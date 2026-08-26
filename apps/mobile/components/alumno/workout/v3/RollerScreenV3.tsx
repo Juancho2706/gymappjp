@@ -14,7 +14,8 @@ import { haptics } from '../../../../lib/haptics'
 import type { SessionBlock, SessionExercise } from '../../../../lib/workout-session'
 import { Sheet } from '../../../Sheet'
 import { SetRow } from '../SetRow'
-import { TypedKeypad } from '../TypedKeypad'
+import { EMPTY_CAPTURE_HINT, TypedKeypad } from '../TypedKeypad'
+import { ExerciseActionChips } from './exercise-actions'
 import { JuicyButton } from './JuicyButton'
 import { SingleWheelPicker } from './DualWheelPicker'
 import { TypedMediaV3, TypedInstructionsChip, hasExecMedia } from './TypedMediaV3'
@@ -40,6 +41,14 @@ export function RollerScreenV3({
   blockLogs,
   reducedMotion = false,
   exec,
+  substitution = null,
+  canSubstitute = false,
+  onOpenSubstitute,
+  onUndoSubstitution,
+  skipped = false,
+  skipReason = null,
+  canSkip = false,
+  onOpenSkip,
   onOpenTechnique,
   onOpenSet,
   onCommitSet,
@@ -52,6 +61,16 @@ export function RollerScreenV3({
   blockLogs: ReconciledSessionLog[]
   reducedMotion?: boolean
   exec: ExecTheme
+  /** Sustitución de HOY (mockup 3: ya no es exclusiva de fuerza). */
+  substitution?: { name: string; prescribedName: string } | null
+  canSubstitute?: boolean
+  onOpenSubstitute?: () => void
+  onUndoSubstitution?: () => void
+  /** El alumno declaró OMITIDO este bloque: se retira el contador y queda el badge. */
+  skipped?: boolean
+  skipReason?: string | null
+  canSkip?: boolean
+  onOpenSkip?: () => void
   onOpenTechnique: () => void
   onOpenSet: (setNumber: number) => void
   onCommitSet: (payload: OptimisticLogPayload) => void
@@ -75,6 +94,9 @@ export function RollerScreenV3({
   for (let i = 1; i <= block.sets; i += 1) {
     if (!loggedSetNumbers.has(i)) { firstUnlogged = i; break }
   }
+  // Bloque OMITIDO ⇒ no hay serie activa: se retiran contador, botones y cronómetro; queda el
+  // historial de lo YA registrado antes de omitir.
+  const activeSet = skipped ? null : firstUnlogged
 
   const [count, setCount] = useState(0)
   const [bump, setBump] = useState(0) // nonce del micro-spring del contador
@@ -96,7 +118,13 @@ export function RollerScreenV3({
   const [kpValue, setKpValue] = useState('')
   const [wheelOpen, setWheelOpen] = useState(false)
   const openNumberKeypad = () => { setKpValue(count > 0 ? String(count) : ''); setKpOpen(true) }
+  // Captura VACÍA = el teclado quedó sin ningún dígito. Misma guarda que `SetRow`/`KeypadHost`
+  // (copy en `EMPTY_CAPTURE_HINT`): sin ella, tocar "Listo" con el campo en blanco escribía 0 pasadas
+  // encima del contador —y una serie de 0 pasadas cuenta igual como serie hecha—. El botón queda
+  // inerte con el motivo encima; esta guarda cubre cualquier disparo que no pase por el press.
+  const kpEmptyCapture = kpValue.trim() === ''
   const commitKeypad = () => {
+    if (kpEmptyCapture) return
     const n = Math.max(0, Math.round(Number(kpValue.replace(',', '.')) || 0))
     setCount(n); setBump((b) => b + 1); setKpOpen(false)
   }
@@ -118,11 +146,11 @@ export function RollerScreenV3({
   }, [])
 
   const confirm = () => {
-    if (firstUnlogged == null) return
+    if (activeSet == null) return
     const values: Record<string, string> = { reps_done: String(count) }
     if (stopwatch.started && stopwatch.elapsed > 0) values.actual_duration_sec = String(stopwatch.elapsed)
     haptics.setDone()
-    onCommitSet(buildTypedPayload('roller', values, block.id, firstUnlogged, block.side_mode ?? null))
+    onCommitSet(buildTypedPayload('roller', values, block.id, activeSet, block.side_mode ?? null))
   }
 
   const loggedRows = Array.from({ length: block.sets }).map((_, i) => {
@@ -164,6 +192,19 @@ export function RollerScreenV3({
             </View>
           ) : null}
         </View>
+        {/* Cambiar / Omitir + badges de estado — misma fila compartida que la pantalla de fuerza. */}
+        <ExerciseActionChips
+          exec={exec}
+          exerciseName={exercise.name}
+          substituted={!!substitution}
+          canSubstitute={canSubstitute}
+          onOpenSubstitute={onOpenSubstitute}
+          onUndoSubstitution={onUndoSubstitution}
+          skipped={skipped}
+          skipReason={skipReason}
+          canSkip={canSkip}
+          onOpenSkip={onOpenSkip}
+        />
       </View>
 
       {/* Media — chips "Instrucciones" + "Nota del coach" DENTRO de la media (overlay superior-izquierdo).
@@ -176,13 +217,13 @@ export function RollerScreenV3({
         <TypedInstructionsChip exercise={exercise} accent={accent} coachNote={coachNote} onOpenTechnique={onOpenTechnique} onOpenNote={() => setNoteOpen(true)} reducedMotion={reducedMotion} />
       )}
 
-      {firstUnlogged == null ? (
+      {activeSet == null ? (
         <View style={{ width: '100%', gap: 6 }}>{loggedRows}</View>
       ) : (
         <>
           <Text style={{ fontFamily: FONT.uiBold, fontSize: 13, color: hexToRgba(s.text, 0.8), textAlign: 'center', fontVariant: ['tabular-nums'] }}>
             Objetivo: <Text style={{ color: s.text }}>{goal}</Text>
-            {block.sets > 1 ? <Text style={{ color: s.textMuted }}>{'  ·  '}Serie {firstUnlogged} de {block.sets}</Text> : null}
+            {block.sets > 1 ? <Text style={{ color: s.textMuted }}>{'  ·  '}Serie {activeSet} de {block.sets}</Text> : null}
           </Text>
 
           {/* Contador gigante EDITABLE (QA4): tap = teclado · mantener = rueda + avisito descartable. */}
@@ -296,7 +337,7 @@ export function RollerScreenV3({
               onPress={confirm}
               style={{ flex: 1, height: 54, borderRadius: 15, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#2f2f3a', backgroundColor: '#1c1c24' }}
               accessibilityRole="button"
-              accessibilityLabel={`Completar la serie ${firstUnlogged} del roller`}
+              accessibilityLabel={`Completar la serie ${activeSet} del roller`}
             >
               <Text style={{ fontFamily: FONT.uiExtra, fontSize: 16, letterSpacing: 0.3, color: '#e8e8ee' }}>Completar</Text>
             </Pressable>
@@ -319,6 +360,11 @@ export function RollerScreenV3({
                 value={kpValue}
                 onChange={setKpValue}
                 onNext={commitKeypad}
+                // "Listo" (no "Guardar serie"): acá el teclado sólo ESCRIBE el número de pasadas en el
+                // contador — la serie la registra "Completar", que además arrastra el cronómetro. El
+                // rótulo dice lo que hace, mismo criterio que el hero de fuerza.
+                doneLabel="Listo"
+                doneBlockedHint={kpEmptyCapture ? EMPTY_CAPTURE_HINT.roller : null}
                 onDone={commitKeypad}
                 onClose={() => setKpOpen(false)}
                 header={{ exerciseName: exercise.name, objectiveLine: goal }}

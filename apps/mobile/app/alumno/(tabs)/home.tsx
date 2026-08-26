@@ -11,7 +11,7 @@ import { useEntitlements } from '../../../lib/entitlements'
 import { useTheme } from '../../../context/ThemeContext'
 import { useMarkDashboardReady } from '../../../context/DashboardReadyContext'
 import { resetChromeScroll, useAlumnoScrollHandler } from '../../../lib/alumno-chrome-scroll'
-import { countLoggedSetsByBlock, deriveDayCompletion, type DayCompletionBlock, type LoggedSetRow } from '@eva/workout-engine'
+import { countLoggedSetsByBlock, deriveDayCompletion, skippedBlockIdsFromLogs, type DayCompletionBlock, type LoggedSetRow } from '@eva/workout-engine'
 import { formatLongDate, getSantiagoIsoYmdForUtcInstant, getSantiagoUtcBoundsForDay, getTodayInSantiago, formatRelativeDate, isoDateAddDays, timeGreeting } from '../../../lib/date-utils'
 import { buildWorkoutDoneEditParams } from '../../../lib/workout-executor-nav'
 import { AppBackground } from '../../../components/AppBackground'
@@ -83,6 +83,11 @@ export default function AlumnoHomeScreen() {
   // sesiones de SU plan, no cualquier entreno del dia. Vive fuera de HomeData (types.ts
   // describe el fetch de 30 dias, esta lectura es semanal).
   const [loggedSetsByPlanDay, setLoggedSetsByPlanDay] = useState<Map<string, Record<string, number>>>(() => new Map())
+  // Bloques OMITIDOS de la semana por (plan, dia): misma clave `${planId}|${ymdSantiago}` → ids de
+  // bloque. El alumno puede cerrar un dia declarando "Omitir" un ejercicio (mockup 3 del ejecutor):
+  // esa fila NO es una serie entrenada (`countLoggedSetsByBlock` la ignora), asi que sin este mapa el
+  // dia se veria eternamente 'in_progress' en las day-cards y el hero jamas mostraria el cierre.
+  const [skippedBlockIdsByPlanDay, setSkippedBlockIdsByPlanDay] = useState<Map<string, string[]>>(() => new Map())
   // Señal de frescura para los widgets que fetchean por su cuenta (p.ej.
   // NutritionDailySummaryV2): se incrementa en cada load() exitoso (montaje,
   // pull-to-refresh, onSaved) para que el widget re-consulte y no quede congelado
@@ -175,9 +180,11 @@ export default function AlumnoHomeScreen() {
         // `block_id` + `set_number` dan las series por bloque y `workout_blocks ( plan_id )` el plan dueño
         // del log (mismo embed que web dashboard.queries.ts:150). Acotada a la semana ⇒ el volumen es de
         // una semana de entreno, no de 30 dias.
+        // `metadata`: trae la marca de OMISION (`skipped`) — sin ella el engine no puede distinguir la
+        // fila declarativa de una serie entrenada y el dia cerrado a base de omisiones no cerraria aca.
         supabase
           .from('workout_logs')
-          .select('logged_at, block_id, set_number, workout_blocks ( plan_id )')
+          .select('logged_at, block_id, set_number, metadata, workout_blocks ( plan_id )')
           .eq('client_id', client.id)
           .gte('logged_at', weekStartIso)
           .lt('logged_at', weekEndIso)
@@ -267,7 +274,15 @@ export default function AlumnoHomeScreen() {
       else rowsByPlanDay.set(key, [r])
     }
     const loggedSetsByPlanDay = new Map<string, Record<string, number>>()
-    for (const [key, bucket] of rowsByPlanDay) loggedSetsByPlanDay.set(key, countLoggedSetsByBlock(bucket))
+    // Compañera del conteo: los bloques que el alumno declaro OMITIDOS ese dia (`skippedBlockIdsFromLogs`
+    // del engine, misma entrada ya filtrada por plan/dia). Resuelven su bloque entero en
+    // `deriveDayCompletion` sin sumar una sola serie entrenada.
+    const skippedBlockIdsByPlanDay = new Map<string, string[]>()
+    for (const [key, bucket] of rowsByPlanDay) {
+      loggedSetsByPlanDay.set(key, countLoggedSetsByBlock(bucket))
+      const skipped = skippedBlockIdsFromLogs(bucket)
+      if (skipped.length > 0) skippedBlockIdsByPlanDay.set(key, skipped)
+    }
     // Progreso del hero (series por bloque de HOY): los ids de bloque son unicos por plan, asi que contar
     // todas las series de hoy y leerlas por bloque equivale a filtrar por plan.
     const todayLoggedByBlock = new Map<string, number>(
@@ -301,6 +316,7 @@ export default function AlumnoHomeScreen() {
       streak,
     })
     setLoggedSetsByPlanDay(loggedSetsByPlanDay)
+    setSkippedBlockIdsByPlanDay(skippedBlockIdsByPlanDay)
     setReloadKey((k) => k + 1)
     setLoading(false)
     setRefreshing(false)
@@ -362,7 +378,7 @@ export default function AlumnoHomeScreen() {
     // Ya viajan en el fetch del programa (`workout_blocks ( id, sets, ... )`), no hay query extra.
     const blocksByPlan = new Map<string, DayCompletionBlock[]>()
     for (const p of plans) blocksByPlan.set(p.id, p.blocks.map((b) => ({ id: b.id, sets: b.sets })))
-    const completionSource: PlanWeekCompletionSource = { blocksByPlan, loggedSetsByPlanDay }
+    const completionSource: PlanWeekCompletionSource = { blocksByPlan, loggedSetsByPlanDay, skippedBlockIdsByPlanDay }
 
     const programPlans = plans.filter((p) => p.day_of_week != null && workoutPlanMatchesVariant(p, activeVariant, abMode))
     // ATRIBUCION GREEDY POR PLAN — espejo EXACTO del fix web weekPendingWorkouts.ts (Paso 2+3,
@@ -470,6 +486,9 @@ export default function AlumnoHomeScreen() {
       ? deriveDayCompletion({
           blocks: blocksByPlan.get(todayPlan.id) ?? [],
           loggedSetsByBlock: loggedSetsByPlanDay.get(`${todayPlan.id}|${todayIso}`) ?? {},
+          // Omisiones de HOY: un bloque declarado omitido resuelve el dia igual que si se hubiera
+          // entrenado (misma regla que las day-cards), sin sumar series al hero.
+          skippedBlockIds: skippedBlockIdsByPlanDay.get(`${todayPlan.id}|${todayIso}`),
         })
       : null
     const doneToday = todayCompletion?.state === 'done'
@@ -483,7 +502,7 @@ export default function AlumnoHomeScreen() {
       streak, ciVariant, ciDays, ciRelative, doneToday,
       weeklyStreak, todayIso,
     }
-  }, [data, loggedSetsByPlanDay])
+  }, [data, loggedSetsByPlanDay, skippedBlockIdsByPlanDay])
 
   // Fallback 'Atleta' = web `DashboardHeader.tsx:13`; el saludo cargado siempre lleva
   // nombre. Durante loading NO se pinta saludo (skeleton), asi el texto aparece una

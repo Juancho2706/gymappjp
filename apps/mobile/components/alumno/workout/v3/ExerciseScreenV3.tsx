@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { MotiView } from 'moti'
 import { LinearTransition } from 'react-native-reanimated'
-import { ArrowRightLeft, ArrowUp, Hand, Keyboard, Pencil, TrendingUp, Undo2, X } from 'lucide-react-native'
+import { ArrowUp, Hand, Keyboard, Pencil, TrendingUp, X } from 'lucide-react-native'
 import {
   formatWeightEsCl,
   sessionLogKey,
@@ -22,6 +22,7 @@ import { bestPrevOf, overloadChipLabel } from '../workout-ui'
 import { DualWheelPicker } from './DualWheelPicker'
 import { dismissWheelHint, useWheelHintDismissed } from './wheel-hint'
 import { ExecMediaV3 } from './ExecMediaV3'
+import { EXEC_SKIP_AMBER, ExerciseActionChips } from './exercise-actions'
 import type { ExecTheme } from './exec-theme'
 
 // Reflow del layout (paridad SingleExerciseCard CARD_LAYOUT): anima el cambio de tamaño al
@@ -77,6 +78,10 @@ export function ExerciseScreenV3({
   showEffort = true,
   substitution,
   canSubstitute,
+  skipped = false,
+  skipReason = null,
+  canSkip = false,
+  onOpenSkip,
   onOpenTechnique,
   onOpenSet,
   onCommitSet,
@@ -108,6 +113,13 @@ export function ExerciseScreenV3({
   showEffort?: boolean
   substitution: { name: string; prescribedName: string } | null
   canSubstitute: boolean
+  /** El alumno declaró OMITIDO este bloque (mockup 3): la captura se retira y queda el badge. */
+  skipped?: boolean
+  /** Motivo declarado al omitir (`SKIP_REASONS`), o null si no eligió ninguno. */
+  skipReason?: string | null
+  /** ¿Se puede omitir? (bloque no resuelto). */
+  canSkip?: boolean
+  onOpenSkip?: () => void
   onOpenTechnique: () => void
   onOpenSet: (setNumber: number) => void
   onCommitSet: (payload: OptimisticLogPayload) => void
@@ -137,6 +149,10 @@ export function ExerciseScreenV3({
   for (let i = 1; i <= block.sets; i += 1) {
     if (!loggedSetNumbers.has(i)) { firstUnlogged = i; break }
   }
+  // Bloque OMITIDO ⇒ no hay serie activa: se retiran hero de captura, fila "Anterior", hint de la
+  // rueda y el botón de teclado. El historial de series YA registradas antes de omitir se conserva
+  // (siguen siendo entrenamiento real).
+  const activeSet = skipped ? null : firstUnlogged
 
   const suggestedWeightKg = eff?.weightKg ?? block.target_weight_kg
   const overloadLabel = overloadChipLabel(block, eff, currentWeek)
@@ -161,17 +177,17 @@ export function ExerciseScreenV3({
   }, [bestPrev, suggestedWeightKg, block.reps])
 
   const openWheel = () => {
-    if (firstUnlogged == null) return
+    if (activeSet == null) return
     // Medium (no el Light de `tap`): el pulso tiene que leerse COMO confirmación del gesto sostenido.
     haptics.longPress()
     setWheelOpen(true)
   }
   const handleWheelDone = (weightKg: number, reps: number) => {
-    if (firstUnlogged != null) setAutofill({ weight: weightKg, reps, nonce: Date.now() })
+    if (activeSet != null) setAutofill({ weight: weightKg, reps, nonce: Date.now() })
     if (!hintDismissed) dismissWheelHint()
     setWheelOpen(false)
   }
-  const showWheelHint = !hintDismissed && firstUnlogged != null
+  const showWheelHint = !hintDismissed && activeSet != null
 
   const coachNote = block.notes?.trim() ? block.notes.trim() : null
 
@@ -193,8 +209,8 @@ export function ExerciseScreenV3({
 
   // HERO de la serie activa (primera sin registrar). Reusa `ActiveSetRow` con `heroMode` — su lógica de
   // guardado/draft/cola/keypad es intocable; sólo cambia la piel a los tiles + esfuerzo + CTA del mockup.
-  const activeHero = firstUnlogged != null ? (() => {
-    const setNumber = firstUnlogged
+  const activeHero = activeSet != null ? (() => {
+    const setNumber = activeSet
     // Precedencia de la captura: draft restaurado (lo último tipeado, resiliencia E2-03) > semilla del
     // día repetido > peso sugerido por progresión (lo resuelve la propia fila con `suggestedWeight`).
     const seed =
@@ -281,25 +297,19 @@ export function ExerciseScreenV3({
               {exercise.muscle_group ? ` · ${exercise.muscle_group}` : ''}
             </Text>
           </View>
-          {substitution ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 999, borderWidth: 1.5, paddingHorizontal: 9, paddingVertical: 4, backgroundColor: hexToRgba(exec.celebration, 0.14), borderColor: hexToRgba(exec.celebration, 0.34) }}>
-                <ArrowRightLeft size={11} color={exec.celebration} />
-                <Text style={{ fontFamily: FONT.uiBold, fontSize: 11, color: exec.celebration }} numberOfLines={1}>Sustituido</Text>
-              </View>
-              {canSubstitute && (
-                <Pressable testID="btn-undo-substitute-v3" onPress={onUndoSubstitution} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }} accessibilityRole="button" accessibilityLabel="Deshacer la sustitución">
-                  <Undo2 size={13} color={s.textMuted} />
-                  <Text style={{ fontFamily: FONT.uiSemibold, fontSize: 11, color: s.textMuted }}>Deshacer</Text>
-                </Pressable>
-              )}
-            </View>
-          ) : canSubstitute ? (
-            <Pressable testID="btn-substitute-v3" onPress={onOpenSubstitute} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 5, borderRadius: 999, borderWidth: 1.5, paddingHorizontal: 9, paddingVertical: 4, borderColor: s.borderStrong }} accessibilityRole="button" accessibilityLabel={`Cambiar ${exercise.name} — máquina ocupada`}>
-              <ArrowRightLeft size={12} color={s.textMuted} />
-              <Text style={{ fontFamily: FONT.uiSemibold, fontSize: 11, color: s.textMuted }}>Cambiar</Text>
-            </Pressable>
-          ) : null}
+          {/* Cambiar / Omitir + badges de estado — fila COMPARTIDA con las pantallas tipadas. */}
+          <ExerciseActionChips
+            exec={exec}
+            exerciseName={exercise.name}
+            substituted={!!substitution}
+            canSubstitute={canSubstitute}
+            onOpenSubstitute={onOpenSubstitute}
+            onUndoSubstitution={onUndoSubstitution}
+            skipped={skipped}
+            skipReason={skipReason}
+            canSkip={canSkip}
+            onOpenSkip={onOpenSkip}
+          />
         </View>
       </View>
 
@@ -339,10 +349,10 @@ export function ExerciseScreenV3({
       {bestPrev && (bestPrev.weight_kg != null || bestPrev.reps_done != null) && (
         <Pressable
           testID="btn-prev-autofill-v3"
-          disabled={firstUnlogged == null}
-          onPress={() => { if (firstUnlogged != null) setAutofill({ weight: bestPrev.weight_kg, reps: bestPrev.reps_done, nonce: Date.now() }) }}
+          disabled={activeSet == null}
+          onPress={() => { if (activeSet != null) setAutofill({ weight: bestPrev.weight_kg, reps: bestPrev.reps_done, nonce: Date.now() }) }}
           accessibilityRole="button"
-          accessibilityLabel={firstUnlogged != null && bestPrev.weight_kg ? `Usar la última vez: ${bestPrev.weight_kg} kg por ${bestPrev.reps_done ?? '-'} reps` : undefined}
+          accessibilityLabel={activeSet != null && bestPrev.weight_kg ? `Usar la última vez: ${bestPrev.weight_kg} kg por ${bestPrev.reps_done ?? '-'} reps` : undefined}
         >
           {/* css-interop descarta `style` cuando es función (auditoría a1 §2.1): el chrome punteado de
               la fila vive en esta View interna con `style` estático. */}
@@ -359,8 +369,8 @@ export function ExerciseScreenV3({
                 borderWidth: 2,
                 borderStyle: 'dashed',
                 borderColor: s.borderStrong,
-                backgroundColor: pressed && firstUnlogged != null ? hexToRgba(exec.accent, 0.08) : s.surfaceRaised,
-                opacity: firstUnlogged == null ? 0.55 : 1,
+                backgroundColor: pressed && activeSet != null ? hexToRgba(exec.accent, 0.08) : s.surfaceRaised,
+                opacity: activeSet == null ? 0.55 : 1,
               }}
             >
               {/* Mockup `.a3a-prev .l`: sólo el rótulo "Anterior" (sin ícono extra). */}
@@ -387,7 +397,7 @@ export function ExerciseScreenV3({
                     </Text>
                   )}
                 </View>
-              ) : firstUnlogged != null ? (
+              ) : activeSet != null ? (
                 <Text style={{ fontFamily: FONT.uiExtra, fontSize: 11, color: exec.accent }}>1 tap ↻</Text>
               ) : null}
             </View>
@@ -440,16 +450,20 @@ export function ExerciseScreenV3({
               />
             )
           })}
-          <Text style={{ fontFamily: FONT.uiExtra, fontSize: 12, color: s.textMuted, marginLeft: 4, fontVariant: ['tabular-nums'] }}>
-            {doneCount} de {block.sets} series
+          {/* Omitido: el pie dice la VERDAD (no "3 de 3 series"). El bloque resuelve el día, pero las
+              series que no se entrenaron no se cuentan como hechas. */}
+          <Text
+            style={{ fontFamily: FONT.uiExtra, fontSize: 12, color: skipped ? EXEC_SKIP_AMBER : s.textMuted, marginLeft: 4, fontVariant: ['tabular-nums'] }}
+          >
+            {skipped ? 'Omitido' : `${doneCount} de ${block.sets} series`}
           </Text>
         </View>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <Pressable
             testID="btn-foot-keyboard-v3"
-            onPress={() => { if (firstUnlogged != null) { haptics.tap(); setKbNonce((n) => n + 1) } }}
-            disabled={firstUnlogged == null}
-            style={{ width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: s.surfaceRaised, borderWidth: 2, borderColor: s.borderStrong, opacity: firstUnlogged == null ? 0.5 : 1 }}
+            onPress={() => { if (activeSet != null) { haptics.tap(); setKbNonce((n) => n + 1) } }}
+            disabled={activeSet == null}
+            style={{ width: 38, height: 38, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: s.surfaceRaised, borderWidth: 2, borderColor: s.borderStrong, opacity: activeSet == null ? 0.5 : 1 }}
             accessibilityRole="button"
             accessibilityLabel="Abrir el teclado para la serie activa"
           >
@@ -487,7 +501,7 @@ export function ExerciseScreenV3({
       <DualWheelPicker
         open={wheelOpen}
         onClose={() => setWheelOpen(false)}
-        setNumber={firstUnlogged ?? 1}
+        setNumber={activeSet ?? 1}
         exerciseName={exercise.name}
         totalSets={block.sets}
         kgAnchor={wheelAnchors.kg}

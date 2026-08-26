@@ -290,10 +290,20 @@ export const WorkoutLogSetSchema = z.object({
     // CHECKs por tipo (misma política que el resto del payload): un log SIN metadata valida idéntico
     // al de hoy. Convive con `actual_hold_sec` (que en modo per_side lleva la SUMA L+R). La UI que
     // captura por lado llega en Ola 3; esto es solo la capa de datos. z.guid() no aplica (jsonb libre).
+    //
+    // ── Omisión de ejercicio (mockup 3 · ejecutor v3, 2026-08-25) ──
+    // `skipped`/`skip_reason` son la OTRA mitad de la misma columna jsonb (espejo de
+    // `WorkoutSkipMetadata` de @eva/workout-engine). Van acá porque Zod v4 estripa las claves no
+    // declaradas: sin ellas el skip se persistía como `metadata: {}` y no sobrevivía a un reload.
+    // `skip_reason` queda como string libre (max 40) —NO enum— espejando el catálogo `SKIP_REASONS`
+    // sin importarlo (misma política que `substitution_reason` y que `screening.ts`): el catálogo
+    // puede crecer sin que una fila vieja de la cola offline deje de parsear.
     metadata: z
         .object({
             left_sec: z.coerce.number().int().min(0).max(86400).nullable().optional(),
             right_sec: z.coerce.number().int().min(0).max(86400).nullable().optional(),
+            skipped: z.boolean().nullable().optional(),
+            skip_reason: z.string().trim().max(40).nullable().optional(),
         })
         .nullable()
         .optional(),

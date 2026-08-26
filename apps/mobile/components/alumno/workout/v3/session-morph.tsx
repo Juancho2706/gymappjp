@@ -169,9 +169,52 @@ export function resetMorphLaunch(): void {
 // suscriba (carrera de montaje): al suscribirse, si ya está listo, dispara de inmediato.
 let morphSceneReady = false
 let morphSceneReadyListener: (() => void) | null = null
-/** Reinicia el estado de "listo" al arrancar un nuevo despegue. */
+
+// ── FUSIÓN de confirmaciones (mockup 6, 2026-08-25) ──
+// Antes el alumno confirmaba DOS veces para empezar: "TOCA PARA COMENZAR" (este overlay) y luego
+// "EMPEZAR" en la pantalla `SessionStart` del ejecutor. El tap del hint ES la confirmación: al
+// dispararse marca "arranque confirmado" y el `ExecutorV3` entra DIRECTO a la fase de sesión,
+// saltándose el Inicio. La animación NO cambia en nada (mismos tiempos, mismo `dismiss`).
+// `SessionStart` sigue vivo para el camino SIN morph (deep link, reanudar desde otra pantalla).
+// Estado a nivel MÓDULO —no un callback— porque el ejecutor puede montar DESPUÉS del tap (fallback
+// `READY_FALLBACK_MS` con la escena aún cargando): ahí no hay quién escuche y la marca se consume al
+// montar.
+let morphStartConfirmed = false
+let morphStartConfirmedListener: (() => void) | null = null
+
+/** Reinicia el estado de "listo"/"arranque confirmado" al arrancar un nuevo despegue. */
 export function resetMorphScene(): void {
   morphSceneReady = false
+  morphStartConfirmed = false
+}
+
+/** El Despegue avisa que el alumno YA confirmó el arranque (tap en "TOCA PARA COMENZAR"). */
+export function signalMorphStartConfirmed(): void {
+  morphStartConfirmed = true
+  morphStartConfirmedListener?.()
+}
+
+/**
+ * Consume la marca de "arranque confirmado" (una sola vez). La lee el ExecutorV3 al MONTAR, para el
+ * caso en que el tap ocurrió antes de que la escena existiera. SIEMPRE limpia: una lectura tardía no
+ * la reusa (mismo criterio que `consumeMorphLaunch`).
+ */
+export function consumeMorphStartConfirmed(): boolean {
+  const confirmed = morphStartConfirmed
+  morphStartConfirmed = false
+  return confirmed
+}
+
+/** El ejecutor se suscribe al tap de arranque; devuelve el unsubscribe. Dispara ya si llegó antes. */
+export function subscribeMorphStartConfirmed(fn: () => void): () => void {
+  morphStartConfirmedListener = fn
+  if (morphStartConfirmed) {
+    morphStartConfirmed = false
+    fn()
+  }
+  return () => {
+    if (morphStartConfirmedListener === fn) morphStartConfirmedListener = null
+  }
 }
 /** El ExecutorV3 avisa que la escena de Inicio ya cargó (via-morph). */
 export function signalMorphSceneReady(): void {
@@ -772,6 +815,11 @@ function DespegueOverlay({
 
   const dismiss = useCallback(() => {
     if (!ready) return
+    // FUSIÓN (mockup 6): este tap ES el "EMPEZAR". Se avisa ANTES del fade para que el ejecutor cambie
+    // a la fase de sesión mientras el overlay todavía cubre la pantalla — el swap queda oculto tras la
+    // ceremonia y el alumno aterriza en el primer ejercicio, sin pantalla intermedia. La animación no
+    // se toca: mismos tiempos, mismo `EXIT_MS`, mismo `onDone`.
+    signalMorphStartConfirmed()
     fade.value = withTiming(0, { duration: EXIT_MS, easing: EASE }, (finished) => {
       if (finished) runOnJS(doneRef.current)()
     })

@@ -1,4 +1,5 @@
 import type { HrMetadataV1 } from '@eva/cardio'
+import type { WorkoutSkipMetadata } from './day-completion'
 
 /**
  * Metadata jsonb de la serie (`workout_logs.metadata`). Hoy solo transporta el hold de movilidad
@@ -15,18 +16,21 @@ export type WorkoutLogSideMetadata = {
 }
 
 /**
- * La columna `workout_logs.metadata` COMPLETA: el hold por lado de movilidad unilateral Y/O el
+ * La columna `workout_logs.metadata` COMPLETA: el hold por lado de movilidad unilateral, el
  * resumen+curva de FC del bloque cardio bajo la clave `hr` (specs/cardio-conectado — reusa el jsonb
- * existente, sin migración DB; un bloque es de un tipo o del otro, así que no colisionan).
+ * existente, sin migración DB; un bloque es de un tipo o del otro, así que no colisionan) Y la marca
+ * de OMISIÓN del bloque (`skipped`/`skip_reason`, mockup 3 del ejecutor RN).
  *
  * Superset de `WorkoutLogSideMetadata`: todo consumidor histórico que lea `left_sec`/`right_sec`
- * sigue compilando igual. El tipo del resumen se importa (solo tipo, se borra en runtime) de
- * `@eva/cardio` — fuente única del shape, mismo criterio que `pr-detect` con `@eva/profile-analytics`;
- * duplicarlo acá garantizaría drift entre lo que el acumulador escribe y lo que el motor transporta.
+ * sigue compilando igual. Los tipos de FC y de omisión se importan (solo tipo, se borran en runtime)
+ * de `@eva/cardio` y de `./day-completion` — fuente única de cada shape, mismo criterio que
+ * `pr-detect` con `@eva/profile-analytics`; duplicarlos acá garantizaría drift entre lo que se
+ * escribe y lo que el motor transporta.
  */
-export type WorkoutLogMetadata = WorkoutLogSideMetadata & {
-    hr?: HrMetadataV1 | null
-}
+export type WorkoutLogMetadata = WorkoutLogSideMetadata &
+    WorkoutSkipMetadata & {
+        hr?: HrMetadataV1 | null
+    }
 
 /**
  * Forma canónica de una serie encolada offline. Vive acá (motor puro) porque es la ENTRADA de

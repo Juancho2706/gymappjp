@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
-import { Keyboard, Pencil, Repeat } from 'lucide-react'
+import { Keyboard, Pencil } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { LogSetForm, type SetSyncResult } from '../LogSetForm'
 import { sessionLogKey, type OptimisticLogPayload, type RepeatSeedEntry } from '@eva/workout-engine'
@@ -13,6 +13,7 @@ import {
     type WorkoutSessionLog,
     RUT_TYPE_META,
 } from '../WorkoutExecutionClient'
+import { BlockActionsV3 } from './SkipBlockV3'
 import { ExecMediaCard } from './ExecMediaCard'
 import { WheelHint } from './WheelHint'
 
@@ -64,10 +65,12 @@ interface ExerciseStepV3Props {
     autoTimerEnabled: boolean
     /** Abre el modal de técnica existente (chip "Instrucciones" y placeholder YouTube). */
     openTechnique: (exercise: ExerciseType | null) => void
-    /** ¿Se puede sustituir el ejercicio (máquina ocupada)? Fuerza sin series aún (informe 09, BLOCKER). */
+    /** ¿Se puede sustituir el ejercicio (máquina ocupada)? Bloque sin series registradas aún. */
     canSubstitute?: boolean
     /** Abre el sheet "Máquina ocupada" para este bloque (mismo handler del padre; sólo si `canSubstitute`). */
     onOpenSubstitute?: () => void
+    /** Abre el sheet «Omitir hoy» (mockup 3). Ausente ⇒ el bloque ya está completo: nada que omitir. */
+    onSkip?: () => void
     /** Log optimista + guía/scroll (handler del padre — superficie de resiliencia intocada). */
     handleLogged: (payload: OptimisticLogPayload) => void
     /** Reconciliación del optimismo (resultado REAL del server). */
@@ -106,6 +109,7 @@ export function ExerciseStepV3({
     openTechnique,
     canSubstitute,
     onOpenSubstitute,
+    onSkip,
     handleLogged,
     handleResult,
 }: ExerciseStepV3Props) {
@@ -149,10 +153,15 @@ export function ExerciseStepV3({
             {/* Nombre + chip tipo · músculo */}
             <div>
                 <h2 className="exec-v3-exname">{exercise.name}</h2>
-                <div className="mt-2 flex flex-wrap gap-2">
+                <div className="mt-2 flex flex-wrap items-center gap-2">
                     <span className="exec-v3-chip">
                         {RUT_TYPE_META[effType].label} · {exercise.muscle_group}
                     </span>
+                    {/* Salida digna del paso activo (mockup 3): «Cambiar» + «Omitir hoy». */}
+                    <BlockActionsV3
+                        onOpenSubstitute={canSubstitute ? onOpenSubstitute : undefined}
+                        onSkip={onSkip}
+                    />
                 </div>
             </div>
 
@@ -261,16 +270,8 @@ export function ExerciseStepV3({
                     </span>
                 </div>
                 <div className="exec-v3-tools">
-                    {canSubstitute && onOpenSubstitute && (
-                        <button
-                            type="button"
-                            className="exec-v3-tool"
-                            onClick={onOpenSubstitute}
-                            aria-label="Cambiar ejercicio (máquina ocupada)"
-                        >
-                            <Repeat className="h-[16px] w-[16px]" aria-hidden />
-                        </button>
-                    )}
+                    {/* «Cambiar» dejó de vivir acá (mockup 3): ahora es un chip de la cabecera junto a
+                        «Omitir hoy», visible en TODOS los tipos de bloque. Duplicarlo sería ruido. */}
                     <button
                         type="button"
                         className="exec-v3-tool"

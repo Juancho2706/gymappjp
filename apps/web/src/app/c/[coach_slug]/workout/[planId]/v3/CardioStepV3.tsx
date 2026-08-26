@@ -20,6 +20,7 @@ import { useWorkoutTimer } from '../WorkoutTimerProvider'
 import type { OptimisticLogPayload, RepeatSeedEntry } from '@eva/workout-engine'
 import type { BlockType, ExerciseType, WorkoutSessionLog } from '../WorkoutExecutionClient'
 import type { ClientCardioView } from '../_data/workout-execution.queries'
+import { BlockActionsV3 } from './SkipBlockV3'
 import { ExecTypedMedia } from './ExecTypedMedia'
 import { useExecCountdown, formatCountdown } from './useExecCountdown'
 import { useIntervalRunner } from './useIntervalRunner'
@@ -43,6 +44,12 @@ interface CardioStepV3Props {
     reopenSignal: { blockId: string; setNumber: number; nonce: number } | null
     substitution?: { exerciseId: string; exerciseName: string; reason: string } | null
     openTechnique: (exercise: ExerciseType | null) => void
+    /** ¿Se puede sustituir el ejercicio? (mockup 3: «Cambiar» ya no es exclusivo de fuerza). */
+    canSubstitute?: boolean
+    /** Abre el sheet "Máquina ocupada" para este bloque (sólo si `canSubstitute`). */
+    onOpenSubstitute?: () => void
+    /** Abre el sheet «Omitir hoy» (mockup 3). Ausente ⇒ el bloque ya está completo. */
+    onSkip?: () => void
     handleLogged: (payload: OptimisticLogPayload) => void
     handleResult: (blockId: string, setNumber: number, result: SetSyncResult) => void
 }
@@ -76,7 +83,7 @@ const DASH = 2 * Math.PI * 92
  * una capa opcional de Ola 6, jamás requisito). La FC se captura MANUAL en las filas tipadas reusadas.
  */
 export function CardioStepV3(props: CardioStepV3Props) {
-    const { block, exercise, cardio, openTechnique } = props
+    const { block, exercise, cardio, openTechnique, canSubstitute, onOpenSubstitute, onSkip } = props
     const coachNote = block.notes?.trim() || null
     const intervalConfig = block.interval_config ?? null
     // Fase D (G2): los intervalos por DISTANCIA (8×400m, HYROX) también montan la cara de intervalos —
@@ -104,10 +111,15 @@ export function CardioStepV3(props: CardioStepV3Props) {
             <div className="exec-v3-cardio-id">
                 <div className="min-w-0">
                     <h2 className="exec-v3-exname">{exercise.name}</h2>
-                    <div className="mt-2 flex flex-wrap gap-2">
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
                         <span className={cn('exec-v3-chip', isInterval && 'is-amber')}>
                             Cardio{isInterval ? ' · Intervalos' : exercise.muscle_group ? ` · ${exercise.muscle_group}` : ''}
                         </span>
+                        {/* Salida digna del paso activo (mockup 3): «Cambiar» + «Omitir hoy». */}
+                        <BlockActionsV3
+                            onOpenSubstitute={canSubstitute ? onOpenSubstitute : undefined}
+                            onSkip={onSkip}
+                        />
                     </div>
                 </div>
             </div>

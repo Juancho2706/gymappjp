@@ -13,6 +13,7 @@ import {
   incrementChipsForStep,
   KEYPAD_MAX_DECIMALS,
   KEYPAD_STEP_PRESETS,
+  type TypedKeypadMode,
 } from '@eva/workout-engine'
 import { FONT, TYPE, textStyle } from '@/lib/typography'
 import { shadow } from '@/lib/shadows'
@@ -68,6 +69,20 @@ const MODE_CFG: Record<KeypadMode, ModeCfg> = {
   reps: { allowDecimal: false, maxDecimals: 0, showChips: false },
   decimal: { allowDecimal: true, maxDecimals: KEYPAD_MAX_DECIMALS, showChips: false },
   integer: { allowDecimal: false, maxDecimals: 0, showChips: false },
+}
+
+/**
+ * Copy del bloqueo por SERIE VACÍA (ningún eje capturado), por tipo de bloque. Vive acá —junto al teclado—
+ * porque las TRES superficies de confirmación la comparten: la fila (`ActiveSetRow`), el botón primario de
+ * este teclado y el `KeypadHost` de edición. Motivo del bloqueo: una fila con TODOS los ejes en NULL cuenta
+ * hoy como serie hecha (`isBlockComplete` mira la existencia de la fila, no su contenido) y eso ya pasó en
+ * producción. La validación es de UI (botón inerte + este hint); el payload NO cambia de forma.
+ */
+export const EMPTY_CAPTURE_HINT: Record<'strength' | TypedKeypadMode, string> = {
+  strength: 'Ingresa al menos las repeticiones',
+  cardio: 'Ingresa al menos los minutos',
+  mobility: 'Ingresa al menos los segundos del hold',
+  roller: 'Ingresa al menos las pasadas',
 }
 
 const DIGITS = ['1', '2', '3', '4', '5', '6', '7', '8', '9'] as const
@@ -417,12 +432,20 @@ export function TypedKeypad(props: {
   onNext(): void
   onDone(): void
   /**
-   * Qué HACE el botón primario "Listo" en el caller (QA5): 'save' (default, mirror web) cierra Y guarda la
-   * serie; 'close' sólo baja el teclado porque la serie la cierra un CTA dedicado de la pantalla (hero V3
-   * "Aplastar serie"). Sólo cambia el `accessibilityLabel` — el rótulo visible sigue siendo "Listo" en ambos
-   * casos (para el alumno "Listo" = terminé de tipear) y `onDone` sigue siendo el único callback.
+   * Rótulo del botón primario del ÚLTIMO campo. Default 'Listo' (fila V2 y pantallas tipadas, mirror web
+   * `NumericKeypadSheet`). El hero de fuerza V3 pasa 'Guardar serie' (mockup aprobado 26-08): ahí el teclado
+   * TAPA el CTA "Aplastar serie" de la card, y el "Listo" que sólo bajaba el teclado dejaba la serie SIN
+   * registrar — el alumno tipeaba, tocaba el botón más grande de la pantalla y no existía la serie. Ahora
+   * `onDone` guarda en las DOS rutas y el rótulo dice lo que hace.
    */
-  doneIntent?: 'save' | 'close'
+  doneLabel?: string
+  /**
+   * Motivo por el que el guardado está BLOQUEADO — hoy: la serie no tiene NINGÚN eje capturado (ver
+   * `EMPTY_CAPTURE_HINT`). Presente ⇒ el botón primario de guardar queda inerte y el motivo se pinta encima.
+   * Ausente/null (default) ⇒ botón habilitado. Nunca bloquea "Siguiente": navegar entre campos es lo que
+   * permite ir a llenar el eje que falta.
+   */
+  doneBlockedHint?: string | null
   /**
    * Cierre explícito SIN guardar — alimenta el botón X del panel (mirror web `NumericKeypadSheet.tsx:193-200`,
    * que SIEMPRE renderiza la X junto al grabber). Sin `onClose` el panel omite la X (el scrim del Modal padre
@@ -442,7 +465,19 @@ export function TypedKeypad(props: {
    */
   header?: { exerciseName?: string; objectiveLine?: string; last?: { weightKg: number | null; reps: number | null } | null }
 }) {
-  const { mode, value, onChange, onNext, onDone, onClose, unit, tabs, header, doneIntent = 'save' } = props
+  const {
+    mode,
+    value,
+    onChange,
+    onNext,
+    onDone,
+    onClose,
+    unit,
+    tabs,
+    header,
+    doneLabel = 'Listo',
+    doneBlockedHint = null,
+  } = props
   const insets = useSafeAreaInsets()
   const motion = useEvaMotion()
   const cfg = MODE_CFG[mode]
@@ -481,6 +516,8 @@ export function TypedKeypad(props: {
     onNext()
   }
   const handleDone = () => {
+    // Serie vacía ⇒ el botón ya está inerte; la guarda cubre cualquier disparo que no pase por el press.
+    if (doneBlockedHint) return
     haptics.setDone()
     onDone()
   }
@@ -496,6 +533,8 @@ export function TypedKeypad(props: {
   const isLastField =
     fieldList.length <= 1 || fieldList[fieldList.length - 1]?.key === (tabs?.activeKey ?? '')
   const primaryIsNext = !isLastField
+  // Sólo el botón que GUARDA se bloquea (serie sin ningún eje): "Siguiente" siempre navega.
+  const doneBlocked = !primaryIsNext && !!doneBlockedHint
 
   return (
     <MotiView
@@ -554,15 +593,32 @@ export function TypedKeypad(props: {
           onClear={onClear}
         />
 
-        {/* Acción — un ÚNICO botón full-width: "Siguiente" avanza de campo; "Listo" cierra + guarda la
-            serie (mirror web §5.4 `NumericKeypadSheet.tsx:405-421`, idéntico al `KeypadHost.tsx:377-401`). */}
+        {/* Acción — un ÚNICO botón full-width: "Siguiente" avanza de campo; el del ÚLTIMO campo cierra +
+            guarda la serie (mirror web §5.4 `NumericKeypadSheet.tsx:405-421`, idéntico al
+            `KeypadHost.tsx:377-401`). El rótulo lo pone el caller (`doneLabel`): "Listo" en la fila V2 y las
+            tipadas, "Guardar serie" en el hero de fuerza, donde este botón tapa el CTA de la card. */}
         <View className="mt-2">
+          {doneBlocked ? (
+            <Text style={textStyle('3xs', FONT.uiMedium)} className="mb-1.5 text-center text-on-dark-muted">
+              {doneBlockedHint}
+            </Text>
+          ) : null}
           <Pressable
             testID={primaryIsNext ? 'keypad-next' : 'keypad-done'}
             accessibilityRole="button"
-            accessibilityLabel={primaryIsNext ? 'Siguiente' : doneIntent === 'close' ? 'Listo, cerrar el teclado' : 'Listo, guardar serie'}
+            accessibilityState={{ disabled: doneBlocked }}
+            accessibilityLabel={
+              primaryIsNext
+                ? 'Siguiente'
+                : doneBlocked
+                  ? `${doneLabel}. ${doneBlockedHint}`
+                  : `${doneLabel}, guardar serie`
+            }
+            disabled={doneBlocked}
             onPress={primaryIsNext ? handleNext : handleDone}
-            className="h-14 w-full flex-row items-center justify-center gap-2 rounded-control bg-sport-500 active:scale-[0.98]"
+            className={`h-14 w-full flex-row items-center justify-center gap-2 rounded-control bg-sport-500 ${
+              doneBlocked ? 'opacity-50' : 'active:scale-[0.98]'
+            }`}
           >
             {primaryIsNext ? (
               <>
@@ -574,8 +630,8 @@ export function TypedKeypad(props: {
             ) : (
               <>
                 <Check size={20} className="text-white" />
-                <Text style={KEYPAD_ACTION_STYLE} className="text-white">
-                  Listo
+                <Text style={KEYPAD_ACTION_STYLE} className="text-white" numberOfLines={1}>
+                  {doneLabel}
                 </Text>
               </>
             )}

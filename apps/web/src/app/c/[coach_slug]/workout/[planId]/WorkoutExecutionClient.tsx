@@ -9,7 +9,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Flag, Info, Dumbbell, Timer, TrendingUp, History, Quote, X, Settings, CheckCircle2, WifiOff, ChevronDown, List, GalleryHorizontal, Pencil, CalendarSync, Repeat, Sparkles } from 'lucide-react'
 import { computeEffectiveTarget } from '@/lib/workout/progression'
-import { readAndConsumeMorphFlag } from '@/lib/workout/launch-ceremony'
+import { isCeremonyActive, readAndConsumeMorphFlag, waitForCeremonyEnd } from '@/lib/workout/launch-ceremony'
 import { useCaptureStudentWorkoutCompleted } from '@/lib/posthog/events'
 import { LogSetForm, type SetSyncResult } from './LogSetForm'
 import { SingleExerciseCard } from './SingleExerciseCard'
@@ -33,6 +33,10 @@ import {
     typedKeypadFields,
     normalizeCardioRepsUnit,
     cardioRepsLabel,
+    buildSkipMetadata,
+    isSkippedSetRow,
+    type SkipReason,
+    type WorkoutLogMetadata,
 } from '@eva/workout-engine'
 import { StepperExecution, type StepperStepView } from './StepperExecution'
 import { ExecHeaderV3, type ExecDotState } from './v3/ExecHeaderV3'
@@ -55,10 +59,13 @@ import { useExecSettings } from './v3/exec-settings'
 import { STEPPER_MODE_KEY } from './rest-timer-preferences'
 import { SubstituteExerciseSheet } from './_components/SubstituteExerciseSheet'
 import { SubstituteSheetV3 } from './v3/SubstituteSheetV3'
+import { SkipBlockSheetV3, SkippedStepV3 } from './v3/SkipBlockV3'
 import { SUBSTITUTION_REASON } from '@/services/workout/exercise-substitution'
 import type { SubstituteCandidate } from './_data/substitution.queries'
 import { logSetAction, revalidateWorkoutViewAction } from './_actions/workout-log.actions'
 import {
+    dequeueWorkoutLog,
+    enqueueWorkoutLog,
     flushWorkoutQueue,
     readWorkoutOfflineQueueForPlan,
     workoutLogToFormData,
@@ -222,8 +229,11 @@ interface Props {
         substituted_exercise_id?: string | null
         substituted_exercise_name?: string | null
         substitution_reason?: string | null
-        // Hold POR LADO (E0.5/E3.2): {left_sec, right_sec} — rehidrata los dos campos de la fila per_side.
-        metadata?: { left_sec?: number | null; right_sec?: number | null } | null
+        // Columna `workout_logs.metadata` jsonb COMPLETA (shape canónico del motor): hold por lado
+        // (E0.5/E3.2) que rehidrata la fila per_side, `hr` del bloque cardio Y la marca de OMISIÓN
+        // (`skipped`/`skip_reason`) — sin esta última el bloque omitido en una sesión anterior de HOY
+        // no se leería como resuelto al montar (`expandSkippedSets(blocks, logs)`).
+        metadata?: WorkoutLogMetadata | null
         // Reconciliación (informe forense 2026-07-04): serie en cola offline sin confirmar por server.
         _pending?: boolean
     }>
@@ -524,10 +534,70 @@ export function TypedLogHeader({
     )
 }
 
+/**
+ * Ventana de espera de la DESPEDIDA del Despegue (fusión de confirmaciones, mockup 6). `waitForCeremonyEnd`
+ * lleva una válvula por diseño (no puede colgar a su otro consumidor, el flush de la cola), pero acá la
+ * espera es legítimamente ilimitada: el overlay vive hasta que el alumno toca. Al vencer se re-arma; el
+ * valor sólo acota cuánto dura cada vuelta del observer.
+ */
+const CEREMONY_WATCH_MS = 60_000
+
+/**
+ * Marca de OMISIÓN dentro de `workout_logs.metadata` («Omitir hoy», mockup 3 · paridad RN).
+ *
+ * Ya NO se castea en el borde: el shape canónico (`WorkoutSkipMetadata`) lo declara
+ * `@eva/workout-engine` y `@eva/schemas` lo valida (`WorkoutLogSetSchema.metadata`), así que la marca
+ * viaja tipada por todo el pipeline. `isSkippedSetRow` es la MISMA lectura que usa el motor para el
+ * cierre del día — no hay dos definiciones de "esta fila es una omisión".
+ */
+type SkipLogRow = { block_id: string; set_number: number; metadata?: WorkoutLogMetadata | null }
+
+/** Lectura: ¿este log es una omisión? Devuelve su metadata para poder mostrar el motivo. */
+function skipMetaOfLog(log: SkipLogRow): WorkoutLogMetadata | null {
+    return isSkippedSetRow(log) ? (log.metadata ?? null) : null
+}
+
+/** Motivo persistido de la omisión de un bloque (`null` = sin motivo o bloque no omitido). */
+function skipMetaOfBlock(blockId: string, logs: SkipLogRow[]): WorkoutLogMetadata | null {
+    for (const log of logs) {
+        if (log.block_id !== blockId) continue
+        const meta = skipMetaOfLog(log)
+        if (meta) return meta
+    }
+    return null
+}
+
+/**
+ * Logs "para completitud": el motor compartido (`isStepComplete`, `firstIncompleteStepIndex`) mide por
+ * PRESENCIA de fila `(block, set)` y NO conoce la omisión, así que un bloque omitido —UNA sola fila con
+ * `metadata.skipped`— le seguiría pareciendo pendiente: sin auto-avance, sin «Siguiente ejercicio» y
+ * con el día imposible de cerrar. Acá se expande ese bloque a sus N series planificadas para que el
+ * motor lo vea resuelto, sin duplicar la regla de completitud ni tocar el paquete compartido.
+ */
+function expandSkippedSets(
+    blocks: BlockType[],
+    logs: SkipLogRow[],
+): Array<{ block_id: string; set_number: number }> {
+    const skipped = new Set<string>()
+    for (const log of logs) if (skipMetaOfLog(log)) skipped.add(log.block_id)
+    if (skipped.size === 0) return logs
+    const out: Array<{ block_id: string; set_number: number }> = logs
+        .filter((l) => !skipped.has(l.block_id))
+        .map((l) => ({ block_id: l.block_id, set_number: l.set_number }))
+    for (const b of blocks) {
+        if (!skipped.has(b.id)) continue
+        for (let i = 1; i <= Math.max(1, b.sets); i += 1) out.push({ block_id: b.id, set_number: i })
+    }
+    return out
+}
+
 function isBlockComplete(
     block: BlockType,
-    logs: Array<{ block_id: string; set_number: number }>
+    logs: SkipLogRow[]
 ) {
+    // «Omitir hoy»: un bloque con log de omisión queda RESUELTO — el auto-avance sigue y el día puede
+    // cerrar aunque no tenga ninguna serie real (misma regla que el motor compartido).
+    if (skipMetaOfBlock(block.id, logs)) return true
     let done = 0
     for (let i = 1; i <= block.sets; i += 1) {
         if (logs.some((log) => log.block_id === block.id && log.set_number === i)) done += 1
@@ -1237,6 +1307,8 @@ export function WorkoutExecutionClient({
     const [substitutionByBlock, setSubstitutionByBlock] = useState<Record<string, SessionSubstitution>>({})
     // Bloque cuyo bottom-sheet de sustitución está abierto (null = cerrado).
     const [substituteSheetBlockId, setSubstituteSheetBlockId] = useState<string | null>(null)
+    // «Omitir hoy» (mockup 3): bloque cuyo sheet de omisión está abierto (null = cerrado).
+    const [skipSheetBlockId, setSkipSheetBlockId] = useState<string | null>(null)
 
     // Rehidratación (AC-C4): tras un reload, si algún log de HOY del bloque trae `substituted_*`, la
     // card arranca en modo sustituido. Reconstrucción liviana (id + nombre snapshot); el gif/técnica
@@ -1542,7 +1614,9 @@ export function WorkoutExecutionClient({
         const startStepper = stepperPref === 'true' || (v3 && stepperPref !== 'false')
         if (startStepper) {
             setStepperEnabled(true)
-            setCurrentStepIndex(firstIncompleteStepIndex(steps, logs))
+            // `expandSkippedSets`: un bloque omitido en una sesión anterior de HOY no debe volver a ser
+            // el punto de arranque del pager (ya está resuelto).
+            setCurrentStepIndex(firstIncompleteStepIndex(steps, expandSkippedSets(blocks, logs)))
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
@@ -1568,6 +1642,42 @@ export function WorkoutExecutionClient({
             cancelAnimationFrame(raf2)
         }
     }, [execV3Active, execV3ViaMorph, execV3Phase])
+
+    // Al arrancar/saltar: gate marcado + aterriza en el primer paso incompleto (el stepper ya lo hace
+    // al montar, pero lo re-sincronizamos por si el usuario tardó en el Inicio). Declarado ACÁ (antes
+    // del early return "Rutina sin ejercicios") porque además lo consume el efecto de fusión de abajo.
+    const enterExecV3Session = useCallback(() => {
+        markExecV3Entered()
+        if (stepperEnabled) setCurrentStepIndex(firstIncompleteStepIndex(steps, expandSkippedSets(blocks, sessionLogs)))
+        setExecV3Phase('session')
+    }, [markExecV3Entered, stepperEnabled, steps, blocks, sessionLogs])
+
+    // Despegue — FUSIÓN de confirmaciones (mockup 6 aprobado). Vía morph el alumno YA confirmó con el
+    // tap de "TOCA PARA COMENZAR": pedirle un segundo "EMPEZAR" en Inicio es una espera muerta. Acá
+    // escuchamos la DESPEDIDA del overlay usando la señal del handoff que ya existe —la marca de
+    // ceremonia `data-exec-ceremony` en <html>, que el provider del layout `/c` quita al terminar su
+    // fade— y entramos DIRECTO a la sesión. La animación del Despegue queda intacta (no tocamos
+    // `WorkoutLaunchMorph`), e Inicio se sigue montando: es lo que dispara `execReady` y evita el flash
+    // del stepper. Sólo deja de ser pantalla de ESPERA. Sin morph (URL directa / reload) nada cambia:
+    // `SessionStart` conserva su botón.
+    useEffect(() => {
+        if (!execV3Active || !execV3ViaMorph || execV3Phase !== 'start') return
+        let cancelled = false
+        const watch = () => {
+            void waitForCeremonyEnd(CEREMONY_WATCH_MS).then(() => {
+                if (cancelled) return
+                // Venció la válvula con la ceremonia AÚN viva (el alumno se quedó mirando el overlay):
+                // re-armamos en vez de entrar a la sesión por debajo del Despegue.
+                if (isCeremonyActive()) {
+                    watch()
+                    return
+                }
+                enterExecV3Session()
+            })
+        }
+        watch()
+        return () => { cancelled = true }
+    }, [execV3Active, execV3ViaMorph, execV3Phase, enterExecV3Session])
 
     const registerRowRef = useCallback((blockId: string, setNumber: number, el: HTMLDivElement | null) => {
         const key = `${blockId}:${setNumber}`
@@ -1602,7 +1712,10 @@ export function WorkoutExecutionClient({
     }
 
     const requiredSets = blocks.reduce((acc, b) => acc + b.sets, 0)
-    const completedSetCount = countUniqueLoggedSets(blocks, sessionLogs)
+    // Vista de los logs "resuelta" para todo cálculo de completitud (progreso, pasos, cierre del día):
+    // los bloques OMITIDOS aportan sus series como hechas. Ver `expandSkippedSets`.
+    const completionLogs = expandSkippedSets(blocks, sessionLogs)
+    const completedSetCount = countUniqueLoggedSets(blocks, completionLogs)
     const completionPct = requiredSets === 0 ? 0 : Math.min(100, Math.round((completedSetCount / requiredSets) * 100))
     // Todas las series planificadas hechas ⇒ el CTA "Finalizar" se enciende (relleno de marca + chispas).
     const allDone = requiredSets > 0 && completedSetCount >= requiredSets
@@ -1652,7 +1765,7 @@ export function WorkoutExecutionClient({
         if (on === stepperEnabled) return
         setStepperEnabled(on)
         localStorage.setItem(STEPPER_MODE_KEY, String(on))
-        if (on) setCurrentStepIndex(firstIncompleteStepIndex(steps, sessionLogs))
+        if (on) setCurrentStepIndex(firstIncompleteStepIndex(steps, completionLogs))
     }
     // "Ver todo" (E2.6): la vista lista V3 se alcanza desde el header; el FAB / tap en el mapa vuelve al
     // stepper. `returnToStepper(i)` conserva el paso (i) en vez de saltar al primer incompleto.
@@ -1825,6 +1938,73 @@ export function WorkoutExecutionClient({
             setJustCompleted({ id: payload.blockId, nonce: Date.now() })
             setTimeout(() => scrollToNextIncomplete(nextLogs), 350)
         }
+    }
+
+    /**
+     * «Omitir hoy» (mockup 3 · paridad RN) — resuelve el bloque sin registrar esfuerzo.
+     *
+     * Escribe UNA fila por el MISMO pipeline que una serie normal (write-through a la cola offline →
+     * `logSetAction` → dequeue al confirmar), así la omisión sobrevive la red mala igual que un
+     * registro y el flush del cierre la reenvía si hace falta. La fila cae en la PRIMERA serie SIN
+     * registrar del bloque: nunca pisa datos reales ya guardados. El avance y el cierre del día salen
+     * gratis por `handleLogged` (el bloque queda completo vía `isBlockComplete`).
+     */
+    const commitSkip = (blockId: string, reason: SkipReason | null) => {
+        setSkipSheetBlockId(null)
+        const block = blocks.find((b) => b.id === blockId)
+        if (!block) return
+        const logged = new Set(sessionLogs.filter((l) => l.block_id === blockId).map((l) => l.set_number))
+        let freeSet: number | null = null
+        for (let i = 1; i <= Math.max(1, block.sets); i += 1) {
+            if (!logged.has(i)) { freeSet = i; break }
+        }
+        if (freeSet == null) return // bloque ya completo: no hay nada que omitir
+        const setNumber = freeSet
+        // Constructor canónico del motor (mismo que usa RN): sin motivo ⇒ sólo `{ skipped: true }`.
+        const metadata = buildSkipMetadata(reason)
+
+        // Write-through: la omisión entra a la cola ANTES de tocar la red (contrato de `LogSetForm`).
+        enqueueWorkoutLog({
+            blockId,
+            setNumber,
+            weightKg: null,
+            repsDone: null,
+            rpe: null,
+            rir: null,
+            planId: plan.id,
+            coachSlug,
+            timestamp: Date.now(),
+            metadata,
+            targetDate: targetDate ?? null,
+        })
+        markWorkoutTouched()
+        // Optimismo + auto-avance por el handler de SIEMPRE (nada bifurcado).
+        handleLogged({ blockId, setNumber, weightKg: null, repsDone: null, rpe: null, rir: null, metadata })
+
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+            toast.info('Sin conexión — la omisión se guardará al reconectar')
+            return
+        }
+
+        const fd = new FormData()
+        fd.set('block_id', blockId)
+        fd.set('set_number', String(setNumber))
+        fd.set('metadata', JSON.stringify(metadata))
+        if (targetDate) fd.set('target_date', targetDate)
+        void logSetAction({}, fd)
+            .then((res) => {
+                if (res.success) {
+                    dequeueWorkoutLog(blockId, setNumber)
+                    return
+                }
+                // Igual que una serie con error: se revierte el optimismo y la fila queda respaldada en
+                // la cola (el flush del cierre / de la reconexión la reintenta).
+                handleResult(blockId, setNumber, 'error')
+                toast.error(res.error || 'No pudimos registrar la omisión — se reintenta al reconectar')
+            })
+            .catch(() => {
+                // Excepción de red: la fila ya está en la cola; no se revierte para no perder la intención.
+            })
     }
     /**
      * Finalizar (reordenado el 2026-07-25, decisión CEO). ANTES: el único `await` del handler era el
@@ -2067,6 +2247,26 @@ export function WorkoutExecutionClient({
                     const recapSub = effType === 'strength'
                         ? `${block.sets} × ${block.reps}${recapWeight != null ? ` · ${recapWeight} kg` : ''}`
                         : `${block.sets} ${block.sets === 1 ? 'serie' : 'series'} · ${exercise.muscle_group}`
+                    // «Omitir hoy» (mockup 3): si el bloque tiene log de omisión, el paso YA está resuelto
+                    // — se reemplaza la captura entera por el estado «Omitido» (no hay nada que registrar).
+                    const skipMeta = skipMetaOfBlock(block.id, sessionLogs)
+                    if (execV3Active && !allowCollapse && skipMeta) {
+                        return (
+                            <SkippedStepV3
+                                key={block.id}
+                                exerciseName={exercise.name}
+                                typeLabel={RUT_TYPE_META[effType].label}
+                                reason={skipMeta.skip_reason ?? null}
+                            />
+                        )
+                    }
+                    // Acciones del paso activo (mockup 3): «Cambiar» en TODOS los tipos (antes sólo fuerza)
+                    // y «Omitir hoy». Ambas siguen exigiendo 0 series registradas del bloque: la sustitución
+                    // estampa columnas POR SERIE (mezclarla a mitad de bloque haría ilegible el registro
+                    // para el coach) y la omisión sólo tiene sentido sobre un bloque sin empezar.
+                    const canSubstituteBlock = doneCount === 0
+                    const onOpenSubstituteBlock = () => setSubstituteSheetBlockId(block.id)
+                    const onSkipBlock = firstUnlogged != null ? () => setSkipSheetBlockId(block.id) : undefined
                     // Completado → recap delgado; tap lo reexpande para editar una serie. Solo en la lista.
                     if (allowCollapse && focus === 'done' && !expandedDone[block.id]) {
                         return (
@@ -2107,8 +2307,9 @@ export function WorkoutExecutionClient({
                                 substitution={sub ? { exerciseId: sub.id, exerciseName: sub.name, reason: SUBSTITUTION_REASON } : null}
                                 autoTimerEnabled={autoTimerEnabled}
                                 openTechnique={openTechnique}
-                                canSubstitute={effType === 'strength' && doneCount === 0}
-                                onOpenSubstitute={() => setSubstituteSheetBlockId(block.id)}
+                                canSubstitute={canSubstituteBlock}
+                                onOpenSubstitute={onOpenSubstituteBlock}
+                                onSkip={onSkipBlock}
                                 handleLogged={handleLogged}
                                 handleResult={handleResult}
                             />
@@ -2129,6 +2330,11 @@ export function WorkoutExecutionClient({
                         reopenSignal,
                         substitution: sub ? { exerciseId: sub.id, exerciseName: sub.name, reason: SUBSTITUTION_REASON } : null,
                         openTechnique,
+                        // Mockup 3: los tipados (movilidad/roller/cardio) ya NO quedan sin salida — reciben
+                        // los mismos handlers de «Cambiar» / «Omitir hoy» que fuerza.
+                        canSubstitute: canSubstituteBlock,
+                        onOpenSubstitute: onOpenSubstituteBlock,
+                        onSkip: onSkipBlock,
                         handleLogged,
                         handleResult,
                     }
@@ -2203,7 +2409,7 @@ export function WorkoutExecutionClient({
         title: stepTitle(step),
         sectionTitle: step.sectionTitle,
         muted: step.muted,
-        complete: isStepComplete(step, sessionLogs),
+        complete: isStepComplete(step, completionLogs),
     }))
     // Mapa "Plan completo" del ejecutor V3 (QA2-C): SÓLO LECTURA, una fila por EJERCICIO INDIVIDUAL. Los
     // miembros de una superserie aparecen como filas propias (con su letra) agrupadas bajo "Superserie X".
@@ -2211,7 +2417,8 @@ export function WorkoutExecutionClient({
     const blockDoneSets = (b: BlockType) => {
         let done = 0
         for (let s = 1; s <= b.sets; s += 1) {
-            if (sessionLogs.some((l) => l.block_id === b.id && l.set_number === s)) done += 1
+            // `completionLogs`: un bloque omitido se lee resuelto (N/N), coherente con su chip `complete`.
+            if (completionLogs.some((l) => l.block_id === b.id && l.set_number === s)) done += 1
         }
         return done
     }
@@ -2356,13 +2563,6 @@ export function WorkoutExecutionClient({
             hasProgress: completedSetCount > 0,
         }
     })()
-    // Al arrancar/saltar: gate marcado + aterriza en el primer paso incompleto (el stepper ya lo hace
-    // al montar, pero lo re-sincronizamos por si el usuario tardó en el Inicio).
-    const enterExecV3Session = () => {
-        markExecV3Entered()
-        if (stepperEnabled) setCurrentStepIndex(firstIncompleteStepIndex(steps, sessionLogs))
-        setExecV3Phase('session')
-    }
     const coachInitial = coachSlug?.trim()?.[0]?.toUpperCase() || null
     // QA "se ve el stepper por debajo de Inicio": el header + el pager (motor) se renderizan SIEMPRE
     // (deben quedar montados para drafts/cola/reloj), pero mientras la Entrada/Inicio está encima NO
@@ -2988,6 +3188,21 @@ export function WorkoutExecutionClient({
                             prescribedName={openEx?.name ?? 'Ejercicio'}
                             muscleGroup={openEx?.muscle_group ?? ''}
                             onConfirm={confirmSubstitution}
+                        />
+                    )
+                })()}
+
+                {/* Bottom-sheet de «Omitir hoy» (mockup 3): motivo OPCIONAL, un tap para confirmar. Sólo
+                    en V3 (el ejecutor legacy no tiene la acción). */}
+                {execV3Active && (() => {
+                    const skipBlock = skipSheetBlockId ? blocks.find((b) => b.id === skipSheetBlockId) : null
+                    const skipEx = skipBlock ? getExercise(skipBlock) : null
+                    return (
+                        <SkipBlockSheetV3
+                            open={skipSheetBlockId != null}
+                            exerciseName={skipEx?.name ?? 'Este ejercicio'}
+                            onOpenChange={(o) => { if (!o) setSkipSheetBlockId(null) }}
+                            onConfirm={(reason) => { if (skipSheetBlockId) commitSkip(skipSheetBlockId, reason) }}
                         />
                     )
                 })()}

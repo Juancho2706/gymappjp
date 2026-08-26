@@ -28,7 +28,14 @@ import { resolveExecTheme, type ExecTheme } from './v3/exec-theme'
 import { WHEEL_LONG_PRESS_MS } from './v3/wheel-hint'
 // RPE_HELP/RIR_HELP se importan (fuente única mobile) en vez de re-declararlos: evita el drift que la
 // Ola 0 flagueó (#1). Son mirror literal —con tildes— de la web (`EffortScale.tsx:17-20`).
-import { TypedKeypad, EffortScale, KEYPAD_EYEBROW_STYLE, RPE_HELP, RIR_HELP } from './TypedKeypad'
+import {
+  TypedKeypad,
+  EffortScale,
+  EMPTY_CAPTURE_HINT,
+  KEYPAD_EYEBROW_STYLE,
+  RPE_HELP,
+  RIR_HELP,
+} from './TypedKeypad'
 import { useEnsureVisibleInStep } from './StepperExecution'
 import { useEvaMotion } from '../../../lib/motion'
 
@@ -857,6 +864,17 @@ export function ActiveSetRow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autofill?.nonce])
 
+  // Serie VACÍA = ningún EJE capturado (peso/reps en fuerza; hold/min/distancia/pasadas en tipadas). El
+  // esfuerzo y la nota NO cuentan: no registran trabajo. Con la fila "Anterior" (1 tap), el peso sugerido o
+  // el hold cronometrado ya hay valor ⇒ el confirm queda habilitado, como debe. Ver `EMPTY_CAPTURE_HINT`:
+  // una fila con todos los ejes en NULL se cuenta hoy como serie hecha, así que el confirm se deshabilita
+  // en vez de escribirla. La validación es de UI; el payload conserva su forma.
+  const isEmptyCapture = useMemo(
+    () => fields.every((f) => (values[f.key] ?? '').trim() === ''),
+    [fields, values],
+  )
+  const emptyHint = EMPTY_CAPTURE_HINT[typedMode ?? 'strength']
+
   const idxOf = (key: string) => Math.max(0, fields.findIndex((f) => f.key === key))
   const openField = (key: string) => {
     haptics.tap()
@@ -894,6 +912,9 @@ export function ActiveSetRow({
   // en su propio botón "Listo" y duplicarla aquí produce doble vibración en un solo tap.
   const handleConfirm = (withHaptic = true) => {
     if (committing) return
+    // Serie vacía no cuenta: los botones ya están inertes, esta guarda cubre cualquier disparo que no pase
+    // por el press (teclado, nonce, autofill sin valores).
+    if (isEmptyCapture) return
     setCommitting(true)
     if (withHaptic) haptics.setDone()
     commit()
@@ -943,16 +964,17 @@ export function ActiveSetRow({
           value={values[openKey] ?? ''}
           onChange={(v) => patch({ [openKey]: v }, idxOf(openKey))}
           onNext={goNext}
-          // QA5 (CEO): en el HERO V3 el "Listo" del teclado SOLO baja el teclado — la serie se cierra con el
-          // CTA dedicado "Aplastar serie", no con el teclado (el alumno todavía quiere ver/ajustar esfuerzo y
-          // nota antes de aplastar). No se pierde nada: cada tecla ya pasó por `patch` → `values`/`valuesRef`,
-          // así que los tiles muestran lo tipeado al cerrar y el CTA commitea esos MISMOS valores.
-          // Fuera del hero (fila V2 y pantallas tipadas) se conserva cerrar+guardar = mirror web
-          // (`NumericKeypadSheet` "Listo" registra la serie).
-          doneIntent={heroCapture ? 'close' : 'save'}
+          // Mockup aprobado 26-08: el botón final del teclado GUARDA la serie en TODAS las rutas. Antes, en
+          // el hero, sólo bajaba el teclado (QA5) y el alumno tipeaba kg/reps, tocaba el botón más grande de
+          // la pantalla —"Listo ✓"— y la serie no existía; si navegaba al siguiente ejercicio se perdía. El
+          // rótulo del hero dice lo que hace ("Guardar serie") y "Aplastar serie" sigue siendo el confirm SIN
+          // teclado, para el que quiere ajustar esfuerzo/nota antes de cerrar. Camino idéntico en ambos:
+          // `handleConfirm` → `commit()` → `onCommit`. Sin háptica acá (el teclado ya hizo `setDone`).
+          doneLabel={heroCapture ? 'Guardar serie' : 'Listo'}
+          doneBlockedHint={isEmptyCapture ? emptyHint : null}
           onDone={() => {
             setOpenKey(null)
-            if (!heroCapture) handleConfirm(false)
+            handleConfirm(false)
           }}
           onClose={() => setOpenKey(null)}
           tabs={
@@ -1031,14 +1053,29 @@ export function ActiveSetRow({
           fontSize={18}
           breathing
           reducedMotion={motion.reduced}
-          disabled={committing}
+          disabled={committing || isEmptyCapture}
           icon={
             <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(0,0,0,0.22)', alignItems: 'center', justifyContent: 'center' }}>
               <Check size={13} color={exec.accentText} strokeWidth={3} />
             </View>
           }
-          accessibilityLabel={committing ? 'Guardando serie...' : `Aplastar la serie ${setNumber}`}
+          accessibilityLabel={
+            committing
+              ? 'Guardando serie...'
+              : isEmptyCapture
+                ? `Aplastar la serie ${setNumber}. ${emptyHint}`
+                : `Aplastar la serie ${setNumber}`
+          }
         />
+
+        {/* Serie vacía: el CTA queda inerte y dice qué falta (antes se podía aplastar una serie sin ningún
+            eje y contaba como hecha). Desaparece en cuanto hay un valor —tipeado, rueda, "Anterior" 1 tap
+            o peso sugerido—, así que no se ve durante la captura normal. */}
+        {isEmptyCapture ? (
+          <Text style={[textStyle('3xs', FONT.uiMedium), { color: s.textMuted, textAlign: 'center' }]}>
+            {emptyHint}
+          </Text>
+        ) : null}
 
         {/* Nota rápida por serie (motor: viaja en values.note → buildStrengthPayload). Compacta bajo el CTA. */}
         <View>
@@ -1197,7 +1234,19 @@ export function ActiveSetRow({
           • TIPADAS (cardio/movilidad/roller) → botón CIRCULAR sin label (`:1095-1097` usa `<SubmitSetButton>`
             sin `label` ⇒ el círculo w-11/w-8 rounded-full de `:1158-1168`); la web reserva el círculo para las
             filas no protagonistas. Commit intacto en ambos. */}
-      <View className="flex-row justify-end">
+      <View className="flex-row items-center justify-end gap-2">
+        {/* Serie vacía: el confirm queda inerte y la fila protagonista dice qué eje falta (una fila con todos
+            los ejes en NULL contaba como serie hecha). Las recesivas sólo llevan el botón inerte, sin texto,
+            para no repetir el mismo hint N veces. */}
+        {isEmptyCapture && (isActive || isEditing) ? (
+          <Text
+            style={textStyle('3xs', FONT.uiMedium)}
+            className="flex-1 text-right text-on-dark-muted"
+            numberOfLines={2}
+          >
+            {emptyHint}
+          </Text>
+        ) : null}
         {/* Botón circular (sin label) para TIPADAS y para las series de fuerza NO protagonistas (recesivas):
             mirror web `SubmitSetButton` sin `label` (`LogSetForm.tsx:696` pasa label sólo cuando isActive;
             las tipadas y las filas compactas caen al círculo `:1158-1168`). El botón etiquetado "Listo"/
@@ -1206,13 +1255,19 @@ export function ActiveSetRow({
           <Pressable
             testID={`confirm-set-${setNumber}`}
             onPress={() => handleConfirm()}
-            disabled={committing}
+            disabled={committing || isEmptyCapture}
             className={`h-11 w-11 items-center justify-center rounded-full border-2 border-white/25 active:opacity-90 ${
-              committing ? 'opacity-70' : ''
+              committing || isEmptyCapture ? 'opacity-70' : ''
             }`}
             accessibilityRole="button"
-            accessibilityState={{ disabled: committing, busy: committing }}
-            accessibilityLabel={committing ? 'Guardando set...' : `Guardar la serie ${setNumber}`}
+            accessibilityState={{ disabled: committing || isEmptyCapture, busy: committing }}
+            accessibilityLabel={
+              committing
+                ? 'Guardando set...'
+                : isEmptyCapture
+                  ? `Guardar la serie ${setNumber}. ${emptyHint}`
+                  : `Guardar la serie ${setNumber}`
+            }
           >
             {committing ? (
               motion.reduced ? (
@@ -1236,14 +1291,18 @@ export function ActiveSetRow({
           <Pressable
             testID={`confirm-set-${setNumber}`}
             onPress={() => handleConfirm()}
-            disabled={committing}
+            disabled={committing || isEmptyCapture}
             className={`h-12 min-w-[104px] flex-row items-center justify-center gap-2 rounded-control bg-sport-500 px-4 active:opacity-90 ${
-              committing ? 'opacity-70' : ''
+              committing || isEmptyCapture ? 'opacity-70' : ''
             }`}
             accessibilityRole="button"
-            accessibilityState={{ disabled: committing, busy: committing }}
+            accessibilityState={{ disabled: committing || isEmptyCapture, busy: committing }}
             accessibilityLabel={
-              committing ? 'Guardando set...' : `${isEditing ? 'Guardar' : 'Listo'}, confirmar serie ${setNumber}`
+              committing
+                ? 'Guardando set...'
+                : isEmptyCapture
+                  ? `${isEditing ? 'Guardar' : 'Listo'}. ${emptyHint}`
+                  : `${isEditing ? 'Guardar' : 'Listo'}, confirmar serie ${setNumber}`
             }
           >
             {committing ? (

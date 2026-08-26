@@ -16,6 +16,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import { Dumbbell, Flag, Sparkles } from 'lucide-react-native'
 import {
+  buildSkipMetadata,
   buildStepModel,
   cardioHasDistanceAxis,
   countLoggedSetsByBlock,
@@ -25,16 +26,19 @@ import {
   firstIncompleteStepIndex,
   formatWeightEsCl,
   isRoundComplete,
+  isSkippedSetRow,
   isStepComplete,
   metersToDistanceCapture,
   PAST_SET_NOT_FOUND_ERROR,
   repsUnitForModality,
   sessionLogKey,
+  skippedBlockIdsFromLogs,
   typedTargetFor,
   type DayCompletionBlock,
   type LoggedSetRow,
   type OptimisticLogPayload,
   type RepeatSeedEntry,
+  type SkipReason,
   type SummaryBlock,
   type TypedKeypadContext,
   type WorkoutCelebrationEvent,
@@ -80,6 +84,7 @@ import { RecoveryBanner } from '../RecoveryBanner'
 import { WorkoutTimerProvider, useWorkoutTimers } from '../timers/TimerProvider'
 import { isRestAutoTimerEnabled, parseRestTime, type RestInterstitialRenderer } from '../timers'
 import { SubstituteSheetV3 } from './SubstituteSheetV3'
+import { SkipBlockSheetV3 } from './exercise-actions'
 import { SUBSTITUTION_REASON } from '../../../../lib/workout/substitution'
 import { bestPrevOf, fmtElapsed, fmtVolume } from '../workout-ui'
 import { EXERCISE_TYPE_META, exerciseTypeColor } from '../../../../lib/exercise-type-meta'
@@ -87,7 +92,7 @@ import { ExecHeaderV3, type ExecDotState } from './ExecHeaderV3'
 import { resolveExecTheme } from './exec-theme'
 import { SessionIntro } from './SessionIntro'
 import { SessionStart, type StartChip, type StartExercisePreview } from './SessionStart'
-import { consumeMorphLaunch, signalMorphSceneReady } from './session-morph'
+import { consumeMorphLaunch, consumeMorphStartConfirmed, signalMorphSceneReady, subscribeMorphStartConfirmed } from './session-morph'
 import { ExerciseScreenV3, strengthSeedValues } from './ExerciseScreenV3'
 import { SupersetScreenV3, type SupersetMemberSub } from './SupersetScreenV3'
 import { supersetGroupLetter, memberLetter } from './superset-screen-model'
@@ -259,6 +264,8 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
   const [techniqueExercise, setTechniqueExercise] = useState<SessionExercise | null>(null)
   const [openDetails, setOpenDetails] = useState<Record<string, boolean>>({})
   const [substituteBlockId, setSubstituteBlockId] = useState<string | null>(null)
+  // Bloque cuyo mini-sheet de OMISIÓN está abierto (mockup 3). null = cerrado.
+  const [skipBlockId, setSkipBlockId] = useState<string | null>(null)
   const [substitutionByBlock, setSubstitutionByBlock] = useState<Record<string, ActiveSub>>({})
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [finishedElapsed, setFinishedElapsed] = useState<number | null>(null)
@@ -296,7 +303,17 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
   // asegura UN solo consumo por instancia; `viaMorphRef.current` alimenta el aviso de "escena lista".
   const viaMorphRef = useRef<boolean | null>(null)
   if (viaMorphRef.current === null) viaMorphRef.current = consumeMorphLaunch()
-  const [phase, setPhase] = useState<ExecPhase>(viaMorphRef.current ? 'start' : 'intro')
+  // FUSIÓN de confirmaciones (mockup 6): el tap de "TOCA PARA COMENZAR" del Despegue YA es el
+  // "EMPEZAR". Si al montar la marca ya está puesta (el alumno tocó antes de que la escena existiera)
+  // arrancamos DIRECTO en sesión; si no, la suscripción de abajo hace el salto cuando toque. Mismo
+  // guard `=== null` que `viaMorphRef`: StrictMode doble-invoca el render y el consumo debe ser único.
+  const morphStartRef = useRef<boolean | null>(null)
+  if (morphStartRef.current === null) {
+    morphStartRef.current = viaMorphRef.current ? consumeMorphStartConfirmed() : false
+  }
+  const [phase, setPhase] = useState<ExecPhase>(
+    viaMorphRef.current ? (morphStartRef.current ? 'session' : 'start') : 'intro',
+  )
   // Crossfade Inicio → sesión (QA device: el swap era un corte seco). El Inicio se desvanece
   // (`startExiting`) y la sesión entra con un fade del mismo largo: como ambas pantallas comparten el
   // fondo del ejecutor, se lee como una disolvencia. reduced-motion ⇒ swap directo, sin timer.
@@ -338,6 +355,14 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
   useEffect(() => {
     if (viaMorphRef.current && !loading) signalMorphSceneReady()
   }, [loading])
+
+  // FUSIÓN (mockup 6): el tap del Despegue entra DIRECTO a la sesión, saltando el Inicio (`SessionStart`
+  // sigue existiendo para el camino SIN morph: deep link / reanudar). Sin crossfade propio — el overlay
+  // del Despegue todavía cubre la pantalla y hace la transición.
+  useEffect(() => {
+    if (!viaMorphRef.current) return undefined
+    return subscribeMorphStartConfirmed(() => setPhase('session'))
+  }, [])
 
   const { hasModule } = useEntitlements()
   const planHasHrZone = useMemo(() => blocks.some((b) => b.hr_zone != null), [blocks])
@@ -382,15 +407,58 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
     [substitutionByBlock, sessionLogs],
   )
 
+  // ── Ejercicios OMITIDOS (mockup 3) ──
+  // El alumno declara "hoy no puedo hacer este" y el bloque queda RESUELTO. La marca NO es estado
+  // local: viaja como una fila de `workout_logs` con `metadata.skipped` por el MISMO pipeline `logSet`
+  // (ver `handleSkipBlock`), así el coach la ve en el registro y sobrevive a un reload / a la cola
+  // offline. Acá sólo se LEE de `sessionLogs`.
+  const skippedBlockIds = useMemo(() => new Set(skippedBlockIdsFromLogs(sessionLogs)), [sessionLogs])
+  const skipReasonByBlock = useMemo(() => {
+    const map: Record<string, string | null> = {}
+    for (const l of sessionLogs) {
+      if (isSkippedSetRow(l)) map[l.block_id] = l.metadata?.skip_reason ?? null
+    }
+    return map
+  }, [sessionLogs])
+
+  /**
+   * `sessionLogs` SIN las filas de omisión — la verdad de "series ENTRENADAS". Lo consumen el resumen
+   * final y el import del reloj: una omisión no es una serie (sin esto el resumen le sumaría una serie
+   * fantasma al volumen del alumno y el import del reloj ofrecería "completar ejes" de un cardio que
+   * nunca se hizo).
+   */
+  const trainedLogs = useMemo(() => sessionLogs.filter((l) => !isSkippedSetRow(l)), [sessionLogs])
+
+  /**
+   * Logs EXPANDIDOS — sólo para calcular COMPLETITUD. Un bloque omitido aporta una fila virtual por
+   * cada serie prescrita que le falta, así toda la maquinaria de pasos del motor (`isStepComplete`,
+   * `firstIncompleteStepIndex`) lo lee como resuelto sin duplicar la regla ni tocar el engine.
+   * JAMÁS alimenta conteos de series hechas, el resumen, el PR ni nada que el coach lea como trabajo:
+   * esas superficies siguen consumiendo `sessionLogs` (y las filas de omisión se les filtran aparte).
+   */
+  const completionLogs = useMemo(() => {
+    if (skippedBlockIds.size === 0) return sessionLogs as { block_id: string; set_number: number }[]
+    const out: { block_id: string; set_number: number }[] = sessionLogs.map((l) => ({ block_id: l.block_id, set_number: l.set_number }))
+    for (const b of blocks) {
+      if (!skippedBlockIds.has(b.id)) continue
+      for (let i = 1; i <= Math.max(1, b.sets); i += 1) {
+        if (!out.some((l) => l.block_id === b.id && l.set_number === i)) out.push({ block_id: b.id, set_number: i })
+      }
+    }
+    return out
+  }, [sessionLogs, blocks, skippedBlockIds])
+
   const isBlockComplete = useCallback(
     (b: SessionBlock) => {
+      // Omitido = resuelto (cuenta para encender "Finalizar" y cerrar el día), aunque no tenga series.
+      if (skippedBlockIds.has(b.id)) return true
       let done = 0
       for (let i = 1; i <= b.sets; i += 1) {
         if (sessionLogs.some((l) => l.block_id === b.id && l.set_number === i)) done += 1
       }
       return done >= b.sets
     },
-    [sessionLogs],
+    [sessionLogs, skippedBlockIds],
   )
   const currentExerciseIdx = blocks.findIndex((b) => !isBlockComplete(b))
   const activeBlockId = currentExerciseIdx === -1 ? null : blocks[currentExerciseIdx]?.id ?? null
@@ -790,6 +858,55 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
     [handleCommit],
   )
 
+  /**
+   * OMITIR un ejercicio (mockup 3). Escribe UNA fila por el MISMO pipeline que una serie (`logSet`:
+   * optimista + snapshot + select-then-update + cola offline) pero SIN valores de ejes: sólo
+   * `metadata { skipped, skip_reason }`. Es lo que hace que el coach LO VEA en el registro y que la
+   * omisión sobreviva a un reload o a quedarse sin señal.
+   *
+   * DELIBERADAMENTE NO pasa por `handleCommit`: omitir no es cerrar una serie ⇒ no arranca descanso,
+   * no celebra, no calcula PR y no suma volumen. El `set_number` elegido es la primera serie SIN
+   * registrar del bloque, así jamás pisa una serie que el alumno sí entrenó antes de omitir.
+   *
+   * Sin "deshacer": la fila ya viajó al registro y el pipeline no borra logs. El guard es el
+   * mini-sheet (confirmación explícita).
+   */
+  const handleSkipBlock = useCallback(
+    async (blockId: string, reason: SkipReason | null) => {
+      const block = blocks.find((b) => b.id === blockId)
+      setSkipBlockId(null)
+      if (!block) return
+      let setNumber = 1
+      for (let i = 1; i <= Math.max(1, block.sets); i += 1) {
+        if (!sessionLogs.some((l) => l.block_id === blockId && l.set_number === i)) { setNumber = i; break }
+      }
+      // Un descanso en curso pierde sentido si el alumno abandona el ejercicio.
+      timers.cancelRest()
+      void haptics.warning()
+      const { error } = await logSet({
+        blockId,
+        setNumber,
+        weightKg: null,
+        repsDone: null,
+        rpe: null,
+        rir: null,
+        metadata: buildSkipMetadata(reason),
+      })
+      const setKey = `${blockId}:${setNumber}`
+      if (error) {
+        setSyncErrors((m) => ({ ...m, [setKey]: error }))
+        return
+      }
+      setSyncErrors((m) => {
+        if (!(setKey in m)) return m
+        const next = { ...m }
+        delete next[setKey]
+        return next
+      })
+    },
+    [blocks, sessionLogs, logSet, timers],
+  )
+
   const handleDraftChange = useCallback(
     (values: Record<string, string>, fieldIndex: number) => {
       if (!keypadTarget) return
@@ -975,7 +1092,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
       if (!ex || effectiveExerciseType(b, ex) !== 'cardio') continue
       // La distancia solo cuenta como "eje vacío" si la modalidad la captura (la elíptica no la pide).
       const wantsDistance = cardioHasDistanceAxis(ex.cardio_modality ?? null)
-      const pending = sessionLogs
+      const pending = trainedLogs
         .filter((l) => l.block_id === b.id)
         .sort((a, z) => a.set_number - z.set_number)
         .find(
@@ -994,7 +1111,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
       })
     }
     return out
-  }, [healthAvailable, blocks, sessionLogs])
+  }, [healthAvailable, blocks, trainedLogs])
 
   /**
    * Aplica el workout del reloj a UNA serie de cardio. Reglas duras del SPEC, todas resueltas por el
@@ -1107,9 +1224,12 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
           // home.tsx / web dashboard.queries.ts): la atribucion greedy necesita a que PLAN pertenece cada
           // log, no solo su fecha. To-one que llega como objeto en runtime (se normaliza abajo).
           // `block_id`/`set_number` = granularidad de SERIE: un dia solo cierra al 100%, no con un log.
+          // `metadata` viaja para que los EJERCICIOS OMITIDOS resuelvan su bloque en
+          // `deriveDayCompletion` (mockup 3): sin la columna el día quedaría eternamente a medias en
+          // los dots de la racha aunque el alumno lo hubiera cerrado con omisiones.
           supabase
             .from('workout_logs')
-            .select('logged_at, block_id, set_number, workout_blocks ( plan_id )')
+            .select('logged_at, block_id, set_number, metadata, workout_blocks ( plan_id )')
             .eq('client_id', clientId)
             .gte('logged_at', startIso)
             .lt('logged_at', endIso),
@@ -1138,6 +1258,10 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
           loggedSetsByPlanDay: new Map(
             [...rowsByPlanDay].map(([key, bucket]) => [key, countLoggedSetsByBlock(bucket)]),
           ),
+          // Ejercicios OMITIDOS del dia: resuelven su bloque sin sumar series (mockup 3).
+          skippedBlockIdsByPlanDay: new Map(
+            [...rowsByPlanDay].map(([key, bucket]) => [key, skippedBlockIdsFromLogs(bucket)]),
+          ),
         }
         // Dia cerrado (100%) vs a medias: los dots del ejecutor pintan la MISMA verdad que la day-card.
         const { doneDates, inProgressDates } = greedyStatesForWeek(plans, weekDates, today, completionSource)
@@ -1152,6 +1276,13 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
   }, [clientId, summaryOpen])
 
   const substituteBlock = substituteBlockId ? blocks.find((b) => b.id === substituteBlockId) : null
+  const skipBlock = skipBlockId ? blocks.find((b) => b.id === skipBlockId) : null
+  // "Máquina ocupada" sólo describe el caso de FUERZA; los tipados se cambian por otras razones.
+  const substituteIsMachineCase = useMemo(() => {
+    if (!substituteBlock) return true
+    const ex = resolveExercise(substituteBlock)
+    return ex ? effectiveExerciseType(substituteBlock, ex) === 'strength' : true
+  }, [substituteBlock])
 
   // ── Datos del Inicio V3 (E2.2) — derivados ya formateados para SessionStart/SessionIntro. ──
   const coachName = branding?.displayName?.trim() || 'Tu coach'
@@ -1272,7 +1403,9 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
       if (!prescribed) return null
       const effType = effectiveExerciseType(block, prescribed)
       const isStrengthBlock = effType === 'strength'
-      const sub = isStrengthBlock ? getSubstitution(block) : null
+      // Mockup 3: "Cambiar" dejó de ser exclusivo de fuerza — movilidad, cardio y roller también se
+      // sustituyen por hoy (mismo músculo, mismo tipo de catálogo: lo garantiza el candidate set).
+      const sub = getSubstitution(block)
       const exercise: SessionExercise = sub
         ? {
             ...prescribed,
@@ -1286,9 +1419,14 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
             instructions: sub.instructions,
           }
         : prescribed
-      const blockLogs = sessionLogs.filter((l) => l.block_id === block.id)
+      // La fila de OMISIÓN se filtra de `blockLogs`: no es una serie entrenada, así que no debe
+      // aparecer en el historial de la card, ni encender un cuadradito del pie, ni correr la serie
+      // activa. La pantalla recibe el hecho por `skipped`/`skipReason`.
+      const blockLogs = sessionLogs.filter((l) => l.block_id === block.id && !isSkippedSetRow(l))
+      const skipped = skippedBlockIds.has(block.id)
+      const skipReason = skipReasonByBlock[block.id] ?? null
       const doneCount = new Set(blockLogs.filter((l) => l.set_number >= 1 && l.set_number <= block.sets).map((l) => l.set_number)).size
-      const complete = doneCount >= block.sets
+      const complete = skipped || doneCount >= block.sets
       const focus: 'active' | 'upcoming' | 'done' = complete ? 'done' : block.id === activeBlockId ? 'active' : 'upcoming'
       const prevList: PrevSet[] = sub ? [] : previousHistory[exercise.id] ?? []
       // E2.3: la pantalla "Fuerza" V3 reemplaza el cuerpo del paso para bloques strength (media siempre
@@ -1310,7 +1448,13 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
             exec={exec}
             showEffort={execSettings.showRpeRir}
             substitution={sub ? { name: sub.name, prescribedName: sub.prescribedName } : null}
-            canSubstitute={doneCount === 0}
+            // Mockup 3: cambiar ya no exige "cero series" — se puede mientras el bloque no esté
+            // resuelto (las series ya registradas conservan su propio ejercicio en el log).
+            canSubstitute={!complete}
+            skipped={skipped}
+            skipReason={skipReason}
+            canSkip={!complete}
+            onOpenSkip={() => setSkipBlockId(block.id)}
             onOpenTechnique={() => setTechniqueExercise(exercise)}
             onOpenSet={(setNumber) => openSet(block.id, setNumber)}
             onCommitSet={handleCommit}
@@ -1336,6 +1480,14 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
             restoredDraft={restoredDraft}
             reducedMotion={motion.reduced}
             exec={exec}
+            substitution={sub ? { name: sub.name, prescribedName: sub.prescribedName } : null}
+            canSubstitute={!complete}
+            onOpenSubstitute={() => setSubstituteBlockId(block.id)}
+            onUndoSubstitution={() => setSubstitutionByBlock((p) => { const n = { ...p }; delete n[block.id]; return n })}
+            skipped={skipped}
+            skipReason={skipReason}
+            canSkip={!complete}
+            onOpenSkip={() => setSkipBlockId(block.id)}
             onOpenTechnique={() => setTechniqueExercise(exercise)}
             onOpenSet={(setNumber) => openSet(block.id, setNumber)}
             onCommitSet={handleCommit}
@@ -1355,6 +1507,14 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
             blockLogs={blockLogs}
             reducedMotion={motion.reduced}
             exec={exec}
+            substitution={sub ? { name: sub.name, prescribedName: sub.prescribedName } : null}
+            canSubstitute={!complete}
+            onOpenSubstitute={() => setSubstituteBlockId(block.id)}
+            onUndoSubstitution={() => setSubstitutionByBlock((p) => { const n = { ...p }; delete n[block.id]; return n })}
+            skipped={skipped}
+            skipReason={skipReason}
+            canSkip={!complete}
+            onOpenSkip={() => setSkipBlockId(block.id)}
             onOpenTechnique={() => setTechniqueExercise(exercise)}
             onOpenSet={(setNumber) => openSet(block.id, setNumber)}
             onCommitSet={handleCommit}
@@ -1376,6 +1536,14 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
             exec={exec}
             hrZones={hrZones}
             hrProfile={hrProfile}
+            substitution={sub ? { name: sub.name, prescribedName: sub.prescribedName } : null}
+            canSubstitute={!complete}
+            onOpenSubstitute={() => setSubstituteBlockId(block.id)}
+            onUndoSubstitution={() => setSubstitutionByBlock((p) => { const n = { ...p }; delete n[block.id]; return n })}
+            skipped={skipped}
+            skipReason={skipReason}
+            canSkip={!complete}
+            onOpenSkip={() => setSkipBlockId(block.id)}
             onOpenTechnique={() => setTechniqueExercise(exercise)}
             onOpenSet={(setNumber) => openSet(block.id, setNumber)}
             onCommitSet={handleCommit}
@@ -1400,7 +1568,9 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
           focus={focus}
           detailsOpen={!!openDetails[block.id]}
           substitution={sub ? { name: sub.name, prescribedName: sub.prescribedName } : null}
-          canSubstitute={doneCount === 0 && isStrengthBlock}
+          // Fallback de tipos sin pantalla V3 dedicada: la card decide internamente si muestra el chip
+          // (`SingleExerciseCard:320` sigue gateando en `isStrength`); acá sólo se afloja el "cero series".
+          canSubstitute={!complete}
           restoredDraft={restoredDraft}
           hrZones={hrZones}
           reducedMotion={motion.reduced}
@@ -1418,7 +1588,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         />
       )
     },
-    [supersetMembersByBlock, sessionLogs, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, getSubstitution, openSet, hrZones, hrProfile, restoredDraft, repeatSeed, motion.reduced, exec, execSettings.showRpeRir, handleCommit, handleRpeUpdate, saveActiveDraft, recentSet, syncErrors, retryCommit],
+    [supersetMembersByBlock, sessionLogs, skippedBlockIds, skipReasonByBlock, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, getSubstitution, openSet, hrZones, hrProfile, restoredDraft, repeatSeed, motion.reduced, exec, execSettings.showRpeRir, handleCommit, handleRpeUpdate, saveActiveDraft, recentSet, syncErrors, retryCommit],
   )
 
   // ── Modelo de pasos (engine) + vistas del rail + auto-avance ──
@@ -1451,10 +1621,14 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
           title,
           sectionTitle: st.sectionTitle,
           muted: st.muted,
-          complete: isStepComplete(st, sessionLogs),
+          // Resuelto = todas las series hechas O el bloque declarado omitido (`completionLogs`).
+          complete: isStepComplete(st, completionLogs),
+          // El rail pinta el segmento omitido en ámbar, no en el acento de "hecho": el paso está
+          // resuelto pero NO entrenado, y esa diferencia tiene que verse.
+          skipped: st.blocks.length > 0 && st.blocks.every((b) => skippedBlockIds.has(b.id)),
         }
       }),
-    [steps, sessionLogs],
+    [steps, completionLogs, skippedBlockIds],
   )
   const renderStep = useCallback(
     (index: number) => {
@@ -1478,10 +1652,12 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
   const listItems = useMemo<ExerciseListItem[]>(() => {
     const out: ExerciseListItem[] = []
     let ssOrd = 0
+    // Las filas de OMISIÓN no son series: no inflan el "N de M" del índice (el bloque igual se marca
+    // resuelto más abajo).
     const doneSetsOf = (b: SessionBlock) =>
       new Set(
         sessionLogs
-          .filter((l) => l.block_id === b.id && l.set_number >= 1 && l.set_number <= b.sets)
+          .filter((l) => l.block_id === b.id && !isSkippedSetRow(l) && l.set_number >= 1 && l.set_number <= b.sets)
           .map((l) => l.set_number),
       ).size
     for (const st of steps) {
@@ -1502,7 +1678,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
             groupTitle: mi === 0 ? `Superserie ${groupLetter}` : null,
             doneSets: done,
             totalSets: b.sets,
-            complete: b.sets > 0 && done >= b.sets,
+            complete: skippedBlockIds.has(b.id) || (b.sets > 0 && done >= b.sets),
             isCurrent: b.id === headerActiveBlockId,
           })
         })
@@ -1522,20 +1698,20 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
           groupTitle: null,
           doneSets: done,
           totalSets: b.sets,
-          complete: b.sets > 0 && done >= b.sets,
+          complete: skippedBlockIds.has(b.id) || (b.sets > 0 && done >= b.sets),
           isCurrent: b.id === headerActiveBlockId,
         })
       }
     }
     return out
-  }, [steps, sessionLogs, exec.accent, headerActiveBlockId])
+  }, [steps, sessionLogs, skippedBlockIds, exec.accent, headerActiveBlockId])
 
   // ── Interstitial de descanso V3 (E3.1) ──
   // "Qué retoma" al terminar el descanso: el primer paso incompleto (mismo destino que el auto-avance).
   // Alimenta la tarjeta SIGUIENTE (nombre + prescripcion + mini-media) y la nota del coach del overlay.
   const restNextData = useMemo(() => {
     if (steps.length === 0) return null
-    const idx = firstIncompleteStepIndex(steps, sessionLogs)
+    const idx = firstIncompleteStepIndex(steps, completionLogs)
     const st = steps[Math.min(idx, steps.length - 1)]
     if (!st) return null
     const b = st.blocks[0]
@@ -1549,7 +1725,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
     const prescription = `${b.sets} × ${b.reps}${w != null ? ` · ${formatWeightEsCl(w)} kg` : ''}`
     const coachNote = b.notes?.trim() ? b.notes.trim() : null
     return { index: idx, next: { name, prescription, exercise: ex }, coachNote }
-  }, [steps, sessionLogs, effByBlock])
+  }, [steps, completionLogs, effByBlock])
 
   // Snapshot que lee el renderer (identidad estable) — se actualiza en cada render con datos frescos.
   const interstitialDataRef = useRef<RestInterstitialData | null>(null)
@@ -1589,24 +1765,24 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
   useEffect(() => {
     if (loading || steps.length === 0 || didHydrateStepPosRef.current) return
     didHydrateStepPosRef.current = true
-    setStepIndex(firstIncompleteStepIndex(steps, sessionLogs))
-  }, [loading, steps, sessionLogs])
+    setStepIndex(firstIncompleteStepIndex(steps, completionLogs))
+  }, [loading, steps, completionLogs])
 
-  // Auto-avance de paso (paridad ExecutorV2): al CERRAR el paso activo, reposiciona al primer
-  // incompleto global; una sola vez por paso (guard).
+  // Auto-avance de paso (paridad ExecutorV2): al RESOLVER el paso activo —todas sus series hechas U
+  // omitido— reposiciona al primer paso sin resolver; una sola vez por paso (guard).
   useEffect(() => {
     if (steps.length === 0) return
     const active = steps[Math.min(stepIndex, steps.length - 1)]
     if (!active || autoAdvancedRef.current.has(active.key)) return
-    if (!isStepComplete(active, sessionLogs)) return
-    if (steps.every((st) => isStepComplete(st, sessionLogs))) return
-    const target = firstIncompleteStepIndex(steps, sessionLogs)
+    if (!isStepComplete(active, completionLogs)) return
+    if (steps.every((st) => isStepComplete(st, completionLogs))) return
+    const target = firstIncompleteStepIndex(steps, completionLogs)
     const t = setTimeout(() => {
       autoAdvancedRef.current.add(active.key)
       setStepIndex((i) => (i === stepIndex ? target : i))
     }, 350)
     return () => clearTimeout(t)
-  }, [sessionLogs, stepIndex, steps])
+  }, [completionLogs, stepIndex, steps])
 
   // Estado vacio (paridad ExecutorV2): plan resuelto pero sin ejercicios.
   if (!loading && blocks.length === 0) {
@@ -1876,6 +2052,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         blockId={substituteBlockId}
         prescribedName={substituteBlock ? resolveExercise(substituteBlock)?.name ?? 'Ejercicio' : 'Ejercicio'}
         muscleGroup={substituteBlock ? resolveExercise(substituteBlock)?.muscle_group ?? '' : ''}
+        machineBusy={substituteIsMachineCase}
         exec={exec}
         reducedMotion={!!motion.reduced}
         onConfirm={(opt) => {
@@ -1899,6 +2076,17 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         }}
       />
 
+      {/* Mini-sheet de OMISIÓN (mockup 3): motivo opcional + confirmación. La persistencia la hace
+          `handleSkipBlock` por el pipeline `logSet` (una fila con `metadata.skipped`). */}
+      <SkipBlockSheetV3
+        open={skipBlockId != null}
+        onClose={() => setSkipBlockId(null)}
+        exerciseName={skipBlock ? resolveExercise(skipBlock)?.name ?? 'Este ejercicio' : 'Este ejercicio'}
+        exec={exec}
+        reducedMotion={!!motion.reduced}
+        onConfirm={(reason) => { if (skipBlockId) void handleSkipBlock(skipBlockId, reason) }}
+      />
+
       <SessionCompleteV3
         visible={summaryOpen}
         exec={exec}
@@ -1907,7 +2095,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         planTitle={planTitle}
         contextLine={finalContext.contextLine}
         blocks={summaryBlocks}
-        logs={sessionLogs}
+        logs={trainedLogs}
         exerciseMaxes={exerciseMaxes}
         exerciseMaxDates={exerciseMaxDates}
         durationSec={finishedElapsed ?? elapsedSec}

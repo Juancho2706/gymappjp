@@ -48,6 +48,10 @@ const NAV_FADE = { type: 'timing' as const, duration: 150, easing: EASE.out }
 // resuelven en runtime vía el theme context (ver `sport400`/`railDone` abajo). RN no anima clases
 // NativeWind, así que el fade `transition-colors` se hace con MotiView sobre backgroundColor.
 const RAIL_UPCOMING = 'rgba(255,255,255,0.15)' // bg-white/15
+// Rail "omitido" (mockup 3): ámbar semántico FIJO — el paso está RESUELTO pero no entrenado, y eso no
+// puede leerse igual que un "hecho" con la rampa sport. Mismo literal que el badge "Omitido"
+// (`exercise-actions.EXEC_SKIP_AMBER`); no se re-tiñe por white-label, igual que el oro del PR.
+const RAIL_SKIPPED = 'rgba(245,176,74,0.7)'
 
 // Clearance del contenido para dejar libre la barra fija "Finalizar" — paridad web `pb-32` = 128px
 // (StepperExecution.tsx:90). En RN la barra (`.exec-finish-bar`, ExecutorV2 FINISH_BAR_H=88) se
@@ -76,8 +80,10 @@ export interface StepperStepView {
   sectionTitle: string
   /** Warmup/cooldown ⇒ eyebrow atenuado. */
   muted: boolean
-  /** ¿El paso está completo? (color del segmento del rail). */
+  /** ¿El paso está RESUELTO? (todas sus series registradas, u omitido — color del segmento del rail). */
   complete: boolean
+  /** ¿El paso quedó resuelto por OMISIÓN? (mockup 3) → segmento ámbar y "Omitido" en el pie/a11y. */
+  skipped?: boolean
 }
 
 // ── Scroll-into-view de inputs del paso (QA: la nota de la serie quedaba tapada por el teclado) ──────
@@ -312,22 +318,32 @@ export function StepperExecution({
           accessibilityLabel="Progreso de ejercicios"
         >
           {steps.map((s, i) => {
-            const state = i === idx ? 'active' : s.complete ? 'done' : 'upcoming'
+            const state = i === idx ? 'active' : s.skipped ? 'skipped' : s.complete ? 'done' : 'upcoming'
             return (
               <Pressable
                 key={s.key}
                 testID={`stepper-rail-${i}`}
                 onPress={() => goTo(i)}
                 accessibilityRole="button"
-                accessibilityLabel={`Ir al ejercicio ${i + 1} de ${total}: ${s.title}`}
+                accessibilityLabel={`Ir al ejercicio ${i + 1} de ${total}: ${s.title}${s.skipped ? ' (omitido)' : ''}`}
                 accessibilityState={{ selected: i === idx }}
                 className="-my-2 flex-1 justify-center py-2"
               >
                 {/* `transition-colors` del web → fade de backgroundColor con moti. active/done leen la
-                    rampa sport resuelta en runtime (white-label aware); upcoming es blanco/15. */}
+                    rampa sport resuelta en runtime (white-label aware); upcoming es blanco/15;
+                    omitido es el ámbar semántico fijo (resuelto, pero NO entrenado). */}
                 <MotiView
                   className="h-1.5 w-full rounded-full"
-                  animate={{ backgroundColor: state === 'active' ? sport400 : state === 'done' ? railDone : RAIL_UPCOMING }}
+                  animate={{
+                    backgroundColor:
+                      state === 'active'
+                        ? sport400
+                        : state === 'skipped'
+                          ? RAIL_SKIPPED
+                          : state === 'done'
+                            ? railDone
+                            : RAIL_UPCOMING,
+                  }}
                   transition={{ type: 'timing', duration: 150, easing: EASE.out }}
                 />
               </Pressable>

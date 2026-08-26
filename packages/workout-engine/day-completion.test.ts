@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+    buildSkipMetadata,
     countLoggedSetsByBlock,
     deriveDayCompletion,
     expectedSetsForBlock,
+    isSkippedSetRow,
+    skippedBlockIdsFromLogs,
 } from './day-completion'
 
 describe('expectedSetsForBlock — denominador por bloque', () => {
@@ -270,5 +273,94 @@ describe('countLoggedSetsByBlock — filas de log => loggedSetsByBlock', () => {
         expect(
             deriveDayCompletion({ blocks: [{ id: 'b1', sets: 3 }], loggedSetsByBlock: counts })
         ).toMatchObject({ state: 'in_progress', logged: 2, expected: 3 })
+    })
+})
+
+describe('ejercicios OMITIDOS — un skip resuelve el bloque sin sumar series', () => {
+    const skip = (blockId: string, setNumber = 1) => ({
+        block_id: blockId,
+        set_number: setNumber,
+        metadata: buildSkipMetadata('no_space'),
+    })
+
+    it('buildSkipMetadata: con motivo lo lleva; sin motivo sólo marca skipped', () => {
+        expect(buildSkipMetadata('machine_busy')).toEqual({ skipped: true, skip_reason: 'machine_busy' })
+        expect(buildSkipMetadata(null)).toEqual({ skipped: true })
+    })
+
+    it('isSkippedSetRow reconoce la fila de omisión y sólo esa', () => {
+        expect(isSkippedSetRow(skip('b1'))).toBe(true)
+        expect(isSkippedSetRow({ metadata: { left_sec: 20, right_sec: 20 } as never })).toBe(false)
+        expect(isSkippedSetRow({ metadata: null })).toBe(false)
+        expect(isSkippedSetRow({})).toBe(false)
+        expect(isSkippedSetRow(null)).toBe(false)
+    })
+
+    it('countLoggedSetsByBlock NO cuenta la fila de omisión (no es una serie entrenada)', () => {
+        expect(
+            countLoggedSetsByBlock([
+                { block_id: 'b1', set_number: 1 },
+                skip('b1', 2),
+                skip('b2'),
+            ])
+        ).toEqual({ b1: 1 })
+    })
+
+    it('skippedBlockIdsFromLogs devuelve los bloques declarados omitidos, deduplicados', () => {
+        expect(skippedBlockIdsFromLogs([{ block_id: 'b1', set_number: 1 }])).toEqual([])
+        expect(skippedBlockIdsFromLogs([skip('b2'), skip('b2', 2), { block_id: null }])).toEqual(['b2'])
+    })
+
+    it('un bloque omitido cuenta por su esperado COMPLETO y cierra el día', () => {
+        const rows = [
+            { block_id: 'b1', set_number: 1 },
+            { block_id: 'b1', set_number: 2 },
+            { block_id: 'b1', set_number: 3 },
+            skip('b2'),
+        ]
+        expect(
+            deriveDayCompletion({
+                blocks: [
+                    { id: 'b1', sets: 3 },
+                    { id: 'b2', sets: 4 },
+                ],
+                loggedSetsByBlock: countLoggedSetsByBlock(rows),
+                skippedBlockIds: skippedBlockIdsFromLogs(rows),
+            })
+        ).toEqual({ state: 'done', pct: 1, expected: 7, logged: 7 })
+    })
+
+    it('omitir a mitad de un bloque también lo resuelve entero (sin duplicar el numerador)', () => {
+        const rows = [{ block_id: 'b1', set_number: 1 }, skip('b1', 2)]
+        expect(
+            deriveDayCompletion({
+                blocks: [{ id: 'b1', sets: 3 }],
+                loggedSetsByBlock: countLoggedSetsByBlock(rows),
+                skippedBlockIds: skippedBlockIdsFromLogs(rows),
+            })
+        ).toEqual({ state: 'done', pct: 1, expected: 3, logged: 3 })
+    })
+
+    it('un bloque omitido de un plan con otro pendiente deja el día in_progress', () => {
+        expect(
+            deriveDayCompletion({
+                blocks: [
+                    { id: 'b1', sets: 2 },
+                    { id: 'b2', sets: 2 },
+                ],
+                loggedSetsByBlock: {},
+                skippedBlockIds: ['b1'],
+            })
+        ).toEqual({ state: 'in_progress', pct: 0.5, expected: 4, logged: 2 })
+    })
+
+    it('skippedBlockIds de un bloque que ya no existe en el plan se ignora', () => {
+        expect(
+            deriveDayCompletion({
+                blocks: [{ id: 'b1', sets: 2 }],
+                loggedSetsByBlock: { b1: 2 },
+                skippedBlockIds: ['huerfano'],
+            })
+        ).toEqual({ state: 'done', pct: 1, expected: 2, logged: 2 })
     })
 })

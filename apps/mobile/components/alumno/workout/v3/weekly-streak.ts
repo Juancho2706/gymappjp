@@ -110,11 +110,15 @@ export function plannedDatesForWeek(plans: WeekPlanRow[], weekDates: string[]): 
  *   · `loggedSetsByPlanDay` — series registradas por dia calendario Santiago: clave `planId|ymd` →
  *     `{ [blockId]: cantidad }` (armado con `countLoggedSetsByBlock` del engine, que ya deduplica por
  *     `(block_id, set_number)`).
+ *   · `skippedBlockIdsByPlanDay` (OPCIONAL) — bloques que el alumno declaro OMITIDOS ese dia, clave
+ *     `planId|ymd` → ids (armado con `skippedBlockIdsFromLogs` del engine). Cada uno resuelve su
+ *     bloque entero: sin esto un dia cerrado a base de omisiones se veria eternamente "a medias".
  * Un plan/dia ausente en los mapas simplemente no tiene series ⇒ `none`.
  */
 export interface PlanWeekCompletionSource {
   blocksByPlan: ReadonlyMap<string, readonly DayCompletionBlock[]>
   loggedSetsByPlanDay: ReadonlyMap<string, Readonly<Record<string, number>>>
+  skippedBlockIdsByPlanDay?: ReadonlyMap<string, readonly string[]>
 }
 
 /** Estado de completitud de UN plan en UN dia calendario, via la regla unica del engine. */
@@ -123,9 +127,11 @@ export function planDayCompletionState(
   planId: string,
   dateIso: string,
 ): DayCompletionState {
+  const key = `${planId}|${dateIso}`
   return deriveDayCompletion({
     blocks: source.blocksByPlan.get(planId) ?? [],
-    loggedSetsByBlock: source.loggedSetsByPlanDay.get(`${planId}|${dateIso}`) ?? {},
+    loggedSetsByBlock: source.loggedSetsByPlanDay.get(key) ?? {},
+    skippedBlockIds: source.skippedBlockIdsByPlanDay?.get(key),
   }).state
 }
 

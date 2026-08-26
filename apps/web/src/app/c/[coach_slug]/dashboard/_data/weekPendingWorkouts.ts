@@ -1,6 +1,7 @@
 import {
     countLoggedSetsByBlock,
     deriveDayCompletion,
+    skippedBlockIdsFromLogs,
     type DayCompletionBlock,
     type LoggedSetRow,
 } from '@eva/workout-engine'
@@ -262,7 +263,17 @@ export function deriveWeekWorkoutStatus(input: {
         // `[]`) no hay denominador que medir, y degradar a "nunca done" convertiría días REALES en
         // pendientes. En ese caso se conserva el comportamiento previo: ≥1 serie = hecho.
         const completion = blocks
-            ? deriveDayCompletion({ blocks, loggedSetsByBlock: countLoggedSetsByBlock(rows) })
+            ? deriveDayCompletion({
+                  blocks,
+                  loggedSetsByBlock: countLoggedSetsByBlock(rows),
+                  // OMISIONES (mockup 3 del ejecutor): el alumno puede resolver un bloque declarando que
+                  // lo omite. Esa fila NO es una serie entrenada (`countLoggedSetsByBlock` la ignora), así
+                  // que sin esto un día cerrado a base de omisiones se quedaría eternamente parcial en el
+                  // panel del coach — pendiente ámbar incluido. Requiere que el caller traiga `metadata`
+                  // en el select de `workout_logs` (ver `WeekLogRow`); sin la columna el array es vacío y
+                  // el comportamiento es idéntico al histórico.
+                  skippedBlockIds: skippedBlockIdsFromLogs(rows),
+              })
             : { state: 'done' as const, pct: 1 }
         pctByPlanDay.set(`${planId}|${ymd}`, completion.pct)
         if (completion.state !== 'done') continue

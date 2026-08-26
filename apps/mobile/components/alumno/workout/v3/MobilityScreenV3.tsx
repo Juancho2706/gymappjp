@@ -12,6 +12,7 @@ import { timerHaptics } from '../../../../lib/haptics'
 import type { SessionBlock, SessionDraft, SessionExercise } from '../../../../lib/workout-session'
 import { Sheet } from '../../../Sheet'
 import { ActiveSetRow, SetRow } from '../SetRow'
+import { ExerciseActionChips } from './exercise-actions'
 import { JuicyButton } from './JuicyButton'
 import { ProgressRing } from './ProgressRing'
 import { TypedMediaV3, TypedInstructionsChip, hasExecMedia } from './TypedMediaV3'
@@ -37,6 +38,14 @@ export function MobilityScreenV3({
   restoredDraft,
   reducedMotion = false,
   exec,
+  substitution = null,
+  canSubstitute = false,
+  onOpenSubstitute,
+  onUndoSubstitution,
+  skipped = false,
+  skipReason = null,
+  canSkip = false,
+  onOpenSkip,
   onOpenTechnique,
   onOpenSet,
   onCommitSet,
@@ -51,6 +60,16 @@ export function MobilityScreenV3({
   restoredDraft: SessionDraft | null
   reducedMotion?: boolean
   exec: ExecTheme
+  /** Sustitución de HOY (mockup 3: ya no es exclusiva de fuerza). */
+  substitution?: { name: string; prescribedName: string } | null
+  canSubstitute?: boolean
+  onOpenSubstitute?: () => void
+  onUndoSubstitution?: () => void
+  /** El alumno declaró OMITIDO este bloque: se retira la captura y queda el badge. */
+  skipped?: boolean
+  skipReason?: string | null
+  canSkip?: boolean
+  onOpenSkip?: () => void
   onOpenTechnique: () => void
   onOpenSet: (setNumber: number) => void
   onCommitSet: (payload: OptimisticLogPayload) => void
@@ -76,6 +95,9 @@ export function MobilityScreenV3({
   for (let i = 1; i <= block.sets; i += 1) {
     if (!loggedSetNumbers.has(i)) { firstUnlogged = i; break }
   }
+  // Bloque OMITIDO ⇒ no hay serie activa: se retiran el anillo de hold y la fila de captura. El
+  // historial de lo YA registrado antes de omitir se conserva.
+  const activeSet = skipped ? null : firstUnlogged
 
   // Secuencia de lados de la serie ACTIVA. `sideIdx` recorre `sides`; `timed` acumula los segundos por
   // lado; `seedNonce` remonta la fila de captura cada vez que hay prefill nuevo. QA4 h8b: la fila de
@@ -157,12 +179,25 @@ export function MobilityScreenV3({
               Movilidad{exercise.muscle_group ? ` · ${exercise.muscle_group}` : ''}
             </Text>
           </View>
-          {firstUnlogged != null && block.sets > 1 && (
+          {activeSet != null && block.sets > 1 && (
             <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: s.textMuted, fontVariant: ['tabular-nums'] }}>
-              Serie {firstUnlogged} de {block.sets}
+              Serie {activeSet} de {block.sets}
             </Text>
           )}
         </View>
+        {/* Cambiar / Omitir + badges de estado — misma fila compartida que la pantalla de fuerza. */}
+        <ExerciseActionChips
+          exec={exec}
+          exerciseName={exercise.name}
+          substituted={!!substitution}
+          canSubstitute={canSubstitute}
+          onOpenSubstitute={onOpenSubstitute}
+          onUndoSubstitution={onUndoSubstitution}
+          skipped={skipped}
+          skipReason={skipReason}
+          canSkip={canSkip}
+          onOpenSkip={onOpenSkip}
+        />
       </View>
 
       {/* Media serena — chips "Instrucciones" + "Nota del coach" DENTRO de la media (overlay superior-
@@ -183,7 +218,7 @@ export function MobilityScreenV3({
 
       {/* ── Secuencia de hold (anillo sereno + lado) — GUÍA. Convive con la fila de registro de abajo
              (QA4 h8b, paridad web): el anillo nunca se desmonta por registrar. ── */}
-      {firstUnlogged != null && holdSec > 0 && (
+      {activeSet != null && holdSec > 0 && (
         <>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, borderRadius: 999, borderWidth: 2, paddingHorizontal: 20, paddingVertical: 10, backgroundColor: hexToRgba(accent, 0.15), borderColor: hexToRgba(accent, 0.36) }}>
             <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: accent }} />
@@ -289,27 +324,27 @@ export function MobilityScreenV3({
 
       {/* ── Captura tipada — SIEMPRE visible mientras haya serie activa (prefill de lo cronometrado,
              editable). Con hold prescrito convive con el anillo de arriba. ── */}
-      {firstUnlogged != null && (
+      {activeSet != null && (
         <View style={{ width: '100%', gap: 10 }}>
           <Text style={{ fontFamily: FONT.uiBold, fontSize: 11, letterSpacing: 0.5, textTransform: 'uppercase', color: s.textMuted }}>
             {perSide ? 'Hold por lado (segundos)' : 'Hold registrado (segundos)'}
           </Text>
           <ActiveSetRow
-            key={`${block.id}-${firstUnlogged}-${seedNonce}`}
+            key={`${block.id}-${activeSet}-${seedNonce}`}
             blockId={block.id}
-            setNumber={firstUnlogged}
+            setNumber={activeSet}
             typedMode="mobility"
             sideMode={sideMode}
             suggestedWeight={null}
             seedValues={
               Object.keys(seedValues).length > 0
                 ? seedValues
-                : restoredDraft && restoredDraft.blockId === block.id && restoredDraft.setNumber === firstUnlogged
+                : restoredDraft && restoredDraft.blockId === block.id && restoredDraft.setNumber === activeSet
                   ? restoredDraft.values
                   : null
             }
             header={{ exerciseName: exercise.name, objectiveLine }}
-            onDraftChange={(values, fieldIndex) => onDraftChange(block.id, firstUnlogged as number, values, fieldIndex)}
+            onDraftChange={(values, fieldIndex) => onDraftChange(block.id, activeSet as number, values, fieldIndex)}
             onCommit={onCommitSet}
           />
         </View>

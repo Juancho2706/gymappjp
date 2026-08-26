@@ -49,6 +49,13 @@ interface Props {
   prescribedName: string
   /** Grupo muscular (subtítulo + estado vacío). */
   muscleGroup: string
+  /**
+   * ¿El bloque usa MÁQUINA? (mockup 3: cambiar dejó de ser exclusivo de fuerza). Sólo cambia la COPY
+   * del encabezado: "Máquina ocupada" describe el caso de fuerza, pero una movilidad o un cardio se
+   * cambian por espacio/molestia — prometer una máquina que no existe sería mentirle al alumno. El
+   * motivo que viaja al log (`SUBSTITUTION_REASON`) NO cambia: es el enum v1 que el coach ya lee.
+   */
+  machineBusy?: boolean
   /** Confirmar la elección → swap in-place SOLO de esta sesión (el plan NO se toca). */
   onConfirm: (option: SubstituteCandidate) => void
   /** Tema del ejecutor (acento de marca + superficies dark). */
@@ -62,10 +69,14 @@ export function SubstituteSheetV3({
   blockId,
   prescribedName,
   muscleGroup,
+  machineBusy = true,
   onConfirm,
   exec,
   reducedMotion = false,
 }: Props) {
+  // Encabezado honesto por tipo de bloque: fuerza con máquina ⇒ el caso original del mockup; el resto
+  // (movilidad, cardio, roller) se cambia por lo que sea — no se nombra una máquina inexistente.
+  const headline = machineBusy ? 'Máquina ocupada' : 'Cambiar ejercicio'
   const s = exec.surface
   const [loading, setLoading] = useState(false)
   const [options, setOptions] = useState<SubstituteCandidate[] | null>(null)
@@ -117,10 +128,10 @@ export function SubstituteSheetV3({
       nativeModal
       snapPoints={['72%']}
       dynamicSizing
-      accessibilityLabel={`Cambiar ${prescribedName} por máquina ocupada`}
+      accessibilityLabel={`${headline}: cambiar ${prescribedName} por hoy`}
     >
       <View style={{ gap: 4 }}>
-        {/* Header: badge "?" ámbar + título "Máquina ocupada". */}
+        {/* Header: badge "?" ámbar + título ("Máquina ocupada" en fuerza, genérico en los tipados). */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
           <View
             style={{
@@ -137,7 +148,7 @@ export function SubstituteSheetV3({
             <Text style={{ fontFamily: FONT.displayBlack, fontSize: 15, color: AMBER }}>?</Text>
           </View>
           <Text style={{ fontFamily: FONT.displayBlack, fontSize: 20, letterSpacing: -0.4, color: s.text }}>
-            Máquina ocupada
+            {headline}
           </Text>
         </View>
         <Text style={{ fontFamily: FONT.uiSemibold, fontSize: 13.5, color: '#a8a8b3', marginTop: 2, marginBottom: 8 }}>

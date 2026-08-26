@@ -359,6 +359,59 @@ describe('deriveWeekWorkoutStatus', () => {
             expect(wed?.doneOnDate).toBeNull()
         })
 
+        // ── OMISIÓN (mockup 3 del ejecutor) ──
+        // La fila de omisión NO es una serie entrenada: `countLoggedSetsByBlock` la ignora. Sin pasar
+        // `skippedBlockIds` el día quedaba eternamente parcial en el panel del coach (y como pendiente
+        // ámbar), aunque el alumno lo hubiera cerrado desde el ejecutor.
+        it('OMITIR cierra el día: 2 series de bm1 + bm2 omitido ⇒ done (la fila de skip no suma series)', () => {
+            const r = deriveWeekWorkoutStatus({
+                userLocalDate: TODAY_DATE,
+                todayIso: TODAY_ISO,
+                program: SIMPLE_PROGRAM,
+                activePlans: [MON, WED],
+                logs: [
+                    ...setsOf(PLAN_MON, '2026-07-06T15:00:00.000Z', 'bm1', 3),
+                    { ...log(PLAN_MON, '2026-07-06T15:10:00.000Z', 'bm2', 1), metadata: { skipped: true, skip_reason: 'machine_busy' } },
+                ],
+            })
+            const mon = r.days.find((d) => d.dayOfWeek === 1)
+            expect(mon?.status).toBe('done')
+            expect(mon?.completionPct).toBe(1)
+            expect(r.pending).toHaveLength(0)
+        })
+
+        it('OMITIR resuelve el bloque ENTERO, no una serie: bm1 omitido tras 1 serie ⇒ 5/5', () => {
+            const r = deriveWeekWorkoutStatus({
+                userLocalDate: TODAY_DATE,
+                todayIso: TODAY_ISO,
+                program: SIMPLE_PROGRAM,
+                activePlans: [MON, WED],
+                logs: [
+                    ...setsOf(PLAN_MON, '2026-07-06T15:00:00.000Z', 'bm2', 2),
+                    ...setsOf(PLAN_MON, '2026-07-06T15:05:00.000Z', 'bm1', 1),
+                    { ...log(PLAN_MON, '2026-07-06T15:10:00.000Z', 'bm1', 2), metadata: { skipped: true } },
+                ],
+            })
+            const mon = r.days.find((d) => d.dayOfWeek === 1)
+            expect(mon?.status).toBe('done')
+            expect(mon?.completionPct).toBe(1)
+        })
+
+        it('metadata SIN skipped (hold por lado) no resuelve nada: sigue siendo parcial', () => {
+            const r = deriveWeekWorkoutStatus({
+                userLocalDate: TODAY_DATE,
+                todayIso: TODAY_ISO,
+                program: SIMPLE_PROGRAM,
+                activePlans: [MON, WED],
+                logs: [
+                    ...setsOf(PLAN_MON, '2026-07-06T15:00:00.000Z', 'bm1', 3).map((l) => ({ ...l, metadata: { skipped: false } })),
+                ],
+            })
+            const mon = r.days.find((d) => d.dayOfWeek === 1)
+            expect(mon?.status).toBe('in_progress')
+            expect(mon?.completionPct).toBeCloseTo(0.6, 5)
+        })
+
         it('PARCIAL DÍA PASADO: 3 de 5 el lunes ⇒ in_progress y entra a la cola como "in_progress"', () => {
             const r = deriveWeekWorkoutStatus({
                 userLocalDate: TODAY_DATE,

@@ -1,6 +1,7 @@
 import { cache } from 'react'
 import { format, subDays } from 'date-fns'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { WorkoutSkipMetadata } from '@eva/workout-engine'
 import { createClient } from '@/lib/supabase/server'
 import type { Database, Tables } from '@/lib/database.types'
 import { getTodayInSantiago, getSantiagoIsoYmdForUtcInstant } from '@/lib/date-utils'
@@ -153,6 +154,13 @@ export type RecentWorkoutLog = {
     weight_kg: number | null
     reps_done: number | null
     workout_blocks: { plan_id: string | null } | null
+    /**
+     * Mitad de OMISIÓN de `workout_logs.metadata` (mockup 3 del ejecutor): un bloque que el alumno
+     * declaró omitido resuelve el día sin aportar series. La lee `deriveWeekWorkoutStatus` vía
+     * `skippedBlockIdsFromLogs`. OPCIONAL a propósito: sólo la trae la ventana de 30 días (la de 365
+     * alimenta el historial, que no deriva completitud, y no vale su peso jsonb por 8000 filas).
+     */
+    metadata?: WorkoutSkipMetadata | null
 }
 
 export const getRecentWorkoutLogs = cache(async (clientId: string): Promise<RecentWorkoutLog[]> => {
@@ -161,7 +169,7 @@ export const getRecentWorkoutLogs = cache(async (clientId: string): Promise<Rece
     const thirtyDaysAgo = subDays(parseISOAnchor(iso), 30)
     const { data } = await supabase
         .from('workout_logs')
-        .select('id, logged_at, block_id, set_number, weight_kg, reps_done, workout_blocks(plan_id)')
+        .select('id, logged_at, block_id, set_number, weight_kg, reps_done, metadata, workout_blocks(plan_id)')
         .eq('client_id', clientId)
         .gte('logged_at', thirtyDaysAgo.toISOString())
         .order('logged_at', { ascending: false })

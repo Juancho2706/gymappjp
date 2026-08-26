@@ -33,6 +33,7 @@ import { Sheet } from '../../../Sheet'
 import { ConnectSensorSheet } from './ConnectSensorSheet'
 import type { SessionBlock, SessionDraft, SessionExercise } from '../../../../lib/workout-session'
 import { ActiveSetRow, SetRow } from '../SetRow'
+import { ExerciseActionChips } from './exercise-actions'
 import { JuicyButton } from './JuicyButton'
 import { ProgressRing } from './ProgressRing'
 import { TypedMediaV3, TypedInstructionsChip, hasExecMedia } from './TypedMediaV3'
@@ -95,6 +96,14 @@ export function CardioScreenV3({
   exec,
   hrZones,
   hrProfile,
+  substitution = null,
+  canSubstitute = false,
+  onOpenSubstitute,
+  onUndoSubstitution,
+  skipped = false,
+  skipReason = null,
+  canSkip = false,
+  onOpenSkip,
   onOpenTechnique,
   onOpenSet,
   onCommitSet,
@@ -112,6 +121,16 @@ export function CardioScreenV3({
   hrZones?: import('@eva/cardio').HrZoneRange[] | null
   /** Perfil FC del alumno (FCmax + FC reposo) para clasificar el BPM en vivo del sensor BLE (E6.1). */
   hrProfile?: HrToZoneProfile | null
+  /** Sustitución de HOY (mockup 3: ya no es exclusiva de fuerza). */
+  substitution?: { name: string; prescribedName: string } | null
+  canSubstitute?: boolean
+  onOpenSubstitute?: () => void
+  onUndoSubstitution?: () => void
+  /** El alumno declaró OMITIDO este bloque: se retira la captura y queda el badge. */
+  skipped?: boolean
+  skipReason?: string | null
+  canSkip?: boolean
+  onOpenSkip?: () => void
   onOpenTechnique: () => void
   onOpenSet: (setNumber: number) => void
   onCommitSet: (payload: OptimisticLogPayload) => void
@@ -242,18 +261,21 @@ export function CardioScreenV3({
   for (let i = 1; i <= block.sets; i += 1) {
     if (!loggedSetNumbers.has(i)) { firstUnlogged = i; break }
   }
+  // Bloque OMITIDO ⇒ no hay serie activa: se retira la captura post-esfuerzo (el hero de tiempo/zona
+  // se conserva: sigue siendo la ficha del ejercicio). Queda el historial de lo YA registrado.
+  const activeSet = skipped ? null : firstUnlogged
 
   // Semilla del keypad tipado: draft restaurado + (si aplica) el promedio del sensor en `actual_avg_hr`.
   // Solo se inyecta la FC del sensor si el campo aún está vacío — JAMÁS pisa lo que el alumno escribió.
   const captureSeed = useMemo(() => {
     const base =
-      restoredDraft && restoredDraft.blockId === block.id && restoredDraft.setNumber === firstUnlogged
+      restoredDraft && restoredDraft.blockId === block.id && restoredDraft.setNumber === activeSet
         ? restoredDraft.values
         : null
     if (seededAvg == null) return base
     if (base?.actual_avg_hr && base.actual_avg_hr.trim() !== '') return base
     return { ...(base ?? {}), actual_avg_hr: String(seededAvg) }
-  }, [restoredDraft, block.id, firstUnlogged, seededAvg])
+  }, [restoredDraft, block.id, activeSet, seededAvg])
 
   const loggedRows = Array.from({ length: block.sets }).map((_, i) => {
     const setNumber = i + 1
@@ -284,11 +306,26 @@ export function CardioScreenV3({
         <Text style={{ fontFamily: FONT.displayBlack, fontSize: 26, letterSpacing: -0.5, lineHeight: 28, color: s.text }} numberOfLines={2}>
           {exercise.name}
         </Text>
-        <View style={{ flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 6, borderRadius: 999, borderWidth: 1.5, paddingHorizontal: 11, paddingVertical: 5, backgroundColor: hexToRgba(chipColor, 0.14), borderColor: hexToRgba(chipColor, 0.32) }}>
-          <HeartPulse size={13} color={chipColor} />
-          <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: hexToRgba(chipColor, 0.95) }} numberOfLines={1}>
-            Cardio · {cardioDetailLabel(block)}
-          </Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, borderRadius: 999, borderWidth: 1.5, paddingHorizontal: 11, paddingVertical: 5, backgroundColor: hexToRgba(chipColor, 0.14), borderColor: hexToRgba(chipColor, 0.32) }}>
+            <HeartPulse size={13} color={chipColor} />
+            <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: hexToRgba(chipColor, 0.95) }} numberOfLines={1}>
+              Cardio · {cardioDetailLabel(block)}
+            </Text>
+          </View>
+          {/* Cambiar / Omitir + badges de estado — misma fila compartida que la pantalla de fuerza. */}
+          <ExerciseActionChips
+            exec={exec}
+            exerciseName={exercise.name}
+            substituted={!!substitution}
+            canSubstitute={canSubstitute}
+            onOpenSubstitute={onOpenSubstitute}
+            onUndoSubstitution={onUndoSubstitution}
+            skipped={skipped}
+            skipReason={skipReason}
+            canSkip={canSkip}
+            onOpenSkip={onOpenSkip}
+          />
         </View>
       </View>
 
@@ -418,10 +455,10 @@ export function CardioScreenV3({
       ) : null}
 
       {/* Captura post-esfuerzo (min/metros/FC manual) */}
-      {firstUnlogged != null && (
+      {activeSet != null && (
         <View style={{ gap: 8 }}>
           <Text style={{ fontFamily: FONT.uiBold, fontSize: 11, letterSpacing: 0.5, textTransform: 'uppercase', color: s.textMuted }}>
-            Registra tu esfuerzo{block.sets > 1 ? ` · serie ${firstUnlogged} de ${block.sets}` : ''}
+            Registra tu esfuerzo{block.sets > 1 ? ` · serie ${activeSet} de ${block.sets}` : ''}
           </Text>
           {seededAvg != null ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -432,9 +469,9 @@ export function CardioScreenV3({
             </View>
           ) : null}
           <ActiveSetRow
-            key={`${block.id}-${firstUnlogged}-${seededAvg != null ? 'hr' : 'x'}`}
+            key={`${block.id}-${activeSet}-${seededAvg != null ? 'hr' : 'x'}`}
             blockId={block.id}
-            setNumber={firstUnlogged}
+            setNumber={activeSet}
             typedMode="cardio"
             // Unidad de captura = unidad PRESCRITA (G3): con "5 km" la caja se llama "Km" y el motor
             // guarda 5000 en `actual_distance_m`. Sin prescripción en km ⇒ "Metros" como siempre.
@@ -449,7 +486,7 @@ export function CardioScreenV3({
             // como `ctx.hrMetadata` a `buildTypedPayload` → `workout_logs.metadata.hr`. Sin stream (o sin
             // una sola muestra) devuelve null y el payload queda byte-idéntico al de siempre.
             getHrMetadata={hrMetadataForCommit}
-            onDraftChange={(values, fieldIndex) => onDraftChange(block.id, firstUnlogged as number, values, fieldIndex)}
+            onDraftChange={(values, fieldIndex) => onDraftChange(block.id, activeSet as number, values, fieldIndex)}
             onCommit={handleCommitSet}
           />
         </View>

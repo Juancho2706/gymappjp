@@ -33,10 +33,50 @@
  *
  * NO-OBJETIVOS (SPEC): la racha real del home (RPC `get_client_current_streak`), `workout_sessions`
  * y la adherencia 30d / momentum NO consumen esto en v1.
+ *
+ * EJERCICIOS OMITIDOS (mockup 3 · ejecutor RN 2026-08-25): un bloque que el alumno declaró OMITIDO
+ * queda RESUELTO —cuenta para cerrar el día— pero NO aporta series entrenadas. Las dos mitades de esa
+ * regla viven acá: `countLoggedSetsByBlock` IGNORA las filas de omisión (no son series registradas) y
+ * `deriveDayCompletion` acepta `skippedBlockIds` para resolver esos bloques enteros.
  */
 
 /** Estado de completitud del día: sin empezar, a medias, o 100% de las series esperadas. */
 export type DayCompletionState = 'none' | 'in_progress' | 'done'
+
+/**
+ * Motivos por los que el alumno declara que OMITE un ejercicio del día. Catálogo cerrado (viaja a
+ * `workout_logs.metadata.skip_reason` para que el coach lo lea en el registro); `null` = omitido sin
+ * declarar motivo (el motivo es OPCIONAL en la UI).
+ */
+export const SKIP_REASONS = ['no_space', 'machine_busy', 'discomfort', 'other'] as const
+export type SkipReason = (typeof SKIP_REASONS)[number]
+
+/**
+ * Mitad "omisión" de `workout_logs.metadata` (jsonb). La fila de omisión se escribe por el MISMO
+ * pipeline que una serie (`logSet`) pero SIN valores de ejes: es una declaración, no un registro.
+ * Espejo VERBATIM de las claves de la columna (snake_case) — igual que el hold por lado.
+ */
+export interface WorkoutSkipMetadata {
+    /** `true` ⇒ esta fila declara el bloque OMITIDO (no es una serie entrenada). */
+    skipped?: boolean | null
+    /** Motivo declarado (catálogo `SKIP_REASONS`) o `null` si el alumno no eligió ninguno. */
+    skip_reason?: SkipReason | string | null
+}
+
+/** Metadata de la fila de omisión de un bloque. `reason` null ⇒ sólo se marca `skipped`. */
+export function buildSkipMetadata(reason: SkipReason | null): WorkoutSkipMetadata {
+    return reason ? { skipped: true, skip_reason: reason } : { skipped: true }
+}
+
+/** Fila mínima capaz de declarar una omisión (cualquier log con su columna `metadata`). */
+export interface SkippableLogRow {
+    metadata?: WorkoutSkipMetadata | null
+}
+
+/** ¿La fila es una declaración de OMISIÓN del bloque (y no una serie entrenada)? */
+export function isSkippedSetRow(row: SkippableLogRow | null | undefined): boolean {
+    return row?.metadata?.skipped === true
+}
 
 /** Bloque del plan reducido a lo único que define el denominador. */
 export interface DayCompletionBlock {
@@ -50,6 +90,12 @@ export interface DayCompletionInput {
     blocks: readonly DayCompletionBlock[]
     /** Series registradas por bloque: `{ [blockId]: cantidad }` (ver `countLoggedSetsByBlock`). */
     loggedSetsByBlock: Readonly<Record<string, number>>
+    /**
+     * Bloques que el alumno declaró OMITIDOS (ver `skippedBlockIdsFromLogs`). Cada uno cuenta como
+     * RESUELTO por su esperado completo — el día puede cerrar aunque esos ejercicios no se entrenaran.
+     * Omitir el campo ⇒ comportamiento idéntico al histórico (nada se resuelve solo).
+     */
+    skippedBlockIds?: readonly string[]
 }
 
 export interface DayCompletion {
@@ -58,7 +104,11 @@ export interface DayCompletion {
     pct: number
     /** Denominador: suma de series esperadas de los bloques vigentes. */
     expected: number
-    /** Numerador: suma de series registradas, YA capadas bloque a bloque a su esperado. */
+    /**
+     * Numerador: series RESUELTAS — las registradas (capadas bloque a bloque a su esperado) MÁS el
+     * esperado completo de los bloques omitidos. Es el numerador de `pct`/`state`, NO un conteo de
+     * series entrenadas: para eso está `countLoggedSetsByBlock`, que ignora las filas de omisión.
+     */
     logged: number
 }
 
@@ -85,6 +135,7 @@ export function expectedSetsForBlock(block: DayCompletionBlock): number {
  */
 export function deriveDayCompletion(input: DayCompletionInput): DayCompletion {
     const { blocks, loggedSetsByBlock } = input
+    const skipped = input.skippedBlockIds && input.skippedBlockIds.length > 0 ? new Set(input.skippedBlockIds) : null
 
     const seenBlockIds = new Set<string>()
     let expected = 0
@@ -95,6 +146,12 @@ export function deriveDayCompletion(input: DayCompletionInput): DayCompletion {
         seenBlockIds.add(block.id)
         const blockExpected = expectedSetsForBlock(block)
         expected += blockExpected
+        // Bloque OMITIDO: resuelto por su esperado completo (el alumno declaró que no lo haría), sin
+        // importar cuántas series alcanzó a registrar antes de omitirlo.
+        if (skipped?.has(block.id)) {
+            logged += blockExpected
+            continue
+        }
         // Cap por bloque: lo registrado de más (bloque editado a la baja) no infla el numerador.
         logged += Math.min(toCount(loggedSetsByBlock[block.id]), blockExpected)
     }
@@ -111,6 +168,11 @@ export function deriveDayCompletion(input: DayCompletionInput): DayCompletion {
 export interface LoggedSetRow {
     block_id: string | null
     set_number?: number | null
+    /**
+     * Columna `metadata` jsonb — sólo se lee la mitad de OMISIÓN. Opcional/aditiva: un caller que no
+     * la seleccione se comporta exactamente como antes (ninguna fila cuenta como omitida).
+     */
+    metadata?: WorkoutSkipMetadata | null
 }
 
 /**
@@ -122,6 +184,10 @@ export interface LoggedSetRow {
  * ignoran; `set_number` nulo cuenta como UNA serie del bloque (dos filas nulas del mismo bloque
  * colapsan a una).
  *
+ * Las filas de OMISIÓN (`metadata.skipped`) NO se cuentan: son una declaración del alumno, no una
+ * serie entrenada — un skip jamás debe inflar las "series registradas" que ve el coach. Para que el
+ * bloque igual resuelva el día, el caller pasa `skippedBlockIdsFromLogs(rows)` a `deriveDayCompletion`.
+ *
  * El caller filtra ANTES por plan y por día (huso Santiago): esta función no sabe de fechas.
  */
 export function countLoggedSetsByBlock(rows: readonly LoggedSetRow[]): Record<string, number> {
@@ -131,6 +197,7 @@ export function countLoggedSetsByBlock(rows: readonly LoggedSetRow[]): Record<st
     for (const row of rows) {
         const blockId = row.block_id
         if (typeof blockId !== 'string' || blockId.length === 0) continue
+        if (isSkippedSetRow(row)) continue
         const key = `${blockId}#${row.set_number ?? ''}`
         if (seenSetKeys.has(key)) continue
         seenSetKeys.add(key)
@@ -138,4 +205,19 @@ export function countLoggedSetsByBlock(rows: readonly LoggedSetRow[]): Record<st
     }
 
     return Object.fromEntries(counts)
+}
+
+/**
+ * Ids de los bloques que traen al menos una fila de OMISIÓN — el `skippedBlockIds` que consume
+ * `deriveDayCompletion`. Compañera de `countLoggedSetsByBlock`: misma entrada, mismo filtrado previo
+ * por plan/día del caller. Sin filas de omisión devuelve `[]` (barato para el caso normal).
+ */
+export function skippedBlockIdsFromLogs(rows: readonly LoggedSetRow[]): string[] {
+    const ids = new Set<string>()
+    for (const row of rows) {
+        const blockId = row.block_id
+        if (typeof blockId !== 'string' || blockId.length === 0) continue
+        if (isSkippedSetRow(row)) ids.add(blockId)
+    }
+    return [...ids]
 }

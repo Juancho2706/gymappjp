@@ -25,6 +25,7 @@ import { shadow } from '../../../lib/shadows'
 import { haptics } from '../../../lib/haptics'
 // Primitivas presentacionales compartidas con la `ActiveSetRow` (sin duplicar).
 import {
+  EMPTY_CAPTURE_HINT,
   KEYPAD_ACTION_STYLE,
   KEYPAD_EYEBROW_STYLE,
   KeypadDisplayRow,
@@ -140,6 +141,14 @@ export function KeypadHost({
   const primaryIsNext = !isLastField || hasNote
   const allowDecimal = activeField.mode === 'weight' || activeField.mode === 'decimal'
   const showChips = activeField.mode === 'weight'
+  // Serie VACÍA = ningún eje capturado (mismo criterio que la `ActiveSetRow`, copy en `EMPTY_CAPTURE_HINT`):
+  // el guardado queda inerte y dice qué falta. Este host no sólo EDITA: también registra desde cero (chip
+  // "Toca para registrar" de la fila V2), así que sin la guarda seguía siendo una vía para escribir una fila
+  // con todos los ejes en NULL — que cuenta como serie hecha. "Siguiente" nunca se bloquea: navegar entre
+  // campos es justo lo que lleva a llenar el eje que falta.
+  const isEmptyCapture = fields.every((f) => (values[f.key] ?? '').trim() === '')
+  const emptyHint = EMPTY_CAPTURE_HINT[target.typed?.mode ?? 'strength']
+  const doneBlocked = !primaryIsNext && isEmptyCapture
 
   // ── Mutación del valor (write-through al draft), mirror del provider web ──────
   const patch = (p: Record<string, string>, idx: number) => {
@@ -186,6 +195,9 @@ export function KeypadHost({
   }
 
   const commit = () => {
+    // Serie vacía no cuenta: las acciones que guardan ya están inertes; la guarda cubre cualquier otro
+    // disparo (p. ej. "Siguiente" del último campo tipado).
+    if (isEmptyCapture) return
     // Háptica de "serie guardada" — la más fuerte del keypad. DIVERGENCIA INTENCIONAL con web
     // (decisión CEO 2026-07-25): allá "Listo" solo CIERRA el teclado y la serie se guarda con el CTA
     // de la fila (visible junto al sheet); acá el keypad es un Modal full-screen que TAPA la fila,
@@ -374,14 +386,25 @@ export function KeypadHost({
                   </AnimatePresence>
                 </View>
 
-                {/* Acciones — ambas guardan la serie (la nota es opcional) */}
+                {/* Acciones — ambas guardan la serie (la nota es opcional); inertes si no hay ningún eje. */}
+                {isEmptyCapture ? (
+                  <Text style={textStyle('3xs', FONT.uiMedium)} className="mt-2 text-center text-on-dark-muted">
+                    {emptyHint}
+                  </Text>
+                ) : null}
                 <View className="mt-2 flex-row gap-2">
                   <Pressable
                     testID="keypad-skip-note"
                     onPress={commit}
+                    disabled={isEmptyCapture}
                     accessibilityRole="button"
-                    accessibilityLabel="Omitir la nota y guardar la serie"
-                    className="h-14 flex-1 items-center justify-center rounded-control border border-inverse/10 bg-white/[0.06] active:scale-[0.98] active:bg-white/[0.10]"
+                    accessibilityState={{ disabled: isEmptyCapture }}
+                    accessibilityLabel={
+                      isEmptyCapture ? `Omitir la nota y guardar la serie. ${emptyHint}` : 'Omitir la nota y guardar la serie'
+                    }
+                    className={`h-14 flex-1 items-center justify-center rounded-control border border-inverse/10 bg-white/[0.06] ${
+                      isEmptyCapture ? 'opacity-50' : 'active:scale-[0.98] active:bg-white/[0.10]'
+                    }`}
                   >
                     <Text style={KEYPAD_ACTION_STYLE} className="text-on-dark">
                       Omitir
@@ -390,9 +413,13 @@ export function KeypadHost({
                   <Pressable
                     testID="keypad-save-set"
                     onPress={commit}
+                    disabled={isEmptyCapture}
                     accessibilityRole="button"
-                    accessibilityLabel={`${doneLabel}, guardar serie`}
-                    className={`h-14 flex-row items-center justify-center gap-2 rounded-control active:scale-[0.98] ${accent ? '' : 'bg-sport-500'}`}
+                    accessibilityState={{ disabled: isEmptyCapture }}
+                    accessibilityLabel={isEmptyCapture ? `${doneLabel}. ${emptyHint}` : `${doneLabel}, guardar serie`}
+                    className={`h-14 flex-row items-center justify-center gap-2 rounded-control ${
+                      isEmptyCapture ? 'opacity-50' : 'active:scale-[0.98]'
+                    } ${accent ? '' : 'bg-sport-500'}`}
                     style={[{ flex: 1.4 }, accent ? { backgroundColor: accent } : null]}
                   >
                     <Check size={20} color={accent ? accentText ?? WHITE : WHITE} />
@@ -431,14 +458,30 @@ export function KeypadHost({
                   onClear={onClear}
                 />
 
-                {/* Acción — un ÚNICO botón: "Siguiente" avanza; "Listo" guarda (mirror web §5.4) */}
+                {/* Acción — un ÚNICO botón: "Siguiente" avanza; "Listo" guarda (mirror web §5.4). Sólo el que
+                    GUARDA se bloquea con la serie vacía; "Siguiente" sigue navegando entre campos. */}
                 <View className="mt-2">
+                  {doneBlocked ? (
+                    <Text style={textStyle('3xs', FONT.uiMedium)} className="mb-1.5 text-center text-on-dark-muted">
+                      {emptyHint}
+                    </Text>
+                  ) : null}
                   <Pressable
                     testID={primaryIsNext ? 'keypad-next' : 'keypad-done'}
                     onPress={goNext}
+                    disabled={doneBlocked}
                     accessibilityRole="button"
-                    accessibilityLabel={primaryIsNext ? 'Siguiente' : `${doneLabel}, guardar serie`}
-                    className={`h-14 w-full flex-row items-center justify-center gap-2 rounded-control active:scale-[0.98] ${accent ? '' : 'bg-sport-500'}`}
+                    accessibilityState={{ disabled: doneBlocked }}
+                    accessibilityLabel={
+                      primaryIsNext
+                        ? 'Siguiente'
+                        : doneBlocked
+                          ? `${doneLabel}. ${emptyHint}`
+                          : `${doneLabel}, guardar serie`
+                    }
+                    className={`h-14 w-full flex-row items-center justify-center gap-2 rounded-control ${
+                      doneBlocked ? 'opacity-50' : 'active:scale-[0.98]'
+                    } ${accent ? '' : 'bg-sport-500'}`}
                     style={accent ? { backgroundColor: accent } : undefined}
                   >
                     {primaryIsNext ? (

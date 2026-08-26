@@ -11,6 +11,7 @@ import { useCoarsePointer } from '@/lib/client/useCoarsePointer'
 import { useWorkoutKeypad } from '../WorkoutKeypadProvider'
 import { formatTypedObjective, sessionLogKey, type OptimisticLogPayload, type RepeatSeedEntry } from '@eva/workout-engine'
 import type { BlockType, ExerciseType, WorkoutSessionLog } from '../WorkoutExecutionClient'
+import { BlockActionsV3 } from './SkipBlockV3'
 import { ExecTypedMedia } from './ExecTypedMedia'
 import { SingleWheelPicker } from './DualWheelPicker'
 
@@ -29,6 +30,12 @@ interface RollerStepV3Props {
     reopenSignal: { blockId: string; setNumber: number; nonce: number } | null
     substitution?: { exerciseId: string; exerciseName: string; reason: string } | null
     openTechnique: (exercise: ExerciseType | null) => void
+    /** ¿Se puede sustituir el ejercicio? (mockup 3: «Cambiar» ya no es exclusivo de fuerza). */
+    canSubstitute?: boolean
+    /** Abre el sheet "Máquina ocupada" para este bloque (sólo si `canSubstitute`). */
+    onOpenSubstitute?: () => void
+    /** Abre el sheet «Omitir hoy» (mockup 3). Ausente ⇒ el bloque ya está completo. */
+    onSkip?: () => void
     handleLogged: (payload: OptimisticLogPayload) => void
     handleResult: (blockId: string, setNumber: number, result: SetSyncResult) => void
 }
@@ -51,6 +58,9 @@ export function RollerStepV3({
     reopenSignal,
     substitution,
     openTechnique,
+    canSubstitute,
+    onOpenSubstitute,
+    onSkip,
     handleLogged,
     handleResult,
 }: RollerStepV3Props) {
@@ -198,6 +208,12 @@ export function RollerStepV3({
                     <span className="exec-v3-chip">Roller</span>
                     <span className="exec-v3-chip is-plain">{exercise.muscle_group}</span>
                 </div>
+                {/* Salida digna del paso activo (mockup 3): «Cambiar» + «Omitir hoy» también acá. */}
+                <BlockActionsV3
+                    className="mt-2 justify-center"
+                    onOpenSubstitute={canSubstitute ? onOpenSubstitute : undefined}
+                    onSkip={onSkip}
+                />
             </div>
 
             {/* Media — mismo tratamiento que fuerza: chips "Instrucciones" + "Nota del coach" DENTRO de la

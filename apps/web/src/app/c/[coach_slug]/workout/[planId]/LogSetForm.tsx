@@ -46,6 +46,20 @@ const initialState: LogState = {}
 /** Variante del registro por tipo efectivo (specs/movida-entrenamiento, AC4). */
 export type LogSetMode = 'strength' | 'cardio' | 'mobility' | 'roller'
 
+/**
+ * "Serie vacía no cuenta": con TODOS los ejes de captura del tipo vacíos el submit queda inerte y se
+ * pinta este motivo. Ejes = las cajas que el modo realmente muestra (kg/reps en fuerza; minutos,
+ * distancia, FC, hold, pasadas en los tipados). RPE/RIR y la nota NO son ejes: no habilitan el
+ * guardado. Copy espejo de RN `apps/mobile/components/alumno/workout/TypedKeypad.tsx`
+ * (`EMPTY_CAPTURE_HINT`) — misma frase palabra por palabra en las dos plataformas.
+ */
+const EMPTY_CAPTURE_HINT: Record<LogSetMode, string> = {
+    strength: 'Ingresa al menos las repeticiones',
+    cardio: 'Ingresa al menos los minutos',
+    mobility: 'Ingresa al menos los segundos del hold',
+    roller: 'Ingresa al menos las pasadas',
+}
+
 interface Props {
     blockId: string
     setNumber: number
@@ -397,6 +411,18 @@ function StrengthLogSetForm({
     const weightRef = useRef<HTMLInputElement>(null)
     const repsRef = useRef<HTMLInputElement>(null)
     const formRef = useRef<HTMLFormElement>(null)
+    // Serie VACÍA no cuenta (paridad RN `SetRow.tsx`): flag reactivo de "kg y reps sin nada". Los inputs
+    // son uncontrolled, así que se sincroniza desde los MISMOS eventos `input` nativos que alimentan el
+    // borrador (tecleo, keypad, rueda) más las mutaciones por ref (prefill "= última vez"). Con precarga
+    // (peso sugerido, "Anterior") el CTA queda HABILITADO, que es el contrato.
+    const [emptyCapture, setEmptyCapture] = useState(false)
+    const syncEmptyCapture = () => {
+        const w = weightRef.current?.value.trim() ?? ''
+        const r = repsRef.current?.value.trim() ?? ''
+        setEmptyCapture(w === '' && r === '')
+    }
+    /** Id estable del hint de serie vacía (`aria-describedby` del CTA inerte). Único por fila. */
+    const emptyHintId = `empty-capture-${blockId}-${setNumber}`
     // Celebraciones sobrias (M1): al cerrar la serie el chip hace un settle (check elástico); si el
     // peso alcanza el máximo histórico, un pulso dorado 300ms. Refs (no state) porque el chip se
     // MONTA de nuevo al colapsar y lee el valor vigente sin disparar un re-render extra. En logs ya
@@ -467,6 +493,8 @@ function StrengthLogSetForm({
         }
         if (repsRef.current && prefill.reps != null) repsRef.current.value = String(prefill.reps)
         keypad?.refreshDisplay()
+        // La mutación por ref no dispara `input`: el flag de serie vacía se sincroniza a mano.
+        syncEmptyCapture()
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [prefill?.nonce])
 
@@ -498,10 +526,20 @@ function StrengthLogSetForm({
     useEffect(() => {
         const wEl = weightRef.current
         const rEl = repsRef.current
-        const onWeight = () => captureDraft({ w: weightRef.current?.value ?? '' })
-        const onReps = () => captureDraft({ r: repsRef.current?.value ?? '' })
+        // El MISMO listener alimenta el flag de "serie vacía" (mismo motivo por el que no sirve el
+        // onChange de React: el keypad muta `ref.value` y sólo despacha el evento nativo).
+        const onWeight = () => {
+            captureDraft({ w: weightRef.current?.value ?? '' })
+            syncEmptyCapture()
+        }
+        const onReps = () => {
+            captureDraft({ r: repsRef.current?.value ?? '' })
+            syncEmptyCapture()
+        }
         wEl?.addEventListener('input', onWeight)
         rEl?.addEventListener('input', onReps)
+        // Estado inicial: `defaultValue` + borrador rehidratado (su efecto corre antes que éste).
+        syncEmptyCapture()
         return () => {
             wEl?.removeEventListener('input', onWeight)
             rEl?.removeEventListener('input', onReps)
@@ -713,6 +751,12 @@ function StrengthLogSetForm({
         const repsRaw = formData.get('reps_done')
         const w = weightRaw === null || weightRaw === '' ? null : Number(weightRaw)
         const r = repsRaw === null || repsRaw === '' ? null : Number(repsRaw)
+
+        // Serie VACÍA no cuenta: sin NINGÚN eje de captura no se encola ni se envía nada (una fila con
+        // kg y reps NULL se escribía igual y contaba como serie hecha). El CTA ya está inerte; esto es
+        // el cinturón contra un submit programático o un estado de UI rezagado. Se lee del FormData —
+        // la verdad del DOM — y no del flag, que puede ir un frame atrás.
+        if (w == null && r == null) return
 
         // Write-through SIEMPRE: el valor tipeado entra a la cola ANTES de tocar la red. Así una
         // request abortada/tragada en 4G inestable (navigator.onLine=true pero sin conectividad real)
@@ -1084,7 +1128,18 @@ function StrengthLogSetForm({
                     </div>
 
                     {/* CTA principal juicy full-width */}
-                    <SubmitSetButton isLogged={Boolean(isLogged)} label={ctaLabel} hero />
+                    <SubmitSetButton
+                        isLogged={Boolean(isLogged)}
+                        label={ctaLabel}
+                        hero
+                        blockedHint={emptyCapture ? EMPTY_CAPTURE_HINT.strength : null}
+                        blockedHintId={emptyHintId}
+                    />
+                    {emptyCapture && (
+                        <p id={emptyHintId} className="text-center text-[11px] font-semibold text-on-dark-muted">
+                            {EMPTY_CAPTURE_HINT.strength}
+                        </p>
+                    )}
 
                     {/* Nota rápida (mismo mirror oculto que la fila V2) */}
                     {showNoteControls && (
@@ -1329,8 +1384,18 @@ function StrengthLogSetForm({
                     </div>
                 </div>
 
-                <div className="mt-3 flex justify-end">
-                    <SubmitSetButton isLogged={Boolean(isLogged)} label={isActive ? (isLogged ? 'Guardar' : 'Listo') : undefined} />
+                <div className="mt-3 flex items-center justify-end gap-2">
+                    {emptyCapture && isActive && (
+                        <span id={emptyHintId} className="text-[11px] font-semibold text-on-dark-muted">
+                            {EMPTY_CAPTURE_HINT.strength}
+                        </span>
+                    )}
+                    <SubmitSetButton
+                        isLogged={Boolean(isLogged)}
+                        label={isActive ? (isLogged ? 'Guardar' : 'Listo') : undefined}
+                        blockedHint={emptyCapture ? EMPTY_CAPTURE_HINT.strength : null}
+                        blockedHintId={isActive ? emptyHintId : undefined}
+                    />
                 </div>
 
                 {/* Nota rápida por serie (quick-win E2-6) — input inline; viaja por el mirror oculto */}
@@ -1503,6 +1568,33 @@ function TypedLogSetRow({
     const [rpeLocal, setRpeLocal] = useState<number | null>(existingLog?.rpe ?? null)
     const reducedMotion = useReducedMotion()
 
+    // Serie VACÍA no cuenta (paridad RN `SetRow.tsx`/`KeypadHost.tsx`): flag reactivo de "ningún eje del
+    // tipo trae valor". Sólo cuentan las cajas MONTADAS (el modo decide cuáles existen), así que un eje
+    // que este modo no muestra no puede habilitar el guardado. El RPE post-registro no es eje.
+    const [emptyCapture, setEmptyCapture] = useState(false)
+    /** Id estable del hint de serie vacía (`aria-describedby` del botón inerte). Único por fila. */
+    const emptyHintId = `empty-capture-${blockId}-${setNumber}`
+    const syncEmptyCapture = () => {
+        const filled = [cardioMinRef, distanceRef, hrRef, holdRef, holdLeftRef, holdRightRef, durationRef, passesRef]
+            .some((r) => (r.current?.value.trim() ?? '') !== '')
+        setEmptyCapture(!filled)
+    }
+
+    // Los inputs son uncontrolled y el keypad muta `ref.value` directo, así que se escucha el evento
+    // `input` NATIVO y no el `onChange` de React (que NO dispara con la escritura del keypad — mismo
+    // motivo documentado en la fila de fuerza). Los prefills por ref sincronizan al cerrar su efecto.
+    useEffect(() => {
+        const els = [cardioMinRef, distanceRef, hrRef, holdRef, holdLeftRef, holdRightRef, durationRef, passesRef]
+            .map((r) => r.current)
+            .filter((el): el is HTMLInputElement => el != null)
+        const onInput = () => syncEmptyCapture()
+        for (const el of els) el.addEventListener('input', onInput)
+        syncEmptyCapture()
+        return () => {
+            for (const el of els) el.removeEventListener('input', onInput)
+        }
+    }, [isLogged, existingLog])
+
     // Prefill tipado (E3.3 · roller): el contador gigante de `RollerStepV3` escribe las pasadas en el
     // input uncontrolled de la fila activa al cambiar `nonce`. Uncontrolled = no re-render; mismo patrón
     // que el prefill "= última vez" de fuerza. Sólo el flujo roller lo pasa.
@@ -1510,6 +1602,7 @@ function TypedLogSetRow({
     useEffect(() => {
         if (prefillNonce == null || typedPrefill?.repsDone == null) return
         if (passesRef.current) passesRef.current.value = String(typedPrefill.repsDone)
+        syncEmptyCapture()
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [prefillNonce])
 
@@ -1521,6 +1614,7 @@ function TypedLogSetRow({
         if (suggestedHrNonce == null || suggestedAvgHr?.bpm == null) return
         const input = hrRef.current
         if (input && input.value.trim() === '') input.value = String(suggestedAvgHr.bpm)
+        syncEmptyCapture()
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [suggestedHrNonce])
 
@@ -1536,6 +1630,7 @@ function TypedLogSetRow({
         } else if (holdPrefill?.holdSec != null && holdRef.current) {
             holdRef.current.value = String(Math.round(holdPrefill.holdSec))
         }
+        syncEmptyCapture()
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [holdPrefillNonce])
 
@@ -1679,6 +1774,19 @@ function TypedLogSetRow({
     const handleSubmit = (formData: FormData) => {
         normalizeFormData(formData)
         const values = collectValues(formData)
+
+        // Serie VACÍA no cuenta: sin NINGÚN eje del tipo no se encola ni se envía nada. El botón ya está
+        // inerte; esto cubre el "Reintentar" (`requestSubmit`) y cualquier estado de UI rezagado. `pace`
+        // y `metadata` son derivados —no ejes—, y el RPE post-registro va por su propio camino.
+        if (
+            values.actualDurationSec == null &&
+            values.actualDistanceM == null &&
+            values.actualHoldSec == null &&
+            values.actualAvgHr == null &&
+            values.repsDone == null
+        ) {
+            return
+        }
 
         // Write-through SIEMPRE: el registro entra a la cola antes de tocar la red (respaldo ante
         // request abortada en red inestable). Confirmar el guardado lo saca (efecto de arriba).
@@ -1996,8 +2104,20 @@ function TypedLogSetRow({
                 )}
 
                 <div className="w-8 flex justify-center">
-                    <SubmitSetButton isLogged={Boolean(isLogged)} />
+                    <SubmitSetButton
+                        isLogged={Boolean(isLogged)}
+                        blockedHint={emptyCapture ? EMPTY_CAPTURE_HINT[mode] : null}
+                        blockedHintId={isActive ? emptyHintId : undefined}
+                    />
                 </div>
+                {/* El hint sólo en la fila ACTIVA: en la lista tipada todas las series pendientes están
+                    vacías y repetirlo en cada una sería ruido. Las demás igual quedan inertes (el motivo
+                    viaja en el `title` del botón). */}
+                {emptyCapture && isActive && (
+                    <p id={emptyHintId} className="col-span-full px-2 pt-0.5 text-[11px] font-semibold text-on-dark-muted">
+                        {EMPTY_CAPTURE_HINT[mode]}
+                    </p>
+                )}
                 {state.error && (
                     <div className="col-span-full flex items-center gap-2 px-2 mt-1">
                         <p className="flex-1 text-xs text-red-400">{humanizeStudentWriteError(state.error)}</p>
@@ -2045,16 +2165,41 @@ function TypedLogSetRow({
     )
 }
 
-function SubmitSetButton({ isLogged, label, hero }: { isLogged: boolean; label?: string; hero?: boolean }) {
+function SubmitSetButton({
+    isLogged,
+    label,
+    hero,
+    blockedHint,
+    blockedHintId,
+}: {
+    isLogged: boolean
+    label?: string
+    hero?: boolean
+    /**
+     * Motivo por el que el guardado está inerte (serie sin NINGÚN eje de captura, `EMPTY_CAPTURE_HINT`).
+     * null/undefined ⇒ botón habilitado. Mientras el submit está en vuelo NUNCA bloquea (el valor ya viajó).
+     */
+    blockedHint?: string | null
+    /** Id del hint visible que pinta la fila, para colgarlo del botón por `aria-describedby`. */
+    blockedHintId?: string
+}) {
     const { pending } = useFormStatus()
+    const blocked = blockedHint != null && !pending
+    // El motivo viaja SIEMPRE en el `title` (aunque la fila no pinte el hint visible, p.ej. las series
+    // futuras de la lista tipada), así el botón inerte nunca queda sin explicación.
+    const guard = {
+        disabled: blocked,
+        'aria-describedby': blocked ? blockedHintId : undefined,
+    }
     // Variante HERO (informe 03): CTA juicy full-width con círculo-check en tinta on-brand + breathe.
     if (hero) {
         return (
             <button
                 type="submit"
-                className="exec-v3-juicy exec-v3-cta"
-                title={pending ? 'Guardando serie...' : label}
-                aria-label={pending ? 'Guardando serie...' : label}
+                {...guard}
+                className={cn('exec-v3-juicy exec-v3-cta', blocked && 'opacity-50')}
+                title={blocked ? (blockedHint as string) : pending ? 'Guardando serie...' : label}
+                aria-label={blocked ? `${label} — ${blockedHint}` : pending ? 'Guardando serie...' : label}
             >
                 {pending ? (
                     <Loader2 className="h-5 w-5 animate-spin" />
@@ -2074,9 +2219,10 @@ function SubmitSetButton({ isLogged, label, hero }: { isLogged: boolean; label?:
         return (
             <button
                 type="submit"
+                {...guard}
                 className="flex h-12 min-w-[104px] items-center justify-center gap-2 rounded-control bg-[var(--sport-500)] px-4 font-bold text-white transition-transform active:scale-[0.98] disabled:opacity-70"
-                title={pending ? 'Guardando set...' : label}
-                aria-label={pending ? 'Guardando set...' : label}
+                title={blocked ? (blockedHint as string) : pending ? 'Guardando set...' : label}
+                aria-label={blocked ? `${label} — ${blockedHint}` : pending ? 'Guardando set...' : label}
             >
                 {pending ? <Loader2 className="h-5 w-5 animate-spin" /> : <><Check className="h-5 w-5" /> {label}</>}
             </button>
@@ -2085,10 +2231,19 @@ function SubmitSetButton({ isLogged, label, hero }: { isLogged: boolean; label?:
     return (
         <button
             type="submit"
-            className={`w-11 h-11 md:w-8 md:h-8 rounded-full border-2 flex items-center justify-center transition-all shrink-0
+            {...guard}
+            className={`w-11 h-11 md:w-8 md:h-8 rounded-full border-2 flex items-center justify-center transition-all shrink-0 disabled:opacity-50
             ${isLogged ? 'bg-[var(--sport-500)] border-[var(--sport-500)] text-white' : 'border-white/25 text-on-dark-muted hover:border-[var(--sport-500)] hover:text-[var(--sport-500)]'}`}
-            title={pending ? 'Guardando set...' : isLogged ? 'Set guardado · toca para editar' : 'Guardar set'}
-            aria-label={pending ? 'Guardando set...' : isLogged ? 'Set guardado, toca para editar' : 'Guardar set'}
+            title={blocked ? (blockedHint as string) : pending ? 'Guardando set...' : isLogged ? 'Set guardado · toca para editar' : 'Guardar set'}
+            aria-label={
+                blocked
+                    ? `Guardar set — ${blockedHint}`
+                    : pending
+                        ? 'Guardando set...'
+                        : isLogged
+                            ? 'Set guardado, toca para editar'
+                            : 'Guardar set'
+            }
         >
             {pending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className={`w-5 h-5 md:w-4 md:h-4 ${isLogged ? '' : 'opacity-40'}`} />}
         </button>

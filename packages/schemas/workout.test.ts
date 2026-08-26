@@ -434,6 +434,49 @@ describe('WorkoutLogSetSchema — espejo polimórfico (AC4)', () => {
         expect(WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { left_sec: -1 } }).success).toBe(false)
         expect(WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { right_sec: 86401 } }).success).toBe(false)
     })
+
+    // ── OMISIÓN (mockup 3) — metadata jsonb {skipped, skip_reason} ──
+    // PIN de regresión: Zod v4 estripa lo no declarado. Cuando estas claves faltaban en el schema el
+    // action persistía `metadata: {}` y la omisión no sobrevivía al reload ni la veía el coach.
+    it('NO estripa skipped/skip_reason de metadata (regresión: se persistía {})', () => {
+        const result = WorkoutLogSetSchema.safeParse({
+            ...baseLog,
+            metadata: { skipped: true, skip_reason: 'machine_busy' },
+        })
+        expect(result.success).toBe(true)
+        if (result.success) {
+            expect(result.data.metadata).toEqual({ skipped: true, skip_reason: 'machine_busy' })
+        }
+    })
+
+    it('acepta omisión sin motivo y motivo null', () => {
+        const sinMotivo = WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { skipped: true } })
+        expect(sinMotivo.success).toBe(true)
+        if (sinMotivo.success) expect(sinMotivo.data.metadata).toEqual({ skipped: true })
+
+        const motivoNull = WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { skipped: true, skip_reason: null } })
+        expect(motivoNull.success).toBe(true)
+        if (motivoNull.success) expect(motivoNull.data.metadata).toEqual({ skipped: true, skip_reason: null })
+    })
+
+    it('acepta los 4 motivos del catálogo SKIP_REASONS y convive con el hold por lado', () => {
+        for (const reason of ['no_space', 'machine_busy', 'discomfort', 'other']) {
+            const result = WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { skipped: true, skip_reason: reason } })
+            expect(result.success).toBe(true)
+            if (result.success) expect(result.data.metadata?.skip_reason).toBe(reason)
+        }
+        const mixto = WorkoutLogSetSchema.safeParse({
+            ...baseLog,
+            metadata: { left_sec: 30, right_sec: 25, skipped: false },
+        })
+        expect(mixto.success).toBe(true)
+        if (mixto.success) expect(mixto.data.metadata).toEqual({ left_sec: 30, right_sec: 25, skipped: false })
+    })
+
+    it('rechaza skipped no booleano y skip_reason demasiado largo', () => {
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { skipped: 'si' } }).success).toBe(false)
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { skip_reason: 'x'.repeat(41) } }).success).toBe(false)
+    })
 })
 
 describe('CardioProfileUpdateSchema (AC9)', () => {
