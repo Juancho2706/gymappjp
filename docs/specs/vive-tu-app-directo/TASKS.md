@@ -259,7 +259,8 @@ deploy web; OTA de RN antes.**
 - [ ] V3.12 (opcional, deuda declarada) Espejo RN: `validate-student-workspace/route.ts:61` responde 403
   `COACH_ACCOUNT` cuando el bearer es un coach, y `app/alumno/codigo` muestra el mismo mensaje con CTA a la
   pantalla de coach.
-- [ ] V3.13 (agregada 26-08 por [FCN W0.7](../flujo-coach-nuevo/TASKS.md); su aporte 1 = **call site de FCN
+- [x] V3.13 — **Hecha 26-08 por la hermana (FCN W1.4), post-merge de VTA W3, con GO del jefe: un solo
+  escritor, regla cumplida.** (agregada 26-08 por [FCN W0.7](../flujo-coach-nuevo/TASKS.md); su aporte 1 = **call site de FCN
   W1.4**) Dentro del diff de V3.1, en `c/[coach_slug]/login/_actions/login.actions.ts`, tras resolver el
   `client` y antes de devolver el `redirectUrl` (`:160-164`): **una línea** que llama **esperada** (`await`,
   nunca promesa flotante) a `recordStudentFirstLogin(admin, client.id)` — el servicio lo crea
