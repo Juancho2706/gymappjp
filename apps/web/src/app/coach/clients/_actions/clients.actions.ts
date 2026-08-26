@@ -6,7 +6,7 @@ import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Tables } from '@/lib/database.types'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
-import { CreateClientSchema, UpdateClientDataSchema } from '@eva/schemas'
+import { CreateClientSchema, UpdateClientDataSchema, PERSONAS, type Persona } from '@eva/schemas'
 import { studentCountLabel, tierMaxClientsFor, type SubscriptionTier } from '@/lib/constants'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import {
@@ -25,6 +25,10 @@ import {
     OWN_EMAIL_CLIENT_CREATE_ES,
 } from '@/lib/auth/platform-email'
 import { buildCoachStudentUrl, getCoachPublicIdentifier } from '@/lib/coach/public-identifier'
+import { captureAddStudentEmailTaken } from '@/lib/posthog/add-student-events'
+// W2.11: el reenvío del acceso reusa el MISMO builder del alta guiada. No se duplica ni el copy ni
+// la regla del teléfono: si divergieran, el coach mandaría dos mensajes distintos por el mismo canal.
+import { canSendCredentialByWhatsapp } from '@/app/coach/clients/_lib/add-student-invite'
 // F3: single source of truth for coach scope + org filtering (replaces the local copies).
 import { resolveCoachScope as getCoachClientScope, applyCoachClientScope } from '@/services/auth/coach-scope.service'
 import { createClientIdentity } from '@/infrastructure/db/client-membership.repository'
@@ -46,6 +50,53 @@ function archiveWorkspaceFromCoachScope(scope: {
     if (scope.activeTeamId) return { type: 'team', teamId: scope.activeTeamId }
     if (scope.isEnterprise && scope.orgId) return { type: 'enterprise', orgId: scope.orgId }
     return { type: 'standalone' }
+}
+
+type StudentLoginCoach = {
+    slug?: string | null
+    invite_code?: string | null
+    brand_name?: string | null
+}
+
+/**
+ * Dónde entra el alumno y con qué marca sale su correo.
+ *
+ * Vive extraído porque lo necesitan DOS caminos: el alta (correo de bienvenida) y el **reenvío**
+ * del acceso (W2.11). Si el reenvío armara el link a mano con el código del coach, un alumno de
+ * team recibiría el login de la marca PERSONAL de su coach — una pantalla donde no tiene cuenta.
+ */
+async function resolveStudentLoginContext(
+    supabase: Awaited<ReturnType<typeof createClient>>,
+    scope: { activeTeamId: string | null },
+    coach: StudentLoginCoach,
+): Promise<{ loginUrl: string; brandName: string }> {
+    // Base pública sin barra final (reporte del owner 22-08: `//c/<code>/login`), ver `publicAppUrl`.
+    const appUrl = publicAppUrl()
+    if (scope.activeTeamId) {
+        // Contexto team: el alumno entra por /t/[team]/login con la marca del TEAM (no la personal).
+        const { data: team } = await supabase
+            .from('teams')
+            .select('slug, name')
+            .eq('id', scope.activeTeamId)
+            .maybeSingle()
+        return {
+            loginUrl: `${appUrl}/t/${team?.slug ?? ''}/login`,
+            brandName: team?.name ?? coach.brand_name ?? 'EVA',
+        }
+    }
+    return {
+        loginUrl: `${appUrl}/c/${getCoachPublicIdentifier(coach)}/login`,
+        brandName: coach.brand_name ?? 'EVA',
+    }
+}
+
+/**
+ * `coaches.persona` es `text` con CHECK y los coaches previos al onboarding v2 la tienen NULL.
+ * Fallback `strength`: el vocabulario histórico del producto, mismo criterio que
+ * `lib/auth/student-login-messages.ts`. Nunca se inventa una persona que la base no tenga.
+ */
+function coachPersonaOrFallback(raw: string | null | undefined): Persona {
+    return (PERSONAS as readonly string[]).includes(raw ?? '') ? (raw as Persona) : 'strength'
 }
 
 export type CreateClientState = {
@@ -170,6 +221,13 @@ export async function createClientAction(
     const availability = await assertPlatformEmailAvailable(supabase, parsed.data.email)
     if (!availability.ok) {
         if (isEmailTakenReason(availability.reason)) {
+            // W2.12 (a): medir ANTES de decidir cuánto vale la salida. La razón granular sale por
+            // acá y NUNCA por la respuesta — el copy colapsa las cuatro a propósito.
+            await captureAddStudentEmailTaken({
+                coachId: coach.id,
+                reason: availability.reason,
+                source: 'web_create',
+            })
             return { error: EMAIL_TAKEN_CLIENT_CREATE_ES, code: 'email_taken' }
         }
         return { error: availability.error }
@@ -183,6 +241,11 @@ export async function createClientAction(
 
     if (authError) {
         if (isAuthDuplicateEmailMessage(authError.message)) {
+            await captureAddStudentEmailTaken({
+                coachId: coach.id,
+                reason: 'auth_duplicate',
+                source: 'web_create',
+            })
             return { error: EMAIL_TAKEN_CLIENT_CREATE_ES, code: 'email_taken' }
         }
         return { error: `Error al crear el usuario: ${authError.message}` }
@@ -206,6 +269,11 @@ export async function createClientAction(
     if (dbError) {
         await authAdmin.auth.admin.deleteUser(newAuthUser.user.id)
         if (dbError.code === '23505') {
+            await captureAddStudentEmailTaken({
+                coachId: coach.id,
+                reason: 'clients_duplicate',
+                source: 'web_create',
+            })
             return { error: EMAIL_TAKEN_CLIENT_CREATE_ES, code: 'email_taken' }
         }
         return { error: 'Error al guardar el alumno en la base de datos.' }
@@ -242,23 +310,7 @@ export async function createClientAction(
         }
     }
 
-    // Base pública sin barra final (reporte del owner 22-08: `//c/<code>/login`), ver `publicAppUrl`.
-    const appUrl = publicAppUrl()
-    // Contexto team: el alumno entra por /t/[team]/login con la marca del TEAM (no la personal).
-    let loginPath: string
-    let emailBrandName = coach.brand_name
-    if (scope.activeTeamId) {
-        const { data: team } = await supabase
-            .from('teams')
-            .select('slug, name')
-            .eq('id', scope.activeTeamId)
-            .maybeSingle()
-        loginPath = `/t/${team?.slug ?? ''}/login`
-        emailBrandName = team?.name ?? coach.brand_name
-    } else {
-        loginPath = `/c/${getCoachPublicIdentifier(coach)}/login`
-    }
-    const loginUrl = `${appUrl}${loginPath}`
+    const { loginUrl, brandName: emailBrandName } = await resolveStudentLoginContext(supabase, scope, coach)
     // White-label (W2): el header/CTA del email usan la marca del coach solo si es standalone Pro+
     // (team/org tienen su propia marca, no threadeada acá → fallback EVA).
     const emailBrand = resolveStudentEmailBranding({
@@ -277,11 +329,15 @@ export async function createClientAction(
         logoUrl: emailBrand.logoUrl,
         primaryColor: emailBrand.primaryColor,
         showsEvaBadge: emailBrand.showsEvaBadge,
+        // W2.6: sin esto el correo dice «responde este correo» y la respuesta del alumno llega a
+        // EVA, no a su coach (callejón 14). `send-email.ts:27` soportaba `reply_to` desde siempre.
+        coachEmail: coachUser.email ?? null,
     })
     const emailResult = await sendTransactionalEmail({
         to: emailSan,
         subject: welcomeEmail.subject,
         html: welcomeEmail.html,
+        replyTo: welcomeEmail.replyTo,
     })
     if (!emailResult.ok) {
         console.error('Welcome email delivery error:', emailResult.error)
@@ -440,7 +496,29 @@ export async function deleteClientAction(clientId: string): Promise<{ error?: st
     return {}
 }
 
-export async function resetClientPasswordAction(clientId: string): Promise<{ error?: string, tempPassword?: string }> {
+/**
+ * Datos para rearmar el MENSAJE de invitación con la clave recién generada (W2.11).
+ *
+ * Solo viaja cuando el alumno tiene teléfono: sin teléfono `wa.me/?text=` abre el selector de
+ * contactos y una credencial no puede ir ahí (regla 4 de la SPEC, Ley 21.719). La clave NO va en
+ * este objeto — la pantalla ya la tiene en `tempPassword` y no hace falta duplicarla.
+ */
+export type ResendAccessInvite = {
+    persona: Persona
+    clientName: string
+    clientEmail: string
+    clientPhone: string
+    loginUrl: string
+}
+
+export type ResetClientPasswordResult = {
+    error?: string
+    tempPassword?: string
+    /** Ausente = no se ofrece el reenvío por WhatsApp (sin teléfono, sin correo o sin link). */
+    resend?: ResendAccessInvite
+}
+
+export async function resetClientPasswordAction(clientId: string): Promise<ResetClientPasswordResult> {
     const supabase = await createClient()
     const { data: { user: coachUser } } = await supabase.auth.getUser()
     if (!coachUser) return { error: 'No autenticado.' }
@@ -449,7 +527,7 @@ export async function resetClientPasswordAction(clientId: string): Promise<{ err
 
     let clientQuery = supabase
         .from('clients')
-        .select('id')
+        .select('id, full_name, email, phone')
         .eq('id', clientId)
         .eq('coach_id', coachUser.id)
     clientQuery = applyCoachClientScope(clientQuery, scope)
@@ -479,7 +557,54 @@ export async function resetClientPasswordAction(clientId: string): Promise<{ err
     if (dbError) return { error: 'Error al actualizar base de datos.' }
 
     revalidatePath('/coach/clients')
-    return { tempPassword }
+    return { tempPassword, resend: await resolveResendInvite(supabase, scope, coachUser.id, client) }
+}
+
+/**
+ * W2.11 — el reenvío del acceso ofrece el MISMO mensaje que el alta, con la clave nueva adentro.
+ *
+ * Hasta hoy el reset devolvía la clave sola y el coach volvía a los dos saltos que este spec mata:
+ * dictarla, o mandar al alumno a buscar un correo que este camino ni siquiera envía.
+ *
+ * **Por qué el filtro del teléfono vive acá y no en la pantalla:** sin teléfono, la variante «sin
+ * clave» del copy dice «te mandé tu clave al correo» — y el reset NO manda ningún correo. Ofrecer
+ * ese mensaje sería mentirle al alumno (regla 6). Entonces sin teléfono no se ofrece nada: la
+ * pantalla se queda exactamente como estaba y el coach dicta la clave, como hasta hoy.
+ *
+ * Nunca lanza: un problema resolviendo el mensaje no puede tumbar un reset que YA ocurrió.
+ */
+async function resolveResendInvite(
+    supabase: Awaited<ReturnType<typeof createClient>>,
+    scope: { activeTeamId: string | null },
+    coachId: string,
+    client: { full_name: string; email: string | null; phone: string | null },
+): Promise<ResendAccessInvite | undefined> {
+    if (!client.email) return undefined
+    if (!canSendCredentialByWhatsapp(client.phone)) return undefined
+
+    try {
+        const { data: coach } = await supabase
+            .from('coaches')
+            .select('slug, invite_code, brand_name, persona')
+            .eq('id', coachId)
+            .maybeSingle()
+        if (!coach) return undefined
+
+        const { loginUrl } = await resolveStudentLoginContext(supabase, scope, coach)
+        if (!loginUrl) return undefined
+
+        return {
+            persona: coachPersonaOrFallback(coach.persona),
+            clientName: client.full_name,
+            clientEmail: client.email,
+            // Ya validado por `canSendCredentialByWhatsapp`: acá el teléfono tiene dígitos.
+            clientPhone: client.phone ?? '',
+            loginUrl,
+        }
+    } catch (error) {
+        console.error('resolveResendInvite (no fatal):', error)
+        return undefined
+    }
 }
 
 export async function archiveClientAction(clientId: string): Promise<{ error?: string }> {

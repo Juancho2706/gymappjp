@@ -60,11 +60,29 @@ export const PLATFORM_EMAIL_TAKEN_ES =
 
 /**
  * Copy para el ALTA de alumno cuando el correo ya tiene cuenta (caso Natalia/jotap 2026-08-05).
- * Deliberadamente NO revela de qué tipo de cuenta se trata (coach/alumno): un coach autenticado
- * podría sondear correos ajenos desde el alta. La razón granular queda server-side (`reason`).
+ *
+ * Deliberadamente NO revela de qué tipo de cuenta se trata (coach/alumno/huérfana): un coach
+ * autenticado podría sondear correos ajenos desde el alta. La razón granular queda server-side
+ * (`reason`, y desde W2.12 también en `add_student_email_taken`). **Es UN solo string para las
+ * cuatro razones**: si el texto se ramificara, el alta se convertiría en un oráculo de correos.
+ *
+ * W2.12 (flujo-coach-nuevo, callejón 16): hasta el 26-08 terminaba en «escríbenos a soporte y lo
+ * resolvemos contigo» — un callejón en el minuto 6 de una sesión de celular, con el coach a punto
+ * de invitar a su primer alumno. Ahora la primera salida es accionable **en el momento** y sirve
+ * para las cuatro razones por igual:
+ *
+ *  - El alias funciona de verdad: `check_platform_email_availability` compara con `lower(trim())`
+ *    y nada más (baseline.sql:31,45,59), así que `ana+eva@gmail.com` pasa aunque `ana@gmail.com`
+ *    esté tomado — y Gmail/Outlook lo entregan en la MISMA bandeja. Es además el único camino
+ *    existente para que una persona sea alumna de dos coaches: `clients.id` es su uid de auth.
+ *  - El correo a EVA queda como SEGUNDO paso (el que ya tiene cuenta de coach con ese correo
+ *    necesita que alguien la mueva), nunca como el único.
  */
 export const EMAIL_TAKEN_CLIENT_CREATE_ES =
-    'Este correo ya tiene una cuenta en EVA, así que no se puede crear un alumno nuevo con él. Escríbenos a soporte y lo resolvemos contigo.'
+    'Este correo ya tiene una cuenta en EVA, así que no se puede crear un alumno nuevo con él. ' +
+    'Pídele otro correo y sigues en un minuto: en Gmail y Outlook le sirve el mismo con un alias, ' +
+    'por ejemplo ana+eva@gmail.com, y le llega a la misma bandeja. ' +
+    'Si no tiene otro, escríbenos a contacto@eva-app.cl con su nombre y lo resolvemos nosotros.'
 
 /**
  * Copy del alta cuando el correo tipeado es el DEL PROPIO COACH (SPEC «Vive tu app» directo §5,
@@ -87,8 +105,19 @@ export type PlatformEmailUnavailableReason =
     | 'taken_auth'
     | 'rpc_error'
 
-/** Correo ocupado por una cuenta/fila existente (vs. inválido o dominio vetado). */
-export function isEmailTakenReason(reason: PlatformEmailUnavailableReason): boolean {
+/** Las cuatro razones de «ese correo ya está ocupado». El copy hacia el usuario las colapsa. */
+export type PlatformEmailTakenReason = Extract<PlatformEmailUnavailableReason, `taken_${string}`>
+
+/**
+ * Correo ocupado por una cuenta/fila existente (vs. inválido o dominio vetado).
+ *
+ * Es un type guard (y no un `boolean` pelado) para que quien mide el rechazo —W2.12,
+ * `add_student_email_taken`— pueda tipar la razón sin castear: así el evento no puede terminar
+ * emitiendo `blocked_domain` bajo la etiqueta de «correo tomado».
+ */
+export function isEmailTakenReason(
+    reason: PlatformEmailUnavailableReason
+): reason is PlatformEmailTakenReason {
     return reason.startsWith('taken_')
 }
 

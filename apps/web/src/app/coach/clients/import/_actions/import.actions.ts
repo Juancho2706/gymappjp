@@ -301,6 +301,8 @@ export async function importClientsAction(
                     orgId,
                     teamId: activeTeamId,
                     loginPath: team ? `/t/${team.slug}/login` : null,
+                    // W2.6: `reply_to` del correo de bienvenida. `coaches` no tiene columna `email`.
+                    coachEmail: user.email ?? null,
                 }, {
                     full_name: parsed.data.full_name,
                     email: parsed.data.email,

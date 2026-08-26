@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from 'react'
 import { KeyRound, Copy, Check } from 'lucide-react'
-import { resetClientPasswordAction } from './_actions/clients.actions'
+import { resetClientPasswordAction, type ResendAccessInvite } from './_actions/clients.actions'
+import { ResendAccessWhatsapp } from './_components/ResendAccessWhatsapp'
 import {
     AlertDialog,
     AlertDialogAction,
@@ -23,6 +24,9 @@ interface ResetPasswordButtonProps {
 export function ResetPasswordButton({ clientId, clientName }: ResetPasswordButtonProps) {
     const [error, setError] = useState<string>()
     const [tempPassword, setTempPassword] = useState<string>()
+    // W2.11: el reenvío del acceso con la clave nueva. `null` = el servidor no lo ofrece (alumno
+    // sin teléfono: una credencial no puede ir al selector de contactos, regla 4 de la SPEC).
+    const [resendInvite, setResendInvite] = useState<ResendAccessInvite | null>(null)
     const [isPending, startTransition] = useTransition()
     const [copied, setCopied] = useState(false)
 
@@ -34,6 +38,7 @@ export function ResetPasswordButton({ clientId, clientName }: ResetPasswordButto
                 setError(result.error)
             } else if (result.tempPassword) {
                 setTempPassword(result.tempPassword)
+                setResendInvite(result.resend ?? null)
             }
         })
     }
@@ -65,9 +70,12 @@ export function ResetPasswordButton({ clientId, clientName }: ResetPasswordButto
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     
-                    <div className="flex items-center justify-between bg-secondary p-4 rounded-xl my-2 border border-border">
+                    {/* `ph-no-capture` (regla 10 de la SPEC): la clave se pinta para dictarla,
+                        pero no puede quedar en la grabación de sesión — es acceso a datos de
+                        salud de un tercero (Ley 21.719). */}
+                    <div className="ph-no-capture flex items-center justify-between bg-secondary p-4 rounded-xl my-2 border border-border">
                         <span className="text-2xl font-mono font-bold tracking-widest text-primary">{tempPassword}</span>
-                        <button 
+                        <button
                             onClick={copyToClipboard}
                             className="p-2 rounded-lg bg-background hover:bg-muted transition-colors border border-border"
                             title="Copiar"
@@ -75,13 +83,25 @@ export function ResetPasswordButton({ clientId, clientName }: ResetPasswordButto
                             {copied ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}
                         </button>
                     </div>
-                    
+
                     <p className="text-xs text-muted-foreground text-center">
                         El alumno deberá cambiar esta contraseña la próxima vez que inicie sesión.
                     </p>
 
+                    {resendInvite && (
+                        <div className="mt-3">
+                            <ResendAccessWhatsapp invite={resendInvite} tempPassword={tempPassword} />
+                        </div>
+                    )}
+
                     <AlertDialogFooter className="mt-4">
-                        <AlertDialogAction onClick={() => setTempPassword(undefined)} className="bg-primary hover:opacity-90 text-white rounded-xl w-full">
+                        <AlertDialogAction
+                            onClick={() => {
+                                setTempPassword(undefined)
+                                setResendInvite(null)
+                            }}
+                            className="bg-primary hover:opacity-90 text-white rounded-xl w-full"
+                        >
                             Entendido
                         </AlertDialogAction>
                     </AlertDialogFooter>

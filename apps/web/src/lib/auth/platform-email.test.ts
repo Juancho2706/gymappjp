@@ -7,7 +7,36 @@ import {
     normalizePlatformEmail,
     sanitizePlatformEmail,
     PLATFORM_EMAIL_TAKEN_ES,
+    EMAIL_TAKEN_CLIENT_CREATE_ES,
 } from './platform-email'
+
+/**
+ * W2.12 (flujo-coach-nuevo, callejón 16): el alta del alumno con correo tomado terminaba en
+ * «escríbenos a soporte y lo resolvemos contigo», en el minuto 6 de una sesión de celular.
+ */
+describe('EMAIL_TAKEN_CLIENT_CREATE_ES — copy con salida real y sin oráculo', () => {
+    it('la primera salida es accionable en el momento, con ejemplo explícito', () => {
+        expect(EMAIL_TAKEN_CLIENT_CREATE_ES).toContain('Pídele otro correo')
+        expect(EMAIL_TAKEN_CLIENT_CREATE_ES).toContain('ana+eva@gmail.com')
+    })
+
+    // (c) del TASKS: las cuatro razones se colapsan a propósito. Nombrar la categoría convertiría
+    // el alta en un oráculo de correos ajenos para cualquier coach autenticado.
+    it('no revela cuál de las cuatro razones es', () => {
+        const lower = EMAIL_TAKEN_CLIENT_CREATE_ES.toLowerCase()
+        for (const leak of ['coach', 'entrenador', 'de otro', 'huérfan', 'huerfan', 'alumno de']) {
+            expect(lower).not.toContain(leak)
+        }
+    })
+
+    it('el correo a EVA queda como segundo paso, no como el único', () => {
+        const support = EMAIL_TAKEN_CLIENT_CREATE_ES.indexOf('contacto@eva-app.cl')
+        const alias = EMAIL_TAKEN_CLIENT_CREATE_ES.indexOf('ana+eva@gmail.com')
+        expect(alias).toBeGreaterThan(-1)
+        expect(support).toBeGreaterThan(alias)
+        expect(EMAIL_TAKEN_CLIENT_CREATE_ES).not.toContain('Escríbenos a soporte')
+    })
+})
 
 describe('sanitizePlatformEmail', () => {
     it('preserves dots in the local part (Gmail addresses are stored verbatim)', () => {

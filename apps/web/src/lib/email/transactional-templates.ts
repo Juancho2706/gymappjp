@@ -15,11 +15,28 @@ type WelcomeClientContext = {
     primaryColor?: string | null
     /** Pricing v3: sello «Hecho con EVA» en el footer (free/starter standalone). */
     showsEvaBadge?: boolean
+    /**
+     * Correo del coach (W2.6, flujo-coach-nuevo). Con él, el `reply_to` del envío apunta al coach
+     * y la línea «responde este correo» deja de mentir: hoy la respuesta del alumno llega a EVA,
+     * que no puede ayudarlo (SPEC §1.2 H5, callejón 14).
+     */
+    coachEmail?: string | null
 }
 
+/**
+ * Bienvenida del alumno: **acceso arriba, clave abajo** (W2.6).
+ *
+ * El orden importa: el alumno abre esto en el teléfono, con la clave que ya le llegó por WhatsApp.
+ * Lo primero que tiene que ver es el botón que lo mete a su app; la clave queda debajo, para el que
+ * la necesite. Hasta el 26-08 el bloque de credenciales iba primero y el CTA quedaba bajo el pliegue.
+ *
+ * Devuelve `replyTo` junto al HTML: quien envía no tiene que acordarse de armarlo aparte
+ * (`send-email.ts:27` lo soporta desde siempre y ningún call site lo pasaba).
+ */
 export function buildClientWelcomeEmail(ctx: WelcomeClientContext) {
     const subject = `Bienvenido/a a ${ctx.brandName} — tus datos de acceso`
     const cta = brandCtaColors(ctx.primaryColor)
+    const replyTo = ctx.coachEmail?.trim() || undefined
 
     const welcomeLine = ctx.welcomeMessage?.trim()
         ? `<p style="margin:0 0 20px;font-size:15px;color:#374151;line-height:1.7;font-style:italic;">"${ctx.welcomeMessage.trim()}"</p>`
@@ -34,6 +51,10 @@ export function buildClientWelcomeEmail(ctx: WelcomeClientContext) {
 </p>
 
 ${welcomeLine}
+
+<div style="margin-bottom:24px;">
+  ${ctaButton('Entrar a mi cuenta →', ctx.loginUrl, cta.bg, cta.text)}
+</div>
 
 <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:24px;background-color:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:16px;">
   <tr>
@@ -53,12 +74,12 @@ ${welcomeLine}
   </tr>
 </table>
 
-<div style="margin-bottom:24px;">
-  ${ctaButton('Entrar a mi cuenta →', ctx.loginUrl, cta.bg, cta.text)}
-</div>
-
 <p style="margin:0;font-size:12px;color:#9ca3af;line-height:1.6;">
-  Te recomendamos cambiar la contraseña la primera vez que inicies sesión. Si tienes algún problema, responde este correo.
+  Te recomendamos cambiar la contraseña la primera vez que inicies sesión. ${
+      replyTo
+          ? `Si tienes alguna duda, responde este correo y le llega a ${ctx.coachName}.`
+          : 'Si tienes algún problema, responde este correo.'
+  }
 </p>`
 
     const html = wrapEmailLayout(body, {
@@ -67,7 +88,7 @@ ${welcomeLine}
         brand: { brandName: ctx.brandName, logoUrl: ctx.logoUrl, primaryColor: ctx.primaryColor, showsEvaBadge: ctx.showsEvaBadge },
     })
 
-    return { subject, html }
+    return { subject, html, replyTo }
 }
 
 // ── Program Assigned ─────────────────────────────────────────────────────────

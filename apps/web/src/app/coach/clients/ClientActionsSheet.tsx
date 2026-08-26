@@ -25,7 +25,9 @@ import {
     deleteClientAction,
     resetClientPasswordAction,
     toggleClientStatusAction,
+    type ResendAccessInvite,
 } from './_actions/clients.actions'
+import { ResendAccessWhatsapp } from './_components/ResendAccessWhatsapp'
 
 type ConfirmKind = 'reset' | 'pause' | 'archive' | 'delete'
 
@@ -103,6 +105,9 @@ export function ClientActionsSheet({ client, loginUrl, onClose, onEdit }: Client
     const router = useRouter()
     const [confirm, setConfirm] = useState<ConfirmKind | null>(null)
     const [tempPassword, setTempPassword] = useState<string | null>(null)
+    // W2.11: el reenvío del acceso con la clave nueva. `null` = el servidor no lo ofrece (alumno
+    // sin teléfono: una credencial no puede ir al selector de contactos, regla 4 de la SPEC).
+    const [resendInvite, setResendInvite] = useState<ResendAccessInvite | null>(null)
     const [copied, setCopied] = useState(false)
     const [error, setError] = useState<string>()
     const [isPending, startTransition] = useTransition()
@@ -136,7 +141,10 @@ export function ClientActionsSheet({ client, loginUrl, onClose, onEdit }: Client
         startTransition(async () => {
             const result = await resetClientPasswordAction(client.id)
             if (result.error) setError(result.error)
-            else if (result.tempPassword) setTempPassword(result.tempPassword)
+            else if (result.tempPassword) {
+                setTempPassword(result.tempPassword)
+                setResendInvite(result.resend ?? null)
+            }
         })
     }
 
@@ -233,12 +241,15 @@ export function ClientActionsSheet({ client, loginUrl, onClose, onEdit }: Client
                     Compartila con {name.split(' ')[0]}. Deberá cambiarla al ingresar.
                 </div>
                 {/* «Copiar» EXPLÍCITO (paridad con el diálogo de RN, queja del coach 22-08): con
-                    solo el ícono, la pastilla se lee como una etiqueta y nadie descubre que copia. */}
+                    solo el ícono, la pastilla se lee como una etiqueta y nadie descubre que copia.
+                    `ph-no-capture` (regla 10 de la SPEC): la clave se pinta para dictarla, pero no
+                    puede quedar en la grabación de sesión — es acceso a datos de salud de un
+                    tercero (Ley 21.719). */}
                 <button
                     type="button"
                     onClick={copyTemp}
                     aria-label={copied ? 'Clave copiada' : 'Copiar la clave temporal'}
-                    className="mb-4 inline-flex items-center gap-3 rounded-[var(--radius-md)] border-[1.5px] border-default bg-surface-sunken px-[18px] py-3 text-strong"
+                    className="ph-no-capture mb-4 inline-flex items-center gap-3 rounded-[var(--radius-md)] border-[1.5px] border-default bg-surface-sunken px-[18px] py-3 text-strong"
                 >
                     <span className="font-mono text-[17px] font-bold">{tempPassword}</span>
                     <span
@@ -249,6 +260,11 @@ export function ClientActionsSheet({ client, loginUrl, onClose, onEdit }: Client
                         {copied ? 'Copiado' : 'Copiar'}
                     </span>
                 </button>
+                {resendInvite && (
+                    <div className="mb-4">
+                        <ResendAccessWhatsapp invite={resendInvite} tempPassword={tempPassword} />
+                    </div>
+                )}
                 <Button variant="sport" size="lg" className="w-full" onClick={onClose}>
                     Listo
                 </Button>

@@ -18,6 +18,7 @@ import {
     OWN_EMAIL_CLIENT_CREATE_ES,
 } from '@/lib/auth/platform-email'
 import { getCoachPublicIdentifier } from '@/lib/coach/public-identifier'
+import { captureAddStudentEmailTaken } from '@/lib/posthog/add-student-events'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { createClientIdentity } from '@/infrastructure/db/client-membership.repository'
 
@@ -249,6 +250,13 @@ export async function POST(request: NextRequest) {
         // 'EMAIL_TAKEN' = cuenta existente (copy accionable, sin revelar tipo);
         // 'EMAIL_UNAVAILABLE' se preserva para dominios vetados/desechables (RN ya lo maneja).
         if (isEmailTakenReason(availability.reason)) {
+            // W2.12 (a): el alta desde la app es la MISMA puerta. Sin instrumentarla, el callejón
+            // 16 quedaría medido a medias y el número diría menos de lo que pasa.
+            await captureAddStudentEmailTaken({
+                coachId: coach.id,
+                reason: availability.reason,
+                source: 'mobile_create',
+            })
             return NextResponse.json({ error: EMAIL_TAKEN_CLIENT_CREATE_ES, code: 'EMAIL_TAKEN' }, { status: 409 })
         }
         return NextResponse.json({ error: availability.error, code: 'EMAIL_UNAVAILABLE' }, { status: 409 })
@@ -262,6 +270,11 @@ export async function POST(request: NextRequest) {
 
     if (authError) {
         if (isAuthDuplicateEmailMessage(authError.message)) {
+            await captureAddStudentEmailTaken({
+                coachId: coach.id,
+                reason: 'auth_duplicate',
+                source: 'mobile_create',
+            })
             return NextResponse.json(
                 { error: EMAIL_TAKEN_CLIENT_CREATE_ES, code: 'EMAIL_TAKEN' },
                 { status: 409 }
@@ -286,6 +299,13 @@ export async function POST(request: NextRequest) {
     if (dbError) {
         await admin.auth.admin.deleteUser(newAuthUser.user.id)
         if (dbError.code === '23505') {
+            await captureAddStudentEmailTaken({
+                coachId: coach.id,
+                reason: 'clients_duplicate',
+                source: 'mobile_create',
+            })
+            // La respuesta NO cambia: el `code` y el copy de esta rama los mapea la app instalada
+            // (piso 1.1.0, sin OTA). Acá solo se suma la medición.
             return NextResponse.json(
                 {
                     error: 'Este correo ya esta registrado en la plataforma. Usa otro correo o inicia sesion si ya tienes cuenta.',
@@ -340,11 +360,15 @@ export async function POST(request: NextRequest) {
         logoUrl: emailBrand.logoUrl,
         primaryColor: emailBrand.primaryColor,
         showsEvaBadge: emailBrand.showsEvaBadge,
+        // W2.6: el alta desde la app manda el MISMO correo que la web; sin `replyTo` la respuesta
+        // del alumno seguiría llegando a EVA en vez de a su coach (callejón 14).
+        coachEmail: coachUser.email ?? null,
     })
     const emailResult = await sendTransactionalEmail({
         to: emailSan,
         subject: welcomeEmail.subject,
         html: welcomeEmail.html,
+        replyTo: welcomeEmail.replyTo,
     })
     if (!emailResult.ok) {
         console.error('Welcome email delivery error:', emailResult.error)

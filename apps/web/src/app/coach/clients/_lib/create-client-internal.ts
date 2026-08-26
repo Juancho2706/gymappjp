@@ -37,6 +37,12 @@ type CoachContext = {
     teamId?: string | null
     /** Login path override (e.g. /t/[slug]/login for pool clients). Default /c/[slug]/login. */
     loginPath?: string | null
+    /**
+     * Correo de quien da de alta (W2.6): sale como `reply_to` del correo de bienvenida. Sin él, la
+     * línea «responde este correo» manda la respuesta del alumno a EVA, que no puede ayudarlo.
+     * `coaches` NO tiene columna `email`: lo pasa el call site desde la sesión.
+     */
+    coachEmail?: string | null
 }
 
 export type CreateClientResult =
@@ -146,11 +152,13 @@ export async function createClientInternal(
             logoUrl: emailBrand.logoUrl,
             primaryColor: emailBrand.primaryColor,
             showsEvaBadge: emailBrand.showsEvaBadge,
+            coachEmail: coach.coachEmail ?? null,
         })
         sendTransactionalEmail({
             to: emailSan,
             subject: welcomeEmail.subject,
             html: welcomeEmail.html,
+            replyTo: welcomeEmail.replyTo,
         }).catch((e) => console.error('Welcome email error:', e))
     }
 

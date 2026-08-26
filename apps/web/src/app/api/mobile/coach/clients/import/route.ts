@@ -370,6 +370,8 @@ export async function POST(request: NextRequest) {
                 orgId,
                 teamId,
                 loginPath: team ? `/t/${team.slug}/login` : null,
+                // W2.6: `reply_to` del correo de bienvenida. `coaches` no tiene columna `email`.
+                coachEmail: user.email ?? null,
             }, {
                 full_name: parsedRow.data.full_name,
                 email: parsedRow.data.email,

@@ -112,6 +112,56 @@ describe('correos transaccionales al COACH — sin precios', () => {
     })
 })
 
+/**
+ * W2.6 (flujo-coach-nuevo): el correo del alumno era el callejón 14 — decía «responde este correo»
+ * y la respuesta llegaba a EVA, que no puede ayudarlo. Y la clave iba ARRIBA del botón, así que en
+ * el teléfono el CTA quedaba bajo el pliegue.
+ */
+describe('buildClientWelcomeEmail — acceso arriba, clave abajo y reply al coach', () => {
+    const base = {
+        brandName: 'Studio Fuerza',
+        coachName: 'Josefa',
+        clientName: 'Ana',
+        loginUrl: `${APP_URL}/c/studio-fuerza/login`,
+        tempPassword: 'Temporal2026',
+    }
+
+    it('devuelve replyTo con el correo del coach', () => {
+        const { replyTo } = buildClientWelcomeEmail({ ...base, coachEmail: 'josefa@example.com' })
+        expect(replyTo).toBe('josefa@example.com')
+    })
+
+    it('sin correo del coach no inventa un replyTo', () => {
+        expect(buildClientWelcomeEmail(base).replyTo).toBeUndefined()
+        expect(buildClientWelcomeEmail({ ...base, coachEmail: '   ' }).replyTo).toBeUndefined()
+    })
+
+    it('con replyTo, la línea de respuesta nombra al coach', () => {
+        const { html } = buildClientWelcomeEmail({ ...base, coachEmail: 'josefa@example.com' })
+        expect(html).toContain('responde este correo y le llega a Josefa')
+    })
+
+    it('sin replyTo conserva la línea genérica (la respuesta va a EVA)', () => {
+        const { html } = buildClientWelcomeEmail(base)
+        expect(html).toContain('Si tienes algún problema, responde este correo.')
+        expect(html).not.toContain('le llega a Josefa')
+    })
+
+    // El orden ES el cambio: el botón de entrar va antes del bloque de credenciales.
+    it('el CTA de entrar aparece ANTES del bloque «Tus datos de acceso»', () => {
+        const { html } = buildClientWelcomeEmail({ ...base, coachEmail: 'josefa@example.com' })
+        const cta = html.indexOf('Entrar a mi cuenta')
+        const credentials = html.indexOf('Tus datos de acceso')
+        expect(cta).toBeGreaterThan(-1)
+        expect(credentials).toBeGreaterThan(-1)
+        expect(cta).toBeLessThan(credentials)
+    })
+
+    it('la clave temporal sigue estando (el alumno la necesita para entrar)', () => {
+        expect(buildClientWelcomeEmail(base).html).toContain('Temporal2026')
+    })
+})
+
 describe('correos transaccionales al ALUMNO — sin precios', () => {
     it('bienvenida del alumno', () => {
         assertNoPrices(
