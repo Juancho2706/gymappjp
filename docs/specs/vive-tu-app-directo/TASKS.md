@@ -130,7 +130,21 @@ deploy web; OTA de RN antes.**
 - [ ] V1.26 Gate W1: `PNPM_CONFIG_VERIFY_DEPS_BEFORE_RUN=false pnpm vitest run vive-tu-app apps/web/src/app/coach/guia
   apps/web/src/app/api/coach/onboarding-events apps/web/src/app/api/mobile/coach/dashboard tests/mobile` +
   `pnpm --filter @eva/mobile exec tsc --noEmit` + `node scripts/guia-visual-check.mjs` (variante V1.18) +
-  V1.12 hecha. **No se despliega sin W2.**
+  V1.12 hecha. **No se despliega sin W2.** Las tareas V1.27–V1.29 (agregadas 26-08 por
+  [flujo-coach-nuevo W0.7](../flujo-coach-nuevo/TASKS.md)) **entran a este mismo gate**.
+- [ ] V1.27 (agregada 26-08 por [FCN W0.7](../flujo-coach-nuevo/TASKS.md); era su aporte 2)
+  `app/vive-tu-app/route.ts:45`: el `signOut()` previo al `verifyOtp` pasa a `signOut({ scope: 'local' })` —
+  hoy con alcance global mata la sesión del coach en TODOS sus dispositivos al abrir el demo. Test: el spy de
+  `signOut` recibe `{ scope: 'local' }`.
+- [ ] V1.28 (agregada 26-08 por [FCN W0.7](../flujo-coach-nuevo/TASKS.md); aporte 3) Mismo route, cinturón de
+  `:38-42`: hoy valida `is_demo` **y nada más** — atar el parámetro `c=` al `coach_id` real del demo
+  (`client.coach_id === c`, 400/redirect neutro si no coincide), para que un token de un demo ajeno no pueda
+  decorarse con el `c=` de otro coach. Encaja con el select ampliado de V1.13 (`coach_id` ya viene). Test:
+  «token válido con `c=` de otro coach → rechazado».
+- [ ] V1.29 (agregada 26-08 por [FCN W0.7](../flujo-coach-nuevo/TASKS.md); aporte 4) Rate limit en
+  `POST /api/mobile/coach/vive-tu-app` — hoy **0 apariciones de `rateLimit`** en sus 62 líneas. Molde
+  `rateLimitViveTuApp` de V1.9 (mismo presupuesto por `user.id`); 429 con shape JSON del endpoint. Test del
+  429.
 
 ## W2 — Volver con un toque (Opus ×2: `web-auth`, `rn`) — mismo deploy que W1
 
@@ -245,6 +259,14 @@ deploy web; OTA de RN antes.**
 - [ ] V3.12 (opcional, deuda declarada) Espejo RN: `validate-student-workspace/route.ts:61` responde 403
   `COACH_ACCOUNT` cuando el bearer es un coach, y `app/alumno/codigo` muestra el mismo mensaje con CTA a la
   pantalla de coach.
+- [ ] V3.13 (agregada 26-08 por [FCN W0.7](../flujo-coach-nuevo/TASKS.md); su aporte 1 = **call site de FCN
+  W1.4**) Dentro del diff de V3.1, en `c/[coach_slug]/login/_actions/login.actions.ts`, tras resolver el
+  `client` y antes de devolver el `redirectUrl` (`:160-164`): **una línea** que llama **esperada** (`await`,
+  nunca promesa flotante) a `recordStudentFirstLogin(admin, client.id)` — el servicio lo crea
+  [FCN W1.2](../flujo-coach-nuevo/TASKS.md) (`student-login-signal.service.ts`, nunca lanza). **Regla de no
+  colisión (FCN W1.4):** la línea la agrega **el worker de VTA W3 dentro de su diff** si FCN W1.2 ya está
+  mergeada; si no, V3.13 queda pendiente y FCN W1.4 la agrega tras el merge de VTA W3 — **nunca los dos**.
+  Gate: el test de V3.6 suma el assert «login de alumno llama `recordStudentFirstLogin` una vez».
 
 ## W4 — Panel admin sin alumno de ejemplo (Opus ×1: `db-admin`) — absorbe W8.1.9
 
