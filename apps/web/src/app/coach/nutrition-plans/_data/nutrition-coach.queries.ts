@@ -453,7 +453,16 @@ export const getClientAdherence = cache(async (clientId: string, planId: string)
     .eq('plan_id', planId)
     .gte('log_date', dateFrom)
     .order('log_date', { ascending: true })
-  return data ?? []
+  // `meal_id` es nullable en LIVE: un log sin comida asociada no puede matchear ninguna meal del
+  // plan, así que se filtra al borde y el shape conserva `meal_id: string` (`DayAdherence`).
+  return (data ?? []).map((day) => ({
+    log_date: day.log_date,
+    nutrition_meal_logs: (day.nutrition_meal_logs ?? []).flatMap((r) =>
+      r.meal_id == null
+        ? []
+        : [{ meal_id: r.meal_id, is_completed: r.is_completed, consumed_quantity: r.consumed_quantity }]
+    ),
+  }))
 })
 
 /** Filtro 3-vías de clientes por workspace activo (mismo patrón que getCoachClientsWithPrograms). */

@@ -374,7 +374,7 @@ export const getPersonalRecords = cache(async (clientId: string): Promise<Person
 
         const maxByExercise = new Map<string, number>()
         for (const row of allW) {
-            const exId = blockToEx.get(row.block_id)
+            const exId = row.block_id ? blockToEx.get(row.block_id) : undefined
             if (!exId || row.weight_kg == null) continue
             const prev = maxByExercise.get(exId) ?? 0
             if (row.weight_kg > prev) maxByExercise.set(exId, row.weight_kg)
@@ -385,7 +385,7 @@ export const getPersonalRecords = cache(async (clientId: string): Promise<Person
         const now = Date.now()
         const dayMs = 24 * 60 * 60 * 1000
         for (const row of recent) {
-            const exId = blockToEx.get(row.block_id)
+            const exId = row.block_id ? blockToEx.get(row.block_id) : undefined
             if (!exId || row.weight_kg == null) continue
             const histMax = maxByExercise.get(exId)
             if (histMax == null || row.weight_kg < histMax) continue

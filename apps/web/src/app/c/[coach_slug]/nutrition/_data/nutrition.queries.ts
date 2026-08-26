@@ -96,5 +96,14 @@ export const getNutritionAdherence30d = cache(async (userId: string, planId: str
     .gte('log_date', dateFrom)
     .order('log_date', { ascending: true })
 
-  return data ?? []
+  // `meal_id` es nullable en LIVE: un log sin comida asociada no matchea ninguna meal del plan —
+  // se filtra al borde para que el shape (`DayAdherence`) conserve `meal_id: string`.
+  return (data ?? []).map((day) => ({
+    log_date: day.log_date,
+    nutrition_meal_logs: (day.nutrition_meal_logs ?? []).flatMap((r) =>
+      r.meal_id == null
+        ? []
+        : [{ meal_id: r.meal_id, is_completed: r.is_completed, consumed_quantity: r.consumed_quantity }]
+    ),
+  }))
 })

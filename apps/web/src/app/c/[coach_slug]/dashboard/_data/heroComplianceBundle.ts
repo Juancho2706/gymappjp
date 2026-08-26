@@ -222,11 +222,12 @@ function computeNutritionComplianceScore(
 
     const logsByDate = new Map<string, MealLogRow[]>()
     for (const day of logs) {
-        const rows: MealLogRow[] = (day.nutrition_meal_logs ?? []).map((r) => ({
-            meal_id: r.meal_id,
-            is_completed: !!r.is_completed,
-            consumed_quantity: r.consumed_quantity,
-        }))
+        // `meal_id` nullable en LIVE: sin comida asociada no hay match posible contra el plan.
+        const rows: MealLogRow[] = (day.nutrition_meal_logs ?? []).flatMap((r) =>
+            r.meal_id == null
+                ? []
+                : [{ meal_id: r.meal_id, is_completed: !!r.is_completed, consumed_quantity: r.consumed_quantity }]
+        )
         logsByDate.set(day.log_date, rows)
     }
 

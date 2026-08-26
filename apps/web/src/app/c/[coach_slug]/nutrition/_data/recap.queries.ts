@@ -56,11 +56,12 @@ export const getNutritionWeeklyRecap = cache(
     for (const day of logs) {
       logsByDate.set(
         day.log_date,
-        (day.nutrition_meal_logs ?? []).map((r) => ({
-          meal_id: r.meal_id,
-          is_completed: !!r.is_completed,
-          consumed_quantity: r.consumed_quantity,
-        }))
+        // `meal_id` nullable en LIVE: sin comida asociada no hay match posible contra el plan.
+        (day.nutrition_meal_logs ?? []).flatMap((r) =>
+          r.meal_id == null
+            ? []
+            : [{ meal_id: r.meal_id, is_completed: !!r.is_completed, consumed_quantity: r.consumed_quantity }]
+        )
       )
       if (day.target_calories_at_log != null) {
         targetByDate.set(day.log_date, {

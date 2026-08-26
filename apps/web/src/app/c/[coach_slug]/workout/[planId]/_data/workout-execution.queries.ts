@@ -338,7 +338,8 @@ export const getWorkoutExecutionData = cache(async (planId: string, targetDate?:
     const lastSessionByBlock: Record<string, { date: string; sets: Array<{ weight_kg: number | null; reps_done: number | null }> }> = {}
     // priorLogs viene desc por fecha → la 1ª aparición de cada bloque marca su día más reciente.
     const grouped: Record<string, { day: string; rows: Array<{ set_number: number; weight_kg: number | null; reps_done: number | null }> }> = {}
-    priorLogsRes.data?.forEach((log: { block_id: string; set_number: number; weight_kg: number | null; reps_done: number | null; logged_at: string }) => {
+    priorLogsRes.data?.forEach((log: { block_id: string | null; set_number: number; weight_kg: number | null; reps_done: number | null; logged_at: string }) => {
+        if (!log.block_id) return // `block_id` nullable en LIVE: sin bloque no hay historial que agrupar.
         const day = getSantiagoIsoYmdForUtcInstant(log.logged_at)
         if (!grouped[log.block_id]) grouped[log.block_id] = { day, rows: [] }
         if (grouped[log.block_id].day === day) {

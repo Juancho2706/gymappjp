@@ -257,6 +257,7 @@ export async function findOrgNutritionTemplateUsage(
             .gte('log_date', sevenDaysAgo)
 
         for (const log of logs ?? []) {
+            if (!log.plan_id || !log.client_id) continue
             if (!loggedPlanIds.has(log.plan_id)) loggedPlanIds.set(log.plan_id, new Set())
             loggedPlanIds.get(log.plan_id)!.add(log.client_id)
         }

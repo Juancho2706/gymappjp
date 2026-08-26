@@ -434,7 +434,7 @@ export const getClientProfileData = cache(async (clientId: string) => {
     })
 
     const nutritionAdherence30d = nutritionLogsArr
-        .filter((l: { plan_id?: string }) => planId && l.plan_id === planId)
+        .filter((l: { plan_id?: string | null }) => planId && l.plan_id === planId)
         .map((l: { log_date: string; nutrition_meal_logs?: { is_completed?: boolean }[] }) => ({
             log_date: l.log_date,
             nutrition_meal_logs: (l.nutrition_meal_logs || []).map((m) => ({
@@ -448,7 +448,7 @@ export const getClientProfileData = cache(async (clientId: string) => {
 
     const dateFrom30 = format(subDays(parseISO(`${todayIso}T12:00:00`), 29), 'yyyy-MM-dd')
     const logsLast30 = nutritionLogsArr.filter(
-        (l: { plan_id?: string; log_date?: string }) =>
+        (l: { plan_id?: string | null; log_date?: string }) =>
             planId && l.plan_id === planId && l.log_date && l.log_date >= dateFrom30
     )
     let nutritionMonthlyAvgPct: number | null = null

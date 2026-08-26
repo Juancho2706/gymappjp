@@ -14,6 +14,57 @@ export type Database = {
   }
   public: {
     Tables: {
+      _bak_foods_ml_fix_20260819: {
+        Row: {
+          backed_at: string | null
+          calories: number | null
+          category: string | null
+          id: string | null
+          is_liquid: boolean | null
+          name: string | null
+          serving_unit: string | null
+        }
+        Insert: {
+          backed_at?: string | null
+          calories?: number | null
+          category?: string | null
+          id?: string | null
+          is_liquid?: boolean | null
+          name?: string | null
+          serving_unit?: string | null
+        }
+        Update: {
+          backed_at?: string | null
+          calories?: number | null
+          category?: string | null
+          id?: string | null
+          is_liquid?: boolean | null
+          name?: string | null
+          serving_unit?: string | null
+        }
+        Relationships: []
+      }
+      _bak_pricing_v3_free_limits_20260821: {
+        Row: {
+          backed_up_at: string | null
+          coach_id: string | null
+          max_clients_prev: number | null
+          slug: string | null
+        }
+        Insert: {
+          backed_up_at?: string | null
+          coach_id?: string | null
+          max_clients_prev?: number | null
+          slug?: string | null
+        }
+        Update: {
+          backed_up_at?: string | null
+          coach_id?: string | null
+          max_clients_prev?: number | null
+          slug?: string | null
+        }
+        Relationships: []
+      }
       admin_audit_logs: {
         Row: {
           action: string
@@ -732,6 +783,7 @@ export type Database = {
           coach_id: string | null
           created_at: string
           email: string
+          first_login_at: string | null
           force_password_change: boolean
           full_name: string
           goal_weight_kg: number | null
@@ -759,6 +811,7 @@ export type Database = {
           coach_id?: string | null
           created_at?: string
           email: string
+          first_login_at?: string | null
           force_password_change?: boolean
           full_name: string
           goal_weight_kg?: number | null
@@ -786,6 +839,7 @@ export type Database = {
           coach_id?: string | null
           created_at?: string
           email?: string
+          first_login_at?: string | null
           force_password_change?: boolean
           full_name?: string
           goal_weight_kg?: number | null
@@ -820,6 +874,13 @@ export type Database = {
             columns: ["org_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "clients_referred_by_client_id_fkey"
+            columns: ["referred_by_client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
             referencedColumns: ["id"]
           },
           {
@@ -989,6 +1050,59 @@ export type Database = {
           },
         ]
       }
+      coach_email_ledger: {
+        Row: {
+          coach_id: string
+          created_at: string
+          delivered_at: string | null
+          id: string
+          payload: Json
+          provider_message_id: string | null
+          scheduled_at: string | null
+          sent_at: string | null
+          status: string
+          template_key: string
+          trigger: string
+          updated_at: string
+        }
+        Insert: {
+          coach_id: string
+          created_at?: string
+          delivered_at?: string | null
+          id?: string
+          payload?: Json
+          provider_message_id?: string | null
+          scheduled_at?: string | null
+          sent_at?: string | null
+          status: string
+          template_key: string
+          trigger: string
+          updated_at?: string
+        }
+        Update: {
+          coach_id?: string
+          created_at?: string
+          delivered_at?: string | null
+          id?: string
+          payload?: Json
+          provider_message_id?: string | null
+          scheduled_at?: string | null
+          sent_at?: string | null
+          status?: string
+          template_key?: string
+          trigger?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coach_email_ledger_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coach_feature_prefs: {
         Row: {
           coach_id: string
@@ -1017,6 +1131,61 @@ export type Database = {
             columns: ["coach_id"]
             isOneToOne: false
             referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      coach_food_last_qty: {
+        Row: {
+          client_id: string | null
+          coach_id: string
+          created_at: string
+          food_id: string
+          id: string
+          quantity: number
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          client_id?: string | null
+          coach_id: string
+          created_at?: string
+          food_id: string
+          id?: string
+          quantity: number
+          unit: string
+          updated_at?: string
+        }
+        Update: {
+          client_id?: string | null
+          coach_id?: string
+          created_at?: string
+          food_id?: string
+          id?: string
+          quantity?: number
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coach_food_last_qty_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coach_food_last_qty_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "coach_food_last_qty_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "foods"
             referencedColumns: ["id"]
           },
         ]
@@ -1080,61 +1249,6 @@ export type Database = {
           },
           {
             foreignKeyName: "coach_food_overrides_food_id_fkey"
-            columns: ["food_id"]
-            isOneToOne: false
-            referencedRelation: "foods"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      coach_food_last_qty: {
-        Row: {
-          client_id: string | null
-          coach_id: string
-          created_at: string
-          food_id: string
-          id: string
-          quantity: number
-          unit: string
-          updated_at: string
-        }
-        Insert: {
-          client_id?: string | null
-          coach_id: string
-          created_at?: string
-          food_id: string
-          id?: string
-          quantity: number
-          unit: string
-          updated_at?: string
-        }
-        Update: {
-          client_id?: string | null
-          coach_id?: string
-          created_at?: string
-          food_id?: string
-          id?: string
-          quantity?: number
-          unit?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "coach_food_last_qty_client_id_fkey"
-            columns: ["client_id"]
-            isOneToOne: false
-            referencedRelation: "clients"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "coach_food_last_qty_coach_id_fkey"
-            columns: ["coach_id"]
-            isOneToOne: false
-            referencedRelation: "coaches"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "coach_food_last_qty_food_id_fkey"
             columns: ["food_id"]
             isOneToOne: false
             referencedRelation: "foods"
@@ -1289,7 +1403,6 @@ export type Database = {
           enabled_modules: Json
           executor_theme: string
           full_name: string
-          paid_access_ended_at?: string | null
           health_data_consent_at: string | null
           id: string
           instagram_handle: string | null
@@ -1308,6 +1421,7 @@ export type Database = {
           max_clients: number
           neutral_tint: boolean
           onboarding_guide: Json
+          paid_access_ended_at: string | null
           payment_provider: string
           persona: string | null
           persona_also_other: boolean
@@ -1356,7 +1470,6 @@ export type Database = {
           current_period_end?: string | null
           enabled_modules?: Json
           executor_theme?: string
-          paid_access_ended_at?: string | null
           full_name: string
           health_data_consent_at?: string | null
           id: string
@@ -1376,6 +1489,7 @@ export type Database = {
           max_clients?: number
           neutral_tint?: boolean
           onboarding_guide?: Json
+          paid_access_ended_at?: string | null
           payment_provider?: string
           persona?: string | null
           persona_also_other?: boolean
@@ -1424,7 +1538,6 @@ export type Database = {
           current_period_end?: string | null
           enabled_modules?: Json
           executor_theme?: string
-          paid_access_ended_at?: string | null
           full_name?: string
           health_data_consent_at?: string | null
           id?: string
@@ -1444,6 +1557,7 @@ export type Database = {
           max_clients?: number
           neutral_tint?: boolean
           onboarding_guide?: Json
+          paid_access_ended_at?: string | null
           payment_provider?: string
           persona?: string | null
           persona_also_other?: boolean
@@ -1809,7 +1923,7 @@ export type Database = {
           created_at: string
           id: string
           log_date: string
-          plan_id: string
+          plan_id: string | null
           plan_name_at_log: string | null
           target_calories_at_log: number | null
           target_carbs_at_log: number | null
@@ -1821,7 +1935,7 @@ export type Database = {
           created_at?: string
           id?: string
           log_date: string
-          plan_id: string
+          plan_id?: string | null
           plan_name_at_log?: string | null
           target_calories_at_log?: number | null
           target_carbs_at_log?: number | null
@@ -1833,7 +1947,7 @@ export type Database = {
           created_at?: string
           id?: string
           log_date?: string
-          plan_id?: string
+          plan_id?: string | null
           plan_name_at_log?: string | null
           target_calories_at_log?: number | null
           target_carbs_at_log?: number | null
@@ -2112,6 +2226,183 @@ export type Database = {
           },
         ]
       }
+      food_catalog_import_batches: {
+        Row: {
+          accepted_rows: number
+          checksum: string | null
+          completed_at: string | null
+          country_code: string
+          created_at: string
+          created_by: string | null
+          duplicate_rows: number
+          file_name: string | null
+          id: string
+          metadata: Json
+          rejected_rows: number
+          source: string
+          status: string
+          total_rows: number
+        }
+        Insert: {
+          accepted_rows?: number
+          checksum?: string | null
+          completed_at?: string | null
+          country_code?: string
+          created_at?: string
+          created_by?: string | null
+          duplicate_rows?: number
+          file_name?: string | null
+          id?: string
+          metadata?: Json
+          rejected_rows?: number
+          source: string
+          status?: string
+          total_rows?: number
+        }
+        Update: {
+          accepted_rows?: number
+          checksum?: string | null
+          completed_at?: string | null
+          country_code?: string
+          created_at?: string
+          created_by?: string | null
+          duplicate_rows?: number
+          file_name?: string | null
+          id?: string
+          metadata?: Json
+          rejected_rows?: number
+          source?: string
+          status?: string
+          total_rows?: number
+        }
+        Relationships: []
+      }
+      food_catalog_import_rows: {
+        Row: {
+          batch_id: string
+          created_at: string
+          id: string
+          normalized_catalog_key: string | null
+          normalized_gtin: string | null
+          payload: Json
+          rejection_reason: string | null
+          resolved_food_id: string | null
+          source_row: number
+          status: string
+        }
+        Insert: {
+          batch_id: string
+          created_at?: string
+          id?: string
+          normalized_catalog_key?: string | null
+          normalized_gtin?: string | null
+          payload: Json
+          rejection_reason?: string | null
+          resolved_food_id?: string | null
+          source_row: number
+          status?: string
+        }
+        Update: {
+          batch_id?: string
+          created_at?: string
+          id?: string
+          normalized_catalog_key?: string | null
+          normalized_gtin?: string | null
+          payload?: Json
+          rejection_reason?: string | null
+          resolved_food_id?: string | null
+          source_row?: number
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "food_catalog_import_rows_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "food_catalog_import_batches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "food_catalog_import_rows_resolved_food_id_fkey"
+            columns: ["resolved_food_id"]
+            isOneToOne: false
+            referencedRelation: "foods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      food_catalog_missing_codes: {
+        Row: {
+          barcode: string
+          captured_brand: string | null
+          captured_name: string | null
+          client_id: string
+          country_code: string
+          first_seen_at: string
+          id: string
+          last_idempotency_key: string | null
+          last_seen_at: string
+          package_photo_path: string | null
+          report_source: string
+          resolved_at: string | null
+          resolved_food_id: string | null
+          sightings: number
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          barcode: string
+          captured_brand?: string | null
+          captured_name?: string | null
+          client_id: string
+          country_code?: string
+          first_seen_at?: string
+          id?: string
+          last_idempotency_key?: string | null
+          last_seen_at?: string
+          package_photo_path?: string | null
+          report_source?: string
+          resolved_at?: string | null
+          resolved_food_id?: string | null
+          sightings?: number
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          barcode?: string
+          captured_brand?: string | null
+          captured_name?: string | null
+          client_id?: string
+          country_code?: string
+          first_seen_at?: string
+          id?: string
+          last_idempotency_key?: string | null
+          last_seen_at?: string
+          package_photo_path?: string | null
+          report_source?: string
+          resolved_at?: string | null
+          resolved_food_id?: string | null
+          sightings?: number
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "food_catalog_missing_codes_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "food_catalog_missing_codes_resolved_food_id_fkey"
+            columns: ["resolved_food_id"]
+            isOneToOne: false
+            referencedRelation: "foods"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       food_items: {
         Row: {
           food_id: string
@@ -2150,6 +2441,77 @@ export type Database = {
             columns: ["meal_id"]
             isOneToOne: false
             referencedRelation: "nutrition_meals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      food_media: {
+        Row: {
+          attribution: string | null
+          blurhash: string | null
+          bucket: string
+          created_at: string
+          created_by: string | null
+          food_id: string
+          height: number | null
+          id: string
+          is_primary: boolean
+          kind: string
+          license: string
+          mime_type: string | null
+          object_path: string
+          source_url: string | null
+          updated_at: string
+          updated_by: string | null
+          version: number
+          width: number | null
+        }
+        Insert: {
+          attribution?: string | null
+          blurhash?: string | null
+          bucket?: string
+          created_at?: string
+          created_by?: string | null
+          food_id: string
+          height?: number | null
+          id?: string
+          is_primary?: boolean
+          kind: string
+          license?: string
+          mime_type?: string | null
+          object_path: string
+          source_url?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+          width?: number | null
+        }
+        Update: {
+          attribution?: string | null
+          blurhash?: string | null
+          bucket?: string
+          created_at?: string
+          created_by?: string | null
+          food_id?: string
+          height?: number | null
+          id?: string
+          is_primary?: boolean
+          kind?: string
+          license?: string
+          mime_type?: string | null
+          object_path?: string
+          source_url?: string | null
+          updated_at?: string
+          updated_by?: string | null
+          version?: number
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "food_media_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "foods"
             referencedColumns: ["id"]
           },
         ]
@@ -2201,11 +2563,15 @@ export type Database = {
       }
       foods: {
         Row: {
+          barcode: string | null
           brand: string | null
           calories: number
           carbs_g: number
+          catalog_key: string | null
+          catalog_source: string
           category: string | null
           coach_id: string | null
+          country_code: string | null
           exchange_group_id: string | null
           exchange_portion_grams: number | null
           exchange_portion_label: string | null
@@ -2219,20 +2585,33 @@ export type Database = {
           name: string
           name_search: string | null
           org_id: string | null
+          package_quantity: number | null
+          package_unit: string | null
+          product_image_path: string | null
           protein_g: number
           saturated_fat_g: number | null
+          search_aliases: string[]
           serving_size: number
           serving_unit: string | null
           sodium_mg: number | null
+          source_ref: string | null
           sugar_g: number | null
           unsaturated_fat_g: number | null
+          updated_at: string | null
+          verification_status: string
+          verified_at: string | null
+          verified_by: string | null
         }
         Insert: {
+          barcode?: string | null
           brand?: string | null
           calories: number
           carbs_g: number
+          catalog_key?: string | null
+          catalog_source?: string
           category?: string | null
           coach_id?: string | null
+          country_code?: string | null
           exchange_group_id?: string | null
           exchange_portion_grams?: number | null
           exchange_portion_label?: string | null
@@ -2246,20 +2625,33 @@ export type Database = {
           name: string
           name_search?: string | null
           org_id?: string | null
+          package_quantity?: number | null
+          package_unit?: string | null
+          product_image_path?: string | null
           protein_g: number
           saturated_fat_g?: number | null
+          search_aliases?: string[]
           serving_size: number
           serving_unit?: string | null
           sodium_mg?: number | null
+          source_ref?: string | null
           sugar_g?: number | null
           unsaturated_fat_g?: number | null
+          updated_at?: string | null
+          verification_status?: string
+          verified_at?: string | null
+          verified_by?: string | null
         }
         Update: {
+          barcode?: string | null
           brand?: string | null
           calories?: number
           carbs_g?: number
+          catalog_key?: string | null
+          catalog_source?: string
           category?: string | null
           coach_id?: string | null
+          country_code?: string | null
           exchange_group_id?: string | null
           exchange_portion_grams?: number | null
           exchange_portion_label?: string | null
@@ -2273,13 +2665,22 @@ export type Database = {
           name?: string
           name_search?: string | null
           org_id?: string | null
+          package_quantity?: number | null
+          package_unit?: string | null
+          product_image_path?: string | null
           protein_g?: number
           saturated_fat_g?: number | null
+          search_aliases?: string[]
           serving_size?: number
           serving_unit?: string | null
           sodium_mg?: number | null
+          source_ref?: string | null
           sugar_g?: number | null
           unsaturated_fat_g?: number | null
+          updated_at?: string | null
+          verification_status?: string
+          verified_at?: string | null
+          verified_by?: string | null
         }
         Relationships: [
           {
@@ -2630,39 +3031,298 @@ export type Database = {
           },
         ]
       }
-      nutrition_intake_entries: {
+      nutrition_day_snapshots_v2: {
         Row: {
           client_id: string
           created_at: string
-          custom_name: string | null
-          food_id: string | null
+          day_variant_id: string | null
           id: string
-          log_date: string
-          quantity: number
-          source: string
-          unit: string
+          local_date: string
+          plan_id: string | null
+          prescription_snapshot: Json
+          strategy: string | null
+          student_permissions: Json
+          target_calories: number | null
+          target_carbs_g: number | null
+          target_fats_g: number | null
+          target_fiber_g: number | null
+          target_protein_g: number | null
+          target_sodium_mg: number | null
+          target_water_ml: number | null
+          timezone: string
+          version_id: string | null
         }
         Insert: {
           client_id: string
           created_at?: string
-          custom_name?: string | null
-          food_id?: string | null
+          day_variant_id?: string | null
           id?: string
-          log_date: string
-          quantity: number
-          source?: string
-          unit: string
+          local_date: string
+          plan_id?: string | null
+          prescription_snapshot?: Json
+          strategy?: string | null
+          student_permissions?: Json
+          target_calories?: number | null
+          target_carbs_g?: number | null
+          target_fats_g?: number | null
+          target_fiber_g?: number | null
+          target_protein_g?: number | null
+          target_sodium_mg?: number | null
+          target_water_ml?: number | null
+          timezone: string
+          version_id?: string | null
         }
         Update: {
           client_id?: string
           created_at?: string
+          day_variant_id?: string | null
+          id?: string
+          local_date?: string
+          plan_id?: string | null
+          prescription_snapshot?: Json
+          strategy?: string | null
+          student_permissions?: Json
+          target_calories?: number | null
+          target_carbs_g?: number | null
+          target_fats_g?: number | null
+          target_fiber_g?: number | null
+          target_protein_g?: number | null
+          target_sodium_mg?: number | null
+          target_water_ml?: number | null
+          timezone?: string
+          version_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_day_snapshots_v2_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_day_snapshots_v2_day_variant_id_fkey"
+            columns: ["day_variant_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_day_variants_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_day_snapshots_v2_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_plans_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_day_snapshots_v2_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_plan_versions_v2"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutrition_day_variants_v2: {
+        Row: {
+          created_at: string
+          day_of_week: number | null
+          id: string
+          is_default: boolean
+          label: string
+          order_index: number
+          target_calories: number | null
+          target_carbs_g: number | null
+          target_fats_g: number | null
+          target_fiber_g: number | null
+          target_protein_g: number | null
+          target_sodium_mg: number | null
+          target_water_ml: number | null
+          updated_at: string
+          variant_key: string
+          version_id: string
+        }
+        Insert: {
+          created_at?: string
+          day_of_week?: number | null
+          id?: string
+          is_default?: boolean
+          label: string
+          order_index?: number
+          target_calories?: number | null
+          target_carbs_g?: number | null
+          target_fats_g?: number | null
+          target_fiber_g?: number | null
+          target_protein_g?: number | null
+          target_sodium_mg?: number | null
+          target_water_ml?: number | null
+          updated_at?: string
+          variant_key: string
+          version_id: string
+        }
+        Update: {
+          created_at?: string
+          day_of_week?: number | null
+          id?: string
+          is_default?: boolean
+          label?: string
+          order_index?: number
+          target_calories?: number | null
+          target_carbs_g?: number | null
+          target_fats_g?: number | null
+          target_fiber_g?: number | null
+          target_protein_g?: number | null
+          target_sodium_mg?: number | null
+          target_water_ml?: number | null
+          updated_at?: string
+          variant_key?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_day_variants_v2_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_plan_versions_v2"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutrition_intake_entries: {
+        Row: {
+          actor_role: string | null
+          actor_user_id: string | null
+          capture_method: string
+          capture_method_v2: string | null
+          client_id: string
+          corrected_by_entry_id: string | null
+          correction_reason: string | null
+          corrects_entry_id: string | null
+          created_at: string
+          custom_name: string | null
+          daily_log_id: string | null
+          day_snapshot_id: string | null
+          entry_status: string
+          exchange_group_code: string | null
+          exchange_portions: number | null
+          food_id: string | null
+          id: string
+          idempotency_key: string | null
+          intake_source_v2: string | null
+          log_date: string
+          meal_id: string | null
+          meal_slot: string | null
+          meal_slot_v2: string | null
+          note: string | null
+          occurred_at: string | null
+          plan_version_id: string | null
+          prescription_item_id: string | null
+          quantity: number
+          revision: number
+          snapshot_brand: string | null
+          snapshot_calories: number | null
+          snapshot_carbs_g: number | null
+          snapshot_fats_g: number | null
+          snapshot_fiber_g: number | null
+          snapshot_macros_basis: string | null
+          snapshot_name: string | null
+          snapshot_protein_g: number | null
+          snapshot_serving_size: number | null
+          snapshot_serving_unit: string | null
+          source: string
+          timezone: string | null
+          unit: string
+          updated_at: string | null
+        }
+        Insert: {
+          actor_role?: string | null
+          actor_user_id?: string | null
+          capture_method?: string
+          capture_method_v2?: string | null
+          client_id: string
+          corrected_by_entry_id?: string | null
+          correction_reason?: string | null
+          corrects_entry_id?: string | null
+          created_at?: string
           custom_name?: string | null
+          daily_log_id?: string | null
+          day_snapshot_id?: string | null
+          entry_status?: string
+          exchange_group_code?: string | null
+          exchange_portions?: number | null
           food_id?: string | null
           id?: string
-          log_date?: string
-          quantity?: number
+          idempotency_key?: string | null
+          intake_source_v2?: string | null
+          log_date: string
+          meal_id?: string | null
+          meal_slot?: string | null
+          meal_slot_v2?: string | null
+          note?: string | null
+          occurred_at?: string | null
+          plan_version_id?: string | null
+          prescription_item_id?: string | null
+          quantity: number
+          revision?: number
+          snapshot_brand?: string | null
+          snapshot_calories?: number | null
+          snapshot_carbs_g?: number | null
+          snapshot_fats_g?: number | null
+          snapshot_fiber_g?: number | null
+          snapshot_macros_basis?: string | null
+          snapshot_name?: string | null
+          snapshot_protein_g?: number | null
+          snapshot_serving_size?: number | null
+          snapshot_serving_unit?: string | null
           source?: string
+          timezone?: string | null
+          unit: string
+          updated_at?: string | null
+        }
+        Update: {
+          actor_role?: string | null
+          actor_user_id?: string | null
+          capture_method?: string
+          capture_method_v2?: string | null
+          client_id?: string
+          corrected_by_entry_id?: string | null
+          correction_reason?: string | null
+          corrects_entry_id?: string | null
+          created_at?: string
+          custom_name?: string | null
+          daily_log_id?: string | null
+          day_snapshot_id?: string | null
+          entry_status?: string
+          exchange_group_code?: string | null
+          exchange_portions?: number | null
+          food_id?: string | null
+          id?: string
+          idempotency_key?: string | null
+          intake_source_v2?: string | null
+          log_date?: string
+          meal_id?: string | null
+          meal_slot?: string | null
+          meal_slot_v2?: string | null
+          note?: string | null
+          occurred_at?: string | null
+          plan_version_id?: string | null
+          prescription_item_id?: string | null
+          quantity?: number
+          revision?: number
+          snapshot_brand?: string | null
+          snapshot_calories?: number | null
+          snapshot_carbs_g?: number | null
+          snapshot_fats_g?: number | null
+          snapshot_fiber_g?: number | null
+          snapshot_macros_basis?: string | null
+          snapshot_name?: string | null
+          snapshot_protein_g?: number | null
+          snapshot_serving_size?: number | null
+          snapshot_serving_unit?: string | null
+          source?: string
+          timezone?: string | null
           unit?: string
+          updated_at?: string | null
         }
         Relationships: [
           {
@@ -2673,10 +3333,144 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "nutrition_intake_entries_daily_log_id_fkey"
+            columns: ["daily_log_id"]
+            isOneToOne: false
+            referencedRelation: "daily_nutrition_logs"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "nutrition_intake_entries_food_id_fkey"
             columns: ["food_id"]
             isOneToOne: false
             referencedRelation: "foods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_intake_entries_meal_id_fkey"
+            columns: ["meal_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_meals"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_intake_entries_v2_corrected_by_fkey"
+            columns: ["corrected_by_entry_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_intake_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_intake_entries_v2_corrects_fkey"
+            columns: ["corrects_entry_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_intake_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_intake_entries_v2_day_snapshot_fkey"
+            columns: ["day_snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_day_snapshots_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_intake_entries_v2_plan_version_fkey"
+            columns: ["plan_version_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_plan_versions_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_intake_entries_v2_prescription_item_fkey"
+            columns: ["prescription_item_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_prescription_items_v2"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutrition_item_substitutions_v2: {
+        Row: {
+          created_at: string
+          custom_name: string | null
+          food_id: string | null
+          id: string
+          order_index: number
+          prescription_item_id: string
+          quantity: number | null
+          recipe_id: string | null
+          snapshot_brand: string | null
+          snapshot_calories: number | null
+          snapshot_carbs_g: number | null
+          snapshot_fats_g: number | null
+          snapshot_fiber_g: number | null
+          snapshot_name: string | null
+          snapshot_protein_g: number | null
+          unit: string | null
+          updated_at: string
+          version_id: string
+        }
+        Insert: {
+          created_at?: string
+          custom_name?: string | null
+          food_id?: string | null
+          id?: string
+          order_index?: number
+          prescription_item_id: string
+          quantity?: number | null
+          recipe_id?: string | null
+          snapshot_brand?: string | null
+          snapshot_calories?: number | null
+          snapshot_carbs_g?: number | null
+          snapshot_fats_g?: number | null
+          snapshot_fiber_g?: number | null
+          snapshot_name?: string | null
+          snapshot_protein_g?: number | null
+          unit?: string | null
+          updated_at?: string
+          version_id: string
+        }
+        Update: {
+          created_at?: string
+          custom_name?: string | null
+          food_id?: string | null
+          id?: string
+          order_index?: number
+          prescription_item_id?: string
+          quantity?: number | null
+          recipe_id?: string | null
+          snapshot_brand?: string | null
+          snapshot_calories?: number | null
+          snapshot_carbs_g?: number | null
+          snapshot_fats_g?: number | null
+          snapshot_fiber_g?: number | null
+          snapshot_name?: string | null
+          snapshot_protein_g?: number | null
+          unit?: string | null
+          updated_at?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nis_item_version_fkey"
+            columns: ["prescription_item_id", "version_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_prescription_items_v2"
+            referencedColumns: ["id", "version_id"]
+          },
+          {
+            foreignKeyName: "nutrition_item_substitutions_v2_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "foods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_item_substitutions_v2_prescription_item_id_fkey"
+            columns: ["prescription_item_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_prescription_items_v2"
             referencedColumns: ["id"]
           },
         ]
@@ -2818,7 +3612,7 @@ export type Database = {
           daily_log_id: string
           id: string
           is_completed: boolean
-          meal_id: string
+          meal_id: string | null
           satisfaction_score: number | null
         }
         Insert: {
@@ -2827,7 +3621,7 @@ export type Database = {
           daily_log_id: string
           id?: string
           is_completed?: boolean
-          meal_id: string
+          meal_id?: string | null
           satisfaction_score?: number | null
         }
         Update: {
@@ -2836,7 +3630,7 @@ export type Database = {
           daily_log_id?: string
           id?: string
           is_completed?: boolean
-          meal_id?: string
+          meal_id?: string | null
           satisfaction_score?: number | null
         }
         Relationships: [
@@ -2853,6 +3647,74 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "nutrition_meals"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutrition_meal_slots_v2: {
+        Row: {
+          created_at: string
+          day_variant_id: string
+          end_time: string | null
+          id: string
+          instructions: string | null
+          is_required: boolean
+          name: string
+          order_index: number
+          slot_code: string
+          slot_mode: string
+          start_time: string | null
+          target_calories: number | null
+          target_carbs_g: number | null
+          target_fats_g: number | null
+          target_protein_g: number | null
+          updated_at: string
+          version_id: string
+        }
+        Insert: {
+          created_at?: string
+          day_variant_id: string
+          end_time?: string | null
+          id?: string
+          instructions?: string | null
+          is_required?: boolean
+          name: string
+          order_index?: number
+          slot_code: string
+          slot_mode?: string
+          start_time?: string | null
+          target_calories?: number | null
+          target_carbs_g?: number | null
+          target_fats_g?: number | null
+          target_protein_g?: number | null
+          updated_at?: string
+          version_id: string
+        }
+        Update: {
+          created_at?: string
+          day_variant_id?: string
+          end_time?: string | null
+          id?: string
+          instructions?: string | null
+          is_required?: boolean
+          name?: string
+          order_index?: number
+          slot_code?: string
+          slot_mode?: string
+          start_time?: string | null
+          target_calories?: number | null
+          target_carbs_g?: number | null
+          target_fats_g?: number | null
+          target_protein_g?: number | null
+          updated_at?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_meal_slots_v2_variant_version_fkey"
+            columns: ["day_variant_id", "version_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_day_variants_v2"
+            referencedColumns: ["id", "version_id"]
           },
         ]
       }
@@ -3055,6 +3917,51 @@ export type Database = {
           },
         ]
       }
+      nutrition_plan_private_notes_v2: {
+        Row: {
+          client_id: string
+          created_at: string
+          created_by: string
+          note: string
+          updated_at: string
+          updated_by: string
+          version_id: string
+        }
+        Insert: {
+          client_id: string
+          created_at?: string
+          created_by: string
+          note?: string
+          updated_at?: string
+          updated_by: string
+          version_id: string
+        }
+        Update: {
+          client_id?: string
+          created_at?: string
+          created_by?: string
+          note?: string
+          updated_at?: string
+          updated_by?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_plan_private_notes_v2_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_plan_private_notes_v2_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: true
+            referencedRelation: "nutrition_plan_versions_v2"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nutrition_plan_templates: {
         Row: {
           carbs_g: number | null
@@ -3239,6 +4146,93 @@ export type Database = {
           },
         ]
       }
+      nutrition_plan_versions_v2: {
+        Row: {
+          created_at: string
+          created_by: string
+          effective_from: string | null
+          effective_to: string | null
+          id: string
+          lock_version: number
+          parent_version_id: string | null
+          plan_id: string
+          private_notes: string | null
+          protocol_notes: string | null
+          publish_idempotency_key: string | null
+          published_at: string | null
+          published_by: string | null
+          status: string
+          strategy: string
+          student_permissions: Json
+          timezone: string
+          updated_at: string
+          updated_by: string
+          version_number: number
+          visible_notes: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          effective_from?: string | null
+          effective_to?: string | null
+          id?: string
+          lock_version?: number
+          parent_version_id?: string | null
+          plan_id: string
+          private_notes?: string | null
+          protocol_notes?: string | null
+          publish_idempotency_key?: string | null
+          published_at?: string | null
+          published_by?: string | null
+          status?: string
+          strategy: string
+          student_permissions?: Json
+          timezone?: string
+          updated_at?: string
+          updated_by: string
+          version_number: number
+          visible_notes?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          effective_from?: string | null
+          effective_to?: string | null
+          id?: string
+          lock_version?: number
+          parent_version_id?: string | null
+          plan_id?: string
+          private_notes?: string | null
+          protocol_notes?: string | null
+          publish_idempotency_key?: string | null
+          published_at?: string | null
+          published_by?: string | null
+          status?: string
+          strategy?: string
+          student_permissions?: Json
+          timezone?: string
+          updated_at?: string
+          updated_by?: string
+          version_number?: number
+          visible_notes?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_plan_versions_v2_parent_version_id_fkey"
+            columns: ["parent_version_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_plan_versions_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_plan_versions_v2_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_plans_v2"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nutrition_plans: {
         Row: {
           carbs_g: number | null
@@ -3246,7 +4240,9 @@ export type Database = {
           coach_id: string
           created_at: string
           daily_calories: number | null
+          fasting_target_hours: number | null
           fats_g: number | null
+          hydration_target_ml: number | null
           id: string
           instructions: string | null
           is_active: boolean
@@ -3256,6 +4252,10 @@ export type Database = {
           org_id: string | null
           plan_mode: string
           protein_g: number | null
+          protocol_notes: string | null
+          sleep_target_hours: number | null
+          steps_target: number | null
+          supplement_guidance: string[]
           template_id: string | null
           template_version_id: string | null
           updated_at: string
@@ -3266,7 +4266,9 @@ export type Database = {
           coach_id: string
           created_at?: string
           daily_calories?: number | null
+          fasting_target_hours?: number | null
           fats_g?: number | null
+          hydration_target_ml?: number | null
           id?: string
           instructions?: string | null
           is_active?: boolean
@@ -3276,6 +4278,10 @@ export type Database = {
           org_id?: string | null
           plan_mode?: string
           protein_g?: number | null
+          protocol_notes?: string | null
+          sleep_target_hours?: number | null
+          steps_target?: number | null
+          supplement_guidance?: string[]
           template_id?: string | null
           template_version_id?: string | null
           updated_at?: string
@@ -3286,7 +4292,9 @@ export type Database = {
           coach_id?: string
           created_at?: string
           daily_calories?: number | null
+          fasting_target_hours?: number | null
           fats_g?: number | null
+          hydration_target_ml?: number | null
           id?: string
           instructions?: string | null
           is_active?: boolean
@@ -3296,6 +4304,10 @@ export type Database = {
           org_id?: string | null
           plan_mode?: string
           protein_g?: number | null
+          protocol_notes?: string | null
+          sleep_target_hours?: number | null
+          steps_target?: number | null
+          supplement_guidance?: string[]
           template_id?: string | null
           template_version_id?: string | null
           updated_at?: string
@@ -3335,6 +4347,193 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "nutrition_plan_templates"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutrition_plans_v2: {
+        Row: {
+          archived_at: string | null
+          client_id: string
+          coach_id: string
+          created_at: string
+          created_by: string
+          current_published_version_id: string | null
+          id: string
+          lifecycle_status: string
+          name: string
+          org_id: string | null
+          strategy: string
+          team_id: string | null
+          updated_at: string
+          updated_by: string
+        }
+        Insert: {
+          archived_at?: string | null
+          client_id: string
+          coach_id: string
+          created_at?: string
+          created_by: string
+          current_published_version_id?: string | null
+          id?: string
+          lifecycle_status?: string
+          name: string
+          org_id?: string | null
+          strategy: string
+          team_id?: string | null
+          updated_at?: string
+          updated_by: string
+        }
+        Update: {
+          archived_at?: string | null
+          client_id?: string
+          coach_id?: string
+          created_at?: string
+          created_by?: string
+          current_published_version_id?: string | null
+          id?: string
+          lifecycle_status?: string
+          name?: string
+          org_id?: string | null
+          strategy?: string
+          team_id?: string | null
+          updated_at?: string
+          updated_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_plans_v2_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_plans_v2_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_plans_v2_current_version_fkey"
+            columns: ["current_published_version_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_plan_versions_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_plans_v2_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_plans_v2_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutrition_prescription_items_v2: {
+        Row: {
+          created_at: string
+          custom_name: string | null
+          food_id: string | null
+          id: string
+          is_optional: boolean
+          maximum_quantity: number | null
+          meal_slot_id: string
+          minimum_quantity: number | null
+          notes: string | null
+          order_index: number
+          quantity: number
+          recipe_id: string | null
+          snapshot_brand: string | null
+          snapshot_calories: number | null
+          snapshot_carbs_g: number | null
+          snapshot_fats_g: number | null
+          snapshot_fiber_g: number | null
+          snapshot_name: string | null
+          snapshot_protein_g: number | null
+          substitution_group_id: string | null
+          unit: string
+          updated_at: string
+          version_id: string
+        }
+        Insert: {
+          created_at?: string
+          custom_name?: string | null
+          food_id?: string | null
+          id?: string
+          is_optional?: boolean
+          maximum_quantity?: number | null
+          meal_slot_id: string
+          minimum_quantity?: number | null
+          notes?: string | null
+          order_index?: number
+          quantity: number
+          recipe_id?: string | null
+          snapshot_brand?: string | null
+          snapshot_calories?: number | null
+          snapshot_carbs_g?: number | null
+          snapshot_fats_g?: number | null
+          snapshot_fiber_g?: number | null
+          snapshot_name?: string | null
+          snapshot_protein_g?: number | null
+          substitution_group_id?: string | null
+          unit: string
+          updated_at?: string
+          version_id: string
+        }
+        Update: {
+          created_at?: string
+          custom_name?: string | null
+          food_id?: string | null
+          id?: string
+          is_optional?: boolean
+          maximum_quantity?: number | null
+          meal_slot_id?: string
+          minimum_quantity?: number | null
+          notes?: string | null
+          order_index?: number
+          quantity?: number
+          recipe_id?: string | null
+          snapshot_brand?: string | null
+          snapshot_calories?: number | null
+          snapshot_carbs_g?: number | null
+          snapshot_fats_g?: number | null
+          snapshot_fiber_g?: number | null
+          snapshot_name?: string | null
+          snapshot_protein_g?: number | null
+          substitution_group_id?: string | null
+          unit?: string
+          updated_at?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_prescription_items_v2_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "foods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_prescription_items_v2_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_recipes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_prescription_items_v2_slot_version_fkey"
+            columns: ["meal_slot_id", "version_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_meal_slots_v2"
+            referencedColumns: ["id", "version_id"]
           },
         ]
       }
@@ -3419,37 +4618,142 @@ export type Database = {
           },
         ]
       }
+      nutrition_recipe_ingredients: {
+        Row: {
+          brand_snapshot: string | null
+          calories_snapshot: number
+          carbs_g_snapshot: number
+          created_at: string
+          fats_g_snapshot: number
+          fiber_g_snapshot: number | null
+          food_id: string | null
+          id: string
+          name_snapshot: string
+          note: string | null
+          order_index: number
+          protein_g_snapshot: number
+          quantity: number
+          recipe_id: string
+          serving_size_snapshot: number
+          serving_unit_snapshot: string | null
+          unit: string
+        }
+        Insert: {
+          brand_snapshot?: string | null
+          calories_snapshot?: number
+          carbs_g_snapshot?: number
+          created_at?: string
+          fats_g_snapshot?: number
+          fiber_g_snapshot?: number | null
+          food_id?: string | null
+          id?: string
+          name_snapshot: string
+          note?: string | null
+          order_index?: number
+          protein_g_snapshot?: number
+          quantity: number
+          recipe_id: string
+          serving_size_snapshot?: number
+          serving_unit_snapshot?: string | null
+          unit: string
+        }
+        Update: {
+          brand_snapshot?: string | null
+          calories_snapshot?: number
+          carbs_g_snapshot?: number
+          created_at?: string
+          fats_g_snapshot?: number
+          fiber_g_snapshot?: number | null
+          food_id?: string | null
+          id?: string
+          name_snapshot?: string
+          note?: string | null
+          order_index?: number
+          protein_g_snapshot?: number
+          quantity?: number
+          recipe_id?: string
+          serving_size_snapshot?: number
+          serving_unit_snapshot?: string | null
+          unit?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_recipe_ingredients_food_id_fkey"
+            columns: ["food_id"]
+            isOneToOne: false
+            referencedRelation: "foods"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_recipe_ingredients_recipe_id_fkey"
+            columns: ["recipe_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_recipes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       nutrition_recipes: {
         Row: {
+          calories_per_serving: number | null
+          carbs_g_per_serving: number | null
+          category: string | null
           coach_id: string | null
           created_at: string
+          description: string | null
+          fats_g_per_serving: number | null
+          fiber_g_per_serving: number | null
           id: string
           image_url: string | null
           ingredients_text: string | null
           instructions: string | null
           name: string
+          prep_time_minutes: number | null
+          protein_g_per_serving: number | null
+          recipe_mode: string
+          servings: number
           team_id: string | null
           updated_at: string
         }
         Insert: {
+          calories_per_serving?: number | null
+          carbs_g_per_serving?: number | null
+          category?: string | null
           coach_id?: string | null
           created_at?: string
+          description?: string | null
+          fats_g_per_serving?: number | null
+          fiber_g_per_serving?: number | null
           id?: string
           image_url?: string | null
           ingredients_text?: string | null
           instructions?: string | null
           name: string
+          prep_time_minutes?: number | null
+          protein_g_per_serving?: number | null
+          recipe_mode?: string
+          servings?: number
           team_id?: string | null
           updated_at?: string
         }
         Update: {
+          calories_per_serving?: number | null
+          carbs_g_per_serving?: number | null
+          category?: string | null
           coach_id?: string | null
           created_at?: string
+          description?: string | null
+          fats_g_per_serving?: number | null
+          fiber_g_per_serving?: number | null
           id?: string
           image_url?: string | null
           ingredients_text?: string | null
           instructions?: string | null
           name?: string
+          prep_time_minutes?: number | null
+          protein_g_per_serving?: number | null
+          recipe_mode?: string
+          servings?: number
           team_id?: string | null
           updated_at?: string
         }
@@ -3466,6 +4770,219 @@ export type Database = {
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutrition_slot_exchange_targets_v2: {
+        Row: {
+          created_at: string
+          exchange_group_id: string
+          id: string
+          meal_slot_id: string
+          notes: string | null
+          order_index: number
+          portions: number
+          snapshot_composed_of: Json | null
+          snapshot_group_code: string | null
+          snapshot_group_name: string | null
+          snapshot_macros_confirmed: boolean | null
+          snapshot_ref_calories: number | null
+          snapshot_ref_carbs_g: number | null
+          snapshot_ref_fats_g: number | null
+          snapshot_ref_protein_g: number | null
+          updated_at: string
+          version_id: string
+        }
+        Insert: {
+          created_at?: string
+          exchange_group_id: string
+          id?: string
+          meal_slot_id: string
+          notes?: string | null
+          order_index?: number
+          portions: number
+          snapshot_composed_of?: Json | null
+          snapshot_group_code?: string | null
+          snapshot_group_name?: string | null
+          snapshot_macros_confirmed?: boolean | null
+          snapshot_ref_calories?: number | null
+          snapshot_ref_carbs_g?: number | null
+          snapshot_ref_fats_g?: number | null
+          snapshot_ref_protein_g?: number | null
+          updated_at?: string
+          version_id: string
+        }
+        Update: {
+          created_at?: string
+          exchange_group_id?: string
+          id?: string
+          meal_slot_id?: string
+          notes?: string | null
+          order_index?: number
+          portions?: number
+          snapshot_composed_of?: Json | null
+          snapshot_group_code?: string | null
+          snapshot_group_name?: string | null
+          snapshot_macros_confirmed?: boolean | null
+          snapshot_ref_calories?: number | null
+          snapshot_ref_carbs_g?: number | null
+          snapshot_ref_fats_g?: number | null
+          snapshot_ref_protein_g?: number | null
+          updated_at?: string
+          version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nstet_slot_version_fkey"
+            columns: ["meal_slot_id", "version_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_meal_slots_v2"
+            referencedColumns: ["id", "version_id"]
+          },
+          {
+            foreignKeyName: "nutrition_slot_exchange_targets_v2_exchange_group_id_fkey"
+            columns: ["exchange_group_id"]
+            isOneToOne: false
+            referencedRelation: "exchange_groups"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutrition_v2_audit_log: {
+        Row: {
+          action: string
+          actor_role: string
+          actor_user_id: string | null
+          client_id: string | null
+          entity_id: string | null
+          entity_type: string
+          id: string
+          idempotency_key: string | null
+          intake_entry_id: string | null
+          metadata: Json
+          occurred_at: string
+          plan_id: string | null
+          version_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_role: string
+          actor_user_id?: string | null
+          client_id?: string | null
+          entity_id?: string | null
+          entity_type: string
+          id?: string
+          idempotency_key?: string | null
+          intake_entry_id?: string | null
+          metadata?: Json
+          occurred_at?: string
+          plan_id?: string | null
+          version_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_role?: string
+          actor_user_id?: string | null
+          client_id?: string | null
+          entity_id?: string | null
+          entity_type?: string
+          id?: string
+          idempotency_key?: string | null
+          intake_entry_id?: string | null
+          metadata?: Json
+          occurred_at?: string
+          plan_id?: string | null
+          version_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_v2_audit_log_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_v2_audit_log_intake_entry_id_fkey"
+            columns: ["intake_entry_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_intake_entries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_v2_audit_log_plan_id_fkey"
+            columns: ["plan_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_plans_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_v2_audit_log_version_id_fkey"
+            columns: ["version_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_plan_versions_v2"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      nutrition_v2_conversion_links: {
+        Row: {
+          client_id: string
+          coach_id: string
+          converted_at: string
+          fidelity: Json
+          id: string
+          last_synced_v1_updated_at: string
+          status: string
+          v1_plan_id: string
+          v2_plan_id: string
+          v2_version_id: string
+        }
+        Insert: {
+          client_id: string
+          coach_id: string
+          converted_at?: string
+          fidelity?: Json
+          id?: string
+          last_synced_v1_updated_at: string
+          status: string
+          v1_plan_id: string
+          v2_plan_id: string
+          v2_version_id: string
+        }
+        Update: {
+          client_id?: string
+          coach_id?: string
+          converted_at?: string
+          fidelity?: Json
+          id?: string
+          last_synced_v1_updated_at?: string
+          status?: string
+          v1_plan_id?: string
+          v2_plan_id?: string
+          v2_version_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "nutrition_v2_conversion_links_v1_plan_id_fkey"
+            columns: ["v1_plan_id"]
+            isOneToOne: true
+            referencedRelation: "nutrition_plans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_v2_conversion_links_v2_plan_id_fkey"
+            columns: ["v2_plan_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_plans_v2"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "nutrition_v2_conversion_links_v2_version_id_fkey"
+            columns: ["v2_version_id"]
+            isOneToOne: false
+            referencedRelation: "nutrition_plan_versions_v2"
             referencedColumns: ["id"]
           },
         ]
@@ -4018,6 +5535,30 @@ export type Database = {
           id?: string
           nombre?: string
           pagador?: string
+        }
+        Relationships: []
+      }
+      platform_admins: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          email: string
+          note: string | null
+          revoked_at: string | null
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          email: string
+          note?: string | null
+          revoked_at?: string | null
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          email?: string
+          note?: string | null
+          revoked_at?: string | null
         }
         Relationships: []
       }
@@ -4889,7 +6430,7 @@ export type Database = {
           actual_duration_sec: number | null
           actual_hold_sec: number | null
           actual_pace_sec_per_km: number | null
-          block_id: string
+          block_id: string | null
           client_id: string
           exercise_id: string | null
           exercise_name_at_log: string | null
@@ -4915,7 +6456,7 @@ export type Database = {
           actual_duration_sec?: number | null
           actual_hold_sec?: number | null
           actual_pace_sec_per_km?: number | null
-          block_id: string
+          block_id?: string | null
           client_id: string
           exercise_id?: string | null
           exercise_name_at_log?: string | null
@@ -4941,7 +6482,7 @@ export type Database = {
           actual_duration_sec?: number | null
           actual_hold_sec?: number | null
           actual_pace_sec_per_km?: number | null
-          block_id?: string
+          block_id?: string | null
           client_id?: string
           exercise_id?: string | null
           exercise_name_at_log?: string | null
@@ -5338,6 +6879,18 @@ export type Database = {
       }
     }
     Functions: {
+      admin_coach_net_monthly_clp: {
+        Args: {
+          p_billing_cycle: string
+          p_redemption_id: string
+          p_tier: string
+        }
+        Returns: number
+      }
+      admin_tier_monthly_price_clp: {
+        Args: { p_tier: string }
+        Returns: number
+      }
       apply_nutrition_template_to_client: {
         Args: { p_coach?: string; p_op: Json }
         Returns: Json
@@ -5378,6 +6931,62 @@ export type Database = {
         Returns: Json
       }
       claim_coupon_code: { Args: { p_code_id: string }; Returns: boolean }
+      coach_food_last_qty_for_client: {
+        Args: { p_client_id: string }
+        Returns: {
+          food_id: string
+          quantity: number
+          unit: string
+        }[]
+      }
+      coach_food_last_qty_remember: {
+        Args: {
+          p_client_id: string
+          p_food_id: string
+          p_quantity: number
+          p_unit: string
+        }
+        Returns: undefined
+      }
+      correct_nutrition_intake_v2: {
+        Args: {
+          p_capture_method: string
+          p_client_id: string
+          p_correction_reason: string
+          p_corrects_entry_id: string
+          p_custom_name: string
+          p_food_id: string
+          p_idempotency_key: string
+          p_local_date: string
+          p_meal_slot: string
+          p_note: string
+          p_occurred_at: string
+          p_plan_version_id: string
+          p_prescription_item_id: string
+          p_quantity: number
+          p_snapshot: Json
+          p_source: string
+          p_timezone: string
+          p_unit: string
+        }
+        Returns: string
+      }
+      create_food_and_resolve_missing_code_scoped_v2: {
+        Args: {
+          p_brand?: string
+          p_calories: number
+          p_carbs_g: number
+          p_fats_g: number
+          p_missing_code_id: string
+          p_name: string
+          p_org_id?: string
+          p_protein_g: number
+          p_scope_type: string
+          p_team_id?: string
+          p_unit?: string
+        }
+        Returns: string
+      }
       current_user_managed_team_ids: { Args: never; Returns: string[] }
       current_user_pool_client_ids: { Args: never; Returns: string[] }
       current_user_pool_coach_ids: { Args: never; Returns: string[] }
@@ -5391,6 +7000,11 @@ export type Database = {
       current_user_pool_workout_plan_ids: { Args: never; Returns: string[] }
       current_user_team_ids: { Args: never; Returns: string[] }
       custom_access_token_hook: { Args: { event: Json }; Returns: Json }
+      ensure_nutrition_day_snapshot_v2: {
+        Args: { p_client_id: string; p_local_date: string; p_timezone?: string }
+        Returns: string
+      }
+      eva_santiago_day: { Args: { ts: string }; Returns: string }
       generate_unique_invite_code: { Args: never; Returns: string }
       get_admin_audit_logs_paginated: {
         Args: {
@@ -5434,6 +7048,7 @@ export type Database = {
           created_at: string
           current_period_end: string
           days_until_expiry: number
+          demo_client_count: number
           full_name: string
           id: string
           last_activity_at: string
@@ -5546,6 +7161,10 @@ export type Database = {
           streak: number
         }[]
       }
+      get_coach_food_suggestions_v2: {
+        Args: { p_client_id?: string; p_limit?: number; p_slot_name?: string }
+        Returns: Json
+      }
       get_coach_id_by_email: { Args: { p_email: string }; Returns: string }
       get_coach_workout_sessions_30d: {
         Args: { p_coach_id: string }
@@ -5566,6 +7185,109 @@ export type Database = {
           subscription_status: string
           tier: string
         }[]
+      }
+      get_nutrition_client_detail_scoped_v2: {
+        Args: {
+          p_client_id: string
+          p_local_date?: string
+          p_org_id?: string
+          p_scope_type: string
+          p_team_id?: string
+          p_timezone?: string
+        }
+        Returns: Json
+      }
+      get_nutrition_client_detail_v2: {
+        Args: { p_client_id: string; p_local_date: string; p_timezone?: string }
+        Returns: Json
+      }
+      get_nutrition_coach_hub_scoped_v2: {
+        Args: {
+          p_cursor_client_id?: string
+          p_cursor_score?: number
+          p_cursor_updated_at?: string
+          p_org_id?: string
+          p_page_size?: number
+          p_scope_type: string
+          p_search?: string
+          p_sort?: string
+          p_team_id?: string
+        }
+        Returns: Json
+      }
+      get_nutrition_coach_hub_v2: {
+        Args: {
+          p_cursor_client_id?: string
+          p_cursor_updated_at?: string
+          p_page_size?: number
+        }
+        Returns: Json
+      }
+      get_nutrition_coach_roster_scoped_v2: {
+        Args: {
+          p_cursor_client_id?: string
+          p_cursor_name?: string
+          p_org_id?: string
+          p_page_size?: number
+          p_scope_type: string
+          p_search?: string
+          p_team_id?: string
+        }
+        Returns: Json
+      }
+      get_nutrition_history_adapter_v2: {
+        Args: { p_client_id: string; p_from: string; p_to: string }
+        Returns: {
+          calories: number
+          carbs_g: number
+          disclosure: string
+          fats_g: number
+          item_name: string
+          local_date: string
+          meal_slot: string
+          metadata: Json
+          occurred_at: string
+          protein_g: number
+          quantity: number
+          record_id: string
+          source: string
+          unit: string
+        }[]
+      }
+      get_nutrition_history_page_v2: {
+        Args: { p_before?: string; p_client_id: string; p_page_size?: number }
+        Returns: Json
+      }
+      get_nutrition_legacy_history_detail_v2: {
+        Args: { p_client_id: string; p_local_date: string }
+        Returns: Json
+      }
+      get_nutrition_plan_read_v2: {
+        Args: { p_as_of_date: string; p_client_id: string; p_timezone?: string }
+        Returns: Json
+      }
+      get_nutrition_student_permissions_v2: {
+        Args: {
+          p_client_id: string
+          p_local_date: string
+          p_prescription_item_id?: string
+        }
+        Returns: Json
+      }
+      get_nutrition_substitution_options_v2: {
+        Args: {
+          p_client_id: string
+          p_group_food_id?: string
+          p_group_limit?: number
+          p_group_query?: string
+          p_local_date: string
+          p_prescription_item_id?: string
+        }
+        Returns: Json
+      }
+      get_nutrition_today_v2: {
+        Args: { p_client_id: string; p_local_date: string; p_timezone?: string }
+        Returns: Json
       }
       get_org_branding: { Args: { p_org_id: string }; Returns: Json }
       get_platform_checkins_7d: { Args: never; Returns: number }
@@ -5679,16 +7401,150 @@ export type Database = {
       }
       is_team_manager: { Args: { p_team_id: string }; Returns: boolean }
       is_team_member: { Args: { p_team_id: string }; Returns: boolean }
+      list_missing_food_codes_scoped_v2: {
+        Args: {
+          p_offset?: number
+          p_org_id?: string
+          p_page_size?: number
+          p_scope_type: string
+          p_team_id?: string
+        }
+        Returns: {
+          barcode: string
+          country_code: string
+          first_seen_at: string
+          id: string
+          last_seen_at: string
+          sightings: number
+        }[]
+      }
+      lookup_food_by_gtin_v2: {
+        Args: { p_country_code?: string; p_gtin: string }
+        Returns: Json
+      }
+      nutrition_v2_convert_publish: {
+        Args: {
+          p_actor: string
+          p_effective_from: string
+          p_idempotency_key: string
+          p_plan_id: string
+          p_version_id: string
+        }
+        Returns: Json
+      }
+      persist_and_publish_nutrition_plan_v2: {
+        Args: {
+          p_draft: Json
+          p_effective_from: string
+          p_expected_current_version_id?: string
+          p_idempotency_key: string
+          p_plan_id?: string
+        }
+        Returns: Json
+      }
+      publish_nutrition_plan_v2: {
+        Args: {
+          p_effective_from: string
+          p_expected_current_version_id?: string
+          p_idempotency_key: string
+          p_version_id: string
+        }
+        Returns: string
+      }
+      record_nutrition_intake_v2: {
+        Args: {
+          p_capture_method: string
+          p_client_id: string
+          p_custom_name: string
+          p_food_id: string
+          p_idempotency_key: string
+          p_local_date: string
+          p_meal_slot: string
+          p_note: string
+          p_occurred_at: string
+          p_plan_version_id: string
+          p_prescription_item_id: string
+          p_quantity: number
+          p_snapshot: Json
+          p_snapshot_macros_basis?: string
+          p_source: string
+          p_timezone: string
+          p_unit: string
+        }
+        Returns: string
+      }
       release_coupon_code: { Args: { p_code_id: string }; Returns: undefined }
+      report_missing_food_gtin_v2: {
+        Args: {
+          p_captured_brand: string
+          p_captured_name: string
+          p_client_id: string
+          p_country_code: string
+          p_gtin: string
+          p_idempotency_key: string
+          p_package_photo_path: string
+          p_source: string
+        }
+        Returns: string
+      }
       resolve_active_discount: { Args: never; Returns: Json }
+      resolve_missing_food_code_scoped_v2: {
+        Args: {
+          p_food_id: string
+          p_missing_code_id: string
+          p_org_id?: string
+          p_scope_type: string
+          p_team_id?: string
+        }
+        Returns: string
+      }
+      save_meal_group_v2: {
+        Args: {
+          p_group_id?: string
+          p_items: Json
+          p_name: string
+          p_org_id?: string
+        }
+        Returns: Json
+      }
+      save_structured_nutrition_recipe: {
+        Args: {
+          p_category: string
+          p_description: string
+          p_image_url: string
+          p_ingredients: Json
+          p_instructions: string
+          p_name: string
+          p_prep_time_minutes: number
+          p_recipe_id: string
+          p_servings: number
+          p_team_id: string
+        }
+        Returns: string
+      }
+      search_food_catalog_v2: {
+        Args: {
+          p_country_code?: string
+          p_cursor_id?: string
+          p_cursor_name?: string
+          p_cursor_score?: number
+          p_page_size?: number
+          p_query: string
+        }
+        Returns: Json
+      }
       search_foods: {
         Args: { search_term: string }
         Returns: {
+          barcode: string | null
           brand: string | null
           calories: number
           carbs_g: number
+          catalog_key: string | null
+          catalog_source: string
           category: string | null
           coach_id: string | null
+          country_code: string | null
           exchange_group_id: string | null
           exchange_portion_grams: number | null
           exchange_portion_label: string | null
@@ -5698,16 +7554,26 @@ export type Database = {
           household_label: string | null
           id: string
           is_liquid: boolean
+          macros_basis: string
           name: string
           name_search: string | null
           org_id: string | null
+          package_quantity: number | null
+          package_unit: string | null
+          product_image_path: string | null
           protein_g: number
           saturated_fat_g: number | null
+          search_aliases: string[]
           serving_size: number
           serving_unit: string | null
           sodium_mg: number | null
+          source_ref: string | null
           sugar_g: number | null
           unsaturated_fat_g: number | null
+          updated_at: string | null
+          verification_status: string
+          verified_at: string | null
+          verified_by: string | null
         }[]
         SetofOptions: {
           from: "*"
@@ -5718,6 +7584,10 @@ export type Database = {
       }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      soft_delete_nutrition_plan_template_v2: {
+        Args: { p_id: string }
+        Returns: boolean
+      }
       touch_coach_activity: { Args: { p_coach_id: string }; Returns: undefined }
       transfer_team_ownership: {
         Args: { p_new_owner: string; p_team_id: string }
@@ -5725,6 +7595,15 @@ export type Database = {
       }
       try_uuid: { Args: { p_value: string }; Returns: string }
       unaccent: { Args: { "": string }; Returns: string }
+      void_nutrition_intake_v2: {
+        Args: {
+          p_client_id: string
+          p_entry_id: string
+          p_idempotency_key?: string
+          p_reason: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       [_ in never]: never
