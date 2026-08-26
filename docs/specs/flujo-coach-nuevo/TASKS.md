@@ -745,6 +745,13 @@ email-taken propuesto por el worker ACEPTADO (un string para las 4 razones, sali
 choca el mismo muro); threading de `coachEmail` por import/ruta móvil ACEPTADO (sin él el correo
 del import quedaba inconsistente).
 
+**Tren de salida ejecutado el 26-08 con GO del owner, en el orden del gate:** push `5bdfa97a..64c02f1f` →
+OTAs runtime 1.1.2 vía `mobile-ota.yml` android run `32991620258` + ios run `32991632055`, ambos
+SUCCESS → deploy web de `master@64c02f1f`. **Port a 1.1.1 DESCARTADO con razón:** `guided-invite.ts`
+no existe en ese runtime (llegó con onboarding v2, posterior al build 57) y sus call sites viejos no
+pasan credencial ⇒ el mensaje quedaría idéntico; el alumno recibe la clave por el correo de
+bienvenida igual, y el build 59 (1.1.2, en review de Apple) migra a esos usuarios pronto.
+
 **Pendientes que deja la wave (declarados, no olvidados):**
 - Verificación de W2.10 por grabación real en PostHog (requiere sesión con cookies aceptadas) — W6.
 - `add_student_email_taken` visto en PostHog real — primer deploy (mismo pendiente que W0.5).
