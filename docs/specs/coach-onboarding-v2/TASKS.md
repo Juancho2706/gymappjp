@@ -301,6 +301,12 @@ del owner D9–D13 están al final; sin ellas no arranca lo que las cita.
 - [ ] W8.4.3 Señal de login del alumno (`clients` no tiene ninguna; solo `auth.users.last_sign_in_at`):
   columna aditiva `clients.last_login_at` escrita por el login del alumno, o lectura con service_role en el
   barrido. Sin esto no existe «+48 h el alumno no entró». [w6-w7-09]
+  **Nota 26-08 ([flujo-coach-nuevo W0.6](../flujo-coach-nuevo/TASKS.md)): la señal CAMBIA DE NOMBRE — es
+  `clients.first_login_at` (PRIMER login, escrito una sola vez con `WHERE first_login_at IS NULL`), no
+  `last_login_at`.** Una columna de último login no puede responder «activado dentro de 72 h» ni «+48 h el
+  alumno no entró» (el alumno que entró el día 1 y volvió el día 5 desaparecería de la ventana). La columna,
+  el servicio y los call sites los implementa FCN W1 (W1.1–W1.4, con [SPEC §5 reglas 1–3](../flujo-coach-nuevo/SPEC.md));
+  esta tarea queda en consumir esa columna en el barrido, no en crear una propia.
 - [ ] W8.4.4 Rama «sin persona» en todas las plantillas (48/51), exclusión de cuentas de prueba con bypass
   explícito para `qa-free-v3` (F6.3), criterio del corte a 90 d (`created_at` vs `persona_set_at`), WhatsApp
   del owner (**D13**). [w6-w7-12/13/20]
@@ -309,9 +315,15 @@ del owner D9–D13 están al final; sin ellas no arranca lo que las cita.
 - [ ] W8.5.1 Tabla de equivalencias SPEC §10 ↔ código (`onboarding_step_completed`→`step_completed`,
   `demo_student_seeded`→`demo_seeded`, `student_first_workout|intake`→`student_workout_completed`/
   `student_nutrition_intake`, aha viejo `aha_moment/first_checkin` vs nuevo `step_completed/aha`). [w6-w7-16/22]
-- [ ] W8.5.2 Espejo a PostHog desde `recordOnboardingEvent` (un punto, web y app) + `$set { persona }` en el
+- [~] W8.5.2 Espejo a PostHog desde `recordOnboardingEvent` (un punto, web y app) + `$set { persona }` en el
   identify: hoy PostHog solo conoce `persona_selected`, no existe ningún insight de activación y nada se
   desglosa por especialidad. [w6-w7-01/02/07]
+  **Ejecutada 26-08 como [W0.5 de flujo-coach-nuevo](../flujo-coach-nuevo/TASKS.md)** (el id no se
+  renombra): el espejo vive en `persona.service.ts` (`mirrorOnboardingEventToPostHog`, `$set { persona }`
+  desde el metadata; `persona_selected` excluido a propósito — sus captures explícitos ya existen y
+  ganaron el `$set`). **Pendiente:** «un punto» aún no es verdad — `api/coach/onboarding-events/route.ts:106`
+  y `api/mobile/coach/dashboard/route.ts:261` insertan directo sin espejo (los rutea el jefe de VTA
+  post-merge de VTA W1, acordado 26-08) + verificación de un evento real en PostHog desde preview.
 - [ ] W8.5.3 Cablear o quitar los tipos sin emisor (`invite_link_copied`, `first_module_opened`,
   `invite_whatsapp_opened` → tabla); contrato de `guide_engagement` (0 filas en toda la historia; server
   «sin dedupe» vs cliente «1 por sesión»; `step_key` distinto web/RN). [db-live-06, w6-w7-14/15/23, missed]

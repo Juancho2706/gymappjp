@@ -117,14 +117,21 @@ Ninguna wave marcada abajo arranca sin su gate. Las respuestas se escriben **en 
 - [ ] **G-ASC** — Estado de App Privacy / privacy manifest en App Store Connect. **Se lee el martes
   **2026-08-25**, no antes: el owner decidió D7 = A (sí al rebuild) pero **diferido a ese día**, así que leer
   hoy el estado de App Privacy no cambia nada y se releería igual. **Resultado:** _pendiente hasta el 25-08_.
-- [ ] **G-BASE** — Correr **hoy** la consulta de W0.1 y guardar el resultado como línea base congelada. Sin
-  esto ninguna wave se puede juzgar. **Se escribe junto al resultado, o la comparación miente:** la baseline
-  usa `min(auth.users.last_sign_in_at)` como «entró», que es **último** login, no primero — el mismo defecto
-  que [SPEC §5 regla 2](SPEC.md) le reprocha a `last_login_at`. Un alumno que entró el día 1 y volvió el 5 cae
-  fuera de la ventana de 72 h; uno que entra por primera vez a los 10 días infla «entró». Por eso la baseline
-  es una **cota con definición distinta**, no la misma métrica, y W6.2 solo compara lo comparable.
-  **Alternativa mejor si la retención lo permite** (no verificado): reconstruir el primer login histórico
-  desde `auth.audit_log_entries`. **Resultado:** _pendiente_.
+- [x] **G-BASE** — **Resultado (26-08): CORRIDO contra LIVE (solo SELECT, Supabase MCP) y CONGELADO.**
+  Ventana de la baseline = la del [SPEC §1.1](SPEC.md): coaches creados **2026-08-18 00:00 UTC →
+  2026-08-23 16:12 UTC**, con el corte de datos en el mismo instante (así se reproduce la foto del 23-08,
+  no la de hoy). **n = 29 · invitaron 7 (NS) / 8 (cruda) · activados 5 · maduros a 72 h 8 · activados
+  dentro de 72 h 2 ⇒ North Star 25,0 %** — coincide 1:1 con la aceptación de W0.1. Fila completa y
+  consulta pegadas en W0.1.
+  La advertencia de la cota (`last_sign_in_at` = último login) queda vigente; `auth.audit_log_entries`
+  no hizo falta: con corte histórico la cota reprodujo la baseline sin ambigüedad en esta ventana.
+  **Dos descubrimientos que la consulta deja escritos:** (1) la exclusión del autoinvitado por
+  `normalizePlatformEmail` captura **cero** casos de esta cohorte: #28 (`palaciosjob98` → alumno
+  `jobpal46`, creado 5 min tras el alta, sin teléfono, nunca entró) usó un **segundo correo sin parentesco
+  textual** ⇒ la consulta lleva una lista manual `self_invites_manual` sembrada con ese par, y el «7» sale
+  de normalización **más** lista, nunca de la normalización sola. (2) `coaches.primary_color` tiene
+  DEFAULT (todas las filas lo traen): «color propio» = distinto de `#1462DC` (default actual) **y**
+  `#10B981` (default pre-cambio); con esa definición el post-v2 da 4/9 = 44 %, el número exacto del SPEC.
 - [x] **G-DEC** — **Resultado (23-08, tarde): las ONCE decisiones respondidas.**
   **De este spec:** **D1 = A** (se mata el muro del correo; arrastra W3.0 y W3.13, que no son opcionales) ·
   **D2 = A** (la clave viaja en el WhatsApp **solo con teléfono**) · **D3 = C** (no reordenar la guía por
@@ -147,7 +154,7 @@ Ninguna wave marcada abajo arranca sin su gate. Las respuestas se escriben **en 
 
 Objetivo: que la North Star se pueda leer y que el coach vea la verdad, **sin una sola migración**.
 
-- [ ] **W0.1** · **MIDE** (medición · Opus, 1,5 h) Consulta de cohorte semanal, guardada **en esta sección** (no en
+- [x] **W0.1** · **MIDE** (medición · Opus, 1,5 h) Consulta de cohorte semanal, guardada **en esta sección** (no en
   `scripts/`: no es código de producto). Esqueleto obligatorio: `coaches` ⋈ `auth.users` por `id` para traer el
   correo (**`coaches` NO tiene columna `email`** — verificado en el `Row` de
   `apps/web/src/lib/database.types.ts`; lo único parecido es `trial_used_email`), purga de cuentas de prueba
@@ -178,8 +185,157 @@ Objetivo: que la North Star se pueda leer y que el coach vea la verdad, **sin un
   devuelve **7 coaches que invitaron** y **5 activados** en la ventana 18-08 → 23-08, y **2 de 8** dentro de
   72 h. Reporta además la columna cruda **sin** la exclusión (**8**) para poder conciliar con R5 §3.3. Si no
   coincide, la consulta está mal, no el informe.
-  **Gate:** ejecución real contra LIVE (SELECT), resultado pegado acá.
-- [ ] **W0.2** · **ARREGLA** (web · Opus, 1,5 h) Chip honesto en el roster web. Entrada:
+  **Gate:** ejecución real contra LIVE (SELECT), resultado pegado acá. ✅ **CORRIDO 26-08.**
+
+  **Resultado (26-08, baseline congelada — ventana SPEC §1.1: coaches 18-08 00:00 UTC → 23-08 16:12 UTC,
+  corte de datos = 23-08 16:12 UTC):**
+
+  | semana | n | invitaron NS | cruda | activados | maduros 72 h | act. 72 h | North Star | color propio | logo | persona | sobre tope IP | active sin verif. 7 d | logins <120 s | mismo fono |
+  |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+  | 2026-08-17 | 29 | **7** | **8** | **5** | 8 | **2** | **25,0 %** | 17,2 % (5/29; post-v2 4/9 = 44 %) | 13,8 % (4/29; post-v2 3/9) | 27,6 % (8/29; post-v2 7/9) | 0 | **sin lectura** (n active a 7 d = 0) | 1 | 0 |
+
+  **Aceptación coincidente 1:1** (7 / 8 / 5 / 2-de-8 = 25 %). Notas de lectura: (a) los % de marca/persona
+  tienen lectura porque n = 29 ≥ 20, pero mezclan 20 altas pre-v2 (el 44 % del SPEC es post-v2 puro; las
+  corridas semanales futuras ya serán 100 % post-v2); (b) el único login < 120 s es el alumno
+  `rgonzalez@contaex.cl` de `gabriel.imendezgomez` (entró 13 s después del alta): firma de auto-test del
+  coach probando la cuenta, con correo y teléfono ajenos ⇒ **no** se excluye, queda como señal; (c) «active
+  sin verificar a 7 d» usa hoy `auth.users.email_confirmed_at` (la columna `coaches.email_verified_at` no
+  existe hasta W3.0, como esta misma tarea documenta) con la forma NULL-safe
+  `email_confirmed_at IS NULL OR email_confirmed_at > created_at + 7 days`; (d) purga de cuentas de prueba
+  de **coach** con el espejo exacto de `isTestCoachEmail` / migración `20260614130000` (`NOT ILIKE
+  '%@evatest.cl'` + `juanmvr2706@gmail.com`) — los **alumnos** jamás se purgan por dominio (`is_demo` ya
+  excluye los demo, que comparten `@evatest.cl`); en esta ventana la purga remueve 0 coaches.
+
+  **La consulta canónica** (semanal: cambiar `desde`/`corte` en `params`; para la corrida semanal `corte`
+  = `now()` y `desde` = inicio de historia que se quiera acumular):
+
+  ```sql
+  with params as (
+    select timestamptz '2026-08-18 00:00:00+00' as desde,
+           timestamptz '2026-08-23 16:12:00+00' as corte
+  ),
+  test_coach_emails(email) as (values ('juanmvr2706@gmail.com')),
+  -- Autoinvitados confirmados a mano que la normalizacion NO captura (segundo correo).
+  -- #28 de la cohorte 18→23-08: palaciosjob98 creo a jobpal46 5 min despues de su alta (SPEC §1.1).
+  self_invites_manual(coach_email, client_email) as (
+    values ('palaciosjob98@gmail.com', 'jobpal46@gmail.com')
+  ),
+  -- Defaults historicos de primary_color: la columna SIEMPRE viene seteada; «propio» = distinto de estos.
+  default_colors(color) as (values ('#1462DC'), ('#10B981')),
+  cohorte as (
+    select c.id, c.created_at, lower(u.email) as email, c.persona, c.primary_color, c.logo_url,
+           c.subscription_status, c.registration_ip, u.phone as coach_phone, u.email_confirmed_at
+    from public.coaches c
+    join auth.users u on u.id = c.id            -- coaches NO tiene columna email
+    cross join params p
+    where c.created_at >= p.desde and c.created_at <= p.corte
+      and c.active_org_id is null
+      and u.email not ilike '%@evatest.cl'
+      and lower(u.email) not in (select email from test_coach_emails)
+  ),
+  alumnos as (
+    select cl.coach_id, cl.id, lower(cl.email) as email, cl.created_at, cl.phone, u2.last_sign_in_at
+    from public.clients cl
+    cross join params p
+    join cohorte co on co.id = cl.coach_id
+    left join auth.users u2 on u2.id = cl.id    -- clients.id = auth uid del alumno (verificado en LIVE)
+    where cl.is_demo is not true and cl.is_archived = false
+      and cl.org_id is null and cl.team_id is null
+      and cl.created_at <= p.corte
+  ),
+  -- normalizePlatformEmail (apps/web/src/lib/auth/platform-email.ts) en SQL
+  norm as (
+    select x.raw,
+      case
+        when x.dom in ('gmail.com','googlemail.com')
+          then replace(split_part(x.loc,'+',1),'.','') || '@gmail.com'
+        when x.dom in ('outlook.com','hotmail.com','live.com')
+          then split_part(x.loc,'+',1) || '@' || x.dom
+        else x.loc || '@' || x.dom
+      end as norm
+    from (
+      select distinct e as raw, split_part(e,'@',1) as loc, split_part(e,'@',2) as dom
+      from (select email as e from cohorte union select email from alumnos) s
+    ) x
+  ),
+  alumnos_f as (
+    select a.*, co.created_at as coach_created, co.coach_phone,
+      (na.norm = nc.norm
+       or (co.email, a.email) in (select coach_email, client_email from self_invites_manual)) as self_inv
+    from alumnos a
+    join cohorte co on co.id = a.coach_id
+    join norm na on na.raw = a.email
+    join norm nc on nc.raw = co.email
+  ),
+  por_coach as (
+    select co.id, co.created_at, co.persona, co.primary_color, co.logo_url,
+           co.subscription_status, co.registration_ip, co.email_confirmed_at,
+      count(a.id) filter (where not a.self_inv) > 0 as invito_ns,
+      count(a.id) > 0 as invito_crudo,
+      bool_or(a.last_sign_in_at <= p.corte) filter (where not a.self_inv) as activado,
+      bool_or(a.last_sign_in_at <= co.created_at + interval '72 hours') filter (where not a.self_inv) as activado_72h,
+      co.created_at + interval '72 hours' <= p.corte as madura_72h,
+      co.created_at + interval '7 days' <= p.corte as madura_7d,
+      count(a.id) filter (where a.last_sign_in_at is not null
+        and a.last_sign_in_at - a.created_at < interval '120 seconds') as guarda_login_120s,
+      count(a.id) filter (where a.phone is not null and co.coach_phone is not null
+        and right(regexp_replace(a.phone, '\D', '', 'g'), 8)
+          = right(regexp_replace(co.coach_phone, '\D', '', 'g'), 8)) as guarda_mismo_fono
+    from cohorte co
+    cross join params p
+    left join alumnos_f a on a.coach_id = co.id
+    group by co.id, co.created_at, co.persona, co.primary_color, co.logo_url,
+             co.subscription_status, co.registration_ip, co.email_confirmed_at, p.corte
+  ),
+  sobre_tope_ip as (
+    select date_trunc('week', semana.wk) as semana, sum(exceso) as altas_sobre_tope
+    from (
+      select date_trunc('week', created_at) as wk, registration_ip, greatest(count(*) - 3, 0) as exceso
+      from por_coach
+      where registration_ip is not null
+      group by 1, 2
+    ) semana
+    group by 1
+  )
+  select
+    to_char(date_trunc('week', pc.created_at), 'YYYY-MM-DD') as semana,
+    count(*) as n,
+    count(*) filter (where invito_ns) as invitaron_ns,
+    count(*) filter (where invito_crudo) as invitaron_crudo,
+    count(*) filter (where activado) as activados,
+    count(*) filter (where madura_72h) as maduras_72h,
+    count(*) filter (where madura_72h and activado_72h) as activados_72h,
+    case when count(*) filter (where madura_72h) > 0
+      then round(100.0 * count(*) filter (where madura_72h and activado_72h)
+        / count(*) filter (where madura_72h), 1)
+    end as north_star_pct,
+    -- guardarrailes: NULL literal («sin lectura») bajo n >= 20
+    case when count(*) >= 20 then round(100.0 * count(*) filter (where primary_color is not null
+      and primary_color not in (select color from default_colors)) / count(*), 1) end as pct_marca_color,
+    case when count(*) >= 20 then round(100.0 * count(*) filter (where logo_url is not null)
+      / count(*), 1) end as pct_marca_logo,
+    case when count(*) >= 20 then round(100.0 * count(*) filter (where persona is not null)
+      / count(*), 1) end as pct_persona,
+    coalesce(st.altas_sobre_tope, 0) as altas_sobre_tope_ip,
+    case when count(*) filter (where madura_7d and subscription_status = 'active') >= 20
+      then round(100.0 * count(*) filter (where madura_7d and subscription_status = 'active'
+        and (email_confirmed_at is null or email_confirmed_at > pc.created_at + interval '7 days'))
+        / count(*) filter (where madura_7d and subscription_status = 'active'), 1)
+    end as pct_active_sin_verificar_7d,
+    count(*) filter (where madura_7d and subscription_status = 'active') as n_active_7d,
+    sum(guarda_login_120s) as guarda_logins_bajo_120s,
+    sum(guarda_mismo_fono) as guarda_mismo_fono
+  from por_coach pc
+  left join sobre_tope_ip st on st.semana = date_trunc('week', pc.created_at)
+  group by date_trunc('week', pc.created_at), st.altas_sobre_tope
+  order by 1
+  ```
+
+  **Cuando W3.0 despliegue `coaches.email_verified_at`:** la expresión de «sin verificar a 7 d» cambia a
+  esa columna (misma forma NULL-safe); hasta el backfill de W3.0 las dos lecturas son equivalentes, como
+  ya documenta esta tarea.
+
+- [x] **W0.2** · **ARREGLA** (web · Opus, 1,5 h) Chip honesto en el roster web. Entrada:
   `apps/web/src/app/coach/clients/DirRowCard.tsx:53-61` (`statusMeta`) y
   `apps/web/src/app/coach/clients/DirTableMobile.tsx:45-53` (`statusMeta` abre en `:45`; el label vive en
   `:51`). Reemplazar `Pend. sync` por los estados de [SPEC §6](SPEC.md).
@@ -197,7 +353,14 @@ Objetivo: que la North Star se pueda leer y que el coach vea la verdad, **sin un
   **Aceptación:** cero apariciones de «Pend. sync» en `apps/web/src`; el filtro `pending_sync` de
   `ClientsDirectoryClient.tsx` conserva su `key` (no se renombra el valor, solo el label).
   **Gate:** `npx vitest run apps/web/src/app/coach/clients` + `pnpm typecheck`.
-- [ ] **W0.3** · **ARREGLA** (RN · Sonnet, 1,5 h) Espejo del chip en RN. Entrada:
+  **Hecho 26-08.** Función pura en `_lib/client-status.ts` (`getClientStatusMeta` + adaptador
+  `clientStatusInputFromRow`, test propio 8/8); gates verdes (vitest 100/100 del dir, typecheck).
+  Además, por juicio del jefe: los labels de FILTRO «Pendiente sync» (`DirectoryActionBar.tsx:160,166,295`)
+  pasaron al mismo copy canónico —la variante larga tenía el mismo mal que el chip—, keys intactas.
+  Dos consecuencias visuales declaradas para el QA device del owner: la columna Estado de la tabla
+  densa móvil pasó de 84 a 188 px (el copy largo se montaba sobre Score; alternativa era recortarlo)
+  y el tono del chip pendiente se unificó en `info-700` (DirTableMobile usaba `info-600`).
+- [x] **W0.3** · **ARREGLA** (RN · Sonnet, 1,5 h) Espejo del chip en RN. Entrada:
   `apps/mobile/components/coach/directory/directory-shared.ts:38`,
   `apps/mobile/components/coach/directory/DirRowCard.tsx:22`,
   `apps/mobile/app/coach/(tabs)/clientes.tsx:108`. Misma función pura, mismos cuatro labels.
@@ -206,7 +369,13 @@ Objetivo: que la North Star se pueda leer y que el coach vea la verdad, **sin un
   `apps/mobile/lib/clients-directory.ts:239,243,265,268,275` conservan sus claves, y la bandera de atención
   `PENDIENTE_SYNC` de `:12,207` sigue significando «no cambió su clave» (no se renombra ni se recalcula acá).
   **Gate:** `pnpm --filter @eva/mobile exec tsc --noEmit` + `npx vitest run tests/mobile`.
-- [ ] **W0.4** · **ARREGLA** (RN · Sonnet, 0,5 h) El medidor de cupo deja de arrancar en «0 de 1». Entrada:
+  **Hecho 26-08.** `statusMeta` puro en `directory-shared.ts` (misma firma y labels que web); los dos
+  llamadores conservan sus mapas de estilo 1:1 (cero cambio de color); `pendingSyncCount`, filtros y
+  `PENDIENTE_SYNC` intactos. Labels de filtro «Pendiente sync» (`STATUS_OPTIONS`, `RISK_LABELS`,
+  `DirectoryFilterSheet`) al copy canónico (mismo juicio que W0.2). Gates: tsc verde, tests/mobile
+  1384/1384 verdes (la corrida del worker tuvo 7 timeouts por contención del árbol compartido; la
+  corrida limpia del jefe salió 97/97 archivos).
+- [x] **W0.4** · **ARREGLA** (RN · Sonnet, 0,5 h) El medidor de cupo deja de arrancar en «0 de 1». Entrada:
   `apps/mobile/lib/client-cap.ts:65-68` (`capMeterLabel`) y
   `apps/web/src/app/coach/dashboard/_components/DashboardShell.tsx:352` (`FreeTierBanner`). Con `active === 0`
   el texto pasa a «Tu plan gratis incluye 1 alumno» (interpolado con `studentCountLabel`, nunca a mano).
@@ -218,7 +387,14 @@ Objetivo: que la North Star se pueda leer y que el coach vea la verdad, **sin un
   pasa a `studentCountLabel` y queda «1 de 1 alumno · Plan gratuito». El predicado de cupo no se toca en
   ninguna de las dos.
   **Gate:** `npx vitest run tests/mobile` (el archivo que pinnea `capMeterLabel`) + `tsc` mobile.
-- [ ] **W0.5** · **MIDE** (web · Opus, 2,5 h) **= W8.5.2 de [coach-onboarding-v2](../coach-onboarding-v2/TASKS.md)**:
+  **Hecho 26-08, con un acote del jefe que la tarea no preveía:** la rama nueva de `capMeterLabel`
+  quedó condicionada a `max === 1` (Free). Sin el acote, `subscription.tsx` —que pinta el anillo de
+  CUALQUIER tier con la misma función— le decía «Tu plan gratis incluye 25 alumnos» a un Pro con 0
+  alumnos. Pro/Elite con 0 siguen leyendo «0 de N alumnos activos»; test que lo pinnea. Web
+  (`FreeTierBanner`) ya venía protegida por el guard `subscriptionTier === 'free'` y pasó a
+  `studentCountLabel` (muere el «1/1 alumnos» con el plural mal). Gates verdes (client-cap tests,
+  tsc, typecheck).
+- [~] **W0.5** · **MIDE** (web · Opus, 2,5 h) **= W8.5.2 de [coach-onboarding-v2](../coach-onboarding-v2/TASKS.md)**:
   espejo de `recordOnboardingEvent` a PostHog + `$set { persona }` en el identify. Entrada:
   `apps/web/src/services/coach/persona.service.ts:375-389` (hoy solo inserta en la tabla; el `console.warn`
   del error se conserva). Vehículo: el patrón de `apps/web/src/lib/posthog/registration-events.ts`
@@ -227,10 +403,24 @@ Objetivo: que la North Star se pueda leer y que el coach vea la verdad, **sin un
   best-effort y **nunca** rompe la acción que la dispara; la tarea queda marcada `- [x]` en el TASKS de
   onboarding-v2 con referencia cruzada (**el id W8.5.2 no se renombra**).
   **Gate:** `npx vitest run apps/web/src/services/coach` + un evento real visible en PostHog desde preview.
-- [ ] **W0.6** · **MIDE** (jefe, 0,5 h) Anotar en el TASKS de onboarding-v2 que W8.4.3 **cambia de nombre**: la señal es
+  **Hecho 26-08 (parcial).** `recordOnboardingEvent` espeja a PostHog (`mirrorOnboardingEventToPostHog`:
+  import dinámico de `server-capture` —proxy.ts importa este módulo—, `await` deliberado, espejo SOLO si
+  el insert quedó, `$set { persona }` desde el metadata del evento); `server-capture.ts` ganó el campo
+  opcional `set` (aditivo). `persona_selected` queda FUERA del espejo (`POSTHOG_MIRROR_SKIP`): sus 3
+  call sites ya capturan explícito y espejarlo duplicaría el único evento en uso; en cambio esos
+  captures ganaron `$set { persona }` (los 2 que no lo tenían). `demo_deleted` del dashboard web
+  ruteado por el helper. Tests 24/24 + vecinos 151/152 (1 timeout ajeno).
+  **Pendiente (por eso `[~]`):** (1) los DOS insert directos restantes —`api/coach/onboarding-events/route.ts:106`
+  (por ahí entra TODO `step_completed`: sin esto el insight de activación sigue cojo) y
+  `api/mobile/coach/dashboard/route.ts:261`— **los toma el jefe de VTA post-merge de VTA W1** (su V1.15
+  está sobre esos tests ahora; acordado 26-08). Ojo route 1: su manejo de FK 404/23505 lee el `error`
+  del insert ⇒ capture aparte tras insert exitoso, no swap ciego. (2) El evento real visible en PostHog
+  desde preview (no hubo deploy en esta tanda).
+- [x] **W0.6** · **MIDE** (jefe, 0,5 h) Anotar en el TASKS de onboarding-v2 que W8.4.3 **cambia de nombre**: la señal es
   `first_login_at` (primer login), no `last_login_at`. Una columna de último login **no puede** responder
   «activado dentro de 72 h». **Aceptación:** la nota vive en ese archivo, no acá. **Gate:** `pnpm docs:check`.
-- [ ] **W0.7** · **ARREGLA** (jefe, 0,5 h) **Anotar en el TASKS de [vive-tu-app-directo](../vive-tu-app-directo/TASKS.md) —
+  **Hecho 26-08** (nota en W8.4.3 de ese TASKS; docs:check verde).
+- [x] **W0.7** · **ARREGLA** (jefe, 0,5 h) **Anotar en el TASKS de [vive-tu-app-directo](../vive-tu-app-directo/TASKS.md) —
   ahora, no al cierre.** Era W6.5 y llegaba tarde: VTA ya habría corrido. Se numeran **dentro de VTA** (V3.13,
   V1.27, V2.14 o los ids que correspondan) cuatro cosas: (1) el call site de W1.4 —una línea que llama a
   `recordStudentFirstLogin` en `c/[coach_slug]/login/_actions/login.actions.ts`, dentro del diff de V3.1, que
@@ -240,6 +430,9 @@ Objetivo: que la North Star se pueda leer y que el coach vea la verdad, **sin un
   `POST /api/mobile/coach/vive-tu-app` (0 apariciones de `rateLimit` en sus 62 líneas).
   **Aceptación:** las cuatro existen como tareas numeradas en el TASKS de VTA **antes** de que arranque VTA
   W3. **Gate:** `pnpm docs:check`.
+  **Hecho 26-08** — numeradas en el TASKS de VTA como **V3.13** (call site de W1.4, con la regla de no
+  colisión), **V1.27** (`signOut` local), **V1.28** (atar `c=` al `coach_id`) y **V1.29** (rate limit del
+  endpoint móvil); VTA W3 aún no arrancaba. docs:check verde.
 
 - [x] **W0.8** · **DESCARTADA** (owner 23-08: contacto no solicitado = invasivo) Era «hablar por WhatsApp con
   los 21 coaches que no invitaron», con tres preguntas. **El owner la baja: escribirle a alguien que no lo
@@ -251,6 +444,10 @@ Objetivo: que la North Star se pueda leer y que el coach vea la verdad, **sin un
 
 **Gate de salida de W0:** W0.1 corrida con resultado coincidente · gates base · `expo export --platform
 android` (W0.3/W0.4 tocan RN) · **OTA antes del deploy web**.
+**Estado 26-08:** W0.1 coincidente ✅ · typecheck web ✅ · tsc mobile ✅ · vitest dirigido (coach/clients
+100/100, services/coach 24/24, tests/mobile 1384/1384) ✅ · docs:check ✅ · `expo export --platform
+android` ✅ · **OTA y deploy web NO disparados**: los ejecuta el jefe de VTA al cierre de la ola conjunta
+(acordado 26-08); hasta la OTA, web y RN muestran el label nuevo solo tras sus respectivos releases.
 
 ---
 
