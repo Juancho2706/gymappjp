@@ -174,6 +174,8 @@ export default async function ClientLoginPage({ params, searchParams }: Props) {
     // contraste del sello no depende del hex de la marca.
     const evaBadge = showsEvaBadge(tier) ? <EvaBadge medium="student_login" className="pt-[18px]" /> : null
 
+    // FCN W2.8: el código de invitación va tal cual a las DOS instancias del form — es lo que
+    // convierte el «¿No tienes cuenta?» en un link real a `/join/{código}`. Sin código no se pinta.
     const loginForm = (
         <ClientLoginForm
             coachSlug={coach_slug}
@@ -181,6 +183,7 @@ export default async function ClientLoginPage({ params, searchParams }: Props) {
             brandName={coach.brand_name}
             logoUrl={logoUrl}
             errorCode={errorCode}
+            inviteCode={coach.invite_code}
         />
     )
 
@@ -194,6 +197,7 @@ export default async function ClientLoginPage({ params, searchParams }: Props) {
             logoUrl={logoUrl}
             idPrefix="d-"
             errorCode={errorCode}
+            inviteCode={coach.invite_code}
         />
     )
 

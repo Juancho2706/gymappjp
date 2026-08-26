@@ -25,7 +25,11 @@ export const getClientLoginCoach = cache(async (coachSlug: string) => {
         // + loader_config (compositor de loader, para la variante "energia") + loader_variant/neutral_tint.
         // W-brand B4: loader_text_color salió del select — el standalone no lo lee (nadie lo
         // consumía en este flujo; el color del texto del loader lo decide el motor de contraste).
-        .select('brand_name, primary_color, logo_url, welcome_message, subscription_tier, brand_secondary_color, accent_light, accent_dark, logo_url_dark, brand_font_key, loader_variant, neutral_tint, theme_preset_key, login_layout_key, loader_config, use_custom_loader, loader_text, loader_icon_mode')
+        // FCN W2.8: +invite_code — el escape del desconocido («¿No tienes cuenta?») necesita el
+        // código para linkear a `/join/{código}`. Ya está en el column-grant de `anon`
+        // (`20260617033845_coaches_restrict_anon_select_to_branding.sql`), así que no arrastra
+        // migración: el login del alumno sigue leyendo con la anon key como siempre.
+        .select('brand_name, primary_color, logo_url, welcome_message, subscription_tier, brand_secondary_color, accent_light, accent_dark, logo_url_dark, brand_font_key, loader_variant, neutral_tint, theme_preset_key, login_layout_key, loader_config, use_custom_loader, loader_text, loader_icon_mode, invite_code')
         .eq(coachIdentifierColumn(coachSlug), coachSlug)
         .maybeSingle()
 
@@ -34,6 +38,6 @@ export const getClientLoginCoach = cache(async (coachSlug: string) => {
         | 'brand_name' | 'primary_color' | 'logo_url' | 'welcome_message' | 'subscription_tier'
         | 'brand_secondary_color' | 'accent_light' | 'accent_dark' | 'logo_url_dark' | 'brand_font_key'
         | 'loader_variant' | 'neutral_tint' | 'theme_preset_key' | 'login_layout_key' | 'loader_config'
-        | 'use_custom_loader' | 'loader_text' | 'loader_icon_mode'
+        | 'use_custom_loader' | 'loader_text' | 'loader_icon_mode' | 'invite_code'
     > | null
 })

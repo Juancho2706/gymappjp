@@ -32,6 +32,12 @@ interface Props {
      * login pelado, sin explicación ni camino de vuelta. Un código desconocido no pinta nada.
      */
     errorCode?: string | null
+    /**
+     * Código de invitación del coach (FCN W2.8). Con él, el desconocido que cae en este login
+     * —hoy un callejón: no hay registro de alumno acá— tiene salida a `/join/{código}`, la puerta
+     * de solicitudes. Sin código (o vacío) no se pinta nada: un link a `/join/` sin código es un 404.
+     */
+    inviteCode?: string | null
 }
 
 function SubmitButton({ primaryColor, brandName }: { primaryColor: string; brandName: string }) {
@@ -58,12 +64,13 @@ function SubmitButton({ primaryColor, brandName }: { primaryColor: string; brand
     )
 }
 
-export default function ClientLoginForm({ coachSlug, primaryColor, brandName, logoUrl, idPrefix = '', errorCode = null }: Props) {
+export default function ClientLoginForm({ coachSlug, primaryColor, brandName, logoUrl, idPrefix = '', errorCode = null, inviteCode = null }: Props) {
     const [state, formAction] = useActionState(clientLoginAction, initialState)
     const [showPassword, setShowPassword] = useState(false)
     const router = useRouter()
     const emailId = `${idPrefix}client-email`
     const passwordId = `${idPrefix}client-password`
+    const joinHref = inviteCode?.trim() ? `/join/${inviteCode.trim()}` : null
 
     // Lo que devuelve el intento manda sobre lo que traía la URL: si el coach ya tecleó y falló,
     // el mensaje del link vencido dejó de ser lo relevante.
@@ -175,6 +182,21 @@ export default function ClientLoginForm({ coachSlug, primaryColor, brandName, lo
                 <div className="pt-2">
                     <SubmitButton primaryColor={primaryColor} brandName={brandName} />
                 </div>
+
+                {/* FCN W2.8 — escape del desconocido. Mismo tamaño/peso/color de link que
+                    «¿Olvidaste tu contraseña?», bajo el botón: es la salida, no un campo del
+                    formulario, y ahí es donde la busca quien no tiene cuenta. */}
+                {joinHref && (
+                    <div className="pt-1 text-center">
+                        <Link
+                            href={joinHref}
+                            className="text-xs font-semibold hover:underline"
+                            style={{ color: primaryColor }}
+                        >
+                            ¿No tienes cuenta? Pídele acceso a {brandName}
+                        </Link>
+                    </div>
+                )}
         </form>
     )
 }
