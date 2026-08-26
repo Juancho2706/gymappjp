@@ -177,8 +177,10 @@ export async function gateNutritionV2Api(
   )
 
   // El master switch funcional del alumno sigue separado del acceso técnico. El scope
-  // proviene de la fila autenticada, nunca del body; el servicio conserva su fail-open
-  // deliberado cuando FEATURE_PREFS está apagado/no disponible.
+  // proviene de la fila autenticada, nunca del body. D9-A (owner): `audience: 'student'` =>
+  // la preferencia del panel del coach NO apaga la nutrición de sus alumnos; el resolver
+  // devuelve el mismo `true` que con FEATURE_PREFS apagado. El gate se conserva para que el
+  // día que exista otra vía de apagado (entitlement/operador) esta superficie ya la respete.
   if (studentSurface) {
     const domainEnabled = await resolveNutritionDomainEnabled(
       {
@@ -186,6 +188,7 @@ export async function gateNutritionV2Api(
         clientId: client?.id ?? null,
         clientTeamId: client?.team_id ?? null,
         clientOrgId: client?.org_id ?? null,
+        audience: 'student',
       },
       userClient as never,
     )

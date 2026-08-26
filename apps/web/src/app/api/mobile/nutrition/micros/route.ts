@@ -54,8 +54,9 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ hasPlan: false, domainEnabled: true, date })
     }
 
-    // Master switch del dominio (fail-OPEN con flag OFF, igual que web): si esta apagado por el
-    // coach, el alumno no ve nada de nutricion -> el cliente movil oculta la seccion.
+    // Master switch del dominio, espejo exacto de web. D9-A (owner): superficie de ALUMNO =>
+    // `audience: 'student'`, la preferencia del panel del coach no participa (el resolver
+    // devuelve `true`); lo que gatea las secciones sigue siendo el entitlement real del plan.
     const domainEnabled = await resolveNutritionDomainEnabled(
         {
             // Nil uuid, mismo patron de :79/:89 — con '' PostgREST revienta el cast a uuid (22P02).
@@ -63,6 +64,7 @@ export async function GET(request: NextRequest) {
             clientId,
             clientTeamId: ctx.teamId,
             clientOrgId: ctx.orgId,
+            audience: 'student',
         },
         admin,
     )
@@ -82,6 +84,7 @@ export async function GET(request: NextRequest) {
                 planId: ctx.planId,
                 clientTeamId: ctx.teamId,
                 clientOrgId: ctx.orgId,
+                audience: 'student',
             },
             admin,
         ),

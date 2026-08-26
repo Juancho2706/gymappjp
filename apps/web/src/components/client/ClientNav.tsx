@@ -45,9 +45,11 @@ interface Props {
     showBodyComposition?: boolean
     /**
      * Master switch del dominio Nutricion para el alumno (resuelto server-side via
-     * `resolveNutritionDomainEnabled`). `false` => el coach apago la nutricion para este alumno y
-     * el tab "Plan Alimenticio" NO se muestra (render-only; la page tambien gatea). Default `true`
-     * (fail-OPEN, espejo de `resolveNutritionDomainEnabled` con flag OFF).
+     * `resolveNutritionDomainEnabled`). `false` => el tab "Plan Alimenticio" NO se muestra
+     * (render-only; la page tambien gatea). Default `true` (fail-OPEN).
+     *
+     * D9-A (owner): la preferencia de modulos del panel del coach NO llega hasta aca — el gate
+     * del alumno se resuelve con `audience: 'student'`, o sea solo por plan/entitlements.
      */
     showNutrition?: boolean
     /**

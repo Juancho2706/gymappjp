@@ -21,15 +21,16 @@ export default async function AddNutritionFoodPage({ params }: Props) {
 
   if (!user || !hasClientRow) redirect(`${base}/login`)
 
-  // Gate de dominio: si el coach apago Nutricion, /add no debe ser accesible por URL directa.
-  // Mismo resolve que la pagina principal; ante dominio apagado redirigimos a /nutrition (que
-  // renderiza NutritionDomainOff). Fail-open del resolver mantiene el dominio prendido si el flag esta OFF.
+  // Gate de dominio: mismo resolve que la pagina principal; ante dominio apagado redirigimos a
+  // /nutrition (que renderiza NutritionDomainOff). D9-A (owner): `audience: 'student'` => la
+  // preferencia del panel del coach no participa, el dominio queda prendido para el alumno.
   const clientScope = await getClientScope(user.id)
   const domainEnabled = await resolveNutritionDomainEnabled({
     coachId: String(clientScope.coachId ?? ''),
     clientId: user.id,
     clientTeamId: clientScope.teamId,
     clientOrgId: clientScope.orgId,
+    audience: 'student',
   })
   if (!domainEnabled) redirect(`${base}/nutrition`)
 

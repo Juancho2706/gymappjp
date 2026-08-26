@@ -77,6 +77,9 @@ export default async function ClientNutritionPage({ params }: Props) {
     planId: String(plan.id),
     clientTeamId: clientScope.teamId,
     clientOrgId: clientScope.orgId,
+    // D9-A (owner): superficie de ALUMNO. La preferencia del panel del coach no participa; las
+    // secciones dependen solo del entitlement real del plan.
+    audience: 'student' as const,
   }
   const [
     todayLog,
@@ -120,6 +123,7 @@ export default async function ClientNutritionPage({ params }: Props) {
       clientId: user.id,
       clientTeamId: clientScope.teamId,
       clientOrgId: clientScope.orgId,
+      audience: 'student',
     }),
     resolveFeaturePrefs(prefsInput),
     getNutritionWeeklyRecap(user.id),

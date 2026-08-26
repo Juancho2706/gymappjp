@@ -142,10 +142,9 @@ export const getStudentBodyCompositionNavEnabled = cache(async () => {
  * fila `clients` del PROPIO alumno (RLS techo: `clients.id = auth.uid()`), no del coach del plan
  * — asi cubre el caso "sin plan todavia" (el dominio puede estar apagado sin que exista plan).
  *
- * Cuando el coach apaga la nutricion para este alumno, el tab del nav se OCULTA (render-only; la
- * page tambien gatea con `resolveNutritionDomainEnabled` => `NutritionDomainOff`). React.cache +
- * fail-OPEN del flag `FEATURE_PREFS_ENABLED` (flag OFF => `true`, nada se oculta) heredado del
- * resolver. Fail-CLOSED a `true` ante error: nunca esconder el tab por un fallo de lectura.
+ * D9-A (owner): la preferencia de modulos es del PANEL DEL COACH, no de la app de sus alumnos =>
+ * `audience: 'student'` y el resolver devuelve siempre `true`. El tab se muestra segun el
+ * plan/entitlements reales. React.cache + fail-CLOSED a `true` ante error: nunca esconder el tab.
  */
 export const getStudentNutritionNavEnabled = cache(async (): Promise<boolean> => {
     const user = await getClientRootUser()
@@ -160,6 +159,7 @@ export const getStudentNutritionNavEnabled = cache(async (): Promise<boolean> =>
             clientId: user.id,
             clientTeamId: scope?.team_id ?? null,
             clientOrgId: scope?.org_id ?? null,
+            audience: 'student',
         })
     } catch {
         return true

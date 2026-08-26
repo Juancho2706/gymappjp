@@ -109,25 +109,19 @@ async function resolveNutritionPrefs(
         nutrition_exchanges: applied.nutrition_exchanges === true,
         body_composition: applied.body_composition === true,
     }
-    if (!prefsEnabled || (!scope.coachId && !scope.teamId)) {
+    // D9-A (owner, 22-08 ratificada 26-08): la preferencia de modulos es SOLO del panel del COACH.
+    // Scope ALUMNO (`clientId` presente — en scope coach siempre es null) => las prefs no
+    // participan y el resultado es el mismo que con `FEATURE_PREFS_ENABLED` OFF: todo prendido,
+    // modulado unicamente por los entitlements reales del plan. El scope COACH sigue igual: su
+    // `nutritionEnabled` (CoachMobileChrome) respeta su propia preferencia.
+    if (!prefsEnabled || scope.clientId || (!scope.coachId && !scope.teamId)) {
         return { nutritionEnabled: true, sections: failOpenSections(entitledByModule) }
     }
     const useTeamBase = !!scope.teamId && !scope.orgId
     try {
-        const [base, clientRes] = await Promise.all([
-            readBaseNutritionPrefs(admin, useTeamBase, scope),
-            scope.clientId
-                ? admin
-                      .from('client_feature_prefs')
-                      .select('sections')
-                      .eq('client_id', scope.clientId)
-                      .eq('domain', 'nutrition')
-                      .maybeSingle()
-                : Promise.resolve({ data: null }),
-        ])
-        const clientSections = (
-            (clientRes.data as { sections?: SectionPrefs } | null)?.sections ?? null
-        ) as SectionPrefs | null
+        // Solo llega scope COACH (el ALUMNO retorno arriba), o sea nunca hay capa por-alumno:
+        // `client_feature_prefs` ya no se lee en este endpoint.
+        const base = await readBaseNutritionPrefs(admin, useTeamBase, scope)
         const resolverInput = {
             domain: 'nutrition' as const,
             entitledByModule,
@@ -135,7 +129,7 @@ async function resolveNutritionPrefs(
             useTeamBase,
             coachSections: useTeamBase ? null : base.sections,
             teamSections: useTeamBase ? base.sections : null,
-            clientSections,
+            clientSections: null,
         }
         return {
             nutritionEnabled: resolveDomainEnabled(resolverInput),

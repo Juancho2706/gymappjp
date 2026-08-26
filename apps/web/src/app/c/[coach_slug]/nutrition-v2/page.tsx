@@ -83,11 +83,13 @@ export default async function StudentNutritionV2Page({ params, searchParams }: P
   // its isolated legacy surface until its separately scoped removal project.
   if (scope.orgId) redirect(`${base}/nutrition`)
 
+  // D9-A (owner): superficie de ALUMNO => la preferencia del panel del coach no participa.
   const domainEnabled = await resolveNutritionDomainEnabled({
       coachId: scope.coachId ?? '',
       clientId: user.id,
       clientTeamId: scope.teamId,
       clientOrgId: scope.orgId,
+      audience: 'student',
     })
   if (!domainEnabled) return <NutritionDomainOff coachSlug={coach_slug} />
 

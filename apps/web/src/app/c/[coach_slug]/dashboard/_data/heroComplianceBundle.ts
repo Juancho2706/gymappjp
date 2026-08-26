@@ -264,9 +264,10 @@ function computeNutritionComplianceScore(
 
 /**
  * ¿Esta PRENDIDO el dominio Nutricion para este alumno en el DASHBOARD? Espejo exacto del gate
- * de la pagina `/c/[coach_slug]/nutrition` (master switch `_enabled`, plan §4.8): cuando el coach
- * apaga el dominio, las superficies de nutricion del dashboard (anillo de cumplimiento + resumen
- * diario) se ocultan limpio — nunca un esqueleto roto (NN/g pitfall).
+ * de la pagina `/c/[coach_slug]/nutrition` (master switch `_enabled`, plan §4.8), que desde D9-A
+ * NO se apaga por preferencia del coach: se mantiene el gate para que las superficies de
+ * nutricion del dashboard (anillo + resumen diario) sigan compartiendo UN solo criterio y nunca
+ * queden en esqueleto roto (NN/g pitfall) si el dominio se apagara por otra via.
  *
  * Resuelve el scope (coach/team/org) desde la fila `clients` del propio alumno (RLS techo:
  * `clients.id = auth.uid()`), igual que `getClientScope` de la pagina de nutricion. Usar el scope
@@ -274,8 +275,8 @@ function computeNutritionComplianceScore(
  * aunque todavia no exista un plan nutricional.
  *
  * React.cache => una sola lectura por request aunque el sidebar se monte 2x (mobile + desktop) y
- * el anillo + el resumen llamen ambos. Fail-OPEN del flag `FEATURE_PREFS_ENABLED` viene heredado
- * de `resolveNutritionDomainEnabled` (flag OFF => `true` = comportamiento de HOY, nada se oculta).
+ * el anillo + el resumen llamen ambos. D9-A (owner): superficie de ALUMNO => `audience: 'student'`,
+ * o sea la preferencia del panel del coach no participa y el resolver devuelve siempre `true`.
  */
 export const getDashboardNutritionDomainEnabled = cache(async (userId: string): Promise<boolean> => {
     const supabase = await createClient()
@@ -290,5 +291,6 @@ export const getDashboardNutritionDomainEnabled = cache(async (userId: string): 
         clientId: userId,
         clientTeamId: (data?.team_id ?? null) as string | null,
         clientOrgId: (data?.org_id ?? null) as string | null,
+        audience: 'student',
     })
 })

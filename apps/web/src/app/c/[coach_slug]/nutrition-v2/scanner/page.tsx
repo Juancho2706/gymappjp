@@ -28,11 +28,13 @@ export default async function NutritionV2ScannerPage({ params }: Props) {
   const scope = await getCurrentStudentNutritionScope(user.id)
   if (scope.orgId) redirect(`${base}/nutrition`)
 
+  // D9-A (owner): superficie de ALUMNO => la preferencia del panel del coach no participa.
   const domainEnabled = await resolveNutritionDomainEnabled({
       coachId: scope.coachId ?? '',
       clientId: user.id,
       clientTeamId: scope.teamId,
       clientOrgId: scope.orgId,
+      audience: 'student',
     })
   if (!domainEnabled) return <NutritionDomainOff coachSlug={coach_slug} />
 

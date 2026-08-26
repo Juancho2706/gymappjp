@@ -194,11 +194,13 @@ async function authorizeStudentWrite(
     return fail('WORKSPACE_NOT_ALLOWED', 'Esta experiencia aún no está disponible para Enterprise.')
   }
 
+  // D9-A (owner): superficie de ALUMNO => la preferencia del panel del coach no participa.
   const domainEnabled = await resolveNutritionDomainEnabled({
       coachId: scope.coachId ?? '',
       clientId: user.id,
       clientTeamId: scope.teamId,
       clientOrgId: scope.orgId,
+      audience: 'student',
     })
   if (!domainEnabled) {
     return fail('NUTRITION_DOMAIN_DISABLED', 'Tu coach no tiene activada la sección de nutrición por ahora.')
