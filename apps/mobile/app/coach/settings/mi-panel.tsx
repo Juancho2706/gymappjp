@@ -30,6 +30,7 @@ import { Switch } from '../../../components/Switch'
 import { toast } from '../../../components/Toast'
 import { useTheme } from '../../../context/ThemeContext'
 import { useWorkspace } from '../../../lib/workspace'
+import { refreshEntitlements } from '../../../lib/entitlements'
 import { getCoachProfile } from '../../../lib/coach'
 import { resetCoachPersonaCache } from '../../../lib/coach-persona'
 import {
@@ -105,6 +106,17 @@ const PERSONA_ICONS: Record<Persona, LucideIcon> = {
   endurance: HeartPulse,
   other: Sparkles,
 }
+
+/**
+ * Dominios cuyo encendido SE VE al instante en la app. La barra del coach solo apaga un tab por
+ * `nutrition` (`components/coach/CoachMobileChrome.tsx`) y el entrenamiento vive siempre en el
+ * panel; cardio, movilidad y composición viven dentro de «Herramientas» y no tienen tab propio, así
+ * que prometerles «ya se ve» es una mentira que el coach comprueba en dos segundos.
+ */
+const DOMAINS_VISIBLE_IN_NAV: ReadonlySet<FeatureDomain> = new Set<FeatureDomain>([
+  'nutrition',
+  'training',
+])
 
 /** Ícono por dominio — el MISMO mapeo que `MiPanelClient.tsx`. */
 const DOMAIN_ICONS: Record<FeatureDomain, LucideIcon> = {
@@ -237,6 +249,9 @@ export default function CoachMiPanelScreen() {
     // El gate de persona cachea su veredicto por sesión: sin esto, la app seguiría creyendo la
     // especialidad vieja hasta el próximo arranque.
     resetCoachPersonaCache()
+    // Con «Ordenar mi panel» el servidor reescribe los master switches: sin revalidar, la barra de
+    // tabs sigue mostrando la foto vieja hasta el próximo foreground.
+    await refreshEntitlements().catch(() => {})
     await loadDashboard().catch(() => null)
     if (reorder && coachId != null) {
       const rows = await loadMiPanelDomains(coachId)
@@ -262,7 +277,16 @@ export default function CoachMiPanelScreen() {
           item.domain === row.domain ? { ...item, enabled: next, sections: payload.sections } : item,
         ) ?? current,
       )
-      toast.success(next ? 'Listo, ya se ve.' : 'Listo, lo ocultamos.')
+      // La barra de tabs lee el store de entitlements, no esta tabla: sin esta revalidación el tab
+      // recién prendido no vuelve hasta el próximo foreground.
+      await refreshEntitlements().catch(() => {})
+      toast.success(
+        next
+          ? DOMAINS_VISIBLE_IN_NAV.has(row.domain)
+            ? 'Listo, ya se ve.'
+            : 'Listo, lo activamos.'
+          : 'Listo, lo ocultamos.',
+      )
       return
     }
     setDomains((current) =>

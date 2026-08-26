@@ -23,7 +23,9 @@ import { cn } from '@/lib/utils'
  */
 
 const BUILD_STEPS = [
-    { key: 'domains', label: 'Eligiendo tus módulos', atMs: 350 },
+    // La persona solo APAGA dominios: no compra ni activa nada. El paso se nombra por lo que
+    // realmente pasa, para no prometer módulos que el coach no tiene.
+    { key: 'domains', label: 'Dejando a la vista lo que usas', atMs: 350 },
     { key: 'demo', label: 'Sembrando tu alumno de ejemplo', atMs: 750 },
     { key: 'guide', label: 'Preparando tu guía', atMs: 1150 },
 ] as const

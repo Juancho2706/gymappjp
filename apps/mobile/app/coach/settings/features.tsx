@@ -19,7 +19,7 @@ import { Switch } from '../../../components/Switch'
 import { toast } from '../../../components/Toast'
 import { useTheme } from '../../../context/ThemeContext'
 import { useWorkspace } from '../../../lib/workspace'
-import { useEntitlements } from '../../../lib/entitlements'
+import { refreshEntitlements, useEntitlements } from '../../../lib/entitlements'
 import { getCoachProfile } from '../../../lib/coach'
 import {
   loadFeaturePrefs,
@@ -259,6 +259,9 @@ function DomainGroup({ data, scopeCtx, entitledByModule, canEdit }: DomainGroupP
     setBusy(false)
     if ('ok' in res) {
       setSaved({ preset, sections })
+      // El master switch del dominio mueve la barra de tabs, que lee el store de entitlements y no
+      // esta tabla: sin revalidar, el cambio no se ve hasta el próximo foreground.
+      await refreshEntitlements().catch(() => {})
       toast.success('Funciones guardadas')
     } else {
       toast.error(res.error)

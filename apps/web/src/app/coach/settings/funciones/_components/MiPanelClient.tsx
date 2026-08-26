@@ -203,7 +203,7 @@ function PersonaCard({ persona, alsoOther }: { persona: Persona | null; alsoOthe
                         Ordenar mi panel según mi especialidad
                     </span>
                     <span className="mt-0.5 block text-muted">
-                        Prende y apaga los módulos de abajo por ti. Si ya los ajustaste a mano,
+                        Prende y apaga las áreas de abajo por ti. Si ya las ajustaste a mano,
                         déjalo sin marcar.
                     </span>
                 </span>

@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
 import { PERSONA_COPY, PersonaSchema, type Persona } from '@eva/schemas'
 import { FEATURE_DOMAIN_KEYS } from '@eva/feature-prefs'
+import { NAV_MODULES } from '@eva/coach-nav'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { capturePostHogServerEvent } from '@/lib/posthog/server-capture'
@@ -203,7 +204,18 @@ export async function setMiPanelDomainAction(input: SetMiPanelDomainInput): Prom
     }
 
     revalidateCoachShell()
-    return { ok: true, message: parsed.data.enabled ? 'Listo, ya se ve.' : 'Listo, lo ocultamos.' }
+    return { ok: true, message: domainToggleMessage(parsed.data.domain, parsed.data.enabled) }
+}
+
+/**
+ * Prender un dominio SIN ítem de nav (hoy `bodycomp`: no aparece en `NAV_MODULES`) no cambia nada
+ * a la vista — prometer «ya se ve» manda al coach a buscar un menú que no existe. El registro del
+ * nav es la fuente de verdad, así que si mañana el dominio gana su ítem el copy se corrige solo.
+ */
+function domainToggleMessage(domain: (typeof FEATURE_DOMAIN_KEYS)[number], enabled: boolean): string {
+    if (!enabled) return 'Listo, lo ocultamos.'
+    const hasNavItem = NAV_MODULES.some((item) => item.featureDomain === domain)
+    return hasNavItem ? 'Listo, ya se ve.' : 'Listo, lo activamos.'
 }
 
 /** Vuelve a sembrar el alumno de ejemplo de la persona actual. Idempotente (lo resuelve W3). */
