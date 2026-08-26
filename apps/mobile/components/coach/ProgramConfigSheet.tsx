@@ -1,4 +1,4 @@
-import { forwardRef, useRef } from 'react'
+import { forwardRef, useEffect, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import type { ScrollView } from 'react-native'
@@ -76,7 +76,7 @@ export const ProgramConfigSheet = forwardRef<BottomSheetModal, Props>(function P
           {p.durationType === 'weeks' ? (
             <View style={styles.inlineNum}>
               <Text style={[styles.inlineLbl, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Cantidad de semanas (1–52)</Text>
-              <TextInput value={String(p.weeks)} onChangeText={(v) => p.setWeeks(Math.max(1, Math.min(52, Number(v) || 1)))} keyboardType="number-pad"
+              <IntDraftInput theme={theme} value={p.weeks} min={1} max={52} onCommit={p.setWeeks}
                 style={[styles.numInput, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]} />
             </View>
           ) : (
@@ -114,7 +114,8 @@ export const ProgramConfigSheet = forwardRef<BottomSheetModal, Props>(function P
               <TouchableOpacity onPress={() => p.setPhases((prev) => prev.map((x, idx) => idx === i ? { ...x, color: PHASE_COLORS[(PHASE_COLORS.indexOf(x.color) + 1) % PHASE_COLORS.length] } : x))} style={[styles.phaseColor, { backgroundColor: ph.color }]} />
               <TextInput value={ph.name} onChangeText={(v) => p.setPhases((prev) => prev.map((x, idx) => idx === i ? { ...x, name: v } : x))} placeholder="Fase" placeholderTextColor={theme.mutedForeground}
                 style={[styles.phaseName, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]} />
-              <TextInput value={String(ph.weeks)} onChangeText={(v) => p.setPhases((prev) => prev.map((x, idx) => idx === i ? { ...x, weeks: Math.max(1, Number(v) || 1) } : x))} keyboardType="number-pad"
+              <IntDraftInput theme={theme} value={ph.weeks} min={1} max={52}
+                onCommit={(n) => p.setPhases((prev) => prev.map((x, idx) => idx === i ? { ...x, weeks: n } : x))}
                 style={[styles.phaseWeeks, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]} />
               <TouchableOpacity disabled={i === 0} onPress={() => p.setPhases((prev) => { const n = [...prev];[n[i - 1], n[i]] = [n[i], n[i - 1]]; return n })} hitSlop={4} style={styles.phaseIcon}><ChevronUp size={16} color={i === 0 ? theme.muted : theme.mutedForeground} /></TouchableOpacity>
               <TouchableOpacity disabled={i >= p.phases.length - 1} onPress={() => p.setPhases((prev) => { const n = [...prev];[n[i], n[i + 1]] = [n[i + 1], n[i]]; return n })} hitSlop={4} style={styles.phaseIcon}><ChevronDown size={16} color={i >= p.phases.length - 1 ? theme.muted : theme.mutedForeground} /></TouchableOpacity>
@@ -134,6 +135,38 @@ export const ProgramConfigSheet = forwardRef<BottomSheetModal, Props>(function P
     </BottomSheetModal>
   )
 })
+
+/**
+ * Entero clampeado que SÍ se deja vaciar mientras se edita (reporte de coach 26-08: «no me deja
+ * eliminar el 1, a no ser que anteponga otro número»). El patrón controlado `Math.max(1, Number(v)
+ * || 1)` convertía el vacío en 1 en el mismo keystroke ⇒ imposible borrar para escribir otro valor.
+ * Estado local string: el vacío se ve, el padre solo recibe valores válidos clampeados, y al perder
+ * el foco un campo vacío vuelve al último valor real. El useEffect solo re-sincroniza ante cambios
+ * EXTERNOS (p. ej. reordenar fases); pisar siempre reintroduciría el bug.
+ */
+function IntDraftInput({ theme, value, min, max, onCommit, style }: { theme: any; value: number; min: number; max: number; onCommit: (n: number) => void; style: any }) {
+  const [str, setStr] = useState(String(value))
+  useEffect(() => {
+    const local = str.trim() === '' ? null : Number(str)
+    if (local !== value) setStr(String(value))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- str fuera a propósito: solo reacciona a cambios externos de value
+  }, [value])
+  return (
+    <TextInput
+      value={str}
+      keyboardType="number-pad"
+      placeholder={String(min)}
+      placeholderTextColor={theme.mutedForeground}
+      onChangeText={(v) => {
+        const clean = v.replace(/[^0-9]/g, '')
+        setStr(clean)
+        if (clean !== '') onCommit(Math.max(min, Math.min(max, parseInt(clean, 10))))
+      }}
+      onBlur={() => { if (str.trim() === '') setStr(String(value)) }}
+      style={style}
+    />
+  )
+}
 
 function Field({ theme, label, children }: { theme: any; label: string; children: React.ReactNode }) {
   return (
