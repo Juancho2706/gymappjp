@@ -1084,7 +1084,7 @@ un `pending_email` viejo · advisors limpio tras W3.0, W3.5 y W3.9 · gates base
 el mismo archivo (`apps/mobile/lib/clients-directory.ts`), en otra wave y con otro worker — y además dependía
 de W1.1, lo que contradecía la fila «Depende de: —» del PLAN. Vive dentro de W1.5.
 
-- [ ] **W4.1** · **ARREGLA** (RN · Opus, 1 h) `apps/mobile/app/(auth)/login.tsx`, **los dos caminos de error** (`:220` y `:230`). En `:230`:
+- [x] **W4.1** · **ARREGLA** (RN · Opus, 1 h) `apps/mobile/app/(auth)/login.tsx`, **los dos caminos de error** (`:220` y `:230`). En `:230`:
   `await supabase.auth.signOut({ scope: 'local' })`. Hoy, cuando el coach se equivoca de login (403 /
   `INVALID_TOKEN` desde `validate-student-workspace`), la app le **revoca el refresh token en todos sus
   dispositivos**. **Y el gemelo está al lado:** `:220`, en el **mismo camino de error** (rama
@@ -1097,7 +1097,7 @@ de W1.1, lo que contradecía la fila «Depende de: —» del PLAN. Vive dentro d
   para que los dos copys queden alineados.
   **Aceptación:** repro manual: login de alumno con credenciales de coach → su sesión de coach en la web
   **sobrevive**. **Gate:** `tsc` mobile + `expo export --platform android`.
-- [ ] **W4.2** · **ARREGLA** (RN · Opus, 3 h) `apps/mobile/app/(auth)/reset-password.tsx:34-48`. La ruta está reclamada con
+- [x] **W4.2** · **ARREGLA** (RN · Opus, 3 h) `apps/mobile/app/(auth)/reset-password.tsx:34-48`. La ruta está reclamada con
   `autoVerify` en las cuatro variantes de host (`apps/mobile/app.json:105,150`) y hoy la pantalla pinta el
   formulario sin comprobar nada, y muere en un `Alert` sin salida.
   **La tarea es CANJEAR el token, no solo guardar.** El token **sí llega a la app**: `+native-intent.ts`
@@ -1112,6 +1112,18 @@ de W1.1, lo que contradecía la fila «Depende de: —» del PLAN. Vive dentro d
   **Aceptación:** un link real de `/reset-password` abierto en Android con la app instalada **permite cambiar
   la clave**; sin token válido no se pinta el formulario, se explica y hay salida.
   **Gate:** `tsc` mobile + `expo export --platform android` + repro en device (matriz de QA, punto 9).
+
+### Cierre de W4 — 2026-08-26 (1 worker Opus + fix del jefe)
+
+**EJECUTADA.** Commit `fcn(w4)`: los TRES caminos de error del login a scope local (los dos del
+contrato + `signOutGoogleAndSupabase`, gemela cazada por el worker fuera de su candado y cerrada
+por el jefe en la misma tanda — uso único verificado) y `/reset-password` canjeando el token de
+verdad (máquina checking→ready|blocked, 4 formas de llegada, gate de tipo, helper puro
+`recovery-link.ts` con 15 tests). Gates: tsc mobile 0 · vitest mobile 1.444+15 · expo export ✓.
+**Pendientes declarados:** `clearBlockedStudentSession` (`api.ts:64`) sigue con signOut global —
+mismo concepto, sin contrato acá, para triage; `api.ts:127` global con refresh muerto = inocuo;
+hueco residual: `revokePushToken` del device no corre en la rama pausada; **prerrequisito de QA:**
+`eva://reset-password` debe estar en Redirect URLs de Supabase Auth ANTES de culpar a la app.
 
 **Gate de salida de W4:** repro de W4.1 en dos superficies · `expo export` verde · **OTA antes del deploy
 web**, solo 1.1.1 y 1.1.2.
