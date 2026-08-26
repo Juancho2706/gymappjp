@@ -333,8 +333,8 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
             <Segmented theme={theme} options={PROGRESSIONS} value={progression}
               onChange={(v) => patch({ progression_type: v === 'none' ? null : (v as 'weight' | 'reps') })} />
             {progression !== 'none' ? (
-              <Field theme={theme} label="Valor por semana" value={draft.progression_value != null ? String(draft.progression_value) : ''} keyboardType="decimal-pad"
-                onChangeText={(v: string) => patch({ progression_value: v.trim() ? Number(v) : null })} placeholder={progression === 'weight' ? '2.5 (kg)' : '1 (rep)'} />
+              <DecimalField theme={theme} label="Valor por semana" value={typeof draft.progression_value === 'number' ? draft.progression_value : null}
+                onCommit={(n: number | null) => patch({ progression_value: n })} placeholder={progression === 'weight' ? '2,5 (kg)' : '1 (rep)'} />
             ) : null}
             {progression === 'weight' ? (
               <>
@@ -574,6 +574,42 @@ function IntField({ theme, label, help, value, onCommit, placeholder }: { theme:
           onCommit(clean === '' ? null : parseInt(clean, 10))
         }}
         style={[styles.input, { textAlign: 'center', borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]}
+      />
+    </View>
+  )
+}
+
+/**
+ * Input decimal opcional (commit number|null al escribir). Acepta coma Y punto: el decimal-pad de
+ * iOS en español solo trae coma, y `Number('2,5')` es NaN — así nació el «NaN» que un coach vio en
+ * «Valor por semana». Estado local string para que un «2,» a mitad de tecleo no se pierda, y el
+ * useEffect solo re-sincroniza ante cambios EXTERNOS (si pisara siempre, borraría la coma recién
+ * escrita porque el commit de «2,» ya es 2). Un value NaN entrante se muestra como vacío.
+ */
+function DecimalField({ theme, label, help, value, onCommit, placeholder }: { theme: any; label: string; help?: string; value: number | null; onCommit: (n: number | null) => void; placeholder?: string }) {
+  const norm = value == null || Number.isNaN(value) ? null : value
+  const [str, setStr] = useState(norm == null ? '' : String(norm))
+  useEffect(() => {
+    const local = str.trim() === '' ? null : Number(str.replace(',', '.'))
+    const localNorm = local == null || Number.isNaN(local) ? null : local
+    if (localNorm !== norm) setStr(norm == null ? '' : String(norm))
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- str deliberadamente fuera: solo reaccionamos a cambios externos de value
+  }, [norm])
+  return (
+    <View style={{ flex: 1, gap: 6 }}>
+      <FieldLabel theme={theme} label={label} help={help} />
+      <TextInput
+        value={str}
+        keyboardType="decimal-pad"
+        placeholder={placeholder}
+        placeholderTextColor={theme.mutedForeground}
+        onChangeText={(v) => {
+          const clean = v.replace(/[^0-9.,]/g, '')
+          setStr(clean)
+          const n = Number(clean.replace(',', '.'))
+          onCommit(clean.trim() === '' || Number.isNaN(n) ? null : n)
+        }}
+        style={[styles.input, { borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]}
       />
     </View>
   )
