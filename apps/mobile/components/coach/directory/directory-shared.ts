@@ -31,11 +31,26 @@ export function severityMeta(score: number): { label: string; tone: 'danger' | '
   return { label: 'On track', tone: 'success', Icon: Check }
 }
 
-/** Estado unificado del alumno (Archivado / Pausado / Pend. sync / Activo). */
-export function statusMeta(client: DirectoryClient): { key: string; label: string; tone: BadgeTone } {
-  if (client.isArchived) return { key: 'archived', label: 'Archivado', tone: 'neutral' }
-  if (!client.isActive) return { key: 'paused', label: 'Pausado', tone: 'neutral' }
-  if (client.forcePwChange) return { key: 'pending', label: 'Pend. sync', tone: 'info' }
+/**
+ * Estado unificado del alumno (Archivado / Pausado / Todavía no cambió su clave / Activo).
+ * Función pura y compartida — copia LOCAL de mobile (espejo del `statusMeta` que la web crea
+ * en paralelo, TASKS.md W0.2/W0.3). NO vive en `packages/*`: un cambio ahí viajaría en el
+ * bundle RN y crearía split por runtime, así que cada plataforma mantiene su propia copia.
+ *
+ * `firstLoginAt` se recibe pero TODAVÍA NO SE USA — los tres llamadores (esta función,
+ * `DirRowCard`, `clientes.tsx`) le pasan `null` hasta que exista la columna
+ * `clients.first_login_at` (W1). PROHIBIDO cualquier label con "entró"/"Entró" acá: mientras
+ * la columna no exista, el fallback honesto es "Todavía no cambió su clave".
+ */
+export function statusMeta(input: {
+  isArchived: boolean
+  isActive: boolean
+  firstLoginAt: string | null
+  forcePasswordChange: boolean
+}): { key: 'archived' | 'paused' | 'pending' | 'active'; label: string; tone: BadgeTone } {
+  if (input.isArchived) return { key: 'archived', label: 'Archivado', tone: 'neutral' }
+  if (!input.isActive) return { key: 'paused', label: 'Pausado', tone: 'neutral' }
+  if (input.forcePasswordChange) return { key: 'pending', label: 'Todavía no cambió su clave', tone: 'info' }
   return { key: 'active', label: 'Activo', tone: 'success' }
 }
 
@@ -67,7 +82,7 @@ export const STATUS_OPTIONS: { label: string; value: StatusFilter }[] = [
   { label: 'Todos', value: 'any' },
   { label: 'Activo', value: 'active' },
   { label: 'Pausado', value: 'paused' },
-  { label: 'Pendiente sync', value: 'pending_sync' },
+  { label: 'Todavía no cambió su clave', value: 'pending_sync' },
   { label: 'Archivados', value: 'archived' },
 ]
 
@@ -78,7 +93,7 @@ export const RISK_LABELS: Record<string, string> = {
   review: 'En riesgo',
   on_track: 'On track',
   expired_program: 'Programa vencido',
-  password_reset: 'Pendiente sync',
+  password_reset: 'Todavía no cambió su clave',
   no_program: 'Sin programa',
   with_program: 'Con programa',
   nutrition_low: 'Nutrición baja',

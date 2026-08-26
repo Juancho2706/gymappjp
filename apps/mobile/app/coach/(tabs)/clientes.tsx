@@ -45,6 +45,7 @@ import {
   SUCCESS,
   WARNING,
   hexToRgba,
+  statusMeta as clientStatusMeta,
 } from '../../../components/coach/directory/directory-shared'
 import { countCapClients } from '../../../lib/client-cap'
 import {
@@ -102,11 +103,18 @@ function lastActivityLabel(days: number | null): string {
   return `Hace ${days}d`
 }
 
+// bg/fg 1:1 con los de antes (solo el texto del estado "pending" cambió, vía directory-shared.statusMeta).
+const STATUS_STYLE: Record<string, { bg: string; fg: string }> = {
+  archived: { bg: 'bg-surface-sunken', fg: 'text-subtle' },
+  paused: { bg: 'bg-ink-100', fg: 'text-ink-600' },
+  pending: { bg: 'bg-info-100 dark:bg-info-100/[0.18]', fg: 'text-info-600' },
+  active: { bg: 'bg-success-100 dark:bg-success-100/[0.18]', fg: 'text-success-700' },
+}
+
 function statusMeta(client: DirectoryClient) {
-  if (client.isArchived) return { label: 'Archivado', bg: 'bg-surface-sunken', fg: 'text-subtle' }
-  if (!client.isActive) return { label: 'Pausado', bg: 'bg-ink-100', fg: 'text-ink-600' }
-  if (client.forcePwChange) return { label: 'Pend. sync', bg: 'bg-info-100 dark:bg-info-100/[0.18]', fg: 'text-info-600' }
-  return { label: 'Activo', bg: 'bg-success-100 dark:bg-success-100/[0.18]', fg: 'text-success-700' }
+  // firstLoginAt: null — todavía no existe la columna (W1); ver directory-shared.ts.
+  const meta = clientStatusMeta({ isArchived: client.isArchived, isActive: client.isActive, firstLoginAt: null, forcePasswordChange: client.forcePwChange })
+  return { label: meta.label, ...STATUS_STYLE[meta.key] }
 }
 
 const DENSE_COLS = {

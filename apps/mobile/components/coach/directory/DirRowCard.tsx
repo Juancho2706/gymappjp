@@ -8,7 +8,7 @@ import { FONT } from '../../../lib/typography'
 import { shadow } from '../../../lib/shadows'
 import { resolveSportRamp } from '../../../lib/theme'
 import type { DirectoryClient, PulseRow } from '../../../lib/clients-directory'
-import { DANGER, WARNING, lastInfo } from './directory-shared'
+import { DANGER, WARNING, lastInfo, statusMeta as clientStatusMeta } from './directory-shared'
 
 function severityMeta(score: number): { label: string; Icon: LucideIcon; bg: string; fg: string } {
   if (score >= 50) return { label: 'Riesgo', Icon: AlertOctagon, bg: 'bg-danger-100 dark:bg-danger-100/[0.18]', fg: 'text-danger-700' }
@@ -16,11 +16,18 @@ function severityMeta(score: number): { label: string; Icon: LucideIcon; bg: str
   return { label: 'On track', Icon: Check, bg: 'bg-success-100 dark:bg-success-100/[0.18]', fg: 'text-success-700' }
 }
 
+// bg/fg 1:1 con los de antes (solo el texto del estado "pending" cambió, vía directory-shared.statusMeta).
+const STATUS_STYLE: Record<string, { bg: string; fg: string }> = {
+  archived: { bg: 'bg-surface-sunken', fg: 'text-subtle' },
+  paused: { bg: 'bg-ink-100', fg: 'text-ink-600' },
+  pending: { bg: 'bg-info-100 dark:bg-info-100/[0.18]', fg: 'text-info-700' },
+  active: { bg: 'bg-success-100 dark:bg-success-100/[0.18]', fg: 'text-success-700' },
+}
+
 function statusMeta(item: DirectoryClient): { key: string; label: string; bg: string; fg: string } {
-  if (item.isArchived) return { key: 'archived', label: 'Archivado', bg: 'bg-surface-sunken', fg: 'text-subtle' }
-  if (!item.isActive) return { key: 'paused', label: 'Pausado', bg: 'bg-ink-100', fg: 'text-ink-600' }
-  if (item.forcePwChange) return { key: 'pending_sync', label: 'Pend. sync', bg: 'bg-info-100 dark:bg-info-100/[0.18]', fg: 'text-info-700' }
-  return { key: 'active', label: 'Activo', bg: 'bg-success-100 dark:bg-success-100/[0.18]', fg: 'text-success-700' }
+  // firstLoginAt: null — todavía no existe la columna (W1); ver directory-shared.ts.
+  const meta = clientStatusMeta({ isArchived: item.isArchived, isActive: item.isActive, firstLoginAt: null, forcePasswordChange: item.forcePwChange })
+  return { ...meta, ...STATUS_STYLE[meta.key] }
 }
 
 /**

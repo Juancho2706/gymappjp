@@ -14,7 +14,7 @@ import type { DirectoryProgramFilter, DirectoryRiskFilter, StatusFilter } from '
 const STATUS_ROWS: { v: StatusFilter; l: string }[] = [
   { v: 'active', l: 'Activo' },
   { v: 'paused', l: 'Pausado' },
-  { v: 'pending_sync', l: 'Pendiente sync' },
+  { v: 'pending_sync', l: 'Todavía no cambió su clave' },
   { v: 'archived', l: 'Archivados' },
 ]
 const RISK_ROWS: { v: DirectoryRiskFilter; l: string }[] = [
