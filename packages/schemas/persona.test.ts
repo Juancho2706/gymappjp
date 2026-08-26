@@ -87,6 +87,41 @@ describe('@eva/schemas/persona — mensaje de WhatsApp', () => {
         }
     })
 
+    // El callejón 4 del spec «flujo del coach nuevo»: el `{link}` es `/c/{código}/login`, que pide
+    // correo Y contraseña. Sin el bloque de acceso, el alumno tenía que ir a buscar la clave a su
+    // casilla — dos saltos de app, y 3 de 8 alumnos invitados nunca entraron.
+    it('las 5 plantillas CON clave traen el bloque de acceso completo', () => {
+        for (const persona of PERSONAS) {
+            const template = PERSONA_COPY[persona].whatsappInvite
+            expect(template).toContain('{link}')
+            expect(template).toContain('{correo}')
+            expect(template).toContain('{clave}')
+        }
+    })
+
+    // Regla 4 de SPEC §5: sin teléfono el mensaje va a `wa.me/?text=` (selector de contactos) y una
+    // credencial ahí es una fuga a un toque. La variante sin clave NO puede tener el token.
+    it('las 5 plantillas SIN clave traen el link y NUNCA la credencial', () => {
+        for (const persona of PERSONAS) {
+            const template = PERSONA_COPY[persona].whatsappInviteSinClave
+            expect(template.trim().length).toBeGreaterThan(0)
+            expect(template).toContain('{nombre}')
+            expect(template).toContain('{link}')
+            expect(template).not.toContain('{clave}')
+            expect(template).not.toContain('{correo}')
+            expect(template).toContain('correo')
+        }
+    })
+
+    it('las dos variantes de cada persona comparten la primera frase', () => {
+        for (const persona of PERSONAS) {
+            const { whatsappInvite, whatsappInviteSinClave } = PERSONA_COPY[persona]
+            const [conClave] = whatsappInvite.split('\n')
+            const [sinClave] = whatsappInviteSinClave.split('\n')
+            expect(conClave).toBe(sinClave)
+        }
+    })
+
     it('formatWhatsappInvite reemplaza los tokens y no deja placeholders sueltos', () => {
         for (const persona of PERSONAS) {
             const msg = formatWhatsappInvite(persona, {
@@ -96,6 +131,43 @@ describe('@eva/schemas/persona — mensaje de WhatsApp', () => {
             expect(msg).toContain('Ana')
             expect(msg).toContain('https://eva-app.cl/join/ABC12')
             expect(msg).not.toMatch(/\{[a-zA-Z]+\}/)
+        }
+    })
+
+    it('con correo Y clave sale la variante con credencial, resuelta', () => {
+        for (const persona of PERSONAS) {
+            const msg = formatWhatsappInvite(persona, {
+                nombre: 'Ana',
+                link: 'https://eva-app.cl/c/ABC12/login',
+                correo: 'ana@correo.com',
+                clave: 'Ru7-mesa',
+            })
+            expect(msg).toContain('Tu usuario: ana@correo.com')
+            expect(msg).toContain('Tu clave temporal: Ru7-mesa')
+            expect(msg).not.toMatch(/\{[a-zA-Z]+\}/)
+        }
+    })
+
+    it('si falta el correo o la clave, cae en la variante SIN credencial', () => {
+        const base = { nombre: 'Ana', link: 'https://eva-app.cl/c/ABC12/login' }
+        const variantes = [
+            { ...base },
+            { ...base, correo: 'ana@correo.com' },
+            { ...base, clave: 'Ru7-mesa' },
+            { ...base, correo: '  ', clave: 'Ru7-mesa' },
+            { ...base, correo: 'ana@correo.com', clave: null },
+        ]
+        for (const persona of PERSONAS) {
+            for (const vars of variantes) {
+                const msg = formatWhatsappInvite(persona, vars)
+                expect(msg).toBe(
+                    PERSONA_COPY[persona].whatsappInviteSinClave
+                        .split('{nombre}').join('Ana')
+                        .split('{link}').join(base.link)
+                )
+                expect(msg).not.toContain('Ru7-mesa')
+                expect(msg).not.toContain('clave temporal:')
+            }
         }
     })
 })

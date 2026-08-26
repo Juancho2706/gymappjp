@@ -43,11 +43,52 @@ export interface PersonaCopy {
      */
     secondQuestion: string | null
     /**
-     * Plantilla del mensaje de WhatsApp con el que el coach invita. Tokens `{nombre}` y `{link}`
-     * (el link de invitación real). Tono latam neutro: es un mensaje que manda una persona.
+     * Plantilla del mensaje de WhatsApp con el que el coach invita, **con la credencial adentro**.
+     * Tokens `{nombre}`, `{link}` (el link de invitación real), `{correo}` y `{clave}`.
+     * Tono latam neutro: es un mensaje que manda una persona.
+     *
+     * Solo se usa cuando el mensaje va a un destinatario CON NOMBRE (`wa.me/<digits>`):
+     * la regla 4 de `docs/specs/flujo-coach-nuevo/SPEC.md §5` lo exige, y quien decide es el
+     * call site — este paquete no sabe si hay teléfono.
      */
     whatsappInvite: string
+    /**
+     * La MISMA invitación sin credencial: misma primera frase, mismo link, y en vez del usuario y
+     * la clave, la verdad («te mandé tu clave al correo» — el correo de bienvenida sí la lleva).
+     *
+     * Es la variante obligatoria cuando no hay teléfono: `wa.me/?text=` abre el selector de
+     * contactos y un toque equivocado entrega acceso a datos de salud de un tercero (Ley 21.719).
+     * Tokens: `{nombre}` y `{link}`. **Nunca** `{clave}`.
+     */
+    whatsappInviteSinClave: string
 }
+
+/**
+ * Primera frase de cada persona — la que ya estaba en producción, intacta: cambia lo que sigue,
+ * no la voz. `nutrition` es la única reescrita, porque su frase traía el `{link}` incrustado y el
+ * bloque de acceso lo pone abajo (copy literal de SPEC §6).
+ */
+const WHATSAPP_INTRO: Record<Persona, string> = {
+    strength: 'Hola {nombre}, te invité a mi app: ahí te dejo tu rutina y vamos siguiendo tus avances.',
+    nutrition: 'Hola {nombre}, te invité a mi app con tu pauta y tu seguimiento.',
+    rehab: 'Hola {nombre}, te invité a mi app: ahí te dejo tus ejercicios y vamos registrando cómo avanzas.',
+    endurance:
+        'Hola {nombre}, te invité a mi app: ahí te dejo tus zonas, tus ritmos y la semana de entrenamiento.',
+    other: 'Hola {nombre}, te invité a mi app: ahí te dejo tu plan y vamos siguiendo tus avances.',
+}
+
+/**
+ * Bloque de acceso, IDÉNTICO en las cinco personas (SPEC §6): es la corrección del callejón 4 —
+ * el `{link}` es `/c/{código}/login`, que pide correo **y** contraseña, y hasta hoy el mensaje
+ * mandaba al alumno a una pantalla que no podía cruzar sin ir a buscar la clave a su casilla.
+ *
+ * Vive en una constante y no copiado cinco veces para que ninguna rama quede sin él.
+ */
+const WHATSAPP_ACCESO_CON_CLAVE =
+    '\nEntra acá: {link}\nTu usuario: {correo}\nTu clave temporal: {clave} — la cambias apenas entres.'
+
+/** Bloque de acceso sin credencial (regla 4 de SPEC §5): el link sí, la clave por correo. */
+const WHATSAPP_ACCESO_SIN_CLAVE = '\nEntra acá: {link} — te mandé tu clave al correo.'
 
 /**
  * Copy por persona. Los títulos y bajadas son EXACTOS de la tabla de SPEC §1: se pregunta por lo
@@ -62,8 +103,8 @@ export const PERSONA_COPY: Record<Persona, PersonaCopy> = {
         demoName: 'Matías',
         demoTagline: '30 años · hipertrofia',
         secondQuestion: '¿También les armas la alimentación?',
-        whatsappInvite:
-            'Hola {nombre}, te invité a mi app: ahí te dejo tu rutina y vamos siguiendo tus avances. Entras con tu correo acá: {link}',
+        whatsappInvite: `${WHATSAPP_INTRO.strength}${WHATSAPP_ACCESO_CON_CLAVE}`,
+        whatsappInviteSinClave: `${WHATSAPP_INTRO.strength}${WHATSAPP_ACCESO_SIN_CLAVE}`,
     },
     nutrition: {
         tileTitle: 'Soy nutricionista',
@@ -72,8 +113,8 @@ export const PERSONA_COPY: Record<Persona, PersonaCopy> = {
         demoName: 'Ana',
         demoTagline: '34 años · recomposición corporal',
         secondQuestion: '¿También les armas el entrenamiento?',
-        whatsappInvite:
-            'Hola {nombre}, te invité a mi app con tu pauta y tu seguimiento: {link} — entras con tu correo y ahí te dejo todo.',
+        whatsappInvite: `${WHATSAPP_INTRO.nutrition}${WHATSAPP_ACCESO_CON_CLAVE}`,
+        whatsappInviteSinClave: `${WHATSAPP_INTRO.nutrition}${WHATSAPP_ACCESO_SIN_CLAVE}`,
     },
     rehab: {
         tileTitle: 'Trabajo rehabilitación y readaptación',
@@ -82,8 +123,8 @@ export const PERSONA_COPY: Record<Persona, PersonaCopy> = {
         demoName: 'Pedro',
         demoTagline: '45 años · lumbalgia inespecífica',
         secondQuestion: '¿También les armas la alimentación?',
-        whatsappInvite:
-            'Hola {nombre}, te invité a mi app: ahí te dejo tus ejercicios y vamos registrando cómo avanzas. Entras con tu correo acá: {link}',
+        whatsappInvite: `${WHATSAPP_INTRO.rehab}${WHATSAPP_ACCESO_CON_CLAVE}`,
+        whatsappInviteSinClave: `${WHATSAPP_INTRO.rehab}${WHATSAPP_ACCESO_SIN_CLAVE}`,
     },
     endurance: {
         tileTitle: 'Entreno resistencia: running, ciclismo, trail',
@@ -92,8 +133,8 @@ export const PERSONA_COPY: Record<Persona, PersonaCopy> = {
         demoName: 'Javiera',
         demoTagline: "28 años · 10K en 52'",
         secondQuestion: '¿También les armas la alimentación?',
-        whatsappInvite:
-            'Hola {nombre}, te invité a mi app: ahí te dejo tus zonas, tus ritmos y la semana de entrenamiento. Entras con tu correo acá: {link}',
+        whatsappInvite: `${WHATSAPP_INTRO.endurance}${WHATSAPP_ACCESO_CON_CLAVE}`,
+        whatsappInviteSinClave: `${WHATSAPP_INTRO.endurance}${WHATSAPP_ACCESO_SIN_CLAVE}`,
     },
     other: {
         tileTitle: 'Otra cosa / todavía no lo tengo claro',
@@ -102,8 +143,8 @@ export const PERSONA_COPY: Record<Persona, PersonaCopy> = {
         demoName: null,
         demoTagline: null,
         secondQuestion: null,
-        whatsappInvite:
-            'Hola {nombre}, te invité a mi app: ahí te dejo tu plan y vamos siguiendo tus avances. Entras con tu correo acá: {link}',
+        whatsappInvite: `${WHATSAPP_INTRO.other}${WHATSAPP_ACCESO_CON_CLAVE}`,
+        whatsappInviteSinClave: `${WHATSAPP_INTRO.other}${WHATSAPP_ACCESO_SIN_CLAVE}`,
     },
 }
 
@@ -120,18 +161,33 @@ export function personaNoun(persona: Persona, plural = false): string {
 }
 
 /**
- * Rellena la plantilla de WhatsApp. Reemplaza TODAS las apariciones de `{nombre}` y `{link}`
- * (el `link` va crudo: quien lo mande decide si lo pasa por `encodeURIComponent` al armar el
- * `wa.me`, porque ahí se codifica el mensaje entero).
+ * Rellena la plantilla de WhatsApp. Reemplaza TODAS las apariciones de `{nombre}`, `{link}`,
+ * `{correo}` y `{clave}` (el `link` va crudo: quien lo mande decide si lo pasa por
+ * `encodeURIComponent` al armar el `wa.me`, porque ahí se codifica el mensaje entero).
+ *
+ * **Qué variante sale la decide lo que se pasa, y quién lo pasa es el CALL SITE**: con `correo` y
+ * `clave` presentes sale `whatsappInvite` (con credencial); si falta alguno —o viene vacío— sale
+ * `whatsappInviteSinClave`. El paquete no sabe si hay teléfono, y la regla 4 de
+ * `docs/specs/flujo-coach-nuevo/SPEC.md §5` (credencial SOLO a un destinatario con nombre) se
+ * aplica donde ese dato existe: `buildWhatsappUrl` en web, `guided-invite` en RN.
+ *
+ * Fallar hacia la variante sin credencial es deliberado: un `undefined` no puede terminar en un
+ * mensaje que diga «Tu clave temporal: undefined».
  */
 export function formatWhatsappInvite(
     persona: Persona,
-    vars: { nombre: string; link: string },
+    vars: { nombre: string; link: string; correo?: string | null; clave?: string | null },
 ): string {
+    const correo = (vars.correo ?? '').trim()
+    const clave = (vars.clave ?? '').trim()
+    const copy = PERSONA_COPY[persona]
+    const template = correo && clave ? copy.whatsappInvite : copy.whatsappInviteSinClave
     // `split().join()` en vez de `replaceAll`: el metodo pide lib ES2021 y este paquete tambien
     // lo compilan tsconfigs con lib ES2020 (los packages puros). Semantica identica con tokens
     // literales, y sin regex (el link no se escapa).
-    return PERSONA_COPY[persona].whatsappInvite
+    return template
         .split('{nombre}').join(vars.nombre)
         .split('{link}').join(vars.link)
+        .split('{correo}').join(correo)
+        .split('{clave}').join(clave)
 }
