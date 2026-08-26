@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { MobileStudentWorkspaceValidationRequestSchema } from '@eva/schemas'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { validateMobileStudentWorkspace } from '@/services/auth/mobile-student-workspace.service'
+import { recordStudentFirstLogin } from '@/services/client/student-login-signal.service'
 
 function bearerToken(request: NextRequest): string | null {
     const authorization = request.headers.get('authorization')
@@ -44,6 +45,14 @@ export async function POST(request: NextRequest) {
         )
 
         if (result.ok) {
+            // W1.3: acá es donde el alumno RN queda adentro, así que acá se sella su primer
+            // login. Se ESPERA a propósito (SPEC §5 regla 3): es un UPDATE por PK que nunca
+            // lanza, y Vercel congela la invocación en el `return` de abajo — una promesa
+            // flotante se perdería, que es la trampa exacta de
+            // `lib/email/free-coach-onboarding.ts:24-28`. El capture de PostHog, que sí cuesta
+            // red, viaja por `after()` dentro del servicio y no suma latencia a esta respuesta.
+            await recordStudentFirstLogin(admin, result.clientId)
+
             return NextResponse.json({
                 ok: true,
                 forcePasswordChange: result.forcePasswordChange,

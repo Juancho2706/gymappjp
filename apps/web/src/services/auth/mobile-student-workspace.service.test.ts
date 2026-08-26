@@ -70,6 +70,7 @@ describe('validateMobileStudentWorkspace', () => {
         await expect(validateMobileStudentWorkspace(db, USER_ID, COACH_ID)).resolves.toEqual({
             ok: true,
             forcePasswordChange: true,
+            clientId: USER_ID,
         })
         expect(mocks.listClientWorkspaces).toHaveBeenCalledWith(db, USER_ID)
         expect(mocks.findClient).toHaveBeenCalledWith(db, USER_ID)
@@ -96,6 +97,7 @@ describe('validateMobileStudentWorkspace', () => {
         await expect(validateMobileStudentWorkspace(db, USER_ID, COACH_ID)).resolves.toEqual({
             ok: true,
             forcePasswordChange: false,
+            clientId: USER_ID,
         })
         expect(mocks.setLastWorkspace).toHaveBeenCalledWith(db, expect.objectContaining({
             type: 'student_enterprise',
@@ -124,6 +126,7 @@ describe('validateMobileStudentWorkspace', () => {
         await expect(validateMobileStudentWorkspace(db, USER_ID, COACH_ID)).resolves.toEqual({
             ok: true,
             forcePasswordChange: false,
+            clientId: USER_ID,
         })
         expect(mocks.findOrgCoach).toHaveBeenCalledWith(db, ORG_ID, COACH_ID)
         expect(mocks.setLastWorkspace).toHaveBeenCalledWith(db, expect.objectContaining({
@@ -211,6 +214,7 @@ describe('validateMobileStudentWorkspace', () => {
         await expect(validateMobileStudentWorkspace(db, USER_ID, COACH_ID)).resolves.toEqual({
             ok: true,
             forcePasswordChange: false,
+            clientId: SPLIT_CLIENT_ID,
         })
         expect(mocks.findClient).toHaveBeenCalledWith(db, SPLIT_CLIENT_ID)
         expect(mocks.setLastWorkspace).toHaveBeenCalledWith(db, expect.objectContaining({

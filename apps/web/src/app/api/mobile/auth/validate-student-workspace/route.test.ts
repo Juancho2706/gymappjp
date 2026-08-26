@@ -4,6 +4,7 @@ import { NextRequest } from 'next/server'
 const mocks = vi.hoisted(() => ({
     getUser: vi.fn(),
     validateWorkspace: vi.fn(),
+    recordFirstLogin: vi.fn(),
 }))
 
 const admin = {
@@ -20,10 +21,15 @@ vi.mock('@/services/auth/mobile-student-workspace.service', () => ({
     validateMobileStudentWorkspace: (...args: unknown[]) => mocks.validateWorkspace(...args),
 }))
 
+vi.mock('@/services/client/student-login-signal.service', () => ({
+    recordStudentFirstLogin: (...args: unknown[]) => mocks.recordFirstLogin(...args),
+}))
+
 import { POST } from './route'
 
 const USER_ID = '11111111-1111-4111-8111-111111111111'
 const COACH_ID = '22222222-2222-4222-8222-222222222222'
+const CLIENT_ID = '99999999-9999-4999-8999-999999999999'
 
 function request(body: unknown, token = 'valid-token') {
     return new NextRequest('http://localhost/api/mobile/auth/validate-student-workspace', {
@@ -45,7 +51,9 @@ beforeEach(() => {
     mocks.validateWorkspace.mockResolvedValue({
         ok: true,
         forcePasswordChange: false,
+        clientId: CLIENT_ID,
     })
+    mocks.recordFirstLogin.mockResolvedValue(true)
 })
 
 describe('POST /api/mobile/auth/validate-student-workspace', () => {
@@ -97,6 +105,7 @@ describe('POST /api/mobile/auth/validate-student-workspace', () => {
         mocks.validateWorkspace.mockResolvedValue({
             ok: true,
             forcePasswordChange: true,
+            clientId: CLIENT_ID,
         })
 
         const response = await POST(request({ coachId: COACH_ID }))
@@ -107,6 +116,26 @@ describe('POST /api/mobile/auth/validate-student-workspace', () => {
             forcePasswordChange: true,
         })
         expect(mocks.validateWorkspace).toHaveBeenCalledWith(admin, USER_ID, COACH_ID)
+    })
+
+    it('login valido registra el primer login una vez', async () => {
+        const response = await POST(request({ coachId: COACH_ID }))
+
+        expect(response.status).toBe(200)
+        // El clientId sale de la fila YA validada por el servicio, nunca del body.
+        expect(mocks.recordFirstLogin).toHaveBeenCalledTimes(1)
+        expect(mocks.recordFirstLogin).toHaveBeenCalledWith(admin, CLIENT_ID)
+        // La respuesta no cambia de forma: la señal no se filtra al cliente.
+        expect(await response.json()).toEqual({ ok: true, forcePasswordChange: false })
+    })
+
+    it('no registra primer login cuando el acceso se rechaza', async () => {
+        mocks.validateWorkspace.mockResolvedValue({ ok: false, reason: 'access_denied' })
+
+        const response = await POST(request({ coachId: COACH_ID }))
+
+        expect(response.status).toBe(403)
+        expect(mocks.recordFirstLogin).not.toHaveBeenCalled()
     })
 
     it.each([

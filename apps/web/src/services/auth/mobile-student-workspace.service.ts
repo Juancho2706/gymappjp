@@ -15,7 +15,11 @@ type CoachScopedStudentWorkspace = Extract<
 >
 
 export type MobileStudentWorkspaceValidationResult =
-    | { ok: true; forcePasswordChange: boolean }
+    // `clientId` es la fila de `clients` YA validada (scope + activa + no archivada), no el
+    // `coachId` del body ni el `userId` del bearer: identidades divididas por
+    // `client_memberships.account_id` tienen `clients.id != auth.uid()`. Lo consume el call site
+    // para sellar `first_login_at` (W1.2/W1.3 de flujo-coach-nuevo); la respuesta HTTP no lo expone.
+    | { ok: true; forcePasswordChange: boolean; clientId: string }
     | { ok: false; reason: 'access_denied' | 'account_paused' | 'dependency_error' }
 
 export async function validateMobileStudentWorkspace(
@@ -81,5 +85,6 @@ export async function validateMobileStudentWorkspace(
     return {
         ok: true,
         forcePasswordChange: client.force_password_change === true,
+        clientId: client.id,
     }
 }
