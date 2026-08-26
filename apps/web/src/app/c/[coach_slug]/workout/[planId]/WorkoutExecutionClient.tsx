@@ -1251,6 +1251,11 @@ export function WorkoutExecutionClient({
     const [execV3Phase, setExecV3Phase] = useState<'intro' | 'start' | 'session'>(executorV3 ? 'intro' : 'session')
     // QA8: ¿esta apertura llegó por el morph de lanzamiento? (splash asentado, ceremonia completa).
     const [execV3ViaMorph, setExecV3ViaMorph] = useState(false)
+    // Bug E: la fase pasa a 'session' con la señal TEMPRANA de despedida del overlay, o sea con la
+    // ceremonia todavía viva (fade). El refresh de entrada NO puede abrirse ahí (navegación dura → mata
+    // el overlay), así que se gatea también por `isCeremonyActive()`; este flag —lo prende la red de
+    // seguridad cuando la ceremonia termina DE VERDAD— es lo que hace re-correr ese efecto.
+    const [ceremonyOver, setCeremonyOver] = useState(false)
     // Wrapper del ejecutor: exec-theme.ts setea aquí --exec-brand/--exec-recovery/--exec-celebration.
     const execRootRef = useRef<HTMLDivElement | null>(null)
     const [showCompleted, setShowCompleted] = useState(false)
@@ -1401,7 +1406,11 @@ export function WorkoutExecutionClient({
         // render leía `execV3ViaMorph` aún en false (lo setea un layout-effect) y refrescaba igual — el
         // `execV3Phase` inicial ('intro' en V3) ya bloquea desde el 1er render. Re-entrada (sesión ya
         // 'entered') resuelve a 'session' → refresca en el acto (Fix A de frescura intacto). V2 igual.
-        const ceremonyBlocking = execV3Active && execV3Phase !== 'session'
+        // Bug E: la fase 'session' ahora se adelanta a la señal TEMPRANA de despedida (el overlay sigue
+        // vivo haciendo su fade), así que la fase sola ya no prueba que la ceremonia terminó. Se suma
+        // `isCeremonyActive()`: mientras la marca del overlay siga en <html> el refresh queda diferido.
+        // `ceremonyOver` (del efecto de fusión de abajo) re-corre este efecto cuando termina de verdad.
+        const ceremonyBlocking = execV3Active && (execV3Phase !== 'session' || isCeremonyActive())
         // El refresh de entrada corre UNA sola vez (el efecto re-corre por cada cambio de fase).
         if (online() && hasPriorData() && !ceremonyBlocking && !entryRefreshedRef.current) {
             entryRefreshedRef.current = true
@@ -1412,9 +1421,10 @@ export function WorkoutExecutionClient({
         }
         document.addEventListener('visibilitychange', onVisible)
         return () => document.removeEventListener('visibilitychange', onVisible)
-    // Re-corre al entrar a la sesión (fase 'session') para lanzar el refresh diferido.
+    // Re-corre al entrar a la sesión (fase 'session') y al morir la ceremonia para lanzar el refresh
+    // diferido (con la señal temprana de despedida, la fase llega ANTES que el fin de la ceremonia).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [execV3Phase])
+    }, [execV3Phase, ceremonyOver])
 
     // Wake lock de TODA la sesión (bug E2-1) — antes el lock solo cubría el descanso.
     useScreenWakeLock()
@@ -1660,9 +1670,28 @@ export function WorkoutExecutionClient({
     // `WorkoutLaunchMorph`), e Inicio se sigue montando: es lo que dispara `execReady` y evita el flash
     // del stepper. Sólo deja de ser pantalla de ESPERA. Sin morph (URL directa / reload) nada cambia:
     // `SessionStart` conserva su botón.
+    // Bug E: esperar a `data-exec-ceremony` llegaba ~360ms TARDE (el provider la quita recién en su
+    // `clearAll`, a EXIT_MS+40 del tap) y durante el fade del overlay lo único visible debajo es
+    // SessionStart → ~560ms de pantalla intermedia. Ahora el overlay avisa su despedida en el MISMO tick
+    // en que arranca el fade ('eva:exec-v3-dismiss', espejo del canal 'eva:exec-v3-ready') y entramos ahí.
     useEffect(() => {
-        if (!execV3Active || !execV3ViaMorph || execV3Phase !== 'start') return
+        if (!execV3Active || !execV3ViaMorph) return
+        // Ya entramos a la sesión Y la ceremonia murió de verdad → no queda nada que vigilar.
+        if (execV3Phase !== 'start' && ceremonyOver) return
         let cancelled = false
+        // `enterExecV3Session` es idempotente, pero re-entrarla fuera de 'start' re-posicionaría el
+        // stepper: sólo entra quien todavía está en Inicio.
+        const enter = () => {
+            if (cancelled || execV3Phase !== 'start') return
+            enterExecV3Session()
+        }
+        window.addEventListener('eva:exec-v3-dismiss', enter)
+        // Relectura del flag al montar: cubre la carrera del camino `forceReady` del morph, donde el
+        // evento puede salir antes de que este listener exista.
+        try { if (sessionStorage.getItem('eva:exec-v3-dismiss') === '1') enter() } catch { /* private */ }
+        // Red de seguridad: caminos donde el overlay muere SIN despedirse (desmontaje del provider,
+        // aborto por el "atrás" del teléfono). Además es la única señal del fin REAL de la ceremonia
+        // → alimenta `ceremonyOver`, que destraba el refresh de entrada (ver efecto de frescura).
         const watch = () => {
             void waitForCeremonyEnd(CEREMONY_WATCH_MS).then(() => {
                 if (cancelled) return
@@ -1672,12 +1701,16 @@ export function WorkoutExecutionClient({
                     watch()
                     return
                 }
-                enterExecV3Session()
+                setCeremonyOver(true)
+                enter()
             })
         }
         watch()
-        return () => { cancelled = true }
-    }, [execV3Active, execV3ViaMorph, execV3Phase, enterExecV3Session])
+        return () => {
+            cancelled = true
+            window.removeEventListener('eva:exec-v3-dismiss', enter)
+        }
+    }, [execV3Active, execV3ViaMorph, execV3Phase, ceremonyOver, enterExecV3Session])
 
     const registerRowRef = useCallback((blockId: string, setNumber: number, el: HTMLDivElement | null) => {
         const key = `${blockId}:${setNumber}`

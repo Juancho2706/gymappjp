@@ -101,6 +101,7 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
         execReadyRef.current = false
         routeReadyRef.current = false
         clearCeremonyDom() // se acabó la ceremonia → los sync de cola pueden refrescar
+        try { sessionStorage.removeItem('eva:exec-v3-dismiss') } catch { /* private mode */ }
         setState(null)
         setAnimDone(false)
         setRouteReady(false)
@@ -143,6 +144,9 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
             try {
                 // Reset de la senal de Inicio-listo del WEC (la del lanzamiento anterior no debe contar).
                 sessionStorage.removeItem('eva:exec-v3-ready')
+                // Idem la senal de DESPEDIDA: una marca del lanzamiento anterior haria que el WEC
+                // saltara a la sesion apenas monta, con el overlay recien empezando.
+                sessionStorage.removeItem('eva:exec-v3-dismiss')
                 if (brand.logoUrl) sessionStorage.setItem('eva:exec-v3-morph-logo', brand.logoUrl)
                 else sessionStorage.removeItem('eva:exec-v3-morph-logo')
             } catch { /* private mode */ }
@@ -246,6 +250,13 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
         // carga lento y aún no la leyó, borrarla acá la dejaba sin marca → mostraba el splash VIEJO
         // (la "animación que se repetía" del QA). El ejecutor es el único consumidor.
         setLeaving(true)
+        // Senal TEMPRANA de despedida (mismo tick que el fade): el WEC entra a la sesion YA, en vez de
+        // esperar a que `clearAll` (EXIT_MS + 40) quite `data-exec-ceremony`. Sin esto, durante el fade
+        // del overlay lo unico visible debajo es SessionStart → ~560ms de pantalla intermedia (bug E).
+        // Espejo exacto del canal 'eva:exec-v3-ready': flag + evento (el flag cubre la carrera en que el
+        // evento sale antes de que el WEC enganche su listener).
+        try { sessionStorage.setItem('eva:exec-v3-dismiss', '1') } catch { /* private mode */ }
+        try { window.dispatchEvent(new Event('eva:exec-v3-dismiss')) } catch { /* SSR */ }
         timersRef.current.push(window.setTimeout(clearAll, EXIT_MS + 40))
     }, [ready, leaving, clearAll])
 
