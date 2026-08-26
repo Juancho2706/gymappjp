@@ -455,6 +455,21 @@ android` ✅ · **OTA y deploy web NO disparados**: los ejecuta el jefe de VTA a
 
 Objetivo: que «el alumno entró» sea un dato del servidor y no una inferencia.
 
+**Pre-vuelo 26-08 (verificación en seco contra el árbol, post-W0): las 16 citas de W1.1–W1.6 están
+VIGENTES; cero drift material.** Matices para quien ejecute (no invalidan ninguna referencia):
+(1) el `.select(...)` de `clients.queries.ts` está en `:29` (`:28` es el `.from`) y **no es un `'*'`
+puro**: ya trae `workout_programs(...)` embebido; `ClientWithProgram` extiende `Tables<'clients'>` vía el
+alias `Client` de `:6` — tras regenerar tipos (W1.1), `first_login_at` entra solo. (2) En
+`login.actions.ts` la **resolución** del `client` vive en ~`:89-138` (guard `:141`); `:160-164` solo arma
+el `redirectUrl` y el `return` — la línea de W1.4/V3.13 va entre esas dos cosas, como ya dice la tarea.
+(3) `vercel.json` raíz declara hoy **12** crons (no 11): `checkout-abandoned` se sumó el 26-08; las 4
+rutas sin declarar siguen siendo las mismas (`weekly-report-email`, `weekly-snapshot`,
+`org-health-alert`, `payment-reminder`). (4) Entradas de W1.5 ya con nombre tras W0: web
+`getClientStatusMeta` en `apps/web/src/app/coach/clients/_lib/client-status.ts`, RN `statusMeta` en
+`apps/mobile/components/coach/directory/directory-shared.ts` — ambas ya reciben `firstLoginAt` en la
+firma, así que W1.5 es cambiar la ENTRADA y el label, no los llamadores. (5) El baseline trae **tres**
+policies UPDATE self redundantes sobre `clients` (`:2493`, `:2856`, `:2893`) — dato, por si W1.1 mira RLS.
+
 - [ ] **W1.1** · **MIDE** (DB · Opus, 1,5 h) Migración **aditiva** `<ts>_clients_first_login_at.sql`:
   `ALTER TABLE public.clients ADD COLUMN first_login_at timestamptz`. **Sin default. Sin
   `GRANT UPDATE(first_login_at) TO authenticated`** — `clients` tiene tres políticas de auto-UPDATE del propio
