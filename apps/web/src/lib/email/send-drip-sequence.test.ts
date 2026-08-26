@@ -92,7 +92,10 @@ describe('scheduleFreeCoachDripSequence', () => {
         expect(DRIP_SCHEDULE.map((s) => s.day)).toEqual([1, 2, 7, 14])
     })
 
-    it('threadea el invite_code a las plantillas (el D+1 lo necesita)', async () => {
+    // FCN W2.5: el D+1 dejó de repartir `/join/{código}` —la puerta de SOLICITUDES— y su único link
+    // pasó al alta directa. El `inviteCode` se sigue threadeando (el contexto lo conserva), pero lo
+    // que este test protege ahora es el DESTINO del correo, no el código.
+    it('threadea el contexto a las plantillas y el D+1 sale con el link del alta directa', async () => {
         await scheduleFreeCoachDripSequence(INPUT)
 
         expect(buildDripTemplatesMock).toHaveBeenCalledWith({
@@ -102,7 +105,8 @@ describe('scheduleFreeCoachDripSequence', () => {
             inviteCode: 'X5UD9X44',
         })
         const day1 = scheduleCoachEmailMock.mock.calls.find(([, arg]) => arg.templateKey === 'day1_value')![1]
-        expect(day1.html).toContain('https://www.eva-app.cl/join/X5UD9X44')
+        expect(day1.html).toContain('https://www.eva-app.cl/coach/clients?invite=1')
+        expect(day1.html).not.toContain('/join/')
     })
 
     // Colisión C3 del SPEC: `templateByKey` devolvía `{ subject: '', html: '' }` en silencio, así que

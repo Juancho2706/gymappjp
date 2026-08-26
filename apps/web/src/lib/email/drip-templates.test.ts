@@ -58,57 +58,69 @@ describe('buildDripTemplates — forma de la serie', () => {
     })
 
     // El coach sin `brand_name` todavía no eligió una marca; lo que sí tiene es una app.
-    // «entra directo a tu marca» no se entiende, «entra directo a tu app» sí.
+    // «tu marca ya está armada» no se entiende, «tu app ya está armada» sí.
     it('sin brandName el fallback es «tu app», nunca «tu marca»', () => {
         const templates = buildDripTemplates({ coachName: 'Josefa', brandName: null, baseUrl: BASE_URL, inviteCode: 'X5UD9X44' })
         const day1 = templates.find((t) => t.key === 'day1_value')!
-        expect(day1.html).toContain('entra directo a tu app')
-        expect(day1.html).not.toContain('entra directo a tu marca')
+        expect(day1.html).toContain('<strong>tu app</strong> ya está armada en EVA')
+        expect(day1.html).not.toContain('tu marca')
     })
 })
 
 describe('day1_value — valor, sin precio', () => {
-    it('deja el link de invitación listo para copiar y es el ÚNICO link del correo', () => {
+    // FCN W2.5: `/join` es la puerta de SOLICITUDES; la que produce alumnos es el alta directa.
+    it('su ÚNICO link es el alta directa, nunca /join', () => {
         const { html, subject } = byKey('day1_value')
         expect(subject).toContain('Josefa')
-        expect(html).toContain(`${BASE_URL}/join/X5UD9X44`)
+        expect(html).toContain(`${BASE_URL}/coach/clients?invite=1`)
+        expect(html).not.toContain('/join/')
         expect(countLinks(html)).toBe(1)
+    })
+
+    // El copy sale de SPEC §6 de flujo-coach-nuevo, carácter por carácter.
+    it('lleva el bloque de alta con el copy literal del spec', () => {
+        const { html } = byKey('day1_value')
+        expect(html).toContain('Da de alta a tu primer alumno')
+        expect(html).toContain(
+            'Le creas la cuenta desde tu panel y le llega el mensaje con su acceso listo. Toma menos de un minuto.'
+        )
+        expect(html).toContain('Dar de alta a mi primer alumno →')
+    })
+
+    // La promesa vieja («se registra solo») es exactamente lo que el producto NO hace: el coach crea
+    // la cuenta. Ninguna variante del correo puede volver a decirlo.
+    it('no promete que el alumno se registra solo', () => {
+        for (const ctx of [CTX, { ...CTX, inviteCode: null }]) {
+            const { html } = byKey('day1_value', ctx)
+            expect(html).not.toContain('se registra solo')
+            expect(html).not.toContain('Se crea la cuenta solo')
+        }
     })
 
     it('nombra la marca del coach y las 3 acciones del día', () => {
         const { html } = byKey('day1_value')
         expect(html).toContain('Studio Fuerza')
-        expect(html).toContain('Invítalo con el link')
+        expect(html).toContain('Dale de alta desde tu panel')
         expect(html).toContain('Asígnale una rutina')
         expect(html).toContain('Súmale su plan de nutrición')
     })
 
-    it('sin invite_code no rompe: manda a Alumnos y sigue con un solo link', () => {
-        const { html } = byKey('day1_value', { ...CTX, inviteCode: null })
-        expect(html).not.toContain('/join/')
-        expect(html).toContain(`${BASE_URL}/coach/clients`)
-        expect(countLinks(html)).toBe(1)
-    })
-
-    // M-7: sin código el cuerpo manda a Alumnos, así que el asunto y la preview no pueden seguir
-    // prometiendo «tu link ya está listo» — es una promesa que ese correo no cumple.
-    it('sin invite_code cambian TAMBIÉN el asunto y la preview', () => {
+    // El código de invitación dejó de decidir nada en este correo: las dos variantes colapsaron.
+    it('el invite_code ya no cambia el correo (mismo asunto, misma preview, mismo cuerpo)', () => {
         const con = byKey('day1_value')
         const sin = byKey('day1_value', { ...CTX, inviteCode: null })
 
-        expect(con.subject).toBe('Josefa, tu link de invitación ya está listo')
-        expect(con.html).toContain('Cópialo, mándalo por WhatsApp y tu alumno entra hoy mismo.')
-
-        expect(sin.subject).toBe('Josefa, tu app ya está lista')
-        expect(sin.html).toContain('Invita a tu primer alumno desde Alumnos.')
-        expect(sin.html).not.toContain('Cópialo, mándalo por WhatsApp')
+        expect(con.subject).toBe('Josefa, tu app ya está lista')
+        expect(sin.subject).toBe(con.subject)
+        expect(sin.html).toBe(con.html)
+        expect(con.html).toContain('Da de alta a tu primer alumno desde tu panel, en menos de un minuto.')
     })
 
-    // El link de invitación es el que el coach REENVÍA a sus alumnos: etiquetarlo atribuiría al drip
-    // altas de alumnos, que no es lo que mide este correo.
-    it('el link de invitación va SIN utm', () => {
+    // El destino es una superficie del coach, no una compra: etiquetarla ensuciaría su embudo con
+    // tráfico que este correo no compra.
+    it('el link del alta va SIN utm', () => {
         const { html } = byKey('day1_value')
-        expect(html).toContain(`${BASE_URL}/join/X5UD9X44`)
+        expect(html).toContain(`${BASE_URL}/coach/clients?invite=1`)
         expect(html).not.toContain('utm_source')
     })
 

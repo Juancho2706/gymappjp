@@ -11,7 +11,7 @@ import { wrapEmailLayout, ctaButton, divider, featureRow, badge } from './base-l
  * precios se escribían a mano.
  *
  * Contrato de contenido, verificado por `drip-templates.test.ts`:
- * - UN solo `<a>` por correo. En D+1 ese link es el de invitación (el activo del coach), no un CTA.
+ * - UN solo `<a>` por correo. En D+1 ese link es el del alta directa (`/coach/clients?invite=1`).
  * - CERO precios salvo D+2 y D+14, y ahí el precio sale de `TIER_CONFIG.pro.monthlyPriceClp`
  *   formateado es-CL — nunca un literal.
  * - Pie de baja en texto plano (sin `<a>`) en los cuatro: es una serie que EVA inicia sola
@@ -23,7 +23,12 @@ type DripTemplateContext = {
     coachName: string | null
     brandName: string | null
     baseUrl: string
-    /** Código de invitación del coach: arma el link que el D+1 le deja listo para copiar. */
+    /**
+     * Código de invitación del coach. **Sin uso desde FCN W2.5**: el D+1 dejó de repartir
+     * `/join/{código}` —la puerta de SOLICITUDES— y ahora manda al alta directa. El campo se
+     * conserva para no arrastrar la cadena entera (`send-drip-sequence` → `free-coach-onboarding`
+     * → sus dos call sites, uno de ellos en otra ola) en este cambio; su limpieza queda declarada.
+     */
     inviteCode?: string | null
 }
 
@@ -67,46 +72,29 @@ function proMonthlyPrice(): string {
 export function buildDripTemplates(ctx: DripTemplateContext): DripTemplate[] {
     const coach = coachDisplayName(ctx)
     const brand = brandDisplayName(ctx)
-    const clients = `${ctx.baseUrl}/coach/clients`
+    // FCN W2.5: destino del D+1 = el alta directa de 3 pasos (`?invite=1`, `coach/clients/page.tsx`),
+    // no `/join/{código}`. Va SIN UTM como iba el link de invitación: es la superficie del coach,
+    // y etiquetarla `utm_source=drip` ensuciaría el embudo con tráfico que este correo no compra.
+    const addStudent = `${ctx.baseUrl}/coach/clients?invite=1`
     // M-6: el CTA del D+7 lleva atribución como los de venta (el `utm_medium` es siempre `email`).
     const nutrition = `${ctx.baseUrl}/coach/nutrition-plans?utm_source=drip&utm_medium=email&utm_campaign=day7_nutrition`
-    const inviteCode = ctx.inviteCode?.trim() || null
-    // El link de invitación va SIN UTM a propósito: el coach lo reenvía a sus alumnos por WhatsApp.
-    // Etiquetarlo `utm_source=drip` atribuiría al drip las altas de ALUMNOS, que no es lo que mide
-    // este correo (y ensuciaría el embudo del coach con tráfico que nunca fue suyo).
-    const inviteUrl = inviteCode ? `${ctx.baseUrl}/join/${inviteCode}` : null
     const proPrice = proMonthlyPrice()
     const proClients = studentCountLabel(TIER_CONFIG.pro.maxClients)
     const freeClients = studentCountLabel(TIER_CONFIG.free.maxClients)
 
     // ── D+1: valor — tu app ya está lista ────────────────────────────────────
-    // El único link del correo es el de invitación: es lo que el coach necesita HOY, y lo
-    // dejamos en texto completo para que lo copie y lo pegue en WhatsApp.
-    const inviteBlock = inviteUrl
-        ? `
+    // FCN W2.5: el bloque dejó de repartir `/join/{código}` y dejó de prometer que el alumno «se
+    // registra solo». `/join` es la puerta de SOLICITUDES; la que produce alumnos es el alta
+    // directa, así que el único link del correo la apunta a ella. Las dos variantes (con y sin
+    // código) colapsaron en una: el copy nuevo no necesita el código para nada.
+    // Copy LITERAL de docs/specs/flujo-coach-nuevo/SPEC.md §6 — no se improvisa.
+    const inviteBlock = `
 <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:20px;background-color:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;">
   <tr>
     <td>
-      <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#065f46;">Tu link de invitación</p>
-      <p style="margin:0 0 4px;font-size:14px;line-height:1.6;word-break:break-all;">
-        <a href="${inviteUrl}" target="_blank" style="color:#065f46;font-weight:700;text-decoration:none;">${inviteUrl}</a>
-      </p>
-      <p style="margin:0;font-size:12px;color:#6b7280;line-height:1.6;">
-        Cópialo y mándaselo por WhatsApp. Tu alumno se registra solo y entra directo a ${brand}.
-      </p>
-    </td>
-  </tr>
-</table>`
-        : `
-<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:20px;background-color:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px;">
-  <tr>
-    <td>
-      <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#065f46;">Tu link de invitación</p>
-      <p style="margin:0;font-size:13px;color:#374151;line-height:1.6;">
-        Lo encuentras en <strong>Alumnos</strong>, arriba a la derecha. Cópialo y mándaselo por
-        WhatsApp: tu alumno se registra solo y entra directo a ${brand}.
-      </p>
-      ${ctaButton('Ir a Alumnos →', clients)}
+      <p style="margin:0 0 8px;font-size:13px;font-weight:700;color:#065f46;">Da de alta a tu primer alumno</p>
+      <p style="margin:0 0 14px;font-size:13px;color:#374151;line-height:1.6;">Le creas la cuenta desde tu panel y le llega el mensaje con su acceso listo. Toma menos de un minuto.</p>
+      ${ctaButton('Dar de alta a mi primer alumno →', addStudent)}
     </td>
   </tr>
 </table>`
@@ -128,7 +116,7 @@ ${divider()}
 <p style="margin:0 0 12px;font-size:14px;font-weight:700;color:#111827;">
   Tres cosas que puedes hacer hoy con tu primer alumno
 </p>
-${featureRow('📩', 'Invítalo con el link', 'Se crea la cuenta solo. No tienes que cargar datos a mano.')}
+${featureRow('📩', 'Dale de alta desde tu panel', 'Le creas la cuenta y le mandas su acceso por WhatsApp.')}
 ${featureRow('💪', 'Asígnale una rutina', 'Ármala en el constructor y le queda en la app el mismo día.')}
 ${featureRow('🥗', 'Súmale su plan de nutrición', 'Está incluido en tu plan gratuito, no es un módulo aparte.')}
 
@@ -231,15 +219,12 @@ ${badge('Día 14 — Última de la serie')}
         {
             key: 'day1_value',
             day: 1,
-            // M-7: sin código, el cuerpo manda a Alumnos — prometer «tu link ya está listo» en el
-            // asunto y en la preview sería una promesa que el correo no cumple.
-            subject: inviteUrl
-                ? `${coach}, tu link de invitación ya está listo`
-                : `${coach}, tu app ya está lista`,
+            // FCN W2.5: el asunto y la preview dejaron de bifurcarse por `inviteCode`. El correo ya
+            // no reparte ningún link de invitación, así que «tu link ya está listo» (el viejo M-7)
+            // sería la misma promesa incumplida que este cambio vino a matar.
+            subject: `${coach}, tu app ya está lista`,
             html: wrapEmailLayout(day1Body, {
-                previewText: inviteUrl
-                    ? 'Cópialo, mándalo por WhatsApp y tu alumno entra hoy mismo.'
-                    : 'Invita a tu primer alumno desde Alumnos.',
+                previewText: 'Da de alta a tu primer alumno desde tu panel, en menos de un minuto.',
                 headerTitle: 'Tu app ya está lista — EVA',
                 footerText: DRIP_UNSUBSCRIBE_FOOTER,
             }),
