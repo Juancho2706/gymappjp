@@ -20,7 +20,6 @@ interface Props {
 export default async function WorkoutExecutionPage({ params, searchParams }: Props) {
     const { coach_slug, planId } = await params
     const { fecha, recuperar, repetir } = await searchParams
-    const base = await getClientBasePath(coach_slug)
 
     // Validación server-side de `fecha`: sólo un día PASADO válido activa el modo edición; cualquier
     // otra cosa (formato malo, futuro) se ignora y el ejecutor abre en modo HOY normal.
@@ -40,7 +39,13 @@ export default async function WorkoutExecutionPage({ params, searchParams }: Pro
     // descartarse, el ejecutor abre como hoy.
     const repeatDate = targetDate ? null : resolveRepeatDate(repetir, todayIso)
 
-    const data = await getWorkoutExecutionData(planId, targetDate ?? undefined, repeatDate ?? undefined)
+    // El base path sale de un header del proxy (sin I/O) y la data del ejecutor de Supabase: no
+    // dependen entre sí, así que van juntas — el ejecutor pelea contra un presupuesto de 3,3 s
+    // antes de que el "Despegue" del alumno caiga al fallback (Sentry EVA-NEXTJS-1C).
+    const [base, data] = await Promise.all([
+        getClientBasePath(coach_slug),
+        getWorkoutExecutionData(planId, targetDate ?? undefined, repeatDate ?? undefined),
+    ])
     const { user, plan } = data
 
     if (!user) redirect(`${base}/login`)
