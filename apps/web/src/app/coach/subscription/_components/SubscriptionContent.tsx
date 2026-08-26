@@ -26,6 +26,7 @@ import {
     type SubscriptionTier,
 } from '@/lib/constants'
 import type { ModuleKey } from '@/services/entitlements.service'
+import { resolveCheckoutError, type CheckoutErrorCopy } from '@/lib/payments/checkout-errors'
 import { useCaptureCheckoutFailed, useCaptureCheckoutStarted } from '@/lib/posthog/events'
 import Link from 'next/link'
 import { Check, CheckCircle2, Info, LockKeyhole, ArrowLeft, ArrowRight, CreditCard, HeartPulse, Activity, Ruler, Utensils, X, type LucideIcon } from 'lucide-react'
@@ -137,6 +138,14 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
     const [loading, setLoading] = useState(false)
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    // P1 — copy accionable del fallo del checkout: el banner mostraba el `error` CRUDO del server
+    // (un coach real vio el JSON de MercadoPago con x-request-id incluido). Ahora, cuando el fallo
+    // viene del checkout, el mismo banner suma la explicación y las salidas (reintentar / probar
+    // Webpay / escribirnos). Guardamos también el gateway que falló para que "Reintentar" repita
+    // el MISMO medio. Solo lo llena handleChangePlan: cualquier otro setError deja el banner simple.
+    const [checkoutError, setCheckoutError] = useState<
+        { copy: CheckoutErrorCopy; gateway: 'mercadopago' | 'flow' } | null
+    >(null)
     // Motivo visible cuando el coach clickea una card de plan bloqueada (cupo / nutrición).
     const [blockedMsg, setBlockedMsg] = useState<string | null>(null)
     const [successMessage, setSuccessMessage] = useState<string | null>(null)
@@ -334,6 +343,7 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
     async function handleChangePlan(gateway: 'mercadopago' | 'flow' = 'mercadopago') {
         setSaving(true)
         setError(null)
+        setCheckoutError(null)
         setSuccessMessage(null)
         // E1 (P8): funnel de checkout — el coach confirmo el cambio de plan y se va a pedir la
         // preference. Gated por consentimiento (no-op sin opt-in), sin PII: tier/ciclo/gateway.
@@ -391,7 +401,17 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                 code: failureCode,
                 message,
             })
-            setError(message)
+            // P1: los códigos de negocio (OVER_CAPACITY, NUTRITION_ADDON_ON_DOWNGRADE…) conservan el
+            // mensaje del server porque lleva los números reales; lo que se traduce es el rechazo del
+            // gateway y lo desconocido, que hasta hoy se pintaban crudos. Webpay se ofrece como plan B
+            // solo donde el backend lo soporta (alta desde free) y si no es el medio que acaba de fallar.
+            const copy = resolveCheckoutError({
+                code: failureCode,
+                message,
+                flowAvailable: canUseFlowForPlanChange && gateway !== 'flow',
+            })
+            setError(copy.message)
+            setCheckoutError({ copy, gateway })
             setSaving(false)
         }
     }
@@ -544,12 +564,52 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
 
             {/* Banners de feedback (arriba, como el diseño) — soft card con icono + cierre */}
             {error ? (
-                <div ref={feedbackBannerRef} role="alert" aria-live="assertive" className="mb-3.5 flex items-center gap-2.5 rounded-control bg-[var(--danger-100)] px-3.5 py-2.5">
-                    <Info className="h-4 w-4 shrink-0 text-[var(--danger-600)]" aria-hidden="true" />
-                    <span className="min-w-0 flex-1 text-[13px] font-semibold text-strong">{error}</span>
-                    <button type="button" aria-label="Descartar aviso" onClick={() => setError(null)} className="shrink-0 p-1 text-muted hover:text-strong">
-                        <X className="h-[15px] w-[15px]" />
-                    </button>
+                <div ref={feedbackBannerRef} role="alert" aria-live="assertive" className="mb-3.5 rounded-control bg-[var(--danger-100)] px-3.5 py-2.5">
+                    <div className="flex items-center gap-2.5">
+                        <Info className="h-4 w-4 shrink-0 text-[var(--danger-600)]" aria-hidden="true" />
+                        <span className="min-w-0 flex-1 text-[13px] font-semibold text-strong">{error}</span>
+                        <button type="button" aria-label="Descartar aviso" onClick={() => { setError(null); setCheckoutError(null) }} className="shrink-0 p-1 text-muted hover:text-strong">
+                            <X className="h-[15px] w-[15px]" />
+                        </button>
+                    </div>
+                    {/* Salidas del fallo del checkout. Se atan al mensaje que las produjo: si otro
+                        setError pisa el banner, las acciones desaparecen solas (no quedan huérfanas). */}
+                    {checkoutError && checkoutError.copy.message === error ? (
+                        <div className="mt-2 pl-[26px]">
+                            {checkoutError.copy.hint ? (
+                                <p className="text-[12px] text-muted">{checkoutError.copy.hint}</p>
+                            ) : null}
+                            {checkoutError.copy.actions.length > 0 ? (
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                    {checkoutError.copy.actions.map((action) =>
+                                        action.kind === 'contact' ? (
+                                            <a
+                                                key={action.kind}
+                                                href={action.href}
+                                                className="inline-flex h-9 items-center justify-center rounded-control border border-default px-3 text-[12.5px] font-bold text-strong transition-colors hover:bg-surface-card"
+                                            >
+                                                {action.label}
+                                            </a>
+                                        ) : (
+                                            <button
+                                                key={action.kind}
+                                                type="button"
+                                                disabled={saving}
+                                                onClick={() =>
+                                                    void handleChangePlan(
+                                                        action.kind === 'try_flow' ? 'flow' : checkoutError.gateway
+                                                    )
+                                                }
+                                                className="inline-flex h-9 items-center justify-center rounded-control bg-sport-500 px-3 text-[12.5px] font-bold text-white transition-colors hover:bg-sport-600 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                            >
+                                                {action.label}
+                                            </button>
+                                        )
+                                    )}
+                                </div>
+                            ) : null}
+                        </div>
+                    ) : null}
                 </div>
             ) : null}
             {successMessage ? (

@@ -343,16 +343,18 @@ export function useCaptureCoachNutritionTemplateApplied() {
  * de cookies (init con opt_out por defecto ⇒ capture es no-op hasta el opt-in del banner) y
  * SIN PII en propiedades — tier/ciclo/gateway si; email o nombres jamas.
  *
- *   pricing_viewed       → /pricing quedo visible (pageview propio del funnel; ver PricingTracker)
- *   pricing_plan_clicked → click en el CTA de un plan de /pricing ({ tier })
- *   checkout_started     → el usuario confirmo y se pide la preference/enrolamiento al server
- *   checkout_failed      → el server NO devolvio checkout: el paso murio antes de la pasarela
- *   checkout_confirmed   → la confirmacion aterrizo visible (processing / flow-processing /
- *                          upgrade-processing); result separa activacion inmediata de cambio agendado
+ *   pricing_viewed          → /pricing quedo visible (pageview propio del funnel; ver PricingTracker)
+ *   pricing_plan_clicked    → click en el CTA de un plan de /pricing ({ tier })
+ *   checkout_started        → el usuario confirmo y se pide la preference/enrolamiento al server
+ *   checkout_failed         → el server NO devolvio checkout: el paso murio antes de la pasarela
+ *   checkout_gateway_opened → el usuario apreto el boton que lo saca HACIA la pasarela
+ *   checkout_confirmed      → la confirmacion aterrizo visible (processing / flow-processing /
+ *                             upgrade-processing); result separa activacion inmediata de cambio agendado
  *
- * checkout_started y checkout_confirmed preceden una navegacion DURA (redirect a MP/Webpay o al
- * dashboard): van con send_instantly + sendBeacon para que el evento no muera con la pagina (el batch
- * normal si moriria). checkout_failed NO — un fallo deja la pantalla pintando el error, sin unload.
+ * checkout_started, checkout_gateway_opened y checkout_confirmed preceden una navegacion DURA
+ * (redirect a MP/Webpay o al dashboard): van con send_instantly + sendBeacon para que el evento no
+ * muera con la pagina (el batch normal si moriria). checkout_failed NO — un fallo deja la pantalla
+ * pintando el error, sin unload.
  */
 export type CheckoutGateway = 'mercadopago' | 'flow'
 export type CheckoutStartSource = 'subscription' | 'reactivate' | 'register'
@@ -368,6 +370,49 @@ export function useCaptureCheckoutStarted() {
         }) => {
             ph?.capture(
                 'checkout_started',
+                {
+                    tier: props.tier,
+                    billing_cycle: props.billingCycle,
+                    gateway: props.gateway,
+                    source: props.source,
+                },
+                { send_instantly: true, transport: 'sendBeacon' }
+            )
+        },
+        [ph]
+    )
+}
+
+/**
+ * checkout_gateway_opened — el usuario apreto el boton que lo saca HACIA la pasarela.
+ *
+ * Existe por un tramo NUEVO del embudo (P2, ola 25-08): `/coach/subscription/processing` ya no
+ * teletransporta al coach a MercadoPago apenas llega la preference — le muestra una card con plan,
+ * monto y medio de pago, y el salto lo aprieta el. Eso partio en dos lo que antes era un solo paso:
+ * `checkout_started` (se PIDIO el checkout al server) y este evento (el coach de verdad SALIO hacia
+ * la pasarela). Sin el, un coach que ve la card y aprieta «Volver» es indistinguible de uno que
+ * abandono adentro de MercadoPago: los dos leen como `checkout_started` sin `checkout_confirmed`.
+ *
+ * `checkout_started` NO se movio: sigue marcando el pedido de la preference, que es lo que el resto
+ * de las superficies (subscription, reactivate) siguen haciendo sin card intermedia.
+ *
+ *   gateway: por donde sale (mercadopago | flow). El coach puede elegir el otro medio EN la card.
+ *   source:  la puerta desde la que arranco el checkout, igual que en checkout_started/failed.
+ *
+ * CON `send_instantly` + `sendBeacon`: el click es un `window.location.href` inmediato — el batch
+ * normal de posthog-js se flushea por timer y moriria con la pagina.
+ */
+export function useCaptureCheckoutGatewayOpened() {
+    const ph = usePostHog()
+    return useCallback(
+        (props: {
+            tier: SubscriptionTier
+            billingCycle: string
+            gateway: CheckoutGateway
+            source: CheckoutStartSource
+        }) => {
+            ph?.capture(
+                'checkout_gateway_opened',
                 {
                     tier: props.tier,
                     billing_cycle: props.billingCycle,

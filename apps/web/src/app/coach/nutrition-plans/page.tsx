@@ -1,4 +1,3 @@
-import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { ArrowUpCircle, PieChart, Repeat, Users, Utensils } from 'lucide-react'
 import { NutritionHub } from './_components/NutritionHub'
@@ -9,7 +8,7 @@ import {
   getFoodLibrary,
 } from './_data/nutrition-coach.queries'
 import { getTierCapabilities, getTierMaxClients, getTierPriceClp, studentCountLabel, type SubscriptionTier } from '@/lib/constants'
-import { UpgradeGateTracker } from '@/components/analytics/UpgradeGateTracker'
+import { UpgradeCTALink, UpgradeGateTracker } from '@/components/analytics/UpgradeGateTracker'
 import { getNutritionPlansPageCoach, getCoachOrgNutritionTemplates } from './_data/nutrition-page.queries'
 import { OrgTemplatesSection } from './_components/OrgTemplatesSection'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
@@ -150,14 +149,21 @@ export default async function NutritionPlansPage() {
           </div>
         </div>
 
-        <Link
+        {/* A4 (26-08): el gate de Nutrición contaba el choque (`UpgradeGateTracker`) pero no el
+            click — 65 `upgrade_gate_hit` contra 0 `upgrade_initiated`. Mismo destino y mismo
+            aspecto; el `style` inline pasó a la clase `bg-[var(--cta-fill)]` (idioma de la casa,
+            mismo token) porque `UpgradeCTALink` no toma `style`. */}
+        <UpgradeCTALink
+          gate="nutrition"
+          currentTier={tier}
+          targetTier="pro"
+          source="nutrition_gate"
           href="/coach/subscription?upgrade=pro"
-          className="eva-press flex h-12 w-full items-center justify-center gap-2 rounded-control text-[15px] font-bold text-white shadow-[var(--glow-sport)] transition-[filter] hover:brightness-105"
-          style={{ background: 'var(--cta-fill)' }}
+          className="eva-press flex h-12 w-full items-center justify-center gap-2 rounded-control bg-[var(--cta-fill)] text-[15px] font-bold text-white shadow-[var(--glow-sport)] transition-[filter] hover:brightness-105"
         >
           <ArrowUpCircle className="h-[18px] w-[18px]" />
           Mejorar a Pro
-        </Link>
+        </UpgradeCTALink>
         <p className="text-center text-xs text-muted">Sin permanencia · Cancela cuando quieras</p>
       </main>
     )

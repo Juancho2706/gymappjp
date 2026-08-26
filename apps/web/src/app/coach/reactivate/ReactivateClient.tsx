@@ -22,7 +22,8 @@ import {
     type SubscriptionTier,
 } from '@/lib/constants'
 import type { ModuleKey } from '@/services/entitlements.service'
-import { useCaptureCheckoutStarted } from '@/lib/posthog/events'
+import { resolveCheckoutError, type CheckoutErrorCopy } from '@/lib/payments/checkout-errors'
+import { useCaptureCheckoutFailed, useCaptureCheckoutStarted } from '@/lib/posthog/events'
 import { effectiveTierLimit } from '../_lib/effective-limit'
 import { formatStudentAccessDate, resolveStudentGraceEndsAt } from '@/lib/student-access'
 import { ReactivateCouponCard } from './_components/ReactivateCouponCard'
@@ -76,6 +77,11 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
     const searchParams = useSearchParams()
     // E1 (P8): checkout_started gated por consentimiento (no-op si el coach no acepto cookies).
     const captureCheckoutStarted = useCaptureCheckoutStarted()
+    // Gemelo de checkout_started (A3): sin esto, un checkout que muere ANTES de la pasarela es
+    // indistinguible en el embudo de uno que el coach abandono en MercadoPago. Esta es la puerta
+    // MAS transitada del checkout — el gate de suscripcion deposita aca a todo coach en
+    // `pending_payment` y el auto-arranque de `?from=register` dispara solo.
+    const captureCheckoutFailed = useCaptureCheckoutFailed()
 
     // Límite REAL de alumnos de ESTE coach por tier — jamás el catálogo plano. Pricing v3: para el
     // tier ACTUAL manda la COLUMNA (ahí vive el grandfather tras el backfill por uso del 21-08); la
@@ -127,6 +133,13 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
     const [isConfirming, setIsConfirming] = useState(false)
     const [isActivatingFree, setIsActivatingFree] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    // P1 — copy humano del fallo del CHECKOUT (código del server → mensaje + salidas). Convive con
+    // `error`, que sigue sirviendo a confirm-subscription y activate-free: esos mensajes ya eran
+    // humanos y no traen `code`. Lo que este estado mata es el JSON crudo del gateway pintado en el
+    // banner rojo — esta era la última puerta del checkout que todavía se lo mostraba al coach.
+    const [errorCopy, setErrorCopy] = useState<CheckoutErrorCopy | null>(null)
+    // Medio del último intento: "Reintentar" repite el MISMO medio que falló.
+    const [lastGateway, setLastGateway] = useState<'mercadopago' | 'flow'>('mercadopago')
     const hasAutoCheckedRef = useRef(false)
     const hasAutoStartedCheckoutRef = useRef(false)
     const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -172,7 +185,10 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
 
     const confirmSubscription = useCallback(async (preapprovalId?: string, silent = false) => {
         setIsConfirming(true)
-        if (!silent) setError(null)
+        if (!silent) {
+            setError(null)
+            setErrorCopy(null)
+        }
         try {
             const response = await fetch('/api/payments/confirm-subscription', {
                 method: 'POST',
@@ -223,9 +239,15 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
     const handleCheckout = useCallback(async (gateway: 'mercadopago' | 'flow' = 'mercadopago') => {
         setIsLoading(true)
         setError(null)
+        setErrorCopy(null)
+        setLastGateway(gateway)
         // E1 (P8): funnel de checkout — el coach confirmo la reactivacion y se va a pedir la
         // preference/enrolamiento. Gated por consentimiento (no-op sin opt-in), sin PII.
         captureCheckoutStarted({ tier, billingCycle, gateway, source: 'reactivate' })
+        // Causa estable para checkout_failed. Se fija ANTES de cada throw porque el catch solo ve el
+        // Error (el `code` del server viaja en el payload, no en el mensaje). 'unknown' = ni siquiera
+        // hubo respuesta parseable (red caida / JSON roto). Mismo vocabulario que `processing/page.tsx`.
+        let failureCode = 'unknown'
         try {
             const response = await fetch('/api/payments/create-preference', {
                 method: 'POST',
@@ -239,19 +261,45 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
             })
             const raw = await response.text()
             const payload = raw ? JSON.parse(raw) : {}
-            if (!response.ok) throw new Error(payload.error ?? 'No se pudo iniciar el pago.')
-            if (!payload.checkoutUrl) throw new Error('No se recibió URL de pago.')
+            if (!response.ok) {
+                failureCode = typeof payload.code === 'string' ? payload.code : `http_${response.status}`
+                throw new Error(payload.error ?? 'No se pudo iniciar el pago.')
+            }
+            if (!payload.checkoutUrl) {
+                failureCode = 'missing_checkout_url'
+                throw new Error('No se recibió URL de pago.')
+            }
             window.location.href = payload.checkoutUrl
         } catch (err) {
-            setError(err instanceof Error ? err.message : 'Error inesperado')
+            const message = err instanceof Error ? err.message : 'Error inesperado'
+            captureCheckoutFailed({
+                tier,
+                billingCycle,
+                gateway,
+                source: 'reactivate',
+                code: failureCode,
+                message,
+            })
+            // P1: el coach ve un mensaje humano y una salida, nunca el JSON crudo del gateway.
+            // Webpay se ofrece como plan B solo si el flag está encendido Y no es el medio que
+            // acaba de fallar: la reactivación NO es `isActiveUpgrade`, así que create-preference
+            // la acepta por Flow (route.ts:203-227) — el botón que se ofrece existe de verdad.
+            setErrorCopy(
+                resolveCheckoutError({
+                    code: failureCode,
+                    message,
+                    flowAvailable: FLOW_ENABLED && gateway !== 'flow',
+                })
+            )
         } finally {
             setIsLoading(false)
         }
-    }, [billingCycle, captureCheckoutStarted, tier])
+    }, [billingCycle, captureCheckoutFailed, captureCheckoutStarted, tier])
 
     const handleActivateFree = useCallback(async () => {
         setIsActivatingFree(true)
         setError(null)
+        setErrorCopy(null)
         try {
             const response = await fetch('/api/payments/activate-free', { method: 'POST' })
             const raw = await response.text()
@@ -514,12 +562,64 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
                 descontado lo aplica create-preference al "Continuar al pago". */}
             <ReactivateCouponCard tier={tier} billingCycle={billingCycle} couponsEnabled={couponsEnabled} />
 
-            {error && (
+            {/* Fallo del CHECKOUT: título + qué pasó + qué hacer + salidas, mismo contrato de copy
+                que `/coach/subscription/processing` (las acciones las decide `resolveCheckoutError`,
+                no esta pantalla). El banner plano de abajo se conserva intacto para los mensajes de
+                confirm-subscription / activate-free, que ya eran humanos y no traen código. */}
+            {errorCopy ? (
+                <div className="mt-4 flex items-start gap-2.5 rounded-control bg-[var(--danger-100)] px-3.5 py-3">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-[var(--danger-600)]" />
+                    <div className="min-w-0 flex-1">
+                        <p className="text-[13px] font-semibold text-strong">{errorCopy.title}</p>
+                        <p className="mt-0.5 text-[13px] text-muted">{errorCopy.message}</p>
+                        {errorCopy.hint && (
+                            <p className="mt-1 text-xs text-muted">{errorCopy.hint}</p>
+                        )}
+                        {errorCopy.actions.length > 0 && (
+                            <div className="mt-2.5 flex flex-wrap gap-2">
+                                {errorCopy.actions.map((action, i) =>
+                                    action.kind === 'contact' ? (
+                                        <a
+                                            key={action.kind}
+                                            href={action.href}
+                                            className={
+                                                i === 0
+                                                    ? 'inline-flex h-9 items-center justify-center rounded-control bg-sport-500 px-4 text-xs font-semibold text-white transition-colors hover:bg-sport-600'
+                                                    : 'inline-flex h-9 items-center justify-center rounded-control border border-default bg-surface-card px-4 text-xs font-semibold text-strong transition-colors hover:bg-surface-sunken'
+                                            }
+                                        >
+                                            {action.label}
+                                        </a>
+                                    ) : (
+                                        <button
+                                            key={action.kind}
+                                            type="button"
+                                            disabled={isLoading}
+                                            onClick={() =>
+                                                void handleCheckout(
+                                                    action.kind === 'try_flow' ? 'flow' : lastGateway
+                                                )
+                                            }
+                                            className={
+                                                i === 0
+                                                    ? 'inline-flex h-9 items-center justify-center rounded-control bg-sport-500 px-4 text-xs font-semibold text-white transition-colors hover:bg-sport-600 disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
+                                                    : 'inline-flex h-9 items-center justify-center rounded-control border border-default bg-surface-card px-4 text-xs font-semibold text-strong transition-colors hover:bg-surface-sunken disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary'
+                                            }
+                                        >
+                                            {action.label}
+                                        </button>
+                                    )
+                                )}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            ) : error ? (
                 <div className="mt-4 flex items-center gap-2.5 rounded-control bg-[var(--danger-100)] px-3.5 py-2.5">
                     <AlertTriangle className="h-4 w-4 shrink-0 text-[var(--danger-600)]" />
                     <p className="text-[13px] font-semibold text-strong">{error}</p>
                 </div>
-            )}
+            ) : null}
 
             <div className="mt-6 flex flex-col gap-2">
                 {tier === 'free' ? (

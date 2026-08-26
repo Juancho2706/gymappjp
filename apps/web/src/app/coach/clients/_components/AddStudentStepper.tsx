@@ -351,11 +351,20 @@ export function AddStudentStepper({
                     <Link
                         href="/coach/subscription"
                         onClick={() =>
-                            ph?.capture('upgrade_initiated', {
-                                gate: 'client_limit',
-                                source: 'add_student_stepper',
-                                current_limit: state.currentLimit,
-                            })
+                            // A4: `send_instantly` + `sendBeacon` porque el click navega YA a
+                            // /coach/subscription. El batch normal de posthog-js se flushea por timer
+                            // y muere con la página si el destino resuelve como carga dura — mismo
+                            // criterio que `checkout_started` (lib/posthog/events.ts).
+                            ph?.capture(
+                                'upgrade_initiated',
+                                {
+                                    gate: 'client_limit',
+                                    source: 'add_student_stepper',
+                                    current_tier: state.currentTier ?? 'free',
+                                    current_limit: state.currentLimit,
+                                },
+                                { send_instantly: true, transport: 'sendBeacon' }
+                            )
                         }
                         className="eva-press inline-flex h-12 items-center justify-center rounded-control bg-[var(--cta-fill)] px-5 font-ui text-[15px] font-bold text-[var(--text-on-sport)]"
                     >

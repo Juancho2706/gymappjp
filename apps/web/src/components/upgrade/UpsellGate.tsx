@@ -1,6 +1,5 @@
-import Link from 'next/link'
 import { Check } from 'lucide-react'
-import { UpgradeGateTracker } from '@/components/analytics/UpgradeGateTracker'
+import { UpgradeCTALink, UpgradeGateTracker } from '@/components/analytics/UpgradeGateTracker'
 import type { SubscriptionTier } from '@/lib/constants'
 
 export type UpsellGateVariant = 'custom_exercises' | 'client_import'
@@ -175,12 +174,20 @@ export function UpsellGate({ variant, currentTier }: Props) {
                     ))}
                 </ul>
 
-                <Link
+                {/* A4 (26-08): este muro monta `UpgradeGateTracker` desde siempre, pero su CTA era
+                    un <Link> pelado — el gate se contaba y el click NO. Con 65 `upgrade_gate_hit` y
+                    0 `upgrade_initiated`, el embudo no podia distinguir "el muro convierte" de "el
+                    muro expulsa". Mismo destino y mismas clases; solo suma el capture del click. */}
+                <UpgradeCTALink
+                    gate={variant}
+                    currentTier={currentTier}
+                    targetTier="pro"
+                    source="upsell_gate"
                     href="/coach/subscription?upgrade=pro"
                     className={`flex h-11 w-full items-center justify-center rounded-xl ${c.cta} px-6 text-sm font-semibold text-white transition-colors`}
                 >
                     {ctaLabel}
-                </Link>
+                </UpgradeCTALink>
                 <p className="text-center text-xs text-muted-foreground">Sin permanencia · Cancela cuando quieras</p>
             </div>
         </div>

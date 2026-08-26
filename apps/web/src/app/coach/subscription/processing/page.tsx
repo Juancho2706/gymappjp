@@ -2,9 +2,24 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
+import Image from 'next/image'
 import Link from 'next/link'
-import { BILLING_CYCLE_CONFIG, TIER_CONFIG, type BillingCycle, type SubscriptionTier } from '@/lib/constants'
-import { useCaptureCheckoutConfirmed, useCaptureCheckoutFailed, useCaptureCheckoutStarted } from '@/lib/posthog/events'
+import {
+    BILLING_CYCLE_CONFIG,
+    BILLING_CYCLE_PRICE_SUFFIX,
+    FLOW_ENABLED,
+    TIER_CONFIG,
+    type BillingCycle,
+    type SubscriptionTier,
+} from '@/lib/constants'
+import { resolveCheckoutError, type CheckoutErrorCopy } from '@/lib/payments/checkout-errors'
+import {
+    useCaptureCheckoutConfirmed,
+    useCaptureCheckoutFailed,
+    useCaptureCheckoutGatewayOpened,
+    useCaptureCheckoutStarted,
+    type CheckoutGateway,
+} from '@/lib/posthog/events'
 
 const POLL_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutes
 
@@ -28,6 +43,19 @@ function extractPreapprovalId(rawSubscriptionParam: string, searchParams: URLSea
     return ampIndex === -1 ? nested : nested.slice(0, ampIndex)
 }
 
+/**
+ * Lo que el SERVER dice de este checkout, ya creado y listo para pagarse. El monto y el tier salen
+ * de la respuesta de create-preference (compuesto neto, con cupón y add-ons ya aplicados): esta
+ * pantalla NUNCA calcula ni hardcodea un precio. `amountClp` es null si el server no lo mandó —
+ * mejor no mostrar monto que mostrar uno inventado.
+ */
+type CheckoutPreview = {
+    checkoutUrl: string
+    amountClp: number | null
+    tier: SubscriptionTier
+    billingCycle: BillingCycle
+}
+
 /** Fecha del corte (current_period_end) para mostrar cuándo se aplica un cambio agendado. */
 async function fetchCurrentPeriodEnd(): Promise<string | null> {
     try {
@@ -47,6 +75,19 @@ export default function SubscriptionProcessingPage() {
     const searchParams = useSearchParams()
     const [statusText, setStatusText] = useState('')
     const [error, setError] = useState<string | null>(null)
+    // P1 — copy humano del fallo del checkout (código del server → mensaje + salidas concretas).
+    // Convive con `error`, que sigue sirviendo a los mensajes del confirm/poll: esos ya eran humanos
+    // y no traen `code`. Lo que este estado mata es el JSON crudo del gateway pintado en pantalla.
+    const [errorCopy, setErrorCopy] = useState<CheckoutErrorCopy | null>(null)
+    // P2 — el checkout YA existe en el gateway pero todavía no redirigimos. Antes esta pantalla era
+    // un spinner de 3 s que teletransportaba al coach a MercadoPago sin decirle qué iba a pasar ni
+    // cuánto se cobraba (los 2 abandonos de la campaña murieron ahí). Ahora el salto lo decide él.
+    const [checkoutPreview, setCheckoutPreview] = useState<CheckoutPreview | null>(null)
+    // El salto al gateway ya se disparó: los botones se apagan mientras el navegador navega (una
+    // navegación full-page puede tardar; sin esto el coach vuelve a apretar y pide otro checkout).
+    const [redirecting, setRedirecting] = useState(false)
+    // Medio del último intento: el botón "Reintentar" repite el MISMO medio que falló.
+    const [lastGateway, setLastGateway] = useState<CheckoutGateway>('mercadopago')
     const [canRetry, setCanRetry] = useState(false)
     // Cambio agendado al corte (downgrade / cambio de ciclo): confirm-subscription responde
     // { scheduled: true } sin mutar al coach (el tier vivo NO cambia hasta el corte). En ese caso
@@ -97,12 +138,23 @@ export default function SubscriptionProcessingPage() {
     const tierLabel = TIER_CONFIG[tierFromUrl]?.label ?? tierFromUrl
     const cycleLabel = BILLING_CYCLE_CONFIG[cycleFromUrl]?.label ?? cycleFromUrl
 
+    // Dos fuentes de error conviven: `errorCopy` (fallo del checkout, con código y salidas) y
+    // `error` (mensajes del confirm/poll, que ya eran humanos y no traen código). El render se
+    // resuelve con una sola pareja título/mensaje para no duplicar ramas.
+    const errorTitle = errorCopy?.title ?? (error ? 'Problema al procesar' : null)
+    const errorMessage = errorCopy?.message ?? error
+    const hasError = errorMessage != null
+
     // E1 (P8) — funnel de checkout en PostHog, gated por consentimiento (no-op sin opt-in).
     const captureCheckoutStarted = useCaptureCheckoutStarted()
     const captureCheckoutConfirmed = useCaptureCheckoutConfirmed()
     // Gemelo de checkout_started: sin esto un checkout que muere antes de la pasarela es
     // INDISTINGUIBLE en el embudo de uno que el coach abandono en MercadoPago.
     const captureCheckoutFailed = useCaptureCheckoutFailed()
+    // El tramo que abrio P2: la card de confirmacion partio "pedir la preference" de "salir hacia
+    // la pasarela". Sin este evento, el coach que ve la card y aprieta "Volver" se lee igual que el
+    // que abandono adentro de MercadoPago.
+    const captureCheckoutGatewayOpened = useCaptureCheckoutGatewayOpened()
     // Para checkout_confirmed SOLO va lo que la URL trae de verdad: la vuelta estandar de MP llega
     // sin tier/cycle y el fallback visual 'starter'/'monthly' de esta pantalla contaminaria el dato.
     const tierForFunnel =
@@ -123,8 +175,18 @@ export default function SubscriptionProcessingPage() {
         })
     }
 
-    async function startCheckoutFromRegister() {
+    // P3 — ¿se puede pagar con Webpay (Flow) DESDE ACÁ? El backend acepta Flow para el ALTA
+    // (registro y free→pago); lo que rechaza con 400 FLOW_PLAN_CHANGE_UNSUPPORTED es el cambio de
+    // plan de un coach pago ACTIVO, que nunca aterriza en esta pantalla en modo ida. Con el flag
+    // apagado el gate real sigue siendo server-side (create-preference rechaza gateway 'flow').
+    const canPayWithFlow = FLOW_ENABLED && fromRegister && !preapprovalId
+
+    async function startCheckoutFromRegister(gateway: CheckoutGateway = 'mercadopago') {
         setError(null)
+        setErrorCopy(null)
+        setCheckoutPreview(null)
+        setRedirecting(false)
+        setLastGateway(gateway)
         setCanRetry(false)
         setStatusText('Preparando tu suscripción...')
         // E1 (P8): el registro pago confirmo su plan y se va a pedir la preference. Aca tier/cycle
@@ -132,7 +194,7 @@ export default function SubscriptionProcessingPage() {
         captureCheckoutStarted({
             tier: tierFromUrl,
             billingCycle: cycleFromUrl,
-            gateway: 'mercadopago',
+            gateway,
             source: 'register',
         })
         // Causa estable para checkout_failed. Se fija ANTES de cada throw porque el catch solo ve
@@ -146,6 +208,7 @@ export default function SubscriptionProcessingPage() {
                 body: JSON.stringify({
                     tier: tierFromUrl,
                     billingCycle: cycleFromUrl,
+                    gateway,
                     ...(addonsFromUrl.length > 0 ? { addons: addonsFromUrl } : {}),
                 }),
             })
@@ -159,19 +222,50 @@ export default function SubscriptionProcessingPage() {
                 failureCode = 'missing_checkout_url'
                 throw new Error('No se recibió URL de checkout.')
             }
-            setStatusText('Redirigiendo a MercadoPago...')
-            window.location.href = payload.checkoutUrl
+            // Webpay/Flow: el coach ya eligió el medio DESDE la card de confirmación (ya vio plan y
+            // monto), así que el enrolamiento arranca de inmediato. MercadoPago es el que pasa por
+            // la card, porque es el medio al que se llega sin haberlo elegido.
+            if (gateway === 'flow') {
+                setStatusText('Redirigiendo a Webpay...')
+                window.location.href = payload.checkoutUrl
+                return
+            }
+            setStatusText('')
+            setCheckoutPreview({
+                checkoutUrl: payload.checkoutUrl,
+                // Monto y plan SIEMPRE del server (compuesto neto: cupón y add-ons ya aplicados).
+                amountClp:
+                    typeof payload.amountClp === 'number' && payload.amountClp > 0
+                        ? payload.amountClp
+                        : null,
+                tier:
+                    typeof payload.tier === 'string' && payload.tier in TIER_CONFIG
+                        ? (payload.tier as SubscriptionTier)
+                        : tierFromUrl,
+                billingCycle:
+                    typeof payload.billingCycle === 'string' && payload.billingCycle in BILLING_CYCLE_CONFIG
+                        ? (payload.billingCycle as BillingCycle)
+                        : cycleFromUrl,
+            })
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Error inesperado al iniciar checkout.'
             captureCheckoutFailed({
                 tier: tierFromUrl,
                 billingCycle: cycleFromUrl,
-                gateway: 'mercadopago',
+                gateway,
                 source: 'register',
                 code: failureCode,
                 message,
             })
-            setError(message)
+            // P1: el coach ve un mensaje humano y una salida, nunca el JSON crudo del gateway.
+            // Webpay se ofrece como plan B solo si el backend lo soporta acá Y no es el que falló.
+            setErrorCopy(
+                resolveCheckoutError({
+                    code: failureCode,
+                    message,
+                    flowAvailable: canPayWithFlow && gateway !== 'flow',
+                })
+            )
             setCanRetry(true)
         }
     }
@@ -425,7 +519,15 @@ export default function SubscriptionProcessingPage() {
     }
 
     // REGISTER-CODE: disclosure SERNAC del descuento, server-priced, ANTES del primer cobro (R4.2).
-    if ((couponPhase === 'preview' || couponPhase === 'applying') && couponPreview && !error) {
+    // `!checkoutPreview`: el commit del cupón deja couponPhase en 'applying' y encadena el checkout;
+    // sin este guard la card de confirmación (P2) quedaría tapada por el disclosure ya cumplido.
+    if (
+        (couponPhase === 'preview' || couponPhase === 'applying') &&
+        couponPreview &&
+        !checkoutPreview &&
+        !error &&
+        !errorCopy
+    ) {
         const clp = (n: number) => `$${n.toLocaleString('es-CL')}`
         return (
             <main className="flex min-h-dvh items-center justify-center px-4 py-12 pt-safe pb-safe bg-background">
@@ -472,10 +574,124 @@ export default function SubscriptionProcessingPage() {
         )
     }
 
+    // ── P2: paso previo a MercadoPago ────────────────────────────────────────────────────────────
+    // El checkout ya está creado en el gateway (por eso hubo spinner), pero el salto lo aprieta el
+    // coach: primero ve QUÉ plan, CUÁNTO se cobra, POR DÓNDE se cobra y que puede volverse sin
+    // perder nada. Plan y monto salen de la respuesta del server — cero precios en el cliente.
+    if (checkoutPreview && !error && !errorCopy) {
+        const previewTierLabel = TIER_CONFIG[checkoutPreview.tier]?.label ?? checkoutPreview.tier
+        const previewCycleLabel =
+            BILLING_CYCLE_CONFIG[checkoutPreview.billingCycle]?.label ?? checkoutPreview.billingCycle
+        return (
+            <main className="flex min-h-dvh items-center justify-center px-4 py-12 pt-safe pb-safe bg-background">
+                <div className="w-full max-w-md rounded-card border border-subtle bg-surface-card p-8 shadow-xl">
+                    <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-sport-500/30 bg-sport-100 px-3 py-1 text-xs font-semibold text-sport-600">
+                        {previewTierLabel} · {previewCycleLabel}
+                    </div>
+                    <h1 className="font-display text-xl font-bold tracking-tight text-strong">
+                        Confirma tu suscripción
+                    </h1>
+
+                    <div className="mt-4 flex items-baseline justify-between gap-3 rounded-control border border-subtle bg-surface-sunken p-4">
+                        <span className="min-w-0 text-sm font-semibold text-strong">Plan {previewTierLabel}</span>
+                        {checkoutPreview.amountClp != null ? (
+                            <span className="shrink-0 text-right">
+                                <span className="eva-metric text-[22px] text-strong">
+                                    ${checkoutPreview.amountClp.toLocaleString('es-CL')}
+                                </span>
+                                <span className="text-[11px] text-muted">
+                                    {' '}
+                                    {BILLING_CYCLE_PRICE_SUFFIX[checkoutPreview.billingCycle]}
+                                </span>
+                            </span>
+                        ) : null}
+                    </div>
+
+                    <p className="mt-3 text-sm text-muted">
+                        Se cobra por MercadoPago — puedes cancelar cuando quieras.
+                    </p>
+                    {/* TODO(owner): garantía de 30 días visible acá (C5 del informe de checkout 25-08).
+                        Pendiente de confirmación del owner: no se promete hasta que exista la decisión. */}
+
+                    <div className="mt-6 flex flex-col gap-3">
+                        <button
+                            type="button"
+                            disabled={redirecting}
+                            onClick={() => {
+                                // Tier/ciclo del SERVER (los de la card), no los de la URL: es lo
+                                // que el coach acaba de ver y lo que se va a cobrar.
+                                captureCheckoutGatewayOpened({
+                                    tier: checkoutPreview.tier,
+                                    billingCycle: checkoutPreview.billingCycle,
+                                    gateway: 'mercadopago',
+                                    source: 'register',
+                                })
+                                setRedirecting(true)
+                                window.location.href = checkoutPreview.checkoutUrl
+                            }}
+                            className="inline-flex h-11 items-center justify-center gap-2 rounded-control bg-sport-500 px-6 text-sm font-semibold text-white transition-colors hover:bg-sport-600 disabled:opacity-60 disabled:hover:bg-sport-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                        >
+                            <Image src="/payments/mercadopago.svg" alt="" aria-hidden="true" width={18} height={18} />
+                            <span>{redirecting ? 'Redirigiendo…' : 'Continuar a MercadoPago'}</span>
+                        </button>
+
+                        {/* P3: el otro medio real. Solo se ofrece donde el backend lo soporta (alta). */}
+                        {canPayWithFlow && (
+                            <button
+                                type="button"
+                                disabled={redirecting}
+                                onClick={() => {
+                                    // Webpay tambien SALE de esta card: el enrolamiento de Flow
+                                    // redirige apenas responde el server, asi que el evento del
+                                    // tramo se emite en el click igual que el de MercadoPago.
+                                    captureCheckoutGatewayOpened({
+                                        tier: checkoutPreview.tier,
+                                        billingCycle: checkoutPreview.billingCycle,
+                                        gateway: 'flow',
+                                        source: 'register',
+                                    })
+                                    void startCheckoutFromRegister('flow')
+                                }}
+                                className="inline-flex h-11 items-center justify-center gap-2 rounded-control border border-default px-6 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                            >
+                                <Image
+                                    src="/payments/webpay-light.svg"
+                                    alt=""
+                                    aria-hidden="true"
+                                    width={73}
+                                    height={18}
+                                    className="dark:hidden"
+                                />
+                                <Image
+                                    src="/payments/webpay-dark.svg"
+                                    alt=""
+                                    aria-hidden="true"
+                                    width={73}
+                                    height={18}
+                                    className="hidden dark:block"
+                                />
+                                <span>Pagar con Webpay</span>
+                            </button>
+                        )}
+
+                        {/* Verdadero desde la ola 25-08: el alta pago ya NO nace bloqueada en
+                            pending_payment, así que volverse deja la cuenta usable (A1). */}
+                        <Link
+                            href="/coach/dashboard"
+                            className="inline-flex h-11 items-center justify-center rounded-control px-6 text-sm font-semibold text-muted transition-colors hover:text-strong"
+                        >
+                            Volver — tu cuenta queda activa igual
+                        </Link>
+                    </div>
+                </div>
+            </main>
+        )
+    }
+
     return (
         <main className="flex min-h-dvh items-center justify-center px-4 py-12 pt-safe pb-safe bg-background">
             <div className="w-full max-w-md rounded-card border border-subtle bg-surface-card p-8 text-center shadow-xl">
-                {!error && (
+                {!hasError && (
                     <div className="mx-auto mb-6 h-12 w-12 animate-spin rounded-full border-[3px] border-sport-500 border-t-transparent" />
                 )}
 
@@ -488,13 +704,17 @@ export default function SubscriptionProcessingPage() {
 
                 <div role="status" aria-live="polite">
                     <h1 className="font-display text-xl font-bold tracking-tight text-strong">
-                        {error ? 'Problema al procesar' : 'Procesando tu suscripción'}
+                        {hasError ? errorTitle : 'Procesando tu suscripción'}
                     </h1>
                     <p className="mt-2 text-sm text-muted">
-                        {error ?? statusText}
+                        {hasError ? errorMessage : statusText}
                     </p>
 
-                    {!error && (
+                    {errorCopy?.hint ? (
+                        <p className="mt-2 text-xs text-muted">{errorCopy.hint}</p>
+                    ) : null}
+
+                    {!hasError && (
                         <p className="mt-3 text-xs text-muted">
                             Te redirigiremos automáticamente cuando tu suscripción esté activa.
                         </p>
@@ -502,7 +722,42 @@ export default function SubscriptionProcessingPage() {
                 </div>
 
                 <div className="mt-6 flex flex-col gap-3">
-                    {canRetry && fromRegister && !preapprovalId ? (
+                    {/* P1: las salidas las decide el copy del error (reintentar el MISMO medio /
+                        probar Webpay / escribirnos), no la pantalla. */}
+                    {errorCopy ? (
+                        errorCopy.actions.map((action, i) =>
+                            action.kind === 'contact' ? (
+                                <a
+                                    key={action.kind}
+                                    href={action.href}
+                                    className={
+                                        i === 0
+                                            ? 'inline-flex h-11 items-center justify-center rounded-control bg-sport-500 px-6 text-sm font-semibold text-white transition-colors hover:bg-sport-600'
+                                            : 'inline-flex h-11 items-center justify-center rounded-control border border-default px-6 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken'
+                                    }
+                                >
+                                    {action.label}
+                                </a>
+                            ) : (
+                                <button
+                                    key={action.kind}
+                                    type="button"
+                                    onClick={() =>
+                                        void startCheckoutFromRegister(
+                                            action.kind === 'try_flow' ? 'flow' : lastGateway
+                                        )
+                                    }
+                                    className={
+                                        i === 0
+                                            ? 'inline-flex h-11 items-center justify-center rounded-control bg-sport-500 px-6 text-sm font-semibold text-white transition-colors hover:bg-sport-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2'
+                                            : 'inline-flex h-11 items-center justify-center rounded-control border border-default px-6 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2'
+                                    }
+                                >
+                                    {action.label}
+                                </button>
+                            )
+                        )
+                    ) : canRetry && fromRegister && !preapprovalId ? (
                         <button
                             type="button"
                             onClick={() => void startCheckoutFromRegister()}

@@ -186,7 +186,21 @@ export function CreateClientModal({ open, onClose, initialValues, onCreated }: C
                         <Link
                             href="/coach/subscription"
                             onClick={() => {
-                                ph?.capture('upgrade_initiated', { gate: 'client_limit', source: 'modal_cta', current_limit: state.currentLimit })
+                                // A4: `send_instantly` + `sendBeacon` porque el click navega YA a
+                                // /coach/subscription y encima cierra el modal. El batch normal de
+                                // posthog-js se flushea por timer: si el destino resuelve como carga
+                                // dura, el evento muere con la página. Mismo criterio que
+                                // `checkout_started` (lib/posthog/events.ts).
+                                ph?.capture(
+                                    'upgrade_initiated',
+                                    {
+                                        gate: 'client_limit',
+                                        source: 'modal_cta',
+                                        current_tier: state.currentTier ?? 'free',
+                                        current_limit: state.currentLimit,
+                                    },
+                                    { send_instantly: true, transport: 'sendBeacon' }
+                                )
                                 handleClose()
                             }}
                             className="w-full flex items-center justify-center h-11 rounded-xl bg-primary text-sm font-bold text-primary-foreground hover:bg-primary/90 transition-colors"
