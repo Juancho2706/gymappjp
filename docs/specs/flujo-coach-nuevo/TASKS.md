@@ -620,7 +620,7 @@ ella. Alternativa aprobada: el mismo worker ejecuta VTA W3 y esta wave en el mis
 D8 = A**, anotadas en su propio TASKS) y **D2 = A** acá, así que VTA W3 puede arrancar y esta wave solo
 espera su **merge**.
 
-- [ ] **W2.1** · **ARREGLA** (packages · Opus, 1,5 h) `packages/schemas/persona.ts`: `PERSONA_COPY[persona]` gana
+- [x] **W2.1** · **ARREGLA** (packages · Opus, 1,5 h) `packages/schemas/persona.ts`: `PERSONA_COPY[persona]` gana
   `whatsappInviteSinClave` y la plantilla `whatsappInvite` de las **cinco** personas suma el bloque de acceso
   (`:65,75,85,95,105`). `formatWhatsappInvite` (`:127-137`, última línea del archivo) acepta `correo?` y `clave?`; con alguno ausente
   usa la variante sin credencial. Copy literal en [SPEC §6](SPEC.md) — **no se improvisa texto**.
@@ -628,7 +628,7 @@ espera su **merge**.
   **Aceptación:** test que pinnea que las 5 plantillas con clave contienen `{link}`, `{correo}` y `{clave}`,
   y que las 5 sin clave contienen `{link}` y **no** `{clave}`.
   **Gate:** `npx vitest run packages/schemas` + `pnpm typecheck`.
-- [ ] **W2.2** · **ARREGLA** (web · Opus, 1,5 h) **⚠ ARCHIVO DE VTA W3.**
+- [x] **W2.2** · **ARREGLA** (web · Opus, 1,5 h) **⚠ ARCHIVO DE VTA W3.**
   `apps/web/src/app/coach/clients/_lib/add-student-invite.ts`: `buildInviteMessage` y `buildWhatsappUrl`
   (`:97-105`) reciben `email` y `tempPassword`. **Regla dura ([SPEC §5.4](SPEC.md)):** la variante con
   credencial se arma **solo** cuando hay teléfono; sin teléfono `wa.me/?text=` abre el selector de contactos y
@@ -638,12 +638,12 @@ espera su **merge**.
   **Aceptación:** `add-student-invite.test.ts` con dos `it` nuevos («con teléfono lleva usuario y clave»,
   «sin teléfono no lleva credencial y menciona el correo»).
   **Gate:** `npx vitest run apps/web/src/app/coach/clients`.
-- [ ] **W2.3** · **ARREGLA** (web · Opus, 0,5 h) **⚠ ARCHIVO DE VTA W3.**
+- [x] **W2.3** · **ARREGLA** (web · Opus, 0,5 h) **⚠ ARCHIVO DE VTA W3.**
   `apps/web/src/app/coach/clients/_components/AddStudentStepper.tsx`: pasa `email` y `tempPassword`
   (`:281`, ya en memoria) al builder del mensaje. La vista de éxito del canal `email` (`:434`) **no cambia**.
   **Aceptación:** el enlace de WhatsApp del canal por defecto contiene la clave solo si hay teléfono.
   **Gate:** `npx vitest run apps/web/src/app/coach/clients` + `pnpm typecheck`.
-- [ ] **W2.4** · **ARREGLA** (RN · Opus, 1,5 h) **⚠ ARCHIVOS DE VTA W3.** Espejo RN:
+- [x] **W2.4** · **ARREGLA** (RN · Opus, 1,5 h) **⚠ ARCHIVOS DE VTA W3.** Espejo RN:
   `apps/mobile/lib/client-invite-copy.ts` (`clientInviteMessage` recibe `email` y `tempPassword`),
   `apps/mobile/components/coach/directory/guided-invite.ts` y
   `apps/mobile/components/coach/directory/CreateClientModal.tsx` (la clave ya se genera ahí).
@@ -652,7 +652,7 @@ espera su **merge**.
   **Aceptación:** `tests/mobile/client-invite-copy.test.ts` y `tests/mobile/guided-invite.test.ts`
   actualizados; los `it` de `guidedCapNote` no cambian; guards `store-copy` / `no-prices` verdes.
   **Gate:** `npx vitest run tests/mobile` + `tsc` mobile + `expo export --platform android`.
-- [ ] **W2.5** · **ARREGLA** (correos · Opus, 1,5 h) El drip D+1 deja de mentir **y cambia de destino**. Entrada:
+- [x] **W2.5** · **ARREGLA** (correos · Opus, 1,5 h) El drip D+1 deja de mentir **y cambia de destino**. Entrada:
   `apps/web/src/lib/email/drip-templates.ts:77` (`inviteUrl = ${ctx.baseUrl}/join/${inviteCode}`), `:95` («Tu
   alumno se registra solo…») y la variante sin código (`:106-107`). El bloque pasa a apuntar a
   `/coach/clients?invite=1` — el alta directa, que es la que produce alumnos — con el copy literal de
@@ -664,7 +664,7 @@ espera su **merge**.
   la persona del coach no llega a la cadena del drip (`buildDripTemplates` ← `send-drip-sequence` ←
   `free-coach-onboarding` ← `complete.actions.ts`, y ese último archivo es de W3.0/W3.3). Threadear
   la persona y pasar el bloque a `personaNoun` entra con W3, no antes.
-- [ ] **W2.6** · **ARREGLA** (correos · Opus, 1,5 h) Correo de bienvenida del alumno: **acceso arriba, clave abajo** y
+- [x] **W2.6** · **ARREGLA** (correos · Opus, 1,5 h) Correo de bienvenida del alumno: **acceso arriba, clave abajo** y
   `replyTo` del coach. Entrada: `apps/web/src/lib/email/transactional-templates.ts:20-67` (el CTA vive en
   `:57` y la línea «responde este correo» en `:61`) y el call site
   `apps/web/src/app/coach/clients/_actions/clients.actions.ts:270` (**⚠ archivo de VTA W3**), que hoy no pasa
@@ -679,7 +679,7 @@ espera su **merge**.
   alumno, el QR y la pastilla salen del mismo host**, que era todo lo que esta tarea protegía.
   **Si alguna vez cambia la env**, la normalización sigue siendo higiene razonable —`studentAppOrigin()` ya la
   hace, `apps/web/src/lib/coach/invite-code.ts:90`— pero entra como **AGREGA**, nunca como callejón.
-- [ ] **W2.8** · **AGREGA** (web · Opus, 2,5 h, **condición CUMPLIDA: D6 = A (owner 23-08), G-GRANT y G-ENV verdes** ⇒ se hace; sigue en el carril 3, o sea es lo primero que se corta si falta tiempo) Escape en el login de
+- [x] **W2.8** · **AGREGA** (web · Opus, 2,5 h, **condición CUMPLIDA: D6 = A (owner 23-08), G-GRANT y G-ENV verdes** ⇒ se hace; sigue en el carril 3, o sea es lo primero que se corta si falta tiempo) Escape en el login de
   marca. Entrada: `apps/web/src/app/c/[coach_slug]/login/_data/login.queries.ts:19` (sumar `invite_code` al
   select) y `apps/web/src/app/c/[coach_slug]/login/ClientLoginForm.tsx` (**⚠ archivo de VTA W3**), junto a
   «¿Olvidaste tu contraseña?». Copy literal en [SPEC §6](SPEC.md). **Solo coaches standalone.**
@@ -691,14 +691,14 @@ espera su **merge**.
   **Aceptación:** un desconocido en `/c/{slug}/login` tiene un camino a `/join/{código}`; el login del
   alumno sigue funcionando con la anon key (repro del incidente de GRANT).
   **Gate:** `npx vitest run apps/web/src/app/c` + un `SELECT` anónimo de verificación.
-- [ ] **W2.9** · **ARREGLA** (web · Sonnet, 0,5 h) La hoja de invitar deja de prometer una tienda que no existe. Entrada:
+- [x] **W2.9** · **ARREGLA** (web · Sonnet, 0,5 h) La hoja de invitar deja de prometer una tienda que no existe. Entrada:
   `apps/web/src/app/coach/dashboard/_components/invite/InviteStudentSheet.tsx:145` vs
   `apps/web/src/lib/app-links.ts:15` (`ANDROID_STORE_IS_PUBLIC = false`). Copy literal en
   [SPEC §6](SPEC.md). **El QR de `:224` es de invitación, no de pago: no cae en 3.1.1 y no se toca.**
   **Aceptación:** cero apariciones de «baja EVA» en superficies del coach.
   **Gate:** `pnpm typecheck` + `pnpm lint`.
 
-- [ ] **W2.10** · **ARREGLA** (web · Opus, 0,5 h) **La credencial no queda en el DOM ni en la grabación.** La pantalla del
+- [x] **W2.10** · **ARREGLA** (web · Opus, 0,5 h) **La credencial no queda en el DOM ni en la grabación.** La pantalla del
   alta guiada **se graba** cuando el coach aceptó cookies: `apps/web/src/lib/posthog/provider.tsx:36`
   (`disable_session_recording: storedConsent !== 'accepted'`) y `apps/web/src/lib/posthog/consent.ts:57`
   (`disable_session_recording: false` al aceptar). El default de PostHog enmascara **inputs**, no texto del
@@ -709,14 +709,14 @@ espera su **merge**.
   la clave.
   **Aceptación:** una grabación real revisada en PostHog no muestra la clave, ni en pantalla ni en el `href`
   ni en la URL. **Gate:** la grabación, no un test unitario.
-- [ ] **W2.11** · **ARREGLA** (web · Opus, 0,5 h) El **reenvío** del acceso usa el mismo mensaje. Entrada:
+- [x] **W2.11** · **ARREGLA** (web · Opus, 0,5 h) El **reenvío** del acceso usa el mismo mensaje. Entrada:
   `resetClientPasswordAction` (`apps/web/src/app/coach/clients/_actions/clients.actions.ts:432-471`), que
   genera una clave temporal nueva y se la devuelve al coach sin builder de mensaje. Reusar el de W2.2, con la
   misma regla de teléfono y la misma regla de W2.10. Si el WhatsApp se pierde o el alumno lo borra, hoy el
   coach vuelve a los dos saltos que este spec dice matar.
   **Aceptación:** el reenvío ofrece el mismo mensaje con credencial (solo con teléfono).
   **Gate:** `npx vitest run apps/web/src/app/coach/clients`.
-- [ ] **W2.12** · **ARREGLA** (web · Opus, 1 h) **El alumno que ya tiene cuenta deja de morir en «escríbenos a soporte»**
+- [x] **W2.12** · **ARREGLA** (web · Opus, 1 h) **El alumno que ya tiene cuenta deja de morir en «escríbenos a soporte»**
   (callejón 16). Hoy el alta responde `EMAIL_TAKEN_CLIENT_CREATE_ES`
   (`apps/web/src/lib/auth/platform-email.ts:66-67`) para las cuatro razones de `:69-77` (`taken_coach`,
   `taken_client`, `taken_orphan`, `taken_auth`), en el minuto 6 de una sesión de celular.
@@ -731,6 +731,30 @@ espera su **merge**.
 **Gate de salida de W2:** los 5 tests de copy actualizados y verdes (`add-student-invite`,
 `tests/mobile/client-invite-copy`, `tests/mobile/guided-invite`, `drip-templates`,
 `tests/coach-invite-code-url`) · **OTA de RN antes del deploy web** · gates base + `expo export`.
+
+### Cierre de W2 — 2026-08-26 (jefe + 4 workers Opus + sesión hermana)
+
+**EJECUTADA COMPLETA.** Commits en `rnmobiledenuevo`: `fa49d2b7` (W2.5) · `88d110d5` (W2.8) ·
+`f69c3b5b` (W2.9) · `1b77d6d4` (W2.4) · `d3392035` (**W2.4b**, no estaba en el plan: el alta corta
+del home RN era una QUINTA copia del mensaje y su fallback de `Share` podía filtrar la clave a un
+chat cualquiera — muerto) · `701ab3c6` (W2.1) · `bd911f79` (W2.2+W2.3+W2.10) · `44b9581d`
+(W2.6+W2.11+W2.12) · `adb62f6c` (nota `{alumno}`). Decisiones del jefe sobre lo no especificado:
+umbral de teléfono UNIFICADO web↔RN en 10 dígitos (menos = selector sin credencial); copy de
+email-taken propuesto por el worker ACEPTADO (un string para las 4 razones, salida por alias
+`+eva` verificada contra `check_platform_email_availability`, `/join` descartado porque el lead
+choca el mismo muro); threading de `coachEmail` por import/ruta móvil ACEPTADO (sin él el correo
+del import quedaba inconsistente).
+
+**Pendientes que deja la wave (declarados, no olvidados):**
+- Verificación de W2.10 por grabación real en PostHog (requiere sesión con cookies aceptadas) — W6.
+- `add_student_email_taken` visto en PostHog real — primer deploy (mismo pendiente que W0.5).
+- El alta corta RN no emite `invite_sent` (paridad de métrica por canal) — hallazgo de la hermana.
+- `{alumno}` literal en el drip hasta que W3 threadee la persona (`adb62f6c`).
+- La rama `23505` móvil conserva `code`/copy viejos (contrato con binario 1.1.0); solo se midió.
+- Split por runtime declarado: 1.1.0 (piso sin OTA) manda la plantilla sin clave; el alumno igual
+  recibe la clave por el correo de bienvenida.
+- Demo endurance sin multimedia: cargar video a «Trote / carrera al aire libre», «Carrera / trote
+  en cinta de correr» y «Caminata» (3 filas del catálogo del sistema) — dueño del contenido decide.
 
 ---
 
