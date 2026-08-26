@@ -495,7 +495,7 @@ export default function BuilderScreen() {
         ) : null}
       </NativeDialog>
 
-      <NativeDialog open={!!duplicateProgram} title="Duplicar como plantilla" onClose={() => setDuplicateProgram(null)} maxWidth={440}>
+      <NativeDialog open={!!duplicateProgram} title="Duplicar como plantilla" onClose={() => setDuplicateProgram(null)} maxWidth={440} scrollable>
         {duplicateProgram ? (
           <DuplicateForm
             name={duplicateName}

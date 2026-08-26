@@ -643,10 +643,12 @@ export function MobileQuickActionsBar({
         <QuickActionButton icon={Receipt} label="+ Pago" onPress={() => setModal('payment')} />
       </View>
 
+      {/* `scrollable`: 5 campos + checkbox + acciones no entran en la card con el teclado abierto. */}
       <NativeDialog
         open={modal != null}
         title={modal === 'payment' ? 'Registrar pago' : 'Agregar alumno'}
         onClose={() => setModal(null)}
+        scrollable
       >
         {modal === 'payment' ? (
           <QuickAddPaymentForm
@@ -779,10 +781,12 @@ export function MobileQuickActionsFab({
         </View>
       </NativeDialog>
 
+      {/* `scrollable`: 5 campos + checkbox + acciones no entran en la card con el teclado abierto. */}
       <NativeDialog
         open={modal != null}
         title={modal === 'payment' ? 'Registrar pago' : 'Agregar alumno'}
         onClose={() => setModal(null)}
+        scrollable
       >
         {modal === 'payment' ? (
           <QuickAddPaymentForm

@@ -30,6 +30,7 @@ import {
   type CoachClientDetailData,
 } from '../../../lib/coach-client-detail'
 import { isUuid, reportInvalidRouteUuid } from '../../../lib/safe-uuid'
+import { useSheetKeyboardInset } from '../../../lib/use-sheet-keyboard-inset'
 import { formatTrainingAgeLabel } from '../../../lib/profile-analytics'
 import { exportClientDossierPdf } from '../../../lib/client-dossier-pdf'
 import { getTodayInSantiago, isoDateAddDays } from '../../../lib/date-utils'
@@ -118,6 +119,8 @@ export default function ClientDetailScreen() {
   const [resourceModulesRetry, setResourceModulesRetry] = useState(0)
   const lastY = useRef(0)
   const tabStickyY = useRef(Number.MAX_SAFE_INTEGER)
+  const scrollRef = useRef<ScrollView>(null)
+  const { keyboardInset, onScroll: onKeyboardScroll } = useSheetKeyboardInset(scrollRef)
   const [tabStuck, setTabStuck] = useState(false)
   // QA2 A4: opacidad del backdrop de la tira de tabs por proximidad al anclaje (sin fondo
   // lejos → superficie sólida del tema al anclarse). `tabNear` solo monta/desmonta la capa;
@@ -693,7 +696,18 @@ export default function ClientDetailScreen() {
         <TopBar back backLabel="Alumnos" backColor={theme.mutedForeground} onBack={() => router.back()} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false} stickyHeaderIndices={[1]} onScroll={onScroll} scrollEventThrottle={16}>
+      {/* Teclado: el composer de nutrición («Escribe un mensaje…»), los umbrales de micros y la
+          nota privada viven al fondo de este scroll y quedaban debajo del teclado. `onScroll` se
+          COMPONE con el propio de la pantalla — el de arriba alimenta el header pegajoso. */}
+      <ScrollView
+        ref={scrollRef}
+        contentContainerStyle={[styles.scroll, keyboardInset ? { paddingBottom: 120 + keyboardInset } : null]}
+        showsVerticalScrollIndicator={false}
+        stickyHeaderIndices={[1]}
+        onScroll={(e) => { onScroll(e); onKeyboardScroll(e) }}
+        scrollEventThrottle={16}
+        keyboardShouldPersistTaps="handled"
+      >
         {/* 0 — Hero */}
         <ClientHero
           name={client.full_name}
@@ -803,7 +817,8 @@ export default function ClientDetailScreen() {
         includeNativeShortcuts={false}
       />
 
-      <NativeDialog open={editOpen} title="Editar alumno" onClose={() => { if (!editSaving) setEditOpen(false) }} closeDisabled={editSaving} unmountOnClose>
+      {/* `scrollable`: 4 campos + acciones no entran en la card con el teclado abierto. */}
+      <NativeDialog open={editOpen} title="Editar alumno" onClose={() => { if (!editSaving) setEditOpen(false) }} closeDisabled={editSaving} unmountOnClose scrollable>
         <EditClientForm client={client} workspace={actionWorkspace} onDone={() => { setEditOpen(false); void load({ silent: true }) }} onCancel={() => setEditOpen(false)} onSavingChange={setEditSaving} />
       </NativeDialog>
 

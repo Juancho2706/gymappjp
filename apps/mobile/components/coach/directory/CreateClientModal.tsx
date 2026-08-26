@@ -535,8 +535,23 @@ export function CreateClientModal({
   const firstName = form.fullName.trim().split(/\s+/)[0] ?? ''
 
   return (
-    <Modal visible={visible} transparent animationType="slide" onRequestClose={requestClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      // Android: la ventana del diálogo debe ser edge-to-edge, igual que el path `nativeModal` de
+      // `Sheet.tsx` (ver el comentario largo ahí). RN avisa por consola si `navigationBarTranslucent`
+      // viaja sin `statusBarTranslucent`, así que van juntas.
+      statusBarTranslucent
+      navigationBarTranslucent
+      onRequestClose={requestClose}
+    >
+      {/* `padding` SIN gate de plataforma: con el gate a iOS el `behavior` era `undefined` en
+          Android y el KAV quedaba inerte — los últimos campos del alta seguían debajo del teclado.
+          Con `statusBarTranslucent` la ventana del Modal nunca recibe ADJUST_RESIZE en Android, así
+          que el teclado la tapa en vez de encogerla y la compensación no puede duplicarse
+          (mismo razonamiento que `Sheet.tsx:357-372`). */}
+      <KeyboardAvoidingView behavior="padding" style={{ flex: 1 }}>
         <Pressable className="bg-black/60" style={styles.overlay} onPress={requestClose} />
         <View
           style={[

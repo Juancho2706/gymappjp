@@ -1,8 +1,10 @@
-import { forwardRef } from 'react'
+import { forwardRef, useRef } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
+import type { ScrollView } from 'react-native'
 import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
 import { ChevronDown, ChevronUp, Plus, Trash2 } from 'lucide-react-native'
+import { useSheetKeyboardInset } from '../../lib/use-sheet-keyboard-inset'
 import { useTheme } from '../../context/ThemeContext'
 import { FONT } from '../../lib/typography'
 import { Switch } from '../Switch'
@@ -33,11 +35,21 @@ interface Props {
  *  abierto por la tuerca ámbar. Incluye fases con paleta de color + reordenar. */
 export const ProgramConfigSheet = forwardRef<BottomSheetModal, Props>(function ProgramConfigSheet(p, ref) {
   const { theme } = useTheme()
+  const scrollRef = useRef<ScrollView>(null)
+  const { keyboardInset, onScroll } = useSheetKeyboardInset(scrollRef)
 
   return (
     <BottomSheetModal ref={ref} index={0} snapPoints={['92%']} enableDynamicSizing={false} enablePanDownToClose onDismiss={p.onClose}
       backgroundStyle={{ backgroundColor: theme.card }} handleIndicatorStyle={{ backgroundColor: theme.mutedForeground }}>
-      <BottomSheetScrollView contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
+      {/* Teclado: inset manual + scroll correctivo (useSheetKeyboardInset), mismo mecanismo que
+          BlockEditorSheet/ExerciseFormSheet. Sin esto «Notas y reglas del programa» y las fases,
+          que son lo último del sheet, quedan debajo del teclado. */}
+      <BottomSheetScrollView
+        ref={scrollRef}
+        contentContainerStyle={[styles.body, keyboardInset ? { paddingBottom: 48 + keyboardInset } : null]}
+        keyboardShouldPersistTaps="handled"
+        onScroll={onScroll}
+      >
         <Text style={[styles.title, { color: theme.foreground, fontFamily: FONT.display }]}>Configurar programa</Text>
 
         <Field theme={theme} label="Nombre del programa">

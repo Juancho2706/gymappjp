@@ -170,11 +170,15 @@ export default function CheckInScreen() {
     }
   }
 
-  // `aspect` es Android-only: en iOS `allowsEditing` fuerza un recorte CUADRADO 1:1 que mutila la
-  // foto de progreso (y el slot 3:4 la vuelve a recortar). En iOS no editamos: el resize a 1920
-  // del processAsset ya normaliza y la foto llega completa (igual que la web, que sube tal cual).
-  const editingOptions: { allowsEditing: boolean; aspect?: [number, number] } =
-    Platform.OS === 'android' ? { allowsEditing: true, aspect: [3, 4] } : { allowsEditing: false }
+  // NUNCA `allowsEditing: true`, en NINGUNA plataforma. En Android abría la `ExpoCropImageActivity`
+  // de expo-image-picker, que escribe el recorte en el cache de la app: si el SO purga ese cache
+  // mientras el alumno recorta (el device de la alumna tenía ~1% de disco libre), el
+  // `openOutputStream` revienta con ENOENT dentro de una coroutine nativa y MATA el proceso —
+  // ningún try/catch de JS puede atraparlo (crash EVA-MOBILE-A, Sentry 25-08). En iOS, además,
+  // fuerza un recorte CUADRADO 1:1 que mutila la foto de progreso. No hace falta editar: el resize
+  // a 1920 del processAsset ya normaliza y la foto llega completa (igual que la web, que sube tal
+  // cual), y el slot 3:4 la recorta visualmente igual.
+  const editingOptions: { allowsEditing: boolean } = { allowsEditing: false }
 
   async function pickFromGallery(type: 'front' | 'back') {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync()
