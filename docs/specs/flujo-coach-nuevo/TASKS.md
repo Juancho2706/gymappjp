@@ -1227,6 +1227,54 @@ regla se cumpla, y **fuera del total base de la estimación** (+4 h condicionale
   al cierre ya es tarde para anotar nada.
 - [ ] **W6.6** · **ARREGLA** Suite completa **una** vez pre-push, en worktree limpio.
 
+### W6 — primera corrida de QA en device del owner (26-08 tarde, Android + iPhone)
+
+Resultado por fase del guion: **F1** alta free web OK con bug (loop de persona, abajo) · **F2** takeover OK
+(clave vieja muere, Google entra, banner desaparece) · **F3** webview Instagram OK · **F4** alta app OK ·
+**F5** reset Android **FALLÓ** (pantalla «Abre el enlace de tu correo») · **F6** login equivocado OK ·
+**F7** demo con videos OK con 2 hallazgos (flash + secuestro App Links).
+
+Bugs diagnosticados (5 workers de investigación con evidencia PostHog/Vercel/auth-logs) y **arreglados el
+mismo día** (2 olas de workers + fix directo del jefe), todo verificado contra logs de producción:
+
+- **A · Loop «¿A qué te dedicas?» (web):** el `redirect()` del alta a `/coach/dashboard` dejaba la barra
+  desfasada de la ruta; el POST de la Server Action viajaba a `/coach/dashboard` y el gate de persona del
+  proxy lo rebotaba ⇒ la action nunca corría. Fix: gates de pantalla del proxy solo interceptan GET +
+  redirect del alta directo a la pantalla de persona + borrador en `sessionStorage` + el banner de cookies ya
+  no pinta sobre `/coach/onboarding/*` (tapaba el CTA).
+- **B · Reset de clave Android:** cliente móvil en flujo implícito ⇒ el token volvía en `#fragment` y se
+  pierde en el salto Custom Tab → intent. Fix: `flowType: 'pkce'` en el cliente RN (vuelve `?code=`, la
+  query sobrevive; `recovery-link.ts` ya lo canjeaba) + `/reset-password` web ahora canjea `token_hash` vía
+  `/auth/confirm`.
+- **C · «Vive tu app» secuestrada por App Links (nuevo HOY al quedar VERIFIED):** el demo redirige a
+  `/c/{id}/dashboard`, que caía en el `pathPrefix /c/` reclamado; la app arrastraba al coach al login de
+  alumno y el camino de error le mataba la sesión. Fix OTA: `+native-intent.ts` solo atiende `/c/{id}` y
+  `/c/{id}/login` (el resto → `/`, que rutea al panel del rol) + la puerta del alumno restaura la sesión
+  previa en vez de hacer `signOut` + `clearBlockedStudentSession` pasa a scope local. **Pendiente binario
+  1.1.3:** estrechar `intentFilters` de `app.json` y el AASA (`/c/*` → `/c/*/login`), decidir `/invite/`
+  (reclamado pero la ruta web no existe).
+- **D · Módulos activados que no aparecen:** el toggle escribía bien pero nadie revalidaba el store de
+  entitlements ⇒ `refreshEntitlements()` tras cada write (mi-panel, persona RN, features) + toasts honestos
+  («ya se ve» solo si el dominio tiene tab) + copys de persona corregidos («Dejando a la vista lo que
+  usas»). **Decisión de owner pendiente (D9 des-latente):** `FEATURE_PREFS_ENABLED` ON + D9 sin implementar
+  ⇒ la preferencia de nutrición del coach apaga el tab de SUS ALUMNOS (~10 alumnos reales afectados, 7 de un
+  Pro de junio que pudo apagarla a propósito).
+- **E · Flash de SessionStart en el Despegue:** el skip llegaba ~360 ms tarde (esperaba `clearAll`). Fix:
+  señal temprana `eva:exec-v3-dismiss` en el mismo tick del fade + gate del refresh consciente de
+  `isCeremonyActive()`.
+- **Extra · «NaN» en «Valor por semana» (video de Jotap.coach):** `Number('2,')` = NaN con el teclado
+  decimal iOS (solo coma). Fix: `DecimalField` en `BlockEditorSheet` (coma y punto, jamás comitea NaN, no
+  pierde la coma a mitad de tecleo). Verificado: su plan quedó sano en DB (2.5 guardado).
+
+Además se implementó lo aprobado por mockup (artifact `51e7f46c`): **banner «Verifica tu correo» en RN**
+(port del web; señal `email_verified_at` leída con el JWT — la columna tiene GRANT SELECT; reenvío vía
+endpoint nuevo `/api/mobile/auth/resend-verification` con cupo compartido web↔app) y **modal «Tu panel quedó
+listo»** (web dialog + RN sheet) que aparece INMEDIATAMENTE tras elegir persona —pedido literal del owner—
+y solo si la elección apagó dominios.
+
+Cuentas QA: `jmvr2706@gmail.com` se conserva (cuenta QA del owner). `tugmail+eva@gmail.com` (Broca) + su
+alumno demo **borrados de LIVE** (la casilla es ajena; el drip D+1 le habría llegado a un desconocido).
+
 ---
 
 ## Orden de ejecución y paralelismo
