@@ -34,10 +34,15 @@ pinnea. **W1+W2 = un solo deploy web; OTA de RN antes.**
   para `www.eva-app.cl` y `eva-app.cl`. Causa raíz: `apps/web/public/.well-known/assetlinks.json` **no
   incluía el SHA-256 de la clave de Play App Signing** (solo la de la build local/upload), así que la app
   instalada desde la tienda jamás podía verificar el dominio. Fix `e4187269` (la firma real de Play entra al
-  archivo; se publica con el deploy web de esta ola). **Pendiente:** re-correr `pm get-app-links` con la app
-  de Play instalada **después** del deploy y abrir `https://www.eva-app.cl/vive-tu-app?t=x&c=y` desde Chrome
-  para ver si el 302 a `/c/y/login` rebota a la app. **Mientras el estado sea 1024 el 302 NO rebota**, así
-  que V1.21 no fue necesaria para desplegar; si tras el re-test rebota, V1.21 entra como hotfix.
+  archivo; se publica con el deploy web de esta ola). **RE-TEST POST-DEPLOY EJECUTADO (26-08, device del
+  owner): `pm verify-app-links --re-verify` ⇒ estado `verified` en AMBOS dominios** — los App Links de EVA
+  verifican por primera vez. Test de rebote: `am start VIEW https://www.eva-app.cl/vive-tu-app?t=x&c=y`
+  abre en el navegador, NO en la app, y no puede ser de otra forma: los intent filters de `app.json` solo
+  reclaman `/c/*`, `/invite/*` y `/reset-password` — `/vive-tu-app` no está reclamado ⇒ **V1.21 es
+  IMPOSIBLE de necesitar y queda cerrada como «no aplica»**. Nota de alcance: con `verified`, los tres
+  paths SÍ reclamados tocados desde apps externas (WhatsApp/Gmail) ahora abren la app en devices donde
+  «Abrir enlaces compatibles» esté activo (el default post-verificación); el device del owner lo tiene
+  Disabled por selección de usuario de la era rota — re-habilitable en Ajustes de la app.
 - [x] G2 **apex → www** — **VERDE, verificado el 26-08**: `eva-app.cl` responde **308** a `www.eva-app.cl`
   y el panel del coach vive en `www` (cookies host-only). `AUTH_COOKIE_DOMAIN` sigue sin setear. Sin esto el
   `getUser()` del paso 1 de V2.7 devolvería `null` y el modo `return` no dispararía nunca.
@@ -139,7 +144,9 @@ pinnea. **W1+W2 = un solo deploy web; OTA de RN antes.**
   no duplican `step_completed`). **`vive-tu-app.service.test.ts` lo actualizó el worker `rn-api`** (es el test
   que pinnea su propio cambio de V1.14/V1.22); `use-onboarding-guide.test.ts` se corrió sin cambios y
   verificado que no duplica `step_completed`.
-- [ ] V1.21 (contingencia, solo si G1 lo confirma) `/vive-tu-app` responde una página mínima 200 que setea
+- [x] V1.21 **NO APLICA — cerrada por el re-test de G1 (26-08)**: `/vive-tu-app` no está en los intent
+  filters de `app.json`, así que el rebote que esta contingencia cubría es imposible; el dominio quedó
+  `verified` y aun así el VIEW intent abre en el navegador. (contingencia, solo si G1 lo confirmaba) `/vive-tu-app` responde una página mínima 200 que setea
   cookies y hace `location.replace('/c/<id>/dashboard')` por JS, en vez de 302. Cambia el assert de `location`
   de `route.test.ts:56` y se agrega al árbol de archivos del PLAN. **NO ejecutada: espera el re-test de G1
   post-deploy** (assetlinks corregido en `e4187269`). Con el estado 1024 vigente el 302 no rebota a la app,
