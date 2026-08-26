@@ -145,11 +145,17 @@ describe('statusMeta · sin first_login_at (el corte decide qué se puede afirma
   })
 
   it('esa MISMA fila, con el corte todavía en el futuro, degrada al fallback W0 (no es un bug)', () => {
-    const meta = statusMeta({
-      ...base,
-      createdAt: '2026-08-26T09:00:00',
-      forcePasswordChange: true,
-    })
+    // Corte explícito en el futuro: la constante real ya quedó fijada al ISO del deploy
+    // (26-08), así que este caso se pinnea con un corte propio y no con el de producción.
+    const meta = statusMeta(
+      {
+        ...base,
+        createdAt: '2026-08-26T09:00:00',
+        forcePasswordChange: true,
+      },
+      NOW,
+      '2100-01-01T00:00:00Z'
+    )
     expect(meta.label).toBe('Todavía no cambió su clave')
     expect(meta.key).toBe('pending')
   })
