@@ -1,6 +1,22 @@
 name: Mobile Integration CI
 
 on:
+  # `rnmobiledenuevo` es la rama de trabajo real y hasta hoy solo se chequeaba en PR: se
+  # empujaban decenas de commits de apps/mobile sin que corriera el typecheck de Expo.
+  # Los paths son EXACTAMENTE los mismos del pull_request de abajo (el gate es
+  # `pnpm --filter @eva/mobile exec tsc --noEmit`, y apps/mobile/tsconfig.json solo mapea
+  # `@/*` y `packages/*`).
+  push:
+    branches: [rnmobiledenuevo]
+    paths:
+      - 'apps/mobile/**'
+      - 'packages/**'
+      - 'pnpm-lock.yaml'
+      - 'package.json'
+      # pnpm-workspace.yaml define los `overrides` del monorepo: un cambio ahi puede romper el
+      # typecheck de mobile sin tocar apps/mobile.
+      - 'pnpm-workspace.yaml'
+      - '.github/workflows/mobile-integration-ci.yml'
   pull_request:
     branches: [rnmobiledenuevo]
     paths:
@@ -8,8 +24,18 @@ on:
       - 'packages/**'
       - 'pnpm-lock.yaml'
       - 'package.json'
+      # pnpm-workspace.yaml define los `overrides` del monorepo: un cambio ahi puede romper el
+      # typecheck de mobile sin tocar apps/mobile.
+      - 'pnpm-workspace.yaml'
       - '.github/workflows/mobile-integration-ci.yml'
   workflow_dispatch:
+
+# Mismo criterio que ci.yml: un push nuevo cancela el anterior en vuelo, salvo en master.
+# El `group` lleva un prefijo PROPIO a proposito: si compartiera `ci-${{ github.ref }}` con
+# ci.yml, cada workflow cancelaria al otro sobre el mismo ref.
+concurrency:
+  group: mobile-integration-ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
   mobile-typecheck:

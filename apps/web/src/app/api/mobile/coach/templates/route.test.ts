@@ -82,8 +82,44 @@ function postReq(body: unknown) {
     })
 }
 
-const ADMIN = { admin: true }
-const USER_DB = { userDb: true }
+/**
+ * Clientes de Supabase de mentira, encadenables (mismo patrón que `persona/route.test.ts`).
+ *
+ * Hoy el POST no los usa para leer: `mobileContextOwnsClient` y `applyTemplate` están mockeados
+ * arriba, así que la propiedad del alumno la sigue decidiendo el switch `ownsClient` y no esta
+ * fake DB. Están encadenados igual para que el día que la ruta lea de verdad —la cadena real es
+ * `clients`/`coach_client_assignments` con `select().eq().is().maybeSingle()`— el test falle por
+ * la aserción y no con un `db.from is not a function`.
+ *
+ * Devuelven el VACÍO seguro: sin filas y sin error.
+ */
+function fakeDbClient<T extends object>(marker: T): T {
+    return {
+        ...marker,
+        from: () => {
+            const chain: Record<string, unknown> = {}
+            Object.assign(chain, {
+                select: () => chain,
+                insert: () => chain,
+                update: () => chain,
+                delete: () => chain,
+                eq: () => chain,
+                is: () => chain,
+                or: () => chain,
+                gt: () => chain,
+                gte: () => chain,
+                limit: () => chain,
+                maybeSingle: async () => ({ data: null, error: null }),
+                // Query sin `maybeSingle` (conteos, listados, INSERT/UPDATE): cero filas y sin error.
+                then: (resolve: (value: unknown) => unknown) => resolve({ data: [], error: null, count: 0 }),
+            })
+            return chain
+        },
+    } as unknown as T
+}
+
+const ADMIN = fakeDbClient({ admin: true })
+const USER_DB = fakeDbClient({ userDb: true })
 
 beforeEach(() => {
     vi.clearAllMocks()

@@ -2,10 +2,37 @@ name: CI
 
 on:
   push:
-    branches: [main, master]
+    # `rnmobiledenuevo` es la rama de trabajo real (cientos de commits/mes) y hasta hoy
+    # empujaba SIN ningun gate: los checks solo corrian en PR y en push a main/master.
+    branches: [main, master, rnmobiledenuevo]
+    # Auditoria 2026-08-25 de lo que consume cada gate. La conclusion honesta es que en este
+    # repo el filtro tiene que ser el arbol completo, porque:
+    #   - `pnpm run docs:check` (scripts/check-docs.mjs) recorre `git ls-files` ENTERO
+    #     (validateEnvironmentCredentialFallbacks) buscando fallbacks literales de credenciales:
+    #     cualquier archivo versionado puede ponerlo rojo, incluidos `apps/enterprise/**` y los
+    #     otros workflows de `.github/`.
+    #   - `npx vitest run` corre `tests/**` (vitest.config.ts) y esos tests IMPORTAN apps/mobile
+    #     por ruta relativa (p.ej. tests/mobile/brand-vars-identity.test.ts ->
+    #     ../../apps/mobile/lib/theme, tests/coach-invite-code-url.test.ts lee
+    #     apps/mobile/lib/student-links.ts). Excluir apps/mobile pierde cobertura real.
+    #   - `pnpm run check:tokens` compara apps/web/src/app/globals.css contra
+    #     apps/mobile/global.css y apps/mobile/lib/theme.ts.
+    #   - el job `hygiene` corre actionlint sobre TODOS los .github/workflows/*.yml.
+    # Por eso queda `**` con una unica exclusion: `.claude/**` (config de agentes, hoy con 0
+    # archivos versionados). El ahorro de minutos real viene de `concurrency`, no de este filtro.
+    paths:
+      - '**'
+      - '!.claude/**'
   pull_request:
     branches: [main, master, rnmobiledenuevo]
   workflow_dispatch:
+
+# Una sola corrida viva por ref: un push nuevo cancela el anterior todavia en vuelo (de ahi sale
+# el ahorro real de minutos en una rama con decenas de commits por dia). En master NO se cancela:
+# cada commit de la rama de release conserva su corrida verificada.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
 
 jobs:
   quality:
@@ -33,6 +60,103 @@ jobs:
       - name: pnpm audit (high+)
         run: pnpm audit --audit-level=high --prod
         continue-on-error: true
+
+  hygiene:
+    # Paralelo a `quality` (a proposito SIN `needs`): son gates de higiene del repo/monorepo,
+    # no dependen de que compile nada, y no instalan node_modules. Cada paso se corrio
+    # LOCALMENTE el 2026-08-25 antes de escribirlo: los que nacian rojos por deuda preexistente
+    # quedaron documentados con su ignore o con continue-on-error, nunca como ruido silencioso.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # gitleaks necesita la historia para resolver `github.event.before..after`; con el
+          # fetch-depth: 1 por defecto ese SHA no existe en el clon. El pack son ~58 MB.
+          fetch-depth: 0
+      # version comes from the root package.json "packageManager" field (pnpm@11.5.0);
+      # passing `version:` here too triggers ERR_PNPM_BAD_PM_VERSION.
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: pnpm
+
+      # NO BLOQUEANTE por deuda preexistente: la corrida local del 2026-08-25 sale
+      # ERR_PNPM_DEDUPE_CHECK_ISSUES con ~180 paquetes deduplicables. El grueso es la
+      # convivencia deliberada de @supabase/supabase-js 2.101.1 (web) y 2.108.2
+      # (mobile/enterprise), mas los dobles de Expo SDK 54 (expo-constants 18.0.13 y 18.0.14,
+      # @expo/prebuild-config 54.0.8 y 54.0.9) y la cadena babel/browserslist que arrastra RN.
+      # Reporta senal sin poder bloquear; sacar `continue-on-error` cuando corra limpio.
+      - name: pnpm dedupe --check (informativo)
+        run: pnpm dedupe --check
+        continue-on-error: true
+
+      # BLOQUEANTE: con estos flags la corrida local del 2026-08-25 sale 0 errores / 1 warning
+      # y exit 0, asi que un desalineo NUEVO del monorepo si rompe el build.
+      # Ignores deliberados (deuda existente, no la introduce este job):
+      #   -p @eva/enterprise  -> app CONGELADA (cuarentena 2026-08-06). Aporta 7 de los duplicados
+      #                          y un `unordered-dependencies`; no se toca ni se ordena.
+      #   -i tailwindcss      -> web v4 vs apps/mobile 3.4.17 (NativeWind); divergencia querida.
+      # TODO(deuda) sacar estos cuatro cuando se unifiquen las versiones:
+      #   -i @supabase/supabase-js -> raiz ^2.101.1 (web) vs apps/mobile ^2.108.2.
+      #   -i @types/react          -> raiz ^19.2.14 vs apps/mobile ~19.1.0 (pin de Expo SDK 54).
+      #   -i typescript            -> raiz ^5 vs apps/mobile ~5.9.2.
+      #   -r unsync-similar-dependencies -> next ^16.2.12 vs eslint-config-next 16.1.6.
+      # Version pinneada a proposito: con `sherif@latest` una release nueva puede sumar una regla
+      # y poner el job rojo sin que cambie una sola linea del repo.
+      - name: sherif (higiene del monorepo)
+        run: >-
+          pnpm dlx sherif@1.13.0
+          -p @eva/enterprise
+          -i tailwindcss
+          -i @supabase/supabase-js
+          -i @types/react
+          -i typescript
+          -r unsync-similar-dependencies
+
+      # BLOQUEANTE. Lintea TODOS los workflows del repo. En el runner de GitHub shellcheck viene
+      # instalado, asi que actionlint tambien lo aplica a cada bloque `run:` (localmente hay que
+      # instalarlo aparte, si no la regla se desactiva sola y el resultado engania).
+      # Los dos `-ignore` son DEUDA PREEXISTENTE en workflows ajenos a este cambio, verificada el
+      # 2026-08-25 con actionlint 1.7.12 + shellcheck 0.11.0. Sin ellos el job nace rojo:
+      #   TODO: .github/workflows/ios-submit-review.yml:64 -> SC2155 (declare and assign separately)
+      #   TODO: .github/workflows/mobile-ota.yml:68        -> SC2129 (usar { cmd1; cmd2; } >> file)
+      # Sacar los ignores al arreglar esos dos scripts.
+      - name: actionlint
+        run: |
+          bash <(curl -sSfL https://raw.githubusercontent.com/rhysd/actionlint/main/scripts/download-actionlint.bash) 1.7.12
+          ./actionlint -color -ignore 'SC2155' -ignore 'SC2129'
+
+      # BLOQUEANTE: un secreto en el diff tiene que romper el push. Escanea SOLO el rango del
+      # evento, NUNCA la historia completa (2574 commits). Corrida local 2026-08-25 sobre
+      # HEAD~50..HEAD: "no leaks found".
+      # Los datos del evento entran por `env` y no interpolados dentro del script: evita
+      # inyeccion de shell y mantiene el bloque legible para shellcheck.
+      - name: gitleaks (solo el diff del evento)
+        env:
+          GITLEAKS_VERSION: '8.30.1'
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_BEFORE: ${{ github.event.before }}
+          PUSH_AFTER: ${{ github.event.after }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar -xz gitleaks
+          zero='0000000000000000000000000000000000000000'
+          if [ "$EVENT_NAME" = 'pull_request' ]; then
+            range="${PR_BASE_SHA}..${PR_HEAD_SHA}"
+          elif [ -n "${PUSH_BEFORE}" ] && [ "${PUSH_BEFORE}" != "$zero" ] && git cat-file -e "${PUSH_BEFORE}^{commit}" 2>/dev/null; then
+            range="${PUSH_BEFORE}..${PUSH_AFTER}"
+          else
+            # Primer push de la rama (before = 000...0), rama recreada, force-push que dejo el SHA
+            # huerfano, o workflow_dispatch (sin before/after): se acota a los ultimos 50 commits
+            # del head. Sigue sin ser la historia completa.
+            range="-n 50 ${PUSH_AFTER:-HEAD}"
+          fi
+          echo "rango gitleaks: ${range}"
+          ./gitleaks git --log-opts="--no-merges ${range}" --redact --no-banner
 
   e2e:
     needs: quality
@@ -80,6 +204,11 @@ jobs:
 
   nutrition-smoke:
     needs: quality
+    # En push SOLO corre en master. Al habilitar push en `rnmobiledenuevo` (2026-08-25) este job
+    # habria corrido Playwright contra Supabase DE PRODUCCION en cada push de la rama de trabajo
+    # (instancia Micro que ya se colgo el 22-08 con QA en paralelo) + ~10-20 min de minutos por
+    # push. PRs y workflow_dispatch conservan el comportamiento que ya tenian.
+    if: ${{ github.event_name != 'push' || github.ref == 'refs/heads/master' }}
     # Antes era manual-only (`if: workflow_dispatch`) por la misma razón que `e2e`: la suite estaba
     # sin mantención y colgaba contra Supabase real. El motivo real de fondo es que DEPENDE DE
     # SECRETS: sin ellos no hay nada que correr. Ahora corre automático (push / PR / dispatch) con

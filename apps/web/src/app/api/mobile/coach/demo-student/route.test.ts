@@ -45,8 +45,51 @@ vi.mock('@/app/api/mobile/coach/clients/_mutation-auth', () => ({
 
 import { DELETE, POST } from './route'
 
-const ADMIN = { admin: true }
-const USER_DB = { userDb: true }
+/**
+ * Clientes de Supabase de mentira, encadenables (mismo patrón que `persona/route.test.ts`).
+ *
+ * Hoy la ruta no los usa para leer: `readCoachPersona`, `seedDemoStudent`, `deleteDemoStudent` y
+ * `recordOnboardingEvent` están mockeados arriba, y esos mocks siguen siendo el switch del test.
+ * Están encadenados igual para que el día que alguno deje de mockearse el test falle por la
+ * aserción y no con un `db.from is not a function`: la cadena real es
+ * `coaches.select().eq().maybeSingle()` (persona), `coach_onboarding_events.insert()` (evento) y
+ * `clients.select()/delete().eq()` (sembrador). Lo que NO se finge es `auth.admin.deleteUser`: el
+ * borrado de verdad exige el servicio real, no una fake DB.
+ *
+ * La fila del coach acompaña al default de `readCoachPersona` en el `beforeEach` (fuerza), para que
+ * las dos mitades cuenten la misma historia.
+ */
+function fakeDbClient<T extends object>(marker: T): T {
+    return {
+        ...marker,
+        from: (table: string) => {
+            const chain: Record<string, unknown> = {}
+            Object.assign(chain, {
+                select: () => chain,
+                insert: () => chain,
+                update: () => chain,
+                delete: () => chain,
+                eq: () => chain,
+                is: () => chain,
+                or: () => chain,
+                limit: () => chain,
+                maybeSingle: async () => ({
+                    data:
+                        table === 'coaches'
+                            ? { persona: 'strength', persona_also_other: false, persona_set_at: null }
+                            : null,
+                    error: null,
+                }),
+                // Query sin `maybeSingle` (listados, INSERT/DELETE): cero filas y sin error.
+                then: (resolve: (value: unknown) => unknown) => resolve({ data: [], error: null, count: 0 }),
+            })
+            return chain
+        },
+    } as unknown as T
+}
+
+const ADMIN = fakeDbClient({ admin: true })
+const USER_DB = fakeDbClient({ userDb: true })
 
 function req(method: 'DELETE' | 'POST') {
     return new NextRequest('http://localhost/api/mobile/coach/demo-student', {

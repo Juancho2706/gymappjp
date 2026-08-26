@@ -108,8 +108,41 @@ function postReq(body: unknown) {
     })
 }
 
-const ADMIN = { admin: true }
-const USER_DB = { userDb: true }
+/**
+ * Clientes de Supabase de mentira, encadenables. El camino «Mi panel» NO mockea
+ * `persona-switch.service` a propósito (la memoria de la guía y el relevo del alumno de ejemplo son
+ * parte de lo que el route decide), y ese servicio lee y escribe de verdad: `loadPersonaArtifactScope`
+ * hace `coaches.select().eq().maybeSingle()`, las señales vivas cuentan filas y `getDemoClientId`
+ * busca en `clients`. Devuelven el VACÍO seguro: coach sin guía archivada, sin `persona_set_at`, sin
+ * artefactos y sin alumno de ejemplo (⇒ el cambio de rama queda en `kept`).
+ */
+function fakeDbClient<T extends object>(marker: T): T {
+    return {
+        ...marker,
+        from: (table: string) => {
+            const chain: Record<string, unknown> = {}
+            Object.assign(chain, {
+                select: () => chain,
+                update: () => chain,
+                eq: () => chain,
+                gt: () => chain,
+                gte: () => chain,
+                or: () => chain,
+                limit: () => chain,
+                maybeSingle: async () => ({
+                    data: table === 'coaches' ? { onboarding_guide: null, persona_set_at: null } : null,
+                    error: null,
+                }),
+                // Query sin `maybeSingle` (conteos, listados, UPDATE): cero filas y sin error.
+                then: (resolve: (value: unknown) => unknown) => resolve({ data: [], error: null, count: 0 }),
+            })
+            return chain
+        },
+    } as unknown as T
+}
+
+const ADMIN = fakeDbClient({ admin: true })
+const USER_DB = fakeDbClient({ userDb: true })
 
 beforeEach(() => {
     vi.clearAllMocks()
@@ -289,7 +322,14 @@ describe('POST /api/mobile/coach/persona — camino «Mi panel»', () => {
     it('reorderPanel:false guarda la persona y NO re-siembra los dominios', async () => {
         const res = await POST(postReq({ persona: 'nutrition', alsoOther: true, reorderPanel: false }))
         expect(res.status).toBe(200)
-        expect(await res.json()).toEqual({ ok: true, demoClientId: null, reordered: false })
+        expect(await res.json()).toEqual({
+            ok: true,
+            demoClientId: null,
+            reordered: false,
+            // El coach de este test no tiene alumno de ejemplo: no hay relevo ni aviso que dar.
+            demo: { action: 'kept', demoName: 'Ana', demoClientId: null, error: null },
+            notice: null,
+        })
         expect(saveCoachPersonaMock).toHaveBeenCalledWith(USER_DB, COACH_ID, 'nutrition', true)
         expect(writePersonaDomainPrefs).not.toHaveBeenCalled()
         // «Mi panel» NO siembra ni toca el alumno de ejemplo: eso es otra acción, con otro botón.
@@ -298,7 +338,13 @@ describe('POST /api/mobile/coach/persona — camino «Mi panel»', () => {
 
     it('reorderPanel:true re-siembra los 5 dominios con la matriz de la persona', async () => {
         const res = await POST(postReq({ persona: 'endurance', reorderPanel: true }))
-        expect(await res.json()).toEqual({ ok: true, demoClientId: null, reordered: true })
+        expect(await res.json()).toEqual({
+            ok: true,
+            demoClientId: null,
+            reordered: true,
+            demo: { action: 'kept', demoName: 'Javiera', demoClientId: null, error: null },
+            notice: null,
+        })
         expect(writePersonaDomainPrefs).toHaveBeenCalledWith(USER_DB, COACH_ID, 'endurance', false)
     })
 
@@ -326,12 +372,21 @@ describe('POST /api/mobile/coach/persona — camino «Mi panel»', () => {
                 source: 'mi_panel',
                 changed: true,
                 reordered: true,
+                // Qué pasó con el alumno de ejemplo (`kept`: este coach no tenía uno sembrado).
+                demo: 'kept',
             },
         })
         expect(capturePostHogServerEvent).toHaveBeenCalledWith({
             event: 'persona_selected',
             distinctId: COACH_ID,
-            properties: { persona: 'rehab', also_other: false, surface: 'rn', source: 'mi_panel' },
+            properties: {
+                persona: 'rehab',
+                also_other: false,
+                surface: 'rn',
+                source: 'mi_panel',
+                changed: true,
+                demo: 'kept',
+            },
         })
     })
 

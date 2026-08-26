@@ -1,0 +1,74 @@
+name: Alerta CI roja
+
+# Aviso al owner cuando la CI de push queda roja (11 corridas rojas de master entre el 22 y el
+# 25-08 pasaron sin que nadie las viera). Decision del owner 2026-08-25: opcion A — issue
+# automatico, sin secretos ni servicios externos.
+#   - Solo eventos push de las ramas con gates: los PRs ya notifican a su autor, y los
+#     `cancelled` de la concurrency (cancel-in-progress) son el caso normal, no una falla.
+#   - Falla -> crea el issue «CI roja: <workflow> @ <rama>» si no existe; si ya existe,
+#     comenta con el link del run nuevo (cada comentario re-notifica por GitHub nativo).
+#   - Verde -> comenta y cierra el issue abierto de ese workflow+rama.
+# OJO: `workflow_run` corre la version de ESTE archivo que este en la rama default (master);
+# la alerta queda viva recien cuando este archivo llegue a master.
+on:
+  workflow_run:
+    workflows: ['CI', 'Mobile Integration CI']
+    types: [completed]
+
+permissions:
+  issues: write
+
+jobs:
+  alert:
+    if: >-
+      github.event.workflow_run.event == 'push' &&
+      contains(fromJSON('["master", "main", "rnmobiledenuevo"]'), github.event.workflow_run.head_branch) &&
+      contains(fromJSON('["success", "failure"]'), github.event.workflow_run.conclusion)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/github-script@v8
+        with:
+          script: |
+            const run = context.payload.workflow_run
+            const title = `🔴 CI roja: ${run.name} @ ${run.head_branch}`
+            const repo = { owner: context.repo.owner, repo: context.repo.repo }
+            const { data: open } = await github.rest.issues.listForRepo({
+              ...repo,
+              state: 'open',
+              per_page: 100,
+            })
+            const issue = open.find((i) => i.title === title)
+            const runLine = `[Run #${run.run_number}](${run.html_url}) — commit \`${run.head_sha.slice(0, 8)}\``
+            if (run.conclusion === 'failure') {
+              if (issue) {
+                await github.rest.issues.createComment({
+                  ...repo,
+                  issue_number: issue.number,
+                  body: `Sigue roja: ${runLine}`,
+                })
+              } else {
+                await github.rest.issues.create({
+                  ...repo,
+                  title,
+                  body: [
+                    `La corrida de **${run.name}** en \`${run.head_branch}\` falló.`,
+                    '',
+                    runLine,
+                    '',
+                    '_Issue automático (`.github/workflows/ci-alert.yml`): se cierra solo cuando el workflow vuelve a verde en esta rama._',
+                  ].join('\n'),
+                })
+              }
+            } else if (issue) {
+              await github.rest.issues.createComment({
+                ...repo,
+                issue_number: issue.number,
+                body: `Verde de nuevo: ${runLine}`,
+              })
+              await github.rest.issues.update({
+                ...repo,
+                issue_number: issue.number,
+                state: 'closed',
+              })
+            }
