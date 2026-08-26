@@ -767,6 +767,14 @@ bienvenida igual, y el build 59 (1.1.2, en review de Apple) migra a esos usuario
 
 ## W3 — Que el coach entre sin correo (2 workers: `web-alta` Opus, `marca-correos` Opus)
 
+> **🔴 CANDADO DE DEPLOY (26-08, vigente):** la rama tiene commiteados W3.0(a)(b) DB, W3.2, W3.2b,
+> W3.3, W3.4, W3.7, W3.8 (+ su cron `drip-hygiene`), W3.9, W3.11 y W3.12 — pero **W3.0(c), W3.1 y
+> W3.13 NO están en el árbol** (el ejecutor del núcleo quedó bloqueado esperando la confirmación
+> explícita del owner para retirar la verificación obligatoria de correo del alta free). El
+> `email_confirm: true` que W3.2 ya mete en la ruta RN abre el pre-account-takeover que W3.13
+> cierra ⇒ **NADA de esta wave se promueve a `master` hasta que W3.0c+W3.1+W3.13 estén commiteadas
+> en el mismo tren.** Orden del tren al desplegar: OTA de RN (W3.2b) ANTES o JUNTO al deploy web.
+
 **D1 = A: respondida por el owner el 23-08** ⇒ esta wave tiene luz verde. G-ENV y G-AUTH quedaron **resueltos el 23-08** (arriba): Turnstile, Upstash y el
 tope por IP están vivos, y el linking de identidades no se configura — se cubre con **W3.13**, que viaja en
 el mismo tren que W3.1 y **no es opcional**.
