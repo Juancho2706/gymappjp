@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-08-21 @ b58b2b74"
+last_verified: "2026-08-26 @ e7ed1de9"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -13,6 +13,53 @@ source_of_truth: apps/web responsive + apps/mobile
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
 
 ## Resumen ejecutivo
+
+> **2026-08-26 («Vive tu app» directo — lo que cambia en RN)** (spec
+> [vive-tu-app-directo](../specs/vive-tu-app-directo/SPEC.md), commits `2d19e237..e7ed1de9`): el coach que
+> toca «Vive tu app» desde la app **entra directo** — la URL que emite el endpoint móvil ahora lleva
+> `&src=rn&from=<guia|builder>` (`lib/vive-tu-app.ts`, `openViveTuAppGuided({ from })`; el builder pasa
+> `from: 'builder'`), y ese `src=rn` es el que hace que el banner de la sesión demo en la web ofrezca la
+> **vuelta a la app** en vez de un cierre de sesión. El `from` viaja en el body con allowlist de dos valores
+> y default `guia`; el **body es opcional** a propósito, para que un bundle anterior al OTA que postea sin
+> cuerpo siga funcionando. `isStoreSafeUrl` acepta el link (mira el path, no la query) y hay caso positivo en
+> `tests/mobile/store-compliance.test.ts`.
+>
+> **La guía se recarga al volver**: `apps/mobile/lib/guia-reload.ts` (NUEVO, puro —
+> `shouldReloadOnAppState(prev, next)`) + listener `AppState` en `app/coach/guia.tsx`, con `inFlightRef`
+> **dentro de `load()`** para que el deduplicado cubra a los tres llamadores (listener, `useFocusEffect` y
+> `onViveTuApp`). Sin esto el coach volvía del navegador y veía la guía cacheada, sin el tilde. **Regresión
+> menor declarada:** `program-builder.tsx` **no** lleva listener (no tiene `load()`; vive del snapshot de
+> `useCoachOnboarding`).
+>
+> **`+native-intent.ts`** gana la allowlist explícita `coach/guia → '/coach/guia'` (el resto del árbol de
+> coach sigue devolviendo el path crudo), que es la que aterriza el `intent://…;scheme=eva;package=cl.evaapp.eva;end`
+> de Android y el `eva://coach/guia` de iOS que emite el banner web. **Cero cambios nativos**: `app.json` ya
+> declara `"scheme": "eva"` y el filtro que genera Expo no restringe host, así que el deep link entra con el
+> binario actual (mismo mecanismo que el `eva://auth/confirmed` que ya corre en producción). Efecto lateral
+> aceptado: `eva://coach/guia/loquesea` también aterriza en la guía.
+>
+> **Explainer v2 con clave versionada**: `VIVE_TU_APP_EXPLAINED_PREFIX` pasa a
+> `eva.vive-tu-app.explained.v2:` para que quien ya vio el v1 se entere del botón nuevo — «…toca «Volver a la
+> app» o usa el botón atrás.», literal idéntico al del banner web (nada lo pinnea automáticamente: son dos
+> strings en árboles distintos, deuda anotada). El sello `…v1:` queda huérfano en AsyncStorage a propósito.
+>
+> **Chip «Entró hace X» en el roster** (`components/coach/directory/directory-shared.ts`): el estado del
+> alumno usa `first_login_at` y solo puede **afirmar la ausencia de login** para filas nacidas después de
+> `FIRST_LOGIN_SIGNAL_CUTOVER = '2026-08-26T06:00:00Z'` — constante **duplicada web/RN** (RN no importa de
+> `apps/web`) que se mueve en los dos archivos a la vez o miente.
+>
+> **Auto-alta bloqueada**: `CreateClientModal` del directorio avisa y deshabilita cuando el correo tipeado es
+> el del propio coach («usa Vive tu app desde tu panel»), leyendo la sesión **local**
+> (`getSession()`, no `getUser()` de red) y una vez por apertura; el 409 `OWN_EMAIL` del servidor cae en
+> `fieldErrors.email` (inline, nunca el banner global). Copy sin plan, sin precios y sin `eva-app.cl`
+> (guards `tests/mobile-no-prices` y `tests/mobile/store-copy` verdes). Nota declarada: `showsCupo` se apaga
+> si `guidedCapNote` ya está en pantalla, para no decir dos veces que el demo no gasta cupo.
+>
+> Gates verdes al cierre: `tsc` mobile, `tests/mobile/{guia-reload,native-intent,vive-tu-app-explainer,store-compliance,guided-invite,directory-status}`
+> y los guards de tiendas. **Requiere OTA a los runtimes 1.1.1 + 1.1.2** (disparada en el cierre de esta ola;
+> sin cambios nativos ⇒ no hay binario) **+ QA device**: `eva://coach/guia` y el `intent://` de Android con la
+> app **cerrada** (cold start por `initial: true`), «atrás» con sesión demo, y el explainer v2. Dependencia
+> dura de release: el explainer promete un botón que solo existe con el deploy web de W2 arriba.
 
 > **2026-08-22 (Nutrición V2 · «eliminar plantilla» EN PARIDAD)**: feedback del coach en iOS
 > («¿No puedo eliminar plantillas ya creadas? Si no me sirven quedan ahí para siempre») — la
