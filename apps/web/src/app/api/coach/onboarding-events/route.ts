@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { jsonRateLimited, rateLimitCoachOnboardingEvents } from '@/lib/rate-limit'
+import { mirrorOnboardingEventToPostHog } from '@/lib/posthog/onboarding-event-mirror'
 
 const schema = z.object({
     // Pasos v2 (`vive_tu_app`, `first_artifact`, `aha`) + los legacy `first_plan`/`first_checkin`,
@@ -124,6 +125,21 @@ export async function POST(request: Request) {
         }
         return NextResponse.json({ error: error.message }, { status: 500 })
     }
+
+    // Espejo a PostHog (W8.5.2 = W0.5 de flujo-coach-nuevo). Va acá abajo, y no dentro de
+    // `recordOnboardingEvent`, porque el manejo de errores de arriba necesita LEER el `error` del
+    // insert (404 por FK, `deduped` por 23505) y el helper del servicio se lo tragaría.
+    //
+    // Por eso mismo esta línea solo se alcanza con la fila YA escrita: los dos caminos de duplicado
+    // —la ventana de 5 s y el 23505 del índice único parcial— y los errores retornan antes. La
+    // tabla es la fuente de verdad: espejar un insert rechazado metería en PostHog filas que la
+    // tabla no tiene. `await` obligatorio: Vercel congela la invocación al responder.
+    await mirrorOnboardingEventToPostHog({
+        coachId: user.id,
+        stepKey: parsed.data.stepKey,
+        eventType: parsed.data.eventType,
+        metadata: parsed.data.metadata ?? null,
+    })
 
     return NextResponse.json({ ok: true })
 }

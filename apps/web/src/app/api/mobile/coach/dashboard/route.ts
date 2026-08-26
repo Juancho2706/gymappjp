@@ -11,6 +11,7 @@ import { ONBOARDING_STEP_KEYS } from '@eva/onboarding'
 import { isBrandingAllowed } from '@eva/tiers'
 import { loadOnboardingV2ApiData } from '@/services/onboarding/onboarding-v2.queries'
 import { parseOnboardingGuide } from '@/app/coach/dashboard/_lib/onboarding-guide-state'
+import { mirrorOnboardingEventToPostHog } from '@/lib/posthog/onboarding-event-mirror'
 
 function bearerToken(request: NextRequest): string | null {
     const auth = request.headers.get('authorization') || request.headers.get('Authorization')
@@ -268,6 +269,19 @@ export async function POST(request: NextRequest) {
         if (error) {
             return NextResponse.json({ error: error.message, code: 'EVENT_INSERT_FAILED' }, { status: 500 })
         }
+
+        // Espejo a PostHog (W8.5.2 = W0.5 de flujo-coach-nuevo), gemelo del de la ruta web. Aparte
+        // del insert y no dentro de `recordOnboardingEvent` por lo mismo: el 500 `EVENT_INSERT_FAILED`
+        // sale de leer el `error` del insert, que el helper del servicio se traga. Solo se alcanza
+        // con la fila escrita —un duplicado o una FK rota retornan 500 arriba— así que la app no
+        // puede meter en PostHog una fila que la tabla no tiene. `await` obligatorio: Vercel congela
+        // la invocación al responder.
+        await mirrorOnboardingEventToPostHog({
+            coachId: user.id,
+            stepKey,
+            eventType,
+            metadata,
+        })
 
         return NextResponse.json({ ok: true })
     }

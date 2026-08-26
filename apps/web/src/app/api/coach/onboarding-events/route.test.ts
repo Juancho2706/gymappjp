@@ -12,6 +12,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  *    `200 { ok: true, deduped: true }` — es el camino ESPERADO de un paso ya completado, no un
  *    error que deba ensuciar Sentry (el re-emit dejó 2.293 filas de `first_client`).
  *  - el dedupe por ventana de 5 s sigue vivo para los re-renders y NO aplica a `guide_engagement`.
+ *  - el espejo a PostHog (W8.5.2 = W0.5 de flujo-coach-nuevo) sale SOLO cuando la fila quedó: ni
+ *    con el dedupe por ventana, ni con el 23505, ni con la FK rota. Una fila en PostHog por fila
+ *    en la tabla.
  */
 
 const USER_ID = 'coach-uuid-1'
@@ -56,6 +59,16 @@ vi.mock('@/lib/supabase/admin-client', () => ({
     }),
 }))
 
+/** El espejo a PostHog se testea a través del módulo real: lo mockeado es la ingesta. */
+type CaptureInput = {
+    event: string
+    distinctId: string
+    properties?: Record<string, string | number | boolean | null>
+    set?: Record<string, string | number | boolean | null>
+}
+const captureMock = vi.hoisted(() => vi.fn<(input: CaptureInput) => Promise<void>>(async () => {}))
+vi.mock('@/lib/posthog/server-capture', () => ({ capturePostHogServerEvent: captureMock }))
+
 import { POST } from './route'
 
 function req(body: unknown) {
@@ -71,6 +84,8 @@ beforeEach(() => {
     lastDup = null
     insertError = null
     inserts.length = 0
+    captureMock.mockClear()
+    captureMock.mockResolvedValue(undefined)
 })
 
 describe('POST /api/coach/onboarding-events — contrato de eventos v2', () => {
@@ -116,6 +131,16 @@ describe('POST /api/coach/onboarding-events — contrato de eventos v2', () => {
             expect(res.status, stepKey).toBe(200)
         }
         expect(inserts.map((r) => r.step_key)).toEqual(steps)
+    })
+
+    it('`vive_tu_app_entered` desde cliente → 400 (el CHECK lo admite, este endpoint NO)', async () => {
+        // El evento existe en la base desde `vive-tu-app-directo` V1.11, pero lo escribe SOLO el
+        // servidor (`GET /vive-tu-app`, después de verificar el magic link y el cinturón
+        // `is_demo`). Abrirlo acá dejaría a cualquiera con un bearer auto-tildarse el paso 2 —que
+        // es exactamente la mentira que esta spec vino a arreglar.
+        const res = await POST(req({ stepKey: 'vive_tu_app', eventType: 'vive_tu_app_entered' }))
+        expect(res.status).toBe(400)
+        expect(inserts).toHaveLength(0)
     })
 
     it('rechaza un event_type fuera del CHECK con 400 (nunca llega al insert)', async () => {
@@ -198,5 +223,74 @@ describe('POST /api/coach/onboarding-events — bordes', () => {
         const res = await POST(req('{no json'))
         expect(res.status).toBe(400)
         expect(inserts).toHaveLength(0)
+    })
+})
+
+describe('POST /api/coach/onboarding-events — espejo a PostHog', () => {
+    it('tras un insert exitoso espeja el evento con el coach como distinct_id', async () => {
+        const res = await POST(
+            req({
+                stepKey: 'vive_tu_app',
+                eventType: 'guide_engagement',
+                metadata: { persona: 'rehab', source: 'guia' },
+            })
+        )
+
+        expect(res.status).toBe(200)
+        expect(inserts).toHaveLength(1)
+        expect(captureMock).toHaveBeenCalledTimes(1)
+        expect(captureMock).toHaveBeenCalledWith({
+            event: 'guide_engagement',
+            distinctId: USER_ID,
+            // `step_key` viaja como PROPIEDAD y es el que quedó en la fila.
+            properties: { persona: 'rehab', source: 'guia', step_key: 'vive_tu_app' },
+            // La persona se pega al PERFIL: cualquier insight se desglosa por rama.
+            set: { persona: 'rehab' },
+        })
+    })
+
+    it('evento sin `persona` en el metadata: se espeja igual, pero sin `$set`', async () => {
+        await POST(req({ stepKey: 'first_client', eventType: 'step_completed' }))
+        expect(captureMock).toHaveBeenCalledWith(
+            expect.objectContaining({ event: 'step_completed', properties: { step_key: 'first_client' }, set: undefined })
+        )
+    })
+
+    it('dedupe por ventana de 5 s: no hubo fila, no hay espejo', async () => {
+        lastDup = { id: 'ev-1', created_at: new Date().toISOString() }
+        const res = await POST(req({ stepKey: 'first_client', eventType: 'step_completed' }))
+        expect(res.status).toBe(200)
+        expect(inserts).toHaveLength(0)
+        expect(captureMock).not.toHaveBeenCalled()
+    })
+
+    it('23505 (el paso ya estaba completado): no hay espejo', async () => {
+        insertError = { code: '23505', message: 'duplicate key value violates unique constraint' }
+        const res = await POST(req({ stepKey: 'first_client', eventType: 'step_completed' }))
+        expect(await res.json()).toEqual({ ok: true, deduped: true })
+        expect(captureMock).not.toHaveBeenCalled()
+    })
+
+    it('FK rota (coach inexistente): no hay espejo', async () => {
+        insertError = { code: '23503', message: 'insert or update violates foreign key constraint' }
+        const res = await POST(req({ stepKey: 'first_client', eventType: 'step_completed' }))
+        expect(res.status).toBe(404)
+        expect(captureMock).not.toHaveBeenCalled()
+    })
+
+    it('`persona_selected` NO se espeja: sus call sites ya lo capturan con payload propio', async () => {
+        const res = await POST(
+            req({ stepKey: 'persona', eventType: 'persona_selected', metadata: { persona: 'nutrition' } })
+        )
+        expect(res.status).toBe(200)
+        expect(inserts).toHaveLength(1)
+        expect(captureMock).not.toHaveBeenCalled()
+    })
+
+    it('la captura que explota no cambia la respuesta del endpoint', async () => {
+        captureMock.mockRejectedValueOnce(new Error('posthog caído'))
+        const res = await POST(req({ stepKey: 'aha', eventType: 'aha_moment' }))
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual({ ok: true })
     })
 })

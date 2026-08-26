@@ -12,7 +12,11 @@ import { NextRequest } from 'next/server'
  *    `onboardingGuide` (la app todavía lee de ahí `invite_code_confirmed` y el inventario del demo);
  *  - que `action: 'onboarding_event'` acepta los pasos de la guía v2. Con los 4 valores del
  *    checklist v1 que había antes, cualquier evento nuevo emitido desde la app moría en 400 y RN
- *    quedaba fuera de la medición.
+ *    quedaba fuera de la medición;
+ *  - que `vive_tu_app_entered` NO entra por acá (vive-tu-app-directo V1.15): lo escribe SOLO el
+ *    servidor web tras verificar el magic link;
+ *  - el espejo a PostHog del insert directo (W8.5.2 = W0.5 de flujo-coach-nuevo): sale tras el
+ *    insert OK y nunca con el insert rechazado.
  */
 
 const COACH_ID = 'coach-uuid-mobile'
@@ -24,7 +28,17 @@ vi.mock('@/lib/mobile-auth', () => ({
 
 let coachRow: Record<string, unknown> | null = null
 const inserts: Array<Record<string, unknown>> = []
-let insertError: { message: string } | null = null
+let insertError: { code?: string; message: string } | null = null
+
+/** El espejo a PostHog se ejercita con el módulo real: lo mockeado es la ingesta. */
+type CaptureInput = {
+    event: string
+    distinctId: string
+    properties?: Record<string, string | number | boolean | null>
+    set?: Record<string, string | number | boolean | null>
+}
+const captureMock = vi.hoisted(() => vi.fn<(input: CaptureInput) => Promise<void>>(async () => {}))
+vi.mock('@/lib/posthog/server-capture', () => ({ capturePostHogServerEvent: captureMock }))
 
 vi.mock('@/lib/supabase/admin-client', () => ({
     createServiceRoleClient: () => ({
@@ -268,5 +282,86 @@ describe('POST /api/mobile/coach/dashboard — onboarding_event', () => {
         expect((await POST(postReq({ action: 'onboarding_event', stepKey: 'inventado', eventType: 'step_completed' }))).status).toBe(400)
         expect((await POST(postReq({ action: 'onboarding_event', stepKey: 'aha', eventType: 'inventado' }))).status).toBe(400)
         expect(inserts).toHaveLength(0)
+    })
+
+    it('`vive_tu_app_entered` desde la app → 400 (la lista de 12 aceptados no cambia)', async () => {
+        // vive-tu-app-directo V1.15: el evento existe en la base desde V1.11, pero lo escribe SOLO
+        // el servidor web (`GET /vive-tu-app`, después de verificar el magic link y el cinturón
+        // `is_demo`). Abrirlo acá dejaría a cualquiera con un bearer auto-tildarse el paso 2 — que
+        // es exactamente la mentira que esa spec vino a arreglar. La unión de tipos de
+        // `apps/mobile/lib/coach-dashboard.ts` tampoco lo incluye (V1.25).
+        const res = await POST(
+            postReq({ action: 'onboarding_event', stepKey: 'vive_tu_app', eventType: 'vive_tu_app_entered' })
+        )
+        expect(res.status).toBe(400)
+        expect(await res.json()).toMatchObject({ code: 'INVALID_EVENT' })
+        expect(inserts).toHaveLength(0)
+    })
+})
+
+describe('POST /api/mobile/coach/dashboard — espejo a PostHog', () => {
+    it('tras el insert OK espeja el evento con el coach del token como distinct_id', async () => {
+        const res = await POST(
+            postReq({
+                action: 'onboarding_event',
+                stepKey: 'first_artifact',
+                eventType: 'step_completed',
+                metadata: { persona: 'rehab', surface: 'rn' },
+            })
+        )
+
+        expect(res.status).toBe(200)
+        expect(captureMock).toHaveBeenCalledTimes(1)
+        expect(captureMock).toHaveBeenCalledWith({
+            event: 'step_completed',
+            distinctId: COACH_ID,
+            properties: { persona: 'rehab', surface: 'rn', step_key: 'first_artifact' },
+            set: { persona: 'rehab' },
+        })
+    })
+
+    it('sin `persona` en el metadata se espeja igual, pero sin `$set`', async () => {
+        await POST(postReq({ action: 'onboarding_event', stepKey: 'aha', eventType: 'aha_moment' }))
+        expect(captureMock).toHaveBeenCalledWith(
+            expect.objectContaining({ event: 'aha_moment', properties: { step_key: 'aha' }, set: undefined })
+        )
+    })
+
+    it('insert rechazado (duplicado o FK rota) → 500 y sin espejo', async () => {
+        insertError = { code: '23503', message: 'insert or update violates foreign key constraint' }
+        const res = await POST(
+            postReq({ action: 'onboarding_event', stepKey: 'first_artifact', eventType: 'step_completed' })
+        )
+        expect(res.status).toBe(500)
+        expect(captureMock).not.toHaveBeenCalled()
+    })
+
+    it('evento rechazado con 400: ni fila ni espejo', async () => {
+        await POST(postReq({ action: 'onboarding_event', stepKey: 'aha', eventType: 'inventado' }))
+        expect(inserts).toHaveLength(0)
+        expect(captureMock).not.toHaveBeenCalled()
+    })
+
+    it('`persona_selected` NO se espeja: su call site ya lo captura con payload propio', async () => {
+        const res = await POST(
+            postReq({
+                action: 'onboarding_event',
+                stepKey: 'persona',
+                eventType: 'persona_selected',
+                metadata: { persona: 'nutrition' },
+            })
+        )
+        expect(res.status).toBe(200)
+        expect(inserts).toHaveLength(1)
+        expect(captureMock).not.toHaveBeenCalled()
+    })
+
+    it('la captura que explota no cambia la respuesta del endpoint', async () => {
+        captureMock.mockRejectedValueOnce(new Error('posthog caído'))
+        const res = await POST(
+            postReq({ action: 'onboarding_event', stepKey: 'first_artifact', eventType: 'step_completed' })
+        )
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual({ ok: true })
     })
 })
