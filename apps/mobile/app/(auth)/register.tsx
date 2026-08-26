@@ -27,7 +27,9 @@ import { useTheme } from '../../context/ThemeContext'
 import { AuthDivider, Button, Card, GoogleSignInButton, HapticPressable, Input } from '../../components'
 import { toast } from '../../components/Toast'
 import { ApiError, completeCoachOnboarding, registerCoachFree } from '../../lib/api'
-import { rememberPendingSignup } from '../../lib/pending-signup'
+import { clearPendingSignup, rememberPendingSignup } from '../../lib/pending-signup'
+import { postRegisterRoute, verifyEmailHref } from '../../lib/register-flow'
+import { supabase } from '../../lib/supabase'
 import {
   GoogleSignInError,
   isGoogleSignInAvailable,
@@ -180,13 +182,41 @@ export default function RegisterScreen() {
         acceptHealthData: true,
         acceptMarketing,
       })
+      // Solo en memoria: la pantalla siguiente entra sola al panel apenas el correo esté confirmado,
+      // y acá abajo son las credenciales con las que se abre sesión cuando el alta ya nace activa.
+      rememberPendingSignup(parsed.data.email, parsed.data.password)
+
+      // W3.2b: si el server declaró la cuenta `active` (alta free sin muro de correo, D1 = A), la
+      // pantalla de verificación no tiene NADA que verificar. Espejo exacto del camino feliz de
+      // `tryAutoSignIn` en `(auth)/verify-email.tsx`: sesión → limpiar credenciales → rol → panel.
+      // `status` ausente (server anterior a W3.2) o `pending_email` ⇒ camino de siempre, intacto.
+      if (postRegisterRoute(created.status) === 'panel') {
+        try {
+          const { error: signInError } = await supabase.auth.signInWithPassword({
+            email: parsed.data.email,
+            password: parsed.data.password,
+          })
+          if (!signInError) {
+            clearPendingSignup()
+            await AsyncStorage.setItem('eva_user_role', 'coach')
+            router.replace('/coach/home')
+            return
+          }
+        } catch {
+          // Cae al fallback de abajo por el mismo motivo que un `error` devuelto.
+        }
+        // El login no salió (red, o la cuenta todavía no propagó). La cuenta EXISTE y está activa:
+        // sería falso decir «no se pudo crear la cuenta» y peor dejarlo en un toast sin salida. Va a
+        // la pantalla de siempre, cuyo «Ya confirmé · Ir al panel» reintenta con estas mismas
+        // credenciales; `active=1` le dice que no prometa un correo que no hay que esperar.
+        router.replace(verifyEmailHref({ email: parsed.data.email, uid: created.uid, alreadyActive: true }))
+        return
+      }
+
       // El `uid` es la llave del reenvio del correo de confirmacion en la pantalla siguiente (no hay
       // sesion hasta que el coach confirma). Espejo del `?uid=` del registro web. Si el server es
       // anterior a W4 no viene y la pantalla degrada sola.
-      const uidParam = created.uid ? `&uid=${encodeURIComponent(created.uid)}` : ''
-      // Solo en memoria: la pantalla siguiente entra sola al panel apenas el correo esté confirmado.
-      rememberPendingSignup(parsed.data.email, parsed.data.password)
-      router.replace(`/(auth)/verify-email?email=${encodeURIComponent(parsed.data.email)}${uidParam}`)
+      router.replace(verifyEmailHref({ email: parsed.data.email, uid: created.uid }))
     } catch (err) {
       const message = err instanceof ApiError ? err.message : 'Intenta nuevamente en unos momentos.'
       setError(message)

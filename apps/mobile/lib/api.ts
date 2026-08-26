@@ -169,6 +169,15 @@ export interface RegisterCoachFreeResponse {
    * anterior a W4, y ahi la pantalla simplemente no ofrece el boton.
    */
   uid?: string
+  /**
+   * Estado con el que nacio la cuenta (W3.2). `active` = el alta free ya no tiene muro de correo y
+   * el cliente puede abrir sesion de una; `pending_email` = hay que confirmar antes.
+   *
+   * Opcional a proposito, igual que `uid`: un binario/OTA nuevo puede correr contra un server
+   * anterior a W3.2, que no manda el campo. Ausente NO significa `active` — el cliente cae a la
+   * pantalla de verificacion (`lib/register-flow.ts`), que es el comportamiento de siempre.
+   */
+  status?: 'active' | 'pending_email'
   email: string
   slug: string
   message: string

@@ -42,7 +42,19 @@ export default function VerifyEmailScreen() {
   // en el login, no acá. Sin `uid` (server anterior a W4) la pantalla degrada al texto de siempre.
   // `confirmed=1` lo pone `+native-intent` cuando `/auth/confirm` (web, Android) devolvió al coach a
   // la app después de confirmar: acá se intenta entrar de una.
-  const { email, uid, confirmed } = useLocalSearchParams<{ email?: string; uid?: string; confirmed?: string }>()
+  // `active=1` lo pone el alta RN (W3.2b) SOLO cuando el server ya devolvió la cuenta `active` y el
+  // `signInWithPassword` inmediato no salió (red, carrera de propagación). Ahí no hay correo que
+  // esperar ni nada que reenviar —`lib/api.ts` documenta que el reenvío contesta 200 aunque el
+  // server no mande nada cuando la cuenta ya está confirmada—, así que el copy deja de pedir «revisa
+  // tu email» y dice lo único cierto: ya puede entrar. Un `pending_email` REAL (server anterior a
+  // W3.2, o un alta con muro) llega sin este flag y ve el copy de siempre, palabra por palabra.
+  const { email, uid, confirmed, active } = useLocalSearchParams<{
+    email?: string
+    uid?: string
+    confirmed?: string
+    active?: string
+  }>()
+  const alreadyActive = active === '1'
   const [signingIn, setSigningIn] = useState(false)
   const signingInRef = useRef(false)
 
@@ -139,7 +151,11 @@ export default function VerifyEmailScreen() {
     }
   }, [uid, phase, cooldown])
 
-  const hint = uid ? resendHint(resendState) : '¿No te llegó? Revisa spam o espera un minuto.'
+  const hint = alreadyActive
+    ? 'Tu cuenta ya está activa. No hace falta confirmar el correo para entrar.'
+    : uid
+      ? resendHint(resendState)
+      : '¿No te llegó? Revisa spam o espera un minuto.'
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: theme.background }]}>
@@ -159,12 +175,14 @@ export default function VerifyEmailScreen() {
           </View>
 
           <Text className="text-strong font-display-black" style={styles.title}>
-            Revisa tu email
+            {alreadyActive ? 'Ya puedes entrar' : 'Revisa tu email'}
           </Text>
           <Text className="text-muted font-sans" style={styles.subtitle}>
-            Te enviamos un enlace de confirmación a{' '}
-            <Text className="text-strong font-sans-semibold">{email || 'tu correo'}</Text>. Clickéalo para
-            activar tu cuenta gratuita.
+            {alreadyActive ? 'Tu cuenta ' : 'Te enviamos un enlace de confirmación a '}
+            <Text className="text-strong font-sans-semibold">{email || 'tu correo'}</Text>
+            {alreadyActive
+              ? ' ya está creada y activa. Entra al panel cuando quieras.'
+              : '. Clickéalo para activar tu cuenta gratuita.'}
           </Text>
 
           <Card padding={18} style={styles.benefitsCard}>
@@ -204,7 +222,11 @@ export default function VerifyEmailScreen() {
             {hint}
           </Text>
 
-          {uid ? (
+          {/* Con la cuenta ya activa el botón desaparece: el server contesta 200 sin reenviar nada
+              (cuenta ya confirmada) y la pantalla pintaría «Listo, te lo reenviamos» sobre un correo
+              que nadie mandó. Un no-op silencioso con acuse de recibo es exactamente la mentira que
+              W3.2b viene a sacar. */}
+          {uid && !alreadyActive ? (
             <Button
               testID="verify-email-resend"
               label={resendButtonLabel(resendState)}
@@ -221,7 +243,7 @@ export default function VerifyEmailScreen() {
 
           <Button
             testID="verify-email-continue"
-            label="Ya confirmé · Ir al panel"
+            label={alreadyActive ? 'Entrar al panel' : 'Ya confirmé · Ir al panel'}
             variant="sport"
             rightIcon={ArrowRight}
             loading={signingIn}
