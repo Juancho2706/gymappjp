@@ -1932,6 +1932,9 @@ export default function ProgramBuilderScreen() {
                 coachId: onboarding?.coachId ?? null,
                 demoName: guidedDemoName,
                 noun: guidedNoun,
+                // Desde acá el banner de vuelta NO ofrece deep link: volver por `eva://` resetearía
+                // el stack y este builder tiene un borrador en pantalla. El botón atrás es el camino.
+                from: 'builder',
               })
                 .then((outcome) => {
                   if (outcome.status === 'error') toast.error(outcome.error)

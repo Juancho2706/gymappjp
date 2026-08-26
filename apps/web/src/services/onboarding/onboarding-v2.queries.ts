@@ -263,23 +263,48 @@ export async function resolveFirstArtifact(
 }
 
 /**
- * Paso 2 («Mira tu app con tu marca») acotado a la especialidad vigente: el evento
- * `vive_tu_app_opened` es «entré como Matías», y entrar como Matías no es entrar como Pedro. Lo
- * hecho en la rama anterior no se pierde — vuelve por `onboarding_guide.progress[persona]`.
+ * Momento en que la web empezó a escribir `vive_tu_app_entered` (docs/specs/vive-tu-app-directo §2).
+ *
+ * ⚠️ PLACEHOLDER: W5.2 lo reemplaza por el timestamp REAL del deploy, justo antes de desplegar.
+ * Mientras el valor esté en el futuro el resolver se comporta como hoy (manda `opened`), que es el
+ * lado seguro del error: nadie pierde un tilde. Con el valor real, todo `opened` posterior al corte
+ * deja de tildar —porque desde ahí existe la señal honesta— y los `opened` anteriores siguen
+ * valiendo: son los 6 coaches que ya tenían el paso 2 tildado con el significado viejo y no se les
+ * puede quitar.
+ */
+export const VIVE_TU_APP_ENTERED_CUTOVER = '2026-08-26T06:00:00.000Z'
+
+/**
+ * Paso 2 («Mira tu app con tu marca») acotado a la especialidad vigente: entrar como Matías no es
+ * entrar como Pedro. Lo hecho en la rama anterior no se pierde — vuelve por
+ * `onboarding_guide.progress[persona]`.
+ *
+ * DOS señales, y la diferencia es lo que arregla esta spec: `vive_tu_app_entered` lo escribe
+ * `/vive-tu-app` cuando el coach ENTRÓ de verdad; `vive_tu_app_opened` solo dice que PIDIÓ el link
+ * (el 23-08, 6 de 6 coaches tenían el paso tildado y solo 2 habían entrado). El viejo sigue
+ * valiendo hasta el corte y nada más — grandfather por fecha, no por coach.
+ *
+ * PostgREST expresa el «o» con `.or(...)`: con dos `.eq('event_type', …)` la consulta sería una
+ * conjunción imposible y el paso no se tildaría nunca.
  */
 export async function resolveViveTuAppOpened(
     db: DbClient,
     coachId: string,
     personaEpoch: string | null,
 ): Promise<boolean> {
-    let q = db
+    const entered = personaEpoch
+        ? `and(event_type.eq.vive_tu_app_entered,created_at.gte.${personaEpoch})`
+        : 'event_type.eq.vive_tu_app_entered'
+    const opened = personaEpoch
+        ? `and(event_type.eq.vive_tu_app_opened,created_at.lt.${VIVE_TU_APP_ENTERED_CUTOVER},created_at.gte.${personaEpoch})`
+        : `and(event_type.eq.vive_tu_app_opened,created_at.lt.${VIVE_TU_APP_ENTERED_CUTOVER})`
+
+    const { data } = await db
         .from('coach_onboarding_events')
         .select('id')
         .eq('coach_id', coachId)
-        .eq('event_type', 'vive_tu_app_opened')
+        .or(`${entered},${opened}`)
         .limit(1)
-    if (personaEpoch) q = q.gte('created_at', personaEpoch)
-    const { data } = await q
     return (data?.length ?? 0) > 0
 }
 

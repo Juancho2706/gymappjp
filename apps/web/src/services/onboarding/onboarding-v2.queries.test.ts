@@ -6,6 +6,7 @@ vi.mock('@/services/billing/capacity.service', () => ({
 }))
 
 import {
+    VIVE_TU_APP_ENTERED_CUTOVER,
     artifactCutoff,
     loadOnboardingSignalsDetailed,
     loadPersonaArtifactScope,
@@ -35,8 +36,53 @@ const COACH = 'coach-1'
 type Filter = { op: 'eq' | 'gt' | 'gte' | 'or'; column: string; value: string }
 type Call = { table: string; filters: Filter[] }
 
-/** Qué devuelve cada consulta, según tabla y si lleva corte (`gt`/`gte`). */
-type Counts = Partial<Record<string, { total: number; afterCutoff?: number }>>
+/** Fila de `coach_onboarding_events` para los casos que distinguen `entered` de `opened`. */
+type EventRow = { event_type: string; created_at: string }
+
+/**
+ * Qué devuelve cada consulta, según tabla y si lleva corte (`gt`/`gte`).
+ *
+ * `events` es la vía FINA: cuando está, la consulta se evalúa de verdad contra esas filas usando
+ * la expresión `.or(...)` que armó el resolver. Hizo falta desde `vive-tu-app-directo` V1.16: el
+ * paso 2 pasó a ser «(`entered` desde la epoch) o (`opened` antes del corte)» y el `total /
+ * afterCutoff` de siempre no sabe distinguir un `entered` de un `opened`, así que un `.or()` mal
+ * armado habría pasado el test por la razón equivocada.
+ */
+type Counts = Partial<Record<string, { total: number; afterCutoff?: number; events?: EventRow[] }>>
+
+/** Separa por comas del NIVEL SUPERIOR (las de adentro de `and(...)` no cuentan). */
+function splitTopLevel(expr: string): string[] {
+    const parts: string[] = []
+    let depth = 0
+    let start = 0
+    for (let i = 0; i < expr.length; i += 1) {
+        const ch = expr[i]
+        if (ch === '(') depth += 1
+        else if (ch === ')') depth -= 1
+        else if (ch === ',' && depth === 0) {
+            parts.push(expr.slice(start, i))
+            start = i + 1
+        }
+    }
+    parts.push(expr.slice(start))
+    return parts.filter((part) => part.length > 0)
+}
+
+/** Mini evaluador de un término PostgREST: `col.op.valor` o `and(term,term,…)`. */
+function matchesTerm(row: EventRow, term: string): boolean {
+    if (term.startsWith('and(') && term.endsWith(')')) {
+        return splitTopLevel(term.slice(4, -1)).every((inner) => matchesTerm(row, inner))
+    }
+    const [column, op, ...rest] = term.split('.')
+    // Los ISO traen puntos (`.000Z`): el valor se rearma con todo lo que sobró.
+    const value = rest.join('.')
+    const left = column === 'event_type' ? row.event_type : row.created_at
+    if (op === 'eq') return left === value
+    if (op === 'gte') return left >= value
+    if (op === 'gt') return left > value
+    if (op === 'lt') return left < value
+    throw new Error(`operador no soportado en el fake: ${term}`)
+}
 
 /** `clients` se consulta dos veces con sentidos distintos: alumno real vs alumno de ejemplo. */
 function keyFor(call: Call): string {
@@ -77,7 +123,21 @@ function fakeDb(
             }),
             then: (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) => {
                 const spec = counts[keyFor(call)] ?? { total: 0 }
-                const cut = call.filters.some((f) => f.op === 'gt' || f.op === 'gte')
+                const or = call.filters.find((f) => f.op === 'or')
+
+                // Vía FINA: filas reales evaluadas contra la expresión `.or(...)` del resolver.
+                if (spec.events && or) {
+                    const terms = splitTopLevel(or.column)
+                    const rows = spec.events.filter((row) => terms.some((term) => matchesTerm(row, term)))
+                    const data = rows.map((_, i) => ({ id: `row-${i}` }))
+                    return Promise.resolve({ count: rows.length, data, error: null }).then(resolve, reject)
+                }
+
+                // Vía GRUESA (el resto de las señales): «¿la consulta lleva corte temporal?». El
+                // corte puede venir como `.gte()` suelto o dentro de un `.or(...)`.
+                const cut =
+                    call.filters.some((f) => f.op === 'gt' || f.op === 'gte') ||
+                    (or != null && or.column.includes('created_at.gte.'))
                 const count = cut ? (spec.afterCutoff ?? 0) : spec.total
                 const data = count > 0 ? Array.from({ length: count }, (_, i) => ({ id: `row-${i}` })) : []
                 return Promise.resolve({ count, data, error: null }).then(resolve, reject)
@@ -261,27 +321,61 @@ describe('resolveFirstArtifact — cada rama mira SU artefacto (bug del owner 22
     })
 })
 
-describe('resolveViveTuAppOpened — «entré como Matías» no es «entré como Pedro»', () => {
-    it('con especialidad nueva, el evento viejo no cuenta', async () => {
+describe('resolveViveTuAppOpened — el paso 2 se tilda cuando el coach ENTRÓ', () => {
+    /** Un instante después del corte: lo que el resolver ya no acepta como `opened`. */
+    const DESPUES_DEL_CORTE = new Date(Date.parse(VIVE_TU_APP_ENTERED_CUTOVER) + 60_000).toISOString()
+    const ANTES_DEL_CORTE = '2026-08-22T19:00:00.000Z'
+    const events = (...rows: EventRow[]) => ({ coach_onboarding_events: { total: 0, events: rows } })
+
+    it('la consulta es un `.or()` con las dos ramas, no dos `.eq` imposibles', async () => {
         const calls: Call[] = []
-        const db = fakeDb({ coach_onboarding_events: { total: 3, afterCutoff: 0 } }, {}, calls)
-        expect(await resolveViveTuAppOpened(db, COACH, PERSONA_SET_AT)).toBe(false)
-        expect(calls[0].filters).toEqual(
-            expect.arrayContaining([
-                { op: 'eq', column: 'event_type', value: 'vive_tu_app_opened' },
-                { op: 'gte', column: 'created_at', value: PERSONA_SET_AT },
-            ]),
+        const db = fakeDb(events(), {}, calls)
+        await resolveViveTuAppOpened(db, COACH, PERSONA_SET_AT)
+
+        const or = calls[0].filters.find((f) => f.op === 'or')
+        expect(or).toBeDefined()
+        expect(or?.column).toContain(`and(event_type.eq.vive_tu_app_entered,created_at.gte.${PERSONA_SET_AT})`)
+        expect(or?.column).toContain(
+            `and(event_type.eq.vive_tu_app_opened,created_at.lt.${VIVE_TU_APP_ENTERED_CUTOVER},created_at.gte.${PERSONA_SET_AT})`,
         )
+        // Un `.eq('event_type', …)` suelto convertiría el `.or()` en una conjunción imposible.
+        expect(calls[0].filters.some((f) => f.op === 'eq' && f.column === 'event_type')).toBe(false)
+    })
+
+    it('con especialidad nueva, el evento viejo no cuenta', async () => {
+        const db = fakeDb(events({ event_type: 'vive_tu_app_opened', created_at: '2026-08-22T13:00:00.000Z' }), {})
+        expect(await resolveViveTuAppOpened(db, COACH, PERSONA_SET_AT)).toBe(false)
     })
 
     it('sin especialidad fechada se cuenta todo (coach viejo)', async () => {
-        const db = fakeDb({ coach_onboarding_events: { total: 1, afterCutoff: 0 } }, {})
+        const db = fakeDb(events({ event_type: 'vive_tu_app_opened', created_at: ANTES_DEL_CORTE }), {})
         expect(await resolveViveTuAppOpened(db, COACH, null)).toBe(true)
     })
 
-    it('abrió su app YA en la rama nueva ⇒ hecho', async () => {
-        const db = fakeDb({ coach_onboarding_events: { total: 2, afterCutoff: 1 } }, {})
+    it('grandfather: el `opened` de la rama nueva ANTERIOR al corte sigue tildando', async () => {
+        // Los 6 coaches que ya tenían el paso 2 tildado con el significado viejo no lo pierden.
+        const db = fakeDb(events({ event_type: 'vive_tu_app_opened', created_at: ANTES_DEL_CORTE }), {})
         expect(await resolveViveTuAppOpened(db, COACH, PERSONA_SET_AT)).toBe(true)
+    })
+
+    it('un `opened` POSTERIOR al corte ya no tilda: desde ahí existe la señal honesta', async () => {
+        const db = fakeDb(events({ event_type: 'vive_tu_app_opened', created_at: DESPUES_DEL_CORTE }), {})
+        expect(await resolveViveTuAppOpened(db, COACH, PERSONA_SET_AT)).toBe(false)
+    })
+
+    it('`vive_tu_app_entered` tilda, sin importar el corte', async () => {
+        const db = fakeDb(events({ event_type: 'vive_tu_app_entered', created_at: DESPUES_DEL_CORTE }), {})
+        expect(await resolveViveTuAppOpened(db, COACH, PERSONA_SET_AT)).toBe(true)
+    })
+
+    it('un `entered` ANTERIOR a la especialidad actual no cuenta (entró como Matías, no como Pedro)', async () => {
+        const db = fakeDb(events({ event_type: 'vive_tu_app_entered', created_at: '2026-08-22T13:00:00.000Z' }), {})
+        expect(await resolveViveTuAppOpened(db, COACH, PERSONA_SET_AT)).toBe(false)
+    })
+
+    it('otro evento del onboarding nunca tilda el paso 2', async () => {
+        const db = fakeDb(events({ event_type: 'demo_seeded', created_at: DESPUES_DEL_CORTE }), {})
+        expect(await resolveViveTuAppOpened(db, COACH, null)).toBe(false)
     })
 })
 

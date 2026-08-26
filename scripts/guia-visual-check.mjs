@@ -21,6 +21,8 @@
  *   E) Tap targets ≥ 44 px de alto en todo lo interactivo y visible de la guía y de la píldora.
  *   F) La banda del alumno de ejemplo apila en móvil (chip, texto y botón en tres renglones) y
  *      vuelve a ser una sola línea desde `md`; su botón ocupa el ancho completo en móvil.
+ *   G) Con el paso 2 PENDIENTE (`?paso2=pendiente`) el CTA de «Vive tu app» está en pantalla y
+ *      cumple A, B y E a 390 px en los dos temas (docs/specs/vive-tu-app-directo V1.18).
  *
  * Capturas: C:/Users/juanm/.claude/jobs/543abb77/tmp/guia-visual/
  *
@@ -488,13 +490,68 @@ async function smokeDemoRailPosition(browser) {
   }
 }
 
+/**
+ * Paso 2 SIN tildar (`?paso2=pendiente`) — la variante que existe desde
+ * `docs/specs/vive-tu-app-directo` (V1.18).
+ *
+ * Con el fixture por defecto el paso 2 está hecho, así que el CTA de «Vive tu app» —el botón que
+ * esa spec reescribe: en móvil un toque y entra directo— no se pintaba en NINGUNA de las pasadas y
+ * el gate visual no lo había medido nunca. Acá se mide donde duele: 390 px, los dos temas.
+ */
+async function smokePaso2Pendiente(browser) {
+  for (const theme of THEMES) {
+    const viewport = VIEWPORTS[0]
+    const context = await browser.newContext({
+      viewport: { width: viewport.width, height: viewport.height },
+      colorScheme: theme,
+      storageState: STORAGE_STATE,
+    })
+    const page = await context.newPage()
+    const tag = `${viewport.label}px ${theme} paso2-pendiente`
+    try {
+      await gotoHarness(page, '?persona=nutrition&paso2=pendiente')
+
+      const cta = page.locator('#paso-vive_tu_app button', { hasText: 'Ver mi app' })
+      report(`CTA «Ver mi app» visible con el paso 2 pendiente — ${tag}`, (await cta.count()) > 0)
+
+      const overflow = await page.evaluate(probeDocumentOverflow)
+      report(
+        `sin scroll horizontal — ${tag}`,
+        overflow.scrollWidth <= overflow.innerWidth &&
+          overflow.bodyScrollWidth <= overflow.bodyClientWidth,
+        `doc=${overflow.scrollWidth}/${overflow.innerWidth} body=${overflow.bodyScrollWidth}/${overflow.bodyClientWidth}`,
+      )
+
+      const clipped = await page.evaluate(probeClippedText)
+      report(
+        `textos sin recorte ciego — ${tag}`,
+        clipped.length === 0,
+        clipped.map((c) => `${c.tag} «${c.text}» ${c.scrollWidth}>${c.clientWidth}`).join(' | '),
+      )
+
+      const small = await page.evaluate(probeTapTargets)
+      report(
+        `tap targets ≥ 44 px — ${tag}`,
+        small.length === 0,
+        small.map((s) => `«${s.label}» ${s.height}px`).join(' | '),
+      )
+
+      await page.screenshot({ path: join(SHOTS_DIR, `${viewport.label}-${theme}-paso2-pendiente.png`), fullPage: true })
+      shotCount += 1
+    } catch (err) {
+      report(`pasada ${tag}`, false, err instanceof Error ? err.message : String(err))
+    }
+    await context.close()
+  }
+}
+
 async function main() {
   console.log('=== guia-visual-check — onboarding v2 W4.6 ===\n')
 
-  console.log('Paso 0/4 — chromium…')
+  console.log('Paso 0/5 — chromium…')
   await ensureChromiumInstalled()
 
-  console.log('Paso 1/4 — dev server…')
+  console.log('Paso 1/5 — dev server…')
   const devServer = await startDevServer()
   const ready = await waitForServer(`${BASE_URL}${HARNESS_PATH}?persona=nutrition`)
   report('dev server responde en el harness', ready, BASE_URL)
@@ -506,14 +563,17 @@ async function main() {
 
   const browser = await chromium.launch({ headless: true })
   try {
-    console.log('\nPaso 2/4 — matriz 5 anchos × 2 temas × 2 personas…')
+    console.log('\nPaso 2/5 — matriz 5 anchos × 2 temas × 2 personas…')
     await runMatrix(browser)
 
-    console.log('\nPaso 3/4 — píldora minimizada…')
+    console.log('\nPaso 3/5 — píldora minimizada…')
     await smokeCollapsedPill(browser)
 
-    console.log('\nPaso 4/4 — posición del riel del alumno de ejemplo…')
+    console.log('\nPaso 4/5 — posición del riel del alumno de ejemplo…')
     await smokeDemoRailPosition(browser)
+
+    console.log('\nPaso 5/5 — paso 2 pendiente (CTA de «Vive tu app»)…')
+    await smokePaso2Pendiente(browser)
   } finally {
     await browser.close()
     killDevServer(devServer)

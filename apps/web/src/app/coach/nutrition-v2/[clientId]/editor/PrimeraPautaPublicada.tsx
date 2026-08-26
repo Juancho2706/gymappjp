@@ -12,7 +12,9 @@ import { ViveTuAppButton } from '@/app/coach/dashboard/_components/ViveTuAppButt
  * resultado y tiene UNA acción — abrir su app como su alumno de ejemplo — más el escape.
  *
  * `autoOpenViveTuApp` es el contrato de la CTA «Publicar y ver como {demo}»: el mismo botón real
- * (mismo magic link de un solo uso, mismo QR, mismos avisos) abre su hoja solo al montar.
+ * (mismo magic link de un solo uso) abre su hoja solo al montar EN ESCRITORIO. En móvil el botón
+ * se pinta y espera el toque —desde `vive-tu-app-directo` §1 un toque ahí navega directo a la app
+ * del alumno, y hacerlo sin gesto sería sacar al coach del editor por sorpresa.
  */
 export function PrimeraPautaPublicada({
     demoName,

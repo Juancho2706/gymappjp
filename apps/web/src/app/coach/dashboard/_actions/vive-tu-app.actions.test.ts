@@ -1,14 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { createClientMock, createServiceRoleClientMock, revalidatePathMock } = vi.hoisted(() => ({
-    createClientMock: vi.fn(),
-    createServiceRoleClientMock: vi.fn(),
-    revalidatePathMock: vi.fn(),
-}))
+const { createClientMock, createServiceRoleClientMock, revalidatePathMock, headersMock, rateLimitMock } =
+    vi.hoisted(() => ({
+        createClientMock: vi.fn(),
+        createServiceRoleClientMock: vi.fn(),
+        revalidatePathMock: vi.fn(),
+        headersMock: vi.fn(),
+        rateLimitMock: vi.fn(),
+    }))
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: createClientMock }))
 vi.mock('@/lib/supabase/admin-client', () => ({ createServiceRoleClient: createServiceRoleClientMock }))
 vi.mock('next/cache', () => ({ revalidatePath: revalidatePathMock }))
+vi.mock('next/headers', () => ({ headers: headersMock }))
+vi.mock('@/lib/rate-limit', () => ({ rateLimitViveTuApp: rateLimitMock }))
 
 import { openViveTuAppAction } from './vive-tu-app.actions'
 
@@ -19,6 +24,9 @@ function setup(options: {
     coach?: { id: string; slug: string | null; invite_code: string | null } | null
     demo?: DemoRow
     generateLink?: { data: unknown; error: { message: string } | null }
+    /** `user-agent` del navegador del coach: es de donde sale `device` (medición del funnel). */
+    userAgent?: string | null
+    rateLimit?: { ok: true } | { ok: false; retryAfter: number }
 }) {
     const {
         user = { id: 'coach-1' },
@@ -28,7 +36,12 @@ function setup(options: {
             data: { properties: { hashed_token: 'HASH_SECRETO' } },
             error: null,
         },
+        userAgent = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) Chrome/126 Mobile Safari/537.36',
+        rateLimit = { ok: true as const },
     } = options
+
+    headersMock.mockResolvedValue(new Headers(userAgent ? { 'user-agent': userAgent } : {}))
+    rateLimitMock.mockResolvedValue(rateLimit)
 
     const coachQuery: Record<string, unknown> = {}
     Object.assign(coachQuery, {
@@ -112,7 +125,30 @@ describe('openViveTuAppAction', () => {
             url: expect.stringMatching(/\/vive-tu-app\?t=HASH_SECRETO&c=EVA123$/),
             demoName: 'Matías Soto',
         })
-        expect(revalidatePathMock).toHaveBeenCalledWith('/coach/dashboard')
+        // La guía vive en `/coach/guia` desde el 22-08: revalidar el dashboard no la refrescaba.
+        expect(revalidatePathMock).toHaveBeenCalledWith('/coach/guia')
+    })
+
+    it('el techo por coach corta ANTES de emitir un magic link', async () => {
+        const { generateLinkFn } = setup({ rateLimit: { ok: false, retryAfter: 120 } })
+
+        const result = await openViveTuAppAction()
+
+        expect(result).toEqual({
+            ok: false,
+            reason: 'error',
+            detail: expect.stringContaining('Espera un momento'),
+        })
+        expect(generateLinkFn).not.toHaveBeenCalled()
+        expect(rateLimitMock).toHaveBeenCalledWith('coach-1')
+    })
+
+    it('lee el `user-agent` para saber si el coach está en el teléfono o en el panel', async () => {
+        // `device` es la única forma de leer la métrica del paso 2 (`entered / opened` con
+        // `device = mobile`). Es MEDICIÓN: el user-agent lo escribe el cliente y no autoriza nada.
+        setup({})
+        await openViveTuAppAction()
+        expect(headersMock).toHaveBeenCalled()
     })
 
     it('si GoTrue falla, ni el mensaje ni el log exponen el token', async () => {

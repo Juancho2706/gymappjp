@@ -32,6 +32,14 @@ export type ViveTuAppOutcome =
 
 export type DeleteDemoOutcome = { ok: true; deleted: boolean } | { ok: false; error: string }
 
+/**
+ * Pantalla que abre el navegador. Viaja al servidor y vuelve dentro de la URL (`&from=`), porque
+ * quien lo necesita es el banner de vuelta del árbol del alumno: desde la guía puede ofrecer
+ * «Volver a la app» (deep link), desde el builder no —volver por `eva://` resetearía el stack con
+ * un borrador en pantalla— y ahí el banner dice «vuelve con el botón atrás».
+ */
+export type ViveTuAppFrom = 'guia' | 'builder'
+
 type ViveTuAppResponse = { ok: true; url: string; demoName: string }
 type DeleteDemoResponse = { ok: true; deleted: boolean }
 
@@ -47,12 +55,15 @@ function humanize(error: unknown, fallback: string): string {
  * Pide el link de un solo uso y lo abre. Devuelve el nombre del demo para el copy («Así ve Matías
  * tu app»), o el motivo por el que no se pudo.
  */
-export async function openViveTuApp(): Promise<ViveTuAppOutcome> {
+export async function openViveTuApp(input: { from?: ViveTuAppFrom } = {}): Promise<ViveTuAppOutcome> {
     let response: ViveTuAppResponse
     try {
         response = await apiFetch<ViveTuAppResponse>('/api/mobile/coach/vive-tu-app', {
             method: 'POST',
             authenticated: true,
+            // Lo único que manda la app: de qué pantalla salió. La identidad sigue saliendo del
+            // bearer; un `from` inventado como mucho cambia el texto del banner de vuelta.
+            body: { from: input.from ?? 'guia' },
         })
     } catch (error) {
         return { ok: false, error: humanize(error, 'No pudimos abrir tu app. Intenta de nuevo.') }
@@ -88,8 +99,16 @@ export async function openViveTuApp(): Promise<ViveTuAppOutcome> {
  * Se recuerda con AsyncStorage y no en el servidor a propósito: es una preferencia de esta app en
  * este teléfono, no un hecho del onboarding. Si el coach reinstala, vuelve a ver el aviso una vez;
  * eso es correcto, porque también es la primera vez que hace el salto en ese teléfono.
+ *
+ * v2 (SPEC «Vive tu app» directo §3): el árbol del alumno ahora muestra un banner con **«Volver a
+ * la app»** (deep link `eva://coach/guia`, o `intent://` en Android). El aviso v1 decía «vuelve con
+ * el botón atrás», que era la única salida que existía; ahora hay dos y la buena es el botón. Como
+ * el copy cambia de fondo —y quien ya vio el v1 nunca se enteraría del botón nuevo— se sube la
+ * versión del prefijo: los coaches que ya tenían el sello vuelven a ver el aviso una vez, con la
+ * salida correcta. El sello viejo (`…v1:<coach>`) queda huérfano en AsyncStorage: son bytes, no
+ * vale un borrado que habría que mantener para siempre.
  */
-const VIVE_TU_APP_EXPLAINED_PREFIX = 'eva.vive-tu-app.explained.v1:'
+const VIVE_TU_APP_EXPLAINED_PREFIX = 'eva.vive-tu-app.explained.v2:'
 
 /** Clave por coach. Con prefijo versionado: si el copy cambia de fondo, se sube la v y se re-explica. */
 export function viveTuAppExplainedKey(coachId: string): string {
@@ -110,10 +129,15 @@ export type ViveTuAppExplainer = {
 }
 
 /**
- * Copy del aviso. Puro y exportado para poder pinnearlo: las tres cosas que el coach necesita
- * saber (se abre en el navegador · con SU marca · su sesión de coach no se pierde) tienen que
- * estar sí o sí, y el nombre del demo va tanto en el título como en el botón para que el salto no
- * sorprenda.
+ * Copy del aviso. Puro y exportado para poder pinnearlo: las cuatro cosas que el coach necesita
+ * saber (se abre en el navegador · con SU marca · su sesión de coach no se pierde · cómo vuelve)
+ * tienen que estar sí o sí, y el nombre del demo va tanto en el título como en el botón para que el
+ * salto no sorprenda.
+ *
+ * La vuelta se nombra con el literal EXACTO del banner web («Volver a la app», SPEC §3 modo `rn`):
+ * si acá dijera otra cosa, el coach buscaría un botón que no existe. El botón atrás se conserva
+ * como segunda salida porque desde el builder el banner no ofrece deep link —resetearía el stack
+ * con un borrador en pantalla— y ahí atrás es la única forma de volver.
  */
 export function viveTuAppExplainer(input: { demoName: string; noun: string }): ViveTuAppExplainer {
     const demoName = input.demoName.trim() === '' ? 'tu alumno de ejemplo' : input.demoName.trim()
@@ -122,7 +146,7 @@ export function viveTuAppExplainer(input: { demoName: string; noun: string }): V
         title: `Así la ve ${demoName}`,
         message:
             `Se abre en el navegador de tu teléfono con tu logo y tu color, tal como la vería tu ${noun}. ` +
-            'Tu sesión de coach sigue acá en la app: cuando termines, vuelve con el botón atrás.',
+            'Tu sesión de coach sigue acá en la app: cuando termines, toca «Volver a la app» o usa el botón atrás.',
         cancelLabel: 'Cancelar',
         confirmLabel: `Abrir como ${demoName}`,
     }
@@ -177,6 +201,8 @@ export async function openViveTuAppGuided(input: {
     coachId: string | null
     demoName: string
     noun: string
+    /** Pantalla que abre el navegador. Sin esto se asume la guía, que es de donde viene la mayoría. */
+    from?: ViveTuAppFrom
     confirm?: (explainer: ViveTuAppExplainer) => Promise<boolean>
     store?: ViveTuAppExplainedStore
 }): Promise<ViveTuAppFlowOutcome> {
@@ -205,7 +231,7 @@ export async function openViveTuAppGuided(input: {
         }
     }
 
-    const result = await openViveTuApp()
+    const result = await openViveTuApp({ from: input.from })
     return result.ok ? { status: 'opened', demoName: result.demoName } : { status: 'error', error: result.error }
 }
 

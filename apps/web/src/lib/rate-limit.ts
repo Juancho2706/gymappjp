@@ -17,6 +17,8 @@ let recipesRatelimit: Ratelimit | null | undefined
 let coachSearchRatelimit: Ratelimit | null | undefined
 let adminRatelimit: Ratelimit | null | undefined
 let coachOnboardingEventsRatelimit: Ratelimit | null | undefined
+let viveTuAppRatelimit: Ratelimit | null | undefined
+let viveTuAppMobileRatelimit: Ratelimit | null | undefined
 let supportRatelimit: Ratelimit | null | undefined
 let exerciseMediaUploadRatelimit: Ratelimit | null | undefined
 let exerciseMediaUploadIpRatelimit: Ratelimit | null | undefined
@@ -222,6 +224,78 @@ export async function rateLimitCoachOnboardingEvents(
     const limiter = getCoachOnboardingEventsRatelimit()
     if (!limiter) return { ok: true }
     const res = await limiter.limit(`coach-onboarding:${coachUserId}`)
+    await res.pending.catch(() => undefined)
+    if (res.success) return { ok: true }
+    const retryAfter = Math.max(1, Math.ceil((res.reset - Date.now()) / 1000))
+    return { ok: false, retryAfter }
+}
+
+function getViveTuAppRatelimit(): Ratelimit | null {
+    if (viveTuAppRatelimit !== undefined) return viveTuAppRatelimit
+    const redis = redisFromEnv()
+    if (!redis) {
+        viveTuAppRatelimit = null
+        return null
+    }
+    viveTuAppRatelimit = new Ratelimit({
+        redis,
+        // 10 cada 10 min por coach. Cada toque emite un magic link de GoTrue, y desde que móvil
+        // entra DIRECTO (docs/specs/vive-tu-app-directo §1) «atrás + volver a tocar» es el gesto
+        // barato: sin techo, un coach curioso quema decenas de links (y el slot de recovery, que
+        // GoTrue comparte). 10 en 10 min es holgado para probar y volver varias veces.
+        limiter: Ratelimit.slidingWindow(10, '10 m'),
+        prefix: 'ratelimit:vive-tu-app',
+    })
+    return viveTuAppRatelimit
+}
+
+/**
+ * fail-OPEN (mismo criterio que `rateLimitCoachOnboardingEvents`): sin Redis permite. Es el paso 2
+ * del onboarding de un coach autenticado; negarle ver su propia app por una caída de Redis es peor
+ * que dejar pasar unos links de más.
+ */
+export async function rateLimitViveTuApp(
+    coachUserId: string
+): Promise<{ ok: true } | { ok: false; retryAfter: number }> {
+    const limiter = getViveTuAppRatelimit()
+    if (!limiter) return { ok: true }
+    const res = await limiter.limit(`vive-tu-app:${coachUserId}`)
+    await res.pending.catch(() => undefined)
+    if (res.success) return { ok: true }
+    const retryAfter = Math.max(1, Math.ceil((res.reset - Date.now()) / 1000))
+    return { ok: false, retryAfter }
+}
+
+function getViveTuAppMobileRatelimit(): Ratelimit | null {
+    if (viveTuAppMobileRatelimit !== undefined) return viveTuAppMobileRatelimit
+    const redis = redisFromEnv()
+    if (!redis) {
+        viveTuAppMobileRatelimit = null
+        return null
+    }
+    viveTuAppMobileRatelimit = new Ratelimit({
+        redis,
+        // MISMO presupuesto que la web (10 cada 10 min por coach) y a propósito una llave APARTE:
+        // el endpoint móvil no comparte sesión con la web y mezclarlos haría que probar desde la app
+        // le gastara el techo a la web del mismo coach. Cada toque emite un magic link real de
+        // GoTrue, que además comparte el slot de recovery.
+        limiter: Ratelimit.slidingWindow(10, '10 m'),
+        prefix: 'ratelimit:vive-tu-app-mobile',
+    })
+    return viveTuAppMobileRatelimit
+}
+
+/**
+ * fail-OPEN (espeja `rateLimitViveTuApp`): sin Redis permite. Es el paso 2 del onboarding de un
+ * coach ya autenticado por bearer; negarle ver su app por una caída de Redis es peor que dejar
+ * pasar unos links de más.
+ */
+export async function rateLimitViveTuAppMobile(
+    coachUserId: string
+): Promise<{ ok: true } | { ok: false; retryAfter: number }> {
+    const limiter = getViveTuAppMobileRatelimit()
+    if (!limiter) return { ok: true }
+    const res = await limiter.limit(`vive-tu-app-mobile:${coachUserId}`)
     await res.pending.catch(() => undefined)
     if (res.success) return { ok: true }
     const retryAfter = Math.max(1, Math.ceil((res.reset - Date.now()) / 1000))

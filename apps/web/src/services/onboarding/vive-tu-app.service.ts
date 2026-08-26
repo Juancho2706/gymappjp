@@ -36,6 +36,20 @@ type DB = SupabaseClient<Database>
 /** Superficie desde la que se abrió: alimenta el funnel (`metadata.surface`). */
 export type ViveTuAppSurface = 'web' | 'rn'
 
+/**
+ * Dispositivo desde el que se PIDIÓ el link. Lo resuelve el llamador (la web por `user-agent`, la
+ * app siempre `mobile`), nunca este núcleo: acá no hay request.
+ */
+export type ViveTuAppDevice = 'mobile' | 'desktop'
+
+/**
+ * Pantalla de RN que abrió el link. Viaja en la URL (`&from=`) porque quien la necesita es el
+ * BANNER de vuelta del árbol del alumno: desde el builder no se puede ofrecer un deep link (el
+ * stack tiene un borrador en pantalla y volver por `eva://` lo resetearía), así que ahí el banner
+ * dice «vuelve con el botón atrás». Default `guia`.
+ */
+export type ViveTuAppFrom = 'guia' | 'builder'
+
 export type ViveTuAppLinkResult =
     | { ok: true; url: string; demoName: string }
     | { ok: false; reason: 'sin_demo' | 'sin_marca' | 'error'; detail?: string }
@@ -44,6 +58,14 @@ export interface ViveTuAppInput {
     /** Coach YA autenticado por el llamador. */
     coachId: string
     surface: ViveTuAppSurface
+    /**
+     * OPCIONAL a propósito: el llamador que todavía no lo sabe (o que no tiene request a mano)
+     * sigue compilando, y el evento guarda `device: null` en vez de mentir. El endpoint móvil
+     * pasa `mobile` siempre; la web lo saca del `user-agent`.
+     */
+    device?: ViveTuAppDevice
+    /** Solo tiene efecto con `surface: 'rn'`: es la pantalla de la app que abrió el navegador. */
+    from?: ViveTuAppFrom
 }
 
 /** `step_key` del paso 2 de la guía. Es lo que lee `getCoachOnboardingV2Data` para auto-tildarlo. */
@@ -54,7 +76,7 @@ export async function createViveTuAppLink(
     admin: DB,
     input: ViveTuAppInput,
 ): Promise<ViveTuAppLinkResult> {
-    const { coachId, surface } = input
+    const { coachId, surface, device, from } = input
 
     const { data: coach } = await db
         .from('coaches')
@@ -92,7 +114,12 @@ export async function createViveTuAppLink(
         return { ok: false, reason: 'error', detail: 'No pudimos abrir tu app. Intenta de nuevo.' }
     }
 
-    const url = `${studentAppOrigin()}/vive-tu-app?t=${encodeURIComponent(hashedToken)}&c=${encodeURIComponent(identifier)}`
+    // `src=rn&from=…` solo desde la app: son las dos señales con las que `/vive-tu-app` decide el
+    // modo del banner de vuelta (`rn` gana sobre `return`) y si ofrece deep link o el botón atrás.
+    // Van en la QUERY y no en el path a propósito: `isStoreSafeUrl` (allowlist de tiendas) mira el
+    // path, así que el link sigue siendo el mismo destino permitido de siempre.
+    const rnParams = surface === 'rn' ? `&src=rn&from=${from ?? 'guia'}` : ''
+    const url = `${studentAppOrigin()}/vive-tu-app?t=${encodeURIComponent(hashedToken)}&c=${encodeURIComponent(identifier)}${rnParams}`
 
     // Señal del paso 2. Es medición: que falle no puede impedirle al coach ver su app, por eso
     // `recordOnboardingEvent` traga el error (solo lo advierte en el log).
@@ -101,11 +128,16 @@ export async function createViveTuAppLink(
     // y el paso 2 se archiva por especialidad. La señal viva se acota por `persona_set_at`
     // (`resolveViveTuAppOpened`), así que esto es para la MEDICIÓN — poder leer el funnel por rama
     // sin cruzar contra el estado actual del coach, que cambia.
+    //
+    // `device` (spec «Vive tu app» directo, V1.14): este evento significa «PIDIÓ el link», y el
+    // agujero que motivó la spec es justamente que en móvil pedirlo y entrar no es lo mismo. Sin
+    // este campo, `entered / opened` no se puede leer por dispositivo y la métrica del rediseño no
+    // existe. El evento NO se mueve de lugar: los 65 runtimes que ya lo emiten siguen valiendo.
     await recordOnboardingEvent(admin, {
         coachId,
         stepKey: VIVE_TU_APP_STEP_KEY,
         eventType: 'vive_tu_app_opened',
-        metadata: { surface, persona: coach?.persona ?? null },
+        metadata: { surface, persona: coach?.persona ?? null, device: device ?? null },
     })
 
     return { ok: true, url, demoName: demo.full_name }

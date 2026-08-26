@@ -26,6 +26,20 @@ export function redirectSystemPath({ path }: { path: string; initial: boolean })
       return `/(auth)/verify-email?confirmed=1${emailParam}`
     }
 
+    // `eva://coach/guia`: la vuelta desde el árbol del alumno en el navegador (banner «Volver a la
+    // app», SPEC «Vive tu app» directo §3, modo `rn`). En Android llega envuelto en un
+    // `intent://coach/guia#Intent;scheme=eva;package=cl.evaapp.eva;…;end` que el sistema resuelve a
+    // este mismo `eva://`. Sin esta rama caía en el `return path` de abajo y el router recibía
+    // `eva://coach/guia` crudo, que no resuelve ninguna pantalla.
+    //
+    // Es una ALLOWLIST explícita, no una regla general «todo /coach/* pasa»: cada ruta interna que
+    // se pueda abrir desde afuera es superficie de ataque (un link en un mail o en un chat entra
+    // acá sin que nadie lo audite), así que se habilita ruta por ruta. El resto del árbol de coach
+    // sigue devolviendo el path crudo, igual que hoy.
+    if (segments[0] === 'coach' && segments[1] === 'guia') {
+      return '/coach/guia'
+    }
+
     return path
   } catch {
     return '/'

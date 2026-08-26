@@ -118,6 +118,10 @@ export async function persistOnboardingGuideAction(
         return { ok: false, error: error.message }
     }
 
+    // Las DOS casas del estado de la guía: la pantalla propia (`/coach/guia`, donde vive desde el
+    // 22-08) y el dashboard, que sigue montando la píldora flotante. Revalidar solo el dashboard
+    // dejaba la guía servida desde caché con el progreso viejo.
+    revalidatePath('/coach/guia')
     revalidatePath('/coach/dashboard')
     return { ok: true }
 }

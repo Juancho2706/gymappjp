@@ -29,6 +29,20 @@ describe('store-compliance: destinos permitidos', () => {
     expect(isStoreSafeUrl('https://eva-app.cl/blog/como-armar-un-plan')).toBe(true)
     expect(isStoreSafeUrl('https://www.eva-app.cl/')).toBe(true)
   })
+
+  /**
+   * «Vive tu app» desde la app (SPEC «Vive tu app» directo, V1.22): el link que emite
+   * `/api/mobile/coach/vive-tu-app` gana `&src=rn&from=<guia|builder>` para que el banner de vuelta
+   * sepa a qué pantalla devolver al coach. La allowlist mira el PATH, así que la query no lo saca
+   * de la lista — y esto lo deja pinneado: si alguien endurece el parser mirando la URL cruda, el
+   * botón «Ver mi app» de la guía se apagaría en silencio en todos los teléfonos.
+   */
+  it('el link de «Vive tu app» con su query de superficie y origen', () => {
+    expect(isStoreSafeUrl('https://www.eva-app.cl/vive-tu-app?t=HASH&c=EVA123&src=rn&from=guia')).toBe(true)
+    expect(isStoreSafeUrl('https://www.eva-app.cl/vive-tu-app?t=HASH&c=mi-marca&src=rn&from=builder')).toBe(true)
+    // Sin query (el link de la web) es el mismo destino.
+    expect(isStoreSafeUrl('https://www.eva-app.cl/vive-tu-app?t=HASH&c=EVA123')).toBe(true)
+  })
 })
 
 describe('store-compliance: superficies de pago del sitio propio', () => {

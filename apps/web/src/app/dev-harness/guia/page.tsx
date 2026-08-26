@@ -29,6 +29,9 @@ import type { CoachBrandDraft, DemoStudentSnapshot } from '../../coach/dashboard
  *  - `?persona=strength|nutrition|rehab|endurance|other` (default `nutrition`)
  *  - `?demo=0` para la variante sin alumno de ejemplo (la guía pierde su riel)
  *  - `?brand=0` para la variante sin la tarjeta «Tu marca en 60 segundos»
+ *  - `?paso2=pendiente` para el paso 2 SIN tildar: es el único estado en que se ve el CTA nuevo
+ *    de «Vive tu app» (docs/specs/vive-tu-app-directo V1.18). Con el fixture por defecto el paso
+ *    está hecho y el gate visual nunca mediría el botón que esta spec cambia.
  *
  * Fuera de `development` la ruta no existe (mismo guard que el resto de `dev-harness`).
  */
@@ -128,7 +131,7 @@ const GUIDE_FIXTURE: Json = {
 export default async function GuiaHarnessPage({
     searchParams,
 }: {
-    searchParams: Promise<{ persona?: string; demo?: string; brand?: string }>
+    searchParams: Promise<{ persona?: string; demo?: string; brand?: string; paso2?: string }>
 }) {
     if (process.env.NODE_ENV !== 'development') notFound()
 
@@ -138,6 +141,16 @@ export default async function GuiaHarnessPage({
         : 'nutrition'
     const withDemo = params.demo !== '0'
     const needsBrand = params.brand !== '0'
+    const paso2Pendiente = params.paso2 === 'pendiente'
+
+    // Paso 2 sin tildar: la señal del servidor en `false` y la key fuera de `completed`. `emitted`
+    // se deja como está — solo evita POSTs, y un paso no completado no emite nada igual.
+    const signals: OnboardingSignals = paso2Pendiente
+        ? { ...SIGNALS, viveTuAppOpened: false }
+        : SIGNALS
+    const guide: Json = paso2Pendiente
+        ? { ...(GUIDE_FIXTURE as Record<string, unknown>), completed: { vive_tu_app: false, first_artifact: true } }
+        : GUIDE_FIXTURE
 
     const demo: DemoStudentSnapshot | null = withDemo
         ? { clientId: 'demo-harness', fullName: DEMO_NAME[persona], kpis: DEMO_KPIS[persona] }
@@ -180,8 +193,8 @@ export default async function GuiaHarnessPage({
                                 brand={BRAND}
                                 needsBrand={needsBrand}
                                 showsEvaBadge
-                                signals={SIGNALS}
-                                initialGuide={GUIDE_FIXTURE}
+                                signals={signals}
+                                initialGuide={guide}
                                 guideSeenAt="2026-08-22T10:00:00.000Z"
                                 welcome
                             />
@@ -234,7 +247,7 @@ export default async function GuiaHarnessPage({
             <GuidePill
                 coachId="harness-coach"
                 persona={persona}
-                onboardingGuide={GUIDE_FIXTURE}
+                onboardingGuide={guide}
                 managed={false}
             />
 

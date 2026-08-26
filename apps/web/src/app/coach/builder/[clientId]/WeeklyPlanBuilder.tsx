@@ -1320,12 +1320,14 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             Listo: {studentFirstName || 'tu alumno'} ya tiene su rutina
                         </p>
                         <p className="mt-0.5 text-[12.5px] leading-snug text-[var(--text-on-dark-muted)]">
-                            Ábrela en tu celular y mírala como la ve él, con tu logo y tu color.
+                            Mírala como la ve él, con tu logo y tu color.
                         </p>
                     </div>
                     <div className="shrink-0">
-                        {/* `autoOpen`: el CTA «Asignar y ver como …» ya fue el gesto del coach; la hoja
-                            (QR + «abrir aquí») se abre sola al montar. */}
+                        {/* `autoOpen` conserva su semántica de ESCRITORIO (el CTA «Asignar y ver como …»
+                            ya fue el gesto del coach y la hoja con QR se abre sola). En móvil el botón
+                            solo se pinta y espera el toque: acá hay borrador local y navegar sin gesto
+                            sería secuestrarle la pantalla (docs/specs/vive-tu-app-directo §1). */}
                         <ViveTuAppButton
                             label={`Ver como ${studentFirstName || 'tu alumno'}`}
                             className="border-white/25 bg-white/10 text-[var(--text-on-dark)] hover:bg-white/20"

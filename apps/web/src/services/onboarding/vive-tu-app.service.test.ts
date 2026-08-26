@@ -66,7 +66,11 @@ describe('createViveTuAppLink', () => {
     it('emite el link a la ruta propia con el identificador público y registra el evento con la superficie', async () => {
         const { db, admin, insert, generateLinkFn } = setup()
 
-        const result = await createViveTuAppLink(db, admin, { coachId: 'coach-1', surface: 'rn' })
+        const result = await createViveTuAppLink(db, admin, {
+            coachId: 'coach-1',
+            surface: 'rn',
+            device: 'mobile',
+        })
 
         expect(generateLinkFn).toHaveBeenCalledWith(
             expect.objectContaining({ type: 'magiclink', email: 'demo@evatest.cl' }),
@@ -74,7 +78,7 @@ describe('createViveTuAppLink', () => {
         expect(result).toEqual({
             ok: true,
             // El identificador público es el invite_code cuando existe (mismo helper que el resto).
-            url: expect.stringMatching(/\/vive-tu-app\?t=HASH_SECRETO&c=EVA123$/),
+            url: expect.stringMatching(/\/vive-tu-app\?t=HASH_SECRETO&c=EVA123&src=rn&from=guia$/),
             demoName: 'Matías Soto',
         })
         expect(insert).toHaveBeenCalledWith(
@@ -83,7 +87,46 @@ describe('createViveTuAppLink', () => {
                 step_key: 'vive_tu_app',
                 event_type: 'vive_tu_app_opened',
                 // La `persona` viaja desde W8.1.3: el paso 2 se archiva por especialidad.
-                metadata: { surface: 'rn', persona: 'strength' },
+                // El `device` desde V1.14: este evento es «pidió el link», y el agujero que motivó
+                // la spec es que en móvil pedirlo y entrar dejaron de ser lo mismo.
+                metadata: { surface: 'rn', persona: 'strength', device: 'mobile' },
+            }),
+        )
+    })
+
+    /**
+     * V1.22 — `src=rn&from=` solo desde la app. Las dos señales las lee `/vive-tu-app` para decidir
+     * el modo del banner de vuelta: `src=rn` gana sobre «volver a mi panel», y `from=builder` lo
+     * deja SIN deep link (volver por `eva://` resetearía el stack con un borrador en pantalla).
+     */
+    it('desde la app el link lleva `src=rn` y la pantalla de origen; desde la web no lleva ninguna', async () => {
+        const { db, admin } = setup()
+
+        const guia = await createViveTuAppLink(db, admin, { coachId: 'coach-1', surface: 'rn' })
+        const builder = await createViveTuAppLink(db, admin, {
+            coachId: 'coach-1',
+            surface: 'rn',
+            from: 'builder',
+        })
+        const web = await createViveTuAppLink(db, admin, {
+            coachId: 'coach-1',
+            surface: 'web',
+            device: 'mobile',
+            // Un `from` colado desde la web no ensucia la URL: sin `src=rn` no significa nada.
+            from: 'builder',
+        })
+
+        expect(guia.ok && guia.url).toMatch(/&src=rn&from=guia$/)
+        expect(builder.ok && builder.url).toMatch(/&src=rn&from=builder$/)
+        expect(web.ok && web.url).toMatch(/\?t=HASH_SECRETO&c=EVA123$/)
+    })
+
+    it('sin `device` el evento guarda null en vez de mentir (el llamador que no lo sabe compila igual)', async () => {
+        const { db, admin, insert } = setup()
+        await createViveTuAppLink(db, admin, { coachId: 'coach-1', surface: 'web' })
+        expect(insert).toHaveBeenCalledWith(
+            expect.objectContaining({
+                metadata: { surface: 'web', persona: 'strength', device: null },
             }),
         )
     })

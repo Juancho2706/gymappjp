@@ -23,6 +23,22 @@ describe('redirectSystemPath', () => {
   })
 })
 
+describe('redirectSystemPath — vuelta a la app desde el árbol del alumno', () => {
+  it('eva://coach/guia aterriza en la guía (allowlist explícita)', () => {
+    expect(redirectSystemPath({ path: 'eva://coach/guia', initial: false })).toBe('/coach/guia')
+    // Android envuelve el mismo destino en un `intent://…;scheme=eva;…;end` que el sistema resuelve
+    // a `eva://coach/guia` antes de entregarlo; y el link también puede llegar como https.
+    expect(redirectSystemPath({ path: 'https://www.eva-app.cl/coach/guia', initial: true })).toBe('/coach/guia')
+    expect(redirectSystemPath({ path: '/coach/guia?desde=vive-tu-app', initial: false })).toBe('/coach/guia')
+  })
+
+  it('el resto del árbol de coach NO está en la allowlist: sigue devolviendo el path crudo', () => {
+    expect(redirectSystemPath({ path: 'eva://coach/clients', initial: true })).toBe('eva://coach/clients')
+    expect(redirectSystemPath({ path: '/coach/settings/brand', initial: true })).toBe('/coach/settings/brand')
+    expect(redirectSystemPath({ path: 'eva://coach', initial: true })).toBe('eva://coach')
+  })
+})
+
 describe('redirectSystemPath — vuelta a la app tras confirmar el correo', () => {
   it('eva://auth/confirmed aterriza en verify-email con confirmed=1 y el email', () => {
     expect(redirectSystemPath({ path: 'eva://auth/confirmed?email=coach%40example.com', initial: true }))

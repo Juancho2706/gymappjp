@@ -48,6 +48,13 @@ export function GuideStepCard({
     const { step, position, state } = view
     const done = state === 'done'
     const isNext = state === 'next'
+    /**
+     * «Vive tu app» conserva su acción también TILDADO (docs/specs/vive-tu-app-directo §1): es la
+     * única forma de volver a entrar a la app del alumno desde la guía, y esconderla al completar
+     * el paso dejaba al coach sin puerta («Verla otra vez»). El resto de los pasos sí la esconde:
+     * ahí el trabajo ya está hecho y el CTA solo sería ruido.
+     */
+    const keepsActionWhenDone = step.key === 'vive_tu_app'
 
     return (
         <li
@@ -125,7 +132,7 @@ export function GuideStepCard({
                         <p className="mt-2 text-[12.5px] font-semibold text-[var(--text-subtle)]">{hint}</p>
                     )}
 
-                    {(href || children) && !done && (
+                    {(href || children) && (!done || keepsActionWhenDone) && (
                         <div className="mt-3.5 flex flex-wrap items-center gap-2">
                             {href && (
                                 <Link

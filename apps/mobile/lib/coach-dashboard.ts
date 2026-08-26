@@ -405,7 +405,17 @@ export async function persistCoachOnboardingGuide(patch: Record<string, unknown>
   }
 }
 
-/** Emite un evento del funnel de onboarding (`coach_onboarding_events`). Best-effort. */
+/**
+ * Emite un evento del funnel de onboarding (`coach_onboarding_events`). Best-effort.
+ *
+ * La unión de `eventType` NO incluye `vive_tu_app_entered` y no debe incluirlo (SPEC «Vive tu app»
+ * directo §2, V1.25): ese evento es el que TILDA el paso 2, y lo escribe únicamente el servidor
+ * cuando el coach entró de verdad a la app de su alumno. El endpoint móvil del dashboard lo
+ * rechaza con 400 por la misma razón —no deduplica, así que abrirlo dejaría a cualquier bearer
+ * auto-tildándose el paso—, y la app tampoco tiene forma de saber si el coach entró: el ingreso
+ * ocurre en el navegador del sistema, fuera del proceso. Desde acá se emite «pidió el link»
+ * (`vive_tu_app_opened`, lo escribe el propio endpoint del link), nunca «entró».
+ */
 export async function postCoachOnboardingEvent(
   eventType: 'step_completed' | 'step_reopened' | 'aha_moment' | 'guide_engagement',
   metadata?: Record<string, string | number | boolean>,

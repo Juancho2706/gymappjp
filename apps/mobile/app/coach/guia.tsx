@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
-import type { LayoutChangeEvent } from 'react-native'
+import { ActivityIndicator, AppState, Pressable, ScrollView, Text, View } from 'react-native'
+import type { AppStateStatus, LayoutChangeEvent } from 'react-native'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { cssInterop } from 'nativewind'
@@ -48,6 +48,7 @@ import {
   shouldAutoScrollToFocus,
   type GuideFocus,
 } from '../../lib/guia-focus'
+import { shouldReloadOnAppState } from '../../lib/guia-reload'
 import { useEvaMotion } from '../../lib/motion'
 import { resolveSportRamp } from '../../lib/theme'
 
@@ -161,7 +162,16 @@ export default function CoachGuiaScreen() {
   const stepOffsetsRef = useRef<Partial<Record<OnboardingStepKey, number>>>({})
   const autoScrolledRef = useRef(false)
 
+  /**
+   * Una sola carga a la vez. Volver del navegador dispara DOS caminos casi juntos (el listener de
+   * `AppState` de abajo y el `useFocusEffect`, que también corre cuando la pantalla se reactiva
+   * por un deep link): sin este cierre serían dos `GET` del dashboard y dos `setData` compitiendo.
+   */
+  const inFlightRef = useRef(false)
+
   const load = useCallback(async () => {
+    if (inFlightRef.current) return
+    inFlightRef.current = true
     try {
       // Datos nuevos = otra oportunidad de persistir. El guard de abajo evita la doble escritura
       // sobre la MISMA foto, no que un paso recién tildado (volver de Mi Marca con el logo puesto)
@@ -172,6 +182,7 @@ export default function CoachGuiaScreen() {
       if (next) publishCoachOnboarding({ coachId: next.coach.id, onboardingV2: next.onboardingV2 })
     } finally {
       setLoading(false)
+      inFlightRef.current = false
     }
   }, [])
 
@@ -183,6 +194,26 @@ export default function CoachGuiaScreen() {
       void load()
     }, [load]),
   )
+
+  /**
+   * Vuelta desde el NAVEGADOR (paso 2). «Ver mi app» abre el navegador del sistema y el tilde lo
+   * escribe el servidor recién cuando el coach entra de verdad allá: el `load()` que dispara el
+   * botón corre antes de eso y trae la foto vieja. Este listener es el equivalente de RN al
+   * `pageshow` de la web — al volver a primer plano, la guía se refresca sola.
+   *
+   * `change` NO se emite al montar (mismo precedente que `app/(auth)/verify-email.tsx:91-95`), así
+   * que no hace falta un ref de «primer montaje»: el estado previo arranca en el real y la primera
+   * carga sigue siendo la del `useFocusEffect`.
+   */
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState)
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      const prev = appStateRef.current
+      appStateRef.current = next
+      if (shouldReloadOnAppState(prev, next)) void load()
+    })
+    return () => sub.remove()
+  }, [load])
 
   const v2 = data?.onboardingV2 ?? null
   /**

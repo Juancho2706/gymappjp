@@ -3,8 +3,10 @@
  * (`apps/mobile/lib/vive-tu-app.ts`, hallazgo 4 del QA del owner 2026-08-22).
  *
  * Lo que se pinnea:
- *  - el aviso dice las tres cosas que el coach necesita saber (se abre en el navegador · con SU
- *    marca · su sesión de coach sigue viva) y nombra al demo en el título y en el botón;
+ *  - el aviso dice las cuatro cosas que el coach necesita saber (se abre en el navegador · con SU
+ *    marca · su sesión de coach sigue viva · cómo vuelve) y nombra al demo en el título y en el
+ *    botón. La vuelta se pinnea con el literal exacto del banner web («Volver a la app», SPEC
+ *    «Vive tu app» directo §3): dos copys que se contradicen mandan a buscar un botón que no está;
  *  - se explica UNA sola vez por coach: el segundo toque abre directo;
  *  - cancelar NO abre nada y se distingue de un error (la guía no puede toastear «no se pudo»
  *    cuando el coach simplemente cerró el aviso);
@@ -67,7 +69,7 @@ beforeEach(() => {
 })
 
 describe('viveTuAppExplainer', () => {
-    it('nombra al demo y explica navegador, marca y sesión', async () => {
+    it('nombra al demo y explica navegador, marca, sesión y vuelta', async () => {
         const { viveTuAppExplainer } = await loadModule()
         const copy = viveTuAppExplainer({ demoName: 'Matías', noun: 'alumno' })
         expect(copy.title).toBe('Así la ve Matías')
@@ -77,6 +79,17 @@ describe('viveTuAppExplainer', () => {
         expect(copy.message).toContain('tu logo y tu color')
         expect(copy.message).toContain('Tu sesión de coach sigue acá en la app')
         expect(copy.message).toContain('tu alumno')
+        // v2: la salida buena es el botón del banner; el atrás queda como segunda vía (desde el
+        // builder el banner no ofrece deep link y es la única).
+        expect(copy.message).toContain('toca «Volver a la app»')
+        expect(copy.message).toContain('el botón atrás')
+    })
+
+    it('el copy no vende: sin plan, sin precio, sin dominio', async () => {
+        const { viveTuAppExplainer } = await loadModule()
+        const copy = viveTuAppExplainer({ demoName: 'Matías', noun: 'alumno' })
+        const all = `${copy.title} ${copy.message} ${copy.cancelLabel} ${copy.confirmLabel}`
+        expect(all).not.toMatch(/plan|precio|\$|eva-app\.cl|Pro\b/i)
     })
 
     it('usa el sustantivo de la persona del coach', async () => {
@@ -105,8 +118,25 @@ describe('shouldExplainViveTuApp / viveTuAppExplainedKey', () => {
 
     it('la clave es por coach y versionada', async () => {
         const { viveTuAppExplainedKey } = await loadModule()
-        expect(viveTuAppExplainedKey('coach-a')).toBe('eva.vive-tu-app.explained.v1:coach-a')
+        expect(viveTuAppExplainedKey('coach-a')).toBe('eva.vive-tu-app.explained.v2:coach-a')
         expect(viveTuAppExplainedKey('coach-b')).not.toBe(viveTuAppExplainedKey('coach-a'))
+    })
+
+    it('el sello v1 no apaga el aviso v2: el copy cambió de fondo y hay que re-explicarlo', async () => {
+        const { openViveTuAppGuided } = await loadModule()
+        const store = memoryStore({ 'eva.vive-tu-app.explained.v1:coach-a': 'true' })
+        let asked = 0
+        await openViveTuAppGuided({
+            coachId: 'coach-a',
+            demoName: 'Matías',
+            noun: 'alumno',
+            store,
+            confirm: async () => {
+                asked += 1
+                return true
+            },
+        })
+        expect(asked).toBe(1)
     })
 })
 

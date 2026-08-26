@@ -131,7 +131,12 @@ export function DemoStudentCard({
                         <ArrowUpRight className="size-4" />
                     </Link>
                 )}
-                <ViveTuAppButton label={`Ver como ${firstName}`} onOpened={onViveTuAppOpened} />
+                <ViveTuAppButton
+                    label={`Ver como ${firstName}`}
+                    onOpened={onViveTuAppOpened}
+                    demoClientId={demo.clientId}
+                    persona={persona}
+                />
                 <button
                     type="button"
                     onClick={() => setConfirmOpen(true)}
@@ -142,10 +147,12 @@ export function DemoStudentCard({
                 </button>
             </div>
 
-            {/* «Ver como …» abre una hoja con QR: el celular no tiene la sesión del panel y la app
-                del alumno es móvil. El aviso de «abrir aquí» vive dentro de la hoja. */}
+            {/* Copy NEUTRO de dispositivo (docs/specs/vive-tu-app-directo §1): en móvil «Ver como
+                …» entra directo en la misma pestaña y mandar a escanear un QR con el celular que el
+                coach tiene en la mano fue justo el callejón del 23-08. En escritorio el QR sigue
+                existiendo, pero dentro de la hoja. */}
             <p className="mt-2 text-[11.5px] text-[var(--text-muted)]">
-                Escanéalo con tu celular y entra como {firstName}: es tu app, con tu marca.
+                Entra como {firstName}: es tu app, con tu marca.
             </p>
 
             <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>

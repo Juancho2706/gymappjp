@@ -93,6 +93,7 @@ export function GuideScreen({
     const demoClientId = demo?.clientId ?? null
 
     useGuideSeenStamp(guideSeenAt)
+    useRefreshOnReturn()
     const { guideOff, restoring, restorePill } = useGuidePillRestore(vm, coachId, persona)
 
     const [line1, line2] = welcomeLines(persona, firstName)
@@ -240,8 +241,14 @@ export function GuideScreen({
                                     >
                                         {step.key === 'vive_tu_app' && (
                                             <ViveTuAppButton
-                                                label="Ver mi app"
-                                                onOpened={() => vm.markStepCompleted('vive_tu_app')}
+                                                /* Tildado, el paso conserva la puerta de vuelta. */
+                                                label={view.state === 'done' ? 'Verla otra vez' : 'Ver mi app'}
+                                                /* El tilde del paso 2 llega por la señal del SERVIDOR
+                                                   (`vive_tu_app_entered`) cuando el coach entró de
+                                                   verdad: pedir el link ya no lo tilda. */
+                                                onOpened={() => undefined}
+                                                demoClientId={demoClientId}
+                                                persona={persona}
                                             />
                                         )}
                                     </GuideStepCard>
@@ -293,7 +300,8 @@ export function GuideScreen({
                             demo={demo}
                             persona={vm.persona}
                             openHref={withPrimeraFlag(resolveHref(vm.steps[2], { demoClientId }))}
-                            onViveTuAppOpened={() => vm.markStepCompleted('vive_tu_app')}
+                            /* Igual que en la tarjeta del paso: pedir el link ya no tilda nada. */
+                            onViveTuAppOpened={() => undefined}
                         />
                     </aside>
                 )}
@@ -366,6 +374,49 @@ function useGuideSeenStamp(guideSeenAt: string | null): void {
         stampedRef.current = true
         void persistOnboardingGuideAction({ [GUIDE_SEEN_AT_KEY]: new Date().toISOString() })
     }, [guideSeenAt])
+}
+
+/**
+ * Vuelta a primer plano ⇒ la guía se relee del servidor.
+ *
+ * Es el equivalente web del listener de `AppState` de la app (docs/specs/vive-tu-app-directo §2).
+ * Desde que «Vive tu app» entra DIRECTO en móvil, el gesto #1 para volver es «atrás»: sin esto el
+ * navegador devuelve la guía cacheada (bfcache o Router Cache de Next) y el paso 2 aparece sin
+ * tildar aunque el servidor ya haya escrito `vive_tu_app_entered`. El coach ve su trabajo perdido.
+ *
+ * `pageshow` con `persisted` cubre el bfcache (Safari/iOS, Chrome Android) y `visibilitychange`
+ * cubre el cambio de pestaña/app. Una restauración de bfcache dispara los DOS: el guard de tiempo
+ * deja UN refresh por retorno. No toca nada más: `router.refresh()` es idempotente y no pierde
+ * estado del cliente.
+ */
+function useRefreshOnReturn(): void {
+    const router = useRouter()
+
+    useEffect(() => {
+        if (typeof document === 'undefined') return
+        let lastAt = 0
+        const refreshOnce = () => {
+            const now = Date.now()
+            if (now - lastAt < 500) return
+            lastAt = now
+            router.refresh()
+        }
+        const onVisibility = () => {
+            if (document.visibilityState !== 'visible') return
+            refreshOnce()
+        }
+        const onPageShow = (event: PageTransitionEvent) => {
+            if (!event.persisted) return
+            refreshOnce()
+        }
+
+        document.addEventListener('visibilitychange', onVisibility)
+        window.addEventListener('pageshow', onPageShow)
+        return () => {
+            document.removeEventListener('visibilitychange', onVisibility)
+            window.removeEventListener('pageshow', onPageShow)
+        }
+    }, [router])
 }
 
 /**

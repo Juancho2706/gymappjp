@@ -48,6 +48,10 @@ vi.mock('../../dashboard/_actions/demo-student.actions', () => ({
     deleteDemoStudentAction: deleteDemoMock,
 }))
 vi.mock('../../dashboard/_actions/vive-tu-app.actions', () => ({ openViveTuAppAction: vi.fn() }))
+/* `ViveTuAppButton` reusa la acción de `Opciones › Mi panel` para «Volver a sembrar» (D8 = A). */
+vi.mock('../../settings/funciones/_actions/mi-panel.actions', () => ({
+    reseedDemoStudentAction: vi.fn(),
+}))
 vi.mock('../../settings/_actions/settings.actions', () => ({
     updateBrandSettingsAction: vi.fn(),
     createLogoUploadUrlAction: vi.fn(),
@@ -380,6 +384,80 @@ describe('el aterrizaje es el paso que sigue, no el inicio de la guía', () => {
     it('sin banda no hay botón «Empezar»', () => {
         renderScreen()
         expect(screen.queryByRole('button', { name: /^Empezar:/ })).toBeNull()
+    })
+})
+
+describe('el paso 2 se tilda cuando el coach ENTRÓ, no cuando pidió el link', () => {
+    it('abrir «Vive tu app» NO tilda el paso 2 por sí solo', async () => {
+        // El tilde llega por la señal del servidor (`vive_tu_app_entered`) al volver a la guía.
+        // Hasta el 23-08 `onOpened` lo tildaba acá y 4 de 6 coaches tenían el paso hecho sin haber
+        // entrado nunca.
+        const vm = makeVm()
+        renderScreen({ demo: DEMO }, vm)
+
+        for (const button of screen.getAllByRole('button', { name: /Ver mi app|Ver como Ana/ })) {
+            fireEvent.click(button)
+        }
+        await new Promise((resolve) => setTimeout(resolve, 30))
+        expect(vm.markStepCompleted).not.toHaveBeenCalled()
+    })
+
+    it('con el paso 2 hecho, «Vive tu app» sigue accesible («Verla otra vez»)', () => {
+        // `GuideStepCard` esconde la acción de los pasos tildados; este es la excepción: sin ella,
+        // completar el paso 2 dejaba al coach sin puerta para volver a entrar a su app.
+        renderScreen({ demo: DEMO }, { done: 1, completed: completedWith({ vive_tu_app: true }) })
+        expect(screen.getByRole('button', { name: /Verla otra vez/ })).toBeTruthy()
+        expect(screen.queryByRole('button', { name: /^Ver mi app$/ })).toBeNull()
+    })
+
+    it('los demás pasos hechos sí esconden su CTA', () => {
+        renderScreen({}, { done: 1, completed: completedWith({ profile_branding: true }) })
+        expect(screen.queryByRole('link', { name: /Abrir Mi Marca/ })).toBeNull()
+    })
+})
+
+describe('volver a la guía la refresca sola', () => {
+    it('`pageshow` desde el bfcache pide datos nuevos del servidor', async () => {
+        renderScreen()
+        refreshMock.mockClear()
+
+        const event = new Event('pageshow') as PageTransitionEvent
+        Object.defineProperty(event, 'persisted', { value: true })
+        window.dispatchEvent(event)
+
+        await waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1))
+    })
+
+    it('volver a primer plano (`visibilitychange`) también', async () => {
+        renderScreen()
+        refreshMock.mockClear()
+
+        document.dispatchEvent(new Event('visibilitychange'))
+
+        await waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1))
+    })
+
+    it('una restauración que dispara los dos eventos refresca UNA vez', async () => {
+        renderScreen()
+        refreshMock.mockClear()
+
+        const event = new Event('pageshow') as PageTransitionEvent
+        Object.defineProperty(event, 'persisted', { value: true })
+        window.dispatchEvent(event)
+        document.dispatchEvent(new Event('visibilitychange'))
+
+        await new Promise((resolve) => setTimeout(resolve, 30))
+        expect(refreshMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('un `pageshow` de carga normal (sin bfcache) no refresca nada', async () => {
+        renderScreen()
+        refreshMock.mockClear()
+
+        window.dispatchEvent(new Event('pageshow'))
+
+        await new Promise((resolve) => setTimeout(resolve, 30))
+        expect(refreshMock).not.toHaveBeenCalled()
     })
 })
 
