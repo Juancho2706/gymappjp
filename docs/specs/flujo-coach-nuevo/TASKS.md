@@ -1272,8 +1272,32 @@ endpoint nuevo `/api/mobile/auth/resend-verification` con cupo compartido web↔
 listo»** (web dialog + RN sheet) que aparece INMEDIATAMENTE tras elegir persona —pedido literal del owner—
 y solo si la elección apagó dominios.
 
-Cuentas QA: `jmvr2706@gmail.com` se conserva (cuenta QA del owner). `tugmail+eva@gmail.com` (Broca) + su
-alumno demo **borrados de LIVE** (la casilla es ajena; el drip D+1 le habría llegado a un desconocido).
+Cuentas QA: **ambas borradas de LIVE** — `tugmail+eva@gmail.com` (Broca) + su alumno demo (la casilla es
+ajena; el drip D+1 le habría llegado a un desconocido) y `jmvr2706@gmail.com` (pedido del owner).
+
+Segunda tanda del mismo día (GO del owner a todo):
+
+- **D9 opción A ejecutada:** corte por `audience` en `feature-prefs.service` — el camino alumno (config
+  móvil, árbol web `/c`, micros y nutrition-v2 móvil) resuelve como con el flag OFF; el panel del coach
+  intacto. Los ~10 alumnos afectados recuperan Nutrición al próximo refresh.
+- **Modal con switches:** «Tu panel quedó listo» pasa de informativo a interactivo (pedido literal del
+  owner) — 5 dominios con switch, «Continuar» persiste solo lo que difiere, mismo write que Mi panel.
+- **Prep binario 1.1.3:** `intentFilters` de `app.json` estrechados (`/c/.*/login`, fuera `/invite/`) +
+  AASA con NOTs del árbol del alumno (rige con el deploy web, sin binario iOS) + guard
+  `applinks-claims.test.ts` auto-mantenido. Decisión del jefe avalada: la build 59 (1.1.2) NO se retira
+  de la review de Apple — el corte iOS vive en el AASA.
+- **Lock biométrico (reporte de alumna, iPhone):** el prompt de Face ID es una transición de AppState y
+  el root layout re-armaba el lock en cada 'active' ⇒ loop infinito de prompts, que además arrancaba al
+  PRENDER el toggle. Fix de dos capas (latch de background real + escudo del prompt), sin reintento
+  automático, degradación sin encierro; 12 tests.
+- **Builder: dos reportes de coaches el mismo día** — «NaN» en «Valor por semana» (Jotap.coach, coma
+  decimal iOS) y «no me deja borrar el 1» en semanas de programa/fases ⇒ `DecimalField` e
+  `IntDraftInput`.
+- **Subject del correo de reset** corregido vía Management API (estaba «Reset Your Password» en inglés):
+  `Restablece tu contraseña de EVA`, verificado por puntos de código tras pelear el encoding de PS 5.1.
+- **Port 1.1.1** (`ota/1.1.1-20260826` → `62bc28aa`): PKCE+deep links+sesión, DecimalField,
+  IntDraftInput, features refresh, banner verificación y fix biométrico; el modal/hoja no aplica (la
+  guía RN no existe en ese runtime).
 
 ---
 
