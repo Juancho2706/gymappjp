@@ -527,7 +527,12 @@ policies UPDATE self redundantes sobre `clients` (`:2493`, `:2856`, `:2893`) —
   `apps/web/src/lib/email/free-coach-onboarding.ts:24-28`.
   **Aceptación:** la respuesta del endpoint no cambia de forma ni de latencia perceptible.
   **Gate:** `npx vitest run apps/web/src/app/api/mobile/auth` + `pnpm typecheck`.
-- [ ] **W1.4** · **MIDE** (web · Opus, 0,5 h) **⚠ ARCHIVO DE VTA W3.** Call site del camino web:
+- [x] **W1.4** · **MIDE** (web · Opus, 0,5 h) — **Hecha 26-08, post-merge de VTA W3 y con GO explícito del
+  jefe de VTA (regla V3.13 cumplida: un solo escritor).** La llamada va tras el guard `if (!client)` y
+  ANTES de la rama suspended — el alumno pausado que logra loguearse también ENTRÓ; usa la PK de
+  `clients` (no el uid de auth) y el admin de service_role (la columna es default-deny: el action
+  user-scoped no podría escribirla). Assert en `login.actions.test.ts` (7/7 verdes) + typecheck verde.
+  **⚠ ARCHIVO DE VTA W3.** Call site del camino web:
   `apps/web/src/app/c/[coach_slug]/login/_actions/login.actions.ts`, tras resolver el `client` y antes de
   devolver el `redirectUrl` (`:160-164`). **Una línea.** Regla: la agrega **el worker de VTA W3 dentro de su
   diff** (queda escrito en el brief de esa wave), o W1.4 espera al merge de VTA W3. **Nunca** los dos a la vez.
