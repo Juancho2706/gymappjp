@@ -164,6 +164,23 @@ describe('credencial por canal (regla 4 de SPEC §5)', () => {
     }
   })
 
+  it('dos payloads del MISMO alta: el de WhatsApp lleva la clave y el de la hoja no', () => {
+    // El error clásico que esto impide (alta corta del home, `CoachDashboardSections`): un solo
+    // mensaje armado una vez y reusado como fallback de `Share.share` cuando WhatsApp no abre. El
+    // destinatario cambia —de `wa.me/<digits>` a «el que el coach elija después»— así que el texto
+    // TIENE que cambiar con él.
+    const entrada = { phone: TELEFONO, ...invitado }
+    const conNombre = guidedInvitePayload({ channel: 'whatsapp', ...entrada })
+    const sinNombre = guidedInvitePayload({ channel: 'share', ...entrada })
+    expect(conNombre.withCredential).toBe(true)
+    expect(sinNombre.withCredential).toBe(false)
+    expect(conNombre.message).not.toBe(sinNombre.message)
+    expect(sinNombre.message).not.toContain(CLAVE)
+    expect(sinNombre.message).not.toContain(CORREO)
+    // Los dos siguen mandando al mismo login: lo que se pierde es la credencial, no el camino.
+    expect(sinNombre.message).toContain(LINK)
+  })
+
   it('el mensaje entero va codificado: la URL no arrastra saltos de línea ni espacios crudos', () => {
     const { whatsappUrl, message } = guidedInvitePayload({ channel: 'whatsapp', phone: TELEFONO, ...invitado })
     expect(message).toContain('\n')

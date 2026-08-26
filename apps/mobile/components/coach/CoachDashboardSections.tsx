@@ -45,6 +45,7 @@ import { CartesianChart, Area, Line, Bar, useChartPressState } from 'victory-nat
 import { useFont, Circle, Text as SkiaText } from '@shopify/react-native-skia'
 import { useDerivedValue, type SharedValue } from 'react-native-reanimated'
 import { deriveSportTokens } from '@eva/brand-kit'
+import type { Persona } from '@eva/schemas'
 import { EvaBlur } from '../EvaBlur'
 import { EvaFigure } from '../entry/EvaFigure'
 import { useTheme } from '../../context/ThemeContext'
@@ -58,6 +59,8 @@ import type {
   MobileKpiSummary,
   MobileRiskAlertItem,
 } from '../../lib/coach-dashboard'
+import { useCoachOnboarding } from '../../lib/coach-dashboard'
+import { getCachedCoachPersonaStatus } from '../../lib/coach-persona'
 import type { CoachProfile } from '../../lib/coach'
 import { isUuid } from '../../lib/safe-uuid'
 // Cupo por coach CONCRETO, nunca el catálogo. `freeClientLimitFor` es el helper nombrado del móvil
@@ -80,6 +83,7 @@ import { ApiError, apiFetch, getApiBaseUrl } from '../../lib/api'
 import { shouldOpenAtCapWall } from '../../lib/client-cap'
 import { captureAppEvent } from '../../lib/analytics'
 import { CreateClientModal } from './directory/CreateClientModal'
+import { channelCarriesCredential, guidedInvitePayload } from './directory/guided-invite'
 import { getCoachNews, markCoachNewsRead, type CoachNewsItem } from '../../lib/coach-news'
 import { FONT } from '../../lib/typography'
 import { shadow } from '../../lib/shadows'
@@ -831,15 +835,17 @@ type CreateClientResponse = {
   newClientPhone: string | null
 }
 
+/**
+ * Lo que el alta corta creó, con la credencial CONGELADA en ese instante: el correo normalizado que
+ * viajó al servidor y la clave temporal con la que nació la cuenta. El endpoint no las devuelve, y
+ * leerlas de los inputs al momento de compartir haría depender el mensaje de un estado que el coach
+ * podría haber tocado — misma decisión que `SuccessInfo` en `CreateClientModal`.
+ */
+type CreatedClient = CreateClientResponse & { email: string; tempPassword: string }
+
 function generateTempPassword(): string {
   const n = Math.floor(100000 + Math.random() * 900000)
   return `Eva${n}!`
-}
-
-function whatsappUrl(phone: string, message: string) {
-  const digits = phone.replace(/\D/g, '')
-  if (!digits) return null
-  return `https://wa.me/${digits}?text=${encodeURIComponent(message)}`
 }
 
 function QuickCreateClientForm({
@@ -865,7 +871,15 @@ function QuickCreateClientForm({
   const [ageConfirmed, setAgeConfirmed] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [created, setCreated] = useState<CreateClientResponse | null>(null)
+  const [created, setCreated] = useState<CreatedClient | null>(null)
+  /**
+   * Persona del coach para la plantilla del mensaje — MISMA cadena que `CreateClientModal`: manda la
+   * foto del onboarding que sirve el dashboard y la caché de sesión del gate es el respaldo. Sin
+   * ninguna de las dos cae a la plantilla neutra, nunca a un texto con «EVA» adentro (white-label).
+   */
+  const onboarding = useCoachOnboarding()
+  const persona: Persona | null =
+    onboarding?.onboardingV2.persona ?? getCachedCoachPersonaStatus()?.persona ?? null
 
   async function submit() {
     setError(null)
@@ -904,7 +918,7 @@ function QuickCreateClientForm({
           ageConfirmed,
         },
       })
-      setCreated(result)
+      setCreated({ ...result, email: mail, tempPassword: pass })
     } catch (err) {
       if (err instanceof ApiError && err.code === 'UPGRADE_REQUIRED' && onCapWall) {
         // `apiFetch` conserva mensaje y `code` del 402 pero no los campos extra; el cupo viene en
@@ -922,14 +936,44 @@ function QuickCreateClientForm({
 
   if (created) {
     const createdClient = created
-    const accessMessage = `Hola ${createdClient.clientName}! Soy tu coach. Aqui esta tu link para acceder a tu plan: ${createdClient.loginUrl}`
-    const waUrl = createdClient.newClientPhone ? whatsappUrl(createdClient.newClientPhone, accessMessage) : null
+    /**
+     * DOS payloads, nunca uno reciclado — regla 4 de `docs/specs/flujo-coach-nuevo/SPEC.md §5`.
+     *
+     * Esta pantalla tiene dos destinos con reglas OPUESTAS y un solo botón: `wa.me/<digits>` es un
+     * destinatario con nombre (ahí sí va la credencial) y la hoja del sistema es un destinatario que
+     * todavía no existe —el coach lo elige DESPUÉS de que el texto ya está escrito—, así que va sin
+     * credencial. Armarlos por separado es lo que impide el error clásico: reusar el mensaje de
+     * WhatsApp como fallback de `Share` y filtrar la clave a un chat cualquiera.
+     *
+     * El texto sale de la plantilla por persona de `@eva/schemas`, igual que el alta completa. Hasta
+     * el 26-08 acá vivía una QUINTA copia hardcodeada («Soy tu coach. Aqui esta tu link para acceder
+     * a tu plan»), sin tildes, sin persona y sin la credencial que el alumno necesita para cruzar el
+     * login.
+     */
+    const invitado = {
+      persona,
+      clientName: createdClient.clientName,
+      loginUrl: createdClient.loginUrl,
+      email: createdClient.email,
+      tempPassword: createdClient.tempPassword,
+    }
+    const conNombre = guidedInvitePayload({ channel: 'whatsapp', phone: createdClient.newClientPhone, ...invitado })
+    const sinNombre = guidedInvitePayload({ channel: 'share', phone: createdClient.newClientPhone, ...invitado })
+    /**
+     * Sin teléfono usable no hay camino de WhatsApp: el botón pasa a «Compartir link» y el alumno
+     * recibe su clave por el correo de bienvenida. La MISMA función decide el destino y la
+     * credencial, así que el rótulo del botón y lo que lleva el mensaje no pueden divergir.
+     */
+    const waUrl = channelCarriesCredential('whatsapp', createdClient.newClientPhone) ? conNombre.whatsappUrl : null
     async function shareAccess() {
       if (waUrl) {
-        await Linking.openURL(waUrl).catch(() => Share.share({ message: accessMessage, url: createdClient.loginUrl }))
+        // WhatsApp no instalado ⇒ hoja del sistema: cambia el destinatario, así que cambia el texto.
+        await Linking.openURL(waUrl).catch(() =>
+          Share.share({ message: sinNombre.message, url: createdClient.loginUrl }),
+        )
         return
       }
-      await Share.share({ message: accessMessage, url: createdClient.loginUrl })
+      await Share.share({ message: sinNombre.message, url: createdClient.loginUrl })
     }
 
     return (
