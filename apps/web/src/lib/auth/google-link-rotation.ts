@@ -66,7 +66,7 @@ export type GoogleLinkVerificationState =
     | { source: 'known'; emailVerifiedAt: string | null }
 
 /** De dónde vino la rotación. Solo para telemetría; jamás vuelve al cliente. */
-export type GoogleLinkRotationContext = 'oauth_onboarding' | 'post_google_auth'
+export type GoogleLinkRotationContext = 'oauth_onboarding' | 'post_google_auth' | 'mobile_post_google_auth'
 
 /**
  * 32 bytes de aleatoriedad (256 bits) en hex = 64 caracteres.

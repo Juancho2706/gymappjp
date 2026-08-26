@@ -20,6 +20,7 @@
 import { GoogleSignin, statusCodes } from '@react-native-google-signin/google-signin'
 import { supabase } from '../supabase'
 import { getCoachProfile } from '../coach'
+import { apiFetch } from '../api'
 
 /**
  * webClientId = el MISMO valor que el web usa en NEXT_PUBLIC_GOOGLE_CLIENT_ID (OAuth client tipo
@@ -72,6 +73,37 @@ export interface GoogleAuthResult {
 }
 
 /**
+ * W3.13b — avisa al servidor que ESTE usuario acaba de enlazar/entrar con Google, para que corra la
+ * rotación anti-takeover (`apps/web/src/lib/auth/google-link-rotation.ts`).
+ *
+ * POR QUÉ HACE FALTA ACÁ. La web dispara la rotación desde su camino post-Google de cliente
+ * (`api/auth/google-link`, por cookie), pero el binario canjea el idToken él mismo con
+ * `signInWithIdToken` y nunca pasa por ahí: sin esta llamada, la víctima que entra con Google DESDE
+ * LA APP no dispara nada y el intruso que registró su correo con contraseña conserva el acceso. El
+ * endpoint gemelo `api/mobile/auth/google-link` autentica por Bearer y no recibe parámetros — la
+ * identidad sale del token.
+ *
+ * FAIL-SILENT TOTAL, y por eso NO se hace `await`: es una tarea de servidor, no un paso del login.
+ * `fetch` en RN no tiene timeout, así que esperar una red muerta dejaría al coach mirando el spinner
+ * después de haberse autenticado bien. Una sola llamada, sin reintentos: si se pierde, el próximo
+ * ingreso con Google la repite y el endpoint es idempotente (`email_verified_at` ya sellado no rota
+ * de nuevo).
+ *
+ * Se pasa el token EXPLÍCITO de la sesión recién creada en vez de `authenticated: true` a propósito:
+ * ese modo mete la llamada en el manejo central de 401 de `apiFetch` (refresh y, en el peor caso,
+ * `signOut`) y nada de este aviso puede tener efectos sobre la sesión que el coach acaba de abrir.
+ */
+function notifyGoogleLink(accessToken: string | null): void {
+  if (!accessToken) return
+  void apiFetch<{ ok: true }>('/api/mobile/auth/google-link', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${accessToken}` },
+  }).catch(() => {
+    // Silencio deliberado: red caída, 500 o endpoint aún no desplegado JAMÁS bloquean el login.
+  })
+}
+
+/**
  * Ejecuta el flujo nativo: hasPlayServices → signIn → extrae idToken → signInWithIdToken.
  * Lanza GoogleSignInError (con `code`) en cualquier fallo; la UI mapea el code a copy.
  */
@@ -120,6 +152,8 @@ export async function signInWithGoogleCoach(): Promise<GoogleAuthResult> {
   if (error || !data.user) {
     throw new GoogleSignInError('supabase', 'No se pudo validar tu sesión de Google. Intenta de nuevo.')
   }
+
+  notifyGoogleLink(data.session?.access_token ?? null)
 
   return {
     userId: data.user.id,
