@@ -57,6 +57,11 @@ class FakeQuery implements PromiseLike<{ data: unknown; error: null }> {
         this.op.filters.push(['is', column, value])
         return this
     }
+    /** `.not('video_url', 'is', null)`: el fallback con preferencia por multimedia lo usa. */
+    not(column: string, operator: string, value: unknown): this {
+        this.op.filters.push(['not', `${column}.${operator}`, value])
+        return this
+    }
     or(expr: string): this {
         this.op.filters.push(['or', expr, null])
         return this
@@ -272,7 +277,13 @@ describe('seedDemoStudent', () => {
         const { admin, state } = makeFakeAdmin({
             clients: [],
             coaches: [{ onboarding_guide: {} }],
-            exercises: [{ id: 'ex-mov', name: 'Cat/Camel' }],
+            exercises: [
+                { id: 'ex-mov', name: 'Cat/Camel', video_url: 'https://v/cat', gif_url: null },
+                // El patrón clínico existe pero SIN media; su sustituto del catálogo general sí la
+                // tiene. La pauta del demo debe caer en el sustituto (mejora «demo con multimedia»).
+                { id: 'ex-basc', name: 'Báscula pélvica en supino', video_url: null, gif_url: null },
+                { id: 'ex-crunch', name: 'Crunch inverso', video_url: 'https://v/crunch', gif_url: null },
+            ],
             workout_section_templates: [],
         })
 
@@ -291,6 +302,14 @@ describe('seedDemoStudent', () => {
 
         const items = opsFor(state, 'movement_assessment_items', 'insert')[0]?.payload as Record<string, unknown>[]
         expect(items).toHaveLength(7)
+
+        // Preferencia por multimedia de punta a punta: ningún bloque queda colgado del patrón
+        // clínico sin video habiendo un sustituto con video en el mismo `names`.
+        const blockExerciseIds = opsFor(state, 'workout_blocks', 'insert').flatMap((op) =>
+            (op.payload as Record<string, unknown>[]).map((row) => row.exercise_id),
+        )
+        expect(blockExerciseIds).not.toContain('ex-basc')
+        expect(blockExerciseIds).toContain('ex-crunch')
 
         // Las tres áreas propias (Movilidad / Control motor / Fortalecimiento) van al inventario.
         const inventory = (opsFor(state, 'coaches', 'update').at(-1)?.payload as {

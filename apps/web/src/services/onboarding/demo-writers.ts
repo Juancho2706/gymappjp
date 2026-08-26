@@ -92,7 +92,14 @@ export interface ResolvedExercises {
 
 /**
  * Resuelve referencias de ejercicio contra el catálogo del SISTEMA en una sola consulta por
- * nombre, más una por fallback de grupo/tipo. Nunca inventa un `exercise_id`.
+ * nombre, más una o dos por fallback de grupo/tipo. Nunca inventa un `exercise_id`.
+ *
+ * PREFERENCIA POR MULTIMEDIA: el orden de `names` sigue mandando, pero primero entre los nombres
+ * que EXISTEN y tienen video o gif, y recién después entre los que no. El demo del onboarding es
+ * lo primero que el coach abre en la app; un bloque sin video se ve pobre y el catálogo del
+ * sistema tiene media en la enorme mayoría de sus filas, así que degradar a «sin media» es el
+ * último recurso, no el primero. Si ningún nombre del ref tiene media, gana el primero que exista
+ * (comportamiento legado intacto).
  */
 export async function resolveExercises(db: DB, refs: readonly ExerciseRef[]): Promise<ResolvedExercises> {
     const byRef = new Map<ExerciseRef, { id: string; name: string }>()
@@ -102,37 +109,55 @@ export async function resolveExercises(db: DB, refs: readonly ExerciseRef[]): Pr
     const allNames = [...new Set(refs.flatMap((ref) => ref.names))]
     const { data } = await db
         .from('exercises')
-        .select('id, name')
+        .select('id, name, video_url, gif_url')
         .in('name', allNames)
         .is('coach_id', null)
         .is('org_id', null)
         .is('team_id', null)
         .is('deleted_at', null)
 
-    const byName = new Map<string, { id: string; name: string }>()
-    for (const row of data ?? []) byName.set(row.name, { id: row.id, name: row.name })
+    const byName = new Map<string, { id: string; name: string; hasMedia: boolean }>()
+    for (const row of data ?? []) {
+        byName.set(row.name, {
+            id: row.id,
+            name: row.name,
+            hasMedia: row.video_url != null || row.gif_url != null,
+        })
+    }
 
     const pendingFallback: ExerciseRef[] = []
     for (const ref of refs) {
-        const hit = ref.names.map((name) => byName.get(name)).find((row) => row != null)
-        if (hit != null) byRef.set(ref, hit)
+        const found = ref.names
+            .map((name) => byName.get(name))
+            .filter((row): row is NonNullable<typeof row> => row != null)
+        const hit = found.find((row) => row.hasMedia) ?? found[0]
+        if (hit != null) byRef.set(ref, { id: hit.id, name: hit.name })
         else pendingFallback.push(ref)
     }
 
     for (const ref of pendingFallback) {
         missing.push(ref.names[0] ?? '(sin nombre)')
         if (ref.fallbackMuscleGroup == null && ref.fallbackType == null) continue
-        let query = db
-            .from('exercises')
-            .select('id, name')
-            .is('coach_id', null)
-            .is('org_id', null)
-            .is('team_id', null)
-            .is('deleted_at', null)
-        if (ref.fallbackMuscleGroup != null) query = query.eq('muscle_group', ref.fallbackMuscleGroup)
-        if (ref.fallbackType != null) query = query.eq('exercise_type', ref.fallbackType)
-        const { data: alt } = await query.limit(1)
-        const first = alt?.[0]
+        const buildQuery = () => {
+            let query = db
+                .from('exercises')
+                .select('id, name')
+                .is('coach_id', null)
+                .is('org_id', null)
+                .is('team_id', null)
+                .is('deleted_at', null)
+            if (ref.fallbackMuscleGroup != null) query = query.eq('muscle_group', ref.fallbackMuscleGroup)
+            if (ref.fallbackType != null) query = query.eq('exercise_type', ref.fallbackType)
+            return query
+        }
+        // Misma preferencia en el fallback: primero cualquiera del grupo/tipo CON video; solo si
+        // ese grupo no tiene ninguno se acepta uno sin media (perder el bloque sería peor).
+        const { data: withMedia } = await buildQuery().not('video_url', 'is', null).limit(1)
+        let first = withMedia?.[0]
+        if (first == null) {
+            const { data: anyMatch } = await buildQuery().limit(1)
+            first = anyMatch?.[0]
+        }
         if (first != null) byRef.set(ref, { id: first.id, name: first.name })
     }
 

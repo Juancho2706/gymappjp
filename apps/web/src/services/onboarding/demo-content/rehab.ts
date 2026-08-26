@@ -126,10 +126,15 @@ export const LUMBALGIA_F1: ProgramBlueprint = {
             dayOfWeek: 1,
             groupName: 'Pauta domiciliaria',
             blocks: [
+                // Orden de `names` de acá en adelante: patrón CLÍNICO ideal primero, sustituto del
+                // catálogo general CON VIDEO después. `resolveExercises` prefiere el primer nombre
+                // con media, así que hoy gana el sustituto (los ejercicios de rehabilitación aún no
+                // tienen video) y el demo se ve con multimedia; el día que el clínico tenga video,
+                // gana él y la pauta vuelve sola al patrón ideal sin tocar este archivo.
                 {
                     key: 'r_a_basc',
                     exercise: {
-                        names: ['Báscula pélvica en supino', 'Cat/Camel'],
+                        names: ['Báscula pélvica en supino', 'Crunch inverso', 'Cat/Camel'],
                         fallbackType: 'mobility',
                     },
                     orderIndex: 0,
@@ -155,7 +160,9 @@ export const LUMBALGIA_F1: ProgramBlueprint = {
                 {
                     key: 'r_a_resp',
                     exercise: {
-                        names: ['Respiración diafragmática 360°', 'Cat/Camel'],
+                        // «Cat/Camel» ya es el bloque `r_a_gato` de este mismo día: el sustituto con
+                        // video es «Estiramiento de columna» para no repetir ejercicio en la sesión.
+                        names: ['Respiración diafragmática 360°', 'Estiramiento de columna', 'Cat/Camel'],
                         fallbackType: 'mobility',
                     },
                     orderIndex: 2,
@@ -166,12 +173,16 @@ export const LUMBALGIA_F1: ProgramBlueprint = {
                     restTime: '30s',
                     exerciseTypeOverride: 'mobility',
                     durationSec: 60,
-                    instructions: 'Costillas hacia los lados, sin levantar los hombros.',
+                    instructions: 'Respiración lenta todo el rato: costillas hacia los lados, sin levantar los hombros.',
                 },
                 {
                     key: 'r_a_bird',
                     exercise: {
-                        names: ['Perro-pájaro (bird dog)', 'Rotación con estabilidad de tronco (rodillas flexionadas)'],
+                        names: [
+                            'Perro-pájaro (bird dog)',
+                            'Rotación torácica en cuadrupedia (lumbar bloqueada)',
+                            'Rotación con estabilidad de tronco (rodillas flexionadas)',
+                        ],
                         fallbackType: 'mobility',
                     },
                     orderIndex: 3,
@@ -207,7 +218,7 @@ export const LUMBALGIA_F1: ProgramBlueprint = {
                 {
                     key: 'r_b_psoas',
                     exercise: {
-                        names: ['Estiramiento del psoas en media rodilla', 'Brettzel 2.0'],
+                        names: ['Estiramiento del psoas en media rodilla', 'Estiramiento de corredor', 'Brettzel 2.0'],
                         fallbackType: 'mobility',
                     },
                     orderIndex: 0,
@@ -238,7 +249,11 @@ export const LUMBALGIA_F1: ProgramBlueprint = {
                 {
                     key: 'r_b_deadbug',
                     exercise: {
-                        names: ['Dead bug (bicho muerto)', 'Descenso de pierna asistido con banda'],
+                        names: [
+                            'Dead bug (bicho muerto)',
+                            'Press pallof horizontal con banda',
+                            'Descenso de pierna asistido con banda',
+                        ],
                         fallbackType: 'mobility',
                     },
                     orderIndex: 2,
@@ -269,7 +284,11 @@ export const LUMBALGIA_F1: ProgramBlueprint = {
                 {
                     key: 'r_b_silla',
                     exercise: {
-                        names: ['Sentadilla a la silla', 'Sentadilla con toque de puntas (toe touch squat)'],
+                        names: [
+                            'Sentadilla a la silla',
+                            'Sentadilla con banda',
+                            'Sentadilla con toque de puntas (toe touch squat)',
+                        ],
                         fallbackMuscleGroup: 'Cuádriceps',
                     },
                     orderIndex: 4,
@@ -304,7 +323,7 @@ export const LUMBALGIA_F1: ProgramBlueprint = {
                 {
                     key: 'r_c_9090',
                     exercise: {
-                        names: ['Apertura de cadera en posición 90/90', 'Rotación en media rodilla con bastón'],
+                        names: ['Apertura de cadera en posición 90/90', 'Brettzel 2.0', 'Rotación en media rodilla con bastón'],
                         fallbackType: 'mobility',
                     },
                     orderIndex: 1,
@@ -318,7 +337,11 @@ export const LUMBALGIA_F1: ProgramBlueprint = {
                 {
                     key: 'r_c_mono',
                     exercise: {
-                        names: ['Apoyo monopodal en superficie estable', 'Puente a una pierna con pierna extendida'],
+                        names: [
+                            'Apoyo monopodal en superficie estable',
+                            'Tabla de equilibrio / balance board',
+                            'Puente a una pierna con pierna extendida',
+                        ],
                         fallbackType: 'mobility',
                     },
                     orderIndex: 2,
@@ -334,7 +357,11 @@ export const LUMBALGIA_F1: ProgramBlueprint = {
                 {
                     key: 'r_c_bisagra',
                     exercise: {
-                        names: ['Bisagra de cadera con bastón', 'Peso muerto con piernas rígidas con banda elástica'],
+                        names: [
+                            'Bisagra de cadera con bastón',
+                            'Peso muerto rumano con mancuernas',
+                            'Peso muerto con piernas rígidas con banda elástica',
+                        ],
                         fallbackMuscleGroup: 'Isquiotibiales',
                     },
                     orderIndex: 3,
@@ -343,12 +370,17 @@ export const LUMBALGIA_F1: ProgramBlueprint = {
                     sets: 3,
                     reps: '10',
                     restTime: '60s',
-                    instructions: 'El bastón toca cabeza, espalda alta y sacro durante todo el movimiento.',
+                    instructions:
+                        'Bisagra pura de cadera: la espalda va neutra de la cabeza al sacro y no se redondea. Con bastón, debe tocar cabeza, espalda alta y sacro durante todo el movimiento.',
                 },
                 {
                     key: 'r_c_talones',
                     exercise: {
-                        names: ['Elevación de talones de pie', 'Prensa de pantorrillas en máquina de prensa de piernas'],
+                        names: [
+                            'Elevación de talones de pie',
+                            'Elevación de pantorrillas de pie en máquina',
+                            'Prensa de pantorrillas en máquina de prensa de piernas',
+                        ],
                         fallbackMuscleGroup: 'Pantorrillas',
                     },
                     orderIndex: 4,
@@ -516,7 +548,10 @@ export const HOMBRO_CONTROL_MOTOR: ProgramBlueprint = {
                 {
                     key: 'h_a_rot',
                     exercise: {
-                        names: ['Rotación externa de hombro con banda', 'Elevación lateral con mancuernas - Full Can'],
+                        // Nombre ÚNICO a propósito: la rotación externa es el patrón clínico del
+                        // manguito y no se degrada a una elevación lateral por tener video — acá
+                        // la intención kine le gana a la preferencia por media del resolver.
+                        names: ['Rotación externa de hombro con banda'],
                         fallbackMuscleGroup: 'Hombros',
                     },
                     orderIndex: 2,
