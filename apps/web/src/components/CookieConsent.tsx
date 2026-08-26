@@ -1,11 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { Cookie, X } from 'lucide-react'
 import { applyConsent, getStoredConsent, setStoredConsent } from '@/lib/posthog/consent'
 
 export function CookieConsent() {
     const [visible, setVisible] = useState(false)
+    const pathname = usePathname()
     // QA pre-campaña 17-08: en ≤640px el banner (bottom fijo, z-70) se apoyaba EXACTAMENTE sobre el
     // CTA sticky de la landing (#mcta, bottom 0, z-60) y tapaba el único botón siempre visible del
     // móvil — para todo visitante nuevo, o sea todo el tráfico pago. Si el CTA está montado y
@@ -45,7 +47,11 @@ export function CookieConsent() {
     // vuelve a ofrecerse en la próxima visita. Ley 21.719: rechazar sigue a un click, igual de fácil.
     const dismissWithoutChoice = () => setVisible(false)
 
-    if (!visible) return null
+    // El onboarding es un TAKEOVER (overlay propio, z-[150] dentro de su stacking context): este
+    // banner es `fixed` a nivel raíz, así que le pintaba encima y en móvil se apoyaba justo sobre
+    // el CTA. Acá no se ofrece; reaparece en la ruta siguiente y, hasta que se acepte, PostHog
+    // sigue corriendo cookieless — o sea no se pierde ni se asume ningún consentimiento.
+    if (!visible || pathname?.startsWith('/coach/onboarding')) return null
 
     return (
         <div

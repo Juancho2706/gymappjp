@@ -278,7 +278,12 @@ export async function completeOAuthOnboarding(
             method: 'google',
             platform: 'web',
         })
-        redirect(`/coach/dashboard?welcome=free&eid=${encodeURIComponent(metaEventId)}&${SERVER_EMITTED_QUERY}`)
+        // Mismo criterio que el alta por formulario: destino REAL (persona), no /coach/dashboard
+        // rebotado por el gate — así la barra del navegador coincide con la pantalla y el POST de
+        // «Armar mi panel» sale a la ruta correcta.
+        redirect(
+            `/coach/onboarding/persona?welcome=free&eid=${encodeURIComponent(metaEventId)}&${SERVER_EMITTED_QUERY}`,
+        )
     }
 
     const selectedCycleLabel = BILLING_CYCLE_CONFIG[selectedBillingCycle].label.toLowerCase()

@@ -45,6 +45,40 @@ const MIN_BUILD_MS = 1200
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
 
+/**
+ * Cinturón contra la recarga: la elección vive en `sessionStorage` hasta que la action la guarda.
+ * Una vuelta a la pantalla (recarga, back, un error de red) no puede dejar en blanco lo que el
+ * coach ya contestó. `sessionStorage` y no `localStorage`: es un borrador de esta visita, no una
+ * preferencia — el dato real vive en `coaches.persona`.
+ */
+const DRAFT_KEY = 'eva:persona-draft'
+
+type PersonaDraft = { persona: Persona; alsoOther: boolean }
+
+function readDraft(): PersonaDraft | null {
+    try {
+        const raw = sessionStorage.getItem(DRAFT_KEY)
+        if (!raw) return null
+        const parsed = JSON.parse(raw) as Partial<PersonaDraft>
+        // La persona se valida contra el orden canónico: un borrador viejo con una rama que ya no
+        // existe se descarta en vez de romper la pantalla.
+        if (!parsed?.persona || !PERSONA_TILE_ORDER.includes(parsed.persona)) return null
+        return { persona: parsed.persona, alsoOther: parsed.alsoOther === true }
+    } catch {
+        return null
+    }
+}
+
+function writeDraft(draft: PersonaDraft | null) {
+    try {
+        if (draft) sessionStorage.setItem(DRAFT_KEY, JSON.stringify(draft))
+        else sessionStorage.removeItem(DRAFT_KEY)
+    } catch {
+        // Storage bloqueado (modo privado, cookies de terceros): el borrador es un extra, no un
+        // requisito — la pantalla sigue funcionando sin él.
+    }
+}
+
 export function PersonaPicker() {
     const [selected, setSelected] = useState<Persona | null>(null)
     const [alsoOther, setAlsoOther] = useState(false)
@@ -62,9 +96,17 @@ export function PersonaPicker() {
     const secondQuestion = selected ? PERSONA_COPY[selected].secondQuestion : null
 
     // La pantalla es un takeover: el foco entra en la primera tarjeta para que quien navega por
-    // teclado no arranque en el sidebar que quedó detrás del overlay.
+    // teclado no arranque en el sidebar que quedó detrás del overlay. El borrador se lee ACÁ y no
+    // en el `useState` para no desincronizar el HTML del servidor con la hidratación.
     useEffect(() => {
-        tileRefs.current[0]?.focus()
+        const draft = readDraft()
+        if (!draft) {
+            tileRefs.current[0]?.focus()
+            return
+        }
+        setSelected(draft.persona)
+        setAlsoOther(draft.alsoOther)
+        tileRefs.current[PERSONA_TILE_ORDER.indexOf(draft.persona)]?.focus()
     }, [])
 
     function choose(persona: Persona) {
@@ -73,6 +115,12 @@ export function PersonaPicker() {
         // Cambiar de rama reinicia la segunda pregunta a su default («No»): la respuesta anterior
         // era sobre otra pregunta.
         setAlsoOther(false)
+        writeDraft({ persona, alsoOther: false })
+    }
+
+    function chooseAlsoOther(value: boolean) {
+        setAlsoOther(value)
+        if (selected) writeDraft({ persona: selected, alsoOther: value })
     }
 
     /** Flechas = mover foco Y selección (comportamiento canónico de un radiogroup). */
@@ -114,7 +162,10 @@ export function PersonaPicker() {
             if (settled && settled.ok === false) {
                 setError(settled.error)
                 setBuilding(false)
+                return
             }
+            // Guardado: el borrador ya no representa nada pendiente.
+            writeDraft(null)
         })
     }
 
@@ -207,7 +258,7 @@ export function PersonaPicker() {
                             { value: 'no', label: 'No' },
                         ]}
                         value={alsoOther ? 'si' : 'no'}
-                        onChange={(value) => setAlsoOther(value === 'si')}
+                        onChange={(value) => chooseAlsoOther(value === 'si')}
                     />
                 </div>
             )}

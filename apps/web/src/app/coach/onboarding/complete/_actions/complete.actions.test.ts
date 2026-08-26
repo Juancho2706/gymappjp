@@ -200,7 +200,7 @@ describe('completeOAuthOnboarding — alta free por Google (web)', () => {
     it('crea el coach y dispara bienvenida + drip con admin, coachId e invite_code', async () => {
         const { redirectedTo } = await run()
 
-        expect(redirectedTo).toBe('/coach/dashboard?welcome=free&eid=evt-1&ph=srv')
+        expect(redirectedTo).toBe('/coach/onboarding/persona?welcome=free&eid=evt-1&ph=srv')
         expect(inserts[0]).toMatchObject({
             id: USER_ID,
             subscription_status: 'active',
@@ -235,7 +235,7 @@ describe('completeOAuthOnboarding — alta free por Google (web)', () => {
 
         const { redirectedTo, state: result } = await run()
 
-        expect(redirectedTo).toBe('/coach/dashboard?welcome=free&eid=evt-1&ph=srv')
+        expect(redirectedTo).toBe('/coach/onboarding/persona?welcome=free&eid=evt-1&ph=srv')
         expect(result).toBeNull()
         expect(warn).toHaveBeenCalledWith('[register] onboarding email failed')
         expect(JSON.stringify(warn.mock.calls)).not.toContain('coach@example.com')

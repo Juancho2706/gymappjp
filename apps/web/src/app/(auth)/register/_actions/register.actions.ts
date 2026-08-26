@@ -401,7 +401,11 @@ export async function registerAction(
         const supabase = await createClient()
         await supabase.auth.signInWithPassword({ email: emailSan, password })
 
-        redirect(`/coach/dashboard?welcome=free&eid=${encodeURIComponent(metaEventId)}`)
+        // Aterriza DIRECTO en la pantalla de persona: el alta nueva siempre nace con `persona`
+        // null y el gate del proxy la mandaría igual ahí, pero por redirect — y la barra del
+        // navegador quedaba en /coach/dashboard, así que el POST de «Armar mi panel» viajaba a la
+        // ruta equivocada. Con el destino real la URL y la pantalla coinciden.
+        redirect(`/coach/onboarding/persona?welcome=free&eid=${encodeURIComponent(metaEventId)}`)
     }
 
     // Paid tier: email auto-confirmed; sign in immediately and proceed to payment

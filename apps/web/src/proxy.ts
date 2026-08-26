@@ -624,6 +624,13 @@ async function proxyInner(request: NextRequest) {
                 }
             }
         }
+        // Un gate de PANTALLA decide una NAVEGACIÓN. El POST de una Server Action viaja con la URL
+        // de la barra, que puede estar desfasada de la ruta real (un `redirect()` de action no la
+        // mueve): rebotarlo mata la action antes de que corra y el cliente cae a navegación dura
+        // (loop medido en el alta free 26-08). La autorización de verdad vive en la propia action
+        // + RLS, no acá.
+        const isNavigationRequest = request.method === 'GET'
+
         const redirectPath = resolveCoachSubscriptionRedirect(
             pathname,
             coach.subscription_status,
@@ -638,7 +645,7 @@ async function proxyInner(request: NextRequest) {
                 freeClientLimit: coach.max_clients ?? tierMaxClientsFor('free', coach.created_at),
             },
         )
-        if (redirectPath) {
+        if (redirectPath && isNavigationRequest) {
             const redirectUrl = request.nextUrl.clone()
             redirectUrl.pathname = redirectPath
             if (redirectPath === '/coach/reactivate') {
@@ -658,6 +665,7 @@ async function proxyInner(request: NextRequest) {
         // tocar la base. Solo el coach VIEJO sin persona paga un count, y una sola vez por request
         // hasta que conteste.
         if (
+            isNavigationRequest &&
             personaGateApplies({
                 pathname,
                 persona: coach.persona ?? null,

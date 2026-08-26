@@ -433,7 +433,7 @@ describe('registerAction', () => {
   it('A1: el alta FREE no escribe intent de compra (no hay nada que comprar)', async () => {
     const { intentUpsert } = freeHappyPathMocks()
 
-    await expect(registerAction({}, freeForm())).rejects.toThrow(/^REDIRECT:\/coach\/dashboard/)
+    await expect(registerAction({}, freeForm())).rejects.toThrow(/^REDIRECT:\/coach\/onboarding\/persona/)
 
     expect(intentUpsert).not.toHaveBeenCalled()
   })
@@ -442,9 +442,11 @@ describe('registerAction', () => {
     const { adminDb, userSupabase, insertQuery } = freeHappyPathMocks()
 
     // El destino ya NO es /verify-email: esa pantalla queda solo para las filas `pending_email`
-    // viejas, que siguen su camino por el proxy (nada retroactivo).
+    // viejas, que siguen su camino por el proxy (nada retroactivo). Y tampoco es /coach/dashboard:
+    // el alta nace sin persona, así que se entra DERECHO a la pantalla que el gate mostraría igual
+    // (sin eso la barra del navegador queda desfasada de la pantalla).
     await expect(registerAction({}, freeForm())).rejects.toThrow(
-      /^REDIRECT:\/coach\/dashboard\?welcome=free&eid=.+/
+      /^REDIRECT:\/coach\/onboarding\/persona\?welcome=free&eid=.+/
     )
 
     // (a) el muro del correo: `email_confirm` pasa a `true` TAMBIÉN en free.
@@ -503,7 +505,7 @@ describe('registerAction', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
     // Este es EL renglón que evita que D1 = A se coma todas las altas free.
-    await expect(registerAction({}, freeForm())).rejects.toThrow(/^REDIRECT:\/coach\/dashboard/)
+    await expect(registerAction({}, freeForm())).rejects.toThrow(/^REDIRECT:\/coach\/onboarding\/persona/)
 
     expect(deleteQuery.delete).not.toHaveBeenCalled()
     expect(adminDb.auth.admin.deleteUser).not.toHaveBeenCalled()
@@ -530,7 +532,7 @@ describe('registerAction', () => {
     vi.mocked(sendFreeCoachOnboardingEmails).mockRejectedValueOnce(new Error('resend caído'))
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    await expect(registerAction({}, freeForm())).rejects.toThrow(/^REDIRECT:\/coach\/dashboard/)
+    await expect(registerAction({}, freeForm())).rejects.toThrow(/^REDIRECT:\/coach\/onboarding\/persona/)
 
     expect(warn).toHaveBeenCalledWith('[register] onboarding email failed')
   })
