@@ -142,7 +142,7 @@ export function InviteStudentSheet({ open, onOpenChange, inviteCode }: Props) {
                             Invitar alumno
                         </SheetTitle>
                         <SheetDescription className="text-[13.5px] font-medium text-muted">
-                            Tu alumno baja EVA, escribe este código y entra directo a tu app.
+                            Tu alumno entra desde el navegador con este link. No necesita instalar nada.
                         </SheetDescription>
                     </SheetHeader>
 
