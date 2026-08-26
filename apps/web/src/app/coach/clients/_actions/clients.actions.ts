@@ -22,6 +22,7 @@ import {
     isEmailTakenReason,
     sanitizePlatformEmail,
     EMAIL_TAKEN_CLIENT_CREATE_ES,
+    OWN_EMAIL_CLIENT_CREATE_ES,
 } from '@/lib/auth/platform-email'
 import { buildCoachStudentUrl, getCoachPublicIdentifier } from '@/lib/coach/public-identifier'
 // F3: single source of truth for coach scope + org filtering (replaces the local copies).
@@ -69,8 +70,11 @@ export type CreateClientState = {
      */
     currentTier?: SubscriptionTier
     activeCount?: number
-    /** 'email_taken' ⇒ el modal muestra estado informativo (no error destructivo). */
-    code?: 'email_taken'
+    /**
+     * 'email_taken' ⇒ el modal muestra estado informativo (no error destructivo).
+     * 'own_email' ⇒ el coach se está agregando a sí mismo: el camino es «Vive tu app», no un alta.
+     */
+    code?: 'email_taken' | 'own_email'
 }
 
 export async function createClientAction(
@@ -155,6 +159,13 @@ export async function createClientAction(
     // PostgREST de esta accion pasan RLS del coach y van con el cliente user-scoped `supabase`.
     const authAdmin = createServiceRoleClient()
     const emailSan = sanitizePlatformEmail(parsed.data.email)
+    // El coach agregándose a sí mismo (SPEC «Vive tu app» directo §5): hasta acá caía en el 409
+    // genérico de `assertPlatformEmailAvailable` («este correo ya tiene una cuenta»), que es
+    // deliberadamente opaco para no filtrar correos ajenos. Con SU propio correo no hay nada que
+    // filtrar y sí un camino que ofrecer. Comparación local, mismo criterio que el cliente.
+    if (coachUser.email && emailSan === sanitizePlatformEmail(coachUser.email)) {
+        return { error: OWN_EMAIL_CLIENT_CREATE_ES, code: 'own_email' }
+    }
     // RPC SECURITY DEFINER con GRANT a authenticated → el cliente user-scoped alcanza.
     const availability = await assertPlatformEmailAvailable(supabase, parsed.data.email)
     if (!availability.ok) {

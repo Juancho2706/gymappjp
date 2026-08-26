@@ -4,6 +4,12 @@ import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { ClientLoginSchema } from '@eva/schemas'
 import { z } from 'zod'
+import {
+    COACH_ACCOUNT_ACTION,
+    coachAccountMessage,
+    type StudentLoginAction,
+} from '@/lib/auth/student-login-messages'
+import { capturePostHogServerEvent } from '@/lib/posthog/server-capture'
 
 // Espeja ClientLoginSchema (/c) — mismas reglas de email+password; el pool usa team_slug
 // en vez de coach_slug, asi que se reusa la base y se cambia ese unico campo.
@@ -15,6 +21,9 @@ export type TeamLoginState = {
     error?: string
     success?: boolean
     redirectUrl?: string
+    /** Espejo de `ClientLoginState` («Vive tu app» directo §4): el pool tenía el mismo hueco. */
+    kind?: 'coach_account'
+    action?: StudentLoginAction
 }
 
 /**
@@ -52,6 +61,31 @@ export async function teamClientLoginAction(
         return { error: 'Error al obtener sesión.' }
     }
 
+    // Espejo de `/c` («Vive tu app» directo §4, D4 = B): el coach que entra con SU cuenta al login
+    // del pool recibe explicación y salida, no «No tienes acceso a este equipo.». Lectura
+    // user-scoped (self de `coaches`), antes de resolver el team.
+    const { data: selfCoachData } = await supabase
+        .from('coaches')
+        .select('id, persona')
+        .eq('id', user.id)
+        .maybeSingle()
+
+    if (selfCoachData) {
+        const selfCoach = selfCoachData as { id: string; persona: string | null }
+        await supabase.auth.signOut({ scope: 'local' })
+        // `own_slug: false` por definición: un slug de pool nunca es el slug de alumno del coach.
+        await capturePostHogServerEvent({
+            event: 'student_login_coach_account',
+            distinctId: selfCoach.id,
+            properties: { surface: 'web', own_slug: false },
+        })
+        return {
+            kind: 'coach_account',
+            error: coachAccountMessage(selfCoach.persona),
+            action: COACH_ACCOUNT_ACTION,
+        }
+    }
+
     const admin = createServiceRoleClient()
 
     const { data: team } = await admin
@@ -62,7 +96,7 @@ export async function teamClientLoginAction(
         .maybeSingle()
 
     if (!team) {
-        await supabase.auth.signOut()
+        await supabase.auth.signOut({ scope: 'local' })
         return { error: 'Equipo no encontrado.' }
     }
 
@@ -87,7 +121,8 @@ export async function teamClientLoginAction(
             .eq('id', user.id)
             .maybeSingle()
         if (!client || client.team_id !== team.id) {
-            await supabase.auth.signOut()
+            // `scope: 'local'` (SPEC §4): global deslogueaba al alumno en todos sus dispositivos.
+            await supabase.auth.signOut({ scope: 'local' })
             return { error: 'No tienes acceso a este equipo.' }
         }
         clientId = client.id

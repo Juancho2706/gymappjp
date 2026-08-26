@@ -1,6 +1,6 @@
 'use client'
 
-import { useActionState, useEffect, useRef } from 'react'
+import { useActionState, useEffect, useRef, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 import { usePostHog } from 'posthog-js/react'
 import {
@@ -15,17 +15,18 @@ import { Loader2, UserPlus, MessageCircle, CheckCircle2, Lock, Sparkles } from '
 import Link from 'next/link'
 import { createClientAction, type CreateClientState } from './_actions/clients.actions'
 import { useAddStudentFlow } from './_components/add-student-flow-context'
+import { isCoachOwnEmail, SELF_INVITE_BLOCKED_ES } from './_lib/add-student-invite'
 import { useCaptureUpgradeGate } from '@/lib/posthog/events'
 import { cn } from '@/lib/utils'
 
 const initialState: CreateClientState = {}
 
-function SubmitButton() {
+function SubmitButton({ disabled = false }: { disabled?: boolean }) {
     const { pending } = useFormStatus()
     return (
         <button
             type="submit"
-            disabled={pending}
+            disabled={pending || disabled}
             className={cn(
                 'w-full h-11 text-sm font-bold rounded-xl transition-all duration-200',
                 'bg-gradient-to-r from-emerald-500 to-teal-600 text-white',
@@ -76,6 +77,32 @@ export function CreateClientModal({ open, onClose, initialValues, onCreated }: C
     // Onboarding v2 (F4.1): dentro del directorio el alta guiada de 3 pasos sigue a un toque de
     // distancia. Fuera del directorio (dashboard) el flujo es inerte y este escape no se pinta.
     const addStudentFlow = useAddStudentFlow()
+    // El correo del coach llega por CONTEXTO: este modal se monta sin config (dashboard, inbox de
+    // solicitudes) y no puede recibirlo por props. `null` fuera del provider ⇒ no bloquea nada.
+    const coachEmail = addStudentFlow.coachEmail ?? null
+    // El input sigue siendo NO controlado (`defaultValue`, para que el inbox de solicitudes pueda
+    // precargarlo): esto solo espeja lo tipeado para el aviso de auto-alta.
+    const [typedEmail, setTypedEmail] = useState(initialValues?.email ?? '')
+    const selfBlockedEmailRef = useRef<string | null>(null)
+    const isOwnEmail = isCoachOwnEmail(typedEmail, coachEmail)
+
+    // El form es no controlado y el modal NO se desmonta al cerrar: sin esto, el espejo del correo
+    // sobreviviría a un `reset()` y el aviso quedaría pegado en la apertura siguiente.
+    useEffect(() => {
+        if (!open) return
+        setTypedEmail(initialValues?.email ?? '')
+        selfBlockedEmailRef.current = null
+    }, [open, initialValues?.email])
+
+    // `add_student_self_blocked`: el coach se está por agregar a sí mismo (SPEC «Vive tu app»
+    // directo §5). Una vez por correo detectado, no por tecla.
+    useEffect(() => {
+        if (!isOwnEmail) return
+        const key = typedEmail.trim().toLowerCase()
+        if (selfBlockedEmailRef.current === key) return
+        selfBlockedEmailRef.current = key
+        ph?.capture('add_student_self_blocked', { surface: 'web_create_client_modal' })
+    }, [isOwnEmail, typedEmail, ph])
 
     // `upgrade_gate_hit` del cupo de alumnos: hasta Pricing v3 este gate NO se emitía en ninguna
     // superficie (solo existían `upgrade_modal_dismissed` / `upgrade_initiated`), así que el embudo
@@ -277,11 +304,19 @@ export function CreateClientModal({ open, onClose, initialValues, onCreated }: C
                             type="email"
                             placeholder="alumno@ejemplo.com"
                             defaultValue={initialValues?.email ?? undefined}
+                            onChange={(e) => setTypedEmail(e.target.value)}
                             required
                             className="h-10 bg-secondary border-border text-foreground rounded-xl placeholder:text-muted-foreground/50 focus:border-primary"
                         />
                         {state.fieldErrors?.email && (
                             <p className="text-xs text-destructive">{state.fieldErrors.email[0]}</p>
+                        )}
+                        {/* Su propio correo: el alta gastaría el cupo en el coach. El camino para
+                            ver la app por dentro es «Vive tu app», no un alumno de mentira. */}
+                        {isOwnEmail && (
+                            <p role="alert" className="text-xs text-destructive">
+                                {SELF_INVITE_BLOCKED_ES}
+                            </p>
                         )}
                     </div>
 
@@ -376,7 +411,7 @@ export function CreateClientModal({ open, onClose, initialValues, onCreated }: C
                             Cancelar
                         </button>
                         <div className="flex-1">
-                            <SubmitButton />
+                            <SubmitButton disabled={isOwnEmail} />
                         </div>
                     </div>
                 </form>

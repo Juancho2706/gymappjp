@@ -19,9 +19,12 @@ import {
   guidedFormHint,
   guidedTitle,
   hasShareableLink,
+  isCoachOwnEmail,
   isSubscriptionTier,
   nextGuidedStep,
+  selfInviteNote,
   shouldEmitInviteSent,
+  SELF_INVITE_BLOCKED_ES,
   type GuidedInviteChannel,
   type GuidedStep,
 } from './guided-invite'
@@ -34,6 +37,7 @@ import { postCoachOnboardingEvent, useCoachOnboarding } from '../../../lib/coach
 import { getCachedCoachPersonaStatus } from '../../../lib/coach-persona'
 import { showsEvaBadge } from '../../../lib/coach-tiers'
 import { captureAppEvent } from '../../../lib/analytics'
+import { supabase } from '../../../lib/supabase'
 import type { Theme } from '../../../lib/theme'
 import { DANGER, SUCCESS, WARNING } from './directory-shared'
 
@@ -251,6 +255,28 @@ export function CreateClientModal({
     () => (guided ? guidedCapNote({ tier: currentTier, maxClients, persona, demoName }) : null),
     [guided, currentTier, maxClients, persona, demoName],
   )
+  /**
+   * Correo de la sesión del coach, para avisarle que no hace falta agregarse (SPEC «Vive tu app»
+   * directo §5). Sale de `getSession()` —la sesión YA cargada, sin round-trip— una sola vez por
+   * apertura: un `getUser()` de red por tecla sería una llamada por carácter.
+   */
+  const [coachEmail, setCoachEmail] = useState<string | null>(null)
+  const selfBlockedEmailRef = useRef<string | null>(null)
+  /**
+   * Nota preventiva del campo de correo: SOLO con alumno de ejemplo sembrado (sin demo, «Vive tu
+   * app» todavía no tiene a quién entrar). El remate del cupo se apaga si `guidedCapNote` ya lo
+   * dijo arriba: la misma pantalla no repite la frase.
+   */
+  const selfNote = useMemo(
+    () =>
+      demoName
+        ? selfInviteNote(noun, {
+            showsCupo: !capNote && currentTier === 'free' && workspace.kind === 'standalone',
+          })
+        : null,
+    [demoName, noun, capNote, currentTier, workspace.kind],
+  )
+  const isOwnEmail = isCoachOwnEmail(form.email, coachEmail)
 
   function handleClose() {
     setForm(EMPTY)
@@ -290,6 +316,12 @@ export function CreateClientModal({
     if (guided) setGuidedPassword(generateGuidedTempPassword())
     // Cada alta cuenta sus propios canales elegidos.
     sentChannelsRef.current = []
+    selfBlockedEmailRef.current = null
+    // Sesión LOCAL (sin round-trip) para el aviso de auto-alta: el correo del coach.
+    void supabase.auth
+      .getSession()
+      .then(({ data }) => setCoachEmail(data.session?.user?.email ?? null))
+      .catch(() => setCoachEmail(null))
     if (openAtCapWall) {
       setUpgradeLimit(typeof maxClients === 'number' && maxClients > 0 ? maxClients : undefined)
       setFreedNotice(false)
@@ -315,6 +347,21 @@ export function CreateClientModal({
   }, [visible])
 
   /**
+   * `add_student_self_blocked`: el coach está por gastar su cupo en sí mismo. UNA vez por correo
+   * detectado, no por tecla — el guard por valor evita un evento por carácter tipeado.
+   */
+  useEffect(() => {
+    if (!isOwnEmail) return
+    const key = form.email.trim().toLowerCase()
+    if (selfBlockedEmailRef.current === key) return
+    selfBlockedEmailRef.current = key
+    captureAppEvent('add_student_self_blocked', {
+      persona: persona ?? null,
+      surface: guided ? 'rn_guided_invite' : 'rn_create_client_modal',
+    })
+  }, [isOwnEmail, form.email, persona, guided])
+
+  /**
    * «Ver mi plan» — pantalla INTERNA de estado (`/coach/(tabs)/subscription`): tier, cupo, activos,
    * módulos y «Actualizar estado». No es una superficie de pago, así que existe en iOS y en Android
    * por igual (el tono también es el permitido: «Ver mi plan», nunca «Mejorar mi plan»).
@@ -329,6 +376,12 @@ export function CreateClientModal({
 
   async function handleSubmit() {
     setError(null)
+    // Cinturón del aviso de auto-alta: el CTA ya viene deshabilitado, pero un submit por teclado
+    // no puede saltarse el mismo rechazo que va a dar el servidor (409 `OWN_EMAIL`).
+    if (isOwnEmail) {
+      setFieldErrors({ email: [SELF_INVITE_BLOCKED_ES] })
+      return
+    }
     const startDate = form.subscriptionStartDate.trim()
     if (startDate && !isValidIsoDate(startDate)) {
       setFieldErrors({ subscription_start_date: ['Ingresa una fecha válida.'] })
@@ -402,7 +455,11 @@ export function CreateClientModal({
         handleClose()
       }
     } catch (e: unknown) {
-      if (e instanceof ApiError && e.code === 'UPGRADE_REQUIRED') {
+      if (e instanceof ApiError && e.code === 'OWN_EMAIL') {
+        // El correo del coach: el problema es de UN campo, así que se dice ahí y no en el banner
+        // rojo general (que en esta pantalla se lee como «el alta falló»).
+        setFieldErrors({ email: [e.message] })
+      } else if (e instanceof ApiError && e.code === 'UPGRADE_REQUIRED') {
         // `apiFetch` conserva el mensaje/codigo del endpoint pero no campos extra.
         // El endpoint incluye el cupo en ambos; el prop sigue teniendo prioridad.
         const limitFromMessage = Number(e.message.match(/\d+/)?.[0])
@@ -766,8 +823,20 @@ export function CreateClientModal({
                     keyboardType="email-address"
                     autoCapitalize="none"
                     autoCorrect={false}
-                    error={fieldErrors.email?.[0]}
+                    // El correo propio se dice INLINE, en el campo que lo causa (nunca en el
+                    // banner rojo del sheet, que se lee como «el alta falló»).
+                    error={fieldErrors.email?.[0] ?? (isOwnEmail ? SELF_INVITE_BLOCKED_ES : undefined)}
                   />
+                  {/* Probar la app no pasa por agregarse: el camino es «Vive tu app» desde el
+                      panel. Solo con alumno de ejemplo sembrado (SPEC «Vive tu app» directo §5). */}
+                  {selfNote && !isOwnEmail ? (
+                    <View
+                      testID="create-client-self-note"
+                      style={[styles.guidedNoteBox, { backgroundColor: theme.muted, borderColor: theme.border }]}
+                    >
+                      <Text style={[styles.guidedNoteText, { color: theme.mutedForeground }]}>{selfNote}</Text>
+                    </View>
+                  ) : null}
                   {/* Nota de cupo del plan Free: el alumno de ejemplo NO gasta el único lugar, y
                       el coach nuevo no tiene cómo saberlo. Solo aparece cuando hay demo sembrado
                       (`guidedCapNote` devuelve null en cualquier otro caso). */}
@@ -899,7 +968,7 @@ export function CreateClientModal({
                   variant="sport"
                   leftIcon={UserPlus}
                   loading={loading}
-                  disabled={loading}
+                  disabled={loading || isOwnEmail}
                   onPress={handleSubmit}
                   style={{ flex: 1 }}
                 />

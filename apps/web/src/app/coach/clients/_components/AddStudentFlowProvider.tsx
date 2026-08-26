@@ -56,6 +56,7 @@ export function AddStudentFlowProvider({
         return {
             mode,
             guidedAvailable: true,
+            coachEmail: config.coachEmail ?? null,
             start: () => setMode(shouldUseGuidedStepper(config.realClientCount) ? 'guided' : 'modal'),
             startGuided: () => setMode('guided'),
             close,
@@ -72,6 +73,8 @@ export function AddStudentFlowProvider({
                     inviteCode={config.inviteCode}
                     brand={config.brand}
                     firstContent={config.firstContent}
+                    coachEmail={config.coachEmail ?? null}
+                    showsCupo={config.showsCupo ?? false}
                     onClose={close}
                 />
             ) : null}

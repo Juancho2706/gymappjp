@@ -57,7 +57,7 @@ export default async function CoachClientsPage({
         )
     }
 
-    const [clients, headersList, pulse, toolsEnabled, leads, params, onboarding] = await Promise.all([
+    const [clients, headersList, pulse, toolsEnabled, leads, params, onboarding, authUser] = await Promise.all([
         getCoachClientsWithPrograms(coachSession.id, { orgId, activeTeamId }),
         headers(),
         getCoachClientsPulse(coachSession.id, { orgId, activeTeamId }),
@@ -68,6 +68,10 @@ export default async function CoachClientsPage({
         // Persona del coach: da el sustantivo de la etiqueta del alumno de ejemplo
         // («Alumno/Paciente/Atleta de ejemplo», onboarding v2 F3.7). Memoizado por request.
         getCoachOnboardingEmptyContext(),
+        // Correo del coach para el aviso de auto-alta («Vive tu app» directo §5): la tabla
+        // `coaches` NO lo guarda, así que sale de la sesión. Va en el mismo `Promise.all` para no
+        // sumar un round-trip serie a la página del directorio.
+        supabase.auth.getUser(),
     ])
 
     const coach = { slug: coachSession.slug, invite_code: coachSession.invite_code }
@@ -97,6 +101,15 @@ export default async function CoachClientsPage({
         firstContent: { programName: demoProgram, demoName: onboarding.demoName },
         realClientCount: countRealClients(clients),
         autoOpenGuided: params.invite === '1' || params.alta === '1',
+        coachEmail: authUser.data.user?.email ?? null,
+        // «No gasta cupo.» solo donde es verdad: Free standalone CON alumno de ejemplo. Fuera de
+        // Free el remate sobra, y a un coach administrado (team/org) el link del demo le responde
+        // 403 — la frase mentiría.
+        showsCupo:
+            (coachSession.subscription_tier ?? 'free') === 'free' &&
+            !orgId &&
+            !activeTeamId &&
+            demoClient != null,
     }
 
     return (

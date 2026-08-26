@@ -1,6 +1,8 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { PERSONA_COPY } from '@eva/schemas'
+
+const { phCapture } = vi.hoisted(() => ({ phCapture: vi.fn() }))
 
 // El stepper escribe por la server action real del modal: en el render solo interesa QUÉ se
 // pinta y cuándo se habilita el CTA, así que la action y la telemetría se apagan.
@@ -8,7 +10,7 @@ vi.mock('../_actions/clients.actions', () => ({ createClientAction: vi.fn() }))
 vi.mock('../../dashboard/_lib/onboarding-telemetry.client', () => ({
     postStepCompleted: vi.fn(),
 }))
-vi.mock('posthog-js/react', () => ({ usePostHog: () => undefined }))
+vi.mock('posthog-js/react', () => ({ usePostHog: () => ({ capture: phCapture }) }))
 vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn(), success: vi.fn() }) }))
 
 import { AddStudentStepper, type AddStudentStepperProps } from './AddStudentStepper'
@@ -24,11 +26,17 @@ function renderStepper(over: Partial<AddStudentStepperProps> = {}) {
             showsEvaBadge: true,
         },
         firstContent: { programName: null, demoName: null },
+        coachEmail: null,
+        showsCupo: false,
         onClose: vi.fn(),
         ...over,
     }
     return { props, ...render(<AddStudentStepper {...props} />) }
 }
+
+beforeEach(() => {
+    phCapture.mockClear()
+})
 
 /** El CTA es el único submit del formulario. */
 function cta(): HTMLButtonElement {
@@ -98,6 +106,44 @@ describe('AddStudentStepper — CTA', () => {
         fillMinimum()
         const button = screen.getByRole('button', { name: 'Invitar a Ana' })
         expect(button).toBeEnabled()
+    })
+})
+
+describe('AddStudentStepper — el coach no se agrega a sí mismo (SPEC «Vive tu app» §5)', () => {
+    it('con el correo del coach avisa y no habilita el CTA', () => {
+        renderStepper({ coachEmail: 'jp@correo.com' })
+        fillMinimum('Job Palacios', ' JP@Correo.com ')
+        expect(cta()).toBeDisabled()
+        // El aviso reemplaza al genérico «Falta el nombre, el correo o la confirmación de edad»:
+        // al coach no le falta nada, está por gastar su cupo en sí mismo.
+        expect(screen.queryByText(/Falta el nombre/i)).not.toBeInTheDocument()
+        expect(screen.getAllByText(/Para probar la app usa Vive tu app/i).length).toBeGreaterThan(0)
+        expect(phCapture).toHaveBeenCalledWith(
+            'add_student_self_blocked',
+            expect.objectContaining({ persona: 'strength' })
+        )
+    })
+
+    it('con el correo de un alumno real el CTA vuelve a habilitarse', () => {
+        renderStepper({ coachEmail: 'jp@correo.com' })
+        fillMinimum('Ana Ruiz', 'ana@correo.com')
+        expect(cta()).toBeEnabled()
+        expect(phCapture).not.toHaveBeenCalledWith('add_student_self_blocked', expect.anything())
+    })
+
+    it('la nota preventiva solo aparece con alumno de ejemplo sembrado', () => {
+        const { unmount } = renderStepper({ firstContent: { programName: null, demoName: 'Matías' } })
+        expect(screen.getByText(/No hace falta agregarte como alumno/i)).toBeInTheDocument()
+        expect(screen.queryByText(/No gasta cupo/i)).not.toBeInTheDocument()
+        unmount()
+
+        renderStepper({ firstContent: { programName: null, demoName: 'Matías' }, showsCupo: true })
+        expect(screen.getByText(/No gasta cupo/i)).toBeInTheDocument()
+    })
+
+    it('sin demo no se promete un botón que el coach no tiene', () => {
+        renderStepper()
+        expect(screen.queryByText(/No hace falta agregarte/i)).not.toBeInTheDocument()
     })
 })
 

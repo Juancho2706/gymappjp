@@ -9,6 +9,7 @@ import { clientLoginAction, type ClientLoginState } from './_actions/login.actio
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PasswordVisibilityToggle } from '@/components/auth/PasswordVisibilityToggle'
+import { getStudentLoginQueryNotice } from '@/lib/auth/student-login-messages'
 import { cn } from '@/lib/utils'
 
 const initialState: ClientLoginState = {}
@@ -25,6 +26,12 @@ interface Props {
      * el input del árbol oculto. Default '' preserva los ids móviles históricos.
      */
     idPrefix?: string
+    /**
+     * `?error=` de la URL («Vive tu app» directo §4). Hoy solo `vive_tu_app_expirado`, que emite
+     * `/vive-tu-app` cuando el magic link del demo venció o ya se usó: sin esto el coach caía en un
+     * login pelado, sin explicación ni camino de vuelta. Un código desconocido no pinta nada.
+     */
+    errorCode?: string | null
 }
 
 function SubmitButton({ primaryColor, brandName }: { primaryColor: string; brandName: string }) {
@@ -51,12 +58,18 @@ function SubmitButton({ primaryColor, brandName }: { primaryColor: string; brand
     )
 }
 
-export default function ClientLoginForm({ coachSlug, primaryColor, brandName, logoUrl, idPrefix = '' }: Props) {
+export default function ClientLoginForm({ coachSlug, primaryColor, brandName, logoUrl, idPrefix = '', errorCode = null }: Props) {
     const [state, formAction] = useActionState(clientLoginAction, initialState)
     const [showPassword, setShowPassword] = useState(false)
     const router = useRouter()
     const emailId = `${idPrefix}client-email`
     const passwordId = `${idPrefix}client-password`
+
+    // Lo que devuelve el intento manda sobre lo que traía la URL: si el coach ya tecleó y falló,
+    // el mensaje del link vencido dejó de ser lo relevante.
+    const notice = state?.error
+        ? { error: state.error, action: state.action }
+        : getStudentLoginQueryNotice(errorCode)
 
     useEffect(() => {
         if (state.success && state.redirectUrl) {
@@ -133,9 +146,29 @@ export default function ClientLoginForm({ coachSlug, primaryColor, brandName, lo
                     </div>
                 </div>
 
-                {state?.error && (
-                    <div className="animate-fade-in rounded-control border border-transparent bg-[var(--danger-100)] px-4 py-3 text-sm font-semibold text-[var(--danger-600)]">
-                        {state.error}
+                {notice && (
+                    /* Con salida (coach en el login de sus alumnos, link vencido) el bloque deja de
+                       ser rojo: es una explicación con camino, no un error del alumno — SPEC §4. */
+                    <div
+                        role={notice.action ? 'status' : 'alert'}
+                        className={cn(
+                            'animate-fade-in rounded-control px-4 py-3 text-sm',
+                            notice.action
+                                ? 'border border-subtle bg-surface-sunken font-medium leading-relaxed text-text-strong'
+                                : 'border border-transparent bg-[var(--danger-100)] font-semibold text-[var(--danger-600)]'
+                        )}
+                    >
+                        <p>{notice.error}</p>
+                        {notice.action && (
+                            <Link
+                                href={notice.action.href}
+                                className="mt-1 inline-flex min-h-11 items-center gap-1.5 text-sm font-bold hover:underline"
+                                style={{ color: primaryColor }}
+                            >
+                                {notice.action.label}
+                                <ArrowRight className="h-4 w-4" aria-hidden="true" />
+                            </Link>
+                        )}
                     </div>
                 )}
 

@@ -8,9 +8,13 @@ import {
     DEFAULT_INVITE_CHANNEL,
     firstContentCopy,
     INVITE_CHANNELS,
+    inviteBlockReason,
+    isCoachOwnEmail,
+    isCoachOwnInbox,
     isReadyToInvite,
     isValidStudentEmail,
     NAME_PLACEHOLDER,
+    selfInviteNote,
     shouldUseGuidedStepper,
     stepperTitle,
 } from './add-student-invite'
@@ -67,6 +71,58 @@ describe('CTA «Invitar a …» — habilitación', () => {
         expect(isValidStudentEmail('ana@mail')).toBe(false)
         expect(isValidStudentEmail('ana mail.com')).toBe(false)
         expect(isValidStudentEmail('')).toBe(false)
+    })
+})
+
+describe('el coach que se agrega a sí mismo (SPEC «Vive tu app» directo §5)', () => {
+    const COACH = 'jp@correo.com'
+
+    it('con SU propio correo el CTA no se habilita y la razón es propia', () => {
+        const draft = { fullName: 'Job Palacios', email: ' JP@Correo.com ', ageConfirmed: true, coachEmail: COACH }
+        expect(isCoachOwnEmail(draft.email, COACH)).toBe(true)
+        expect(isReadyToInvite(draft)).toBe(false)
+        expect(inviteBlockReason(draft)).toBe('own_email')
+        // Sin el correo del coach cargado nada se bloquea: la comparación es una cortesía, no
+        // una autorización (el servidor repite el chequeo con su propio `user.email`).
+        expect(isReadyToInvite({ ...draft, coachEmail: null })).toBe(true)
+        expect(inviteBlockReason({ ...draft, coachEmail: null })).toBeNull()
+        expect(isCoachOwnEmail('ana@correo.com', COACH)).toBe(false)
+        expect(isCoachOwnEmail('ana@correo.com', '   ')).toBe(false)
+    })
+
+    it('la razón distingue «falta algo» de «ese eres tú»', () => {
+        expect(inviteBlockReason({ fullName: '', email: '', ageConfirmed: false, coachEmail: COACH })).toBe('missing')
+        expect(
+            inviteBlockReason({ fullName: 'Ana Ruiz', email: 'ana@correo.com', ageConfirmed: true, coachEmail: COACH })
+        ).toBeNull()
+        // Correo propio + nombre a medias: gana el aviso útil, no el genérico.
+        expect(inviteBlockReason({ fullName: '', email: COACH, ageConfirmed: false, coachEmail: COACH })).toBe('own_email')
+    })
+
+    it('la variante del MISMO buzón (+alias, puntos de Gmail) avisa pero no bloquea', () => {
+        // `check_platform_email_availability` la deja pasar (deuda declarada): bloquear el CTA
+        // mentiría sobre lo que el servidor va a hacer.
+        expect(isCoachOwnInbox('j.p+alumno@gmail.com', 'jp@gmail.com')).toBe(true)
+        expect(isCoachOwnEmail('j.p+alumno@gmail.com', 'jp@gmail.com')).toBe(false)
+        expect(
+            isReadyToInvite({ fullName: 'Ana Ruiz', email: 'j.p+alumno@gmail.com', ageConfirmed: true, coachEmail: 'jp@gmail.com' })
+        ).toBe(true)
+        expect(isCoachOwnInbox('otra@gmail.com', 'jp@gmail.com')).toBe(false)
+        expect(isCoachOwnInbox('', 'jp@gmail.com')).toBe(false)
+    })
+
+    it('la nota manda a «Vive tu app» y solo remata con el cupo cuando es verdad', () => {
+        const free = selfInviteNote('paciente', { showsCupo: true })
+        expect(free).toContain('Vive tu app')
+        expect(free).toContain('paciente')
+        expect(free).toContain('No gasta cupo.')
+        const pro = selfInviteNote('alumno', { showsCupo: false })
+        expect(pro).toContain('Vive tu app')
+        expect(pro).not.toContain('cupo')
+        // Cero venta dentro del flujo (regla 7 de la SPEC): ni plan, ni precio, ni tier.
+        for (const note of [free, pro]) {
+            expect(note).not.toMatch(/plan|precio|\$/i)
+        }
     })
 })
 

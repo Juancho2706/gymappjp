@@ -22,6 +22,15 @@ export interface AddStudentFlowConfig {
     realClientCount: number
     /** `?invite=1` / `?alta=1` en la URL: se abre el alta guiada al entrar. */
     autoOpenGuided?: boolean
+    /**
+     * Correo de la sesión del coach (`auth.getUser()` en la page: la tabla `coaches` no lo tiene).
+     * Sirve para avisar —y no habilitar el CTA— cuando el coach se está agregando a sí mismo.
+     * `null` = no se pudo leer: entonces nada se bloquea. NUNCA autoriza: el servidor repite la
+     * comparación con su propio `user.email`.
+     */
+    coachEmail?: string | null
+    /** Free standalone CON alumno de ejemplo: solo ahí la nota puede rematar «No gasta cupo.». */
+    showsCupo?: boolean
 }
 
 export type AddStudentFlowMode = 'closed' | 'guided' | 'modal'
@@ -38,6 +47,11 @@ export interface AddStudentFlowValue {
      * sigue funcionando exactamente como hoy y no ofrece el modo guiado.
      */
     guidedAvailable: boolean
+    /**
+     * Correo del coach, para el aviso de auto-alta del `CreateClientModal` (que se monta SIN
+     * config y no puede recibirlo por props). `null`/ausente ⇒ el modal no bloquea nada.
+     */
+    coachEmail?: string | null
 }
 
 /** Flujo inerte: es el valor por defecto del contexto, para montar el modal sin provider. */
@@ -47,6 +61,7 @@ export const NOOP_ADD_STUDENT_FLOW: AddStudentFlowValue = {
     startGuided: () => {},
     close: () => {},
     guidedAvailable: false,
+    coachEmail: null,
 }
 
 export const AddStudentFlowContext = createContext<AddStudentFlowValue>(NOOP_ADD_STUDENT_FLOW)

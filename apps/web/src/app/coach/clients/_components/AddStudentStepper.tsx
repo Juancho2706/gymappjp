@@ -39,7 +39,10 @@ import {
     buildWhatsappUrl,
     DEFAULT_INVITE_CHANNEL,
     firstContentCopy,
-    isReadyToInvite,
+    inviteBlockReason,
+    isCoachOwnInbox,
+    selfInviteNote,
+    SELF_INVITE_BLOCKED_ES,
     stepperTitle,
     type InviteChannel,
 } from '../_lib/add-student-invite'
@@ -81,6 +84,14 @@ export interface AddStudentStepperProps {
     inviteCode: string
     brand: AddStudentBrand
     firstContent: AddStudentFirstContent
+    /**
+     * Correo de la sesión del coach. Solo para AVISAR que no hace falta agregarse (SPEC «Vive tu
+     * app» directo §5). `null` ⇒ no se avisa nada. Nunca autoriza: el servidor repite la
+     * comparación con su propio `user.email`.
+     */
+    coachEmail?: string | null
+    /** Free standalone con demo: solo ahí la nota remata «No gasta cupo.». */
+    showsCupo?: boolean
     /** Cierra el alta guiada y devuelve al directorio. */
     onClose: () => void
     /** Se dispara UNA vez con el id del alumno creado. */
@@ -255,6 +266,8 @@ export function AddStudentStepper({
     inviteCode,
     brand,
     firstContent,
+    coachEmail = null,
+    showsCupo = false,
     onClose,
     onCreated,
 }: AddStudentStepperProps) {
@@ -263,6 +276,7 @@ export function AddStudentStepper({
     const captureUpgradeGate = useCaptureUpgradeGate()
     const gateHitStateRef = useRef<CreateClientState | null>(null)
     const emittedIdRef = useRef<string | null>(null)
+    const selfBlockedEmailRef = useRef<string | null>(null)
     const sectionRef = useRef<HTMLElement>(null)
     const headingRef = useRef<HTMLHeadingElement>(null)
     const uid = useId()
@@ -287,8 +301,12 @@ export function AddStudentStepper({
         () => firstContentCopy(persona, firstContent),
         [persona, firstContent]
     )
-    const draft = { fullName, email, ageConfirmed }
-    const ready = isReadyToInvite(draft)
+    const draft = { fullName, email, ageConfirmed, coachEmail }
+    const blockReason = inviteBlockReason(draft)
+    const ready = blockReason === null
+    // El aviso es más ancho que el bloqueo: `+alias` y los puntos de Gmail caen en el MISMO buzón
+    // del coach y el servidor los deja pasar (deuda declarada), así que se avisa sin apagar el CTA.
+    const ownInbox = isCoachOwnInbox(email, coachEmail)
     const firstNameOnly = fullName.trim().split(/\s+/)[0] ?? ''
     const inviteMessage = buildInviteMessage(persona, { name: firstNameOnly, link: loginUrl })
     const whatsappUrl = buildWhatsappUrl({ persona, name: firstNameOnly, link: loginUrl, phone })
@@ -301,6 +319,16 @@ export function AddStudentStepper({
         gateHitStateRef.current = state
         captureUpgradeGate('client_limit', state.currentTier ?? 'free', state.currentLimit, state.activeCount)
     }, [state, captureUpgradeGate])
+
+    // `add_student_self_blocked`: el coach está por gastar su cupo en sí mismo (caso Job Palacios).
+    // UNA vez por correo detectado, no por tecla: el guard por valor evita un evento por carácter.
+    useEffect(() => {
+        if (!ownInbox) return
+        const key = email.trim().toLowerCase()
+        if (selfBlockedEmailRef.current === key) return
+        selfBlockedEmailRef.current = key
+        ph?.capture('add_student_self_blocked', { persona, surface: 'web_add_student_stepper' })
+    }, [ownInbox, email, persona, ph])
 
     // Alta hecha: UN evento de ledger por alta (dedupe duro server-side en `step_completed`) y el
     // canal en PostHog, que es donde se compara la conversión por canal. Guarda por id del alumno
@@ -591,6 +619,18 @@ export function AddStudentStepper({
                                 {state.fieldErrors?.email && (
                                     <p className="text-[12px] text-[var(--cta-danger)]">{state.fieldErrors.email[0]}</p>
                                 )}
+                                {/* Callejón 7 de la SPEC: nada le decía al coach que probar la app
+                                    no pasa por agregarse. Solo con demo sembrado — sin él, «Vive tu
+                                    app» todavía no tiene a quién entrar. */}
+                                {ownInbox ? (
+                                    <p role="alert" className="text-[12px] leading-snug text-[var(--cta-danger)]">
+                                        {SELF_INVITE_BLOCKED_ES}
+                                    </p>
+                                ) : firstContent.demoName ? (
+                                    <p className="text-[12px] leading-snug text-muted">
+                                        {selfInviteNote(noun, { showsCupo })}
+                                    </p>
+                                ) : null}
                             </div>
 
                             <details className="rounded-control border border-subtle bg-surface-sunken px-3 py-2">
@@ -762,11 +802,15 @@ export function AddStudentStepper({
                     >
                         Cancelar
                     </button>
-                    {!ready && (
+                    {/* La razón del CTA apagado se ramifica: al coach que escribió SU correo no le
+                        «falta» nada — está por gastar su cupo en sí mismo. */}
+                    {blockReason === 'own_email' ? (
+                        <p className="text-[12px] text-muted md:ml-1">{SELF_INVITE_BLOCKED_ES}</p>
+                    ) : blockReason === 'missing' ? (
                         <p className="text-[12px] text-muted md:ml-1">
                             Falta el nombre, el correo o la confirmación de edad.
                         </p>
-                    )}
+                    ) : null}
                 </div>
             </form>
 

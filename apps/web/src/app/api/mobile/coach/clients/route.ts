@@ -15,6 +15,7 @@ import {
     isEmailTakenReason,
     sanitizePlatformEmail,
     EMAIL_TAKEN_CLIENT_CREATE_ES,
+    OWN_EMAIL_CLIENT_CREATE_ES,
 } from '@/lib/auth/platform-email'
 import { getCoachPublicIdentifier } from '@/lib/coach/public-identifier'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
@@ -237,6 +238,12 @@ export async function POST(request: NextRequest) {
     }
 
     const emailSan = sanitizePlatformEmail(parsed.data.email)
+    // Espejo del web (SPEC «Vive tu app» directo §5): con SU propio correo el coach recibe el
+    // camino real —«Vive tu app»— en vez del 409 opaco anti-enumeracion. La app mapea este `code`
+    // al error INLINE del campo correo, no al banner global.
+    if (coachUser.email && emailSan === sanitizePlatformEmail(coachUser.email)) {
+        return NextResponse.json({ error: OWN_EMAIL_CLIENT_CREATE_ES, code: 'OWN_EMAIL' }, { status: 409 })
+    }
     const availability = await assertPlatformEmailAvailable(admin, parsed.data.email)
     if (!availability.ok) {
         // 'EMAIL_TAKEN' = cuenta existente (copy accionable, sin revelar tipo);

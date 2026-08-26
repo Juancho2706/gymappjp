@@ -4,11 +4,12 @@ import { useActionState, useEffect, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
-import { Mail, Lock, Loader2 } from 'lucide-react'
+import { Mail, Lock, Loader2, ArrowRight } from 'lucide-react'
 import { teamClientLoginAction, type TeamLoginState } from './_actions/login.actions'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { PasswordVisibilityToggle } from '@/components/auth/PasswordVisibilityToggle'
+import { getStudentLoginQueryNotice } from '@/lib/auth/student-login-messages'
 import { cn } from '@/lib/utils'
 
 const initialState: TeamLoginState = {}
@@ -18,6 +19,8 @@ interface Props {
     primaryColor: string
     brandName: string
     logoUrl: string | null
+    /** Espejo de `/c`: `?error=` de la URL («Vive tu app» directo §4). Código desconocido = nada. */
+    errorCode?: string | null
 }
 
 function SubmitButton({ primaryColor }: { primaryColor: string }) {
@@ -41,10 +44,14 @@ function SubmitButton({ primaryColor }: { primaryColor: string }) {
     )
 }
 
-export default function TeamLoginForm({ teamSlug, primaryColor, brandName, logoUrl }: Props) {
+export default function TeamLoginForm({ teamSlug, primaryColor, brandName, logoUrl, errorCode = null }: Props) {
     const [state, formAction] = useActionState(teamClientLoginAction, initialState)
     const [showPassword, setShowPassword] = useState(false)
     const router = useRouter()
+
+    const notice = state?.error
+        ? { error: state.error, action: state.action }
+        : getStudentLoginQueryNotice(errorCode)
 
     useEffect(() => {
         if (state.success && state.redirectUrl) {
@@ -129,9 +136,29 @@ export default function TeamLoginForm({ teamSlug, primaryColor, brandName, logoU
                     </div>
                 </div>
 
-                {state?.error && (
-                    <div className="animate-fade-in rounded-xl bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
-                        {state.error}
+                {notice && (
+                    /* Con salida (coach en el login del pool, link vencido) el bloque deja de ser
+                       rojo: es una explicación con camino, no un error del alumno — SPEC §4. */
+                    <div
+                        role={notice.action ? 'status' : 'alert'}
+                        className={cn(
+                            'animate-fade-in rounded-xl border px-4 py-3 text-sm',
+                            notice.action
+                                ? 'border-border bg-secondary leading-relaxed text-foreground'
+                                : 'border-red-500/20 bg-red-500/10 text-red-400'
+                        )}
+                    >
+                        <p>{notice.error}</p>
+                        {notice.action && (
+                            <Link
+                                href={notice.action.href}
+                                className="mt-1 inline-flex min-h-11 items-center gap-1.5 text-sm font-semibold hover:underline"
+                                style={{ color: primaryColor }}
+                            >
+                                {notice.action.label}
+                                <ArrowRight className="w-4 h-4" aria-hidden="true" />
+                            </Link>
+                        )}
                     </div>
                 )}
 

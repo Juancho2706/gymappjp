@@ -134,6 +134,40 @@ export function guidedCapNote(input: {
 }
 
 /**
+ * Nota preventiva del campo de correo: el coach NO necesita agregarse para ver su app
+ * (SPEC «Vive tu app» directo §5, caso Job Palacios 23-08 — se agregó a sí mismo con un segundo
+ * correo y quemó su único cupo Free antes de ver nada).
+ *
+ * Es INDEPENDIENTE de `guidedCapNote`: aquella solo existe en Free con demo y habla del cupo; esta
+ * habla del camino («Vive tu app»). `showsCupo` agrega el remate solo donde es verdad —Free
+ * standalone con demo— y el llamador lo apaga si `guidedCapNote` ya dijo lo del cupo, para no
+ * decirlo dos veces en la misma pantalla.
+ *
+ * Copy sin «plan», sin «eva-app.cl» y sin precios (regla de tiendas, `apps/mobile/AGENTS.md`).
+ */
+export function selfInviteNote(noun: string, options: { showsCupo: boolean }): string {
+    const base = `¿Quieres probar la app tú? No hace falta agregarte como ${noun}: usa Vive tu app desde tu panel.`
+    return options.showsCupo ? `${base} No gasta cupo.` : base
+}
+
+/** Mensaje inline cuando el correo tipeado es el del propio coach. Espejo del web. */
+export const SELF_INVITE_BLOCKED_ES = 'Ese es tu correo de coach. Para probar la app usa Vive tu app.'
+
+/**
+ * ¿El correo tipeado ES el del coach? Comparación LOCAL `trim().toLowerCase()`, la misma que hace
+ * el servidor con `sanitizePlatformEmail` antes de responder 409 `OWN_EMAIL`.
+ *
+ * El correo del coach sale de la sesión YA cargada (`getSession`, sin round-trip): un `getUser()`
+ * de red por cada tecla sería una llamada por carácter. Nada de esto autoriza: el servidor repite
+ * la comparación con su propio `user.email`.
+ */
+export function isCoachOwnEmail(value: string, coachEmail?: string | null): boolean {
+    const coach = (coachEmail ?? '').trim().toLowerCase()
+    if (!coach) return false
+    return value.trim().toLowerCase() === coach
+}
+
+/**
  * Línea del paso 3 sobre lo que viene después. La segunda mitad NO se redacta acá: sale del paso 5
  * («el aha») de la MISMA guía compartida, así el alta y la guía no pueden prometer cosas distintas.
  */

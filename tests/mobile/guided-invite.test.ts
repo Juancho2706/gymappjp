@@ -23,8 +23,11 @@ import {
   guidedStepLabel,
   guidedTitle,
   hasShareableLink,
+  isCoachOwnEmail,
   isSubscriptionTier,
   nextGuidedStep,
+  selfInviteNote,
+  SELF_INVITE_BLOCKED_ES,
   shouldEmitInviteSent,
   type GuidedInviteChannel,
 } from '../../apps/mobile/components/coach/directory/guided-invite'
@@ -109,6 +112,53 @@ describe('nota de cupo del paso 1', () => {
     expect(guidedCapNote({ tier: 'pro', maxClients: 25, persona: 'strength', demoName: 'Matías' })).toBeNull()
     expect(guidedCapNote({ tier: 'free', maxClients: 0, persona: 'strength', demoName: 'Matías' })).toBeNull()
     expect(guidedCapNote({ tier: null, maxClients: null, persona: null, demoName: 'Matías' })).toBeNull()
+  })
+})
+
+describe('nota de auto-alta', () => {
+  it('manda a «Vive tu app» con el sustantivo de la persona, sin nombrar el plan', () => {
+    for (const persona of PERSONAS) {
+      const note = selfInviteNote(personaNoun(persona), { showsCupo: false })
+      expect(note).toContain('Vive tu app')
+      expect(note).toContain(personaNoun(persona))
+      expect(note).not.toContain('undefined')
+    }
+  })
+
+  it('el remate del cupo aparece SOLO cuando corresponde (Free standalone con demo)', () => {
+    expect(selfInviteNote('alumno', { showsCupo: true })).toContain('No gasta cupo.')
+    expect(selfInviteNote('alumno', { showsCupo: false })).not.toContain('cupo')
+  })
+
+  it('es independiente de guidedCapNote: ninguna repite a la otra palabra por palabra', () => {
+    const cap = guidedCapNote({ tier: 'free', maxClients: 1, persona: 'strength', demoName: 'Matías' })
+    const self = selfInviteNote('alumno', { showsCupo: true })
+    expect(cap).not.toBeNull()
+    expect(self).not.toBe(cap)
+    // La nota de auto-alta nunca nombra al alumno de ejemplo por su nombre: habla del camino.
+    expect(self).not.toContain('Matías')
+  })
+
+  it('el copy de tiendas se respeta: sin «plan», sin «eva-app.cl», sin precios', () => {
+    const textos = [
+      selfInviteNote('paciente', { showsCupo: true }),
+      selfInviteNote('atleta', { showsCupo: false }),
+      SELF_INVITE_BLOCKED_ES,
+    ]
+    for (const texto of textos) {
+      expect(texto.toLowerCase()).not.toContain('plan')
+      expect(texto.toLowerCase()).not.toContain('eva-app.cl')
+      expect(texto).not.toMatch(/\$|\/mes/)
+    }
+  })
+
+  it('el correo propio se detecta con la misma comparación que hace el servidor', () => {
+    expect(isCoachOwnEmail(' JP@Correo.com ', 'jp@correo.com')).toBe(true)
+    expect(isCoachOwnEmail('ana@correo.com', 'jp@correo.com')).toBe(false)
+    // Sin sesión cargada nada se bloquea: es una cortesía, no una autorización.
+    expect(isCoachOwnEmail('jp@correo.com', null)).toBe(false)
+    expect(isCoachOwnEmail('jp@correo.com', '   ')).toBe(false)
+    expect(isCoachOwnEmail('', '')).toBe(false)
   })
 })
 

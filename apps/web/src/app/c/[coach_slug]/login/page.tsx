@@ -19,6 +19,12 @@ import { ThemedLogo } from '@/components/brand/ThemedLogo'
 
 interface Props {
     params: Promise<{ coach_slug: string }>
+    /**
+     * «Vive tu app» directo §4: `/vive-tu-app` manda `?error=vive_tu_app_expirado` cuando el magic
+     * link del demo venció o ya se usó. Hasta hoy la page no leía `searchParams` y el coach caía en
+     * un login pelado. Se pasa a las DOS instancias del form (móvil y desktop coexisten en el DOM).
+     */
+    searchParams: Promise<{ error?: string }>
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -48,11 +54,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     }
 }
 
-export default async function ClientLoginPage({ params }: Props) {
+export default async function ClientLoginPage({ params, searchParams }: Props) {
     const { coach_slug } = await params
     const coach = await getClientLoginCoach(coach_slug)
 
     if (!coach) notFound()
+
+    const errorCode = (await searchParams).error ?? null
 
     // Pricing v3 (owner 2026-08-21): el branding pre-auth es de TODOS los planes. `brandingAllowed`
     // queda como red de seguridad FAIL-CLOSED (solo un tier inválido/stale cae a skin EVA); lo que
@@ -172,6 +180,7 @@ export default async function ClientLoginPage({ params }: Props) {
             primaryColor={theme.light.accent}
             brandName={coach.brand_name}
             logoUrl={logoUrl}
+            errorCode={errorCode}
         />
     )
 
@@ -184,6 +193,7 @@ export default async function ClientLoginPage({ params }: Props) {
             brandName={coach.brand_name}
             logoUrl={logoUrl}
             idPrefix="d-"
+            errorCode={errorCode}
         />
     )
 

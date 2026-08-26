@@ -1,4 +1,5 @@
 import { formatWhatsappInvite, personaNoun, type Persona } from '@eva/schemas'
+import { normalizePlatformEmail } from '@/lib/auth/platform-email'
 
 /**
  * Contratos PUROS del alta guiada «Sumar un {alumno} en 3 pasos»
@@ -59,6 +60,41 @@ export interface InviteDraft {
     email: string
     /** Ley 21.719 — el alta no existe sin esta confirmación (la exige el schema del servidor). */
     ageConfirmed: boolean
+    /**
+     * Correo de la sesión del coach. `null`/ausente = no se sabe (fuera del directorio, o la
+     * página no lo leyó): entonces NADA se bloquea. Nunca se usa para autorizar — el servidor
+     * repite la comparación con su propio `user.email` (`clients.actions.ts`).
+     */
+    coachEmail?: string | null
+}
+
+/**
+ * ¿El correo tipeado ES el del coach? (caso Job Palacios, 23-08: se agregó a sí mismo y quemó su
+ * único cupo Free por no saber que el alumno de ejemplo ya era su forma de probar la app).
+ *
+ * Comparación LOCAL `trim().toLowerCase()` — exactamente la misma que hace el servidor con
+ * `sanitizePlatformEmail`, para que el CTA no bloquee un alta que el servidor sí dejaría pasar.
+ */
+export function isCoachOwnEmail(value: string, coachEmail?: string | null): boolean {
+    const coach = (coachEmail ?? '').trim().toLowerCase()
+    if (!coach) return false
+    return value.trim().toLowerCase() === coach
+}
+
+/**
+ * ¿El correo tipeado cae en el MISMO buzón del coach (`+alias`, puntos de Gmail)?
+ *
+ * Solo para AVISAR: `check_platform_email_availability` ignora esas variantes (deuda declarada en
+ * la SPEC), así que el servidor crea un alumno real con `coach+x@gmail.com`. Bloquear el CTA acá
+ * mentiría sobre lo que el servidor va a hacer; decirle al coach «ese buzón es el tuyo» no.
+ */
+export function isCoachOwnInbox(value: string, coachEmail?: string | null): boolean {
+    const coach = (coachEmail ?? '').trim().toLowerCase()
+    if (!coach) return false
+    const typed = value.trim().toLowerCase()
+    if (!typed) return false
+    if (typed === coach) return true
+    return normalizePlatformEmail(typed) === normalizePlatformEmail(coach)
 }
 
 /** ¿El CTA «Invitar a {nombre}» puede dispararse? */
@@ -66,8 +102,41 @@ export function isReadyToInvite(draft: InviteDraft): boolean {
     return (
         draft.fullName.trim().length >= 2 &&
         isValidStudentEmail(draft.email) &&
-        draft.ageConfirmed === true
+        draft.ageConfirmed === true &&
+        !isCoachOwnEmail(draft.email, draft.coachEmail)
     )
+}
+
+/**
+ * Por QUÉ el CTA está apagado. Hasta acá el texto era uno solo («Falta el nombre, el correo o la
+ * confirmación de edad»), que para el coach que escribió SU correo era mentira: no le falta nada,
+ * está por gastar su cupo en sí mismo.
+ *
+ * `null` = el CTA se puede disparar.
+ */
+export type InviteBlockReason = 'missing' | 'own_email'
+
+export function inviteBlockReason(draft: InviteDraft): InviteBlockReason | null {
+    if (isCoachOwnEmail(draft.email, draft.coachEmail)) return 'own_email'
+    return isReadyToInvite(draft) ? null : 'missing'
+}
+
+/** Mensaje inline cuando el correo tipeado es el del propio coach (V3.8). */
+export const SELF_INVITE_BLOCKED_ES = 'Ese es tu correo de coach. Para probar la app usa Vive tu app.'
+
+/**
+ * Nota preventiva del paso 1 «Datos mínimos», SOLO cuando hay alumno de ejemplo sembrado: sin demo
+ * la frase mandaría al coach a un botón que no tiene.
+ *
+ * `showsCupo` = Free standalone con demo. Fuera de Free el remate sobra, y para un coach
+ * administrado (team/org) el endpoint del link responde 403 y la frase mentiría.
+ *
+ * El sustantivo lo pone la persona (`personaNoun`): regla 8 de la SPEC, nada de «alumno»
+ * hardcodeado en copy nuevo.
+ */
+export function selfInviteNote(noun: string, options: { showsCupo: boolean }): string {
+    const base = `¿Quieres probar la app tú? No hace falta agregarte como ${noun}: usa Vive tu app desde tu panel.`
+    return options.showsCupo ? `${base} No gasta cupo.` : base
 }
 
 /**

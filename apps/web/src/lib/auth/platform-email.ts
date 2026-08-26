@@ -66,6 +66,17 @@ export const PLATFORM_EMAIL_TAKEN_ES =
 export const EMAIL_TAKEN_CLIENT_CREATE_ES =
     'Este correo ya tiene una cuenta en EVA, así que no se puede crear un alumno nuevo con él. Escríbenos a soporte y lo resolvemos contigo.'
 
+/**
+ * Copy del alta cuando el correo tipeado es el DEL PROPIO COACH (SPEC «Vive tu app» directo §5,
+ * caso Job Palacios 23-08: se agregó a sí mismo con un segundo correo y quemó su único cupo Free).
+ *
+ * A diferencia de `EMAIL_TAKEN_CLIENT_CREATE_ES`, acá NO hay riesgo de enumeración: el servidor
+ * compara contra el correo de la sesión que hace el pedido, así que solo confirma algo que quien
+ * pregunta ya sabe. Por eso puede ser específico y ofrecer el camino real.
+ */
+export const OWN_EMAIL_CLIENT_CREATE_ES =
+    'Ese es tu correo de coach. Para probar la app usa Vive tu app desde tu panel.'
+
 export type PlatformEmailUnavailableReason =
     | 'invalid'
     | 'blocked_domain'

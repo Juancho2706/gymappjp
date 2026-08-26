@@ -25,7 +25,7 @@ export type ClientStatusKey = 'archived' | 'paused' | 'entered' | 'pending_sync'
  * un módulo compartido en `packages/*` viajaría en el bundle RN y crearía split por runtime — el
  * binario en la tienda no se redeploya junto con la web, así que cada plataforma fija su propio corte.
  */
-export const FIRST_LOGIN_SIGNAL_CUTOVER = '2100-01-01T00:00:00Z'
+export const FIRST_LOGIN_SIGNAL_CUTOVER = '2026-08-26T06:00:00Z'
 
 export interface ClientStatusInput {
     /** `client.is_archived === true` */

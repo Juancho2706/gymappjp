@@ -172,4 +172,52 @@ describe('createClientAction', () => {
     expect(clientsQuery.insert).toHaveBeenCalled()
     expect(revalidatePathMock).toHaveBeenCalledWith('/coach/clients')
   })
+
+  // SPEC «Vive tu app» directo §5 (caso Job Palacios 23-08): agregarse a uno mismo gastaba el
+  // cupo y el rechazo —cuando llegaba— era el 409 opaco anti-enumeración. Con SU propio correo no
+  // hay nada que filtrar: se devuelve el camino real y NO se crea ninguna cuenta.
+  it('rechaza el alta cuando el correo es el del propio coach, sin tocar GoTrue', async () => {
+    const coachesQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({
+        data: { id: 'coach-1', slug: 'coach', subscription_tier: 'free', max_clients: 1 },
+      }),
+    }
+    const clientsQuery = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      is: vi.fn().mockResolvedValue({ count: 0, error: null }),
+      insert: vi.fn(),
+    }
+
+    const supabase = {
+      auth: {
+        getUser: vi
+          .fn()
+          .mockResolvedValue({ data: { user: { id: 'coach-1', email: ' Alumno@Example.com ' } } }),
+      },
+      from: vi.fn((table: string) => {
+        if (table === 'coaches') return coachesQuery
+        if (table === 'clients') return clientsQuery
+        throw new Error(`Unexpected table: ${table}`)
+      }),
+      // Si la RPC de disponibilidad llegara a correr, el test lo delataría: el rechazo tiene que
+      // pasar ANTES (el 409 genérico no puede tapar este caso).
+      rpc: vi.fn().mockRejectedValue(new Error('no debería consultarse')),
+    }
+
+    const authAdmin = { auth: { admin: { createUser: vi.fn(), deleteUser: vi.fn() } } }
+
+    createClientMock.mockResolvedValue(supabase)
+    createServiceRoleClientMock.mockReturnValue(authAdmin)
+
+    const result = await createClientAction({}, buildFormData())
+    expect(result.code).toBe('own_email')
+    expect(result.error).toContain('Vive tu app')
+    expect(result.success).toBeUndefined()
+    expect(supabase.rpc).not.toHaveBeenCalled()
+    expect(authAdmin.auth.admin.createUser).not.toHaveBeenCalled()
+    expect(clientsQuery.insert).not.toHaveBeenCalled()
+  })
 })

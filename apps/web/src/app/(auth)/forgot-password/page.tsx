@@ -149,6 +149,23 @@ function ForgotPasswordForm() {
                         </Link>
                     </div>
 
+                    {/* «Vive tu app» directo §4 (V3.4): el coach que llegó acá desde el login de
+                        SUS alumnos pidiendo resets de su propia cuenta (caso Job, 3 intentos) no
+                        tiene forma de darse cuenta. Línea ESTÁTICA: no se sondea si el correo
+                        tecleado es de coach — eso sería un oráculo de correos. */}
+                    {(coachSlug || teamSlug) && (
+                        <p className="mt-4 text-center text-[12.5px] leading-relaxed text-text-muted">
+                            ¿Eres coach? Tu panel entra por{' '}
+                            <Link
+                                href="/login"
+                                className="font-bold text-sport-600 transition-opacity hover:opacity-80"
+                            >
+                                el login de coach
+                            </Link>
+                            .
+                        </p>
+                    )}
+
                     {!coachSlug && !teamSlug && <StudentEntryCard />}
                 </>
             )}

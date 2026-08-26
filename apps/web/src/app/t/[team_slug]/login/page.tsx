@@ -8,6 +8,8 @@ import { getTeamLoginInfo } from './_data/login.queries'
 
 interface Props {
     params: Promise<{ team_slug: string }>
+    /** Espejo de `/c/[coach_slug]/login`: la page tampoco leía `searchParams` («Vive tu app» §4). */
+    searchParams: Promise<{ error?: string }>
 }
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
@@ -28,10 +30,12 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     }
 }
 
-export default async function TeamLoginPage({ params }: Props) {
+export default async function TeamLoginPage({ params, searchParams }: Props) {
     const { team_slug } = await params
     const team = await getTeamLoginInfo(team_slug)
     if (!team) notFound()
+
+    const errorCode = (await searchParams).error ?? null
 
     return (
         <div className="relative min-h-dvh flex flex-col items-center justify-center p-4 pt-safe pb-safe bg-background overflow-hidden">
@@ -76,6 +80,7 @@ export default async function TeamLoginPage({ params }: Props) {
                     primaryColor={team.primary_color}
                     brandName={team.name}
                     logoUrl={team.logo_url}
+                    errorCode={errorCode}
                 />
 
                 <p className="mt-5 text-center text-xs text-muted-foreground/60">
