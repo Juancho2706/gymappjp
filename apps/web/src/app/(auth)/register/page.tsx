@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useMemo, useRef, useState } from 'react'
 import { useFormStatus } from 'react-dom'
 import Link from 'next/link'
-import { Loader2, User, Mail, Lock, Store, CheckCircle2, ChevronLeft, ArrowRight, Check, CreditCard, RefreshCw, ExternalLink } from 'lucide-react'
+import { Loader2, User, Mail, Store, CheckCircle2, ChevronLeft, ArrowRight, Check, CreditCard, RefreshCw, ExternalLink } from 'lucide-react'
 import { registerAction, type RegisterState } from './_actions/register.actions'
 import {
     TurnstileWidget,
@@ -15,7 +15,9 @@ import { SummaryStep } from './_components/SummaryStep'
 import { completeOAuthOnboarding, type CompleteOnboardingState } from '@/app/coach/onboarding/complete/_actions/complete.actions'
 import { cn } from '@/lib/utils'
 import { getCurrentOAuthUserProfile } from '@/lib/auth/client-oauth'
+import { suggestEmailDomainFix } from '@/lib/auth/email-domain-suggest'
 import { GoogleSignInButton } from '@/components/auth/GoogleSignInButton'
+import { PasswordInput } from '@/components/auth/PasswordInput'
 import { useCaptureRegisterFailed, useCaptureRegisterSubmitted } from '@/lib/posthog/events'
 import {
     BILLING_CYCLE_CONFIG,
@@ -122,76 +124,6 @@ function SubmitButton({
     )
 }
 
-/**
- * Dominios que concentran el grueso de las altas. NO son una lista blanca —cualquier otro dominio
- * pasa igual—: son el ancla para detectar un tipeo torcido y ofrecer la corrección.
- */
-const COMMON_EMAIL_DOMAINS = [
-    'gmail.com',
-    'hotmail.com',
-    'hotmail.cl',
-    'outlook.com',
-    'outlook.cl',
-    'yahoo.com',
-    'yahoo.es',
-    'icloud.com',
-    'live.cl',
-    'live.com',
-]
-
-/**
- * Damerau-Levenshtein (incluye TRANSPOSICIÓN): sin ella `gmial.com` queda a distancia 2 de
- * `gmail.com` y el typo más común de todos pasaría de largo.
- */
-function damerauLevenshtein(a: string, b: string): number {
-    const rows = a.length + 1
-    const cols = b.length + 1
-    const d: number[][] = Array.from({ length: rows }, (_, i) => {
-        const row = new Array<number>(cols).fill(0)
-        row[0] = i
-        return row
-    })
-    for (let j = 0; j < cols; j += 1) d[0][j] = j
-    for (let i = 1; i < rows; i += 1) {
-        for (let j = 1; j < cols; j += 1) {
-            const cost = a[i - 1] === b[j - 1] ? 0 : 1
-            d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost)
-            if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
-                d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1)
-            }
-        }
-    }
-    return d[rows - 1][cols - 1]
-}
-
-/**
- * «¿Quisiste decir …?» — devuelve el correo con el dominio corregido, o null si no hay sospecha.
- *
- * Es una SUGERENCIA, nunca un bloqueo: el alta con un dominio raro pero válido tiene que salir
- * igual. Existe por el caso `esteban` del 22-08 (autopsia 25-08): escribió `…@gmail.con`, el
- * formulario lo aceptó, el correo de confirmación no pudo llegar nunca y la cuenta quedó muerta en
- * `pending_email` — sin forma de recuperarla, porque re-registrarse con el correo bueno es otra
- * cuenta y el link de reenvío va al dominio equivocado.
- *
- * Sólo se toca el DOMINIO: el buzón se devuelve tal como se tipeó (la parte local del correo es
- * sensible a mayúsculas según RFC 5321).
- */
-function suggestEmailFix(raw: string): string | null {
-    const value = raw.trim()
-    const at = value.lastIndexOf('@')
-    if (at <= 0 || at === value.length - 1) return null
-    const domain = value.slice(at + 1).toLowerCase()
-    if (!domain.includes('.')) return null
-    if (COMMON_EMAIL_DOMAINS.includes(domain)) return null
-    const match = COMMON_EMAIL_DOMAINS.find(
-        (candidate) =>
-            Math.abs(candidate.length - domain.length) <= 1 &&
-            damerauLevenshtein(domain, candidate) === 1
-    )
-    if (!match) return null
-    return `${value.slice(0, at)}@${match}`
-}
-
 function CheckTile({ className }: { className?: string }) {
     return (
         <span
@@ -261,7 +193,7 @@ export default function RegisterPage() {
     const liveTotal = selectedPrice
     const isFreeTier = tier === 'free'
     const emailSuggestion = useMemo(
-        () => (emailBlurred ? suggestEmailFix(email) : null),
+        () => (emailBlurred ? suggestEmailDomainFix(email) : null),
         [email, emailBlurred]
     )
     const captureRegisterFailed = useCaptureRegisterFailed()
@@ -665,24 +597,22 @@ export default function RegisterPage() {
                             )}
                         </div>
                         <div className="space-y-1.5">
-                            <label htmlFor="password" className="text-text-strong text-[13px] font-semibold">
-                                Contraseña
-                            </label>
-                            <div className="relative">
-                                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted pointer-events-none" />
-                                <input
-                                    id="password"
-                                    name="password"
-                                    type="password"
-                                    placeholder="Mínimo 8 caracteres"
-                                    autoComplete="new-password"
-                                    required
-                                    minLength={8}
-                                    value={password}
-                                    onChange={(event) => setPassword(event.target.value)}
-                                    className="w-full pl-10 h-12 bg-surface-card border-[1.5px] border-border-default text-text-strong text-[15px] font-medium rounded-control placeholder:text-text-muted focus:border-sport-600 focus:shadow-[var(--ring-focus)] transition-all outline-none"
-                                />
-                            </div>
+                            {/* W3.6: el mismo control del login (ojo de ver + aviso de Bloq Mayús).
+                                Una clave que no se puede releer es el paso donde el alta se cae en
+                                celular, y el `autoComplete="new-password"` sigue siendo el que le
+                                pide al navegador guardar una clave NUEVA (no autocompletar la vieja). */}
+                            <PasswordInput
+                                id="password"
+                                name="password"
+                                label="Contraseña"
+                                placeholder="Mínimo 8 caracteres"
+                                autoComplete="new-password"
+                                required
+                                minLength={8}
+                                value={password}
+                                onChange={(event) => setPassword(event.target.value)}
+                                variant="coach"
+                            />
                             {password.length > 0 && (() => {
                                 const checks = [password.length >= 8, /\d/.test(password), /[a-zA-Z]/.test(password)]
                                 const score = checks.filter(Boolean).length
@@ -865,7 +795,22 @@ export default function RegisterPage() {
                     </div>
                 </form>
 
-                {/* Google OAuth — solo en el paso 1; hide when already in Google flow */}
+                {/* Google OAuth — solo en el paso 1; hide when already in Google flow.
+
+                    W3.6b: dentro de la WebView de Instagram/Facebook el OAuth de Google muere con
+                    `disallowed_useragent` —lo bloquea Google, no hay arreglo de nuestro lado— y esa
+                    WebView es justo donde aterriza el tráfico de los ads. Pintar ahí el botón es un
+                    callejón en el primer toque del alta, así que en su lugar va el escape al
+                    navegador del sistema, ANTES de que el coach choque. Reusa la detección de UA y
+                    el href que ya calcula el efecto de montaje (`isMetaWebView`,
+                    `browserEscapeHref`): una segunda copia de ese sniffing se desincroniza sola.
+                    El escape del aviso del captcha NO se toca: cubre el otro caso —el challenge ya
+                    falló, en el paso 3— y ahí el botón de Google ni siquiera está en pantalla.
+
+                    Sin `browserEscapeHref` (mismo criterio que el aviso del captcha) se omite el
+                    link y queda la explicación: el correo de aquí arriba es un camino real, un
+                    botón de Google que no puede funcionar no lo es. En la práctica el href sólo está
+                    vacío antes de que corra el efecto, y ahí `isMetaWebView` también es false. */}
                 {step === 1 && !fromGoogle && (
                     <>
                         <div className="my-[18px] flex items-center gap-3">
@@ -873,9 +818,37 @@ export default function RegisterPage() {
                             <span className="text-xs font-semibold text-text-subtle">o</span>
                             <div className="flex-1 h-px bg-border-subtle" />
                         </div>
-                        <div className="mt-4">
-                            <GoogleSignInButton intent="register" />
-                        </div>
+                        {isMetaWebView ? (
+                            <div className="mt-4 rounded-control border border-border-subtle bg-surface-sunken px-4 py-3.5">
+                                <p className="text-[13px] leading-relaxed text-text-muted">
+                                    Google no funciona dentro del navegador de Instagram o Facebook.
+                                    Puedes crear tu cuenta con tu correo aquí arriba, o abrir esta página
+                                    en tu navegador para usar Google.
+                                </p>
+                                {browserEscapeHref && (
+                                    <a
+                                        href={browserEscapeHref}
+                                        // El `intent://` de Android lo resuelve el sistema:
+                                        // un `_blank` ahí sólo abriría otra pestaña interna.
+                                        target={isAndroid ? undefined : '_blank'}
+                                        rel="noopener noreferrer"
+                                        className="mt-3 flex h-12 w-full items-center justify-center gap-2 rounded-control border-[1.5px] border-border-default bg-surface-card text-[15px] font-bold text-text-strong transition-colors hover:bg-[color-mix(in_oklab,var(--surface-card)_92%,#000)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]"
+                                    >
+                                        <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                                        Abrir en el navegador
+                                    </a>
+                                )}
+                                {!isAndroid && (
+                                    <p className="mt-2 text-[12px] leading-[1.45] text-text-subtle">
+                                        En iPhone: toca ··· arriba a la derecha y elige «Abrir en Safari».
+                                    </p>
+                                )}
+                            </div>
+                        ) : (
+                            <div className="mt-4">
+                                <GoogleSignInButton intent="register" />
+                            </div>
+                        )}
                     </>
                 )}
 

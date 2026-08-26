@@ -215,6 +215,11 @@ export async function assertPlatformEmailAvailable(
     return { ok: true }
 }
 
+// La guardia de typos de dominio vive en `email-domain-suggest.ts` (archivo sin imports, apto para
+// bundle cliente); acá solo se re-exporta para el server y los tests. El componente del registro
+// importa DIRECTO desde ese archivo — nunca desde este, que carga la lista de desechables.
+export { suggestEmailDomainFix } from './email-domain-suggest'
+
 export function isAuthDuplicateEmailMessage(message: string): boolean {
     const m = message.toLowerCase()
     return (

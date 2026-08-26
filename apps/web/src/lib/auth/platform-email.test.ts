@@ -8,6 +8,7 @@ import {
     sanitizePlatformEmail,
     PLATFORM_EMAIL_TAKEN_ES,
     EMAIL_TAKEN_CLIENT_CREATE_ES,
+    suggestEmailDomainFix,
 } from './platform-email'
 
 /**
@@ -120,6 +121,91 @@ describe('assertPlatformEmailAvailable — reason estructurado', () => {
     it('error del RPC → rpc_error (fail-closed)', async () => {
         const res = await assertPlatformEmailAvailable(fakeAdmin(null, { message: 'boom' }), 'x@ejemplo.cl')
         expect(res).toMatchObject({ ok: false, reason: 'rpc_error' })
+    })
+})
+
+/**
+ * W3.6 (flujo-coach-nuevo): un dominio mal tipeado NO rebota — el correo de confirmación
+ * simplemente no llega nunca y la cuenta queda muerta en `pending_email` (caso `esteban`, 22-08).
+ * La guardia sugiere; jamás bloquea, así que el precio de un falso positivo es un aviso ignorable
+ * y el precio de un falso negativo es una cuenta perdida.
+ */
+describe('suggestEmailDomainFix — typos que matan el correo de confirmación', () => {
+    const typos: Array<[string, string]> = [
+        // El «.com» torcido: un solo error de edición sobre el proveedor dominante.
+        ['coach@gmail.con', 'coach@gmail.com'],
+        ['coach@gmail.co', 'coach@gmail.com'],
+        ['coach@gmail.cm', 'coach@gmail.com'],
+        ['coach@gmail.om', 'coach@gmail.com'],
+        // Dedos cruzados en el nombre del proveedor (transposición y letra faltante).
+        ['coach@gmial.com', 'coach@gmail.com'],
+        ['coach@gamil.com', 'coach@gmail.com'],
+        ['coach@gmai.com', 'coach@gmail.com'],
+        ['coach@gnail.com', 'coach@gmail.com'],
+        ['coach@hotmial.com', 'coach@hotmail.com'],
+        ['coach@hotmal.com', 'coach@hotmail.com'],
+        ['coach@hotmail.con', 'coach@hotmail.com'],
+        ['coach@outlok.com', 'coach@outlook.com'],
+        ['coach@outlook.con', 'coach@outlook.com'],
+        ['coach@yaho.com', 'coach@yahoo.com'],
+        ['coach@yahoo.con', 'coach@yahoo.com'],
+        ['coach@icloud.con', 'coach@icloud.com'],
+        // El punto que se comió el teclado del celular.
+        ['coach@gmailcom', 'coach@gmail.com'],
+        ['coach@hotmailcom', 'coach@hotmail.com'],
+        // Chilenismos: el `.cl` por reflejo y el `.com.cl` pegado (dos errores, tabla explícita).
+        ['coach@gmail.cl', 'coach@gmail.com'],
+        ['coach@gmail.com.cl', 'coach@gmail.com'],
+        ['coach@hotmail.com.cl', 'coach@hotmail.com'],
+        ['coach@outlook.com.cl', 'coach@outlook.com'],
+        ['coach@yahoo.cl', 'coach@yahoo.com'],
+        ['coach@icloud.cl', 'coach@icloud.com'],
+    ]
+
+    it.each(typos)('%s → %s', (typed, expected) => {
+        expect(suggestEmailDomainFix(typed)).toBe(expected)
+    })
+
+    it('corrige el dominio sin tocar el buzón (RFC 5321: la parte local es sensible a mayúsculas)', () => {
+        expect(suggestEmailDomainFix('Juan.Perez@GMAIL.CON')).toBe('Juan.Perez@gmail.com')
+        expect(suggestEmailDomainFix('  ana+eva@gmail.con  ')).toBe('ana+eva@gmail.com')
+    })
+})
+
+describe('suggestEmailDomainFix — un dominio legítimo NUNCA se marca', () => {
+    const legit = [
+        // Anclas: el correo está bien escrito.
+        'coach@gmail.com',
+        'coach@hotmail.cl',
+        'coach@outlook.com',
+        'coach@yahoo.es',
+        'coach@icloud.com',
+        'coach@live.cl',
+        // Proveedores reales que caen a UN error de un ancla: sin la lista de lookalikes, la
+        // métrica los «corregiría» a gmail.com.
+        'coach@mail.com',
+        'coach@email.com',
+        'coach@googlemail.com',
+        // Proveedores reales de otro país: a dos errores de un ancla, fuera del umbral a propósito.
+        'coach@hotmail.es',
+        'coach@outlook.es',
+        // Dominio propio del coach: la guardia no sabe nada del mundo y no debe inventar.
+        'coach@josefit.cl',
+        'contacto@miempresa.com.cl',
+        'coach@entrenaconjuan.cl',
+        'coach@duoc.cl',
+    ]
+
+    it.each(legit)('%s → sin sugerencia', (typed) => {
+        expect(suggestEmailDomainFix(typed)).toBeNull()
+    })
+
+    it('no opina sobre lo que todavía no es un correo', () => {
+        expect(suggestEmailDomainFix('')).toBeNull()
+        expect(suggestEmailDomainFix('coach')).toBeNull()
+        expect(suggestEmailDomainFix('coach@')).toBeNull()
+        expect(suggestEmailDomainFix('@gmail.con')).toBeNull()
+        expect(suggestEmailDomainFix('coach@gmail')).toBeNull()
     })
 })
 
