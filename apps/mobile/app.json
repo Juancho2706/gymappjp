@@ -72,22 +72,7 @@
             {
               "scheme": "https",
               "host": "eva-app.cl",
-              "pathPrefix": "/c/"
-            }
-          ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
-        },
-        {
-          "action": "VIEW",
-          "autoVerify": true,
-          "data": [
-            {
-              "scheme": "https",
-              "host": "eva-app.cl",
-              "pathPrefix": "/invite/"
+              "pathPattern": "/c/.*/login"
             }
           ],
           "category": [
@@ -117,22 +102,7 @@
             {
               "scheme": "https",
               "host": "www.eva-app.cl",
-              "pathPrefix": "/c/"
-            }
-          ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
-        },
-        {
-          "action": "VIEW",
-          "autoVerify": true,
-          "data": [
-            {
-              "scheme": "https",
-              "host": "www.eva-app.cl",
-              "pathPrefix": "/invite/"
+              "pathPattern": "/c/.*/login"
             }
           ],
           "category": [

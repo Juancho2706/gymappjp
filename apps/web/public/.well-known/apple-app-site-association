@@ -5,8 +5,18 @@
       {
         "appID": "5GKWMMZ46Q.cl.evaapp.eva",
         "paths": [
+          "NOT /c/*/dashboard*",
+          "NOT /c/*/bodycomp*",
+          "NOT /c/*/change-password*",
+          "NOT /c/*/check-in*",
+          "NOT /c/*/exercises*",
+          "NOT /c/*/movimiento*",
+          "NOT /c/*/nutrition*",
+          "NOT /c/*/onboarding*",
+          "NOT /c/*/perfil*",
+          "NOT /c/*/suspended*",
+          "NOT /c/*/workout*",
           "/c/*",
-          "/invite/*",
           "/reset-password",
           "/coach/subscription"
         ]
