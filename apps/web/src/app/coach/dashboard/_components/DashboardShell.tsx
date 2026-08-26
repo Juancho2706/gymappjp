@@ -23,7 +23,7 @@ import type { DashboardV2Data } from '../_data/types'
 import type { WorkspaceSummary } from '@/domain/auth/types'
 import type { Persona } from '@eva/schemas'
 import type { SubscriptionTier } from '@/lib/constants'
-import { tierMaxClientsFor } from '@/lib/constants'
+import { studentCountLabel, tierMaxClientsFor } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -347,9 +347,11 @@ function FreeTierBanner({ activeClients, maxClients }: { activeClients: number; 
         >
             <div className="min-w-0 flex-1">
                 <p className="text-xs font-bold text-[var(--text-strong)]">
-                    {over
-                        ? `${activeClients}/${max} alumnos · ${activeClients - max} sobre el límite`
-                        : `${activeClients}/${max} alumnos · Plan gratuito`}
+                    {activeClients === 0
+                        ? `Tu plan gratis incluye ${studentCountLabel(max)}`
+                        : over
+                          ? `${activeClients} de ${studentCountLabel(max)} · ${activeClients - max} sobre el límite`
+                          : `${activeClients} de ${studentCountLabel(max)} · Plan gratuito`}
                 </p>
                 <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-pill bg-[var(--track)]">
                     <div

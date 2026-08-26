@@ -61,9 +61,19 @@ export function capTone(active: number, max: number): CapTone {
  * «3 de 25 alumnos activos» · «1 de 1 alumno activo». El sustantivo sale de `studentCountLabel`
  * (catálogo compartido) y el adjetivo CONCUERDA con él: con Free = 1 el interpolado a mano decía
  * «1 de 1 alumnos activos».
+ *
+ * Con 0 alumnos (W0.4, `docs/specs/flujo-coach-nuevo/SPEC.md` §6) el medidor dejó de arrancar en
+ * «0 de 1 alumno activo»: un coach recién registrado leía su plan como si ya estuviera vacío en
+ * vez de leer lo que trae. El texto pasa a «Tu plan gratis incluye 1 alumno», también interpolado
+ * con `studentCountLabel` — nunca a mano. Acotado a `max === 1` (Free): el copy dice «plan
+ * gratis», y esta función también pinta el anillo de `subscription.tsx` para Pro/Elite, donde un
+ * coach con 0 alumnos debe seguir leyendo «0 de 25 alumnos activos», no una mentira de tier.
  */
 export function capMeterLabel(active: number, max: number): string {
   const safeActive = Number.isFinite(active) && active > 0 ? Math.floor(active) : 0
+  if (safeActive === 0 && max === 1) {
+    return `Tu plan gratis incluye ${studentCountLabel(max)}`
+  }
   return `${safeActive} de ${studentCountLabel(max)} ${max === 1 ? 'activo' : 'activos'}`
 }
 

@@ -70,16 +70,26 @@ describe('client-cap: capTone', () => {
 })
 
 describe('client-cap: capMeterLabel', () => {
-  it('el adjetivo concuerda con el sustantivo del catálogo (no se concatena la «s»)', () => {
+  it('con 1 o más alumnos, el adjetivo concuerda con el sustantivo del catálogo (no se concatena la «s»)', () => {
     expect(capMeterLabel(1, 1)).toBe('1 de 1 alumno activo')
-    expect(capMeterLabel(0, 1)).toBe('0 de 1 alumno activo')
     expect(capMeterLabel(3, 25)).toBe('3 de 25 alumnos activos')
     expect(capMeterLabel(60, 60)).toBe('60 de 60 alumnos activos')
   })
 
-  it('conteos imposibles no rompen la etiqueta', () => {
+  it('con 0 alumnos en Free, el medidor deja de arrancar en «0 de 1»: dice lo que el plan trae (W0.4)', () => {
+    expect(capMeterLabel(0, 1)).toBe('Tu plan gratis incluye 1 alumno')
+  })
+
+  it('el copy «plan gratis» NO se filtra a otros tiers: Pro/Elite con 0 alumnos leen el conteo de siempre', () => {
+    // capMeterLabel también pinta el anillo de subscription.tsx para cualquier tier.
+    expect(capMeterLabel(0, 25)).toBe('0 de 25 alumnos activos')
+    expect(capMeterLabel(0, 60)).toBe('0 de 60 alumnos activos')
+  })
+
+  it('conteos imposibles caen en la misma rama de 0, no rompen la etiqueta', () => {
+    expect(capMeterLabel(-2, 1)).toBe('Tu plan gratis incluye 1 alumno')
+    expect(capMeterLabel(Number.NaN, 1)).toBe('Tu plan gratis incluye 1 alumno')
     expect(capMeterLabel(-2, 25)).toBe('0 de 25 alumnos activos')
-    expect(capMeterLabel(Number.NaN, 25)).toBe('0 de 25 alumnos activos')
   })
 })
 
@@ -128,10 +138,10 @@ describe('client-cap: countCapClients (quién OCUPA cupo)', () => {
     expect(occupiesCap(undefined)).toBe(false)
   })
 
-  it('con solo el demo, el medidor Free dice «0 de 1» y NO se lee lleno', () => {
+  it('con solo el demo, el medidor Free dice «Tu plan gratis incluye 1 alumno» y NO se lee lleno', () => {
     // Las dos bocas del mismo número: el medidor del home y el pre-check del alta.
     const active = countCapClients([real({ isDemo: true })])
-    expect(capMeterLabel(active, 1)).toBe('0 de 1 alumno activo')
+    expect(capMeterLabel(active, 1)).toBe('Tu plan gratis incluye 1 alumno')
     expect(capTone(active, 1)).toBe('brand')
     expect(shouldOpenAtCapWall({ activeCount: active, maxClients: 1 })).toBe(false)
   })
