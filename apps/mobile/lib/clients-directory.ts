@@ -70,6 +70,12 @@ export interface DirectoryClient {
    */
   isDemo: boolean
   forcePwChange: boolean
+  /**
+   * Primer login real del alumno (`clients.first_login_at`, W1.1). `null` = todavía no entró
+   * **o** la DB no tiene la columna (fallback de compatibilidad): quién decide cuál de las dos
+   * es `statusMeta` en `components/coach/directory/directory-shared.ts`, cruzándola con `createdAt`.
+   */
+  firstLoginAt: string | null
   createdAt: string
   activeProgramName: string | null
   planDaysRemaining: number | null
@@ -146,9 +152,11 @@ export async function getCoachDirectoryClients(scope?: CoachDirectoryScope): Pro
   const clientsBaseSelect = 'id, full_name, email, phone, is_active, is_archived, force_password_change, created_at, subscription_start_date, workout_programs(id, name, start_date, weeks_to_repeat, is_active)'
   // `is_demo` (onboarding v2) decide quién OCUPA CUPO: el alumno de ejemplo no cuenta para el gate
   // del server, así que el selector de archivado no puede ofrecerlo como forma de liberar espacio.
-  // Va en el select rico y NO en el mínimo: en una DB anterior a la columna, la lectura degrada al
-  // comportamiento viejo (todos `isDemo: false`) en vez de romper el directorio entero.
-  const clientsSelect = `${clientsBaseSelect}, is_demo`
+  // `first_login_at` (W1.1) es la señal del chip «Entró…» del roster.
+  // Las dos van en el select rico y NO en el mínimo: en una DB anterior a esas columnas, la lectura
+  // degrada al comportamiento viejo (`isDemo: false`, `firstLoginAt: null` ⇒ fallback honesto por
+  // `force_password_change`) en vez de romper el directorio entero.
+  const clientsSelect = `${clientsBaseSelect}, is_demo, first_login_at`
 
   const scopedClientsQuery = (select: string) => () => {
     let q = supabase.from('clients').select(select)
@@ -219,6 +227,7 @@ export async function getCoachDirectoryClients(scope?: CoachDirectoryScope): Pro
       isArchived: c.is_archived === true,
       isDemo: c.is_demo === true,
       forcePwChange: c.force_password_change === true,
+      firstLoginAt: c.first_login_at ?? null,
       createdAt: c.created_at,
       activeProgramName: activeProgram?.name ?? null,
       planDaysRemaining,

@@ -104,16 +104,23 @@ function lastActivityLabel(days: number | null): string {
 }
 
 // bg/fg 1:1 con los de antes (solo el texto del estado "pending" cambió, vía directory-shared.statusMeta).
+// `entered` (W1.5) reusa la paleta de `active`: es el mismo hecho feliz, contado con fecha.
 const STATUS_STYLE: Record<string, { bg: string; fg: string }> = {
   archived: { bg: 'bg-surface-sunken', fg: 'text-subtle' },
   paused: { bg: 'bg-ink-100', fg: 'text-ink-600' },
   pending: { bg: 'bg-info-100 dark:bg-info-100/[0.18]', fg: 'text-info-600' },
+  entered: { bg: 'bg-success-100 dark:bg-success-100/[0.18]', fg: 'text-success-700' },
   active: { bg: 'bg-success-100 dark:bg-success-100/[0.18]', fg: 'text-success-700' },
 }
 
 function statusMeta(client: DirectoryClient) {
-  // firstLoginAt: null — todavía no existe la columna (W1); ver directory-shared.ts.
-  const meta = clientStatusMeta({ isArchived: client.isArchived, isActive: client.isActive, firstLoginAt: null, forcePasswordChange: client.forcePwChange })
+  const meta = clientStatusMeta({
+    isArchived: client.isArchived,
+    isActive: client.isActive,
+    firstLoginAt: client.firstLoginAt,
+    createdAt: client.createdAt,
+    forcePasswordChange: client.forcePwChange,
+  })
   return { label: meta.label, ...STATUS_STYLE[meta.key] }
 }
 
