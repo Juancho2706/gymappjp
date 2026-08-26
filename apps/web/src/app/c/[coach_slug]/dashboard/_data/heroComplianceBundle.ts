@@ -89,7 +89,10 @@ export const getHeroComplianceBundle = cache(async (userId: string, _coachSlug: 
         userLocalDate
     )
 
-    let todayPlan = activePlans.find((p) => p.assigned_date === today) ?? null
+    // Atajo por fecha SOLO para planes sueltos: los de programa mandan por `day_of_week`. El builder
+    // estampaba `assigned_date = start_date` en todos los días del programa y el hero de la semana del
+    // start_date mostraba un plan arbitrario ("HOY ENTRENAS <otro día> 0/19", incidente 2026-08-25).
+    let todayPlan = activePlans.find((p) => p.program_id == null && p.assigned_date === today) ?? null
     if (!todayPlan && program) {
         todayPlan =
             activePlans.find(

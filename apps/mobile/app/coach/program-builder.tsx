@@ -538,7 +538,11 @@ async function persistProgram(opts: {
           title: programPlanTitle(persistedMeta.name, day.id, day.title),
           day_of_week: day.id,
           week_variant: variant,
-          assigned_date: persistedMeta.start_date ?? null,
+          // Un plan de PROGRAMA no lleva fecha: su identidad de dia es `day_of_week`. Estampar el
+          // `start_date` daba a TODOS los dias del programa la MISMA `assigned_date` y el resolvedor
+          // del dia devolvia un plan arbitrario (incidente 2026-08-25). El `null` explicito ademas
+          // limpia el valor viejo al re-guardar un programa ya existente.
+          assigned_date: null,
         })
         .eq('id', planId)
         .eq('program_id', programId)
@@ -588,7 +592,8 @@ async function persistProgram(opts: {
           title: programPlanTitle(persistedMeta.name, day.id, day.title),
           day_of_week: day.id,
           week_variant: variant,
-          assigned_date: persistedMeta.start_date ?? null,
+          // Sin fecha: el dia lo define `day_of_week` (ver el update de arriba).
+          assigned_date: null,
           group_name: persistedPlanGroupName(day),
         })
         .select('id')
@@ -686,7 +691,8 @@ async function persistProgram(opts: {
           title: programPlanTitle(persistedMeta.name, day.id, day.title),
           day_of_week: day.id,
           week_variant: set.variant,
-          assigned_date: persistedMeta.start_date ?? null,
+          // Sin fecha: el dia lo define `day_of_week` (ver el update de arriba).
+          assigned_date: null,
           group_name: persistedPlanGroupName(day),
         })
         .select('id')

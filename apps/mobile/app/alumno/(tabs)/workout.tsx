@@ -39,6 +39,8 @@ interface Plan {
   title: string
   day_of_week: number | null
   assigned_date: string | null
+  /** `null` = plan SUELTO (el unico que resuelve por `assigned_date`); si no, plan de programa. */
+  program_id: string | null
   blockCount: number
   setsTarget: number
   blockIds: string[]
@@ -74,6 +76,7 @@ export default function WorkoutScreen() {
       title: p.title,
       day_of_week: p.day_of_week,
       assigned_date: p.assigned_date,
+      program_id: p.program_id ?? null,
       blockCount: blocks.length,
       setsTarget: blocks.reduce((sum, b) => sum + (b.sets ?? 0), 0),
       blockIds: blocks.map((b) => b.id),
@@ -93,7 +96,7 @@ export default function WorkoutScreen() {
       const blocksSel = 'workout_blocks ( id, sets )'
       const { data: program, error: progErr } = await supabase
         .from('workout_programs')
-        .select(`id, name, workout_plans ( id, title, day_of_week, assigned_date, ${blocksSel} )`)
+        .select(`id, name, workout_plans ( id, title, day_of_week, assigned_date, program_id, ${blocksSel} )`)
         .eq('client_id', client.id)
         .eq('is_active', true)
         .maybeSingle()
@@ -106,9 +109,10 @@ export default function WorkoutScreen() {
       } else {
         const { data, error: plansErr } = await supabase
           .from('workout_plans')
-          .select(`id, title, day_of_week, assigned_date, ${blocksSel}`)
+          .select(`id, title, day_of_week, assigned_date, program_id, ${blocksSel}`)
           .eq('client_id', client.id)
           .order('assigned_date', { ascending: false })
+          .order('day_of_week')
           .limit(14)
         if (plansErr) throw plansErr
         mapped = (data ?? []).map(mapPlan)
@@ -117,8 +121,11 @@ export default function WorkoutScreen() {
 
       // Progreso de HOY (best-effort): series logueadas hoy para el plan de hoy vs objetivo.
       const todayIso = getTodayInSantiago().iso
+      // El atajo por fecha es SOLO del plan SUELTO: el builder estampaba `assigned_date = start_date`
+      // en TODOS los dias del programa, asi que durante la semana del start_date el dia resolvia a un
+      // plan arbitrario en vez del de `day_of_week` (incidente 2026-08-25).
       const todayPlan =
-        mapped.find((p) => p.assigned_date === todayIso) ??
+        mapped.find((p) => p.program_id == null && p.assigned_date === todayIso) ??
         mapped.find((p) => p.day_of_week === todayDow()) ??
         null
       setTodayProgress(todayPlan ? await computeTodayProgress(client.id, todayPlan) : null)

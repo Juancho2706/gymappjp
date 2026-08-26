@@ -148,7 +148,8 @@ export async function syncProgramFromTemplate(program: ProgramItem): Promise<{ o
         day_of_week: cp.day_of_week,
         title: cp.title,
         group_name: cp.group_name ?? null,
-        assigned_date: cp.assigned_date ?? null,
+        // No re-propagar fechas de programas viejos (colision del resolvedor, fix 25-08).
+        assigned_date: null,
         week_variant: cp.week_variant ?? 'A',
       })
       .select('id')
@@ -174,7 +175,9 @@ async function copyPlansAndBlocks(source: ProgramItem, newProgramId: string, coa
         day_of_week: plan.day_of_week,
         title: plan.title,
         group_name: plan.group_name ?? null,
-        assigned_date: assignedDate,
+        // Plan de programa: day_of_week manda. La fecha estampada en todos los dias
+        // colisionaba el resolvedor de "hoy" (fix 25-08); el start_date vive en el programa.
+        assigned_date: null,
         week_variant: plan.week_variant ?? 'A',
       })
       .select('id')

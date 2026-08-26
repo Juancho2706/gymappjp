@@ -7,7 +7,8 @@
  * en ejecucion). Para que la racha sea HONESTA y no inventada, `ExecutorV3` hace una lectura acotada a la
  * semana (best-effort, gateada por `clientId`) que espeja la atribucion GREEDY del dashboard
  * (`home.tsx` day-cards / web `weekPendingWorkouts`):
- *   · `plannedDates` = dias Lun→Dom con un `workout_plan` del alumno (por `day_of_week` 1..7 o `assigned_date`).
+ *   · `plannedDates` = dias Lun→Dom con un `workout_plan` del alumno (por `day_of_week` 1..7; la
+ *     `assigned_date` solo cuenta en un plan SUELTO — ver `usesAssignedDate`).
  *   · `doneDates`    = dias Lun→Dom `done` bajo atribucion GREEDY por plan (`greedyStatesForWeek`): un dia
  *     queda done si SU plan tiene una sesion COMPLETA en cualquier dia de la semana → recuperar el lunes un
  *     jueves marca el LUNES (decision CEO: RN adopta el greedy del web, el dia recuperado pinta done igual
@@ -67,18 +68,34 @@ export function weekDatesMondayToSunday(todayIso: string): string[] {
   return Array.from({ length: 7 }, (_, i) => isoDateAddDays(monday, i))
 }
 
+/** Fila minima de plan que consumen los helpers de la semana. */
+export interface WeekPlanRow {
+  day_of_week: number | null
+  assigned_date: string | null
+  /** `null` = plan SUELTO. OPCIONAL: el ejecutor lee los planes ANIDADOS del programa activo y no lo trae. */
+  program_id?: string | null
+}
+
+/**
+ * ¿Este plan resuelve su dia por `assigned_date`? SOLO el plan SUELTO de fecha fija. Un plan de PROGRAMA
+ * se identifica SIEMPRE por su `day_of_week`: el builder estampaba `assigned_date = program.start_date`
+ * en TODOS los dias del programa, asi que durante la semana del start_date los 4 dias caian en el MISMO
+ * slot y la semana entera colapsaba (incidente 2026-08-25). Un plan con `day_of_week` nunca es suelto,
+ * asi que el descarte funciona igual cuando el caller no trae `program_id`.
+ */
+function usesAssignedDate(plan: WeekPlanRow): boolean {
+  return plan.program_id == null && plan.day_of_week == null
+}
+
 /**
  * Dias de la semana con plan, a partir de las filas de plan del alumno. Un dia cuenta si algun plan cae en
  * su `day_of_week` (1..7) o su `assigned_date` coincide con la fecha (plan suelto de fecha fija).
  */
-export function plannedDatesForWeek(
-  plans: Array<{ day_of_week: number | null; assigned_date: string | null }>,
-  weekDates: string[],
-): Set<string> {
+export function plannedDatesForWeek(plans: WeekPlanRow[], weekDates: string[]): Set<string> {
   const planned = new Set<string>()
   for (const iso of weekDates) {
     const dow = isoWeekday1to7(iso)
-    if (plans.some((p) => p.day_of_week === dow || (p.assigned_date != null && p.assigned_date === iso))) {
+    if (plans.some((p) => p.day_of_week === dow || (usesAssignedDate(p) && p.assigned_date === iso))) {
       planned.add(iso)
     }
   }
@@ -166,14 +183,14 @@ export function greedyPlanDone(
   return { state: 'none', doneOnDate: null } // 5 — sin sesion del plan esta semana.
 }
 
-/** Slot (fecha ISO de esta semana) que ocupa un plan: su `assigned_date` si cae en la semana, si no su
- *  `day_of_week` (1=Lun..7=Dom) mapeado sobre `weekDates` (Lun→Dom). `null` si no cae en la semana. */
-function planSlotDate(
-  plan: { day_of_week: number | null; assigned_date: string | null },
-  weekDates: string[],
-): string | null {
-  if (plan.assigned_date != null && weekDates.includes(plan.assigned_date)) return plan.assigned_date
+/** Slot (fecha ISO de esta semana) que ocupa un plan: su `day_of_week` (1=Lun..7=Dom) mapeado sobre
+ *  `weekDates` (Lun→Dom) y, solo cuando el plan no declara dia (suelto de fecha fija, ver
+ *  `usesAssignedDate`), su `assigned_date`. `null` si no cae en la semana.
+ *  El `day_of_week` va PRIMERO a proposito: con la fecha adelante, los N dias de un programa
+ *  —todos con `assigned_date = start_date`— caian en un unico slot (incidente 2026-08-25). */
+function planSlotDate(plan: WeekPlanRow, weekDates: string[]): string | null {
   if (plan.day_of_week != null) return weekDates[((plan.day_of_week - 1) % 7 + 7) % 7] ?? null
+  if (plan.assigned_date != null && weekDates.includes(plan.assigned_date)) return plan.assigned_date
   return null
 }
 
@@ -192,7 +209,7 @@ export interface GreedyWeekStates {
  * tercera visual incluida.
  */
 export function greedyStatesForWeek(
-  plans: Array<{ id: string; day_of_week: number | null; assigned_date: string | null }>,
+  plans: Array<WeekPlanRow & { id: string }>,
   weekDates: string[],
   todayIso: string,
   source: PlanWeekCompletionSource,

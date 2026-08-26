@@ -188,12 +188,16 @@ export default function AlumnoHomeScreen() {
           .eq('client_id', client.id)
           .gte('log_date', since30Iso)
           .lte('log_date', todayIso),
+        // `check_ins.date` es timestamptz (un INSTANTE), no un dia calendario: `lte(todayIso)` lo casteaba
+        // a la medianoche de hoy y dejaba FUERA el check-in que el alumno acaba de hacer — el banner
+        // seguia diciendo "hace N dias" y el peso de hoy no aparecia. El corte va al fin del dia HOY en
+        // Santiago (mismo helper que ya acota la ventana semanal de los logs).
         supabase
           .from('check_ins')
           .select('date, weight')
           .eq('client_id', client.id)
           .gte('date', since30Iso)
-          .lte('date', todayIso)
+          .lt('date', getSantiagoUtcBoundsForDay(todayIso).endIso)
           .order('date', { ascending: true }),
         supabase
           .from('coaches')
@@ -323,10 +327,11 @@ export default function AlumnoHomeScreen() {
     const cycleVariant = weekIdx ? weekIndexToVariantLetter(weekIdx) : 'A'
     const activeVariant = effectiveWeekVariantFromPlans(plans, cycleVariant, abMode)
 
-    const todayPlan =
-      plans.find((p) => p.assigned_date === todayIso) ??
-      plans.find((p) => p.day_of_week === todayDbDay) ??
-      null
+    // `plans` viene ANIDADO del programa ACTIVO ⇒ son TODOS planes de programa, cuya identidad de dia
+    // es `day_of_week`. El atajo por `assigned_date` (que solo tiene sentido en un plan SUELTO de fecha
+    // fija, aca imposible) hacia que durante la semana del `start_date` —estampado por el builder en
+    // TODOS los dias del programa— el dia resolviera a un plan arbitrario (incidente 2026-08-25).
+    const todayPlan = plans.find((p) => p.day_of_week === todayDbDay) ?? null
     const nextPlan = plans.find((p) => p.id !== todayPlan?.id) ?? null
 
     // Semana Lun..Dom + planificados.
@@ -336,7 +341,8 @@ export default function AlumnoHomeScreen() {
     for (let i = 0; i < 7; i++) {
       const dIso = weekDates[i]
       const dbDay = jsDayToDbDay(new Date(monday.getTime() + i * MS_DAY).getDay())
-      if (plans.some((p) => p.day_of_week === dbDay || p.assigned_date === dIso)) plannedDays.add(dIso)
+      // Solo `day_of_week`: ver `todayPlan` — un plan de programa no se resuelve por fecha.
+      if (plans.some((p) => p.day_of_week === dbDay)) plannedDays.add(dIso)
     }
     const momentumDays: MomentumDay[] = weekDates.map((dIso, i) => ({
       label: WEEK_LETTERS[i],

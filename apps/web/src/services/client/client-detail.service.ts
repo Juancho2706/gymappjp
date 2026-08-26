@@ -137,8 +137,11 @@ export const getClientProfileData = cache(async (clientId: string) => {
             )
         `)
         .eq('client_id', clientId)
-        .gte('assigned_date', workoutHistoryFromDate)
-        .order('assigned_date', { ascending: false })
+        // Los planes de PROGRAMA ya no estampan assigned_date (fix colision 25-08: la fecha
+        // duplicada hacia que el resolvedor del dia eligiera un plan arbitrario). Para que no
+        // desaparezcan del historial, los null entran acotados por created_at a la misma ventana.
+        .or(`assigned_date.gte.${workoutHistoryFromDate},and(assigned_date.is.null,created_at.gte.${workoutHistoryFromDate})`)
+        .order('assigned_date', { ascending: false, nullsFirst: false })
 
     // NOTA (poda 2026-07-29): acá vivía la lectura de `client_payments` -> `data.payments`.
     // Su unico consumidor era `BillingTabB8`, desconectado del chrome de la ficha y borrado.

@@ -312,7 +312,9 @@ export async function writeProgram(
                 group_name: plan.groupName ?? 'Programa de Entrenamiento',
                 day_of_week: plan.dayOfWeek,
                 week_variant: 'A',
-                assigned_date: startDate,
+                // Plan de programa: day_of_week es la identidad del dia. Estampar la fecha de
+                // inicio en todos los dias hacia colisionar el resolvedor de "hoy" (fix 25-08).
+                assigned_date: null,
             })
             .select('id')
             .single()

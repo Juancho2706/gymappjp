@@ -118,7 +118,10 @@ export const getClientWorkoutPlans = cache(async (clientId: string) => {
             'id, title, assigned_date, group_name, day_of_week, week_variant, program_id, created_at, workout_blocks ( id, sets )'
         )
         .eq('client_id', clientId)
+        // Desempate estable: sin `day_of_week` dos planes con la MISMA `assigned_date` salían en orden
+        // arbitrario del planner y cualquier `.find()` por fecha devolvía uno u otro entre requests.
         .order('assigned_date', { ascending: false })
+        .order('day_of_week')
     return data ?? []
 })
 

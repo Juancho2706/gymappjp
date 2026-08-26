@@ -195,7 +195,12 @@ export function deriveWeekWorkoutStatus(input: {
         const dStr = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
         const dDow = d.getDay() === 0 ? 7 : d.getDay()
 
-        const assignedPlan = activePlans.find((p) => p.assigned_date === dStr) ?? null
+        // El atajo por fecha es SOLO para planes SUELTOS (su semántica real: "plan de fecha fija").
+        // Un plan de PROGRAMA se resuelve SIEMPRE por `day_of_week`: el builder estampaba
+        // `assigned_date = program.start_date` en TODOS los días del programa, así que la semana del
+        // start_date resolvía a un plan ARBITRARIO (el primero del array) en vez del día que tocaba
+        // — el alumno veía otro entreno y su sesión real quedaba huérfana (incidente 2026-08-25).
+        const assignedPlan = activePlans.find((p) => p.program_id == null && p.assigned_date === dStr) ?? null
         const programPlan =
             activePlans.find(
                 (p) =>

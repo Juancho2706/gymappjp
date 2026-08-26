@@ -175,10 +175,9 @@ async function reconcileExistingClientProgram(args: {
     coachId: string
     days: WorkoutDayInput[]
     programName: string
-    startDateToUse: string | null
     allowedAreaIds: Set<string>
 }): Promise<void> {
-    const { supabase, programId, clientId, coachId, days, programName, startDateToUse, allowedAreaIds } = args
+    const { supabase, programId, clientId, coachId, days, programName, allowedAreaIds } = args
 
     const { data: existingRaw } = await supabase
         .from('workout_plans')
@@ -208,7 +207,11 @@ async function reconcileExistingClientProgram(args: {
             .from('workout_plans')
             .update({
                 title: day.title || `${programName} - Día ${day.day_of_week}`,
-                assigned_date: startDateToUse,
+                // Un plan de PROGRAMA no lleva fecha: su identidad de día es `day_of_week`. Estampar
+                // aquí el `start_date` daba a TODOS los días del programa la MISMA `assigned_date` y
+                // el resolvedor del día devolvía un plan arbitrario (incidente 2026-08-25). El `null`
+                // explícito también limpia el valor viejo al re-guardar un programa ya existente.
+                assigned_date: null,
                 week_variant: day.week_variant || 'A',
             })
             .eq('id', planId)
@@ -246,7 +249,8 @@ async function reconcileExistingClientProgram(args: {
                 day_of_week: day.day_of_week,
                 title: day.title || `${programName} - Día ${day.day_of_week}`,
                 group_name: 'Programa de Entrenamiento',
-                assigned_date: startDateToUse,
+                // Sin fecha: el día lo define `day_of_week` (ver el update de arriba).
+                assigned_date: null,
                 week_variant: day.week_variant || 'A',
             })
             .select('id')
@@ -527,7 +531,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
             if (clientId) {
                 await reconcileExistingClientProgram({
                     supabase, programId: finalProgramId, clientId, coachId: user.id,
-                    days, programName, startDateToUse, allowedAreaIds,
+                    days, programName, allowedAreaIds,
                 })
                 return { programId: finalProgramId }
             }
@@ -607,7 +611,9 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
                     day_of_week: day.day_of_week,
                     title: day.title || `${programName} - Día ${day.day_of_week}`,
                     group_name: 'Programa de Entrenamiento',
-                    assigned_date: startDateToUse,
+                    // Sin fecha: el día de un plan de programa lo define `day_of_week`
+                    // (`assigned_date` es sólo del plan SUELTO de fecha fija).
+                    assigned_date: null,
                     week_variant: day.week_variant || 'A',
                 })
                 .select('id')
@@ -1037,7 +1043,10 @@ export async function assignProgramToClientsAction(
                             day_of_week: plan.day_of_week,
                             title: plan.title,
                             group_name: plan.group_name,
-                            assigned_date: dateToUse,
+                            // Sin fecha: el día de un plan de programa lo define `day_of_week`. La fecha
+                            // de arranque vive en `workout_programs.start_date` (arriba), no repetida en
+                            // cada día — si no, los N días de la plantilla asignada colisionan en uno.
+                            assigned_date: null,
                             week_variant: (plan as any).week_variant || 'A',
                         })
                         .select('id')
@@ -1165,7 +1174,9 @@ export async function getExerciseHistoryAction(clientId: string, exerciseId: str
         .eq('exercise_id', exerciseId)
         .order('logged_at', { ascending: false })
         .limit(1)
-        .single()
+        // maybeSingle: "el alumno nunca hizo este ejercicio" es un estado normal, no un error.
+        // Con .single() PostgREST devolvía 406 en ese caso (decenas por día en los logs).
+        .maybeSingle()
 
     if (lastLogError || !lastLog) return { data: [] }
 

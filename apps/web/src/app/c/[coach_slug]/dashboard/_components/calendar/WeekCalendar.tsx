@@ -42,7 +42,10 @@ export async function WeekCalendar({ userId }: { userId: string }) {
         const dStr = `${dYear}-${dMonth}-${dDay}`
         const dDow = d.getDay() === 0 ? 7 : d.getDay()
 
-        const assignedPlan = activePlans.find((p) => p.assigned_date === dStr)
+        // Atajo por fecha SOLO para planes sueltos (misma regla que el hero/weekPendingWorkouts): un
+        // plan de programa manda por `day_of_week`, porque el builder estampaba `assigned_date =
+        // start_date` en todos sus días y colisionaban en el mismo día (incidente 2026-08-25).
+        const assignedPlan = activePlans.find((p) => p.program_id == null && p.assigned_date === dStr)
         const programPlan = program
             ? activePlans.find(
                   (p) =>

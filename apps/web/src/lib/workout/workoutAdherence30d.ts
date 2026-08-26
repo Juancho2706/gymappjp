@@ -47,7 +47,10 @@ export function computeWorkoutScore30d(input: {
         const instant = subDays(anchor, i)
         const iso = getSantiagoIsoYmdForUtcInstant(instant.toISOString())
         const dow = getNutritionDayOfWeekFromIsoYmdInSantiago(iso)
-        const assignedPlan = input.activePlans.find((p) => p.assigned_date === iso) ?? null
+        // Only LOOSE plans resolve by date: a program plan always resolves by `day_of_week` (the
+        // builder used to stamp `assigned_date = program.start_date` on every day of the program, so
+        // the start_date day matched an arbitrary plan and poisoned the whole 30d window).
+        const assignedPlan = input.activePlans.find((p) => p.program_id == null && p.assigned_date === iso) ?? null
 
         let programPlan: AdherencePlanRow | null = null
         const prog = input.program
