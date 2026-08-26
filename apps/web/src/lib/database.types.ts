@@ -1400,6 +1400,7 @@ export type Database = {
           card_payment_method_id: string | null
           created_at: string
           current_period_end: string | null
+          email_verified_at: string | null
           enabled_modules: Json
           executor_theme: string
           full_name: string
@@ -1446,6 +1447,8 @@ export type Database = {
           updated_at: string
           use_brand_colors_coach: boolean | null
           use_custom_loader: boolean
+          utm_campaign: string | null
+          utm_source: string | null
           welcome_message: string | null
           welcome_modal_content: string | null
           welcome_modal_enabled: boolean
@@ -1468,6 +1471,7 @@ export type Database = {
           card_payment_method_id?: string | null
           created_at?: string
           current_period_end?: string | null
+          email_verified_at?: string | null
           enabled_modules?: Json
           executor_theme?: string
           full_name: string
@@ -1514,6 +1518,8 @@ export type Database = {
           updated_at?: string
           use_brand_colors_coach?: boolean | null
           use_custom_loader?: boolean
+          utm_campaign?: string | null
+          utm_source?: string | null
           welcome_message?: string | null
           welcome_modal_content?: string | null
           welcome_modal_enabled?: boolean
@@ -1536,6 +1542,7 @@ export type Database = {
           card_payment_method_id?: string | null
           created_at?: string
           current_period_end?: string | null
+          email_verified_at?: string | null
           enabled_modules?: Json
           executor_theme?: string
           full_name?: string
@@ -1582,6 +1589,8 @@ export type Database = {
           updated_at?: string
           use_brand_colors_coach?: boolean | null
           use_custom_loader?: boolean
+          utm_campaign?: string | null
+          utm_source?: string | null
           welcome_message?: string | null
           welcome_modal_content?: string | null
           welcome_modal_enabled?: boolean
