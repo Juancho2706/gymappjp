@@ -10,7 +10,20 @@ export function redirectSystemPath({ path }: { path: string; initial: boolean })
     const clean = noProtocol.split('?')[0]?.split('#')[0] ?? ''
     const segments = clean.split('/').filter(Boolean)
 
-    if ((segments[0] === 'c' || segments[0] === 'invite') && segments[1]) {
+    if (segments[0] === 'invite' && segments[1]) {
+      const identifier = safeDecode(segments[1])
+      if (!identifier) return '/'
+      return `/alumno/codigo?identifier=${encodeURIComponent(identifier)}&auto=1`
+    }
+
+    // `/c/{coach}`: SOLO la puerta de entrada del alumno (`/c/{coach}` a secas o `/c/{coach}/login`)
+    // manda al resolver. Con App Links VERIFIED, Android le entrega a la app TODO el árbol web del
+    // alumno (`/c/{coach}/dashboard`, adonde redirige «Vive tu app», `/c/{coach}/perfil`, …), y
+    // colapsar todo eso a `alumno/codigo` arrastraba al coach con sesión viva a la puerta de login
+    // del alumno. El resto cae al índice, que con sesión rutea al dashboard del rol que sea.
+    if (segments[0] === 'c' && segments[1]) {
+      const isEntryPoint = segments.length === 2 || (segments.length === 3 && segments[2] === 'login')
+      if (!isEntryPoint) return '/'
       const identifier = safeDecode(segments[1])
       if (!identifier) return '/'
       return `/alumno/codigo?identifier=${encodeURIComponent(identifier)}&auto=1`

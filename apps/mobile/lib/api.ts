@@ -67,7 +67,8 @@ async function clearBlockedStudentSession(): Promise<void> {
   try {
     // Keep the tiny account-status cache only long enough for `/alumno/suspended` to render;
     // session, nutrition cache and offline mutation queue are removed before navigation.
-    await signOutAndCleanup({ preserveStudentAccountStatus: true })
+    // Scope local: un `CLIENT_BLOCKED` es un camino de error del gate, no un logout deliberado.
+    await signOutAndCleanup({ preserveStudentAccountStatus: true, scope: 'local' })
     router.replace('/alumno/suspended')
   } finally {
     clientBlockedCleanupInFlight = false

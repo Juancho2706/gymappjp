@@ -39,7 +39,17 @@ export function registerSessionCacheJanitor(): void {
   })
 }
 
-export async function signOutAndCleanup(options: { preserveStudentAccountStatus?: boolean } = {}): Promise<void> {
+export async function signOutAndCleanup(
+  options: {
+    preserveStudentAccountStatus?: boolean
+    /**
+     * `global` (default) revoca el refresh token en TODOS los dispositivos: es la política del
+     * logout DELIBERADO (teléfono perdido). Los caminos de ERROR deben pasar `local` — cerrar acá
+     * no puede echar al usuario de sus otras sesiones.
+     */
+    scope?: 'global' | 'local'
+  } = {},
+): Promise<void> {
   // Resolvemos el id del usuario SALIENTE ANTES de cerrar la sesión: después se pierde y ya no
   // podríamos revocar el push ni borrar su cache por-usuario. Aislado para que un fallo aquí no
   // impida la limpieza posterior.
@@ -66,7 +76,7 @@ export async function signOutAndCleanup(options: { preserveStudentAccountStatus?
   if (!options.preserveStudentAccountStatus) {
     await AsyncStorage.removeItem('eva:student-account-status:v1').catch(() => {})
   }
-  await supabase.auth.signOut().catch(() => {})
+  await supabase.auth.signOut({ scope: options.scope ?? 'global' }).catch(() => {})
 }
 
 /**

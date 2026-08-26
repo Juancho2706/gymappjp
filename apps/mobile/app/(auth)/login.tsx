@@ -196,6 +196,25 @@ export default function LoginScreen() {
       setLoading(false)
       return
     }
+    // Snapshot de la sesión que ya vivía en el teléfono ANTES de pisarla (Bug C): un deep link
+    // puede depositar a un coach logueado en la puerta del alumno, y si el intento falla más
+    // abajo el `signOut` mataba una sesión que este formulario nunca creó. Con `prior` guardado,
+    // los caminos de error la RESTAURAN en vez de cerrarla.
+    const prior = (await supabase.auth.getSession()).data.session
+
+    /** Deshace lo que hizo ESTE intento: restaura la sesión previa, o cierra la recién creada. */
+    const undoSignIn = async () => {
+      if (prior) {
+        // El signOut local NO revoca el refresh token en el server, así que la sesión previa
+        // sigue siendo canjeable: volver a montarla es suficiente.
+        await supabase.auth
+          .setSession({ access_token: prior.access_token, refresh_token: prior.refresh_token })
+          .catch(() => {})
+        return
+      }
+      await supabase.auth.signOut({ scope: 'local' }).catch(() => {})
+    }
+
     const { error: signInError } = await supabase.auth.signInWithPassword(parsed.data)
     if (signInError) {
       setError(translateAuthError(signInError.message))
@@ -224,7 +243,7 @@ export default function LoginScreen() {
           // pierde: el estado server-verified ya quedó cacheado arriba y el janitor de
           // `registerSessionCacheJanitor` borra la nutrición V2 del usuario saliente con el
           // `SIGNED_OUT` que dispara este mismo signOut.
-          await supabase.auth.signOut({ scope: 'local' }).catch(() => {})
+          await undoSignIn()
           setLoading(false)
           router.replace('/alumno/suspended')
           return
@@ -236,7 +255,12 @@ export default function LoginScreen() {
           apiError?.status === 403 ||
           apiError?.code === 'INVALID_TOKEN'
         ) {
-          await supabase.auth.signOut({ scope: 'local' }).catch(() => {})
+          await undoSignIn()
+        } else if (prior) {
+          // Los demás errores (red, validación caída) no cierran nada: la sesión recién creada
+          // queda viva para reintentar. Pero si el teléfono YA tenía una sesión ajena, el intento
+          // fallido tampoco puede quedarse con su lugar.
+          await undoSignIn()
         }
         setError(studentWorkspaceErrorCopy(apiError))
         setLoading(false)

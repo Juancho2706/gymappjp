@@ -23,6 +23,23 @@ describe('redirectSystemPath', () => {
   })
 })
 
+describe('redirectSystemPath — /c/{coach} solo entra por la puerta del alumno', () => {
+  it('la puerta (raíz y /login) sí resuelve el código del coach', () => {
+    expect(redirectSystemPath({ path: 'https://www.eva-app.cl/c/ana-fit', initial: true }))
+      .toBe('/alumno/codigo?identifier=ana-fit&auto=1')
+    expect(redirectSystemPath({ path: 'https://www.eva-app.cl/c/ana-fit/login', initial: true }))
+      .toBe('/alumno/codigo?identifier=ana-fit&auto=1')
+  })
+
+  it('el resto del árbol web del alumno cae al índice, que rutea por rol/sesión', () => {
+    // «Vive tu app» abre `/c/{coach}/dashboard` en el navegador; con App Links VERIFIED Android se
+    // lo entrega a la app y antes arrastraba al coach a la puerta de login del alumno.
+    expect(redirectSystemPath({ path: 'https://www.eva-app.cl/c/ana-fit/dashboard', initial: true })).toBe('/')
+    expect(redirectSystemPath({ path: '/c/ana-fit/perfil', initial: false })).toBe('/')
+    expect(redirectSystemPath({ path: '/c/ana-fit/rutinas/hoy', initial: true })).toBe('/')
+  })
+})
+
 describe('redirectSystemPath — vuelta a la app desde el árbol del alumno', () => {
   it('eva://coach/guia aterriza en la guía (allowlist explícita)', () => {
     expect(redirectSystemPath({ path: 'eva://coach/guia', initial: false })).toBe('/coach/guia')
