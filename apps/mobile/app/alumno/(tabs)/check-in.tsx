@@ -8,6 +8,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -43,6 +44,25 @@ const MAX_BYTES = 5 * 1024 * 1024
 // a literal icon color) — mirror of the constants used across alumno screens.
 const ICON_WHITE = '#FFFFFF'
 
+// Peso tipeable — mismo contrato que el atajo del home (`components/alumno/home/WeightQuickLog.tsx:29-32`):
+// se acepta coma o punto como separador decimal (el teclado `decimal-pad` de es-CL entrega coma) y el
+// rango valido es 20–400 kg con el MISMO copy de error. El stepper ±0,1 sigue existiendo para el ajuste
+// fino; el teclado es para llegar de una a un peso lejano del prefill (un alumno de 102 kg necesitaba
+// ~320 taps en «+»).
+const WEIGHT_MIN = 20
+const WEIGHT_MAX = 400
+const WEIGHT_ERROR = 'Ingresa un peso válido (20–400 kg).'
+
+/** Normaliza el separador decimal antes de `parseFloat` (espejo WeightQuickLog.tsx:29). */
+function parseWeight(raw: string): number {
+  return parseFloat(raw.replace(',', '.'))
+}
+
+function isWeightValid(raw: string): boolean {
+  const w = parseWeight(raw)
+  return !isNaN(w) && w >= WEIGHT_MIN && w <= WEIGHT_MAX
+}
+
 interface LastCheckIn {
   weight: number | null
   energy_level: number | null
@@ -63,9 +83,13 @@ export default function CheckInScreen() {
   // 'COACH_ACCOUNT_PAUSED') que isCoachAccountPausedError no reconoce (fix r2 'ux').
   const { studentAccess } = useEntitlements()
   const [step, setStep] = useState<1 | 2 | 3>(1)
-  // Peso: stepper +/- 0.1kg con default 70.0 (espejo web); se prellenar con el
-  // ultimo check-in cuando carga (una sola vez, sin pisar edicion del alumno).
+  // Peso: TextInput `decimal-pad` + stepper +/- 0.1kg de ajuste fino. El default 70.0 es solo el
+  // arranque en frio: apenas carga `loadLastCheckIn` se prellena con el ULTIMO peso conocido del
+  // alumno (una sola vez, sin pisar edicion del alumno); sin historial queda 70.0.
   const [weight, setWeight] = useState('70.0')
+  // Error de peso INLINE bajo el stepper. Se pinta en blur/Continuar, nunca mientras se tipea
+  // (un "1" a medio escribir no es un error todavia).
+  const [weightError, setWeightError] = useState<string | null>(null)
   const [energyLevel, setEnergyLevel] = useState<number | null>(7)
   const [frontPhotoUri, setFrontPhotoUri] = useState<string | null>(null)
   const [backPhotoUri, setBackPhotoUri] = useState<string | null>(null)
@@ -299,9 +323,12 @@ export default function CheckInScreen() {
     // NO seteamos `date` (espejo web check-in.actions.ts:193-200): el insert web solo escribe
     // weight/energy/notes/fotos y la lectura ordena por created_at. Setearlo generaba un residual
     // de off-by-one en la vista del coach vs filas creadas por web (date NULL).
+    // `parseWeight`: normaliza la coma decimal antes de persistir. Si por lo que sea llega vacio o
+    // ilegible se guarda null (el check-in NUNCA se aborta por el peso).
+    const parsedWeight = parseWeight(weight)
     const { data: inserted, error } = await supabase.from('check_ins').insert({
       client_id: client.id,
-      weight: weight ? parseFloat(weight) : null,
+      weight: isNaN(parsedWeight) ? null : parsedWeight,
       energy_level: energyLevel,
       front_photo_url: frontPhotoPath,
       back_photo_url: backPhotoPath,
@@ -333,6 +360,7 @@ export default function CheckInScreen() {
       }
       setDone(true) // celebración: confetti + pantalla de éxito se montan con `done`
       setStep(1)
+      setWeightError(null)
       setFrontPhotoUri(null)
       setBackPhotoUri(null)
       setNotes('')
@@ -353,7 +381,28 @@ export default function CheckInScreen() {
 
   function adjustWeight(delta: number) {
     editedRef.current = true
-    setWeight((w) => Math.max(0, (parseFloat(w) || 0) + delta).toFixed(1))
+    setWeightError(null)
+    // `parseWeight`: el valor puede venir tipeado con coma desde el teclado decimal.
+    setWeight((w) => Math.max(0, (parseWeight(w) || 0) + delta).toFixed(1))
+  }
+
+  // Tipeo libre: se filtra a digitos + separador decimal (mismo saneado que WeightQuickLog.tsx:62)
+  // y NO se normaliza en caliente (normalizar mientras se tipea le come el separador al alumno).
+  function handleWeightInput(raw: string) {
+    editedRef.current = true
+    setWeightError(null)
+    setWeight(raw.replace(/[^0-9.,]/g, ''))
+  }
+
+  // Al salir del campo: si el valor es valido se normaliza a 1 decimal (el mismo formato que produce
+  // el stepper y que lee el resumen del paso 3); si no, se pinta el error inline.
+  function handleWeightBlur() {
+    if (isWeightValid(weight)) {
+      setWeight(parseWeight(weight).toFixed(1))
+      setWeightError(null)
+    } else if (weight.trim().length > 0) {
+      setWeightError(WEIGHT_ERROR)
+    }
   }
 
   // Cambio manual de energia: marca dirty (mismo anti-race que el peso) antes de setear.
@@ -363,6 +412,12 @@ export default function CheckInScreen() {
   }
 
   function goNext() {
+    // El peso ahora es tipeable, asi que puede quedar fuera de rango o a medio escribir: se corta el
+    // avance aca (el `disabled={!weight}` del boton solo cubre el vacio) y se muestra el error inline.
+    if (step === 1 && !isWeightValid(weight)) {
+      setWeightError(WEIGHT_ERROR)
+      return
+    }
     setDirection(1)
     if (step === 1) setStep(2)
     else if (step === 2) setStep(3)
@@ -468,7 +523,10 @@ export default function CheckInScreen() {
                 lastCheckIn={lastCheckIn}
                 todayIso={todayIso}
                 weight={weight}
+                weightError={weightError}
                 adjustWeight={adjustWeight}
+                onWeightInput={handleWeightInput}
+                onWeightBlur={handleWeightBlur}
                 energyLevel={energyLevel}
                 setEnergyLevel={handleEnergyChange}
                 onNext={goNext}
@@ -529,17 +587,23 @@ export default function CheckInScreen() {
 }
 
 function StepOne({
-  theme, lastCheckIn, todayIso, weight, adjustWeight, energyLevel, setEnergyLevel, onNext,
+  theme, lastCheckIn, todayIso, weight, weightError, adjustWeight, onWeightInput, onWeightBlur, energyLevel, setEnergyLevel, onNext,
 }: {
   theme: any
   lastCheckIn: LastCheckIn | null
   todayIso: string
   weight: string
+  weightError: string | null
   adjustWeight: (delta: number) => void
+  onWeightInput: (raw: string) => void
+  onWeightBlur: () => void
   energyLevel: number | null
   setEnergyLevel: (v: number | null) => void
   onNext: () => void
 }) {
+  // Foco del campo de peso: SOLO cambia el borderColor del propio TextInput (mismo cuidado que
+  // WeightQuickLog.tsx:70-72 — Fabric #45798: no condicionar el arbol/wrapper por foco).
+  const [weightFocused, setWeightFocused] = useState(false)
   return (
     <View style={{ gap: 14 }}>
       {/* Ultimo check-in (o primer check-in) */}
@@ -582,7 +646,35 @@ function StepOne({
             <Minus size={20} color={theme.foreground} strokeWidth={2} />
           </Pressable>
           <View style={styles.weightValueRow}>
-            <Text className="text-strong" style={[TYPE.display, { fontVariant: ['tabular-nums'] }]}>{weight}</Text>
+            {/* El numeral ES el campo (no un Text con un Pressable encima): siempre montado, asi el
+                arbol no cambia al enfocar. Tocarlo abre el teclado decimal; el subrayado de 1,5px es
+                la unica pista de que se puede escribir y se tiñe con la marca al enfocar (patron
+                WeightQuickLog.tsx:70-72). Ancho fijo + textAlign center: un TextInput no auto-mide su
+                contenido de forma confiable. 128 = el maximo que entra en la fila junto a los dos
+                botones de 48 y el "kg" en una pantalla de 360dp, y alcanza para "102.0" a 49px. */}
+            <TextInput
+              value={weight}
+              onChangeText={onWeightInput}
+              onFocus={() => setWeightFocused(true)}
+              onBlur={() => { setWeightFocused(false); onWeightBlur() }}
+              keyboardType="decimal-pad"
+              inputMode="decimal"
+              selectTextOnFocus
+              maxLength={5}
+              returnKeyType="done"
+              accessibilityLabel="Peso actual en kilos"
+              className="text-strong"
+              style={[
+                TYPE.display,
+                styles.weightInput,
+                {
+                  color: theme.foreground,
+                  borderBottomColor: weightError ? theme.destructive : weightFocused ? theme.primary : theme.border,
+                  fontVariant: ['tabular-nums'],
+                },
+              ]}
+              testID="weight-input"
+            />
             <Text className="text-muted" style={textStyle('lg', FONT.uiSemibold)}>kg</Text>
           </View>
           <Pressable
@@ -596,6 +688,11 @@ function StepOne({
             <Plus size={20} color={theme.foreground} strokeWidth={2} />
           </Pressable>
         </View>
+        {weightError ? (
+          <Text className="text-danger-600" style={[textStyle('3xs', FONT.uiSemibold), { textAlign: 'center' }]} testID="weight-error">
+            {weightError}
+          </Text>
+        ) : null}
       </Card>
 
       {/* Nivel de energia — gap 12 (espejo web gap-3 CheckInForm.tsx:474; Ola 0 #4) */}
@@ -843,7 +940,17 @@ const styles = StyleSheet.create({
   lastChip: { width: 38, height: 38, borderRadius: 999, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   weightRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16 },
   weightValueRow: { flexDirection: 'row', alignItems: 'baseline', gap: 4 },
-  stepBtn: { width: 48, height: 48, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  // `includeFontPadding: false` + paddings en 0: sin eso Android suma el padding del EditText y el
+  // numeral queda desalineado del "kg" (la fila alinea por baseline).
+  weightInput: {
+    width: 128,
+    textAlign: 'center',
+    paddingVertical: 0,
+    paddingHorizontal: 0,
+    includeFontPadding: false,
+    borderBottomWidth: 1.5,
+  },
+  stepBtn: { width: 48, height: 48, borderRadius: 999, alignItems: 'center', justifyContent: 'center', flexShrink: 0 },
   energyHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   photoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
   photoCol: { flex: 1, minWidth: 0 },

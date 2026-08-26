@@ -122,6 +122,13 @@ import {
 // anillo del héroe, el punto verde del selector semanal y el check de cada fila — afirmarlo una
 // cuarta vez arriba de todo no agregaba ninguna decisión.
 
+/**
+ * Cuánto dura el acuse «Marcado» del CTA de la franja una vez que el refetch reconcilió. No es una
+ * animación decorativa: es el único frame en que el alumno ve confirmado lo que tocó, porque justo
+ * después el control se desmonta solo (la franja quedó completa).
+ */
+const BULK_MARKED_FLASH_MS = 1600
+
 type DialogState =
   | { kind: 'none' }
   // `initialMealSlot`: preselección de franja al llegar desde el sheet de equivalencias.
@@ -240,6 +247,39 @@ export function TodayExperience({
   const router = useRouter()
   useNavigationGate(useCallback((href: string) => router.push(href), [router]))
   const [busyId, setBusyId] = useState<string | null>(null)
+  /**
+   * Franja cuyo registro en bloque acaba de RECONCILIAR con el servidor (acuse «Marcado»).
+   *
+   * Sin esto el CTA desaparecía en el mismo frame del tap —el delta optimista ya deja la franja
+   * `complete` y `BulkMarkControl` devolvía null— y durante el ~1 s del refetch el alumno se
+   * quedaba sin ninguna respuesta a lo que acababa de tocar: el triple tap reportado. Ahora el
+   * control se queda montado, deshabilitado y en su estado de guardado hasta que la verdad del
+   * servidor llega, y recién ahí acusa «Marcado» antes de desmontarse.
+   */
+  const [markedSlotId, setMarkedSlotId] = useState<string | null>(null)
+  const markedSlotTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  function clearSlotMarked() {
+    if (markedSlotTimerRef.current !== null) {
+      clearTimeout(markedSlotTimerRef.current)
+      markedSlotTimerRef.current = null
+    }
+    setMarkedSlotId(null)
+  }
+  function flashSlotMarked(slotId: string) {
+    if (markedSlotTimerRef.current !== null) clearTimeout(markedSlotTimerRef.current)
+    setMarkedSlotId(slotId)
+    markedSlotTimerRef.current = setTimeout(() => {
+      markedSlotTimerRef.current = null
+      setMarkedSlotId(null)
+    }, BULK_MARKED_FLASH_MS)
+  }
+  // Al desmontar no queda ningún timer vivo apuntando a un setState de esta pantalla.
+  useEffect(
+    () => () => {
+      if (markedSlotTimerRef.current !== null) clearTimeout(markedSlotTimerRef.current)
+    },
+    [],
+  )
   const [error, setError] = useState<string | null>(null)
   const [dialog, setDialog] = useState<DialogState>({ kind: 'none' })
   /**
@@ -410,6 +450,8 @@ export function TodayExperience({
           )
           return
         }
+        // Recién acá el servidor es la verdad de la pantalla: el CTA acusa «Marcado» y se va.
+        flashSlotMarked(slot.id)
         toast.success(`Registraste tu ${slot.name} 🎉`, {
           duration: 6000,
           action: { label: 'Deshacer', onClick: () => handleBulkUndo(slot.name, payloads, res.ids) },
@@ -433,6 +475,8 @@ export function TodayExperience({
       kind: 'void',
       entryId: payload.entryId,
     }))
+    // El acuse «Marcado» no puede sobrevivir al deshacer: el CTA vuelve, y volvería deshabilitado.
+    clearSlotMarked()
     startTransition(async () => {
       for (const delta of undoDeltas) {
         applyTodayDelta(delta)
@@ -726,6 +770,7 @@ export function TodayExperience({
       <PrescribedSection
         today={today}
         busyId={busyId}
+        markedSlotId={markedSlotId}
         portionsApi={portionsApi}
         substitutionOptionsByItem={substitutionOptionsByItem}
         onOpenPortionSheet={(slotCode, groupCode) => setPortionSheet({ slotCode, groupCode })}
@@ -1154,6 +1199,11 @@ function EatCheckbox({
       role="checkbox"
       aria-checked={checked}
       aria-label={checked ? `Retirar registro de ${name}` : `Registrar ${name}`}
+      // El botón queda deshabilitado desde el tap hasta que el refetch reconcilia (`busyId` se
+      // suelta recién después del sync), así que el estado de guardado tiene que ser AUDIBLE
+      // además de visible: el pulso del cuadro no le dice nada a un lector de pantalla.
+      aria-busy={pending}
+      title={pending ? 'Guardando…' : undefined}
       data-testid={checked ? 'nutrition-v2-registrado' : 'nutrition-v2-lo-comi'}
       disabled={disabled}
       onClick={onToggle}
@@ -1205,6 +1255,7 @@ function IconButton({
 function PrescribedSection({
   today,
   busyId,
+  markedSlotId,
   portionsApi,
   substitutionOptionsByItem,
   onOpenPortionSheet,
@@ -1223,6 +1274,8 @@ function PrescribedSection({
    * acciones muertos sin feedback — el "no puedo marcar la 2ª comida" reportado por QA.
    */
   busyId: string | null
+  /** Franja con el acuse «Marcado» vivo (registro en bloque ya reconciliado con el servidor). */
+  markedSlotId: string | null
   portionsApi: PortionMarksApi
   substitutionOptionsByItem: Record<string, SubstitutionOptionsItem>
   onOpenPortionSheet: (slotCode: string, groupCode: string) => void
@@ -1419,6 +1472,7 @@ function PrescribedSection({
             <BulkMarkControl
               state={bulk}
               pending={busyId === `bulk:${slot.id}`}
+              justMarked={markedSlotId === slot.id}
               onEat={() => onBulkEat(slot, bulk)}
             />
             {/* Porciones de la franja (SPEC UX-b): sección hermana de los items. */}
@@ -1623,17 +1677,27 @@ function MealProgressMeter({ consumed, total }: { consumed: number; total: numbe
  *                    dos veces a ~200 px de distancia).
  *  - all-open      → CTA "Comí toda esta comida · N kcal".
  *  - partial       → CTA "Comer lo que falta (N) · M kcal".
+ *
+ * Los dos casos que devolvían null se SUSPENDEN mientras el registro en bloque está en vuelo o
+ * acaba de reconciliar: el delta optimista deja la franja `complete` en el frame del tap, así que
+ * desmontarse ahí era dejar al alumno sin respuesta durante el ~1 s del refetch — y volver a
+ * tocar. El estado de guardado y el check son los de `NutritionMotionButton`; acá no nace ningún
+ * spinner nuevo.
  */
 function BulkMarkControl({
   state,
   pending,
+  justMarked,
   onEat,
 }: {
   state: BulkMarkSlotState
   pending: boolean
+  /** Acuse posterior al refetch: el CTA sigue montado y deshabilitado, con el check «Marcado». */
+  justMarked: boolean
   onEat: () => void
 }) {
-  if (state.status === 'none-required' || state.status === 'complete') return null
+  const settled = state.status === 'none-required' || state.status === 'complete'
+  if (settled && !pending && !justMarked) return null
   return (
     <NutritionMotionButton
       type="button"
@@ -1641,13 +1705,26 @@ function BulkMarkControl({
       tone="success"
       className="mt-3 w-full"
       pending={pending}
+      success={justMarked}
+      disabled={justMarked}
+      aria-busy={pending}
       onClick={onEat}
     >
-      <Utensils className="h-4 w-4" aria-hidden="true" />
-      <span>{bulkMarkCtaLabel(state)}</span>
-      {state.eligibleKcal > 0 ? (
-        <span className="font-normal opacity-85">· {Math.round(state.eligibleKcal)} kcal</span>
-      ) : null}
+      {pending ? (
+        // `bulkMarkCtaLabel` ya devuelve null acá (la franja quedó `complete` por el delta
+        // optimista), así que el copy honesto del intervalo es el estado, no la acción.
+        <span>Guardando…</span>
+      ) : justMarked ? (
+        <span>Marcado</span>
+      ) : (
+        <>
+          <Utensils className="h-4 w-4" aria-hidden="true" />
+          <span>{bulkMarkCtaLabel(state)}</span>
+          {state.eligibleKcal > 0 ? (
+            <span className="font-normal opacity-85">· {Math.round(state.eligibleKcal)} kcal</span>
+          ) : null}
+        </>
+      )}
     </NutritionMotionButton>
   )
 }

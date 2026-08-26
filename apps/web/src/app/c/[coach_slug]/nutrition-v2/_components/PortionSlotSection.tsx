@@ -137,6 +137,12 @@ function PortionChip({
   }
 
   const handleTap = () => {
+    // Freno anti-doble-tap POR CELDA: mientras la marca de ESTA celda está en vuelo el chip no
+    // acepta otro tap (el `disabled` de abajo ya lo cubre; esto es el cinturón por si el click
+    // llega igual). El freno suelta apenas el server confirma el entryId — NO espera la
+    // reconciliación: el refetch va debounced 4 s A PROPÓSITO para que marcar el día entero sea
+    // una ráfaga de decenas de taps (ver PORTION_REFRESH_DEBOUNCE_MS en PortionMarks.tsx).
+    if (pending) return
     if (next.extra) {
       onRequestExtra()
       return
@@ -146,8 +152,13 @@ function PortionChip({
 
   return (
     <motion.button
+      aria-busy={pending}
       aria-label={ariaLabel}
-      className="flex min-h-11 w-full items-center gap-2.5 rounded-control border border-border-subtle bg-surface-card px-2.5 py-1.5 text-left transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      className={cx(
+        'flex min-h-11 w-full items-center gap-2.5 rounded-control border border-border-subtle bg-surface-card px-2.5 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        pending ? 'cursor-wait' : 'hover:bg-surface-sunken',
+      )}
+      disabled={pending}
       onClick={() => {
         if (longPressed.current) {
           longPressed.current = false
@@ -168,7 +179,7 @@ function PortionChip({
       onPointerLeave={clearTimer}
       onPointerUp={clearTimer}
       type="button"
-      whileTap={reduceMotion ? undefined : { scale: NUTRITION_MOTION.press.scale }}
+      whileTap={reduceMotion || pending ? undefined : { scale: NUTRITION_MOTION.press.scale }}
     >
       <PortionGroupCircle code={target.groupCode} color={target.color} sortOrder={target.orderIndex} />
       <span className="min-w-0 flex-1 truncate text-sm font-medium text-strong">{target.groupName}</span>

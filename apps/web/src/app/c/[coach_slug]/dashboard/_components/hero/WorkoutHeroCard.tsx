@@ -98,7 +98,34 @@ export function WorkoutHeroCard({
                 />
             </div>
 
-            <ul className="mt-4 mb-4 flex flex-col gap-px overflow-hidden rounded-control bg-white/[0.04]">
+            {/* CTA ARRIBA de la lista (paridad con el hero RN): con un plan largo el botón caía bajo la
+                lista de 4 ejercicios y, en un móvil, bajo el pliegue — había que scrollear a ciegas para
+                empezar a entrenar. Mismo botón, mismo destino y mismos estados; solo cambia la posición,
+                y el ritmo vertical se conserva pasando el margen de 16 al CTA (la lista pierde su `mb-4`
+                porque ya no es la que separa del botón). */}
+            <div className="mt-4 flex gap-2.5">
+                <Link
+                    href={workoutHref}
+                    onClick={(e) => {
+                        // QA6: intercepta el click para el morph de lanzamiento; navega al MISMO destino.
+                        // Sin JS (o si preventDefault no corre) el Link navega normal — sin regresiones.
+                        e.preventDefault()
+                        // QA7: si ya está completado, abre la ventanita de doble intención (el CTA queda
+                        // bajo el overlay, pero cubrimos el caso por robustez); si no, morph directo.
+                        if (isAlreadyLogged) {
+                            setSheetOpen(true)
+                            return
+                        }
+                        launch(e.currentTarget, workoutHref)
+                    }}
+                    className={cn(buttonVariants({ variant: 'sport', size: 'lg' }), 'flex-1')}
+                >
+                    <Play className="h-5 w-5" />
+                    {isAlreadyLogged ? 'Ver registro' : liveLogged > 0 ? 'Continuar' : 'Empezar entrenamiento'}
+                </Link>
+            </div>
+
+            <ul className="mt-4 flex flex-col gap-px overflow-hidden rounded-control bg-white/[0.04]">
                 {show.map((b) => {
                     const logged = baseLoggedPerBlock[b.id] ?? 0
                     const full = logged >= b.sets
@@ -135,27 +162,6 @@ export function WorkoutHeroCard({
                 ) : null}
             </ul>
 
-            <div className="flex gap-2.5">
-                <Link
-                    href={workoutHref}
-                    onClick={(e) => {
-                        // QA6: intercepta el click para el morph de lanzamiento; navega al MISMO destino.
-                        // Sin JS (o si preventDefault no corre) el Link navega normal — sin regresiones.
-                        e.preventDefault()
-                        // QA7: si ya está completado, abre la ventanita de doble intención (el CTA queda
-                        // bajo el overlay, pero cubrimos el caso por robustez); si no, morph directo.
-                        if (isAlreadyLogged) {
-                            setSheetOpen(true)
-                            return
-                        }
-                        launch(e.currentTarget, workoutHref)
-                    }}
-                    className={cn(buttonVariants({ variant: 'sport', size: 'lg' }), 'flex-1')}
-                >
-                    <Play className="h-5 w-5" />
-                    {isAlreadyLogged ? 'Ver registro' : liveLogged > 0 ? 'Continuar' : 'Empezar entrenamiento'}
-                </Link>
-            </div>
             {isAlreadyLogged ? (
                 <WorkoutDoneSheet
                     open={sheetOpen}

@@ -59,6 +59,25 @@ interface Props {
 // deja ~2MB. Rechazar acá al ELEGIR = el alumno nunca puede adjuntar (incidente jul-2026).
 const MAX_SIZE = 12 * 1024 * 1024
 
+// Peso tipeable — mismo contrato que el check-in de la app (`apps/mobile/app/alumno/(tabs)/check-in.tsx`)
+// y que el atajo de peso del dashboard: se acepta coma o punto como separador decimal (el teclado
+// decimal de es-CL entrega coma) y el rango válido es 20–400 kg con el MISMO copy de error. El stepper
+// ±0,1 se conserva para el ajuste fino; el campo es para llegar de una a un peso lejano del prefill
+// (un alumno de 102 kg necesitaba ~320 taps en «+»).
+const WEIGHT_MIN = 20
+const WEIGHT_MAX = 400
+const WEIGHT_ERROR = 'Ingresa un peso válido (20–400 kg).'
+
+/** Normaliza el separador decimal antes de `parseFloat` (espejo del server: check-in.actions.ts:152). */
+function parseWeight(raw: string): number {
+    return parseFloat(raw.replace(',', '.'))
+}
+
+function isWeightValid(raw: string): boolean {
+    const w = parseWeight(raw)
+    return !isNaN(w) && w >= WEIGHT_MIN && w <= WEIGHT_MAX
+}
+
 export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props) {
     const router = useRouter()
     const base = useBasePath(`/c/${coachSlug}`)
@@ -70,6 +89,7 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
     const [weight, setWeight] = useState(() =>
         lastCheckIn?.weight != null ? lastCheckIn.weight.toFixed(1) : '70.0'
     )
+    const [weightError, setWeightError] = useState<string | null>(null)
     const [energyLevel, setEnergyLevel] = useState(lastCheckIn?.energy_level ?? 7)
     const [notes, setNotes] = useState('')
     const [frontFile, setFrontFile] = useState<File | null>(null)
@@ -139,6 +159,12 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
     }
 
     const goNext = () => {
+        // El peso ahora es tipeable, así que puede quedar fuera de rango o a medio escribir: se corta
+        // el avance acá además del `disabled` del botón, que no cubre un blur todavía sin procesar.
+        if (currentStep === 1 && !isWeightValid(weight)) {
+            setWeightError(WEIGHT_ERROR)
+            return
+        }
         setDirection(1)
         setCurrentStep((s) => (s < 3 ? ((s + 1) as 1 | 2 | 3) : s))
     }
@@ -147,8 +173,29 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
         setCurrentStep((s) => (s > 1 ? ((s - 1) as 1 | 2 | 3) : s))
     }
 
-    const adjustWeight = (delta: number) =>
-        setWeight((w) => Math.max(0, (parseFloat(w) || 0) + delta).toFixed(1))
+    const adjustWeight = (delta: number) => {
+        setWeightError(null)
+        // `parseWeight`: el valor puede venir tipeado con coma desde el teclado decimal.
+        setWeight((w) => Math.max(0, (parseWeight(w) || 0) + delta).toFixed(1))
+    }
+
+    // Tipeo libre: se filtra a dígitos + separador decimal y NO se normaliza en caliente (normalizar
+    // mientras se tipea le come el separador al alumno).
+    const handleWeightInput = (raw: string) => {
+        setWeightError(null)
+        setWeight(raw.replace(/[^0-9.,]/g, ''))
+    }
+
+    // Al salir del campo: si el valor es válido se normaliza a 1 decimal (el mismo formato que produce
+    // el stepper y que lee el resumen del paso 3); si no, se pinta el error inline.
+    const handleWeightBlur = () => {
+        if (isWeightValid(weight)) {
+            setWeight(parseWeight(weight).toFixed(1))
+            setWeightError(null)
+        } else if (weight.trim().length > 0) {
+            setWeightError(WEIGHT_ERROR)
+        }
+    }
 
     // Compresión BEST-EFFORT a JPEG (encode universal — convierte el HEIC de iPhone). Con
     // timeout: con ciertas fotos la promesa de browser-image-compression jamás resuelve
@@ -456,9 +503,28 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
                                     <Minus className="h-5 w-5" />
                                 </button>
                                 <div className="flex items-baseline gap-1">
-                                    <span className="font-display text-5xl font-black tabular-nums tracking-[-0.03em] text-strong">
-                                        {weight}
-                                    </span>
+                                    {/* El numeral ES el campo: el subrayado de 1,5px es la única pista de
+                                        que se puede escribir y se tiñe con la marca del coach al enfocar.
+                                        Ancho fijo de 128px = el máximo que entra en la fila junto a los dos
+                                        botones de 48 y el "kg" en un viewport de 360px, y alcanza para
+                                        "102.0". */}
+                                    <input
+                                        type="text"
+                                        inputMode="decimal"
+                                        value={weight}
+                                        onChange={(e) => handleWeightInput(e.target.value)}
+                                        onFocus={(e) => e.currentTarget.select()}
+                                        onBlur={handleWeightBlur}
+                                        maxLength={5}
+                                        aria-label="Peso actual en kilos"
+                                        aria-invalid={weightError != null}
+                                        aria-describedby={weightError ? 'checkin-weight-error' : undefined}
+                                        className={`w-32 border-b-[1.5px] bg-transparent text-center font-display text-5xl font-black tabular-nums tracking-[-0.03em] text-strong outline-none transition-colors ${
+                                            weightError
+                                                ? 'border-[var(--danger-600)]'
+                                                : 'border-default focus:border-[var(--theme-primary)]'
+                                        }`}
+                                    />
                                     <span className="text-lg font-semibold text-muted">kg</span>
                                 </div>
                                 <button
@@ -471,6 +537,15 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
                                     <Plus className="h-5 w-5" />
                                 </button>
                             </div>
+                            {weightError ? (
+                                <p
+                                    id="checkin-weight-error"
+                                    role="alert"
+                                    className="text-center text-[11.5px] font-semibold text-[var(--danger-600)]"
+                                >
+                                    {weightError}
+                                </p>
+                            ) : null}
                         </Card>
 
                         {/* Nivel de energía */}
@@ -499,7 +574,11 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
                             variant="sport"
                             size="lg"
                             onClick={goNext}
-                            disabled={!weight}
+                            // Cubre vacío E inválido. El inválido se apaga vía `weightError` (no vía
+                            // `isWeightValid` directo) para no dejar un botón muerto sin explicación:
+                            // mientras el alumno escribe el botón sigue vivo, el tap dispara el guard de
+                            // `goNext`, aparece el error inline y RECIÉN ahí queda deshabilitado.
+                            disabled={!weight || weightError != null}
                             className="w-full"
                         >
                             Continuar <ArrowRight className="h-4 w-4" />

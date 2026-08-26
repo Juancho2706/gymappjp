@@ -145,25 +145,16 @@ function WorkoutHero({
           />
         </View>
 
-        {show.length > 0 ? (
-          <View style={{ marginTop: 16, marginBottom: 16, borderRadius: theme.radius.control, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.04)' }}>
-            {show.map((b, i) => (
-              <HeroBlockRow key={b.id} block={b} logged={loggedByBlock.get(b.id) ?? 0} first={i === 0} />
-            ))}
-            {more > 0 ? (
-              <Text className="text-on-dark-muted" style={{ fontFamily: FONT.uiSemibold, fontSize: 11, paddingHorizontal: 12, paddingVertical: 8 }}>
-                + {more} ejercicios más
-              </Text>
-            ) : null}
-          </View>
-        ) : (
-          <View style={{ height: 16 }} />
-        )}
-
-        {/* Ref-wrapper medible: al tocar el CTA se mide su rect real en ventana para que el morph
+        {/* CTA ARRIBA de la lista: con un plan largo (13 ejercicios) el botón caía ~260px bajo el tope
+            de la card, ya de por sí debajo de header + WeekStrip + banner de check-in ⇒ en un teléfono
+            de 6" quedaba bajo el pliegue y había que scrollear a ciegas para empezar a entrenar. El
+            botón, sus estados y sus estilos son los mismos; solo cambia la posición, y el ritmo
+            vertical se conserva moviendo el margen de 16 a este bloque (la lista pierde su
+            marginBottom porque ya no es la que separa del CTA).
+            Ref-wrapper medible: al tocar el CTA se mide su rect real en ventana para que el morph
             "Impulso" nazca EXACTO del botón (QA6). `collapsable={false}` evita que Android colapse el
             View y measureInWindow devuelva 0. Si la medición falla, el morph cae al origen sintético. */}
-        <View ref={ctaRef} collapsable={false} style={{ opacity: ctaHidden ? 0 : 1 }}>
+        <View ref={ctaRef} collapsable={false} style={{ marginTop: 16, opacity: ctaHidden ? 0 : 1 }}>
           <Button
             testID="home-hero-start"
             label={cta}
@@ -182,6 +173,19 @@ function WorkoutHero({
             }}
           />
         </View>
+
+        {show.length > 0 ? (
+          <View style={{ marginTop: 16, borderRadius: theme.radius.control, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.04)' }}>
+            {show.map((b, i) => (
+              <HeroBlockRow key={b.id} block={b} logged={loggedByBlock.get(b.id) ?? 0} first={i === 0} />
+            ))}
+            {more > 0 ? (
+              <Text className="text-on-dark-muted" style={{ fontFamily: FONT.uiSemibold, fontSize: 11, paddingHorizontal: 12, paddingVertical: 8 }}>
+                + {more} ejercicios más
+              </Text>
+            ) : null}
+          </View>
+        ) : null}
 
         {isAlreadyLogged ? (
           // Overlay ACCIONABLE (MOBILE-2 / paridad web WorkoutHeroCard:62): tapea → ventanita de doble

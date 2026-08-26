@@ -122,6 +122,76 @@ function SubmitButton({
     )
 }
 
+/**
+ * Dominios que concentran el grueso de las altas. NO son una lista blanca —cualquier otro dominio
+ * pasa igual—: son el ancla para detectar un tipeo torcido y ofrecer la corrección.
+ */
+const COMMON_EMAIL_DOMAINS = [
+    'gmail.com',
+    'hotmail.com',
+    'hotmail.cl',
+    'outlook.com',
+    'outlook.cl',
+    'yahoo.com',
+    'yahoo.es',
+    'icloud.com',
+    'live.cl',
+    'live.com',
+]
+
+/**
+ * Damerau-Levenshtein (incluye TRANSPOSICIÓN): sin ella `gmial.com` queda a distancia 2 de
+ * `gmail.com` y el typo más común de todos pasaría de largo.
+ */
+function damerauLevenshtein(a: string, b: string): number {
+    const rows = a.length + 1
+    const cols = b.length + 1
+    const d: number[][] = Array.from({ length: rows }, (_, i) => {
+        const row = new Array<number>(cols).fill(0)
+        row[0] = i
+        return row
+    })
+    for (let j = 0; j < cols; j += 1) d[0][j] = j
+    for (let i = 1; i < rows; i += 1) {
+        for (let j = 1; j < cols; j += 1) {
+            const cost = a[i - 1] === b[j - 1] ? 0 : 1
+            d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + cost)
+            if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+                d[i][j] = Math.min(d[i][j], d[i - 2][j - 2] + 1)
+            }
+        }
+    }
+    return d[rows - 1][cols - 1]
+}
+
+/**
+ * «¿Quisiste decir …?» — devuelve el correo con el dominio corregido, o null si no hay sospecha.
+ *
+ * Es una SUGERENCIA, nunca un bloqueo: el alta con un dominio raro pero válido tiene que salir
+ * igual. Existe por el caso `esteban` del 22-08 (autopsia 25-08): escribió `…@gmail.con`, el
+ * formulario lo aceptó, el correo de confirmación no pudo llegar nunca y la cuenta quedó muerta en
+ * `pending_email` — sin forma de recuperarla, porque re-registrarse con el correo bueno es otra
+ * cuenta y el link de reenvío va al dominio equivocado.
+ *
+ * Sólo se toca el DOMINIO: el buzón se devuelve tal como se tipeó (la parte local del correo es
+ * sensible a mayúsculas según RFC 5321).
+ */
+function suggestEmailFix(raw: string): string | null {
+    const value = raw.trim()
+    const at = value.lastIndexOf('@')
+    if (at <= 0 || at === value.length - 1) return null
+    const domain = value.slice(at + 1).toLowerCase()
+    if (!domain.includes('.')) return null
+    if (COMMON_EMAIL_DOMAINS.includes(domain)) return null
+    const match = COMMON_EMAIL_DOMAINS.find(
+        (candidate) =>
+            Math.abs(candidate.length - domain.length) <= 1 &&
+            damerauLevenshtein(domain, candidate) === 1
+    )
+    if (!match) return null
+    return `${value.slice(0, at)}@${match}`
+}
+
 function CheckTile({ className }: { className?: string }) {
     return (
         <span
@@ -145,6 +215,9 @@ export default function RegisterPage() {
     const [fullName, setFullName] = useState('')
     const [brandName, setBrandName] = useState('')
     const [email, setEmail] = useState('')
+    // La sugerencia de dominio aparece recién al SALIR del campo: evaluada tecla a tecla, «gmail.co»
+    // camino a «gmail.com» dispararía el aviso en la mitad de las altas sanas.
+    const [emailBlurred, setEmailBlurred] = useState(false)
     const [password, setPassword] = useState('')
     const [clientError, setClientError] = useState<string | null>(null)
     const [fromGoogle, setFromGoogle] = useState(false)
@@ -181,6 +254,10 @@ export default function RegisterPage() {
     // (decisión CEO 2026-07-17) y ya no se compran como add-ons en el signup.
     const liveTotal = selectedPrice
     const isFreeTier = tier === 'free'
+    const emailSuggestion = useMemo(
+        () => (emailBlurred ? suggestEmailFix(email) : null),
+        [email, emailBlurred]
+    )
     const captureRegisterFailed = useCaptureRegisterFailed()
 
     useEffect(() => {
@@ -549,9 +626,26 @@ export default function RegisterPage() {
                                     required
                                     value={email}
                                     onChange={(event) => setEmail(event.target.value)}
+                                    onBlur={() => setEmailBlurred(true)}
                                     className="w-full pl-10 h-12 bg-surface-card border-[1.5px] border-border-default text-text-strong text-[15px] font-medium rounded-control placeholder:text-text-muted focus:border-sport-600 focus:shadow-[var(--ring-focus)] transition-all outline-none"
                                 />
                             </div>
+                            {/* Sugerencia, NUNCA bloqueo: un dominio raro pero válido sigue pasando.
+                                Un correo con el dominio mal tipeado no rebota — simplemente no llega
+                                nunca, y la cuenta queda muerta en `pending_email` sin recuperación. */}
+                            {emailSuggestion && (
+                                <p aria-live="polite" className="pl-1 text-xs text-text-muted">
+                                    ¿Quisiste decir{' '}
+                                    <button
+                                        type="button"
+                                        onClick={() => setEmail(emailSuggestion)}
+                                        className="font-bold text-sport-600 underline underline-offset-2 transition-opacity hover:opacity-80"
+                                    >
+                                        {emailSuggestion}
+                                    </button>
+                                    ?
+                                </p>
+                            )}
                         </div>
                         <div className="space-y-1.5">
                             <label htmlFor="password" className="text-text-strong text-[13px] font-semibold">
