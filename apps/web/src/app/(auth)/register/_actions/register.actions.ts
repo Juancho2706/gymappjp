@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { redirect } from 'next/navigation'
-import { headers } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import {
     BILLING_CYCLE_CONFIG,
     getTierCapabilities,
@@ -28,7 +28,7 @@ import { sendFreeCoachOnboardingEmails } from '@/lib/email/free-coach-onboarding
 import { normalizeCouponCode } from '@/services/billing/coupons.normalize'
 import { newMetaEventId, queueMetaCapiEvent } from '@/lib/meta/capi'
 import { persistCheckoutIntent } from '@/lib/payments/checkout-intent'
-import { resolveRegistrationUtm } from '@/lib/auth/registration-utm'
+import { parseUtmCookie, resolveRegistrationUtm, UTM_COOKIE_NAME } from '@/lib/auth/registration-utm'
 
 export type RegisterState = {
     error?: string
@@ -83,10 +83,16 @@ export async function registerAction(
     // sesión y por eso 24 de 25 personas quedaban con `$initial_utm_source = none`.
     // Retención declarada en el `COMMENT ON COLUMN` de la migración (dato personal, Ley 21.719:
     // vive lo que vive la cuenta y se borra con la fila).
-    const { utmSource, utmCampaign } = resolveRegistrationUtm({
+    // W3.9b: los hidden inputs solo traen dato si el ad apuntó DIRECTO a /register?utm_... — el
+    // camino real (aterrizar en `/` y tocar un CTA) los deja vacíos. Fallback: la cookie
+    // first-touch `eva_utm` que dejó el proxy. El form gana campo a campo cuando trae valor.
+    const formUtm = resolveRegistrationUtm({
         utmSource: formData.get('utm_source'),
         utmCampaign: formData.get('utm_campaign'),
     })
+    const cookieUtm = parseUtmCookie((await cookies()).get(UTM_COOKIE_NAME)?.value)
+    const utmSource = formUtm.utmSource ?? cookieUtm.utmSource
+    const utmCampaign = formUtm.utmCampaign ?? cookieUtm.utmCampaign
     // Add-ons opcionales del signup (plan 05 F5.5): CSV de MODULE_KEYS. Se validan contra la
     // whitelist + coherencia D8 (nutrition_exchanges solo en tier con nutrición). El monto se
     // calcula SOLO server-side en create-preference; acá solo se decide qué módulos viajan.

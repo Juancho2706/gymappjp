@@ -49,6 +49,35 @@ export type RegistrationUtm = {
 }
 
 /**
+ * Cookie first-party de atribución, escrita por el proxy en el PRIMER aterrizaje que traiga
+ * `?utm_source=` (first-touch: nunca se pisa). POR QUÉ: los hidden inputs solo cubren «el anuncio
+ * apunta directo a `/register?utm_...`», pero el ad real aterriza en `/` y todos los CTAs de la
+ * landing navegan a `/register` SIN query; el alta por Google además pierde los params en el ida y
+ * vuelta de OAuth. La cookie sobrevive ambos saltos. httpOnly (solo la leen los server actions de
+ * alta), 30 días — mismo dato y misma retención declarada que las columnas de la migración
+ * `20260826171126_coaches_utm_attribution.sql`: se consume en el insert del coach y no viaja a
+ * ningún otro sistema.
+ */
+export const UTM_COOKIE_NAME = 'eva_utm'
+export const UTM_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 30
+
+/**
+ * Valor crudo de la cookie (`source|campaign`, cada parte URL-encoded al escribirla) → par saneado.
+ * Tolera basura: una cookie manipulada pasa por el MISMO `sanitizeUtmValue` que un query param.
+ */
+export function parseUtmCookie(raw: string | null | undefined): RegistrationUtm {
+    if (!raw) return { utmSource: null, utmCampaign: null }
+    const [source = '', campaign = ''] = raw.split('|', 2).map(part => {
+        try {
+            return decodeURIComponent(part)
+        } catch {
+            return part
+        }
+    })
+    return { utmSource: sanitizeUtmValue(source), utmCampaign: sanitizeUtmValue(campaign) }
+}
+
+/**
  * Par listo para el `insert` de `coaches` y para el `coach_registered` de servidor.
  *
  * Se devuelven SIEMPRE las dos claves (con `null` cuando no hay dato) para que el `insert` sea el

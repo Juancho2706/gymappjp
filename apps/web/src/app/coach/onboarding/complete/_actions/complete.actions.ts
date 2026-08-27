@@ -3,6 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { redirect } from 'next/navigation'
+import { cookies } from 'next/headers'
 import {
     BILLING_CYCLE_CONFIG,
     getTierMaxClients,
@@ -18,7 +19,7 @@ import { newMetaEventId, queueMetaCapiEvent } from '@/lib/meta/capi'
 import { sendFreeCoachOnboardingEmails } from '@/lib/email/free-coach-onboarding'
 import { captureCoachRegisteredServer } from '@/lib/posthog/registration-events'
 import { SERVER_EMITTED_QUERY } from '@/lib/posthog/registration'
-import { resolveRegistrationUtm } from '@/lib/auth/registration-utm'
+import { parseUtmCookie, resolveRegistrationUtm, UTM_COOKIE_NAME } from '@/lib/auth/registration-utm'
 import { rotatePasswordOnGoogleLink } from '@/lib/auth/google-link-rotation'
 
 export type CompleteOnboardingState = {
@@ -66,20 +67,21 @@ export async function completeOAuthOnboarding(
     const acceptLegal = formData.get('accept_legal')
     const acceptHealthData = formData.get('accept_health_data')
     const acceptMarketing = formData.get('accept_marketing') === 'on'
-    // W3.9 (atribución del alta) — pendiente heredado que cierra este diff: el alta por Google
-    // ignoraba los UTM y quedaba fuera de la única medición de campaña que existe. Se sanean igual
-    // que en el alta por correo (mismo helper compartido: el valor llega del cliente).
+    // W3.9 (atribución del alta): el alta por Google ignoraba los UTM y quedaba fuera de la única
+    // medición de campaña que existe. Se sanean igual que en el alta por correo (mismo helper).
     //
-    // ⚠ DECLARADO: hoy este formulario (`_components/CompleteOnboardingForm.tsx`) NO planta los
-    // hidden inputs —los planta `(auth)/register/page.tsx`, que es OTRO formulario— y los query
-    // params del anuncio además se pierden en el ida y vuelta de OAuth. O sea: esto escribe NULL
-    // hasta que alguien acarree los UTM a través del redirect de Google (dos archivos fuera del
-    // alcance de esta tarea). Se deja escrito igual para que el día que lleguen no haya que tocar
-    // el servidor, y para que el `insert` sea el MISMO objeto en los tres caminos de alta.
-    const { utmSource, utmCampaign } = resolveRegistrationUtm({
+    // W3.9b: este formulario (`_components/CompleteOnboardingForm.tsx`) sigue SIN plantar los
+    // hidden inputs y los query params del anuncio se pierden en el ida y vuelta de OAuth — pero ya
+    // no importa: la cookie first-touch `eva_utm` que dejó el proxy en el aterrizaje del anuncio
+    // sobrevive al redirect de Google (first-party) y entra acá como fallback. El form gana campo a
+    // campo si algún día trae valor.
+    const formUtm = resolveRegistrationUtm({
         utmSource: formData.get('utm_source'),
         utmCampaign: formData.get('utm_campaign'),
     })
+    const cookieUtm = parseUtmCookie((await cookies()).get(UTM_COOKIE_NAME)?.value)
+    const utmSource = formUtm.utmSource ?? cookieUtm.utmSource
+    const utmCampaign = formUtm.utmCampaign ?? cookieUtm.utmCampaign
 
     if (!brandName || brandName.length < 2) return reject('oauth_brand_missing', 'El nombre de tu marca es obligatorio (mínimo 2 caracteres).')
     if (!fullName || fullName.length < 2) return reject('oauth_name_missing', 'Tu nombre completo es obligatorio.')

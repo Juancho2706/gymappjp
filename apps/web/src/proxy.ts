@@ -19,6 +19,7 @@ import {
 import { isStudentAccessGateEnabled, resolveStudentAccessForCoach } from '@/lib/student-access.server'
 import { resolvePostLoginRedirect } from '@/lib/auth/post-login-redirect.server'
 import { buildCoachLoginNext, pickUtmParams, safeNext } from '@/lib/auth/safe-next'
+import { sanitizeUtmValue, UTM_COOKIE_MAX_AGE_SECONDS, UTM_COOKIE_NAME } from '@/lib/auth/registration-utm'
 import { listUserWorkspaces, pickPreferredWorkspace } from '@/services/auth/workspace.service'
 import { findWorkspacePreference } from '@/infrastructure/db/workspace.repository'
 import { canAccessWorkspacePath, defaultWorkspaceHome } from '@/services/auth/workspace-route-guard.service'
@@ -111,8 +112,40 @@ async function isCoachActiveOrgMember(
  */
 export async function proxy(request: NextRequest): Promise<Response> {
     const response = await proxyInner(request)
-    if (!isServerActionRequest(request.headers)) return response
-    return toServerActionRedirect(response) ?? response
+    const finalResponse = isServerActionRequest(request.headers)
+        ? (toServerActionRedirect(response) ?? response)
+        : response
+    applyUtmCookie(request, finalResponse)
+    return finalResponse
+}
+
+/**
+ * W3.9b (atribución del alta): cookie first-touch `eva_utm` en el PRIMER request que llegue con
+ * `?utm_source=`. POR QUÉ: el anuncio aterriza en `/` o `/pricing`, todos los CTAs de la landing
+ * navegan a `/register` SIN query, y el alta por Google pierde los params en el ida y vuelta de
+ * OAuth — sin esto, los hidden inputs de `/register` solo miden «el ad apuntó directo a /register»
+ * y la cohorte queda en NULL (constatado 27-08 con los 42 del 18-26 ago).
+ *
+ * Se aplica sobre la respuesta FINAL en `proxy()` y NUNCA sobre `supabaseResponse`: el `setAll` del
+ * cliente de Supabase RECONSTRUYE esa respuesta al refrescar sesión y se comería un Set-Cookie
+ * temprano. First-touch deliberado (`has` ⇒ no pisar): la primera fuente que trajo a la persona es
+ * la que se atribuye. La leen solo los server actions de alta (httpOnly; misma retención declarada
+ * en `registration-utm.ts`).
+ */
+function applyUtmCookie(request: NextRequest, response: Response): void {
+    if (request.method !== 'GET') return
+    if (!(response instanceof NextResponse)) return
+    if (request.cookies.has(UTM_COOKIE_NAME)) return
+    const utmSource = sanitizeUtmValue(request.nextUrl.searchParams.get('utm_source'))
+    if (!utmSource) return
+    const utmCampaign = sanitizeUtmValue(request.nextUrl.searchParams.get('utm_campaign')) ?? ''
+    response.cookies.set(UTM_COOKIE_NAME, `${encodeURIComponent(utmSource)}|${encodeURIComponent(utmCampaign)}`, {
+        maxAge: UTM_COOKIE_MAX_AGE_SECONDS,
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: process.env.NODE_ENV === 'production',
+        path: '/',
+    })
 }
 
 async function proxyInner(request: NextRequest) {
