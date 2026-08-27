@@ -1299,6 +1299,21 @@ Segunda tanda del mismo día (GO del owner a todo):
   IntDraftInput, features refresh, banner verificación y fix biométrico; el modal/hoja no aplica (la
   guía RN no existe en ese runtime).
 
+Tercera tanda (26-08 noche, re-QA del owner sobre lo anterior — F1/F3–F8 del guion nuevo OK):
+
+- **Banner de verificación pegado tras confirmar (F2):** el link del correo verifica en el NAVEGADOR;
+  volver a la app es un cambio de `AppState`, no un evento de foco del router, así que la relectura por
+  `useFocusEffect` nunca corría. Fix: `VerifyEmailBanner` también relee en `AppState → 'active'`
+  (`a4bc0620`). Que el link aterrice en la web es por diseño (la verificación vive en web y los App
+  Links ya no reclaman `/auth/confirm`).
+- **Reset en app: «Confirmar contraseña» inalcanzable con el teclado abierto** ⇒ el formulario va en
+  `ScrollView` (`keyboardShouldPersistTaps`), y el hero deja la llave: círculo negro `#07080C` con la
+  figura EVA blanca (`EvaFigure`) al centro — pedido literal del owner.
+- Tren: `a4bc0620` en rama+master · port `48baa2bf` (tsc verde en worktree) · 4 OTAs por GH Actions
+  (1.1.2 android `33027651596` / ios `33027653395` SUCCESS; port 1.1.1 `33027786929` / `33027788699`).
+- Cuenta QA `jmvr2706@gmail.com` (recreada en el re-QA) + su alumno demo: borradas de LIVE otra vez
+  (dry-run BEGIN/ROLLBACK con cascada verificada 0/0/0 antes del DELETE).
+
 ---
 
 ## Orden de ejecución y paralelismo
