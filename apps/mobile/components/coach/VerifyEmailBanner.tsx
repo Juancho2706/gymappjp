@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, Text, View } from 'react-native'
+import { ActivityIndicator, AppState, Pressable, Text, View } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { cssInterop } from 'nativewind'
 import { MailWarning } from 'lucide-react-native'
@@ -55,18 +55,28 @@ export function VerifyEmailBanner() {
   useFocusEffect(
     useCallback(() => {
       let alive = true
-      void getCoachEmailVerification().then((status) => {
-        if (!alive) return
-        if (status === 'verified') {
-          setNeeded(false)
-          setPhase('idle')
-          return
-        }
-        if (status === 'unverified') setNeeded(true)
-        // `unknown` conserva lo que ya había: un refresco fallido no puede ni encender ni apagar.
+      const read = () => {
+        void getCoachEmailVerification().then((status) => {
+          if (!alive) return
+          if (status === 'verified') {
+            setNeeded(false)
+            setPhase('idle')
+            return
+          }
+          if (status === 'unverified') setNeeded(true)
+          // `unknown` conserva lo que ya había: un refresco fallido no puede ni encender ni apagar.
+        })
+      }
+      read()
+      // El camino real de verificación pasa por el NAVEGADOR (el link del correo abre la web): al
+      // volver a la app eso es un cambio de AppState, no un evento de foco del router, así que sin
+      // esta suscripción el aviso quedaba pegado hasta el próximo arranque (QA owner 26-08).
+      const appState = AppState.addEventListener('change', (state) => {
+        if (state === 'active') read()
       })
       return () => {
         alive = false
+        appState.remove()
       }
     }, []),
   )

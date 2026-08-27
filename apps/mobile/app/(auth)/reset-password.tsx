@@ -3,6 +3,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -11,8 +12,9 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import * as Linking from 'expo-linking'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { ArrowRight, Check, Eye, EyeOff, KeyRound, Lock, MailWarning } from 'lucide-react-native'
+import { ArrowRight, Check, Eye, EyeOff, Lock, MailWarning } from 'lucide-react-native'
 import { MotiView } from 'moti'
+import { EvaFigure } from '../../components/entry/EvaFigure'
 import { supabase } from '../../lib/supabase'
 import { parseRecoveryLink, recoveryLinkFromParams, type RecoveryLink } from '../../lib/recovery-link'
 import { useTheme } from '../../context/ThemeContext'
@@ -259,14 +261,20 @@ export default function ResetPasswordScreen() {
             />
           </MotiView>
         ) : (
-          <MotiView
-            from={{ opacity: 0, translateY: 20 }}
-            animate={{ opacity: 1, translateY: 0 }}
-            transition={{ type: 'timing', duration: 500 }}
-            style={styles.inner}
+          <ScrollView
+            style={styles.scroll}
+            contentContainerStyle={styles.scrollInner}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
           >
-            <View className="bg-sport-100" style={[styles.heroIcon, { borderRadius: theme.radius['2xl'] }]}>
-              <KeyRound size={26} color={theme.primary} strokeWidth={1.75} />
+            <MotiView
+              from={{ opacity: 0, translateY: 20 }}
+              animate={{ opacity: 1, translateY: 0 }}
+              transition={{ type: 'timing', duration: 500 }}
+              style={styles.formBlock}
+            >
+            <View style={styles.heroSeal}>
+              <EvaFigure size={30} />
             </View>
             <Text className="text-strong font-display-black" style={styles.title}>
               Nueva contraseña
@@ -318,7 +326,8 @@ export default function ResetPasswordScreen() {
                 size="lg"
               />
             </View>
-          </MotiView>
+            </MotiView>
+          </ScrollView>
         )}
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -400,6 +409,25 @@ const styles = StyleSheet.create({
   safe: { flex: 1 },
   kav: { flex: 1, paddingHorizontal: 24, paddingBottom: 24 },
   inner: { flex: 1, justifyContent: 'center', gap: 12 },
+  // El formulario vive en un ScrollView: con el teclado abierto la ventana se achica
+  // (adjustResize) y sin scroll el campo «Confirmar contraseña» quedaba fuera de vista
+  // e inalcanzable (QA owner 26-08).
+  scroll: { flex: 1 },
+  scrollInner: { flexGrow: 1, justifyContent: 'center', paddingBottom: 24 },
+  formBlock: { gap: 12 },
+  // Círculo negro con la figura EVA blanca al centro (pedido del owner 26-08). El negro es el
+  // del splash (#07080C), fijo en ambos temas; el borde hairline lo separa del fondo en dark.
+  heroSeal: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#07080C',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.16)',
+  },
   heroIcon: {
     width: 56,
     height: 56,
