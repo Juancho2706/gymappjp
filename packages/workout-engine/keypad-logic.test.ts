@@ -60,6 +60,10 @@ describe('applyKeypadIncrement', () => {
   it('starts from 0 when empty', () => {
     expect(applyKeypadIncrement('', 2.5)).toBe('2,5')
   })
+  it('clamps to 999 (chips live only on the weight field)', () => {
+    expect(applyKeypadIncrement('998', 5)).toBe('999')
+    expect(applyKeypadIncrement('999', 2.5)).toBe('999')
+  })
   it('clamps to 0 (never negative)', () => {
     expect(applyKeypadIncrement('2,5', -5)).toBe('0')
   })
@@ -87,6 +91,50 @@ describe('appendKeypadDigit', () => {
   })
   it('ignores non-digits', () => {
     expect(appendKeypadDigit('2', 'x', WEIGHT)).toBe('2')
+  })
+})
+
+// Incidente 2026-08-27: "40" pre-cargado + tipear "60" registró 4060 kg. El primer dígito sobre un
+// valor pre-cargado sin tocar (replace=true) REEMPLAZA; los siguientes (replace=false) appendean.
+describe('appendKeypadDigit — replace (valor pre-cargado)', () => {
+  it('first digit replaces the whole pre-filled value', () => {
+    expect(appendKeypadDigit('40', '6', { ...WEIGHT, replace: true })).toBe('6')
+    expect(appendKeypadDigit('122,5', '8', { ...WEIGHT, replace: true })).toBe('8')
+  })
+  it('subsequent digits append normally (surface lowers the flag)', () => {
+    let v = appendKeypadDigit('40', '6', { ...WEIGHT, replace: true })
+    v = appendKeypadDigit(v, '0', WEIGHT)
+    expect(v).toBe('60')
+  })
+  it('non-digit with replace leaves the value untouched', () => {
+    expect(appendKeypadDigit('40', 'x', { ...WEIGHT, replace: true })).toBe('40')
+  })
+})
+
+describe('appendKeypadDecimal — replace (valor pre-cargado)', () => {
+  it('comma over a pre-filled value starts fresh at "0,"', () => {
+    expect(appendKeypadDecimal('40', { replace: true })).toBe('0,')
+  })
+  it('without replace keeps appending', () => {
+    expect(appendKeypadDecimal('40')).toBe('40,')
+  })
+})
+
+describe('appendKeypadDigit — maxIntDigits (tope 999 en peso/reps)', () => {
+  const W3 = { ...WEIGHT, maxIntDigits: 3 } as const
+  it('rejects a 4th integer digit', () => {
+    expect(appendKeypadDigit('999', '9', W3)).toBe('999')
+    expect(appendKeypadDigit('100', '0', W3)).toBe('100')
+  })
+  it('still allows decimals past the integer cap', () => {
+    let v = appendKeypadDigit('999', '5', W3) // rechazado
+    v = appendKeypadDecimal(v)
+    v = appendKeypadDigit(v, '7', W3)
+    expect(v).toBe('999,7')
+  })
+  it('without the option keeps the legacy 6-digit cap', () => {
+    expect(appendKeypadDigit('99999', '9', WEIGHT)).toBe('999999')
+    expect(appendKeypadDigit('999999', '9', WEIGHT)).toBe('999999')
   })
 })
 

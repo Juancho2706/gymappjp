@@ -38,6 +38,11 @@ export interface KeypadFieldDef {
   allowDecimal: boolean
   /** Sólo el campo de peso muestra los chips de incremento + engranaje del paso. */
   weightChips?: boolean
+  /**
+   * Tope de dígitos ENTEROS del campo (peso/reps = 3 → máx 999). Sin la prop rige sólo el tope
+   * general de 6 dígitos del engine — los campos tipados (distancia en metros) lo necesitan.
+   */
+  maxIntDigits?: number
 }
 
 export interface OpenKeypadConfig {
@@ -109,6 +114,11 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
   // para compensar el scroll SOLO cuando el teclado se va de verdad. `closeKeypad` lo sube, `openKeypad`
   // lo baja; el cleanup del efecto [config] lo lee (y lo resetea) para decidir si re-ancla la vista.
   const closingRef = useRef(false)
+  // El valor visible vino PRE-CARGADO (última serie/autofill) y el alumno aún no lo tocó ⇒ el primer
+  // dígito/coma lo REEMPLAZA (semántica calculadora; incidente 4060 kg 2026-08-27). Se arma al abrir,
+  // al cambiar de campo y tras el autofill; lo baja cualquier gesto de edición (dígito, coma,
+  // backspace, borrar, chips — los chips SÍ operan sobre la base: 40 +2,5 = 42,5).
+  const pristineRef = useRef(false)
 
   useEffect(() => {
     setMounted(true)
@@ -150,6 +160,7 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
     setActiveKey(cfg.initialFieldKey)
     setStepMenuOpen(false)
     setDisplay(el?.value ?? '')
+    pristineRef.current = (el?.value ?? '') !== ''
     triggerHaptic(8)
   }, [])
 
@@ -165,6 +176,8 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
     if (!config) return
     const el = refFor(activeKey, config)
     setDisplay(el?.value ?? '')
+    // El autofill ("= última vez") re-siembra el valor: vuelve a ser pre-cargado sin tocar.
+    pristineRef.current = (el?.value ?? '') !== ''
   }, [config, activeKey, refFor])
 
   const isOpen = useCallback(() => config != null, [config])
@@ -172,27 +185,40 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
   /** Valor vigente del `<input>` activo (fuente de verdad — evita staleness del mirror). */
   const readActive = useCallback(() => refFor(activeKey, config)?.value ?? '', [refFor, activeKey, config])
 
+  const maxIntDigits = activeField?.maxIntDigits
+
   const onDigit = useCallback(
     (d: string) => {
-      writeActive(appendKeypadDigit(readActive(), d, { allowDecimal, maxDecimals: KEYPAD_MAX_DECIMALS }))
+      writeActive(
+        appendKeypadDigit(readActive(), d, {
+          allowDecimal,
+          maxDecimals: KEYPAD_MAX_DECIMALS,
+          maxIntDigits,
+          replace: pristineRef.current,
+        }),
+      )
+      pristineRef.current = false
       triggerHaptic(6)
     },
-    [writeActive, readActive, allowDecimal],
+    [writeActive, readActive, allowDecimal, maxIntDigits],
   )
 
   const onDecimal = useCallback(() => {
     if (!allowDecimal) return
-    writeActive(appendKeypadDecimal(readActive()))
+    writeActive(appendKeypadDecimal(readActive(), { replace: pristineRef.current }))
+    pristineRef.current = false
     triggerHaptic(6)
   }, [allowDecimal, writeActive, readActive])
 
   const onBackspace = useCallback(() => {
     writeActive(keypadBackspace(readActive()))
+    pristineRef.current = false
     triggerHaptic(6)
   }, [writeActive, readActive])
 
   const onClear = useCallback(() => {
     writeActive('')
+    pristineRef.current = false
     triggerHaptic(12)
   }, [writeActive])
 
@@ -200,6 +226,7 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
     (delta: number) => {
       // Los incrementos son de peso; sólo el campo de peso renderiza los chips.
       writeActive(applyKeypadIncrement(readActive(), delta))
+      pristineRef.current = false
       triggerHaptic(10)
     },
     [writeActive, readActive],
@@ -212,6 +239,7 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
       setActiveKey(key)
       setStepMenuOpen(false)
       setDisplay(el?.value ?? '')
+      pristineRef.current = (el?.value ?? '') !== ''
       triggerHaptic(8)
     },
     [config, refFor],

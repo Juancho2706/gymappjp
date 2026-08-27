@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, Text, View, type TextStyle } from 'react-native'
 import { MotiView } from 'moti'
 import { cssInterop } from 'nativewind'
@@ -12,6 +12,7 @@ import {
   formatWeightEsCl,
   incrementChipsForStep,
   KEYPAD_MAX_DECIMALS,
+  KEYPAD_MAX_INT_DIGITS,
   KEYPAD_STEP_PRESETS,
   type TypedKeypadMode,
 } from '@eva/workout-engine'
@@ -62,11 +63,14 @@ interface ModeCfg {
   allowDecimal: boolean
   maxDecimals: number
   showChips: boolean
+  /** Tope de dígitos ENTEROS (peso/reps = 3 → máx 999; incidente 4060 kg 2026-08-27). Los campos
+   *  tipados (distancia en metros, segundos) conservan el tope general de 6 dígitos del engine. */
+  maxIntDigits?: number
 }
 
 const MODE_CFG: Record<KeypadMode, ModeCfg> = {
-  weight: { allowDecimal: true, maxDecimals: KEYPAD_MAX_DECIMALS, showChips: true },
-  reps: { allowDecimal: false, maxDecimals: 0, showChips: false },
+  weight: { allowDecimal: true, maxDecimals: KEYPAD_MAX_DECIMALS, showChips: true, maxIntDigits: KEYPAD_MAX_INT_DIGITS },
+  reps: { allowDecimal: false, maxDecimals: 0, showChips: false, maxIntDigits: KEYPAD_MAX_INT_DIGITS },
   decimal: { allowDecimal: true, maxDecimals: KEYPAD_MAX_DECIMALS, showChips: false },
   integer: { allowDecimal: false, maxDecimals: 0, showChips: false },
 }
@@ -482,6 +486,21 @@ export function TypedKeypad(props: {
   const motion = useEvaMotion()
   const cfg = MODE_CFG[mode]
 
+  // Valor PRE-CARGADO (última serie / prefill sugerido) sin tocar ⇒ el primer dígito/coma lo
+  // REEMPLAZA entero (semántica calculadora; incidente 4060 kg 2026-08-27: "40" + tipear "60").
+  // Se arma al MONTAR (los callers montan el keypad al abrirlo) y al cambiar de pestaña; lo baja
+  // cualquier gesto de edición — los chips ±kg SÍ operan sobre la base (40 +2,5 = 42,5).
+  const valueRef = useRef(value)
+  useEffect(() => {
+    valueRef.current = value
+  }, [value])
+  const pristineRef = useRef(value !== '')
+  const activeTabKey = tabs?.activeKey
+  // Corre DESPUÉS del sync de arriba (orden de declaración) ⇒ lee el valor del campo recién activado.
+  useEffect(() => {
+    pristineRef.current = valueRef.current !== ''
+  }, [activeTabKey])
+
   // Sombra SIEMPRE dark: el panel es `bg-ink-950` fijo (no sigue al esquema de la cuenta).
   const panelShadow = useMemo(() => {
     const base = shadow('xl', 'dark')
@@ -490,15 +509,25 @@ export function TypedKeypad(props: {
 
   const onDigit = (d: string) => {
     haptics.select()
-    onChange(appendKeypadDigit(value, d, { allowDecimal: cfg.allowDecimal, maxDecimals: cfg.maxDecimals }))
+    onChange(
+      appendKeypadDigit(value, d, {
+        allowDecimal: cfg.allowDecimal,
+        maxDecimals: cfg.maxDecimals,
+        maxIntDigits: cfg.maxIntDigits,
+        replace: pristineRef.current,
+      }),
+    )
+    pristineRef.current = false
   }
   const onDecimal = () => {
     haptics.select()
-    onChange(appendKeypadDecimal(value))
+    onChange(appendKeypadDecimal(value, { replace: pristineRef.current }))
+    pristineRef.current = false
   }
   const onBackspace = () => {
     haptics.tap()
     onChange(keypadBackspace(value))
+    pristineRef.current = false
   }
   const onClear = () => {
     // Borrado TOTAL (long-press ⌫): cue háptico MÁS fuerte que el backspace de un char, espejando la
@@ -506,10 +535,12 @@ export function TypedKeypad(props: {
     // intensidad a impact Medium (`haptics.setDone`) frente al Light tap del backspace (`onBackspace`).
     haptics.setDone()
     onChange('')
+    pristineRef.current = false
   }
   const onIncrement = (delta: number) => {
     haptics.select()
     onChange(applyKeypadIncrement(value, delta))
+    pristineRef.current = false
   }
   const handleNext = () => {
     haptics.tap()

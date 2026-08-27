@@ -34,6 +34,16 @@ export const KEYPAD_MAX_DECIMALS = 2
 const KEYPAD_MAX_DIGITS = 6
 
 /**
+ * Tope de dígitos ENTEROS para peso y reps (999 kg / 999 reps) — incidente 2026-08-27: un alumno
+ * registró 4060 kg ("40" pre-cargado + "60" tipeado encima). Sólo aplica a los campos de FUERZA;
+ * los tipados (distancia en metros, segundos…) conservan el tope general de 6 dígitos.
+ */
+export const KEYPAD_MAX_INT_DIGITS = 3
+
+/** Techo de peso alcanzable con los chips de incremento (los chips sólo existen en el campo peso). */
+export const KEYPAD_MAX_WEIGHT_KG = 999
+
+/**
  * Chips de incremento derivados del paso: `[-step, +step, +2·step]`.
  * step 2.5 → [-2.5, +2.5, +5] (default); step 0.5 → [-0.5, +0.5, +1]; step 5 → [-5, +5, +10].
  */
@@ -66,6 +76,9 @@ export function applyKeypadIncrement(current: string, deltaKg: number): string {
   const base = parseWeightEsCl(current) ?? 0
   let next = base + deltaKg
   if (next < 0) next = 0
+  // Techo 999 kg: los chips sólo viven en el campo de peso (las 3 superficies gatean por modo),
+  // así que el clamp acá no toca reps ni campos tipados.
+  if (next > KEYPAD_MAX_WEIGHT_KG) next = KEYPAD_MAX_WEIGHT_KG
   next = Math.round(next * 1000) / 1000
   return formatWeightEsCl(next)
 }
@@ -74,14 +87,23 @@ export function applyKeypadIncrement(current: string, deltaKg: number): string {
  * Agrega un dígito (`0`-`9`) al valor. Respeta: sin ceros a la izquierda, límite de decimales
  * (cuando `allowDecimal`), y un tope de dígitos. `allowDecimal=false` (reps) solo cambia el
  * límite de decimales (los dígitos se agregan igual).
+ *
+ * `replace`: el valor actual vino PRE-CARGADO (última serie, autofill, prefill sugerido) y el
+ * alumno todavía no lo tocó ⇒ el dígito lo REEMPLAZA entero en vez de appendearse (semántica de
+ * calculadora). Sin esto, "40" pre-cargado + tipear "60" producía "4060" — y así se registró un
+ * hip thrust de 4060 kg en producción (2026-08-27). El flag lo arma cada superficie al abrir el
+ * teclado o cambiar de campo, y lo baja en el primer gesto de edición.
+ *
+ * `maxIntDigits`: tope de dígitos de la parte ENTERA (peso/reps usan `KEYPAD_MAX_INT_DIGITS`);
+ * sin la opción rige sólo el tope general de 6 dígitos significativos.
  */
 export function appendKeypadDigit(
   current: string,
   digit: string,
-  opts: { allowDecimal: boolean; maxDecimals?: number },
+  opts: { allowDecimal: boolean; maxDecimals?: number; maxIntDigits?: number; replace?: boolean },
 ): string {
   if (!/^[0-9]$/.test(digit)) return current
-  const cur = current ?? ''
+  const cur = opts.replace ? '' : current ?? ''
   const maxDecimals = opts.allowDecimal ? (opts.maxDecimals ?? KEYPAD_MAX_DECIMALS) : 0
   // Límite de decimales: no dejar tipear más allá del paso mínimo soportado.
   if (cur.includes(',')) {
@@ -92,15 +114,20 @@ export function appendKeypadDigit(
   if (cur === '0') return digit
   // Tope de dígitos significativos.
   if (cur.replace(',', '').length >= KEYPAD_MAX_DIGITS) return cur
+  // Tope de la parte entera (sólo si el dígito va ANTES de la coma).
+  if (opts.maxIntDigits != null && !cur.includes(',')) {
+    if (cur.length >= opts.maxIntDigits) return cur
+  }
   return cur + digit
 }
 
 /**
  * Agrega la coma decimal es-CL. Una sola coma; si el valor está vacío arranca "0,".
  * (El teclado sólo ofrece la coma cuando `allowDecimal` — reps la tiene bloqueada.)
+ * `replace`: mismo contrato que en `appendKeypadDigit` — valor pre-cargado sin tocar ⇒ "0,".
  */
-export function appendKeypadDecimal(current: string): string {
-  const cur = current ?? ''
+export function appendKeypadDecimal(current: string, opts?: { replace?: boolean }): string {
+  const cur = opts?.replace ? '' : current ?? ''
   if (cur.includes(',')) return cur
   if (cur === '') return '0,'
   return cur + ','

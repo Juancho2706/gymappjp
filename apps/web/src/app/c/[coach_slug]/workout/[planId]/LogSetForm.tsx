@@ -635,8 +635,9 @@ function StrengthLogSetForm({
         if (w && w.value.includes('.')) w.value = w.value.replace('.', ',')
         keypad.openKeypad({
             fields: [
-                { key: 'weight', label: 'Kg', unit: 'kg', allowDecimal: true, weightChips: true },
-                { key: 'reps', label: 'Reps', unit: 'reps', allowDecimal: false },
+                // maxIntDigits 3 = tope 999 kg / 999 reps (incidente 4060 kg 2026-08-27).
+                { key: 'weight', label: 'Kg', unit: 'kg', allowDecimal: true, weightChips: true, maxIntDigits: 3 },
+                { key: 'reps', label: 'Reps', unit: 'reps', allowDecimal: false, maxIntDigits: 3 },
             ],
             fieldRefs: { weight: weightRef, reps: repsRef },
             initialFieldKey: initialField,

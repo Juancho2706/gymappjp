@@ -9,6 +9,7 @@ import {
   applyKeypadIncrement,
   formatWeightEsCl,
   keypadBackspace,
+  KEYPAD_MAX_INT_DIGITS,
   type OptimisticLogPayload,
   // Routing PURO tipo->campos (fix QA R4·#5): fuente única de la secuencia de pasos del teclado.
   keypadStepsForTarget,
@@ -105,6 +106,11 @@ export function KeypadHost({
   // Nota rápida por serie (mirror web A.4.d): desplegable en el paso de nota. El texto vive en
   // `values.note` (mismo carril que rpe/rir → viaja al draft y a `buildStrengthPayload`).
   const [noteOpen, setNoteOpen] = useState(false)
+  // Valor del campo activo PRE-CARGADO (draft/autofill/prefill de peso sugerido) y sin tocar ⇒ el
+  // primer dígito/coma lo REEMPLAZA entero (semántica calculadora; incidente 4060 kg 2026-08-27:
+  // "40" pre-cargado + tipear "60"). Se arma al sembrar el target y al cambiar de pestaña; lo baja
+  // cualquier gesto de edición — los chips ±kg SÍ operan sobre la base (40 +2,5 = 42,5).
+  const pristineRef = useRef(false)
 
   // Secuencia de pasos según el tipo del bloque (routing puro compartido con `openSet`).
   const steps = useMemo(() => keypadStepsForTarget(target), [target])
@@ -126,7 +132,10 @@ export function KeypadHost({
         : { weight: target.suggestedWeight != null ? formatWeightEsCl(target.suggestedWeight) : '' })
     valuesRef.current = seed
     setValues(seed)
-    setActiveKey(fields[target.initialFieldIndex ?? 0]?.key ?? fields[0]?.key ?? '')
+    const initialKey = fields[target.initialFieldIndex ?? 0]?.key ?? fields[0]?.key ?? ''
+    setActiveKey(initialKey)
+    // El campo con el que abre trae valor sembrado ⇒ el primer dígito lo reemplaza (ver pristineRef).
+    pristineRef.current = (seed[initialKey] ?? '') !== ''
     setPhase('input')
     // Editar una serie que YA lleva nota abre el input desplegado: ahora la nota es lo único de la fase,
     // así que dejarlo colapsado obligaría a un tap extra sólo para ver lo que se está corrigiendo.
@@ -160,18 +169,25 @@ export function KeypadHost({
   const activeVal = () => valuesRef.current[activeField.key] ?? ''
   const writeActive = (nextValue: string) => patch({ [activeField.key]: nextValue }, activeIndex)
 
+  // Tope 999 sólo en peso/reps de fuerza; los tipados (metros, segundos) conservan el general de 6.
+  const maxIntDigits =
+    activeField.mode === 'weight' || activeField.mode === 'reps' ? KEYPAD_MAX_INT_DIGITS : undefined
+
   const onDigit = (d: string) => {
     haptics.select()
-    writeActive(appendKeypadDigit(activeVal(), d, { allowDecimal }))
+    writeActive(appendKeypadDigit(activeVal(), d, { allowDecimal, maxIntDigits, replace: pristineRef.current }))
+    pristineRef.current = false
   }
   const onDecimal = () => {
     if (!allowDecimal) return
     haptics.select()
-    writeActive(appendKeypadDecimal(activeVal()))
+    writeActive(appendKeypadDecimal(activeVal(), { replace: pristineRef.current }))
+    pristineRef.current = false
   }
   const onBackspace = () => {
     haptics.tap()
     writeActive(keypadBackspace(activeVal()))
+    pristineRef.current = false
   }
   const onClear = () => {
     // Borrado TOTAL (long-press ⌫): cue háptico MÁS fuerte que el backspace de un char, espejando la
@@ -183,11 +199,14 @@ export function KeypadHost({
   const onIncrement = (delta: number) => {
     haptics.select()
     writeActive(applyKeypadIncrement(activeVal(), delta))
+    pristineRef.current = false
   }
   const onSwitchField = (key: string) => {
     haptics.select()
     setActiveKey(key)
     setPhase('input')
+    // Entrar a un campo que ya trae valor lo deja "sin tocar": el primer dígito reemplaza.
+    pristineRef.current = (valuesRef.current[key] ?? '') !== ''
   }
   const onNoteBack = () => {
     haptics.tap()

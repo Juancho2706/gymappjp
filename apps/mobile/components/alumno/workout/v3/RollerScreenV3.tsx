@@ -354,6 +354,10 @@ export function RollerScreenV3({
                 accessibilityRole="button"
                 accessibilityLabel="Cerrar teclado"
               />
+              {/* Montaje condicional: TypedKeypad arma su flag de "valor pre-cargado sin tocar"
+                  (primer dígito REEMPLAZA) al montar; dentro de un Modal con `visible` toggling
+                  quedaría montado desde el primer render y el flag nunca se re-armaría al reabrir. */}
+              {kpOpen ? (
               <TypedKeypad
                 mode="integer"
                 unit="pasadas"
@@ -369,6 +373,7 @@ export function RollerScreenV3({
                 onClose={() => setKpOpen(false)}
                 header={{ exerciseName: exercise.name, objectiveLine: goal }}
               />
+              ) : null}
             </View>
           </Modal>
 
