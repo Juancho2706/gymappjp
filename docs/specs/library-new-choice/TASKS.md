@@ -25,7 +25,7 @@ canonical: false
 
 ## W2 · Salida y QA
 
-- [ ] W2.1 Deploy web READY + OTA android/ios runtime 1.1.2 (grupos en el runbook de OTA).
+- [x] W2.1 Deploy web READY (`dpl_B1Bspc9s8w4mWAFsjrV121s1hPZY`, `a4fedef4`) + OTA runtime 1.1.2: android `e416bbff` (run 33217562571) / ios `c85fb81f` (run 33217563954), ambos SUCCESS 28-08 22:4xZ.
 - [ ] W2.2 QA owner RN (dark + claro): tocar «+ Nueva» → hoja; «Programa nuevo» → builder;
       «Ejercicio personalizado» → catálogo con el formulario abierto (incluido arranque en frío);
       volver atrás NO reabre el formulario; hoja «Entrenamiento incompleto» legible.
