@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import {
@@ -18,6 +18,7 @@ import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { filterExercises, cn } from '@/lib/utils'
+import { toast } from 'sonner'
 import { extractYoutubeVideoId, exerciseThumbnailUrl } from '@/lib/youtube'
 import { ExerciseVideo } from '@/components/exercise/ExerciseVideo'
 import { motion, AnimatePresence } from 'framer-motion'
@@ -52,6 +53,29 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
             [muscle]: !prev[muscle]
         }))
     }
+
+    /**
+     * Deep-link `?create=1` — lo manda el CTA «Nueva → Ejercicio personalizado» de la biblioteca de
+     * programas. Abre el MISMO modal de creación que el header (nombre vacío) y limpia el parámetro
+     * de la URL para que un refresh o el botón atrás no lo reabran. `consumed` lo hace una sola vez.
+     */
+    const createParamConsumed = useRef(false)
+    useEffect(() => {
+        if (createParamConsumed.current) return
+        if (searchParams.get('create') !== '1') return
+        createParamConsumed.current = true
+
+        const rest = new URLSearchParams(searchParams.toString())
+        rest.delete('create')
+        const qs = rest.toString()
+        router.replace(qs ? `/coach/exercises?${qs}` : '/coach/exercises')
+
+        if (!canCreateExercises) {
+            toast.error('Tu rol no permite crear ejercicios')
+            return
+        }
+        setCreateName('')
+    }, [searchParams, router, canCreateExercises])
 
     const allExercises = useMemo(() => [...globalExercises, ...customExercises], [globalExercises, customExercises])
 

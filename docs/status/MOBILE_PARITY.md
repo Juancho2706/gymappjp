@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-08-26 @ e7ed1de9"
+last_verified: "2026-08-28"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -14,6 +14,17 @@ source_of_truth: apps/web responsive + apps/mobile
 
 ## Resumen ejecutivo
 
+> **2026-08-28 («+ Nueva» pregunta qué crear + hoja «Entrenamiento incompleto» legible)** (spec
+> [library-new-choice](../specs/library-new-choice/SPEC.md), mockup aprobado `9d979bfa`): el CTA hero de la
+> biblioteca de programas abre en **ambas plataformas** una hoja «¿Qué querés crear?» con «Programa nuevo»
+> (builder, igual que antes) y «Ejercicio personalizado» (catálogo con `?create=1`, que abre el alta solo y limpia
+> el param). RN: `app/coach/(tabs)/builder.tsx` (`Sheet` nativeModal) + `ejercicios.tsx`; web:
+> `LibraryHeader.tsx` (dropdown `sm+` / bottom sheet `<sm`) + `ExerciseCatalogClient.tsx`. Eventos
+> `library_new_pressed` / `library_new_choice` en las dos. **Paridad web ↔ RN completa en código; QA device y
+> navegador del owner PENDIENTE** (TASKS W2). Hermana solo-RN: las dos filas de `DoubleIntentSheet`
+> (`components/alumno/home/ActiveProgramSection.tsx`) dejan de pintarse sólidas en dark (`bg-sport-100` sin
+> `dark:` ⇒ token crudo); ahora igualan el patrón de la web (`WorkoutDoneSheet.tsx`, que ya estaba bien).
+>
 > **2026-08-26 («Vive tu app» directo — lo que cambia en RN)** (spec
 > [vive-tu-app-directo](../specs/vive-tu-app-directo/SPEC.md), commits `2d19e237..e7ed1de9`): el coach que
 > toca «Vive tu app» desde la app **entra directo** — la URL que emite el endpoint móvil ahora lleva

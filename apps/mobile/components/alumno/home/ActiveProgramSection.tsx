@@ -323,14 +323,14 @@ export function DoubleIntentSheet({
             onPress={() => view && reviewDate && onReview?.(view.plan.id, reviewDate, !!view.isToday)}
             activeOpacity={0.85}
             accessibilityRole="button"
-            className="rounded-control border border-sport-500 bg-sport-100"
+            className="rounded-control border border-sport-500/25 bg-sport-100 dark:bg-sport-100/[0.16]"
             style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 13 }}
           >
             <View className="bg-sport-500" style={{ width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' }}>
               <Pencil size={17} color="#fff" strokeWidth={2} />
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text className="text-sport-600" style={{ fontFamily: FONT.uiBold, fontSize: 14 }}>Revisar y editar</Text>
+              <Text className="text-strong" style={{ fontFamily: FONT.uiBold, fontSize: 14 }}>Revisar y editar</Text>
               <Text className="text-muted" numberOfLines={2} style={{ fontFamily: FONT.ui, fontSize: 11.5, marginTop: 1 }}>
                 {reviewIsToday ? 'Abre tus registros de hoy y corrige lo que quieras' : 'Abre tus registros de ese día y corrige lo que quieras'}
               </Text>
@@ -347,14 +347,14 @@ export function DoubleIntentSheet({
             onPress={() => view && onRepeat(view.plan.id, reviewDate)}
             activeOpacity={0.85}
             accessibilityRole="button"
-            className="rounded-control border border-sport-500 bg-sport-100"
+            className="rounded-control border border-sport-500/25 bg-sport-100 dark:bg-sport-100/[0.16]"
             style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 13 }}
           >
             <View className="bg-sport-500" style={{ width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' }}>
               <RotateCcw size={17} color="#fff" strokeWidth={2.25} />
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text className="text-sport-600" style={{ fontFamily: FONT.uiBold, fontSize: 14 }}>Repetir hoy</Text>
+              <Text className="text-strong" style={{ fontFamily: FONT.uiBold, fontSize: 14 }}>Repetir hoy</Text>
               <Text className="text-muted" numberOfLines={2} style={{ fontFamily: FONT.ui, fontSize: 11.5, marginTop: 1 }}>Sesión nueva con tus valores de esa vez ya cargados</Text>
             </View>
             <ChevronRight size={18} color={theme.mutedForeground} />

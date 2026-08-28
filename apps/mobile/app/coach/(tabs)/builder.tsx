@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Pressable, Text, View } from 'react-native'
+import { Alert, Pressable, Text, TouchableOpacity, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { FlashList } from '@shopify/flash-list'
 import { useLocalSearchParams, useRouter } from 'expo-router'
-import { ArrowDownUp, CalendarClock, Dumbbell, LayoutGrid, LayoutTemplate, List, Plus, Search, SearchX } from 'lucide-react-native'
+import { ArrowDownUp, CalendarClock, ChevronRight, ClipboardList, Dumbbell, LayoutGrid, LayoutTemplate, List, Plus, Search, SearchX } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import * as Haptics from 'expo-haptics'
 import { supabase } from '../../../lib/supabase'
@@ -14,6 +14,8 @@ import { useTheme } from '../../../context/ThemeContext'
 import { SHADOWS } from '../../../lib/shadows'
 import { FONT, textStyle } from '../../../lib/typography'
 import { Input, NativeDialog } from '../../../components'
+import { Sheet } from '../../../components/Sheet'
+import { captureAppEvent } from '../../../lib/analytics'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { useCoachTabbarScroll } from '../../../components/coach/CoachTabbarScroll'
@@ -70,7 +72,7 @@ const TABS: { value: FilterType; label: string }[] = [
 export default function BuilderScreen() {
   const { onScroll } = useCoachTabbarScroll()
   const insets = useSafeAreaInsets()
-  const { resolvedScheme } = useTheme()
+  const { theme, resolvedScheme } = useTheme()
   const router = useRouter()
   const workspace = useWorkspace()
   // Paso 3 de la guía: la ruta llega marcada con `?primera=1` (`RN_FIRST_STEP_PARAM` de
@@ -80,6 +82,9 @@ export default function BuilderScreen() {
   const demoClientId = onboarding?.onboardingV2.demoClientId ?? null
   const demoName = onboarding?.onboardingV2.demoName ?? null
   const [firstTemplateOpen, setFirstTemplateOpen] = useState(false)
+  // «+ Nueva» ya no adivina: pregunta qué crear (programa o ejercicio propio). Antes empujaba
+  // derecho al lienzo del builder y el ejercicio personalizado quedaba escondido en otro tab.
+  const [newSheetOpen, setNewSheetOpen] = useState(false)
   // La marca se consume UNA vez: sin esto, volver al tab desde el builder reabriría la sheet.
   const guidedConsumedRef = useRef(false)
   const [programs, setPrograms] = useState<ProgramItem[]>([])
@@ -200,6 +205,26 @@ export default function BuilderScreen() {
 
   function openNewTemplate() {
     router.push({ pathname: '/coach/program-builder', params: { mode: 'template' } })
+  }
+
+  /**
+   * Elección de la hoja «¿Qué querés crear?». Se cierra la hoja y se navega en el MISMO tick: es el
+   * patrón que ya usa el resto de la app para «elegir opción → ir a otra pantalla» (acciones rápidas
+   * del panel, `CoachDashboardSections.tsx:726`, y el sheet de doble intención del alumno). El
+   * `setTimeout` de 300ms que existe en ese archivo está reservado para el caso distinto de abrir
+   * OTRO overlay encima; navegar no compite con la animación de cierre porque el Modal se desmonta
+   * con la pantalla que lo hospeda.
+   */
+  function chooseNewProgram() {
+    setNewSheetOpen(false)
+    captureAppEvent('library_new_choice', { choice: 'program' })
+    openNewTemplate()
+  }
+
+  function chooseNewExercise() {
+    setNewSheetOpen(false)
+    captureAppEvent('library_new_choice', { choice: 'exercise' })
+    router.push({ pathname: '/coach/ejercicios', params: { create: '1' } })
   }
 
   /** Lienzo del paso 3: el alumno de ejemplo, la marca guiada y (si se sembró) el programa. */
@@ -351,8 +376,11 @@ export default function BuilderScreen() {
           <Pressable
             testID="new-template-button"
             accessibilityRole="button"
-            accessibilityLabel="Nueva plantilla"
-            onPress={openNewTemplate}
+            accessibilityLabel="Crear programa o ejercicio"
+            onPress={() => {
+              captureAppEvent('library_new_pressed')
+              setNewSheetOpen(true)
+            }}
             className="shrink-0 flex-row items-center gap-space-2 rounded-control bg-sport-500 px-space-4 py-space-3 active:opacity-85"
           >
             <IconPlus size={16} className="text-on-sport" />
@@ -440,6 +468,61 @@ export default function BuilderScreen() {
           )}
         />
       </SafeAreaView>
+
+      {/* «¿Qué querés crear?» — desambigua el «+ Nueva» del header. `nativeModal`: bajo gorhom 5.2.14
+          + reanimated 4 el sheet puede montar fuera de pantalla al primer present (ver SheetProps). */}
+      <Sheet
+        open={newSheetOpen}
+        onClose={() => setNewSheetOpen(false)}
+        nativeModal
+        title="¿Qué querés crear?"
+        description="Elegí qué sumar a tu biblioteca."
+        snapPoints={['42%']}
+      >
+        <View style={{ gap: 16 }}>
+          {/* `dark:bg-*-100/[0.16|0.18]`: en dark los tokens `-100` son el color sólido (pensados para
+              usarse con alpha, ver Badge.tsx) — sin el alpha la fila quedaría pintada entera. */}
+          <TouchableOpacity
+            testID="new-choice-program"
+            onPress={chooseNewProgram}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            className="rounded-control border border-sport-500/25 bg-sport-100 dark:bg-sport-100/[0.16]"
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 13 }}
+          >
+            <View className="bg-sport-500" style={{ width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' }}>
+              <ClipboardList size={17} color="#fff" strokeWidth={2} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text className="text-strong" style={{ fontFamily: FONT.uiBold, fontSize: 14 }}>Programa nuevo</Text>
+              <Text className="text-muted" numberOfLines={2} style={{ fontFamily: FONT.ui, fontSize: 11.5, marginTop: 1 }}>Plantilla o rutina para asignar a tus alumnos</Text>
+            </View>
+            <ChevronRight size={18} color={theme.mutedForeground} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            testID="new-choice-exercise"
+            onPress={chooseNewExercise}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            className="rounded-control border border-success-500/25 bg-success-100 dark:bg-success-100/[0.18]"
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 13 }}
+          >
+            <View className="bg-success-500" style={{ width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' }}>
+              <Dumbbell size={17} color="#fff" strokeWidth={2} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text className="text-strong" style={{ fontFamily: FONT.uiBold, fontSize: 14 }}>Ejercicio personalizado</Text>
+              <Text className="text-muted" numberOfLines={2} style={{ fontFamily: FONT.ui, fontSize: 11.5, marginTop: 1 }}>Queda en tu biblioteca para usarlo en cualquier programa</Text>
+            </View>
+            <ChevronRight size={18} color={theme.mutedForeground} />
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => setNewSheetOpen(false)} activeOpacity={0.7} accessibilityRole="button" style={{ paddingVertical: 6 }}>
+            <Text className="text-muted" style={{ textAlign: 'center', fontFamily: FONT.uiSemibold, fontSize: 13.5 }}>Cancelar</Text>
+          </TouchableOpacity>
+        </View>
+      </Sheet>
 
       {/* Paso 3 de la guía. `demoClientId` no puede ser null acá: el efecto solo abre con demo. */}
       {demoClientId != null ? (

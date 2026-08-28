@@ -1,7 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Alert, RefreshControl, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import type { ViewStyle } from 'react-native'
-import { useFocusEffect, useLocalSearchParams } from 'expo-router'
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { FlashList } from '@shopify/flash-list'
 import { Image } from 'expo-image'
@@ -44,7 +44,12 @@ export default function EjerciciosScreen() {
   const insets = useSafeAreaInsets()
   // Buscador global del coach → navega a `/coach/ejercicios?q=<nombre>` (CoachSearchPalette).
   // Espejo web: ExerciseCatalogClient.tsx:38 siembra `search` desde `searchParams.get('q')`.
-  const params = useLocalSearchParams<{ q?: string | string[] }>()
+  // `?create=1` llega desde la hoja «¿Qué querés crear?» del tab Programas: abre el alta directo.
+  const params = useLocalSearchParams<{ q?: string | string[]; create?: string | string[] }>()
+  const router = useRouter()
+  // El alta automática se consume UNA vez por montaje: los tabs no se desmontan, así que sin esto
+  // volver acá reabriría el formulario.
+  const createConsumedRef = useRef(false)
   const formRef = useRef<BottomSheetModal>(null)
   const previewRef = useRef<BottomSheetModal>(null)
 
@@ -85,6 +90,27 @@ export default function EjerciciosScreen() {
       if (incoming != null && incoming.length > 0) setQuery(incoming)
     }, [params.q])
   )
+
+  // `?create=1` → abre el alta apenas la pantalla terminó de cargar. Dos guardas obligatorias:
+  //  · `loading`: mientras carga, la pantalla hace early-return del loader ⇒ `ExerciseFormSheet` (y su
+  //    ref) todavía no existe. Además `canCreate` sale de ese mismo fetch: dispararlo antes mostraría
+  //    el Alert «Sin permiso» a alguien que sí puede crear.
+  //  · `requestAnimationFrame`: el `present()` del BottomSheetModal necesita el frame posterior al
+  //    montaje del sheet (mismo motivo por el que `openEditFromPreview` difiere su present).
+  // El param se limpia al consumirlo para que volver atrás no lo reabra.
+  useEffect(() => {
+    if (loading || createConsumedRef.current) return
+    const raw = params.create
+    const incoming = Array.isArray(raw) ? raw[0] : raw
+    if (incoming !== '1') return
+    createConsumedRef.current = true
+    router.setParams({ create: '' })
+    const frame = requestAnimationFrame(() => openCreate())
+    return () => cancelAnimationFrame(frame)
+    // `openCreate` es una función del cuerpo del componente (identidad nueva por render): se omite a
+    // propósito para no re-disparar el efecto.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, params.create, router])
 
   // Término del CTA de creación: recortado para que la etiqueta del botón no se parta en dos.
   const searchTerm = query.trim()
