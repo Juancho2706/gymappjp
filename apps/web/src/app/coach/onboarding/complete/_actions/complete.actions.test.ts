@@ -131,9 +131,19 @@ const {
     capturePostHogServerEventMock,
 } = harness
 
+// W3.9b: `completeOAuthOnboarding` lee `(await cookies()).get(UTM_COOKIE_NAME)` como fallback de
+// atribución (la cookie first-touch `eva_utm` que deja el proxy sobrevive al ida y vuelta de
+// Google). Sin este mock `cookies()` es el real de Next y explota fuera de request scope
+// ("cookies was called outside a request scope") — por eso los 17 tests de este archivo estaban
+// rojos. `get()` devuelve `undefined` por defecto, como el store real sin esa cookie.
+const cookiesStoreMock = vi.hoisted(() => ({
+    get: vi.fn(() => undefined as { value: string } | undefined),
+}))
+
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => harness.serverStub }))
 vi.mock('@/lib/supabase/admin-client', () => ({ createServiceRoleClient: () => harness.adminStub }))
 vi.mock('next/navigation', () => ({ redirect: (p: string) => harness.redirectMock(p) }))
+vi.mock('next/headers', () => ({ cookies: vi.fn(async () => cookiesStoreMock) }))
 vi.mock('@/lib/coach/invite-code.server', () => ({
     generateUniqueInviteCode: harness.generateUniqueInviteCodeMock,
 }))
@@ -190,6 +200,7 @@ beforeEach(() => {
     state.existingSlug = null
     state.insertError = null
     state.identities = ['google']
+    cookiesStoreMock.get.mockReturnValue(undefined)
     sendFreeCoachOnboardingEmailsMock.mockImplementation(async () => {
         order.push('emails')
     })
@@ -265,6 +276,17 @@ describe('completeOAuthOnboarding — señal de correo y atribución', () => {
         await run()
 
         expect(inserts[0]).toMatchObject({ utm_source: null, utm_campaign: null })
+    })
+
+    // W3.9b: el formulario de Google nunca planta los hidden inputs (los pierde el ida y vuelta
+    // de OAuth) — el fallback es la cookie first-touch `eva_utm` del proxy, formato
+    // `source|campaign` URL-encoded por parte (mismo contrato que `parseUtmCookie`).
+    it('W3.9b: sin UTM en el formulario, toma utm_source/utm_campaign de la cookie eva_utm', async () => {
+        cookiesStoreMock.get.mockReturnValue({ value: 'meta|coaches-ago' })
+
+        await run()
+
+        expect(inserts[0]).toMatchObject({ utm_source: 'meta', utm_campaign: 'coaches-ago' })
     })
 })
 

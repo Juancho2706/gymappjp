@@ -36,8 +36,16 @@ vi.mock('next/navigation', () => ({
   redirect: redirectMock,
 }))
 
+// W3.9b: `registerAction` ahora también lee `(await cookies()).get(UTM_COOKIE_NAME)` como fallback
+// de atribución. `get()` sin match real devuelve `undefined` (como el store real de Next), y cada
+// test de UTM pisa el mock puntualmente cuando necesita simular la cookie first-touch del proxy.
+const cookiesStoreMock = vi.hoisted(() => ({
+  get: vi.fn(() => undefined as { value: string } | undefined),
+}))
+
 vi.mock('next/headers', () => ({
   headers: vi.fn(async () => new Headers({ 'x-forwarded-for': '203.0.113.10' })),
+  cookies: vi.fn(async () => cookiesStoreMock),
 }))
 
 import {
@@ -74,6 +82,7 @@ function buildRegisterFormData(overrides?: Partial<Record<string, string>>) {
 describe('registerAction', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    cookiesStoreMock.get.mockReturnValue(undefined)
   })
 
   it('returns error when email is already registered on the platform', async () => {
@@ -579,6 +588,22 @@ describe('registerAction', () => {
     const inserted = insertQuery.insert.mock.calls[0][0] as Record<string, unknown>
     expect(inserted.utm_source).toBe('meta ads')
     expect(inserted.utm_campaign).toHaveLength(120)
+  })
+
+  // W3.9b: el camino real (aterrizar en `/` y tocar un CTA) deja los hidden inputs vacíos — el
+  // fallback es la cookie first-touch `eva_utm` que dejó el proxy, formato `source|campaign`
+  // URL-encoded por parte (mismo contrato que `parseUtmCookie`).
+  it('W3.9b: sin UTM en el form, toma utm_source/utm_campaign de la cookie eva_utm', async () => {
+    const { insertQuery } = paidHappyPathMocks()
+    cookiesStoreMock.get.mockReturnValue({ value: 'meta|coaches-ago' })
+    const formData = buildRegisterFormData()
+
+    await expect(registerAction({}, formData)).rejects.toThrow(/^REDIRECT:/)
+
+    expect(insertQuery.insert).toHaveBeenCalledWith(expect.objectContaining({
+      utm_source: 'meta',
+      utm_campaign: 'coaches-ago',
+    }))
   })
 
   it('W3.9: un utm vacío no escribe cadena vacía — escribe NULL', async () => {
