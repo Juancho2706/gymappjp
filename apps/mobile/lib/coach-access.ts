@@ -195,6 +195,13 @@ export function refreshCoachAccess(force = false): Promise<void> {
             const workspaceKind = workspace?.kind ?? null
             let activeStandaloneClientCount: number | null = null
             if (profile.subscriptionTier === 'free' && workspaceKind === 'standalone') {
+                // MISMO filtro canónico que `services/billing/capacity.service.ts` (web) y que
+                // `occupiesCap` (client-cap.ts): `is_demo = false`. El alumno de ejemplo que siembra el
+                // onboarding v2 NO ocupa cupo. Sin este filtro (incidente 2026-08-29, 6 coaches free v3):
+                // demo + 1 alumno real = 2 > max_clients 1 ⇒ este guard mandaba al muro
+                // /coach/reactivate, cuyo overview (API, que sí excluye el demo) decía «1 alumno» y
+                // ofrecía «Continuar gratis», y activate-free lo rechazaba porque el status era
+                // `active` — deadlock sin salida desde el teléfono.
                 const { count, error } = await supabase
                     .from('clients')
                     .select('id', { count: 'exact', head: true })
@@ -202,6 +209,7 @@ export function refreshCoachAccess(force = false): Promise<void> {
                     .is('org_id', null)
                     .is('team_id', null)
                     .eq('is_archived', false)
+                    .eq('is_demo', false)
                 if (error) throw error
                 activeStandaloneClientCount = count ?? 0
             }

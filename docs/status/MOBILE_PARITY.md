@@ -14,6 +14,8 @@ source_of_truth: apps/web responsive + apps/mobile
 
 ## Resumen ejecutivo
 
+> **2026-08-29 (guard de acceso RN contaba al alumno demo — 6 coaches free en el muro)**: `lib/coach-access.ts` hacía el head-count de cupo con `is_archived = false` pero SIN `is_demo = false`, así que un coach free v3 (cupo 1) con el alumno de ejemplo del onboarding + su primer alumno real sumaba 2 > 1 y el layout lo mandaba a `/coach/reactivate`; ahí el overview (API, que sí excluye el demo) decía «1 alumno» y ofrecía «Continuar gratis», y `activate-free` lo rechazaba («solo disponible para suscripciones bloqueadas») porque el status seguía `active` — deadlock sin salida desde el teléfono (reporte de `gf.riquelmevera`, 29-08; 5 coaches más en la misma condición). W6.9 (22-08) había corregido el banner del home pero no este guard. Fix: el guard aplica el MISMO predicado canónico que `capacity.service.ts` (web) y `occupiesCap`; `tests/mobile/coach-access.test.ts` pinnea los filtros. La web nunca estuvo afectada (el proxy usa `countActiveStandaloneClients`). Requiere OTA 1.1.2.
+>
 > **2026-08-28 («+ Nueva» pregunta qué crear + hoja «Entrenamiento incompleto» legible)** (spec
 > [library-new-choice](../specs/library-new-choice/SPEC.md), mockup aprobado `9d979bfa`): el CTA hero de la
 > biblioteca de programas abre en **ambas plataformas** una hoja «¿Qué querés crear?» con «Programa nuevo»

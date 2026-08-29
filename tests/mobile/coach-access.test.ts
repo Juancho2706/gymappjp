@@ -62,8 +62,11 @@ function makeStorage() {
     }
 }
 
+/** Filtros `eq`/`is` que el guard aplicó al head-count de `clients` (para pinnear el predicado de cupo). */
+type FilterCall = [method: 'eq' | 'is', column: string, value: unknown]
+
 /** Supabase minimo: sesion + el head-count de `clients` (solo lo toca el tier free standalone). */
-function makeSupabase(userId: string | null, clientCount = 0) {
+function makeSupabase(userId: string | null, clientCount = 0, filterCalls: FilterCall[] = []) {
     return {
         supabase: {
             auth: {
@@ -74,8 +77,12 @@ function makeSupabase(userId: string | null, clientCount = 0) {
             },
             from: vi.fn(() => {
                 const builder: Record<string, unknown> = {}
-                for (const m of ['select', 'eq', 'is']) {
-                    builder[m] = vi.fn(() => builder)
+                builder.select = vi.fn(() => builder)
+                for (const m of ['eq', 'is'] as const) {
+                    builder[m] = vi.fn((column: string, value: unknown) => {
+                        filterCalls.push([m, column, value])
+                        return builder
+                    })
                 }
                 // El head-count se await-ea directo sobre el builder.
                 builder.then = (resolve: (v: unknown) => unknown) =>
@@ -90,6 +97,7 @@ interface Harness {
     profileMock: ReturnType<typeof vi.fn>
     workspaceMock: ReturnType<typeof vi.fn>
     storage: ReturnType<typeof makeStorage>
+    filterCalls: FilterCall[]
 }
 
 async function setup(opts: {
@@ -101,16 +109,19 @@ async function setup(opts: {
     const storage = makeStorage()
     const profileMock = vi.fn(opts.profile ?? (async () => profile()))
     const workspaceMock = vi.fn(opts.workspace ?? (async () => ({ kind: 'standalone' })))
+    const filterCalls: FilterCall[] = []
 
     vi.resetModules()
     vi.doMock(mobileDep('react-native'), () => ({ AppState: { addEventListener: vi.fn() } }))
     vi.doMock(mobileDep('@react-native-async-storage/async-storage'), () => storage.mod)
-    vi.doMock(mobileLib('supabase.ts'), () => makeSupabase(opts.userId ?? 'coach-a', opts.clientCount ?? 0))
+    vi.doMock(mobileLib('supabase.ts'), () =>
+        makeSupabase(opts.userId ?? 'coach-a', opts.clientCount ?? 0, filterCalls),
+    )
     vi.doMock(mobileLib('coach.ts'), () => ({ getCoachProfileStrict: profileMock }))
     vi.doMock(mobileLib('workspace.ts'), () => ({ getActiveCoachWorkspaceStrict: workspaceMock }))
 
     const mod = (await import(mobileLib('coach-access.ts'))) as typeof import('../../apps/mobile/lib/coach-access')
-    return Object.assign(mod, { profileMock, workspaceMock, storage })
+    return Object.assign(mod, { profileMock, workspaceMock, storage, filterCalls })
 }
 
 const CACHE_KEY = (id: string) => `eva_coach_access_v2:${id}`
@@ -373,6 +384,26 @@ describe('veredictos resueltos', () => {
         const h = await setup({ clientCount: 1, profile: async () => profile({ subscriptionTier: 'free' }) })
         await h.refreshCoachAccess(true)
         expect(h.getCoachAccessSnapshot().blocked).toBe(false)
+    })
+
+    // Incidente 2026-08-29 (6 coaches free v3 en el muro): el guard contaba al alumno DEMO del
+    // onboarding v2 y sumaba 2 > 1, mientras el overview del muro (API, que sí lo excluye) decía
+    // «1 alumno» y activate-free rechazaba porque el status seguía `active` — deadlock. El
+    // head-count tiene que aplicar el MISMO predicado canónico que `capacity.service.ts` (web) y
+    // `occupiesCap` (client-cap.ts): standalone + no archivado + NO demo.
+    it('el head-count de cupo excluye al alumno demo (is_demo=false) y al archivado, scope standalone', async () => {
+        const h = await setup({ clientCount: 1, profile: async () => profile({ subscriptionTier: 'free' }) })
+        await h.refreshCoachAccess(true)
+
+        expect(h.filterCalls).toEqual(
+            expect.arrayContaining([
+                ['eq', 'coach_id', 'coach-a'],
+                ['is', 'org_id', null],
+                ['is', 'team_id', null],
+                ['eq', 'is_archived', false],
+                ['eq', 'is_demo', false],
+            ]),
+        )
     })
 
     // Pricing v3: el free NUEVO con 2 alumnos ya está sobre su cupo de 1.
