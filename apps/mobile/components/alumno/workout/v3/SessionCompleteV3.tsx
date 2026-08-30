@@ -599,7 +599,9 @@ export function SessionCompleteV3({
                     <Text style={{ fontFamily: FONT.uiExtra, fontSize: 11, letterSpacing: 1.4, textTransform: 'uppercase', color: s.textMuted, marginBottom: 8 }}>
                       Sin trabajo de fuerza hoy
                     </Text>
-                    <View style={{ opacity: 0.55 }}>
+                    {/* Sin atenuación extra: el neutro del mapa ya es tenue por diseño («Contorno
+                        firme» 30-08) — el 0.55 encima lo devolvía a invisible. */}
+                    <View>
                       <MuscleMapSvg groups={session.muscleWork} reducedMotion={reducedMotion} legendVariant="tiers" showLegend={false} />
                     </View>
                   </>
