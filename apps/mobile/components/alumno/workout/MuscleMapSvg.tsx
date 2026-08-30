@@ -47,14 +47,17 @@ const REGION_INDEX = Object.fromEntries(REGION_ORDER.map((r, i) => [r, i])) as R
 // <G> animable para el fade escalonado de cada región encendida (paridad con el web framer-motion).
 const AnimatedG = Animated.createAnimatedComponent(G)
 
-// Alfa por nivel de intensidad (1 = menos, 4 = más) — mismos valores que el web.
-const TIER_ALPHA: Record<1 | 2 | 3 | 4, number> = { 1: 0.18, 2: 0.38, 3: 0.62, 4: 0.92 }
+// Alfa por nivel de intensidad (1 = menos, 4 = más). DIVERGE del web a propósito (Opción 1
+// «Contorno firme», mockup aprobado 30-08): en RN el 18% del tier «Leve» desaparecía sobre el
+// canvas #15151c (renderer nativo, sin el antialiasing del browser) — piso sube a 30%.
+const TIER_ALPHA: Record<1 | 2 | 3 | 4, number> = { 1: 0.3, 2: 0.48, 3: 0.68, 4: 0.92 }
 
 // Neutro del cuerpo base / regiones sin trabajar. ANTES flipeaba con el esquema de la CUENTA y con el
 // alumno en tema claro pintaba slate-950 (oscuro) sobre el canvas ink-950 del resumen ⇒ silueta
 // invisible. El canvas del mapa es SIEMPRE dark-inmersivo (igual que los rótulos, blanco 55%), así que
-// el neutro es fijo: alfas de blanco.
-const NEUTRAL = { fill: 'rgba(255,255,255,0.055)', stroke: 'rgba(255,255,255,0.10)' }
+// el neutro es fijo: alfas de blanco. Valores RN ≠ web (Opción 1 «Contorno firme», 30-08): el 5.5%/10%
+// del web daba contraste ~1.15:1 sobre #15151c y el trazo quedaba sub-píxel ⇒ cuerpo invisible.
+const NEUTRAL = { fill: 'rgba(255,255,255,0.11)', stroke: 'rgba(255,255,255,0.26)' }
 // Rótulos FRENTE/ESPALDA dentro del SVG: web usa `var(--on-dark-muted, rgba(255,255,255,0.55))`
 // y --on-dark-muted NO está definida en globals.css → cae al fallback blanco 55% (MuscleMapSvg.tsx:174).
 const LABEL_FILL = 'rgba(255,255,255,0.55)'
@@ -160,10 +163,12 @@ export function MuscleMapSvg({ groups, reducedMotion, legendVariant = 'ramp', sh
   return (
     <View testID="muscle-map" accessibilityRole="image" accessibilityLabel={ariaLabel}>
       <Svg viewBox={BODY_VIEWBOX} width="100%" height={260} preserveAspectRatio="xMidYMid meet">
-        {/* Cuerpo base neutro (cuello / cabeza / manos / rodillas / tobillos / pies). */}
-        <G fill={neutral.fill} stroke={neutral.stroke} strokeWidth={2}>
+        {/* Cuerpo base neutro (cuello / cabeza / manos / rodillas / tobillos / pies). El trazo usa
+            non-scaling-stroke: 1px FÍSICO a cualquier tamaño de render — con width en unidades del
+            viewBox (1448) el contorno medía ~0.36px y el renderer nativo lo perdía. */}
+        <G fill={neutral.fill} stroke={neutral.stroke} strokeWidth={1}>
           {NEUTRAL_SHAPES.map((s, i) => (
-            <Path key={`n${i}`} d={s.d} />
+            <Path key={`n${i}`} d={s.d} vectorEffect="non-scaling-stroke" />
           ))}
         </G>
 
@@ -173,9 +178,9 @@ export function MuscleMapSvg({ groups, reducedMotion, legendVariant = 'ramp', sh
           const shapes = REGION_SHAPES[region]
           if (tier === 0) {
             return (
-              <G key={region} fill={neutral.fill} stroke={neutral.stroke} strokeWidth={2}>
+              <G key={region} fill={neutral.fill} stroke={neutral.stroke} strokeWidth={1}>
                 {shapes.map((s, i) => (
-                  <Path key={i} d={s.d} />
+                  <Path key={i} d={s.d} vectorEffect="non-scaling-stroke" />
                 ))}
               </G>
             )
@@ -183,8 +188,9 @@ export function MuscleMapSvg({ groups, reducedMotion, legendVariant = 'ramp', sh
           const litTier = tier as 1 | 2 | 3 | 4
           const isMax = litTier === 4
           const fill = withAlpha(brand, TIER_ALPHA[litTier])
-          const stroke = isMax ? withAlpha(brand, 1) : withAlpha(brand, 0.45)
-          const strokeWidth = isMax ? 6 : 2
+          const stroke = isMax ? withAlpha(brand, 1) : withAlpha(brand, 0.55)
+          // Con non-scaling-stroke el width es en px físicos: 2px marca el nivel máximo, 1px el resto.
+          const strokeWidth = isMax ? 2 : 1
           return (
             <AnimatedG
               key={region}
@@ -200,7 +206,7 @@ export function MuscleMapSvg({ groups, reducedMotion, legendVariant = 'ramp', sh
               accessibilityLabel={`${REGION_LABEL[region]}, intensidad ${litTier} de 4`}
             >
               {shapes.map((s, i) => (
-                <Path key={i} d={s.d} />
+                <Path key={i} d={s.d} vectorEffect="non-scaling-stroke" />
               ))}
             </AnimatedG>
           )
@@ -220,7 +226,7 @@ export function MuscleMapSvg({ groups, reducedMotion, legendVariant = 'ramp', sh
           `showLegend=false` (estado vacío del Final V3) la omite por completo. */}
       {showLegend && (legendVariant === 'tiers' ? (
         <View style={{ marginTop: 4, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
-          {([['Fuerte', 1], ['Medio', 0.52], ['Leve', 0.26]] as const).map(([label, alpha]) => (
+          {([['Fuerte', 0.92], ['Medio', 0.52], ['Leve', 0.3]] as const).map(([label, alpha]) => (
             <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
               <View style={{ height: 10, width: 10, borderRadius: 3, backgroundColor: withAlpha(brand, alpha) }} />
               <Text style={{ fontFamily: FONT.ui, fontSize: 10, letterSpacing: 0.8, color: LEGEND_FILL, textTransform: 'uppercase' }}>{label}</Text>

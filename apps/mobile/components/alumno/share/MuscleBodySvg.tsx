@@ -24,11 +24,13 @@ import {
  */
 
 // ── Copiado de MuscleMapSvg.tsx (mismo contrato visual; ver cabecera) ────────────────────────────
-/** Alfa por nivel de intensidad (1 = menos, 4 = más). Origen: MuscleMapSvg.tsx:51 (idéntico a web). */
-const TIER_ALPHA: Record<1 | 2 | 3 | 4, number> = { 1: 0.18, 2: 0.38, 3: 0.62, 4: 0.92 }
-/** Neutro del cuerpo base / regiones sin trabajar. Origen: MuscleMapSvg.tsx:57. Alfas de blanco
- *  FIJAS: el canvas del card es siempre oscuro-inmersivo, no sigue al esquema de la cuenta. */
-const NEUTRAL = { fill: 'rgba(255,255,255,0.055)', stroke: 'rgba(255,255,255,0.10)' }
+/** Alfa por nivel de intensidad (1 = menos, 4 = más). Origen: MuscleMapSvg.tsx (Opción 1
+ *  «Contorno firme» 30-08: piso «Leve» 30% — el 18% desaparecía en render nativo). */
+const TIER_ALPHA: Record<1 | 2 | 3 | 4, number> = { 1: 0.3, 2: 0.48, 3: 0.68, 4: 0.92 }
+/** Neutro del cuerpo base / regiones sin trabajar. Origen: MuscleMapSvg.tsx. Alfas de blanco
+ *  FIJAS: el canvas del card es siempre oscuro-inmersivo, no sigue al esquema de la cuenta.
+ *  Valores «Contorno firme» (30-08): 5.5%/10% eran invisibles sobre canvas oscuro en nativo. */
+const NEUTRAL = { fill: 'rgba(255,255,255,0.11)', stroke: 'rgba(255,255,255,0.26)' }
 /** Rótulos FRENTE/ESPALDA. Origen: MuscleMapSvg.tsx:60 (blanco 55%). */
 const LABEL_FILL = 'rgba(255,255,255,0.55)'
 
@@ -104,10 +106,11 @@ export function MuscleBodySvg({ view, intensity, accent, height, showLabels = fa
 
     return (
         <Svg viewBox={VIEWBOX[view]} width={width} height={height} preserveAspectRatio="xMidYMid meet">
-            {/* Cuerpo base neutro (cuello / cabeza / manos / rodillas / tobillos / pies). */}
-            <G fill={NEUTRAL.fill} stroke={NEUTRAL.stroke} strokeWidth={2}>
+            {/* Cuerpo base neutro (cuello / cabeza / manos / rodillas / tobillos / pies).
+                non-scaling-stroke: 1px físico a cualquier tamaño (antes ~0.36px sub-píxel). */}
+            <G fill={NEUTRAL.fill} stroke={NEUTRAL.stroke} strokeWidth={1}>
                 {neutralShapes.map((s, i) => (
-                    <Path key={`n${i}`} d={s.d} />
+                    <Path key={`n${i}`} d={s.d} vectorEffect="non-scaling-stroke" />
                 ))}
             </G>
 
@@ -119,9 +122,9 @@ export function MuscleBodySvg({ view, intensity, accent, height, showLabels = fa
                 const tier = tierOf(intensity[region] ?? 0)
                 if (tier === 0) {
                     return (
-                        <G key={region} fill={NEUTRAL.fill} stroke={NEUTRAL.stroke} strokeWidth={2}>
+                        <G key={region} fill={NEUTRAL.fill} stroke={NEUTRAL.stroke} strokeWidth={1}>
                             {shapes.map((s, i) => (
-                                <Path key={i} d={s.d} />
+                                <Path key={i} d={s.d} vectorEffect="non-scaling-stroke" />
                             ))}
                         </G>
                     )
@@ -134,11 +137,11 @@ export function MuscleBodySvg({ view, intensity, accent, height, showLabels = fa
                     <G
                         key={region}
                         fill={withAlpha(accent, TIER_ALPHA[litTier])}
-                        stroke={isMax ? withAlpha(accent, 1) : withAlpha(accent, 0.45)}
-                        strokeWidth={isMax ? 6 : 2}
+                        stroke={isMax ? withAlpha(accent, 1) : withAlpha(accent, 0.55)}
+                        strokeWidth={isMax ? 2 : 1}
                     >
                         {shapes.map((s, i) => (
-                            <Path key={i} d={s.d} />
+                            <Path key={i} d={s.d} vectorEffect="non-scaling-stroke" />
                         ))}
                     </G>
                 )
