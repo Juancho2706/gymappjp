@@ -27,10 +27,13 @@ export function WorkoutRecoverBanner({
     /** Estado del día del CTA: sin nada registrado (`pending`) o a medias (`in_progress`). */
     oldestStatus?: 'pending' | 'in_progress'
 }) {
-    const { launch } = useWorkoutLaunch()
+    const { launch, prefetch } = useWorkoutLaunch()
     return (
         <Link
             href={href}
+            // Ver `WorkoutHeroCard`: hover/touch re-prioriza el prefetch del ejecutor en la cola de Next.
+            onPointerEnter={() => prefetch(href)}
+            onTouchStart={() => prefetch(href)}
             onClick={(e) => {
                 // Mismo destino; interceptamos para animar el Despegue mientras se navega.
                 e.preventDefault()

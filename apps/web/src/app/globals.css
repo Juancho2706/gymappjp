@@ -3704,6 +3704,22 @@ html[data-exec-v3-entered] [data-exec-v3] .exec-v3-splash {
 .exec-dsp.is-ready .exec-dsp-prep-ready {
   opacity: 1;
 }
+/* Fallback DEGRADADO (~4,6 s y el ejecutor todavía sin montar). El overlay deja pasar al alumno pero
+   no le dice «LISTO», porque detrás no hay nada: el copy pasa a «ESTO ESTÁ TARDANDO» + «TOCAR PARA
+   ENTRAR IGUAL». Ambos textos son mucho más largos que los del camino feliz y viven en un bloque
+   `nowrap` centrado en absoluto, así que acá se bajan tipografía y tracking para que entren en un
+   iPhone SE (320 px) sin desbordar. Deliberadamente SIN rojo ni ícono de error: no es una falla del
+   alumno ni una acción destructiva, es un aviso de estado. */
+.exec-dsp.is-degraded .exec-dsp-prep-ready {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  font-weight: 800;
+  color: rgba(255, 255, 255, 0.82);
+}
+.exec-dsp.is-degraded .exec-dsp-hint {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+}
 .exec-dsp-dots i {
   width: 5px;
   height: 5px;

@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { createClient as createBareClient, type SupabaseClient } from '@supabase/supabase-js'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
-import { NextResponse, type NextRequest } from 'next/server'
+import { NextResponse, after, type NextRequest } from 'next/server'
 import type { Database, Tables } from '@/lib/database.types'
 import type { EnterpriseStaffRole, WorkspaceSummary } from '@/domain/auth/types'
 import { resolveCoachSubscriptionRedirect } from '@/lib/coach-subscription-gate'
@@ -519,6 +519,25 @@ async function proxyInner(request: NextRequest) {
             return supabaseResponse
         }
 
+        // Workspace y fila del coach EN PARALELO (auditoría de waterfall 2026-08-31).
+        //
+        // `resolveCoachRouteWorkspace` se awaiteaba recién más abajo, después del select de `coaches`
+        // y de los dos early-returns — pero NO depende de `coach`: su única entrada es `user.id`, y
+        // es pura lectura (`findWorkspacePreference` + `listUserWorkspaces` en un Promise.all, sin
+        // efectos). O sea era un waterfall gratis de dos olas seriales, y este archivo es el PROXY:
+        // corre en el POP del visitante, así que cada ola le cuesta a un coach chileno un RTT
+        // transcontinental completo (~180 ms) contra Supabase en Oregón, en CADA navegación /coach/**.
+        //
+        // El `.catch(() => {})` de acá NO traga el error: solo marca la promesa como manejada para
+        // que un early-return de abajo (sin fila `coaches`, o `pending_email`) no deje un unhandled
+        // rejection. El `await` de más abajo sigue propagando el fallo igual que siempre.
+        //
+        // Costo del adelanto: en los dos caminos que redirigen se desperdician sus 2 lecturas. Son
+        // caminos fríos (un `clients` con sesión abierta tocando «atrás», o un free sin confirmar);
+        // el camino caliente —el coach real trabajando— se ahorra una ola entera.
+        const workspacePromise = resolveCoachRouteWorkspace(supabase, user.id)
+        workspacePromise.catch(() => {})
+
         // Verify the user has a coaches record
         // `persona` (onboarding v2): viaja en ESTE select, que ya corría, para que el gate de la
         // pantalla «¿A qué te dedicas?» no cueste una query extra (ver más abajo).
@@ -577,7 +596,8 @@ async function proxyInner(request: NextRequest) {
             return NextResponse.redirect(redirectUrl)
         }
 
-        const activeWorkspace = await resolveCoachRouteWorkspace(supabase, user.id)
+        // Ya viajó en paralelo con el select de `coaches` (ver arriba): acá normalmente ya resolvió.
+        const activeWorkspace = await workspacePromise
         if (activeWorkspace === 'select') {
             const redirectUrl = request.nextUrl.clone()
             redirectUrl.pathname = '/workspace/select'
@@ -744,11 +764,30 @@ async function proxyInner(request: NextRequest) {
             }
         }
 
-        // Debounced in DB (no-op if <5min since last update), so await is safe.
-        // Phase 2: en prefetch el request a PostgREST viaja igual aunque el SQL sea no-op — una
-        // visita real lo toca de todos modos. Saltarlo no afecta auth/routing.
+        // Telemetría de actividad del coach — FUERA del camino crítico vía `after()`.
+        //
+        // POR QUÉ NO SE AWAITEA (auditoría de waterfall 2026-08-31). El SQL es un no-op debounced a
+        // 5 min, y de ahí venía el «so await is safe» que estaba acá: cierto sobre la DB, falso sobre
+        // la latencia. Este archivo es el PROXY, o sea corre en el POP del visitante, no en `pdx1`:
+        // un alumno/coach chileno paga el RTT transcontinental completo hasta Supabase en Oregón
+        // (~180 ms) ANTES de que el request siga su curso — y lo paga en el 100% de las navegaciones
+        // reales de /coach/**, porque el guard de prefetch de abajo es inerte acá (la entrada del
+        // matcher para /coach lleva `missing: next-router-prefetch`, así que un prefetch ni entra).
+        // El comentario viejo ya lo admitía sin sacar la conclusión: «el request a PostgREST viaja
+        // igual aunque el SQL sea no-op».
+        //
+        // NADIE LEE EL RESULTADO en este request: es una escritura de telemetría pura. `after()`
+        // (estable en Next 15+, exportado por `next/server` en 16.3) la corre después de mandar la
+        // respuesta, sobre el mismo `supabase` ya autenticado.
+        //
+        // QUE NADIE LE VUELVA A PONER `await`: la ganancia de esta línea es el TTFB de cada
+        // navegación del coach. Si algún día hiciera falta el dato DENTRO del request, no se
+        // re-awaitea acá — se lee en el RSC del layout, que corre en `pdx1` junto a la DB.
+        // Perder alguna escritura en un cierre abrupto es aceptable: es telemetría debounced.
         if (!isPrefetchRequest(request.headers)) {
-            await supabase.rpc('touch_coach_activity', { p_coach_id: user.id })
+            after(async () => {
+                await supabase.rpc('touch_coach_activity', { p_coach_id: user.id })
+            })
         }
 
         return supabaseResponse

@@ -57,14 +57,25 @@ interface MorphState {
 
 interface LaunchApi {
     launch: (el: HTMLElement, href: string) => void
+    prefetch: (href: string) => void
 }
 
 const WorkoutLaunchContext = createContext<LaunchApi | null>(null)
 
-/** Hook de los triggers. `morph` queda null (el overlay lo renderiza el provider del layout). */
-export function useWorkoutLaunch(): { launch: (el: HTMLElement, href: string) => void; morph: null } {
+/**
+ * Hook de los triggers. `morph` queda null (el overlay lo renderiza el provider del layout).
+ *
+ * `prefetch(href)` va en la INTENCIÓN del alumno (`onPointerEnter` / `onTouchStart`), no en el click:
+ * para cuando toca, el chunk del ejecutor ya viajó. Ver el gotcha en `prefetch` del provider — NO
+ * precalienta los datos del server, solo el bundle.
+ */
+export function useWorkoutLaunch(): {
+    launch: (el: HTMLElement, href: string) => void
+    prefetch: (href: string) => void
+    morph: null
+} {
     const ctx = useContext(WorkoutLaunchContext)
-    return { launch: ctx?.launch ?? (() => {}), morph: null }
+    return { launch: ctx?.launch ?? (() => {}), prefetch: ctx?.prefetch ?? (() => {}), morph: null }
 }
 
 /** Provider del Despegue — montar UNA vez en el layout `/c` envolviendo `{children}`. */
@@ -110,9 +121,38 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
         setLeaving(false)
     }, [clearTimers])
 
+    /**
+     * Calienta la ruta del ejecutor ANTES de navegar (Sentry EVA-NEXTJS-1C).
+     *
+     * QUÉ GANA — y qué NO. `/c/[coach_slug]/workout/[planId]` es una ruta DINÁMICA con `loading.tsx`,
+     * así que Next 16 prefetchea «del layout hasta el primer loading boundary» y nada más: el RSC
+     * payload con los datos del plan NO se precalienta, y el client cache de rutas dinámicas está
+     * apagado por defecto (`staleTimes.dynamic`). Lo que sí viaja es el CHUNK JS de la ruta, que acá
+     * no es menor: `WorkoutExecutionClient` son ~2.600 líneas con framer-motion, timers y keypad, y
+     * en un iPhone con red móvil su descarga + parse se come una tajada del presupuesto de 3,3 s que
+     * el "Despegue" le da a la pantalla antes de caer al fallback.
+     *
+     * QUE NADIE LO CONFUNDA con un arreglo del waterfall del server: los ~12 queries en dos tandas
+     * seriales de `workout/[planId]/page.tsx` siguen ahí y siguen siendo la causa principal. Esto es
+     * la mitad barata y sin riesgo; la otra mitad se paga en el server.
+     *
+     * Es idempotente y su fallo no importa (red caída, ruta inválida): el `catch` vacío es deliberado.
+     */
+    const prefetch = useCallback(
+        (href: string) => {
+            try { router.prefetch(href) } catch { /* prefetch es best-effort: jamás debe romper el tap */ }
+        },
+        [router]
+    )
+
     const launch = useCallback(
         (el: HTMLElement, href: string) => {
             if (activeRef.current || state) return // guard anti doble-tap
+            // Arranca el viaje del bundle en t=0. La navegación real recién ocurre en `NAV_AT_MS`
+            // (1,3 s), para que el wipe de marca tape el swap de ruta: ese 1,3 s de animación es
+            // tiempo muerto de red que acá pasa a ser útil. Si el alumno ya había hecho hover/touch,
+            // esto es un no-op barato (Next deduplica el prefetch en vuelo).
+            prefetch(href)
             const r = el.getBoundingClientRect()
             const cs = window.getComputedStyle(el)
             const rect: Rect = { top: r.top, left: r.left, width: r.width, height: r.height, radius: parseFloat(cs.borderTopLeftRadius) || 14 }
@@ -204,7 +244,7 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
                 setForceReady(true)
             }, READY_FALLBACK_MS))
         },
-        [pathname, reduced, router, state, captureLaunched]
+        [pathname, reduced, router, state, captureLaunched, prefetch]
     )
 
     useEffect(() => {
@@ -239,10 +279,23 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
     // Espejo de la señal de Inicio-listo en un ref (mismo motivo que `routeReadyRef`).
     useEffect(() => { execReadyRef.current = execReady }, [execReady])
 
-    // `ready` (habilita el tap y despide el overlay) exige que el Inicio del ejecutor ya este pintado
-    // (`execReady`), no solo que la ruta commiteo (`routeReady`). `forceReady` (fallback ~4,6s) sigue
-    // siendo la valvula para no atrapar al alumno si la senal nunca llega.
-    const ready = !!state && animDone && (routeReady || forceReady) && (execReady || forceReady)
+    // `ready` habilita el tap y despide el overlay. Se llega por DOS caminos que NO son lo mismo, y
+    // la diferencia es visible para el alumno (decision del owner, 2026-08-31):
+    //
+    //  - `signalsReady`: el camino feliz. La ruta commiteo Y el Inicio del ejecutor ya pinto. Acá el
+    //    overlay dice «LISTO» y es verdad.
+    //  - `degraded`: gano el fallback de ~4,6 s con alguna senal todavia sin llegar. El tap se
+    //    habilita igual —la valvula existe para no ATRAPAR al alumno si la senal nunca llega— pero
+    //    el copy cambia: detras no hay nada montado y decir «LISTO» era mentirle.
+    //
+    // POR QUE IMPORTA: hasta hoy `ready` era `animDone && (routeReady || forceReady) && (execReady ||
+    // forceReady)`, y con `forceReady` en true los dos parentesis daban true sin mirar las senales
+    // reales. O sea el overlay anunciaba «LISTO / TOCA PARA COMENZAR» sobre una pantalla vacia. Cada
+    // evento de Sentry EVA-NEXTJS-1C es exactamente uno de esos momentos. Que no vuelva a colapsarse
+    // en una sola condicion: el fallback puede dejar pasar, no puede mentir.
+    const signalsReady = !!state && animDone && routeReady && execReady
+    const degraded = !!state && animDone && forceReady && !(routeReady && execReady)
+    const ready = signalsReady || degraded
 
     const dismiss = useCallback(() => {
         if (!ready || leaving) return
@@ -265,7 +318,7 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
     useEffect(() => () => { clearTimers(); clearCeremonyDom() }, [clearTimers])
 
     return (
-        <WorkoutLaunchContext.Provider value={{ launch }}>
+        <WorkoutLaunchContext.Provider value={{ launch, prefetch }}>
             {children}
             {state && (
                 <DespegueOverlay
@@ -274,6 +327,7 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
                     logoUrl={state.logoUrl}
                     initial={state.initial}
                     ready={ready}
+                    degraded={degraded}
                     leaving={leaving}
                     reduced={!!reduced}
                     onTap={dismiss}
@@ -295,6 +349,7 @@ function DespegueOverlay({
     logoUrl,
     initial,
     ready,
+    degraded,
     leaving,
     reduced,
     onTap,
@@ -304,6 +359,8 @@ function DespegueOverlay({
     logoUrl: string | null
     initial: string | null
     ready: boolean
+    /** El tap se habilitó por el fallback, con el ejecutor aún sin montar: avisar en vez de decir «LISTO». */
+    degraded: boolean
     leaving: boolean
     reduced: boolean
     onTap: () => void
@@ -345,8 +402,8 @@ function DespegueOverlay({
 
     return createPortal(
         <motion.div
-            className={`exec-dsp${ready ? ' is-ready' : ''}`}
-            aria-label="Preparando tu sesión"
+            className={`exec-dsp${ready ? ' is-ready' : ''}${degraded ? ' is-degraded' : ''}`}
+            aria-label={degraded ? 'La sesión está tardando en cargar' : 'Preparando tu sesión'}
             role="status"
             initial={false}
             animate={{ opacity: leaving ? 0 : 1 }}
@@ -394,14 +451,18 @@ function DespegueOverlay({
                     </div>
                 </div>
                 <div className="exec-dsp-prep">
-                    {/* Al estar listo, "PREPARANDO…" + dots se desvanecen y "LISTO" cruza en el mismo bloque. */}
+                    {/* Al estar listo, "PREPARANDO…" + dots se desvanecen y el mensaje final cruza en el
+                        mismo bloque. Con el fallback degradado NO decimos "LISTO" (detrás no hay nada
+                        montado): se avisa que está tardando y el tap de abajo ofrece entrar igual. */}
                     <span className="exec-dsp-prep-t">PREPARANDO TU SESIÓN</span>
                     <span className="exec-dsp-dots" aria-hidden><i /><i /><i /></span>
-                    <span className="exec-dsp-prep-ready" aria-hidden>LISTO</span>
+                    <span className="exec-dsp-prep-ready" aria-hidden>
+                        {degraded ? 'ESTO ESTÁ TARDANDO' : 'LISTO'}
+                    </span>
                 </div>
             </div>
 
-            <div className="exec-dsp-hint">TOCA PARA COMENZAR</div>
+            <div className="exec-dsp-hint">{degraded ? 'TOCAR PARA ENTRAR IGUAL' : 'TOCA PARA COMENZAR'}</div>
             {/* Capa que CAPTURA todos los taps durante la ceremonia (no se puede skipear). Antes de estar
                 listo no hace nada (bloquea el pass-through); al estar listo, avanza a Inicio. */}
             <button
@@ -409,7 +470,7 @@ function DespegueOverlay({
                 className="exec-dsp-tap"
                 style={{ cursor: ready ? 'pointer' : 'default' }}
                 onClick={ready ? onTap : undefined}
-                aria-label={ready ? 'Comenzar entrenamiento' : undefined}
+                aria-label={ready ? (degraded ? 'Entrar al entrenamiento aunque siga cargando' : 'Comenzar entrenamiento') : undefined}
                 aria-hidden={!ready}
                 tabIndex={ready ? 0 : -1}
             />

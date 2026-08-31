@@ -60,7 +60,7 @@ export function WorkoutPlanCards({
     // Sheet de doble intención: se abre al tocar un día hecho en OTRO día de la semana.
     const [sheetItem, setSheetItem] = useState<WorkoutPlanCardItem | null>(null)
     // QA6: morph de lanzamiento desde el rect de la card (mismo destino de navegación).
-    const { launch, morph } = useWorkoutLaunch()
+    const { launch, prefetch, morph } = useWorkoutLaunch()
 
     const todayIso = getTodayInSantiago().iso
     // Fecha REAL de la sesión del sheet: si el día se recuperó en otra fecha manda `doneOnDate`, no
@@ -179,6 +179,11 @@ export function WorkoutPlanCards({
                         <Link
                             key={p.id}
                             href={href}
+                            // Ver `WorkoutHeroCard`. Acá pesa más: las day-cards son una LISTA de links
+                            // que compiten entre sí en la cola del scheduler, así que el que el alumno
+                            // toca rara vez es el que quedó prefetcheado.
+                            onPointerEnter={() => prefetch(href)}
+                            onTouchStart={() => prefetch(href)}
                             onClick={(e) => {
                                 // QA6: el MISMO morph que el CTA, disparado desde el rect de la card.
                                 e.preventDefault()

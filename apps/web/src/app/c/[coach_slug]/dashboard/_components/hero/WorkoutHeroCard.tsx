@@ -44,7 +44,7 @@ export function WorkoutHeroCard({
 }: WorkoutHeroCardProps) {
     const { t } = useTranslation()
     const base = useBasePath(`/c/${coachSlug}`)
-    const { launch, morph } = useWorkoutLaunch()
+    const { launch, prefetch, morph } = useWorkoutLaunch()
     const workoutHref = `${base}/workout/${planId}`
     // QA7: entreno de HOY ya completado → la "ventanita" de doble intención (Revisar y editar / Repetir
     // hoy) en vez de ir directo al registro; el morph sale de la opción elegida. Antes se abría directo.
@@ -106,6 +106,12 @@ export function WorkoutHeroCard({
             <div className="mt-4 flex gap-2.5">
                 <Link
                     href={workoutHref}
+                    // Intención del alumno → calienta el chunk del ejecutor antes del tap. El prefetch
+                    // automático del `<Link>` ya corre al entrar en viewport, pero el dashboard tiene
+                    // muchos links y el scheduler de Next descarta los que salen de pantalla: hover/touch
+                    // los vuelve a poner primeros en la cola. Idempotente y best-effort.
+                    onPointerEnter={() => prefetch(workoutHref)}
+                    onTouchStart={() => prefetch(workoutHref)}
                     onClick={(e) => {
                         // QA6: intercepta el click para el morph de lanzamiento; navega al MISMO destino.
                         // Sin JS (o si preventDefault no corre) el Link navega normal — sin regresiones.
