@@ -242,8 +242,8 @@ export default function SubscriptionScreen() {
   const statusLabel = STATUS_LABELS[status] ?? status
   const statusTone = STATUS_TONE[status] ?? 'neutral'
   /**
-   * ¿Los 4 módulos vienen incluidos? Espejo de `hasPaidModuleAccess`
-   * (`apps/web/src/services/entitlements.service.ts:73`), que desde Pricing v2 P3 NO mira el tier:
+   * ¿Los 4 módulos vienen incluidos? Espejo de `hasActiveModuleAccess`
+   * (`apps/web/src/services/entitlements.service.ts:77`), que no mira el tier (W4.4, 2026-09-01):
    * cualquier coach con suscripción vigente los deriva, free incluido. El predicado viejo
    * (`tier !== 'free' && (active|trialing)`) mentía por partida doble — le pintaba «No incluido»
    * con candado a un free ACTIVO al que el server sí se los da, y también a un pro `canceled`

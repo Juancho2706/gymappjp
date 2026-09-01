@@ -28,7 +28,7 @@ import { Card } from '../../components'
  * `apps/web/src/app/coach/settings/modules/_components/ModulesForm.tsx`.
  *
  * Decisión CEO 2026-07-17 + Pricing v2 P3: los 4 módulos vienen INCLUIDOS para todo coach con
- * suscripción VIGENTE — free incluido (`hasPaidModuleAccess` ya no mira el tier); ya no se
+ * suscripción VIGENTE — free incluido (`hasActiveModuleAccess` no mira el tier, W4.4); ya no se
  * compran, activan ni desactivan por separado. Esta pantalla dejó de ser superficie de venta:
  * sin precios ni CTA de compra. Con acceso => "Incluido en tu plan"; sin acceso => solo ESTADO
  * ("No está incluido en tu plan actual") + "Actualizar estado", que revalida entitlements. Sin
