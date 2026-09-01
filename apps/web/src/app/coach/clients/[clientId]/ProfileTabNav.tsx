@@ -1,24 +1,20 @@
 'use client'
 
 import type { ReactNode } from 'react'
-import { useRef, useState, useEffect, useCallback } from 'react'
+import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
+// El catálogo de las 5 pestañas y su gobierno por dominio viven en el módulo puro `_lib`
+// (Ola de orden W1.8): acá solo se pinta lo que sobrevive al filtro.
+import {
+    visibleProfileTabs,
+    type DomainsEnabled,
+    type ProfileMainTabId,
+} from './_lib/profile-tabs'
 
-// 5 pestañas (sin Facturación). Etiquetas 1:1 con el diseño nuevo: Resumen ·
-// Progreso · Entreno · Programa · Nutrición. Pills label-only (sin íconos),
-// como en coach-ficha.jsx.
-const TABS = [
-    { id: 'overview', label: 'Resumen' },
-    { id: 'progress', label: 'Progreso' },
-    { id: 'workout', label: 'Entreno' },
-    { id: 'program', label: 'Programa' },
-    { id: 'nutrition', label: 'Nutrición' },
-] as const
-
-export type ProfileMainTabId = (typeof TABS)[number]['id']
+export type { ProfileMainTabId }
 
 export type ProfileTabBadges = Partial<Record<ProfileMainTabId, ReactNode>>
 
@@ -26,10 +22,16 @@ interface ProfileTabNavProps {
     activeTab: string
     onChange: (id: ProfileMainTabId) => void
     badges?: ProfileTabBadges
+    /**
+     * Dominios prendidos del panel del coach (`resolveDomainsEnabled`, resuelto server-side).
+     * Un dominio en `false` esconde su pestaña (4A). Fail-OPEN: key ausente ⇒ se muestra.
+     */
+    domainsEnabled: DomainsEnabled
 }
 
-export function ProfileTabNav({ activeTab, onChange, badges }: ProfileTabNavProps) {
+export function ProfileTabNav({ activeTab, onChange, badges, domainsEnabled }: ProfileTabNavProps) {
     const reduceMotion = useReducedMotion()
+    const tabs = useMemo(() => visibleProfileTabs(domainsEnabled), [domainsEnabled])
     const scrollRef = useRef<HTMLDivElement>(null)
     const barRef = useRef<HTMLDivElement>(null)
     const [canScrollRight, setCanScrollRight] = useState(false)
@@ -95,7 +97,7 @@ export function ProfileTabNav({ activeTab, onChange, badges }: ProfileTabNavProp
                     className="relative z-10 flex min-w-0 gap-1.5 overflow-x-auto px-5 py-2 scrollbar-none lg:px-6"
                     style={{ scrollbarWidth: 'none', msOverflowStyle: 'none', scrollPaddingInline: 20 }}
                 >
-                    {TABS.map((tab) => {
+                    {tabs.map((tab) => {
                         const active = activeTab === tab.id
                         const badge = badges?.[tab.id]
                         const isAlert = badge === '!'

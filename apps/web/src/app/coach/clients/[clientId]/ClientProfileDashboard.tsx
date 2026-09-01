@@ -10,6 +10,7 @@ import { Progress } from '@/components/ui/progress'
 import { getProfileTopAlert } from './getProfileTopAlert'
 import { ProfileTopAlertBanner } from './ProfileTopAlertBanner'
 import { ProfileTabNav, type ProfileMainTabId, type ProfileTabBadges } from './ProfileTabNav'
+import { resolveActiveProfileTab, type DomainsEnabled } from './_lib/profile-tabs'
 import { SectionTitle } from './_components/SectionTitle'
 import { ProfileOverviewB3 } from './ProfileOverviewB3'
 import { TrainingTabB4Panels } from './TrainingTabB4Panels'
@@ -28,6 +29,12 @@ import {
 } from '@/lib/workout/programWeekVariant'
 import { updateClientGoalWeight } from './_actions/client-detail.actions'
 
+/**
+ * Fallback fail-OPEN de dominios (referencia estable: no rompe el `useMemo` de la barra).
+ * Un consumidor que todavía no resuelve preferencias ve las 5 pestañas, como antes de W1.8.
+ */
+const DOMAINS_UNRESOLVED: DomainsEnabled = {}
+
 interface ClientProfileDashboardProps {
     data: any // using any temporarily to save time on type definitions
     /** Entitlements de módulos de pago (espejo del gate server-side, resueltos en page.tsx). */
@@ -39,6 +46,13 @@ interface ClientProfileDashboardProps {
      * la resolución falló y el tab pinta su estado degradado, nunca V1.
      */
     nutritionV2?: NutritionTabV2ViewModel | null
+    /**
+     * Dominios PRENDIDOS del panel del coach (`resolveDomainsEnabled`, server-side). Gobiernan
+     * qué pestañas se ven (W1.8 · 4A): `training:false` esconde Entreno y Programa,
+     * `nutrition:false` esconde Nutrición; Resumen y Progreso nunca se ocultan. Visibilidad,
+     * NUNCA autorización. Ausente ⇒ fail-OPEN (las 5).
+     */
+    domainsEnabled?: DomainsEnabled
     /** Fuerza tema oscuro para los charts (la ficha del master-detail es dark-only vía isla CSS;
         next-themes resolvedTheme no la conoce → sin esto los ejes saldrían claros sobre negro). */
     forceDark?: boolean
@@ -48,10 +62,14 @@ export function ClientProfileDashboard({
     data,
     moduleFlags,
     nutritionV2,
+    domainsEnabled = DOMAINS_UNRESOLVED,
     forceDark = false,
 }: ClientProfileDashboardProps) {
     const reduceMotion = useReducedMotion()
     const [activeTab, setActiveTab] = useState<ProfileMainTabId>('overview')
+    // Pestaña que se PINTA: si el coach apagó el dominio de la activa, cae a Resumen (4A) en vez
+    // de dejar un panel colgado sin pill que lo represente.
+    const shownTab = resolveActiveProfileTab(activeTab, domainsEnabled)
     const [isPending, startTransition] = useTransition()
 
     const handleTabChange = useCallback((id: ProfileMainTabId) => {
@@ -198,7 +216,12 @@ export function ClientProfileDashboard({
 
     return (
         <div className="@container/ficha min-w-0 max-w-full space-y-6 pb-[calc(9rem+env(safe-area-inset-bottom))] md:pb-0">
-            <ProfileTabNav activeTab={activeTab} onChange={handleTabChange} badges={tabBadges} />
+            <ProfileTabNav
+                activeTab={shownTab}
+                onChange={handleTabChange}
+                badges={tabBadges}
+                domainsEnabled={domainsEnabled}
+            />
 
             {isPending && (
                 <div className="grid min-w-0 animate-pulse grid-cols-1 gap-6 md:grid-cols-12">
@@ -217,7 +240,7 @@ export function ClientProfileDashboard({
             )}
 
             <AnimatePresence mode="wait" initial={false}>
-                {activeTab === 'overview' && !isPending && (
+                {shownTab === 'overview' && !isPending && (
                     <motion.div
                         key="overview"
                         {...tabMotion}
@@ -261,7 +284,7 @@ export function ClientProfileDashboard({
                     </motion.div>
                 )}
 
-                {activeTab === 'progress' && !isPending && (
+                {shownTab === 'progress' && !isPending && (
                     <motion.div
                         key="progress"
                         {...tabMotion}
@@ -330,7 +353,7 @@ export function ClientProfileDashboard({
                     </motion.div>
                 )}
 
-                {activeTab === 'workout' && !isPending && (
+                {shownTab === 'workout' && !isPending && (
                     <motion.div
                         key="workout"
                         {...tabMotion}
@@ -418,7 +441,7 @@ export function ClientProfileDashboard({
                     </motion.div>
                 )}
 
-                {activeTab === 'program' && !isPending && (
+                {shownTab === 'program' && !isPending && (
                     <motion.div
                         key="program"
                         {...tabMotion}
@@ -446,7 +469,7 @@ export function ClientProfileDashboard({
                     umbrales de micronutrientes (CoachNutrientTargetsEditor — micros NO se entregan
                     en V2, claim retirado) y "Funciones para este alumno" (override de feature prefs
                     por alumno, que solo gobernaba esos micros). */}
-                {activeTab === 'nutrition' && !isPending && (
+                {shownTab === 'nutrition' && !isPending && (
                     <motion.div
                         key="nutrition"
                         {...tabMotion}

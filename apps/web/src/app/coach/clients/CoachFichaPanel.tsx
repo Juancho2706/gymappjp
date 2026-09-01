@@ -42,6 +42,7 @@ export function CoachFichaPanel({ bundle }: { bundle: ClientFichaPanelBundle }) 
                 moduleFlags={moduleFlags}
                 data={bundle.data}
                 nutritionV2={bundle.nutritionV2}
+                domainsEnabled={bundle.domainsEnabled}
             />
         </div>
     )

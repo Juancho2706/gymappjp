@@ -10,6 +10,7 @@ import {
     getEnabledModulesForRender,
     hasModuleFromMap,
 } from '@/services/entitlements-render-cache'
+import { resolveDomainsEnabled } from '@/services/feature-prefs.service'
 import { applyNutritionAttentionScore } from '@/services/dashboard.service'
 import { resolveNutritionTabV2 } from './_data/nutrition-tab-v2.data'
 import { DemoStudentBanner } from './_components/DemoStudentBanner'
@@ -62,7 +63,7 @@ async function ProfileContent({ clientId }: { clientId: string }) {
 
     // Módulos (cardio/movimiento/composición) para el hero + el resumen del tab Nutrición
     // (SIEMPRE V2 desde la poda 2026-07-29; ver `_data/nutrition-tab-v2.data.ts`).
-    const [enabledModules, nutritionTabV2View, onboarding] = await Promise.all([
+    const [enabledModules, nutritionTabV2View, onboarding, domainsEnabled] = await Promise.all([
         isOrgScoped
             ? Promise.resolve({})
             : getEnabledModulesForRender(
@@ -73,6 +74,19 @@ async function ProfileContent({ clientId }: { clientId: string }) {
         // Persona del coach: da el sustantivo de la etiqueta del alumno de ejemplo
         // («Alumno/Paciente/Atleta de ejemplo», onboarding v2 F3.7). Memoizado por request.
         getCoachOnboardingEmptyContext(),
+        // Dominios PRENDIDOS del panel (master switch `_enabled`, Ola de orden W1.8): gobiernan
+        // qué pestañas se ven en la ficha (4A). MISMA fuente de coach que
+        // `getEnabledModulesForRender`: el coach DUEÑO del recurso. Sin `clientId` a propósito —
+        // el override por-alumno NO oculta pestañas, es la puerta para volver a prender. Enterprise
+        // (`clientOrgId`) devuelve los 5 en true sin leer, así que no hace falta ternario.
+        nutritionClient.coach_id
+            ? resolveDomainsEnabled({
+                  coachId: nutritionClient.coach_id,
+                  clientTeamId: nutritionClient.team_id ?? null,
+                  clientOrgId: nutritionClient.org_id ?? null,
+              })
+            : // Sin coach dueño no hay preferencia que leer ⇒ fail-OPEN (las 5 pestañas).
+              Promise.resolve({}),
     ])
     const cardioModule = hasModuleFromMap(enabledModules, 'cardio')
     const movementModule = hasModuleFromMap(enabledModules, 'movement_assessment')
@@ -151,6 +165,7 @@ async function ProfileContent({ clientId }: { clientId: string }) {
             <ClientProfileDashboard
                 data={data}
                 nutritionV2={nutritionTabV2View}
+                domainsEnabled={domainsEnabled}
                 moduleFlags={{
                     cardio: cardioModule,
                     movement: movementModule,

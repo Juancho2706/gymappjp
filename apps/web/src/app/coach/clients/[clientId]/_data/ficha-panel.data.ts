@@ -6,6 +6,7 @@ import {
     hasModuleFromMap,
 } from '@/services/entitlements-render-cache'
 import { applyNutritionAttentionScore } from '@/services/dashboard.service'
+import { resolveDomainsEnabled } from '@/services/feature-prefs.service'
 import { resolveNutritionTabV2 } from './nutrition-tab-v2.data'
 
 /**
@@ -37,7 +38,7 @@ export async function assembleClientFichaPanel(clientId: string) {
     // idénticos por selección de alumno en el rail.
     const isOrgScoped = !!nutritionClient.org_id
 
-    const [enabledModules, nutritionV2] = await Promise.all([
+    const [enabledModules, nutritionV2, domainsEnabled] = await Promise.all([
         isOrgScoped
             ? Promise.resolve({})
             : getEnabledModulesForRender(
@@ -47,6 +48,17 @@ export async function assembleClientFichaPanel(clientId: string) {
         // Poda 2026-07-29: el panel resuelve el MISMO resumen V2 que la ruta standalone. Antes
         // no lo resolvía, así que este camino mostraba el tab V1 (borrado) pase lo que pase.
         resolveNutritionTabV2(clientId),
+        // Dominios PRENDIDOS del panel del coach (Ola de orden W1.8): misma resolución que
+        // `[clientId]/page.tsx` — el panel del master-detail es la MISMA ficha y no puede mostrar
+        // pestañas que la ruta standalone esconde. Sin `clientId` (4A: el override por-alumno no
+        // oculta pestañas); enterprise ⇒ los 5 en true sin leer.
+        nutritionClient.coach_id
+            ? resolveDomainsEnabled({
+                  coachId: nutritionClient.coach_id,
+                  clientTeamId: nutritionClient.team_id ?? null,
+                  clientOrgId: nutritionClient.org_id ?? null,
+              })
+            : Promise.resolve({}),
     ])
     const cardio = hasModuleFromMap(enabledModules, 'cardio')
     const movement = hasModuleFromMap(enabledModules, 'movement_assessment')
@@ -100,6 +112,8 @@ export async function assembleClientFichaPanel(clientId: string) {
         moduleFlags: { cardio, movement, bodycomp },
         /** Resumen del tab Nutrición (SIEMPRE V2). `null` ⇒ el tab pinta su estado degradado. */
         nutritionV2,
+        /** Dominios prendidos del panel del coach: gobiernan las pestañas de la ficha (W1.8 · 4A). */
+        domainsEnabled,
     }
 }
 
