@@ -2,7 +2,19 @@ import { useEffect } from 'react'
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
-import { Dumbbell, Home, LayoutDashboard, Settings, Shield, Users, Utensils, type LucideIcon } from 'lucide-react-native'
+import {
+  Dumbbell,
+  Ellipsis,
+  HeartPulse,
+  Home,
+  LayoutDashboard,
+  PersonStanding,
+  Settings,
+  Shield,
+  Users,
+  Utensils,
+  type LucideIcon,
+} from 'lucide-react-native'
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -11,21 +23,33 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated'
 import { SPRING, deriveSportTokens } from '@eva/brand-kit'
-import { coachWorkspaceTypeFromKind, getVisibleNavItems, type NavModule } from '@eva/coach-nav'
+import { buildMobileBar, type NavModule } from '@eva/coach-nav'
 import { EvaBlur } from '../EvaBlur'
 import { useTheme } from '../../context/ThemeContext'
-import { useWorkspace } from '../../lib/workspace'
-import { disabledDomainsFromFlags } from '../../lib/entitlements-core'
-import { useEntitlements } from '../../lib/entitlements'
+import { useCoachNavState } from '../../lib/coach-nav-state'
 import { NavIconRN, type NavConceptRN } from '../NavIconRN'
-import { MOBILE_TAB_KEYS } from './coach-tab-keys'
+import type { MobileTabKey } from './coach-tab-keys'
 import { resetCoachTabbarScroll, useCoachTabbarMinimized } from './CoachTabbarScroll'
 
 type TabRoute = { key: string; name: string }
-// `concept` cablea la silueta propia del CEO (NavIconRN); si falta, se usa `icon` de lucide.
-type MobileNavRoute = { tab?: string; path: string; icon: LucideIcon; label: string; concept?: NavConceptRN }
+/**
+ * Destino RN de una key del nav.
+ *  - `concept` cablea la silueta propia del CEO (NavIconRN); si falta, se usa `icon` de lucide.
+ *  - `tab: null` = la pantalla NO es un tab del grupo `(tabs)`: se llega por `router.push` (stack) y
+ *    por eso NUNCA se marca activa en la cápsula.
+ */
+type MobileNavRoute = { tab?: string | null; path: string; icon: LucideIcon; label: string; concept?: NavConceptRN }
 
-const NAV_ROUTE: Record<string, MobileNavRoute> = {
+/**
+ * Key del nav -> pantalla de Expo Router. El `satisfies` la ata a `MOBILE_TAB_KEYS` (modulo puro):
+ * agregar un destino sin sumar su key al array —o al reves— NO compila, y asi el test de contrato
+ * de la raiz (`tests/mobile-nav-tab-keys-contract.test.ts`) sigue cruzando la lista REAL.
+ *
+ * Cardio y Movimiento (Ola de orden W2.5) viven como pantallas de STACK fuera de `(tabs)`: tienen
+ * su propio header con ←, asi que se abren con push y la cápsula queda debajo. `tab: null` para que
+ * nunca se pinten como tab activo.
+ */
+const NAV_ROUTE: Record<string, MobileNavRoute | undefined> = {
   dashboard: { tab: 'home', path: '/coach/home', icon: Home, label: 'Inicio', concept: 'home' },
   clients: { tab: 'clientes', path: '/coach/clientes', icon: Users, label: 'Alumnos', concept: 'alumnos' },
   programs: { tab: 'builder', path: '/coach/builder', icon: Dumbbell, label: 'Programas', concept: 'programas' },
@@ -34,6 +58,16 @@ const NAV_ROUTE: Record<string, MobileNavRoute> = {
   settings_team: { tab: 'settings', path: '/coach/settings', icon: Settings, label: 'Opciones', concept: 'ajustes' },
   team: { tab: 'team', path: '/coach/team', icon: Shield, label: 'Equipo', concept: 'equipo' },
   reactivate: { tab: 'reactivate', path: '/coach/reactivate', icon: LayoutDashboard, label: 'Mi plan' },
+  // `concept: 'mas'` = la MISMA silueta del CEO que el «Más» del alumno (AlumnoMobileChrome):
+  // sin ella, el 5to slot seria el unico de la capsula pintado con un glifo de lucide.
+  more: { tab: 'more', path: '/coach/more', icon: Ellipsis, label: 'Más', concept: 'mas' },
+  cardio: { tab: null, path: '/coach/cardio', icon: HeartPulse, label: 'Cardio' },
+  movement: { tab: null, path: '/coach/movement', icon: PersonStanding, label: 'Movimiento' },
+} satisfies Record<MobileTabKey, MobileNavRoute>
+
+/** Destino RN de `key`, o `undefined` si esa entrada del nav no tiene pantalla propia en la app. */
+export function coachNavRoute(key: string): MobileNavRoute | undefined {
+  return NAV_ROUTE[key]
 }
 
 // Resorte compartido SPRING.ui de @eva/brand-kit (damping 18 / stiffness 220 /
@@ -77,8 +111,7 @@ export function CoachMobileTabBar({
   const insets = useSafeAreaInsets()
   const { theme, mode } = useTheme()
   const router = useRouter()
-  const { kind, subscriptionState } = useWorkspace()
-  const { hasModule, domains } = useEntitlements()
+  const { visible, domainOrder, blocked } = useCoachNavState()
   const minimized = useCoachTabbarMinimized()
   const isDark = mode !== 'light'
 
@@ -90,35 +123,25 @@ export function CoachMobileTabBar({
     resetCoachTabbarScroll()
   }, [activeName])
 
-  const visible = getVisibleNavItems({
-    activeWorkspaceType: coachWorkspaceTypeFromKind(kind),
-    subscriptionStatus: subscriptionState,
-    enabledModules: {
-      cardio: hasModule('cardio'),
-      movement_assessment: hasModule('movement_assessment'),
-    },
-    // Los 5 dominios de feature-prefs, no solo nutricion: paridad exacta con el
-    // `disabledDomainsFromPrefs` del nav web (misma fuente, misma regla fail-open).
-    // `bodycomp` no tiene entrada en NAV_MODULES => viaja igual y es inocuo.
-    disabledDomains: disabledDomainsFromFlags(domains),
-  })
-
-  const blocked = visible.length === 1 && visible[0].key === 'reactivate'
-
   // ---- drivers Reanimated (declarados antes de cualquier return para no romper
   // el orden de hooks; el caso `blocked` renderiza ReactivateTabBar, que tiene los
   // suyos). ----
   const barW = useSharedValue(0)
   const mini = useSharedValue(minimized ? 1 : 0)
 
-  const byKey = new Map(visible.map((item) => [item.key, item]))
-  const barItems = MOBILE_TAB_KEYS
-    .map((key) => byKey.get(key))
-    .filter((item): item is NavModule => !!item && !!NAV_ROUTE[item.key])
-    .slice(0, 5)
+  // Ola de orden W2.5 — la barra ya NO es un `.slice(0, 5)` sobre una lista fija (ese corte ciego
+  // tiraba «Equipo» para los coaches de team): `buildMobileBar` arma [Inicio, Alumnos, los 2
+  // dominios que la especialidad del coach pone primero, «Más»] y todo lo que sobra viaja al
+  // `overflow` que pinta la hoja «Más» (`app/coach/(tabs)/more.tsx`), asi que nada se pierde.
+  const { bar } = buildMobileBar(visible, domainOrder)
+  const barItems = bar.filter((item) => !!NAV_ROUTE[item.key])
 
   const n = barItems.length || 1
-  const activeIndex = barItems.findIndex((item) => NAV_ROUTE[item.key]?.tab === activeName)
+  // `tab: null` (pantallas de stack) nunca ilumina un slot: solo un tab REAL puede estar activo.
+  const activeIndex = barItems.findIndex((item) => {
+    const tab = NAV_ROUTE[item.key]?.tab
+    return tab != null && tab === activeName
+  })
   const activeIdx = useSharedValue(activeIndex)
   const sport = deriveSportTokens(theme.primary)
   const activeColor = isDark ? sport.dark['600'] : sport.ramp['600']
@@ -211,7 +234,7 @@ export function CoachMobileTabBar({
 
         {barItems.map((item) => {
           const route = NAV_ROUTE[item.key]!
-          const focused = route.tab === activeName
+          const focused = route.tab != null && route.tab === activeName
           return (
             <CoachTabTile
               key={item.key}

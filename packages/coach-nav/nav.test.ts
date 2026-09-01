@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import {
+    buildMobileBar,
     getVisibleNavItems,
     groupNavItems,
-    splitNavItems,
-    splitForSidebar,
     coachWorkspaceTypeFromKind,
     isNavItemActiveForPath,
     GESTION_ORDER,
+    MORE_NAV_ITEM,
     NAV_MODULES,
     REACTIVATE_NAV_ITEM,
     type NavModule,
@@ -14,7 +14,10 @@ import {
 // FEATURE_DOMAIN_KEYS es la lista canonica de dominios de @eva/feature-prefs (paquete puro,
 // aliaseado por el vitest raiz). nav.ts NO lo importa (se mantiene desacoplado, ver comentario
 // de `featureDomain` en nav.ts), pero el TEST si puede — es el contrato cruzado de W1.12.
-import { FEATURE_DOMAIN_KEYS } from '@eva/feature-prefs'
+// `PERSONA_DOMAIN_ORDER` (W2.1) es la prioridad de dominios por especialidad. `buildMobileBar` la
+// recibe como parametro (`readonly string[]`) justamente para que nav.ts NO importe feature-prefs;
+// el TEST si la importa, porque el contrato que hay que fijar es «la barra respeta la especialidad».
+import { FEATURE_DOMAIN_KEYS, PERSONA_DOMAIN_ORDER } from '@eva/feature-prefs'
 
 // Matriz de modulos por contexto (separacion de flujos — regresion del smoke 2026-06-09:
 // josefit en standalone veia "Equipo").
@@ -246,9 +249,9 @@ describe('W2.1B · retiro del `entitlement` legado (cardio/movement)', () => {
             entitlement: 'body_composition',
         }
         expect(sintetico.entitlement).toBe('body_composition')
-        const { core, modules } = splitNavItems([sintetico])
-        expect(modules.map((m) => m.key)).toEqual(['futuro_modulo'])
-        expect(core).toEqual([])
+        // groupNavItems no discrimina por entitlement: un item sintetico sin featureDomain cae a
+        // Gestion, con o sin el campo (el gate de entitlement vive en getVisibleNavItems).
+        expect(groupNavItems([sintetico]).gestion.map((m) => m.key)).toEqual(['futuro_modulo'])
     })
 })
 
@@ -337,96 +340,6 @@ describe('W2.2 · entrada de nav «funciones»', () => {
             'dashboard', 'clients', 'team', 'programs', 'nutrition',
             'funciones', 'options', 'settings_team', 'support', 'cardio', 'movement',
         ])
-    })
-})
-
-describe('splitNavItems — @deprecated tras W2.1B (partición core / módulos)', () => {
-    it('discriminador: items con entitlement van a modules, el resto a core (mecanismo intacto)', () => {
-        const sintetico: NavModule = {
-            key: 'futuro_modulo',
-            href: '/coach/futuro',
-            label: 'Futuro',
-            icon: 'Settings',
-            contexts: ['coach_standalone'],
-            entitlement: 'nutrition_exchanges',
-        }
-        const items = [...getVisibleNavItems({ activeWorkspaceType: 'coach_standalone', subscriptionStatus: 'active' }), sintetico]
-        const { core, modules } = splitNavItems(items)
-        expect(modules.map((m) => m.key)).toEqual(['futuro_modulo'])
-        expect(modules.every((m) => m.entitlement != null)).toBe(true)
-        expect(core.every((m) => m.entitlement == null)).toBe(true)
-    })
-
-    it('con el registro REAL, `modules` sale siempre vacío (por eso queda @deprecated)', () => {
-        for (const ws of ['coach_standalone', 'coach_team', 'enterprise_coach'] as const) {
-            const items = getVisibleNavItems({
-                activeWorkspaceType: ws,
-                subscriptionStatus: ws === 'coach_standalone' ? 'active' : 'team_managed',
-            })
-            const { core, modules } = splitNavItems(items)
-            expect({ ws, modules: modules.map((m) => m.key) }).toEqual({ ws, modules: [] })
-            expect(core).toEqual(items)
-        }
-    })
-
-    it('grupos disjuntos y cobertura total (core ∪ modules = items, sin solapamiento)', () => {
-        const items = getVisibleNavItems({ activeWorkspaceType: 'coach_team', subscriptionStatus: 'team_managed' })
-        const { core, modules } = splitNavItems(items)
-        expect(core.length + modules.length).toBe(items.length)
-        const coreKeys = new Set(core.map((m) => m.key))
-        const moduleKeys = new Set(modules.map((m) => m.key))
-        for (const k of coreKeys) expect(moduleKeys.has(k)).toBe(false)
-    })
-
-    it('preserva el orden relativo de items dentro de cada grupo (estable)', () => {
-        const items = getVisibleNavItems({ activeWorkspaceType: 'coach_standalone', subscriptionStatus: 'active' })
-        const { core, modules } = splitNavItems(items)
-        expect(core.map((m) => m.key)).toEqual(items.filter((i) => i.entitlement == null).map((m) => m.key))
-        expect(modules.map((m) => m.key)).toEqual(items.filter((i) => i.entitlement != null).map((m) => m.key))
-    })
-
-    it('lista vacía ⇒ ambos grupos vacíos (función pura, sin throw)', () => {
-        const { core, modules } = splitNavItems([])
-        expect(core).toEqual([])
-        expect(modules).toEqual([])
-    })
-})
-
-describe('splitForSidebar — @deprecated (W2.4 la retira cuando CoachSidebar migre a groupNavItems)', () => {
-    it('secundario = solo Soporte con el registro real (el tramo de módulos quedó vacío tras W2.1B)', () => {
-        const items = getVisibleNavItems({ activeWorkspaceType: 'coach_standalone', subscriptionStatus: 'active' })
-        const { primary, secondary } = splitForSidebar(items)
-        expect(secondary.map((m) => m.key)).toEqual(['support'])
-        // Consecuencia deliberada del retiro: Cardio/Movimiento pasan a `primary` y por fin se
-        // pintan en el sidebar de HOY (que solo consume `primary`). Estado intermedio hasta W2.4.
-        expect(primary.map((m) => m.key)).toEqual(['dashboard', 'clients', 'programs', 'nutrition', 'funciones', 'options', 'cardio', 'movement'])
-    })
-
-    it('el discriminador `entitlement` sigue mandando a secondary si un item lo declara', () => {
-        const sintetico: NavModule = {
-            key: 'futuro_modulo',
-            href: '/coach/futuro',
-            label: 'Futuro',
-            icon: 'Settings',
-            contexts: ['coach_standalone'],
-            entitlement: 'cardio',
-        }
-        const { primary, secondary } = splitForSidebar([sintetico])
-        expect(secondary.map((m) => m.key)).toEqual(['futuro_modulo'])
-        expect(primary).toEqual([])
-    })
-
-    it('en team el secundario también es solo Soporte', () => {
-        const items = getVisibleNavItems({ activeWorkspaceType: 'coach_team', subscriptionStatus: 'team_managed' })
-        const { secondary } = splitForSidebar(items)
-        expect(secondary.map((m) => m.key)).toEqual(['support'])
-    })
-
-    it('status bloqueado ⇒ solo Reactivar en primary, secundario vacío', () => {
-        const items = getVisibleNavItems({ activeWorkspaceType: 'coach_standalone', subscriptionStatus: 'expired' })
-        const { primary, secondary } = splitForSidebar(items)
-        expect(primary.map((m) => m.key)).toEqual(['reactivate'])
-        expect(secondary).toEqual([])
     })
 })
 
@@ -582,6 +495,13 @@ describe('W1 · Ola de orden — contrato de dominios', () => {
 })
 
 describe('W2 · groupNavItems — Principal / Tu trabajo / Gestión', () => {
+    it('«Reactivar» (status bloqueado) cae en Principal, no en Gestión', () => {
+        const groups = groupNavItems([REACTIVATE_NAV_ITEM])
+        expect(groups.principal.map((i) => i.key)).toEqual(['reactivate'])
+        expect(groups.gestion).toEqual([])
+        expect(groups.trabajo).toEqual([])
+    })
+
     const NAV_DOMAINS = ['training', 'nutrition', 'cardio', 'movement'] as const
     // Entradas de nav por dominio, EN ORDEN DE REGISTRO (bodycomp no tiene: OUTLINE §3).
     const KEY_BY_DOMAIN: Record<string, string> = {
@@ -680,12 +600,12 @@ describe('W2 · groupNavItems — Principal / Tu trabajo / Gestión', () => {
         expect(keys(gestion)).toEqual(['funciones', 'options', 'support', 'zeta', 'alfa'])
     })
 
-    it('`reactivate` (status bloqueado) cae en `gestion` sin romper nada', () => {
+    it('`reactivate` (status bloqueado) cae en `principal` — es lo UNICO visible, no es gestion', () => {
         const items = getVisibleNavItems({ activeWorkspaceType: 'coach_standalone', subscriptionStatus: 'expired' })
         const { principal, trabajo, gestion } = groupNavItems(items)
-        expect(principal).toEqual([])
+        expect(keys(principal)).toEqual(['reactivate'])
         expect(trabajo).toEqual([])
-        expect(keys(gestion)).toEqual(['reactivate'])
+        expect(gestion).toEqual([])
     })
 
     it('la unión de los 3 grupos es EXACTAMENTE la lista de entrada (sin pérdida ni duplicado)', () => {
@@ -726,6 +646,117 @@ describe('W2 · groupNavItems — Principal / Tu trabajo / Gestión', () => {
             const item = NAV_MODULES.find((m) => m.key === key)
             expect(item?.featureDomain == null).toBe(true)
             expect(dominios.has(item?.featureDomain ?? '')).toBe(false)
+        }
+    })
+})
+
+// =================================================================================================
+// W2.5 — barra inferior de RN: [dashboard, clients] + 2 dominios de la especialidad + «Mas».
+// =================================================================================================
+
+describe('W2.5 · buildMobileBar', () => {
+    const visibleFor = (ws: string, status: string, disabled: ReadonlyArray<string> = []) =>
+        getVisibleNavItems({
+            activeWorkspaceType: ws,
+            subscriptionStatus: status,
+            disabledDomains: new Set(disabled),
+        })
+
+    const barFor = (persona: keyof typeof PERSONA_DOMAIN_ORDER, ws = 'coach_standalone', status = 'active', disabled: ReadonlyArray<string> = []) =>
+        buildMobileBar(visibleFor(ws, status, disabled), PERSONA_DOMAIN_ORDER[persona])
+
+    it('`more` es un SLOT de la barra, no una superficie: no esta en NAV_MODULES', () => {
+        expect(NAV_MODULES.some((m) => m.key === MORE_NAV_ITEM.key)).toBe(false)
+        expect(MORE_NAV_ITEM.key).toBe('more')
+    })
+
+    it('persona `strength`: Programas y Nutricion (entrenamiento primero)', () => {
+        expect(keys(barFor('strength').bar)).toEqual(['dashboard', 'clients', 'programs', 'nutrition', 'more'])
+    })
+
+    it('persona `nutrition`: Nutricion PRIMERO (bodycomp no tiene entrada y se saltea sola)', () => {
+        // PERSONA_DOMAIN_ORDER.nutrition = nutrition, bodycomp, training, ... => el 2do slot lo toma
+        // `training` porque `bodycomp` no tiene item de nav (OUTLINE §3).
+        expect(keys(barFor('nutrition').bar)).toEqual(['dashboard', 'clients', 'nutrition', 'programs', 'more'])
+    })
+
+    it('persona `rehab`: Programas + Movimiento', () => {
+        expect(keys(barFor('rehab').bar)).toEqual(['dashboard', 'clients', 'programs', 'movement', 'more'])
+    })
+
+    it('persona `endurance`: Programas + Cardio', () => {
+        expect(keys(barFor('endurance').bar)).toEqual(['dashboard', 'clients', 'programs', 'cardio', 'more'])
+    })
+
+    it('coach de TEAM con persona `strength`: «Equipo» YA NO se cae — vive en el overflow', () => {
+        const { bar, overflow } = barFor('strength', 'coach_team')
+        expect(keys(bar)).toEqual(['dashboard', 'clients', 'programs', 'nutrition', 'more'])
+        // El bug del `.slice(0, 5)`: con la lista fija, settings_team llenaba el 5to slot y `team`
+        // desaparecia SIN aviso. Ahora esta en la hoja «Mas».
+        expect(keys(overflow)).toEqual(['team', 'funciones', 'settings_team', 'support', 'cardio', 'movement'])
+    })
+
+    it('persona `endurance` con Cardio APAGADO: entra el siguiente del orden (Nutricion)', () => {
+        const { bar, overflow } = barFor('endurance', 'coach_standalone', 'active', ['cardio'])
+        expect(keys(bar)).toEqual(['dashboard', 'clients', 'programs', 'nutrition', 'more'])
+        expect(keys(overflow)).not.toContain('cardio')
+    })
+
+    it('los 5 dominios APAGADOS (BRIEF §5.2): barra de 3 slots y overflow sin dominios', () => {
+        const { bar, overflow } = barFor('strength', 'coach_standalone', 'active', [...FEATURE_DOMAIN_KEYS])
+        expect(keys(bar)).toEqual(['dashboard', 'clients', 'more'])
+        expect(overflow.every((item) => item.featureDomain == null)).toBe(true)
+        expect(keys(overflow)).toEqual(['funciones', 'options', 'support'])
+    })
+
+    it('enterprise: mismos 2 dominios, y el overflow es solo lo que ese contexto expone', () => {
+        const { bar, overflow } = barFor('strength', 'enterprise_coach', 'org_managed')
+        expect(keys(bar)).toEqual(['dashboard', 'clients', 'programs', 'nutrition', 'more'])
+        // ENTERPRISE_FULL = dashboard, clients, programs, nutrition, support (sin funciones/opciones).
+        expect(keys(overflow)).toEqual(['support'])
+    })
+
+    it('persona `null` (coach previo al onboarding v2) cae en el orden `other`', () => {
+        const visible = visibleFor('coach_standalone', 'active')
+        const fallback = buildMobileBar(visible, PERSONA_DOMAIN_ORDER.other)
+        expect(keys(fallback.bar)).toEqual(['dashboard', 'clients', 'programs', 'nutrition', 'more'])
+    })
+
+    it('status bloqueado: devuelve solo «Reactivar», sin «Mas»', () => {
+        const visible = visibleFor('coach_standalone', 'expired')
+        const { bar, overflow } = buildMobileBar(visible, PERSONA_DOMAIN_ORDER.strength)
+        expect(keys(bar)).toEqual(['reactivate'])
+        expect(overflow).toEqual([])
+    })
+
+    it('nunca mas de 5 slots, y `more` SIEMPRE va ultimo', () => {
+        for (const persona of Object.keys(PERSONA_DOMAIN_ORDER) as Array<keyof typeof PERSONA_DOMAIN_ORDER>) {
+            for (const ws of ['coach_standalone', 'coach_team', 'enterprise_coach']) {
+                const { bar } = barFor(persona, ws)
+                expect(bar.length).toBeLessThanOrEqual(5)
+                expect(bar[bar.length - 1]?.key).toBe('more')
+            }
+        }
+    })
+
+    it('`bar` (sin «Mas») ∪ `overflow` = lo visible, sin perdida ni duplicados', () => {
+        const DISABLED_CASES: ReadonlyArray<ReadonlyArray<string>> = [
+            [],
+            ['cardio'],
+            ['training', 'nutrition'],
+            [...FEATURE_DOMAIN_KEYS],
+        ]
+        for (const persona of Object.keys(PERSONA_DOMAIN_ORDER) as Array<keyof typeof PERSONA_DOMAIN_ORDER>) {
+            for (const ws of ['coach_standalone', 'coach_team', 'enterprise_coach']) {
+                for (const disabled of DISABLED_CASES) {
+                    const visible = visibleFor(ws, 'active', disabled)
+                    const { bar, overflow } = buildMobileBar(visible, PERSONA_DOMAIN_ORDER[persona])
+                    const union = [...bar.filter((item) => item.key !== MORE_NAV_ITEM.key), ...overflow]
+                    expect(union).toHaveLength(visible.length)
+                    expect(new Set(keys(union)).size).toBe(visible.length)
+                    expect([...keys(union)].sort()).toEqual([...keys(visible)].sort())
+                }
+            }
         }
     })
 })

@@ -18,8 +18,10 @@ export default function CoachTabsLayout() {
       <View style={{ flex: 1, backgroundColor: theme.background }}>
         {/* Sin barra superior global: cada screen renderiza su propio header. El dashboard
             usa <MobileGreetingHeader/>. El set de Tabs.Screen es fijo porque Expo Router
-            necesita los archivos; CoachMobileTabBar deriva hasta cinco accesos directos de
-            getVisibleNavItems, respetando workspace, módulos y suscripción como la web. */}
+            necesita los archivos; CoachMobileTabBar decide cuáles se PINTAN: Ola de orden W2.5,
+            la cápsula muestra [Inicio, Alumnos, los 2 dominios que la especialidad del coach pone
+            primero, «Más»] y el resto vive en la hoja «Más» (`more.tsx`), respetando workspace,
+            dominios y suscripción como la web. */}
         <Tabs
           tabBar={(props) => <CoachMobileTabBar {...props} />}
           screenOptions={{
@@ -37,7 +39,7 @@ export default function CoachTabsLayout() {
           <Tabs.Screen name="reactivate" options={{ title: 'Reactivar' }} />
           <Tabs.Screen name="support" options={{ title: 'Soporte' }} />
           <Tabs.Screen name="subscription" options={{ title: 'Mi plan' }} />
-          <Tabs.Screen name="check-ins" options={{ title: 'Check-ins' }} />
+          <Tabs.Screen name="more" options={{ title: 'Más' }} />
           <Tabs.Screen name="perfil" options={{ title: 'Mi cuenta' }} />
         </Tabs>
 

@@ -12,8 +12,8 @@
  * que web y mobile deriven la MISMA matriz de tabs (evita el drift del smoke 2026-06-09:
  * josefit standalone veia "Equipo").
  *
- * `getVisibleNavItems` / `groupNavItems` (y las heredadas `splitNavItems` / `splitForSidebar`, hoy
- * `@deprecated`) son funciones PURAS (unit-testeables sin render). `coachWorkspaceTypeFromKind`
+ * `getVisibleNavItems` / `groupNavItems` / `buildMobileBar` son funciones PURAS (unit-testeables
+ * sin render; `splitNavItems`/`splitForSidebar` se retiraron en W2.4). `coachWorkspaceTypeFromKind`
  * puentea el enum de mobile
  * (`WorkspaceKind`) al de la web (`CoachWorkspaceType`) para que mobile no re-derive.
  */
@@ -94,7 +94,7 @@ const ALL: ReadonlyArray<CoachWorkspaceType> = ['coach_standalone', 'enterprise_
  *    (en org/team la marca y el cobro son del tenant; el team usa su propio hub `settings_team`).
  *  - Los modulos toggleables (cardio/movement) van AL FINAL a proposito: en mobile el bottom bar
  *    renderiza plano por orden de registro => quedan contiguos al final. En desktop el orden lo
- *    impone `splitForSidebar` (grupo "Mas"), no el registro.
+ *    impone `groupNavItems` (sidebar) / `buildMobileBar` (barra RN), no el registro.
  */
 export const NAV_MODULES: ReadonlyArray<NavModule> = [
     { key: 'dashboard', href: '/coach/dashboard', label: 'Dashboard', shortLabel: 'Inicio', icon: 'LayoutDashboard', contexts: ALL },
@@ -139,6 +139,92 @@ export const REACTIVATE_NAV_ITEM: NavModule = {
     shortLabel: 'Pago',
     icon: 'LayoutDashboard',
     contexts: ALL,
+}
+
+/**
+ * Slot «Más» de la barra inferior de RN (Ola de orden W2.5, decisión 2A del owner).
+ *
+ * NO vive en `NAV_MODULES` a propósito: no es una superficie del panel (no se gatea por contexto,
+ * ni por dominio, ni por entitlement) sino un SLOT de la barra — el que rescata todo lo que no
+ * entró en los 5 lugares. Meterlo en el registro lo haría aparecer en el sidebar web, donde no
+ * existe: allí el nav se pinta entero (W2.4).
+ *
+ * `contexts: ALL` porque la barra existe en los 3 flujos; `icon` como KEY string igual que el
+ * resto del registro (RN lo resuelve a `Ellipsis` de lucide-react-native).
+ */
+export const MORE_NAV_ITEM: NavModule = {
+    key: 'more',
+    href: '/coach/more',
+    label: 'Más',
+    shortLabel: 'Más',
+    icon: 'Ellipsis',
+    contexts: ALL,
+}
+
+/** Slots totales de la barra inferior de RN. Techo duro: la cápsula no pinta un sexto ítem. */
+const MOBILE_BAR_SLOTS = 5
+
+/** Entradas fijas de la barra, en orden. El resto de los slots los pelean los dominios. */
+const MOBILE_BAR_CORE: ReadonlyArray<string> = ['dashboard', 'clients']
+
+/**
+ * Arma la barra inferior de RN a partir de los items YA visibles (Ola de orden W2.5).
+ *
+ * Reemplaza al `MOBILE_TAB_KEYS.slice(0, 5)` de `CoachMobileChrome`, que era un corte CIEGO sobre
+ * una lista fija: un coach de team perdía «Equipo» porque dashboard/clients/programs/nutrition/
+ * settings_team ya llenaban los 5 slots y no había ningún «Más» que lo rescatara.
+ *
+ * Reglas:
+ *  - `bar` = [dashboard, clients] (los que estén visibles) + hasta `maxDomains` items CON
+ *    `featureDomain`, elegidos recorriendo `domainOrder` (la prioridad por especialidad de
+ *    `PERSONA_DOMAIN_ORDER`, @eva/feature-prefs) + `MORE_NAV_ITEM` SIEMPRE al final.
+ *  - Un dominio de `domainOrder` sin item visible se saltea solo: `bodycomp` nunca tuvo entrada de
+ *    nav, y un dominio apagado ya no viene en `visible`. Entra el siguiente del orden.
+ *  - Con los 5 dominios apagados la barra queda `[dashboard, clients, more]` (3 slots, BRIEF §5.2):
+ *    no se rellena con items que no son dominios ni se duplica «Más».
+ *  - `overflow` = todo lo visible que NO entró, en orden de REGISTRO. Es lo que la hoja «Más»
+ *    (W2.6) agrupa con `groupNavItems`.
+ *  - Status bloqueado (`visible` = solo «Reactivar»): se devuelve tal cual, sin «Más» — la cápsula
+ *    ya trata ese caso con su propia barra.
+ *
+ * PURA: `domainOrder` llega como `readonly string[]` para no acoplar este paquete a
+ * @eva/feature-prefs (mismo criterio que `featureDomain`, ver arriba). Union sin pérdida:
+ * `bar` (sin `more`) + `overflow` = `visible`, sin duplicados.
+ */
+export function buildMobileBar(
+    visible: NavModule[],
+    domainOrder: readonly string[],
+    maxDomains = 2,
+): { bar: NavModule[]; overflow: NavModule[] } {
+    if (visible.length === 1 && visible[0]?.key === REACTIVATE_NAV_ITEM.key) {
+        return { bar: [...visible], overflow: [] }
+    }
+
+    const bar: NavModule[] = []
+    const taken = new Set<string>()
+
+    for (const key of MOBILE_BAR_CORE) {
+        const item = visible.find((candidate) => candidate.key === key)
+        if (!item) continue
+        bar.push(item)
+        taken.add(item.key)
+    }
+
+    // Slots libres = techo de la barra - lo fijo - el propio «Más». Con el core completo son 2.
+    const slots = Math.max(0, Math.min(maxDomains, MOBILE_BAR_SLOTS - bar.length - 1))
+    let picked = 0
+    for (const domain of domainOrder) {
+        if (picked >= slots) break
+        const item = visible.find((candidate) => candidate.featureDomain === domain && !taken.has(candidate.key))
+        if (!item) continue
+        bar.push(item)
+        taken.add(item.key)
+        picked += 1
+    }
+
+    bar.push(MORE_NAV_ITEM)
+
+    return { bar, overflow: visible.filter((item) => !taken.has(item.key)) }
 }
 
 export type VisibleNavContext = {
@@ -226,45 +312,6 @@ export function isNavItemActiveForPath(item: NavModule, pathname: string): boole
     return (item.activeAliases ?? []).some(matches)
 }
 
-/**
- * Particiona los items visibles en `core` (siempre presentes) y `modules` (toggleables).
- * Discriminador: `item.entitlement != null`. Funcion PURA; preserva el orden relativo.
- *
- * @deprecated Ola de orden W2.1B — ninguna entrada del registro declara ya `entitlement`, asi que
- * `modules` sale SIEMPRE vacio y `core` es la lista entera. Se conserva porque el mecanismo
- * `entitlement` sigue vivo en el tipo para un modulo futuro. Para agrupar el nav usar
- * `groupNavItems`.
- */
-export function splitNavItems(items: NavModule[]): { core: NavModule[]; modules: NavModule[] } {
-    const core: NavModule[] = []
-    const modules: NavModule[] = []
-    for (const item of items) {
-        if (item.entitlement != null) modules.push(item)
-        else core.push(item)
-    }
-    return { core, modules }
-}
-
-/**
- * Particion para el SIDEBAR/CHROME. Separa los items visibles en:
- *  - `primary`: navegacion principal (nucleo de trabajo).
- *  - `secondary`: grupo "Mas" (Soporte + los modulos comprados/toggleables).
- * Discriminador: `item.key === 'support'` OR `item.entitlement != null`. PURA; preserva el orden.
- *
- * @deprecated Ola de orden W2.3 — su unico consumidor real (`CoachSidebar.tsx`) destructura solo
- * `primary`, por lo que `secondary` NUNCA se pinta: Soporte (y antes Cardio/Movimiento) quedaban
- * invisibles en el sidebar. Ademas, tras W2.1B el tramo de modulos de `secondary` sale siempre
- * vacio. Usar `groupNavItems`; W2.4 migra CoachSidebar y ahi esta funcion se retira.
- */
-export function splitForSidebar(items: NavModule[]): { primary: NavModule[]; secondary: NavModule[] } {
-    const primary: NavModule[] = []
-    const secondary: NavModule[] = []
-    for (const item of items) {
-        if (item.key === 'support' || item.entitlement != null) secondary.push(item)
-        else primary.push(item)
-    }
-    return { primary, secondary }
-}
 
 /**
  * Orden CANONICO del grupo «Gestion» (`groupNavItems`). Es un orden de LECTURA, no el del
@@ -275,7 +322,7 @@ export const GESTION_ORDER: ReadonlyArray<string> = ['team', 'funciones', 'optio
 
 /** Los 3 grupos con los que el sidebar (W2.4) y la hoja «Mas» de RN (W2.6) pintan el nav. */
 export type NavGroups = {
-    /** Entrada al panel: Dashboard + Alumnos, en ese orden. */
+    /** Entrada al panel: Dashboard + Alumnos, en ese orden (y «Reactivar» si el status esta bloqueado). */
     principal: NavModule[]
     /** Los dominios de trabajo prendidos (items con `featureDomain`), en orden de registro. */
     trabajo: NavModule[]
@@ -294,7 +341,8 @@ export type NavGroups = {
  * pintables y hace imposible que un item se pierda: la union de los 3 es la lista de entrada.
  *
  * Reglas:
- *  - `principal`: keys `dashboard` y `clients`, en ESE orden (no el de entrada).
+ *  - `principal`: keys `dashboard`, `clients` y `reactivate`, en ESE orden (no el de entrada).
+ *    `reactivate` va aca porque cuando aparece es lo UNICO visible: bajo «Gestion» se leia raro.
  *  - `trabajo`: items con `featureDomain != null`, en orden de entrada (= orden de registro:
  *    programs, nutrition, cardio, movement). `bodycomp` no tiene entrada de nav (OUTLINE §3).
  *  - `gestion`: el resto, reordenado por `GESTION_ORDER`; lo no listado (p. ej. `reactivate`, si
@@ -308,13 +356,13 @@ export function groupNavItems(items: NavModule[]): NavGroups {
     const gestion: NavModule[] = []
 
     for (const item of items) {
-        if (item.key === 'dashboard' || item.key === 'clients') principal.push(item)
+        if (item.key === 'dashboard' || item.key === 'clients' || item.key === 'reactivate') principal.push(item)
         else if (item.featureDomain != null) trabajo.push(item)
         else gestion.push(item)
     }
 
     // Principal se pinta en orden fijo (Dashboard, Alumnos), no en el de entrada.
-    const principalOrder = ['dashboard', 'clients']
+    const principalOrder = ['dashboard', 'clients', 'reactivate']
     principal.sort((a, b) => principalOrder.indexOf(a.key) - principalOrder.indexOf(b.key))
 
     // Gestion: las keys conocidas en GESTION_ORDER; las desconocidas quedan al final, estables.
