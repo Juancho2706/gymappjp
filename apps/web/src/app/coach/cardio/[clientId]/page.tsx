@@ -34,6 +34,9 @@ export default async function CardioClientPage({ params, searchParams }: Props) 
 
     if (data.status === 'unauthenticated') redirect('/login')
     if (data.status === 'module_off') redirect('/coach/cardio')
+    // Dominio apagado por el propio coach (W1.4b): al hub, que ahí vive el aviso con el CTA a
+    // Mi panel. No duplicamos el aviso en la subruta del alumno.
+    if (data.status === 'domain_off') redirect('/coach/cardio')
     if (data.status === 'not_found') notFound()
 
     const { client } = data

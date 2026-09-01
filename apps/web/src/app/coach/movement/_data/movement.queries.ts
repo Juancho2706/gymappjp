@@ -2,6 +2,7 @@ import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { assertModule } from '@/services/entitlements.service'
+import { resolveMovementDomainEnabled } from '@/services/feature-prefs.service'
 import {
     getClientMovementDetail,
     getMovementHubData,
@@ -17,12 +18,18 @@ import {
 export type MovementHubResult =
     | { status: 'unauthenticated' }
     | { status: 'module_off' }
+    | { status: 'domain_off' }
     | { status: 'ok'; data: MovementHubData }
 
 /**
  * Hub del modulo: distingue module_off (aviso amable, plan 05 F5.7) de no-sesion. El gate
  * server-side (assertModule por workspace activo) sigue siendo el techo: si el modulo esta
  * apagado la page muestra ModuleOffNotice, no datos.
+ *
+ * Ola de orden W1.4b: la PREFERENCIA del coach (dominio `movement` apagado en Opciones › Mi
+ * panel) se evalua ANTES que el modulo — el aviso correcto para quien lo apago el mismo es
+ * «prendelo de nuevo», no «compra el modulo». El assertModule sigue debajo como kill-switch de
+ * operador / entitlement: la preferencia solo achica, nunca autoriza.
  */
 export const getMovementHub = cache(async (): Promise<MovementHubResult> => {
     const supabase = await createClient()
@@ -35,6 +42,18 @@ export const getMovementHub = cache(async (): Promise<MovementHubResult> => {
     // Enterprise v1: modulo OFF (paridad con cardio). Team manda; standalone usa flags del coach.
     if (workspace?.type === 'enterprise_coach') return { status: 'module_off' }
     const activeTeamId = workspace?.type === 'coach_team' ? workspace.teamId : null
+
+    // Preferencia del coach (dominio) ANTES del modulo. `clientOrgId: null`: el caso enterprise ya
+    // salio arriba; el resolver es fail-OPEN, solo un `false` explicito apaga.
+    if (
+        !(await resolveMovementDomainEnabled({
+            coachId: user.id,
+            clientTeamId: activeTeamId,
+            clientOrgId: null,
+        }))
+    ) {
+        return { status: 'domain_off' }
+    }
 
     try {
         await assertModule(supabase, 'movement_assessment', {

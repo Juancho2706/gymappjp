@@ -2,6 +2,7 @@ import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { assertModule } from '@/services/entitlements.service'
+import { resolveCardioDomainEnabled } from '@/services/feature-prefs.service'
 import {
     getCardioClientForCoach,
     listCardioClients,
@@ -16,11 +17,17 @@ export interface CardioPageScope {
 export type CardioPageData =
     | { status: 'unauthenticated' }
     | { status: 'module_off' }
+    | { status: 'domain_off' }
     | { status: 'ok'; scope: CardioPageScope; clients: CardioProfileRow[] }
 
 /**
  * Datos del módulo /coach/cardio. Gating SERVER-SIDE: assertModule('cardio') por el
  * workspace ACTIVO (team manda; standalone usa los flags del coach). Enterprise v1: OFF.
+ *
+ * Ola de orden W1.4b: la PREFERENCIA del coach (dominio `cardio` apagado en Opciones › Mi panel)
+ * se evalúa ANTES que el módulo — si él mismo lo apagó, el aviso correcto es «prendelo de nuevo»,
+ * no «comprá el módulo». El `assertModule` queda intacto debajo como kill-switch de operador /
+ * entitlement: la preferencia solo achica, nunca autoriza.
  */
 export const getCardioPageData = cache(async (): Promise<CardioPageData> => {
     const supabase = await createClient()
@@ -32,6 +39,18 @@ export const getCardioPageData = cache(async (): Promise<CardioPageData> => {
     const workspace = await resolvePreferredWorkspace(supabase, user.id)
     if (workspace?.type === 'enterprise_coach') return { status: 'module_off' }
     const activeTeamId = workspace?.type === 'coach_team' ? workspace.teamId : null
+
+    // Preferencia del coach (dominio) ANTES del módulo. `clientOrgId: null`: el caso enterprise ya
+    // salió arriba; el resolver es fail-OPEN, solo un `false` explícito apaga.
+    if (
+        !(await resolveCardioDomainEnabled({
+            coachId: user.id,
+            clientTeamId: activeTeamId,
+            clientOrgId: null,
+        }))
+    ) {
+        return { status: 'domain_off' }
+    }
 
     try {
         await assertModule(supabase, 'cardio', {
@@ -50,10 +69,14 @@ export const getCardioPageData = cache(async (): Promise<CardioPageData> => {
 export type CardioClientData =
     | { status: 'unauthenticated' }
     | { status: 'module_off' }
+    | { status: 'domain_off' }
     | { status: 'not_found' }
     | { status: 'ok'; client: CardioProfileRow }
 
-/** Perfil cardio de UN alumno para el editor del coach (mismo gating + scope 3-vías). */
+/**
+ * Perfil cardio de UN alumno para el editor del coach (mismo gating + scope 3-vías).
+ * Mismo orden que el hub: preferencia del dominio primero, módulo después (W1.4b).
+ */
 export const getCardioClientData = cache(async (clientId: string): Promise<CardioClientData> => {
     const supabase = await createClient()
     // getClaims(): verificación local del JWT (ES256), sin /user. El proxy ya validó/refrescó la sesión.
@@ -64,6 +87,17 @@ export const getCardioClientData = cache(async (clientId: string): Promise<Cardi
     const workspace = await resolvePreferredWorkspace(supabase, user.id)
     if (workspace?.type === 'enterprise_coach') return { status: 'module_off' }
     const activeTeamId = workspace?.type === 'coach_team' ? workspace.teamId : null
+
+    // Preferencia del coach (dominio) ANTES del módulo, igual que en el hub.
+    if (
+        !(await resolveCardioDomainEnabled({
+            coachId: user.id,
+            clientTeamId: activeTeamId,
+            clientOrgId: null,
+        }))
+    ) {
+        return { status: 'domain_off' }
+    }
 
     try {
         await assertModule(supabase, 'cardio', {

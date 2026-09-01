@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import {
     DOMAIN_ENABLED_KEY,
+    DOMAIN_GENDER,
+    DOMAIN_LABELS,
     FEATURE_DOMAINS,
     FEATURE_DOMAIN_KEYS,
+    FUNCIONES_BREADCRUMB,
+    FUNCIONES_LABEL,
     NUTRITION_SECTIONS,
     PRESETS,
     disabledDomainsForPersona,
+    domainOffBannerCopy,
+    domainOffCopy,
     normalizePreset,
     resolveDomainEnabled,
     resolvePersonaPrefs,
@@ -536,5 +542,58 @@ describe('@eva/feature-prefs — resolvePersonaPrefs (matriz de SPEC §2)', () =
         })
         expect(res.micros_advanced).toBe(false)
         expect(res.goals_bodycomp).toBe(false)
+    })
+})
+
+describe('copy compartido «dominio apagado» (Ola de orden W1, mockup 9801fec7 1A/2A/3A)', () => {
+    it('hay label y genero para los 5 dominios; la pantalla se nombra como se llama HOY (1A)', () => {
+        for (const domain of FEATURE_DOMAIN_KEYS) {
+            expect(DOMAIN_LABELS[domain]).toBeTruthy()
+            expect(['m', 'f']).toContain(DOMAIN_GENDER[domain])
+        }
+        expect(FUNCIONES_LABEL).toBe('Mi panel')
+        expect(FUNCIONES_BREADCRUMB).toBe('Opciones › Mi panel')
+    })
+
+    it('el aviso in-page concuerda en genero y nombra la pantalla real, sin plan ni precio', () => {
+        const cardio = domainOffCopy('cardio')
+        expect(cardio.title).toBe('Cardio está apagado en tu panel')
+        expect(cardio.body).toBe(
+            'Lo apagaste en Opciones › Mi panel. Tus datos se conservan; préndelo para volver a usar zonas, pace e intervalos.',
+        )
+        expect(cardio.cta).toBe('Prender en Mi panel')
+
+        const nutrition = domainOffCopy('nutrition')
+        expect(nutrition.title).toBe('Nutrición está apagada en tu panel')
+        expect(nutrition.body.startsWith('La apagaste en Opciones › Mi panel.')).toBe(true)
+
+        const training = domainOffCopy('training')
+        expect(training.title).toBe('Entrenamiento está apagado en tu panel')
+        expect(training.body).toBe(
+            'Lo apagaste en Opciones › Mi panel. Tus programas se conservan; préndelo para volver a verlos.',
+        )
+
+        for (const domain of FEATURE_DOMAIN_KEYS) {
+            const copy = domainOffCopy(domain)
+            expect(copy.body).toContain(FUNCIONES_BREADCRUMB)
+            expect(copy.cta).toContain(FUNCIONES_LABEL)
+            // Regla anti-hostigamiento: es una preferencia del coach, nunca un upsell.
+            expect(`${copy.title} ${copy.body} ${copy.cta}`).not.toMatch(/plan pago|plan actual|precio|suscripci|upgrade|ver planes/i)
+        }
+    })
+
+    it('el banner del dashboard dice como re-prender y a donde ir (2A)', () => {
+        const nutrition = domainOffBannerCopy('nutrition')
+        expect(nutrition.title).toBe('Nutrición está apagada en tu panel.')
+        expect(nutrition.hint).toBe('Préndela en Opciones › Mi panel para volver a verla.')
+        expect(nutrition.cta).toBe('Ir a Mi panel')
+
+        const movement = domainOffBannerCopy('movement')
+        expect(movement.title).toBe('Movimiento está apagado en tu panel.')
+        expect(movement.hint).toBe('Préndelo en Opciones › Mi panel para volver a verlo.')
+
+        for (const domain of FEATURE_DOMAIN_KEYS) {
+            expect(domainOffBannerCopy(domain).hint).toContain(FUNCIONES_BREADCRUMB)
+        }
     })
 })

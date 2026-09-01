@@ -5,6 +5,7 @@ import { getCardioPageData } from './_data/cardio.queries'
 import { CardioToolsClient } from './_components/CardioToolsClient'
 import { CardioFirstRunEmpty } from './_components/CardioFirstRunEmpty'
 import { ModuleOffNotice } from '@/components/coach/ModuleOffNotice'
+import { DomainOffNotice } from '@/components/coach/DomainOffNotice'
 import { getCoachOnboardingEmptyContext } from '../_data/onboarding-empty.queries'
 
 export const metadata: Metadata = { title: 'Cardio | EVA' }
@@ -13,6 +14,10 @@ export const metadata: Metadata = { title: 'Cardio | EVA' }
  * Módulo cardio (key `cardio`, toggleable — specs/movida-entrenamiento F7).
  * Gating SERVER-SIDE en _data (assertModule por workspace activo): con OFF se
  * muestra el aviso y ninguna action del módulo es ejecutable (AC7).
+ *
+ * Ola de orden W1.4b (mockup 3A): si el coach apagó el dominio en Opciones › Mi panel, la página
+ * CONSERVA su encabezado y cambia solo el contenido por `DomainOffNotice` — así sabe dónde está
+ * parado y que la pantalla existe, apagada por él. `module_off` sigue con su aviso de siempre.
  */
 export default async function CardioPage() {
     const data = await getCardioPageData()
@@ -20,6 +25,15 @@ export default async function CardioPage() {
 
     if (data.status === 'module_off') {
         return <ModuleOffNotice moduleKey="cardio" />
+    }
+
+    if (data.status === 'domain_off') {
+        return (
+            <div className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 md:px-6">
+                <CardioPageHeader />
+                <DomainOffNotice domain="cardio" />
+            </div>
+        )
     }
 
     // Primer uso = ningún alumno tiene todavía datos de los que salgan zonas. Con el alumno de
@@ -32,20 +46,7 @@ export default async function CardioPage() {
 
     return (
         <div className="mx-auto w-full max-w-4xl space-y-6 px-4 py-6 md:px-6">
-            <header className="space-y-1.5">
-                <div className="flex items-center justify-between gap-3">
-                    <h1 className="flex items-center gap-2 font-display text-xl font-extrabold tracking-[-0.02em] text-strong">
-                        <span className="inline-flex size-9 items-center justify-center rounded-control bg-sport-100 text-sport-600">
-                            <HeartPulse className="size-5" />
-                        </span>
-                        Cardio
-                    </h1>
-                    <span className="inline-flex h-6 shrink-0 items-center rounded-pill bg-sport-100 px-2.5 text-[12px] font-bold text-sport-700">
-                        Módulo
-                    </span>
-                </div>
-                <p className="text-[12.5px] text-muted">Herramientas</p>
-            </header>
+            <CardioPageHeader />
             {!hasCardioProfile && (
                 <CardioFirstRunEmpty
                     demoClientId={onboarding.demoClientId}
@@ -68,5 +69,29 @@ export default async function CardioPage() {
                 }))}
             />
         </div>
+    )
+}
+
+/**
+ * Encabezado de la página (♥ Cardio · pastilla «Módulo» · «Herramientas»). Extraído para que la
+ * rama `domain_off` pinte EXACTAMENTE el mismo chasis que la página viva (mockup 3A): un solo
+ * lugar que editar cuando cambie el título.
+ */
+function CardioPageHeader() {
+    return (
+        <header className="space-y-1.5">
+            <div className="flex items-center justify-between gap-3">
+                <h1 className="flex items-center gap-2 font-display text-xl font-extrabold tracking-[-0.02em] text-strong">
+                    <span className="inline-flex size-9 items-center justify-center rounded-control bg-sport-100 text-sport-600">
+                        <HeartPulse className="size-5" />
+                    </span>
+                    Cardio
+                </h1>
+                <span className="inline-flex h-6 shrink-0 items-center rounded-pill bg-sport-100 px-2.5 text-[12px] font-bold text-sport-700">
+                    Módulo
+                </span>
+            </div>
+            <p className="text-[12.5px] text-muted">Herramientas</p>
+        </header>
     )
 }

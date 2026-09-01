@@ -1,6 +1,7 @@
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { assertModule } from '@/services/entitlements.service'
+import { resolveBodycompDomainEnabled } from '@/services/feature-prefs.service'
 import {
     assertBodyCompositionEnabled,
     assertCoachClientWriteAccess,
@@ -17,10 +18,14 @@ export type BodyCompositionData = {
 /**
  * Resultado discriminado para distinguir el módulo APAGADO (aviso amable hacia el catálogo,
  * plan 05 F5.7) del cliente inexistente / sin acceso / sin consentimiento (notFound seco).
+ *
+ * `domain_off` (Ola de orden W1.4b) es una TERCERA cosa: el coach apagó Composición corporal en
+ * su panel. No es plata ni permisos — es preferencia, y se revierte desde Opciones › Mi panel.
  */
 export type BodyCompositionResult =
     | { status: 'ok'; data: BodyCompositionData }
     | { status: 'module_off' }
+    | { status: 'domain_off' }
     | { status: 'not_found' }
 
 /**
@@ -58,6 +63,21 @@ export const getClientBodyComposition = cache(
             access = await assertCoachClientWriteAccess(supabase, user.id, clientId)
         } catch {
             return { status: 'not_found' }
+        }
+
+        // Preferencia del coach (dominio `bodycomp` apagado en Opciones › Mi panel) ANTES del
+        // módulo: si él mismo lo apagó, el aviso correcto es «prendelo de nuevo», no «comprá el
+        // módulo». Va DESPUÉS del acceso porque el ctx (team/org) sale del propio `access`.
+        // NO se pasa `clientId`: el override por-alumno no apaga la superficie del coach — es la
+        // puerta para volver a prenderla (mockup 4A).
+        if (
+            !(await resolveBodycompDomainEnabled({
+                coachId: user.id,
+                clientTeamId: access.viaTeam ? access.teamId : null,
+                clientOrgId: access.orgId ?? null,
+            }))
+        ) {
+            return { status: 'domain_off' }
         }
 
         const ctx = access.viaTeam ? { teamId: access.teamId } : { coachId: user.id }

@@ -504,3 +504,92 @@ export function disabledDomainsForPersona(
     }
     return disabled
 }
+
+// ---------------------------------------------------------------------------------------------
+// Copy compartido del aviso «dominio apagado» (Ola de orden W1, mockup `9801fec7` 1A/2A/3A).
+// Vive ACA y no en `apps/web/src/lib` porque lo pintan web (DomainOffNotice, DomainOffBanner) y
+// RN (DomainOffNotice) con las MISMAS palabras: el coach no puede leer «Funciones» en un lado y
+// «Mi panel» en el otro. Decision 1A del owner: se nombra la pantalla como se llama HOY
+// («Opciones › Mi panel»); W3 la renombra a «Funciones» cambiando SOLO `FUNCIONES_LABEL`.
+// Las RUTAS no se comparten (web `/coach/settings/funciones`, RN `/coach/settings/mi-panel`):
+// cada app las declara en su propio `lib/domain-off.ts`.
+// ---------------------------------------------------------------------------------------------
+
+/** Nombre visible de la pantalla donde se prende/apaga un dominio. W3 lo cambia a «Funciones» SOLO aca. */
+export const FUNCIONES_LABEL = 'Mi panel' as const
+
+/** Ruta de migas que precede a `FUNCIONES_LABEL` en el copy («Opciones › Mi panel»). */
+export const FUNCIONES_BREADCRUMB = `Opciones › ${FUNCIONES_LABEL}` as const
+
+/** Nombre visible de cada dominio (banner, avisos in-page y pantalla de funciones). */
+export const DOMAIN_LABELS: Record<FeatureDomain, string> = {
+    nutrition: 'Nutrición',
+    training: 'Entrenamiento',
+    cardio: 'Cardio',
+    movement: 'Movimiento',
+    bodycomp: 'Composición corporal',
+}
+
+/** Genero gramatical del label, para concordar «apagado/apagada», «préndelo/préndela». */
+export const DOMAIN_GENDER: Record<FeatureDomain, 'm' | 'f'> = {
+    nutrition: 'f',
+    training: 'm',
+    cardio: 'm',
+    movement: 'm',
+    bodycomp: 'f',
+}
+
+/** Que se conserva y que se recupera al prender, por dominio (segunda oracion del aviso in-page). */
+const DOMAIN_OFF_KEEP: Record<FeatureDomain, string> = {
+    nutrition: 'Tus planes se conservan; préndela para volver a verlos.',
+    training: 'Tus programas se conservan; préndelo para volver a verlos.',
+    cardio: 'Tus datos se conservan; préndelo para volver a usar zonas, pace e intervalos.',
+    movement: 'Tus screenings se conservan; préndelo para volver a evaluar.',
+    bodycomp: 'Tus mediciones se conservan; préndela para volver a verlas.',
+}
+
+export interface DomainOffCopy {
+    /** «Cardio está apagado en tu panel» */
+    title: string
+    /** «Lo apagaste en Opciones › Mi panel. Tus datos se conservan; préndelo para…» */
+    body: string
+    /** «Prender en Mi panel» */
+    cta: string
+}
+
+/**
+ * Copy del aviso IN-PAGE «dominio apagado» (`DomainOffNotice` web y RN, mockup 3A/C). Sin plan,
+ * sin precio, sin urgencia: es una preferencia del propio coach, no un upsell.
+ */
+export function domainOffCopy(domain: FeatureDomain): DomainOffCopy {
+    const label = DOMAIN_LABELS[domain]
+    const f = DOMAIN_GENDER[domain] === 'f'
+    return {
+        title: `${label} está ${f ? 'apagada' : 'apagado'} en tu panel`,
+        body: `${f ? 'La' : 'Lo'} apagaste en ${FUNCIONES_BREADCRUMB}. ${DOMAIN_OFF_KEEP[domain]}`,
+        cta: `Prender en ${FUNCIONES_LABEL}`,
+    }
+}
+
+export interface DomainOffBannerCopy {
+    /** «Nutrición está apagada en tu panel.» */
+    title: string
+    /** «Préndela en Opciones › Mi panel para volver a verla.» */
+    hint: string
+    /** «Ir a Mi panel» */
+    cta: string
+}
+
+/**
+ * Copy del BANNER del dashboard cuando una ruta apagada devolvio al coach
+ * (`?notice=domain_off&domain=…`, mockup 1A/2A). Una linea, tono neutro, se cierra con ×.
+ */
+export function domainOffBannerCopy(domain: FeatureDomain): DomainOffBannerCopy {
+    const label = DOMAIN_LABELS[domain]
+    const f = DOMAIN_GENDER[domain] === 'f'
+    return {
+        title: `${label} está ${f ? 'apagada' : 'apagado'} en tu panel.`,
+        hint: `${f ? 'Préndela' : 'Préndelo'} en ${FUNCIONES_BREADCRUMB} para volver a ${f ? 'verla' : 'verlo'}.`,
+        cta: `Ir a ${FUNCIONES_LABEL}`,
+    }
+}

@@ -22,15 +22,6 @@ export function domainOffRedirectPath(domain: FeatureDomain): string {
     return `/coach/dashboard?notice=${DOMAIN_OFF_NOTICE}&domain=${domain}`
 }
 
-/** Nombre visible de cada dominio (copy del banner y de la pantalla de funciones). */
-export const DOMAIN_LABELS: Record<FeatureDomain, string> = {
-    nutrition: 'Nutrición',
-    training: 'Entrenamiento',
-    cardio: 'Cardio',
-    movement: 'Movimiento',
-    bodycomp: 'Composición corporal',
-}
-
 /**
  * Type guard runtime contra `FEATURE_DOMAIN_KEYS`. El `?domain=` del redirect llega del cliente:
  * se parsea con esto y nunca se confía crudo (evita pintar copy con basura de la URL).
@@ -39,6 +30,21 @@ export function isFeatureDomain(v: unknown): v is FeatureDomain {
     return typeof v === 'string' && (FEATURE_DOMAIN_KEYS as readonly string[]).includes(v)
 }
 
-/** Ruta y nombre de la pantalla donde se prende/apaga un dominio. W3 renombra la pantalla a «Funciones»: cambiar SOLO acá. */
+/**
+ * Ruta WEB de la pantalla donde se prende/apaga un dominio (RN tiene la suya en
+ * `apps/mobile/lib/domain-off.ts`). El NOMBRE visible (`FUNCIONES_LABEL`) y el copy de los avisos
+ * viven en `@eva/feature-prefs` para que web y RN digan exactamente lo mismo; se re-exportan aca
+ * para que el codigo web siga importando de un solo modulo. W3 renombra la pantalla: la ruta
+ * cambia SOLO aca y el label SOLO en el paquete.
+ */
 export const FUNCIONES_PATH = '/coach/settings/funciones' as const
-export const FUNCIONES_LABEL = 'Mi panel' as const
+export {
+    DOMAIN_GENDER,
+    DOMAIN_LABELS,
+    FUNCIONES_BREADCRUMB,
+    FUNCIONES_LABEL,
+    domainOffBannerCopy,
+    domainOffCopy,
+    type DomainOffBannerCopy,
+    type DomainOffCopy,
+} from '@eva/feature-prefs'

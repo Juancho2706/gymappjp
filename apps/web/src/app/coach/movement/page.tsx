@@ -4,6 +4,7 @@ import { getMovementHub } from './_data/movement.queries'
 import { MovementHubList } from './_components/MovementHubList'
 import { MovementFirstRunEmpty } from './_components/MovementFirstRunEmpty'
 import { ModuleOffNotice } from '@/components/coach/ModuleOffNotice'
+import { DomainOffNotice } from '@/components/coach/DomainOffNotice'
 import { getCoachOnboardingEmptyContext } from '../_data/onboarding-empty.queries'
 
 export const metadata: Metadata = { title: 'Screening de Movimiento | EVA' }
@@ -17,6 +18,9 @@ export default async function MovementHubPage() {
     const result = await getMovementHub()
     if (result.status === 'unauthenticated') redirect('/login')
     if (result.status === 'module_off') return <ModuleOffNotice moduleKey="movement_assessment" />
+    // Dominio apagado por el propio coach (W1.4b): aviso IN-PAGE con el CTA a Mi panel. Este hub
+    // no tiene encabezado propio, asi que el aviso ocupa la pantalla (mockup 3A).
+    if (result.status === 'domain_off') return <DomainOffNotice domain="movement" />
 
     // Primer uso = todavia no existe NINGUN screening (ni borrador). Con el alumno de ejemplo
     // sembrado la lista no esta vacia, asi que el vacio real es «sin evaluar», no «sin alumnos»
