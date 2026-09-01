@@ -35,17 +35,6 @@ function bearerToken(request: NextRequest): string | null {
     return auth.slice('Bearer '.length).trim() || null
 }
 
-/** Lee FEATURE_PREFS_ENABLED de Edge Config. Fail-open para V1. */
-async function readFeaturePrefsEnabled(): Promise<boolean> {
-    if (!process.env.EDGE_CONFIG) return false
-    try {
-        const { get } = await import('@vercel/edge-config')
-        return (await get<boolean>('FEATURE_PREFS_ENABLED')) === true
-    } catch {
-        return false
-    }
-}
-
 type NutritionScope = {
     coachId: string | null
     clientId: string | null
@@ -101,7 +90,6 @@ function failOpenSections(
 
 async function resolveNutritionPrefs(
     admin: DB,
-    prefsEnabled: boolean,
     scope: NutritionScope,
     applied: EnabledModules,
 ): Promise<{ nutritionEnabled: boolean; sections: Record<NutritionSectionKey, boolean> }> {
@@ -111,10 +99,10 @@ async function resolveNutritionPrefs(
     }
     // D9-A (owner, 22-08 ratificada 26-08): la preferencia de modulos es SOLO del panel del COACH.
     // Scope ALUMNO (`clientId` presente — en scope coach siempre es null) => las prefs no
-    // participan y el resultado es el mismo que con `FEATURE_PREFS_ENABLED` OFF: todo prendido,
-    // modulado unicamente por los entitlements reales del plan. El scope COACH sigue igual: su
-    // `nutritionEnabled` (CoachMobileChrome) respeta su propia preferencia.
-    if (!prefsEnabled || scope.clientId || (!scope.coachId && !scope.teamId)) {
+    // participan: todo prendido, modulado unicamente por los entitlements reales del plan. El
+    // scope COACH sigue igual: su `nutritionEnabled` (CoachMobileChrome) respeta su propia
+    // preferencia, ahora siempre (prefs siempre-on desde W1.10, 2026-09-01).
+    if (scope.clientId || (!scope.coachId && !scope.teamId)) {
         return { nutritionEnabled: true, sections: failOpenSections(entitledByModule) }
     }
     const useTeamBase = !!scope.teamId && !scope.orgId
@@ -236,14 +224,14 @@ export async function GET(request: NextRequest) {
         ? await resolveStudentAccessForCoach(admin, scope.coachId)
         : null
 
-    const featurePrefsEnabled = await readFeaturePrefsEnabled()
-    const { nutritionEnabled, sections } = await resolveNutritionPrefs(admin, featurePrefsEnabled, scope, applied)
+    const { nutritionEnabled, sections } = await resolveNutritionPrefs(admin, scope, applied)
 
     return NextResponse.json({
         enabledModules,
         disabledModules,
         featurePrefs: { nutritionEnabled, sections },
-        featurePrefsEnabled,
+        // ESPEJO LEGACY (W1.10, 2026-09-01): lo lee apps/mobile/lib/coach-client-detail.ts en binarios/OTAs anteriores; el valor real ya no existe (prefs siempre-on). Retirar junto con featurePrefs.nutritionEnabled en la wave siguiente.
+        featurePrefsEnabled: true,
         studentAccess: studentAccess
             ? { state: studentAccess.state, graceEndsAt: studentAccess.graceEndsAt }
             : null,

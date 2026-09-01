@@ -44,7 +44,6 @@ import {
 import {
   resolveSections,
   resolveDomainEnabled,
-  NUTRITION_SECTIONS,
   type SectionPrefs,
   type ModuleKey,
   type NutritionSectionKey,
@@ -1408,7 +1407,6 @@ export interface NutritionZoneCData {
   entitledByModule: NutritionEntitledByModule
   domainEnabledBase: boolean
   useTeamBase: boolean
-  prefsEnabled: boolean
   proEnabled: boolean
 }
 
@@ -1418,19 +1416,18 @@ export async function getCoachNutritionZoneC(clientId: string, logDate: string):
   // clientId puede llegar 'null'/'' por un param de navegación sin validar → degradar al nil uuid.
   const cid = safeUuid(clientId)
 
-  // Flag Edge Config (FEATURE_PREFS_ENABLED) + kill-switch de operador — server-only, vía el
-  // endpoint mobile. Fail-OPEN: cualquier fallo => prefs ignoradas = mostrar todo lo entitled.
-  // `enabledModules` del mismo payload viene YA DERIVADO server-side ("plan pago ⇒ los 4 módulos",
-  // getCoachEnabledModules): es la fuente de entitlement del coach standalone — la lectura cruda de
-  // `coaches.enabled_modules` de abajo queda solo de fallback si el endpoint falló (drift QA CEO
-  // 2026-07-25: un coach Pro sin flags crudos veía la Zona C apagada).
+  // Kill-switch de operador (`disabledModules`) — server-only, vía el endpoint mobile. Las prefs
+  // son SIEMPRE-ON (Ola de orden W1.10, 2026-09-01): ya no se lee ningún flag transicional; el
+  // fail-open sin fila lo resuelve el resolver puro. El endpoint se sigue llamando porque aporta
+  // `disabledModules` y `enabledModules`: este último viene YA DERIVADO server-side ("plan pago ⇒
+  // los 4 módulos", getCoachEnabledModules) y es la fuente de entitlement del coach standalone —
+  // la lectura cruda de `coaches.enabled_modules` de abajo queda solo de fallback si el endpoint
+  // falló (drift QA CEO 2026-07-25: un coach Pro sin flags crudos veía la Zona C apagada).
   let disabledModules: string[] = []
-  let prefsEnabled = false
   let derivedCoachModules: string[] | null = null
   try {
-    const cfg = await apiFetch<{ disabledModules?: string[]; featurePrefsEnabled?: boolean; enabledModules?: string[] }>('/api/mobile/config', { authenticated: true })
+    const cfg = await apiFetch<{ disabledModules?: string[]; enabledModules?: string[] }>('/api/mobile/config', { authenticated: true })
     disabledModules = cfg.disabledModules ?? []
-    prefsEnabled = cfg.featurePrefsEnabled === true
     derivedCoachModules = Array.isArray(cfg.enabledModules) ? cfg.enabledModules : null
   } catch { /* fail-open */ }
 
@@ -1489,18 +1486,10 @@ export async function getCoachNutritionZoneC(clientId: string, logDate: string):
     clientSections,
   })
 
-  // Flag OFF/ausente/Edge caído => fail-OPEN: mostrar TODO lo entitled (comportamiento de HOY, espejo web).
-  const failOpen = (): Record<NutritionSectionKey, boolean> => {
-    const out = {} as Record<NutritionSectionKey, boolean>
-    for (const s of NUTRITION_SECTIONS) {
-      out[s.key] = s.core ? true : s.requiresModule ? entitledByModule[s.requiresModule] === true : true
-    }
-    return out
-  }
-
-  const baseEffective = prefsEnabled ? (resolveSections(resolveInput(null)) as Record<NutritionSectionKey, boolean>) : failOpen()
-  const effective = prefsEnabled ? (resolveSections(resolveInput(override)) as Record<NutritionSectionKey, boolean>) : failOpen()
-  const domainEnabledBase = prefsEnabled ? resolveDomainEnabled(resolveInput(null)) : true
+  // Prefs siempre-on (W1.10): el resolver puro corre siempre y ya trae el fail-open sin fila.
+  const baseEffective = resolveSections(resolveInput(null)) as Record<NutritionSectionKey, boolean>
+  const effective = resolveSections(resolveInput(override)) as Record<NutritionSectionKey, boolean>
+  const domainEnabledBase = resolveDomainEnabled(resolveInput(null))
 
   return {
     privateNotes: (((notesRes.data as any[] | null) ?? [])).map((n) => ({ id: String(n.id), body: String(n.body ?? ''), created_at: n.created_at ?? null, updated_at: n.updated_at ?? null })),
@@ -1520,7 +1509,6 @@ export async function getCoachNutritionZoneC(clientId: string, logDate: string):
     entitledByModule,
     domainEnabledBase,
     useTeamBase,
-    prefsEnabled,
     proEnabled: effective.micros_advanced === true,
   }
 }

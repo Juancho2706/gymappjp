@@ -1,11 +1,12 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 /**
  * Decision D9 opcion A del owner (22-08, ratificada 26-08): la preferencia de modulos vive SOLO
- * en el panel del COACH. Con `FEATURE_PREFS_ENABLED` ON y `coach_feature_prefs` apagando
- * Nutricion, el coach deja de ver su modulo pero SUS ALUMNOS lo conservan — la app del alumno se
- * modula unicamente por los entitlements reales del plan.
+ * en el panel del COACH. Con `coach_feature_prefs` apagando Nutricion, el coach deja de ver su
+ * modulo pero SUS ALUMNOS lo conservan — la app del alumno se modula unicamente por los
+ * entitlements reales del plan. Prefs siempre-on (Ola de orden W1.10, 2026-09-01): sin flag
+ * Edge Config que mockear.
  */
 
 // ── Mocks ────────────────────────────────────────────────────────────────────────
@@ -33,11 +34,6 @@ vi.mock('@/services/entitlements.service', async (importOriginal) => ({
     ...(await importOriginal<typeof import('@/services/entitlements.service')>()),
     getCoachEnabledModules: (...a: unknown[]) => getCoachEnabledModules(...a),
     getTeamEnabledModules: (...a: unknown[]) => getTeamEnabledModules(...a),
-}))
-
-const edgeConfigGet = vi.fn(async (key: string) => key === 'FEATURE_PREFS_ENABLED')
-vi.mock('@vercel/edge-config', () => ({
-    get: (...a: [string]) => edgeConfigGet(...a),
 }))
 
 /** Filas que devuelve el fake admin, enrutadas por tabla. */
@@ -82,12 +78,8 @@ type ConfigBody = {
     featurePrefs: { nutritionEnabled: boolean; sections: Record<string, boolean> }
 }
 
-const previousEdgeConfig = process.env.EDGE_CONFIG
-
 beforeEach(() => {
     vi.clearAllMocks()
-    process.env.EDGE_CONFIG = 'https://edge-config.test/ec'
-    edgeConfigGet.mockImplementation(async (key: string) => key === 'FEATURE_PREFS_ENABLED')
     getCoachEnabledModules.mockResolvedValue({})
     getTeamEnabledModules.mockResolvedValue({})
     resolveStudentAccessForCoach.mockResolvedValue({ state: 'active', graceEndsAt: null })
@@ -99,11 +91,6 @@ beforeEach(() => {
     touchedTables = []
 })
 
-afterEach(() => {
-    if (previousEdgeConfig === undefined) delete process.env.EDGE_CONFIG
-    else process.env.EDGE_CONFIG = previousEdgeConfig
-})
-
 describe('GET /api/mobile/config — D9-A: la pref del coach no gobierna a sus alumnos', () => {
     it('ALUMNO: con el coach en nutrition._enabled=false igual recibe nutritionEnabled true', async () => {
         clientRow = { coach_id: 'coach-1', team_id: null, org_id: null }
@@ -112,7 +99,7 @@ describe('GET /api/mobile/config — D9-A: la pref del coach no gobierna a sus a
         const body = (await res.json()) as ConfigBody
 
         expect(res.status).toBe(200)
-        // El flag sigue ON (el coach lo usa); lo que cambia es que el alumno no lo hereda.
+        // Espejo legacy fijo en `true` (W1.10): lo leen binarios/OTAs anteriores, ya no es un flag.
         expect(body.featurePrefsEnabled).toBe(true)
         expect(body.featurePrefs.nutritionEnabled).toBe(true)
         // Ni siquiera se leen las prefs del coach para el alumno.

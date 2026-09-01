@@ -1,9 +1,12 @@
-import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
+import { describe, expect, it, vi, beforeEach } from 'vitest'
 
 /**
  * Decision D9 opcion A del owner (22-08, ratificada 26-08): la preferencia de modulos gobierna
- * SOLO el panel del coach. `audience: 'student'` desacopla la superficie del alumno — mismo
- * resultado que con `FEATURE_PREFS_ENABLED` OFF (fail-open, modulado solo por entitlements).
+ * SOLO el panel del coach. `audience: 'student'` desacopla la superficie del alumno — fail-open,
+ * modulado solo por entitlements.
+ *
+ * Prefs SIEMPRE-ON (Ola de orden W1.10, 2026-09-01): ya no hay flag Edge Config que mockear; el
+ * camino del coach siempre pasa por las prefs y el del alumno nunca.
  */
 
 // ── Mocks ────────────────────────────────────────────────────────────────────────
@@ -53,17 +56,10 @@ vi.mock('@/infrastructure/db/exchanges.repository', () => ({
     findPlanModuleContext: vi.fn(async () => null),
 }))
 
-const edgeConfigGet = vi.fn(async (key: string) => key === 'FEATURE_PREFS_ENABLED')
-vi.mock('@vercel/edge-config', () => ({ get: (...a: [string]) => edgeConfigGet(...a) }))
-
 import { resolveFeaturePrefs, resolveNutritionDomainEnabled } from './feature-prefs.service'
-
-const previousEdgeConfig = process.env.EDGE_CONFIG
 
 beforeEach(() => {
     vi.clearAllMocks()
-    process.env.EDGE_CONFIG = 'https://edge-config.test/ec'
-    edgeConfigGet.mockImplementation(async (key: string) => key === 'FEATURE_PREFS_ENABLED')
     hasModule.mockResolvedValue(false)
     hasExchangesModuleForClientContext.mockResolvedValue(false)
     // El coach apago Nutricion entera y quedo en preset basico (lo que siembra la persona).
@@ -71,11 +67,6 @@ beforeEach(() => {
     teamPrefsRow = { preset: 'basico', sections: { _enabled: false } }
     clientPrefsRow = null
     touchedTables = []
-})
-
-afterEach(() => {
-    if (previousEdgeConfig === undefined) delete process.env.EDGE_CONFIG
-    else process.env.EDGE_CONFIG = previousEdgeConfig
 })
 
 describe('resolveNutritionDomainEnabled — audiencia', () => {
@@ -152,5 +143,37 @@ describe('resolveFeaturePrefs — audiencia', () => {
         expect(prefs.plan).toBe(true)
         expect(prefs.micros_base).toBe(true)
         expect(touchedTables).toEqual([])
+    })
+})
+
+/**
+ * Regresion del retiro del flag (Ola de orden W1.10, 2026-09-01): sin `FEATURE_PREFS_ENABLED`,
+ * el `_enabled:false` guardado por el coach manda SIEMPRE en su panel, D9-A sigue protegiendo al
+ * alumno, y un coach SIN fila conserva el fail-open.
+ */
+describe('resolveNutritionDomainEnabled — prefs siempre-on (sin flag, W1.10)', () => {
+    it('fila del coach con `_enabled:false` => false para el coach y true para el alumno', async () => {
+        coachPrefsRow = { preset: 'basico', sections: { _enabled: false } }
+
+        await expect(resolveNutritionDomainEnabled({ coachId: 'coach-w110' })).resolves.toBe(false)
+        expect(touchedTables).toContain('coach_feature_prefs')
+
+        touchedTables = []
+        await expect(
+            resolveNutritionDomainEnabled({
+                coachId: 'coach-w110',
+                clientId: 'client-w110',
+                audience: 'student',
+            }),
+        ).resolves.toBe(true)
+        expect(touchedTables).toEqual([])
+    })
+
+    it('coach SIN fila de prefs => fail-open, el dominio queda prendido', async () => {
+        coachPrefsRow = null
+
+        await expect(resolveNutritionDomainEnabled({ coachId: 'coach-sin-fila' })).resolves.toBe(
+            true,
+        )
     })
 })

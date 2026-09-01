@@ -121,10 +121,11 @@ export default async function CoachLayout({
     // Fail-OPEN, igual que antes: error de lectura, dominio sin fila o fila sin la key ⇒ dominio
     // VISIBLE. Un coach sin preferencias ve exactamente el menú de hoy.
     //
-    // Nota deliberada: esta lectura NO pasa por el flag transicional `FEATURE_PREFS_ENABLED` que
-    // usa `resolveFeaturePrefs`. Ese flag existe para no quitarle superficies a quien todavía no
-    // tiene filas; acá la fila es una elección EXPLÍCITA del coach (la pantalla de persona o
-    // Opciones › Mi panel) y honrarla es justamente el producto.
+    // Nota: el flag transicional que antes separaba esta lectura de `resolveFeaturePrefs` ya no
+    // existe (retirado en la Ola de orden W1.10, 2026-09-01 — las prefs son siempre-on). Nav y
+    // rutas leen ahora la MISMA fuente: `coach_feature_prefs._enabled`, con fail-open sin fila.
+    // La fila es una elección EXPLÍCITA del coach (la pantalla de persona o Opciones › Mi panel)
+    // y honrarla es justamente el producto.
     const resolveDisabledDomains = async (): Promise<string[]> => {
         try {
             return disabledDomainsFromPrefs(await readCoachDomainPrefs(supabase, coach.id))

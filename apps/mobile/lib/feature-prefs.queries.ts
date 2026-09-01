@@ -103,7 +103,8 @@ export type SavePrefsResult = { ok: true } | { error: string }
  * UNA sola escritura (el panel commitea el borrador entero). RLS authoritative.
  *
  * Coherencia con `/api/mobile/config` + gate del alumno (E0-C3): el config endpoint solo expone
- * flags globales (kill-switch de operador + FEATURE_PREFS_ENABLED), computados frescos por request —
+ * flags globales (kill-switch de operador; el flag transicional de prefs se retiró en la Ola de
+ * orden W1.10, 2026-09-01 — son siempre-on), computados frescos por request —
  * NO cachea prefs, asi que no hay nada que invalidar ahi. Las PREFERENCIAS viven en estas tablas y
  * las leen directo por PostgREST el gate de nav del alumno y las secciones de nutricion; al re-montar
  * / volver a foreground esos consumidores releen la MISMA fila que este write persiste y ven el cambio.

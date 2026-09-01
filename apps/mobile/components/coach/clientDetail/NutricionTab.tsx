@@ -106,8 +106,8 @@ function NutricionTabV1({
     [activeNutrition, compliance, nutritionMonthlyAvgPct, nutritionTimeline, todayIso]
   )
 
-  const nutritionDomainEnabled = !zoneC?.prefsEnabled
-    || (zoneC.override[DOMAIN_ENABLED_KEY] ?? zoneC.domainEnabledBase)
+  // Prefs siempre-on (Ola de orden W1.10, 2026-09-01): sin zona C cargada asumimos prendido.
+  const nutritionDomainEnabled = zoneC ? (zoneC.override[DOMAIN_ENABLED_KEY] ?? zoneC.domainEnabledBase) : true
 
   if (!zoneLoading && zoneC && !nutritionDomainEnabled) {
     return (
@@ -397,7 +397,7 @@ function CoachNutritionZoneC({ zc, loading, clientId, todayIso, reload }: {
   if (loading) return <View style={{ paddingVertical: 16 }}><EvaLoader size="sm" subtitle="Cargando zona coach…" /></View>
   if (!zc) return null
 
-  const showSection = (k: NutritionSectionKey): boolean => (zc.prefsEnabled ? zc.effective[k] === true : true)
+  const showSection = (k: NutritionSectionKey): boolean => zc.effective[k] === true
   const showMicros = showSection('micros_base') || showSection('micros_advanced')
 
   return (

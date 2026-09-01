@@ -32,10 +32,12 @@ import { findPlanModuleContext } from '@/infrastructure/db/exchanges.repository'
  * La PREFERENCIA SOLO ACHICA (invariante de oro): si una seccion no esta entitled, ningun
  * toggle la prende. El resolver puro `@eva/feature-prefs#resolveSections` lo garantiza.
  *
- * Flag `FEATURE_PREFS_ENABLED` (Edge Config, fail-OPEN): ausente/false/Edge caido =>
- * comportamiento de HOY = mostrar TODO lo entitled (las preferencias se ignoran por completo).
- * Esto es el grandfathering transicional (plan §5.2): nadie pierde una superficie por el solo
- * hecho de no tener fila de prefs todavia.
+ * SIEMPRE-ON desde 2026-09-01 (Ola de orden W1.10): el flag transicional `FEATURE_PREFS_ENABLED`
+ * (Edge Config) se retiro — estaba vivo en `true` en produccion, asi que el retiro no cambia
+ * comportamiento. Las preferencias participan siempre en el camino del coach.
+ *
+ * FAIL-OPEN SIN FILA (sin cambios): un coach que nunca guardo preferencias no pierde ninguna
+ * superficie — el resolver puro trata la fila ausente como "todo lo entitled visible".
  *
  * AUDIENCIA (D9-A, owner 22-08 ratificada 26-08): la preferencia gobierna SOLO el panel del
  * COACH. Todo caller de la superficie del ALUMNO (arbol `/c`, endpoints `/api/mobile/*` de
@@ -49,10 +51,9 @@ type DB = ReturnType<typeof createServiceRoleClient>
  * preferencia de modulos (`coach_feature_prefs` / `team_feature_prefs` / `client_feature_prefs`)
  * es SOLO del panel del COACH — reordenar su panel no debe apagarle superficies a SUS ALUMNOS.
  *
- * - `'coach'` (default): comportamiento historico, la preferencia participa segun el flag.
- * - `'student'`: la preferencia NO participa. El resultado es exactamente el de
- *   `FEATURE_PREFS_ENABLED` OFF (fail-open: todo lo entitled visible, dominio prendido), o sea
- *   el alumno ve sus modulos segun el plan/entitlements reales y nada mas.
+ * - `'coach'` (default): la preferencia participa siempre (prefs siempre-on desde W1.10).
+ * - `'student'`: la preferencia NO participa. Fail-open: todo lo entitled visible, dominio
+ *   prendido — el alumno ve sus modulos segun el plan/entitlements reales y nada mas.
  */
 export type FeaturePrefsAudience = 'coach' | 'student'
 
@@ -80,28 +81,15 @@ export interface ResolveFeaturePrefsInput {
     audience?: FeaturePrefsAudience
 }
 
-/** Lee el flag `FEATURE_PREFS_ENABLED` de Edge Config. Fail-CLOSED a `false` (=> bypass prefs). */
-async function getFeaturePrefsEnabled(): Promise<boolean> {
-    if (!process.env.EDGE_CONFIG) return false
-    try {
-        const { get } = await import('@vercel/edge-config')
-        return (await get<boolean>('FEATURE_PREFS_ENABLED')) === true
-    } catch {
-        // fail-OPEN del FEATURE: el caller interpreta `false` como "mostrar todo lo entitled".
-        return false
-    }
-}
-
 /**
  * ¿Participa la capa de PREFERENCIA en esta resolucion?
  *
- * Alumno (D9-A) => NUNCA: ni siquiera se lee el flag, porque la respuesta ya es "no". Coach =>
- * manda `FEATURE_PREFS_ENABLED`. `false` significa siempre lo mismo para el caller: bypass total
- * de prefs = mostrar todo lo entitled.
+ * Alumno (D9-A) => NUNCA: bypass total de prefs = mostrar todo lo entitled. Coach => SIEMPRE
+ * (prefs siempre-on desde 2026-09-01, Ola de orden W1.10: ya no hay flag que consultar, por eso
+ * esta funcion quedo sincrona y sin I/O).
  */
-async function prefsApplyFor(audience: FeaturePrefsAudience | undefined): Promise<boolean> {
-    if (audience === 'student') return false
-    return getFeaturePrefsEnabled()
+function prefsApplyFor(audience: FeaturePrefsAudience | undefined): boolean {
+    return audience !== 'student'
 }
 
 /** Lee la fila de prefs del coach para el dominio. */
@@ -226,19 +214,17 @@ export const resolveFeaturePrefs = cache(
 
         const useTeamBase = !!input.clientTeamId && !input.clientOrgId
 
-        const [enabled, entitledByModule] = await Promise.all([
-            prefsApplyFor(input.audience),
-            entitledByModuleForNutrition(serviceDb, {
-                coachId: input.coachId,
-                planId: input.planId,
-                clientTeamId: input.clientTeamId,
-                clientOrgId: input.clientOrgId,
-            }),
-        ])
+        const enabled = prefsApplyFor(input.audience)
+        const entitledByModule = await entitledByModuleForNutrition(serviceDb, {
+            coachId: input.coachId,
+            planId: input.planId,
+            clientTeamId: input.clientTeamId,
+            clientOrgId: input.clientOrgId,
+        })
 
-        // FLAG OFF / ausente / Edge caido / AUDIENCIA ALUMNO (D9-A) => fail-OPEN: mostrar TODO lo
-        // entitled (bypass prefs). Es el comportamiento de HOY: las secciones core van ON, y las
-        // gateadas dependen solo del entitlement; nada se oculta por preferencia.
+        // AUDIENCIA ALUMNO (D9-A) => fail-OPEN: mostrar TODO lo entitled (bypass prefs). Las
+        // secciones core van ON y las gateadas dependen solo del entitlement; nada se oculta por
+        // preferencia del coach.
         if (!enabled) {
             const result = {} as Record<NutritionSectionKey, boolean>
             for (const section of FEATURE_DOMAINS[domain]) {
@@ -254,7 +240,7 @@ export const resolveFeaturePrefs = cache(
             return result
         }
 
-        // FLAG ON => modelo completo: entitled AND wants (preferencia solo achica).
+        // AUDIENCIA COACH => modelo completo: entitled AND wants (la preferencia solo achica).
         const [coachOrTeam, clientSections] = await Promise.all([
             useTeamBase
                 ? readTeamPrefs(serviceDb, input.clientTeamId!, domain)
@@ -300,10 +286,10 @@ export const getNutritionProEnabledForClient = cache(
  * plan §4.8). Distinto de las secciones: si devuelve `false`, el coach apago el dominio entero
  * → el menu de Nutricion y todo su contenido se ocultan.
  *
- * Mismo contrato que el resto del servicio: React.cache (dedup por request) + flag
- * `FEATURE_PREFS_ENABLED` fail-OPEN. Flag OFF / ausente / Edge caido => `true` (el dominio NO
- * se oculta por preferencia — comportamiento de HOY), igual que `resolveFeaturePrefs` ignora
- * las prefs con el flag apagado. No mira entitlement: el master switch es pura preferencia.
+ * Mismo contrato que el resto del servicio: React.cache (dedup por request) + prefs siempre-on
+ * (Ola de orden W1.10, 2026-09-01 — ya no hay flag transicional). Fail-OPEN sin fila: coach sin
+ * preferencias guardadas => `true`, el dominio NO se oculta. No mira entitlement: el master
+ * switch es pura preferencia.
  *
  * `audience: 'student'` (D9-A) => `true` siempre: la preferencia del panel del coach no apaga la
  * nutricion de sus alumnos. El gate real de la superficie del alumno es su plan/entitlement.
@@ -317,9 +303,8 @@ export const resolveNutritionDomainEnabled = cache(
         audience?: FeaturePrefsAudience
     }, userDbOverride?: DB): Promise<boolean> => {
         const domain: FeatureDomain = 'nutrition'
-        const enabled = await prefsApplyFor(input.audience)
-        // FLAG OFF / ausente / Edge caido / AUDIENCIA ALUMNO => fail-OPEN: dominio prendido.
-        if (!enabled) return true
+        // AUDIENCIA ALUMNO (D9-A) => fail-OPEN: dominio prendido, sin leer prefs.
+        if (!prefsApplyFor(input.audience)) return true
 
         const userDb = userDbOverride ?? (await createClient())
         const serviceDb = createServiceRoleClient()
@@ -377,8 +362,6 @@ export interface ClientFeaturePrefsOverrideContext {
     domainEnabledOverride: boolean | undefined
     /** `true` si la base es el team (pool); informa el copy "default del equipo" vs "tuyo". */
     useTeamBase: boolean
-    /** `true` si el flag `FEATURE_PREFS_ENABLED` esta ON (si no, las prefs se ignoran). */
-    prefsEnabled: boolean
 }
 
 export const resolveClientFeaturePrefsOverrideContext = cache(
@@ -395,8 +378,7 @@ export const resolveClientFeaturePrefsOverrideContext = cache(
         const serviceDb = createServiceRoleClient()
         const useTeamBase = !!input.clientTeamId && !input.clientOrgId
 
-        const [prefsEnabled, entitledByModule, base, override] = await Promise.all([
-            getFeaturePrefsEnabled(),
+        const [entitledByModule, base, override] = await Promise.all([
             entitledByModuleForNutrition(serviceDb, {
                 coachId: input.coachId,
                 planId: input.planId,
@@ -410,31 +392,17 @@ export const resolveClientFeaturePrefsOverrideContext = cache(
         ])
 
         // `baseEffective` = resolver SIN la capa del alumno (clientSections null). Esto es lo
-        // que el alumno "hereda" de la base coach/team. Si el flag esta OFF, fail-OPEN:
-        // mostrar todo lo entitled (espejo del bypass de `resolveFeaturePrefs`).
-        let baseEffective: Record<NutritionSectionKey, boolean>
-        if (!prefsEnabled) {
-            baseEffective = {} as Record<NutritionSectionKey, boolean>
-            for (const section of FEATURE_DOMAINS[domain]) {
-                if (section.core) {
-                    baseEffective[section.key] = true
-                    continue
-                }
-                baseEffective[section.key] = section.requiresModule
-                    ? entitledByModule[section.requiresModule] === true
-                    : true
-            }
-        } else {
-            baseEffective = resolveSections({
-                domain,
-                entitledByModule,
-                preset: base.preset as Preset | string | null,
-                useTeamBase,
-                coachSections: useTeamBase ? null : base.sections,
-                teamSections: useTeamBase ? base.sections : null,
-                clientSections: null,
-            }) as Record<NutritionSectionKey, boolean>
-        }
+        // que el alumno "hereda" de la base coach/team. Prefs siempre-on (W1.10, 2026-09-01): ya
+        // no hay rama de bypass por flag; el fail-open sin fila lo cubre el resolver puro.
+        const baseEffective = resolveSections({
+            domain,
+            entitledByModule,
+            preset: base.preset as Preset | string | null,
+            useTeamBase,
+            coachSections: useTeamBase ? null : base.sections,
+            teamSections: useTeamBase ? base.sections : null,
+            clientSections: null,
+        }) as Record<NutritionSectionKey, boolean>
 
         const domainEnabledBase = resolveDomainEnabled({
             domain,
@@ -455,7 +423,6 @@ export const resolveClientFeaturePrefsOverrideContext = cache(
             domainEnabledBase,
             domainEnabledOverride: overrideObj[DOMAIN_ENABLED_KEY],
             useTeamBase,
-            prefsEnabled,
         }
     },
 )
