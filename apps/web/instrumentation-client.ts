@@ -65,6 +65,13 @@ Sentry.init({
         // Texto de Safari para un fetch abortado: el prefetch de un <Link> muere al navegar o al
         // mandar la pestaña a segundo plano. 91 eventos, 0 usuarios impactados.
         'Load failed',
+        // EVA-NEXTJS-1M — extensión de navegador inyectada (familia Grammarly/Office): llega como
+        // rejection sin stacktrace, en /privacidad, una página sin interactividad propia. Cero
+        // usuarios impactados y cero código nuestro.
+        // La regex describe la ESTRUCTURA COMPLETA del mensaje (los tres campos con sus tipos), no
+        // un fragmento: `ignoreErrors` matchea por SUBSTRING, así que un patrón corto como
+        // «Object Not Found» se tragaría errores propios que casualmente lo contengan.
+        /Object Not Found Matching Id:\d+, MethodName:\w+, ParamCount:\d+/,
     ],
     // Cinturón para cualquier OTRA cosa que tire el logger inyectado de Meta: a diferencia de
     // `ignoreErrors`, `denyUrls` sí matchea el filename del stack. Ningún archivo nuestro se llama
