@@ -21,6 +21,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import { useTheme } from '../../../../context/ThemeContext'
 import { resolveOrFallback } from '../../../../lib/measure-guard'
+import { resolveDespegueReady } from '../../../../lib/despegue-ready'
 import { FONT } from '../../../../lib/typography'
 import { resolveExecTheme, type ExecTheme } from './exec-theme'
 import { CircularBrandLogo } from '../../../CircularBrandLogo'
@@ -649,11 +650,21 @@ function DespegueOverlay({
   const readyProg = useSharedValue(0)
   const pulse = useSharedValue(1)
 
-  // Estado tap-driven.
+  // Estado tap-driven. `ready` habilita el tap por DOS caminos que NO son lo mismo (criterio puro en
+  // `lib/despegue-ready`, espejo del web): `signalsReady` = listo de verdad ⇒ «LISTO»; `degraded` =
+  // ganó el fallback y la escena aún no avisó ⇒ se puede entrar, pero NO se anuncia «LISTO» (detrás no
+  // hay nada montado). El fallback puede dejar pasar, no puede mentir.
   const [animDone, setAnimDone] = useState(false)
   const [sceneReady, setSceneReady] = useState(false)
   const [forceReady, setForceReady] = useState(false)
-  const ready = animDone && (sceneReady || forceReady)
+  const { ready, signalsReady, degraded } = resolveDespegueReady({ animDone, sceneReady, forceReady })
+  // El copy EN FLUJO se queda PEGADO en el aviso una vez que el degradado lo mostró: si la escena
+  // avisa tarde, el bloque cruza a «LISTO» con «ESTO ESTÁ TARDANDO» desvaneciéndose. Volver a
+  // «PREPARANDO TU SESIÓN» durante los 350ms del crossfade sería un parpadeo de un texto ya vencido.
+  // (El HINT sí vuelve al copy normal en vivo: es la CTA y ahora sí está listo de verdad.)
+  const showedDegradedRef = useRef(false)
+  if (degraded) showedDegradedRef.current = true
+  const prepDegradedCopy = showedDegradedRef.current
 
   const navRef = useRef(onNavigate)
   const doneRef = useRef(onDone)
@@ -777,7 +788,11 @@ function DespegueOverlay({
   // corren siempre; el pulso sólo con movimiento permitido (reduced-motion = sin pulso, sólo fades).
   useEffect(() => {
     hint.value = withTiming(ready ? 1 : 0, { duration: HINT_FADE_MS, easing: EASE })
-    readyProg.value = withTiming(ready ? 1 : 0, { duration: HINT_FADE_MS, easing: EASE })
+    // El crossfade a «LISTO» + el apagado de los dots los manda SÓLO el camino feliz: en degradado
+    // `readyProg` se queda en 0, así el bloque sigue mostrando el label en flujo (con el copy de aviso)
+    // y los dots SIGUEN latiendo — «sigue cargando, pero podés pasar». Si la escena avisa después,
+    // `signalsReady` pasa a true y el crossfade corre normal.
+    readyProg.value = withTiming(signalsReady ? 1 : 0, { duration: HINT_FADE_MS, easing: EASE })
     if (ready && !reducedMotion) {
       pulse.value = withRepeat(
         withSequence(
@@ -790,7 +805,7 @@ function DespegueOverlay({
       pulse.value = withTiming(1, { duration: HINT_FADE_MS, easing: EASE })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready])
+  }, [ready, signalsReady])
 
   // Telemetría: el fallback habilitó el tap SIN que el ejecutor avisara "escena lista" (sceneReady=false).
   // Señal de que la escena tardó más que READY_FALLBACK_MS (device lento / carga colgada) — no atrapa al
@@ -987,8 +1002,13 @@ function DespegueOverlay({
                 la fila) y "LISTO" se superpone CENTRADO SOBRE LA FILA COMPLETA (texto + gap + dots),
                 espejo del `.exec-dsp-prep-ready { left:50%; translateX(-50%) }` del web — antes se
                 anclaba al borde izquierdo del texto largo y caía a la izquierda del centro óptico. */}
-            <Animated.Text style={[styles.prepText, { color: prepColor }, prepLabelStyle]}>
-              PREPARANDO TU SESIÓN
+            {/* En DEGRADADO el label en flujo NO cruza a «LISTO»: cambia su texto al aviso y toma el
+                casi-blanco del listo (`readyColor`) para que se lea como el estado actual, mientras los
+                dots siguen latiendo detrás. */}
+            <Animated.Text
+              style={[styles.prepText, { color: prepDegradedCopy ? readyColor : prepColor }, prepLabelStyle]}
+            >
+              {prepDegradedCopy ? 'ESTO ESTÁ TARDANDO' : 'PREPARANDO TU SESIÓN'}
             </Animated.Text>
             <Animated.View style={[styles.dots, dotsWrapStyle]}>
               <Animated.View style={[styles.dot, { backgroundColor: dotColor }, dot0Style]} />
@@ -1004,12 +1024,17 @@ function DespegueOverlay({
           </Animated.View>
         </View>
 
-        {/* Hint "TOCA PARA COMENZAR" — respeta el safe-area inferior (no pisa el gesto de home del iPhone). */}
+        {/* Hint "TOCA PARA COMENZAR" — respeta el safe-area inferior (no pisa el gesto de home del
+            iPhone). En degradado entra IGUAL (misma animación + pulso) pero ofrece entrar sabiendo que
+            todavía carga; el copy es más largo, así que baja 1px y algo de tracking para no desbordar
+            en 320px (espejo del `.exec-dsp.is-degraded .exec-dsp-hint` del web). */}
         <Animated.View
           style={[styles.hintWrap, { bottom: insets.bottom + 24 }, hintStyle]}
           pointerEvents="none"
         >
-          <Text style={styles.hintText}>TOCA PARA COMENZAR</Text>
+          <Text style={[styles.hintText, degraded && styles.hintTextDegraded]}>
+            {degraded ? 'TOCAR PARA ENTRAR IGUAL' : 'TOCA PARA COMENZAR'}
+          </Text>
         </Animated.View>
 
         {/* Capa de tap SIEMPRE presente (top del stack): CAPTURA todos los toques durante la ceremonia
@@ -1020,7 +1045,9 @@ function DespegueOverlay({
           style={StyleSheet.absoluteFill}
           onPress={dismiss}
           accessibilityRole={ready ? 'button' : undefined}
-          accessibilityLabel={ready ? 'Comenzar entrenamiento' : undefined}
+          accessibilityLabel={
+            ready ? (degraded ? 'Entrar al entrenamiento aunque siga cargando' : 'Comenzar entrenamiento') : undefined
+          }
           accessibilityElementsHidden={!ready}
           importantForAccessibility={ready ? 'yes' : 'no-hide-descendants'}
         />
@@ -1117,4 +1144,7 @@ const styles = StyleSheet.create({
     letterSpacing: 2.2,
     color: 'rgba(255,255,255,0.92)',
   },
+  // Variante degradada: «TOCAR PARA ENTRAR IGUAL» son 23 caracteres (vs 18) y el hint no tiene padding
+  // lateral — 1px de tamaño y 0,3 de tracking menos lo dejan en ~205px, cómodo en una pantalla de 320.
+  hintTextDegraded: { fontSize: 12, letterSpacing: 1.9 },
 })

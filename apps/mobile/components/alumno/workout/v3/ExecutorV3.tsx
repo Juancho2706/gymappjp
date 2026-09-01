@@ -14,7 +14,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated'
-import { Dumbbell, Flag, Sparkles } from 'lucide-react-native'
+import { AlertTriangle, Dumbbell, Flag, Sparkles, WifiOff } from 'lucide-react-native'
 import {
   buildSkipMetadata,
   buildStepModel,
@@ -345,13 +345,15 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
   }, [])
 
   const {
-    loading, planTitle, programName, phaseName, activeWeekVariant, currentWeek, weeksToRepeat, programStructure,
+    loading, loadError, planTitle, programName, phaseName, activeWeekVariant, currentWeek, weeksToRepeat, programStructure,
     dayOfWeek, clientId, blocks, sections, supersetMembersByBlock, sessionLogs, previousHistory, lastSessionByBlock,
-    exerciseMaxes, repeatSeed, elapsedSec, isOnline, restoredDraft, saveDraft, logSet, finishSession,
+    exerciseMaxes, repeatSeed, elapsedSec, isOnline, restoredDraft, saveDraft, logSet, finishSession, retry,
   } = session
 
   // Via-morph (Despegue): avisa al overlay de lanzamiento que la escena de Inicio ya cargó → habilita el
   // tap "TOCA PARA COMENZAR". Se emite en cuanto `loading` cae a false (o de inmediato si ya venía listo).
+  // Vale IGUAL cuando lo que quedó atrás es la pantalla de error de carga: `loading` también cae a false
+  // ahí, así que el Despegue se destraba en el acto en vez de agotar su fallback de ~4,6 s.
   useEffect(() => {
     if (viaMorphRef.current && !loading) signalMorphSceneReady()
   }, [loading])
@@ -1783,6 +1785,48 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
     }, 350)
     return () => clearTimeout(t)
   }, [completionLogs, stepIndex, steps])
+
+  // Error de CARGA (Sentry EVA-MOBILE-9) — tercer estado, ANTES del vacío y con la misma anatomía.
+  // El `finally` del hook a secas no alcanzaba: apagaba el spinner eterno pero dejaba al alumno sin señal
+  // leyendo «Rutina sin ejercicios · tu coach probablemente esté actualizando tu plan», que es un
+  // diagnóstico FALSO (su plan está intacto; lo que falló fue el fetch). Sólo aparece si no hubo nada que
+  // pintar: con caché el hook ni siquiera enciende `loadError` y el alumno entrena con sus datos.
+  if (!loading && loadError && blocks.length === 0) {
+    const offline = loadError === 'offline'
+    const ErrorIcon = offline ? WifiOff : AlertTriangle
+    return (
+      <SafeAreaView edges={['top']} className="flex-1 items-center justify-center p-6" style={{ backgroundColor: exec.surface.appBg }}>
+        <View className="mb-4 h-16 w-16 items-center justify-center rounded-full" style={{ backgroundColor: exec.surface.surface }}>
+          <ErrorIcon size={32} color={ON_DARK_MUTED} strokeWidth={2} />
+        </View>
+        <Text className="mb-2 font-display-bold text-xl" style={{ color: exec.surface.text }}>No pudimos cargar tu rutina</Text>
+        <Text className="mb-6 text-center text-sm" style={{ color: exec.surface.textMuted }}>
+          {offline
+            ? 'Parece que no hay conexión. Lo que ya registraste está guardado en tu teléfono.'
+            : 'Algo falló al cargar tu rutina. Probá de nuevo en un momento.'}
+        </Text>
+        <Pressable
+          testID="btn-load-error-retry-v3"
+          onPress={() => { void retry() }}
+          className="rounded-control px-6 py-2.5"
+          style={{ backgroundColor: exec.accent }}
+          accessibilityRole="button"
+          accessibilityLabel="Reintentar la carga de la rutina"
+        >
+          <Text className="font-sans-bold" style={{ color: exec.accentText }}>Reintentar</Text>
+        </Pressable>
+        <Pressable
+          testID="btn-load-error-back-v3"
+          onPress={() => router.replace('/alumno/home')}
+          className="mt-2 rounded-control px-6 py-2.5"
+          accessibilityRole="button"
+          accessibilityLabel="Volver al inicio"
+        >
+          <Text className="font-sans-bold" style={{ color: exec.surface.textMuted }}>Volver al inicio</Text>
+        </Pressable>
+      </SafeAreaView>
+    )
+  }
 
   // Estado vacio (paridad ExecutorV2): plan resuelto pero sin ejercicios.
   if (!loading && blocks.length === 0) {

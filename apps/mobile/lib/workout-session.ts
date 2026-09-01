@@ -38,6 +38,7 @@ import type { StudentAccessState } from './entitlements-core'
 import { isCoachAccountPausedError, STUDENT_ACCESS_COPY } from './student-access-copy'
 import { cachePlan, enqueueLog, getCachedPlan, getPendingLogCount } from './offline-cache'
 import { checkOnline } from './use-online'
+import { classifyPlanLoad } from './workout-load-state'
 import {
   getTodayInSantiago,
   getSantiagoUtcBoundsForDay,
@@ -45,6 +46,11 @@ import {
 } from './date-utils'
 import { programWeekIndex1Based, resolveActiveWeekVariantForDisplay } from './program-week-variant'
 import type { LastSessionForBlock } from './workout/progression'
+
+// Re-export del clasificador puro: vive en su propio módulo (sin react-native ni supabase) para que
+// los tests lo importen sin bootear el hook, pero se consume desde acá como parte del contrato.
+export { classifyPlanLoad, isNetworkFailureMessage } from './workout-load-state'
+export type { PlanLoadOutcome } from './workout-load-state'
 
 /** Cap duro de duración de sesión (E2-03): 4 horas — el cronómetro se congela ahí. */
 export const MAX_SESSION_SEC = 4 * 60 * 60
@@ -219,6 +225,13 @@ function clampIntInRange(v: number | null | undefined, min: number, max: number)
 
 export interface WorkoutSessionState {
   loading: boolean
+  /**
+   * Tercer estado de la pantalla (Sentry EVA-MOBILE-9): la carga del plan FALLÓ y no había nada que
+   * pintar. `null` en el camino feliz Y cuando la caché alcanzó a pintar la rutina (un refresco caído
+   * no expulsa a nadie del entreno). `offline` = no llegamos a la red; `error` = el server contestó
+   * que no (RLS/4xx/5xx). Distinguirlo del vacío real es lo que evita culpar al coach de un corte de red.
+   */
+  loadError: 'offline' | 'error' | null
   planTitle: string
   programName: string | null
   /** Nombre de la fase activa del programa (periodización), o null si no aplica. */
@@ -252,6 +265,8 @@ export interface WorkoutSessionState {
   /** Draft restaurado del set en curso (para rehidratar el keypad al reabrir). */
   restoredDraft: SessionDraft | null
   refresh: () => Promise<void>
+  /** Reintento explícito tras `loadError`: limpia el error y vuelve a cargar mostrando el loader. */
+  retry: () => Promise<void>
   /** Persiste el draft del set en curso (llamado por el keypad host en cada cambio). */
   saveDraft: (draft: SessionDraft | null) => void
   /**
@@ -298,6 +313,11 @@ export function useWorkoutSession(
   editDate?: string | null,
 ): WorkoutSessionState {
   const [loading, setLoading] = useState(true)
+  /**
+   * Fallo de la carga INICIAL del plan (Sentry EVA-MOBILE-9). Sólo se enciende cuando no hubo nada
+   * que pintar: con caché el alumno ya tiene su rutina y un refresco caído se ignora, como siempre.
+   */
+  const [loadError, setLoadError] = useState<'offline' | 'error' | null>(null)
   const [planTitle, setPlanTitle] = useState('')
   const [programName, setProgramName] = useState<string | null>(null)
   const [phaseName, setPhaseName] = useState<string | null>(null)
@@ -565,147 +585,175 @@ export function useWorkoutSession(
   const load = useCallback(async (opts?: { silent?: boolean }) => {
     // `silent`: refetch de frescura (foco/foreground) que NO debe parpadear al loader — la pantalla ya
     // está montada con datos. El load inicial y el pull-to-refresh sí muestran el loader (silent=false).
-    if (!opts?.silent) setLoading(true)
+    const silent = opts?.silent === true
+    if (!silent) setLoading(true)
 
-    // El perfil y el plan viajan JUNTOS (Sentry EVA-MOBILE-9). `getClientProfile()` hace I/O real
-    // (`client.ts:21`: `auth.getUser()` + un select a `clients`) y el select del plan de más abajo
-    // solo necesita `planId`, que ya tenemos: no dependían entre sí y estaban en serie, pagando dos
-    // viajes donde alcanza uno. Esta pantalla pelea contra el fallback de ~4,6 s del despegue
-    // (`session-morph.tsx:72`), así que un viaje entero es una tajada grande del presupuesto.
-    //
-    // El `await` de cada una queda EXACTAMENTE donde estaba, así que el orden de los `setState`, del
-    // snapshot local y del render desde caché no cambia en nada: lo único que cambia es cuándo
-    // arrancan los requests.
-    const clientPromise = getClientProfile()
-    // `Promise.resolve(...)` ENVUELVE el builder UNA sola vez, y esa llamada es la que dispara el
-    // request. NO guardar el builder pelado para awaitearlo después: `PostgrestBuilder.then()` ejecuta
-    // un fetch NUEVO en cada llamada (no memoiza), así que un `.catch()` acá más un `await` abajo
-    // sobre el builder serían DOS queries idénticas — y la segunda arrancaría recién después del
-    // perfil, o sea el viaje que esta paralelización quiere ahorrar, pagado igual y con una query de
-    // regalo. Con el wrapper, el `.catch()` y el `await` leen la MISMA promesa.
-    const planPromise = Promise.resolve(
-      supabase
-        .from('workout_plans')
-        .select(
-          `id, title, week_variant, program_id, day_of_week,
-           workout_blocks ( *, exercises ( id, name, muscle_group, video_url, video_start_time, video_end_time, gif_url, thumbnail_url, instructions, exercise_type, cardio_modality ) )`,
-        )
-        .eq('id', planId)
-        .maybeSingle(),
-    )
-    // Marca la promesa como manejada: si `getClientProfile()` lanza, el `await` de abajo no llega a
-    // correr y quedaría un unhandled rejection. El `await` real sigue leyendo el resultado igual.
-    planPromise.catch(() => { /* lo maneja el await de abajo */ })
-
-    const client = await clientPromise
-    if (client) {
-      setClientId(client.id)
-      clientIdRef.current = client.id
+    // ¿Alcanzamos a pintar la rutina desde la caché? Si sí, un fallo posterior NO es pantalla de error:
+    // el alumno ya tiene sus datos y sigue entrenando (mismo criterio que el refetch silencioso).
+    let paintedFromCache = false
+    // Sentry EVA-MOBILE-9. La forma del error es una PISTA; la verdad de "hay red o no" la da NetInfo,
+    // igual que en el guardado de series (`logSet`): un RLS/4xx con conexión plena NO es "sin conexión".
+    const failLoad = async (outcome: 'offline' | 'error') => {
+      if (silent || paintedFromCache) return
+      const online = await checkOnline()
+      isOnlineRef.current = online
+      setIsOnline(online)
+      setLoadError(!online || outcome === 'offline' ? 'offline' : 'error')
     }
-
-    // Día que esta sesión escribe: hoy, o la fecha objetivo en el editor de día pasado (`?fecha`).
-    // Es la ventana ÚNICA de logs del día / historial / máximos / última sesión y del upsert de `logSet`.
-    const windowDay = editIso ?? getTodayInSantiago().iso
-
-    // Snapshot local del día (resiliencia): startedAt + logs guardados sin confirmar.
-    let snapshot: SessionSnapshot | null = null
     try {
-      const raw = await AsyncStorage.getItem(snapshotKey)
-      if (raw) {
-        const parsed = JSON.parse(raw) as SessionSnapshot
-        if (parsed.day === windowDay) snapshot = parsed
-      }
-    } catch { /* corrupto → ignorar */ }
-    if (snapshot) {
-      startedAtRef.current = snapshot.startedAt
-      if (snapshot.draft) {
-        draftRef.current = snapshot.draft
-        setRestoredDraft(snapshot.draft)
-      }
-    }
+      // El perfil y el plan viajan JUNTOS (Sentry EVA-MOBILE-9). `getClientProfile()` hace I/O real
+      // (`client.ts:21`: `auth.getUser()` + un select a `clients`) y el select del plan de más abajo
+      // solo necesita `planId`, que ya tenemos: no dependían entre sí y estaban en serie, pagando dos
+      // viajes donde alcanza uno. Esta pantalla pelea contra el fallback de ~4,6 s del despegue
+      // (`session-morph.tsx:72`), así que un viaje entero es una tajada grande del presupuesto.
+      //
+      // El `await` de cada una queda EXACTAMENTE donde estaba, así que el orden de los `setState`, del
+      // snapshot local y del render desde caché no cambia en nada: lo único que cambia es cuándo
+      // arrancan los requests.
+      const clientPromise = getClientProfile()
+      // `Promise.resolve(...)` ENVUELVE el builder UNA sola vez, y esa llamada es la que dispara el
+      // request. NO guardar el builder pelado para awaitearlo después: `PostgrestBuilder.then()` ejecuta
+      // un fetch NUEVO en cada llamada (no memoiza), así que un `.catch()` acá más un `await` abajo
+      // sobre el builder serían DOS queries idénticas — y la segunda arrancaría recién después del
+      // perfil, o sea el viaje que esta paralelización quiere ahorrar, pagado igual y con una query de
+      // regalo. Con el wrapper, el `.catch()` y el `await` leen la MISMA promesa.
+      const planPromise = Promise.resolve(
+        supabase
+          .from('workout_plans')
+          .select(
+            `id, title, week_variant, program_id, day_of_week,
+             workout_blocks ( *, exercises ( id, name, muscle_group, video_url, video_start_time, video_end_time, gif_url, thumbnail_url, instructions, exercise_type, cardio_modality ) )`,
+          )
+          .eq('id', planId)
+          .maybeSingle(),
+      )
+      // Marca la promesa como manejada: si `getClientProfile()` lanza, el `await` de abajo no llega a
+      // correr y quedaría un unhandled rejection. El `await` real sigue leyendo el resultado igual.
+      planPromise.catch(() => { /* lo maneja el await de abajo */ })
 
-    // Cache offline del plan (render inmediato) → server (fuente de verdad).
-    const cached = await getCachedPlan<{ title: string; blocks: SessionBlock[]; activeWeekVariant?: string | null }>(planId)
-    if (cached) {
-      setPlanTitle(cached.title)
-      setBlocks(cached.blocks)
-      setActiveWeekVariant(cached.activeWeekVariant ?? null)
-      void loadAreas(cached.blocks)
+      const client = await clientPromise
+      if (client) {
+        setClientId(client.id)
+        clientIdRef.current = client.id
+      }
+
+      // Día que esta sesión escribe: hoy, o la fecha objetivo en el editor de día pasado (`?fecha`).
+      // Es la ventana ÚNICA de logs del día / historial / máximos / última sesión y del upsert de `logSet`.
+      const windowDay = editIso ?? getTodayInSantiago().iso
+
+      // Snapshot local del día (resiliencia): startedAt + logs guardados sin confirmar.
+      let snapshot: SessionSnapshot | null = null
+      try {
+        const raw = await AsyncStorage.getItem(snapshotKey)
+        if (raw) {
+          const parsed = JSON.parse(raw) as SessionSnapshot
+          if (parsed.day === windowDay) snapshot = parsed
+        }
+      } catch { /* corrupto → ignorar */ }
+      if (snapshot) {
+        startedAtRef.current = snapshot.startedAt
+        if (snapshot.draft) {
+          draftRef.current = snapshot.draft
+          setRestoredDraft(snapshot.draft)
+        }
+      }
+
+      // Cache offline del plan (render inmediato) → server (fuente de verdad).
+      const cached = await getCachedPlan<{ title: string; blocks: SessionBlock[]; activeWeekVariant?: string | null }>(planId)
+      if (cached) {
+        setPlanTitle(cached.title)
+        setBlocks(cached.blocks)
+        setActiveWeekVariant(cached.activeWeekVariant ?? null)
+        void loadAreas(cached.blocks)
+        paintedFromCache = true
+        setLoading(false)
+      }
+
+      // Ya viajó en paralelo con el perfil (ver arriba): acá normalmente ya resolvió.
+      const { data, error: planError, status } = await planPromise
+
+      // `data === null` NO significa "plan vacío" (Sentry EVA-MOBILE-9): supabase-js RESUELVE (no lanza)
+      // un corte de red como `{ data: null, error, status: 0 }` y un RLS/4xx como `{ data: null, error }`.
+      // El viejo `if (!data)` mandaba a los tres al mismo estado vacío, así que el alumno sin señal leía
+      // «Rutina sin ejercicios · tu coach probablemente esté actualizando tu plan» — que es mentira.
+      const outcome = classifyPlanLoad({ error: planError, status, data })
+      if (outcome !== 'ok') {
+        // `empty` es el vacío REAL (el plan existe y no tiene bloques): cae en la pantalla de siempre.
+        if (outcome !== 'empty') await failLoad(outcome)
+        return
+      }
+      // Cargó: si veníamos de un fallo (retry o reconexión), la pantalla de error se apaga.
+      setLoadError(null)
+
+      const raw = (data as Record<string, unknown>).workout_blocks as SessionBlock[] | undefined
+      const sorted = [...(raw ?? [])].sort((a, b) => a.order_index - b.order_index)
+      setPlanTitle((data as { title: string }).title)
+      setBlocks(sorted)
+      setDayOfWeek((data as { day_of_week?: number | null }).day_of_week ?? null)
+      void loadAreas(sorted)
+
+      // Badge "Semana A/B" (P1, espejo queries.ts:136-138): el badge EXISTE sólo si el programa está en
+      // `ab_mode`, y la letra es la variante ACTIVA de la semana por ROTACIÓN (resolveActiveWeekVariantForDisplay),
+      // NO el `week_variant` crudo del plan. Antes se seteaba `plan.week_variant` sin mirar `ab_mode` → en
+      // programas NO-A/B aparecía "Semana A" (web no muestra nada) y en A/B pintaba la variante del plan en
+      // vez de la activa. Se resuelve tras cargar el programa; sin programa/sin ab_mode ⇒ null (sin badge).
+      let resolvedWeekVariant: string | null = null
+
+      const programId = (data as { program_id?: string | null }).program_id
+      if (programId) {
+        const { data: prog } = await supabase
+          .from('workout_programs')
+          .select('name, start_date, weeks_to_repeat, program_structure_type, cycle_length, program_phases, ab_mode')
+          .eq('id', programId)
+          .maybeSingle()
+        if (prog) {
+          const week = programWeekIndex1Based(prog as { start_date?: string | null; weeks_to_repeat?: number | null })
+          setProgramName((prog as { name?: string | null }).name ?? null)
+          setWeeksToRepeat((prog as { weeks_to_repeat?: number | null }).weeks_to_repeat ?? null)
+          setCurrentWeek(week)
+          setProgramStructure((prog as { program_structure_type?: 'weekly' | 'cycle' | null }).program_structure_type ?? null)
+          setCycleLength((prog as { cycle_length?: number | null }).cycle_length ?? null)
+          setPhaseName(currentPhaseName((prog as { program_phases?: { name: string; weeks: number }[] | null }).program_phases, week))
+          resolvedWeekVariant = (prog as { ab_mode?: boolean | null }).ab_mode
+            ? resolveActiveWeekVariantForDisplay(
+                prog as { ab_mode?: boolean | null; start_date?: string | null; weeks_to_repeat?: number | null },
+              )
+            : null
+        }
+      }
+      setActiveWeekVariant(resolvedWeekVariant)
+      // Cache offline con la variante YA resuelta (no el `week_variant` crudo): al reabrir sin red el badge
+      // refleja la variante activa por rotación, igual que online.
+      await cachePlan(planId, {
+        title: (data as { title: string }).title,
+        blocks: sorted,
+        activeWeekVariant: resolvedWeekVariant,
+      })
+
+      const blockIds = sorted.map((b) => b.id)
+      if (client && blockIds.length > 0) {
+        const [serverLogs] = await Promise.all([
+          loadServerLogsForDay(client.id, blockIds, windowDay),
+          loadPreviousHistory(client.id, sorted, windowDay),
+          loadExerciseMaxes(client.id, sorted, windowDay),
+          loadLastSession(sorted, blockIds, windowDay),
+          // Semilla de repetición: query aparte, NUNCA mezclada con los logs de hoy ni con el snapshot.
+          // En modo edición la ruta ya descartó `repetir` (exclusión mutua), así que acá llega null.
+          loadRepeatSeed(client.id, blockIds, repeatDate ?? null),
+        ])
+        // Reconciliación server ∪ snapshot (server gana por block:set; lo local sobrevive _pending).
+        const queued = (snapshot?.logs ?? []).map((l) => reconciledToOfflineLog(l, planId))
+        const merged = reconcileSessionLogs(serverLogs, queued)
+        logsRef.current = merged
+        setSessionLogs(merged)
+      }
+    } catch (e) {
+      // `getClientProfile()` puede lanzar (auth/red). Sin este catch el `setLoading(false)` no corría
+      // nunca y la pantalla quedaba en «Cargando rutina…» para siempre.
+      await failLoad(classifyPlanLoad({ thrown: e }) === 'offline' ? 'offline' : 'error')
+    } finally {
       setLoading(false)
     }
-
-    // Ya viajó en paralelo con el perfil (ver arriba): acá normalmente ya resolvió.
-    const { data } = await planPromise
-
-    if (!data) {
-      setLoading(false)
-      return
-    }
-
-    const raw = (data as Record<string, unknown>).workout_blocks as SessionBlock[] | undefined
-    const sorted = [...(raw ?? [])].sort((a, b) => a.order_index - b.order_index)
-    setPlanTitle((data as { title: string }).title)
-    setBlocks(sorted)
-    setDayOfWeek((data as { day_of_week?: number | null }).day_of_week ?? null)
-    void loadAreas(sorted)
-
-    // Badge "Semana A/B" (P1, espejo queries.ts:136-138): el badge EXISTE sólo si el programa está en
-    // `ab_mode`, y la letra es la variante ACTIVA de la semana por ROTACIÓN (resolveActiveWeekVariantForDisplay),
-    // NO el `week_variant` crudo del plan. Antes se seteaba `plan.week_variant` sin mirar `ab_mode` → en
-    // programas NO-A/B aparecía "Semana A" (web no muestra nada) y en A/B pintaba la variante del plan en
-    // vez de la activa. Se resuelve tras cargar el programa; sin programa/sin ab_mode ⇒ null (sin badge).
-    let resolvedWeekVariant: string | null = null
-
-    const programId = (data as { program_id?: string | null }).program_id
-    if (programId) {
-      const { data: prog } = await supabase
-        .from('workout_programs')
-        .select('name, start_date, weeks_to_repeat, program_structure_type, cycle_length, program_phases, ab_mode')
-        .eq('id', programId)
-        .maybeSingle()
-      if (prog) {
-        const week = programWeekIndex1Based(prog as { start_date?: string | null; weeks_to_repeat?: number | null })
-        setProgramName((prog as { name?: string | null }).name ?? null)
-        setWeeksToRepeat((prog as { weeks_to_repeat?: number | null }).weeks_to_repeat ?? null)
-        setCurrentWeek(week)
-        setProgramStructure((prog as { program_structure_type?: 'weekly' | 'cycle' | null }).program_structure_type ?? null)
-        setCycleLength((prog as { cycle_length?: number | null }).cycle_length ?? null)
-        setPhaseName(currentPhaseName((prog as { program_phases?: { name: string; weeks: number }[] | null }).program_phases, week))
-        resolvedWeekVariant = (prog as { ab_mode?: boolean | null }).ab_mode
-          ? resolveActiveWeekVariantForDisplay(
-              prog as { ab_mode?: boolean | null; start_date?: string | null; weeks_to_repeat?: number | null },
-            )
-          : null
-      }
-    }
-    setActiveWeekVariant(resolvedWeekVariant)
-    // Cache offline con la variante YA resuelta (no el `week_variant` crudo): al reabrir sin red el badge
-    // refleja la variante activa por rotación, igual que online.
-    await cachePlan(planId, {
-      title: (data as { title: string }).title,
-      blocks: sorted,
-      activeWeekVariant: resolvedWeekVariant,
-    })
-
-    const blockIds = sorted.map((b) => b.id)
-    if (client && blockIds.length > 0) {
-      const [serverLogs] = await Promise.all([
-        loadServerLogsForDay(client.id, blockIds, windowDay),
-        loadPreviousHistory(client.id, sorted, windowDay),
-        loadExerciseMaxes(client.id, sorted, windowDay),
-        loadLastSession(sorted, blockIds, windowDay),
-        // Semilla de repetición: query aparte, NUNCA mezclada con los logs de hoy ni con el snapshot.
-        // En modo edición la ruta ya descartó `repetir` (exclusión mutua), así que acá llega null.
-        loadRepeatSeed(client.id, blockIds, repeatDate ?? null),
-      ])
-      // Reconciliación server ∪ snapshot (server gana por block:set; lo local sobrevive _pending).
-      const queued = (snapshot?.logs ?? []).map((l) => reconciledToOfflineLog(l, planId))
-      const merged = reconcileSessionLogs(serverLogs, queued)
-      logsRef.current = merged
-      setSessionLogs(merged)
-    }
-
-    setLoading(false)
   }, [planId, repeatDate, editIso, snapshotKey, loadAreas, loadServerLogsForDay, loadPreviousHistory, loadExerciseMaxes, loadLastSession, loadRepeatSeed])
 
   useEffect(() => {
@@ -797,6 +845,16 @@ export function useWorkoutSession(
 
   const refresh = useCallback(async () => {
     await load()
+  }, [load])
+
+  /**
+   * Botón «Reintentar» de la pantalla de error de carga. Apaga el error ANTES de pedir de nuevo para
+   * que el ejecutor vuelva al loader (`loading` sube en el acto al no ser silent) en vez de dejar el
+   * mensaje de fallo congelado mientras el reintento viaja.
+   */
+  const retry = useCallback(async () => {
+    setLoadError(null)
+    await load({ silent: false })
   }, [load])
 
   const finishSession = useCallback(async () => {
@@ -1063,6 +1121,7 @@ export function useWorkoutSession(
 
   return {
     loading,
+    loadError,
     planTitle,
     programName,
     phaseName,
@@ -1086,6 +1145,7 @@ export function useWorkoutSession(
     isOnline,
     restoredDraft,
     refresh,
+    retry,
     saveDraft,
     logSet,
     finishSession,
