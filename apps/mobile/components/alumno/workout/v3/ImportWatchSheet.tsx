@@ -78,6 +78,8 @@ function sourceLabel(workout: HubWorkout): string {
 function reportImportFailure(stage: string, workoutCount: number | null): void {
   try {
     Sentry.captureMessage('cardio-conectado: import del reloj falló', {
+      // fingerprint fijo: sin él Sentry agrupa por el nombre de la función del stack (EVA-MOBILE-9/C).
+      fingerprint: ['cardio-conectado', 'import-reloj-fallo'],
       level: 'warning',
       tags: { area: 'cardio-conectado', platform: 'rn', stage },
       extra: workoutCount != null ? { workoutCount } : {},

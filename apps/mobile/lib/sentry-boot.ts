@@ -82,6 +82,8 @@ if (SENTRY_DSN) {
     })
     if (Updates.isEmergencyLaunch) {
       Sentry.captureMessage('expo-updates: arranque de emergencia (el update anterior falló al lanzar)', {
+        // fingerprint fijo: sin él Sentry agrupa por el nombre de la función del stack (EVA-MOBILE-9/C).
+        fingerprint: ['expo-updates', 'emergency-launch'],
         level: 'warning',
         extra: { reason: Updates.emergencyLaunchReason ?? null, updateId: Updates.updateId ?? null },
       })

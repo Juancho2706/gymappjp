@@ -66,6 +66,8 @@ function probeFocusHop(field?: string) {
       data: { count: focusHopTimes.length, field },
     })
     Sentry.captureMessage('focus-hop-loop-detected', {
+      // fingerprint fijo: sin él Sentry agrupa por el nombre de la función del stack (EVA-MOBILE-9/C).
+      fingerprint: ['input', 'focus-hop-loop'],
       level: 'warning',
       extra: { count: focusHopTimes.length, field },
     })

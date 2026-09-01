@@ -34,6 +34,8 @@ export function safeUuid(v: string | null | undefined): string {
 export function reportInvalidRouteUuid(screen: string, received: unknown): void {
   try {
     Sentry.captureMessage('nav: param de ruta no es uuid', {
+      // fingerprint fijo: sin él Sentry agrupa por el nombre de la función del stack (EVA-MOBILE-9/C).
+      fingerprint: ['nav-uuid-guard', 'param-no-uuid'],
       level: 'warning',
       tags: { area: 'nav-uuid-guard', platform: 'rn', screen },
       extra: { screen, received: typeof received === 'string' ? received : String(received) },

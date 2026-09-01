@@ -818,6 +818,8 @@ function DespegueOverlay({
     if (forceReady && !sceneReady) {
       try {
         Sentry.captureMessage('exec-v3-despegue-force-ready-sin-escena', {
+          // fingerprint fijo: sin él Sentry agrupa por el nombre de la función del stack (EVA-MOBILE-9/C).
+          fingerprint: ['exec-v3', 'despegue-force-ready-sin-escena'],
           level: 'warning',
           extra: { planId, elapsedMs: Date.now() - startedAt, viaMorph: morphConsumeState },
         })

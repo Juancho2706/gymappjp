@@ -152,6 +152,8 @@ export async function flushLogQueue(supabase: SupabaseClient, scope?: LogQueueSc
           // PERMANENT_FAILURE_CODES). Se deja rastro en Sentry igual que el descarte 23503.
           try {
             Sentry.captureMessage('workout-offline-queue: descarte past_set_not_found', {
+              // fingerprint fijo: sin él Sentry agrupa por el nombre de la función del stack (EVA-MOBILE-9/C).
+              fingerprint: ['workout-offline-queue', 'discard', 'past_set_not_found'],
               level: 'warning',
               tags: { area: 'workout-offline-queue', platform: 'rn', discard_code: 'past_set_not_found' },
               extra: { blockId: log.block_id, setNumber: log.set_number, targetDate: target_date },
@@ -173,6 +175,7 @@ export async function flushLogQueue(supabase: SupabaseClient, scope?: LogQueueSc
             // el consumidor con el `discarded` del resumen.
             try {
               Sentry.captureMessage('workout-offline-queue: descarte 23503', {
+                fingerprint: ['workout-offline-queue', 'discard', '23503'],
                 level: 'warning',
                 tags: { area: 'workout-offline-queue', platform: 'rn', discard_code: '23503' },
                 extra: { blockId: log.block_id, setNumber: log.set_number },

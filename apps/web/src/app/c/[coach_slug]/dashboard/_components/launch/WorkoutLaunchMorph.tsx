@@ -223,6 +223,9 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
                     const faltaExec = !execReadyRef.current
                     const causa = faltaRuta && faltaExec ? 'ambas señales' : faltaRuta ? 'ruta sin commitear' : 'ejecutor sin señal'
                     Sentry.captureMessage(`exec-v3: fallback 4.6s gano la carrera — ${causa}`, {
+                        // fingerprint fijo: `causa` es uno de 3 valores fijos (cardinalidad segura),
+                        // así cada degradación agrupa por separado en vez de por el nombre de la función.
+                        fingerprint: ['exec-v3', 'despegue-fallback', causa],
                         level: 'warning',
                         extra: {
                             sinceLaunchMs: Math.round(perfNow() - launchedAtPerf),
