@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { Flag, X } from 'lucide-react'
@@ -111,9 +111,23 @@ export function ExecSettingsSheet({
     if (soundOn) playTimerSound(value, volume)
   }
 
+  // P6 (EVA-NEXTJS-8): cada tick del drag disparaba un AudioContext nuevo (pico de "Failed to
+  // start the audio device" en WebKit). El % y la barra siguen el dedo sin demora; el preview
+  // de audio se debouncea 180ms trailing-edge.
+  const volumePreviewTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    return () => {
+      if (volumePreviewTimer.current) clearTimeout(volumePreviewTimer.current)
+    }
+  }, [])
+
   const changeVolume = (next: number) => {
     setVolumePersist(next)
-    if (soundOn) playTimerSound(sound, next)
+    if (!soundOn) return
+    if (volumePreviewTimer.current) clearTimeout(volumePreviewTimer.current)
+    volumePreviewTimer.current = setTimeout(() => {
+      playTimerSound(sound, next)
+    }, 180)
   }
 
   return (

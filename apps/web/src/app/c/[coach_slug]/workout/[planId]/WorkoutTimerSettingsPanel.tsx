@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
 import { BellRing, Volume2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -58,9 +58,22 @@ export function WorkoutTimerSettingsPanel({
     playTimerSound(type, volume)
   }
 
+  // P6 (EVA-NEXTJS-8): cada tick del drag disparaba un AudioContext nuevo (pico de "Failed to
+  // start the audio device" en WebKit). El % y la barra siguen el dedo sin demora; el preview
+  // de audio se debouncea 180ms trailing-edge.
+  const volumePreviewTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    return () => {
+      if (volumePreviewTimer.current) clearTimeout(volumePreviewTimer.current)
+    }
+  }, [])
+
   const handleVolumeChange = (next: number) => {
     setVolumePersist(next)
-    playTimerSound(sound, next)
+    if (volumePreviewTimer.current) clearTimeout(volumePreviewTimer.current)
+    volumePreviewTimer.current = setTimeout(() => {
+      playTimerSound(sound, next)
+    }, 180)
   }
 
   return (
