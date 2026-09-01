@@ -138,8 +138,8 @@ Marcar solo con evidencia real. Prohibido dar un gate por verde sin haberlo corr
       `dpl_F4DXU6vLvouUaVADMK3Btqj2Q3gv` READY, OTA tren 1 android `66e32589` / ios `b53e8e5d`;
       tren 2 (`231d2937`, override `decode-uri-component` 0.5.0 por Dependabot #99) android
       `d2f948a0` / ios `d40564a9`. En Sentry: 18/19/1C/8 «resolved in next release» con nota.
-      **QA device del owner pendiente** (O4.4: badge Semana A/B y nombre/fase del programa; P6:
-      arrastrar el slider de volumen en iOS; deep link tras el override).
+      **QA device del owner VERDE (01-09 tarde)**: O4.4 badge Semana A/B y nombre/fase del programa,
+      P6 slider de volumen en iOS, deep link tras el override.
 - [ ] O6.8 A las 72 h del deploy de O6: `EVA-NEXTJS-19` debe quedar en 0 eventos nuevos; si
       persiste, el mecanismo de la respuesta 200/no-RSC de 2 bytes (registrada en el proxy en
       `serverless-middleware` a las 20:49:17Z del 31-08) es lo siguiente a cazar — no es skew de
@@ -151,9 +151,14 @@ Marcar solo con evidencia real. Prohibido dar un gate por verde sin haberlo corr
       `postcss-selector-parser` 6.1.4 + `browserslist` 4.28.8 (tooling de build; override, sin OTA).
       Todos in-major salvo el 0.2→0.5 de decode-uri-component (función única, firma intacta).
       Gates por cada tanda: `pnpm install` limpio, build web, `expo export android`, tsc mobile, vitest.
-- [ ] O6.11 Panel «Así lo ve tu alumno» plegable en desktop (`9b283488`): QA visual del owner en
-      ≥1024 px — ojo de la cabecera pliega/abre, «✕» del panel, memoria tras recargar. Reporte de un
-      coach con captura (01-09).
+- [x] O6.11 Panel «Así lo ve tu alumno» plegable en desktop (`9b283488`): QA visual del owner en
+      ≥1024 px **verde (01-09)** — ojo de la cabecera pliega/abre, «✕» del panel, memoria tras
+      recargar. Reporte de un coach con captura (01-09).
+
+> **Cierre 2026-09-01 (tarde).** Todo lo del cierre Sentry está en producción con QA del owner verde.
+> Abiertos: C3/O6.8 (verificar Sentry a 72 h, ~04-09), O6.9 (`EVA-MOBILE-9` se reclasifica solo), P3
+> (Skia = build nativo 1.1.3, decisión del owner), P4 (QA de fluidez) y P5 (431 errores, tanda
+> propia). Siguiente frente del repo: **Ola de orden W1** (`docs/specs/ola-de-orden`).
 
 ## Cierre
 
