@@ -18,6 +18,8 @@ import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { ModuleOffNotice } from '../../../components/ModuleOffNotice'
 import { toast } from '../../../components/Toast'
 import { CardioHeader, CardioZoneList } from '../../../components/coach/CardioShared'
+import { DomainOffNotice } from '../../../components/coach/DomainOffNotice'
+import { useDomainGuard } from '../../../lib/domain-guard'
 import { GuidedTaskBanner } from '../../../components/coach/GuidedTaskBanner'
 import { useCoachOnboarding } from '../../../lib/coach-dashboard'
 import { isGuidedEntry } from '../../../lib/templates'
@@ -42,6 +44,9 @@ export default function CardioClientScreen() {
   const router = useRouter()
   const { hasModule, ready } = useEntitlements()
   const enabled = hasModule('cardio')
+  // Mismo gate que el hub: cierra el deep link por alumno (`/coach/cardio/<id>`), que si no
+  // seguiria abriendo el perfil con el dominio apagado. Preferencia ANTES que modulo.
+  const cardioDomain = useDomainGuard('cardio')
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -53,7 +58,8 @@ export default function CardioClientScreen() {
   const [errors, setErrors] = useState<Errors>({})
 
   useEffect(() => {
-    if (!enabled || !clientId) {
+    // Dominio apagado ⇒ cero lectura del perfil del alumno (money-safety).
+    if (!cardioDomain.enabled || !enabled || !clientId) {
       setLoading(false)
       return
     }
@@ -71,7 +77,7 @@ export default function CardioClientScreen() {
     return () => {
       cancelled = true
     }
-  }, [clientId, enabled])
+  }, [clientId, enabled, cardioDomain.enabled])
 
   // Zonas en vivo desde los valores del form (misma resolucion que el alumno vera).
   const zones = useMemo<ResolvedClientZones | null>(
@@ -129,8 +135,10 @@ export default function CardioClientScreen() {
     <SafeAreaView edges={['top']} style={[styles.container, { backgroundColor: theme.background }]}>
       <AppBackground />
       <CardioHeader title="Perfil cardio" subtitle={client?.full_name ?? 'Alumno'} onBack={() => router.back()} />
-      {!ready || (enabled && loading) ? (
+      {!ready || (cardioDomain.enabled && enabled && loading) ? (
         <EvaLoaderScreen subtitle="Cargando perfil…" />
+      ) : !cardioDomain.enabled ? (
+        <DomainOffNotice domain="cardio" />
       ) : !enabled ? (
         <ModuleOffNotice moduleKey="cardio" />
       ) : (

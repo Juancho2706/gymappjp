@@ -66,6 +66,8 @@ import {
 } from '@eva/nutrition-v2'
 import { supabase } from '../../../lib/supabase'
 import { useEntitlements } from '../../../lib/entitlements'
+import { useDomainGuard } from '../../../lib/domain-guard'
+import { DomainOffNotice } from '../../../components/coach/DomainOffNotice'
 import { useWorkspace } from '../../../lib/workspace'
 import {
   deletePlanTemplateRN,
@@ -158,6 +160,10 @@ export default function CoachNutritionV2Screen() {
   const brandColor = resolveEffectiveCoachBrandTheme(branding).brandColor
   const insets = useSafeAreaInsets()
   const entitlements = useEntitlements()
+  // Master switch del dominio Nutrición (Ola de orden W1): preferencia del coach, fail-open y sin
+  // relación con el plan. Sale del MISMO store que `entitlements`, así que cuando
+  // `entitlements.ready` es true el dominio ya está resuelto (no hace falta mirar su `ready`).
+  const nutritionDomain = useDomainGuard('nutrition')
   const {
     ready: workspaceReady,
     kind: workspaceKind,
@@ -318,9 +324,11 @@ export default function CoachNutritionV2Screen() {
     void goToPage(pageIndex - 1, cursorsRef.current[pageIndex - 1] ?? null)
   }, [goToPage, pageIndex])
 
+  // Nutrición apagada ⇒ CERO consulta del roster (money-safety): la única carga automática del hub
+  // vive acá; el picker y las plantillas son perezosos (se disparan desde la UI, que ya no existe).
   useEffect(() => {
-    if (userId && enabled && scope) void loadFirst()
-  }, [enabled, loadFirst, userId, scope])
+    if (userId && enabled && scope && nutritionDomain.enabled) void loadFirst()
+  }, [enabled, loadFirst, userId, scope, nutritionDomain.enabled])
 
   // Carga el roster COMPLETO del scope para el picker (independiente de la paginacion visible).
   // Perezosa: se dispara la primera vez que se abre el CTA global, no en cada montaje del hub.
@@ -484,7 +492,10 @@ export default function CoachNutritionV2Screen() {
      *   Alumnos después sí lo hace, sin remontar la pantalla;
      * - el roster ya cargado: cuatro de los seis pasos iluminan cosas que solo existen con datos.
      */
-    autoStartReady: tourCoachId !== null && activeTab === 'roster' && !loading,
+    // Con Nutrición apagada el tour no arranca: hoy eso ya pasa de rebote (`loading` nunca baja
+    // porque `loadFirst` no corre), pero se declara explícito — nadie tiene que deducir el gate
+    // del dominio a partir de un spinner que no termina.
+    autoStartReady: tourCoachId !== null && activeTab === 'roster' && !loading && nutritionDomain.enabled,
   })
 
   // ── Chrome colapsable del hub (QA-4 H2) ───────────────────────────────────────────────────
@@ -560,6 +571,16 @@ export default function CoachNutritionV2Screen() {
     return (
       <View className="flex-1 bg-surface-app px-4" style={{ paddingTop: insets.top + 24 }}>
         <NutritionSkeleton variant="coach" />
+      </View>
+    )
+  }
+
+  // La PREFERENCIA del coach se evalúa ANTES que la compatibilidad del workspace y que `loading`
+  // (que con el dominio apagado nunca baja: `loadFirst` no corre). Mockup 9801fec7, decisión 3A.
+  if (!nutritionDomain.enabled) {
+    return (
+      <View className="flex-1 bg-surface-app" style={{ paddingTop: insets.top + 24 }}>
+        <DomainOffNotice domain="nutrition" />
       </View>
     )
   }

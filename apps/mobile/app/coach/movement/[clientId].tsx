@@ -44,6 +44,8 @@ import { AppBackground } from '../../../components/AppBackground'
 import { Card } from '../../../components/Card'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { ModuleOffNotice } from '../../../components/ModuleOffNotice'
+import { DomainOffNotice } from '../../../components/coach/DomainOffNotice'
+import { useDomainGuard } from '../../../lib/domain-guard'
 import { toast } from '../../../components/Toast'
 import {
   BAND_COLOR,
@@ -86,6 +88,9 @@ export default function MovementClientScreen() {
   const router = useRouter()
   const { hasModule, ready } = useEntitlements()
   const enabled = hasModule('movement_assessment')
+  // Mismo gate que el hub: cierra el deep link por alumno (`/coach/movement/<id>`, incluido el
+  // `?start=1` que abre el wizard). Preferencia ANTES que modulo.
+  const movementDomain = useDomainGuard('movement')
 
   const [loading, setLoading] = useState(true)
   const [clientName, setClientName] = useState<string | null>(null)
@@ -101,7 +106,8 @@ export default function MovementClientScreen() {
   }, [clientId])
 
   useEffect(() => {
-    if (!enabled || !clientId) {
+    // Dominio apagado ⇒ cero lectura del reporte/borrador del alumno (money-safety).
+    if (!movementDomain.enabled || !enabled || !clientId) {
       setLoading(false)
       return
     }
@@ -123,9 +129,11 @@ export default function MovementClientScreen() {
     return () => {
       cancelled = true
     }
-  }, [clientId, enabled, start])
+  }, [clientId, enabled, start, movementDomain.enabled])
 
-  if (mode === 'wizard' && enabled && clientId) {
+  // Este early-return es legal: TODOS los hooks de la pantalla ya se declararon arriba (el wizard
+  // es un componente aparte con los suyos). Con el dominio apagado no se entra ni por `?start=1`.
+  if (mode === 'wizard' && enabled && movementDomain.enabled && clientId) {
     return (
       <WizardView
         clientId={clientId}
@@ -151,7 +159,7 @@ export default function MovementClientScreen() {
       />
       {/* Tarea guiada del paso 3 (hallazgo 5 del QA del owner 22-08). Solo en el REPORTE: el
           wizard es pantalla completa con su propio paso a paso y no necesita otra ayuda encima. */}
-      {guidedFirst && enabled ? (
+      {guidedFirst && enabled && movementDomain.enabled ? (
         <GuidedTaskBanner
           coachId={onboarding?.coachId ?? null}
           surface="movement"
@@ -163,8 +171,10 @@ export default function MovementClientScreen() {
           ]}
         />
       ) : null}
-      {!ready || (enabled && loading) ? (
+      {!ready || (movementDomain.enabled && enabled && loading) ? (
         <EvaLoaderScreen subtitle="Cargando reporte…" />
+      ) : !movementDomain.enabled ? (
+        <DomainOffNotice domain="movement" />
       ) : !enabled ? (
         <ModuleOffNotice moduleKey="movement_assessment" />
       ) : (

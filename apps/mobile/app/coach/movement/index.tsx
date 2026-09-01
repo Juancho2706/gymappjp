@@ -11,6 +11,8 @@ import { AppBackground } from '../../../components/AppBackground'
 import { Card } from '../../../components/Card'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { ModuleOffNotice } from '../../../components/ModuleOffNotice'
+import { DomainOffNotice } from '../../../components/coach/DomainOffNotice'
+import { useDomainGuard } from '../../../lib/domain-guard'
 import {
   MovementDisclaimerNote,
   MovementHeader,
@@ -33,15 +35,18 @@ export default function MovementHubScreen() {
   const router = useRouter()
   const { hasModule, ready } = useEntitlements()
   const enabled = hasModule('movement_assessment')
+  // Preferencia del coach (Ola de orden W1): se evalua ANTES que el modulo, que queda como
+  // kill-switch de operador. Apagar Movimiento en «Mi panel» no habla del plan.
+  const movementDomain = useDomainGuard('movement')
 
   const [clients, setClients] = useState<MovementHubClient[]>([])
   const [loading, setLoading] = useState(true)
 
   // Recarga al enfocar → tras finalizar/eliminar una evaluacion (volver del detalle) el semaforo
-  // se actualiza. Sin modulo NO se pega a la DB (money-safety: cero fetch).
+  // se actualiza. Sin dominio o sin modulo NO se pega a la DB (money-safety: cero fetch).
   useFocusEffect(
     useCallback(() => {
-      if (!enabled) {
+      if (!movementDomain.enabled || !enabled) {
         setLoading(false)
         return
       }
@@ -58,7 +63,7 @@ export default function MovementHubScreen() {
       return () => {
         cancelled = true
       }
-    }, [enabled]),
+    }, [movementDomain.enabled, enabled]),
   )
 
   return (
@@ -70,8 +75,10 @@ export default function MovementHubScreen() {
         onBack={() => router.back()}
         showBadge
       />
-      {!ready || (enabled && loading) ? (
+      {!ready || (movementDomain.enabled && enabled && loading) ? (
         <EvaLoaderScreen subtitle="Cargando…" />
+      ) : !movementDomain.enabled ? (
+        <DomainOffNotice domain="movement" />
       ) : !enabled ? (
         <ModuleOffNotice moduleKey="movement_assessment" />
       ) : (

@@ -9,6 +9,7 @@ import type { BiaMetrics, BodyFatEquation, IsakRawInput } from '@eva/bodycomp'
 import { useTheme } from '../../../context/ThemeContext'
 import { FONT } from '../../../lib/typography'
 import { getWorkspaceEntitlements } from '../../../lib/entitlements'
+import { isDomainEnabledIn } from '../../../lib/entitlements-core'
 import { useWorkspace } from '../../../lib/workspace'
 import type { ClientActionWorkspace } from '../../../lib/client-actions'
 import {
@@ -28,6 +29,7 @@ import { Card } from '../../../components/Card'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { Input } from '../../../components/Input'
 import { ModuleOffNotice } from '../../../components/ModuleOffNotice'
+import { DomainOffNotice } from '../../../components/coach/DomainOffNotice'
 import { SegmentedTabs } from '../../../components/SegmentedTabs'
 import { Select } from '../../../components/Select'
 import { toast } from '../../../components/Toast'
@@ -68,6 +70,13 @@ export default function BodyCompScreen() {
   const [loading, setLoading] = useState(true)
   const [entitlementsReady, setEntitlementsReady] = useState(false)
   const [enabled, setEnabled] = useState(false)
+  /**
+   * Master switch del dominio Composición corporal (Ola de orden W1). Esta pantalla NO usa
+   * `useDomainGuard`: resuelve entitlements por WORKSPACE del recurso (`getWorkspaceEntitlements`),
+   * no por el store global, así que el dominio se lee del MISMO `config` con `isDomainEnabledIn`.
+   * Fail-OPEN: arranca en `true` y solo el `false` explícito del payload lo apaga.
+   */
+  const [domainEnabled, setDomainEnabled] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [retryKey, setRetryKey] = useState(0)
   const [clientName, setClientName] = useState<string | null>(null)
@@ -94,6 +103,7 @@ export default function BodyCompScreen() {
       let active = true
       setEntitlementsReady(false)
       setEnabled(false)
+      setDomainEnabled(true)
       setLoading(true)
       setLoadError(null)
       setClientName(null)
@@ -101,9 +111,21 @@ export default function BodyCompScreen() {
         try {
           const config = await getWorkspaceEntitlements(actionWorkspace)
           if (!active) return
+          // La PREFERENCIA va primero que el módulo: con el dominio apagado no se leen ni el
+          // nombre del alumno ni sus mediciones (cero fetch) y no se le habla de plan a alguien
+          // que solo apagó una sección suya.
+          const domainOn = isDomainEnabledIn(config, 'bodycomp')
+          setDomainEnabled(domainOn)
+          setEntitlementsReady(true)
+          if (!domainOn) {
+            setClientName(null)
+            setBiaRows([])
+            setIsakRows([])
+            setLoading(false)
+            return
+          }
           const moduleEnabled = config.enabledModules.includes('body_composition')
           setEnabled(moduleEnabled)
-          setEntitlementsReady(true)
           if (!moduleEnabled) {
             setClientName(null)
             setBiaRows([])
@@ -191,6 +213,8 @@ export default function BodyCompScreen() {
             <Button label="Reintentar" variant="secondary" onPress={() => setRetryKey((value) => value + 1)} />
           </Card>
         </View>
+      ) : !domainEnabled ? (
+        <DomainOffNotice domain="bodycomp" />
       ) : !enabled ? (
         <ModuleOffNotice moduleKey="body_composition" />
       ) : (

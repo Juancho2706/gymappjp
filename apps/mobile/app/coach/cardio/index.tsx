@@ -30,6 +30,8 @@ import { ModuleOffNotice } from '../../../components/ModuleOffNotice'
 import { Select } from '../../../components/Select'
 import { SegmentedTabs } from '../../../components/SegmentedTabs'
 import { CardioHeader, CardioZoneList } from '../../../components/coach/CardioShared'
+import { DomainOffNotice } from '../../../components/coach/DomainOffNotice'
+import { useDomainGuard } from '../../../lib/domain-guard'
 
 /**
  * Hub del modulo Cardio (E6-03) — espejo mobile de `apps/web/.../coach/cardio`
@@ -66,16 +68,19 @@ export default function CardioHubScreen() {
   const router = useRouter()
   const { hasModule, ready } = useEntitlements()
   const enabled = hasModule('cardio')
+  // Preferencia del coach (Ola de orden W1): se evalua ANTES que el modulo. El modulo sigue siendo
+  // el kill-switch de operador; apagar Cardio en «Mi panel» no es un problema de plan.
+  const cardioDomain = useDomainGuard('cardio')
 
   const [tool, setTool] = useState<Tool>('zonas')
   const [clients, setClients] = useState<CardioClientRow[]>([])
   const [loadingClients, setLoadingClients] = useState(true)
 
   // Recarga al enfocar → tras editar un perfil (volver de [clientId]) el resumen/zonas se
-  // actualizan. Sin modulo NO se pega a la DB (money-safety: cero fetch).
+  // actualizan. Sin dominio o sin modulo NO se pega a la DB (money-safety: cero fetch).
   useFocusEffect(
     useCallback(() => {
-      if (!enabled) {
+      if (!cardioDomain.enabled || !enabled) {
         setLoadingClients(false)
         return
       }
@@ -92,7 +97,7 @@ export default function CardioHubScreen() {
       return () => {
         cancelled = true
       }
-    }, [enabled]),
+    }, [cardioDomain.enabled, enabled]),
   )
 
   return (
@@ -101,6 +106,8 @@ export default function CardioHubScreen() {
       <CardioHeader title="Cardio" subtitle="Herramientas" onBack={() => router.back()} showBadge />
       {!ready ? (
         <EvaLoaderScreen subtitle="Cargando…" />
+      ) : !cardioDomain.enabled ? (
+        <DomainOffNotice domain="cardio" />
       ) : !enabled ? (
         <ModuleOffNotice moduleKey="cardio" />
       ) : (

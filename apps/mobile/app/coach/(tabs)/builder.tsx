@@ -18,6 +18,8 @@ import { Sheet } from '../../../components/Sheet'
 import { captureAppEvent } from '../../../lib/analytics'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
+import { DomainOffNotice } from '../../../components/coach/DomainOffNotice'
+import { useDomainGuard } from '../../../lib/domain-guard'
 import { useCoachTabbarScroll } from '../../../components/coach/CoachTabbarScroll'
 import { COACH_TABBAR_CLEARANCE } from '../../../components/coach/CoachMobileChrome'
 import { themedIcon, type ThemedIcon } from '../../../components/coach/programs/themed-icon'
@@ -69,6 +71,35 @@ const TABS: { value: FilterType; label: string }[] = [
   { value: 'assigned', label: 'En curso' },
 ]
 
+/**
+ * Header de la biblioteca (1:1 web): eyebrow «Biblioteca» + título «Programas» + «Nueva».
+ * Extraído para que la rama de dominio apagado pinte EXACTAMENTE el mismo encabezado que la
+ * pantalla real (mockup 9801fec7 C: «conserva el título Programas»), sin duplicar el markup.
+ * `showNew=false` deja el chasis sin la acción de crear.
+ */
+function LibraryHeader({ showNew, onNew }: { showNew: boolean; onNew?: () => void }) {
+  return (
+    <View className="flex-row items-end justify-between gap-space-3 px-space-5 pb-space-3 pt-space-6">
+      <View className="min-w-0 flex-1">
+        <Text style={T_EYEBROW} className="text-muted">Biblioteca</Text>
+        <Text numberOfLines={1} style={T_TITLE} className="text-strong">Programas</Text>
+      </View>
+      {showNew ? (
+        <Pressable
+          testID="new-template-button"
+          accessibilityRole="button"
+          accessibilityLabel="Crear programa o ejercicio"
+          onPress={onNew}
+          className="shrink-0 flex-row items-center gap-space-2 rounded-control bg-sport-500 px-space-4 py-space-3 active:opacity-85"
+        >
+          <IconPlus size={16} className="text-on-sport" />
+          <Text style={T_NUEVA} className="text-on-sport">Nueva</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  )
+}
+
 export default function BuilderScreen() {
   const { onScroll } = useCoachTabbarScroll()
   const insets = useSafeAreaInsets()
@@ -79,6 +110,10 @@ export default function BuilderScreen() {
   // @eva/onboarding; el literal se repite acá porque Expo Router tipa los params por nombre).
   const { primera } = useLocalSearchParams<{ primera?: string }>()
   const onboarding = useCoachOnboarding()
+  // Master switch del dominio Entrenamiento (Ola de orden W1). Preferencia del coach, NO permiso:
+  // fail-open y sin relacion con el plan. Ver el contrato de consumo en `lib/domain-guard.ts` —
+  // nada de early-return antes de los hooks; se gatea el efecto y se elige rama abajo.
+  const training = useDomainGuard('training')
   const demoClientId = onboarding?.onboardingV2.demoClientId ?? null
   const demoName = onboarding?.onboardingV2.demoName ?? null
   const [firstTemplateOpen, setFirstTemplateOpen] = useState(false)
@@ -105,9 +140,15 @@ export default function BuilderScreen() {
   const [actionBusy, setActionBusy] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!workspace.ready) return
+    if (!workspace.ready || !training.ready) return
+    // Entrenamiento apagado ⇒ CERO consulta a la biblioteca (money-safety): la pantalla no lee
+    // programas que no va a mostrar. `setLoading(false)` deja pasar la rama del aviso.
+    if (!training.enabled) {
+      setLoading(false)
+      return
+    }
     loadLibrary().catch(() => setLoading(false))
-  }, [workspace.ready, workspace.kind, workspace.teamId, workspace.orgId])
+  }, [workspace.ready, workspace.kind, workspace.teamId, workspace.orgId, training.ready, training.enabled])
 
   async function loadLibrary() {
     setLoading(true)
@@ -191,6 +232,9 @@ export default function BuilderScreen() {
    * podía abrir cuando llegaba el `demoClientId`). La decisión vive en `resolveGuidedEntry`.
    */
   useEffect(() => {
+    // Con Entrenamiento apagado la marca NO se consume: quemarla acá dejaría al coach sin paso 3
+    // cuando vuelva a prender el dominio (la sheet no se abriría nunca más).
+    if (!training.ready || !training.enabled) return
     const decision = resolveGuidedEntry({
       raw: primera,
       snapshotReady: onboarding != null,
@@ -201,7 +245,7 @@ export default function BuilderScreen() {
     guidedConsumedRef.current = true
     router.setParams({ primera: '' })
     if (decision.openSheet) setFirstTemplateOpen(true)
-  }, [primera, onboarding, demoClientId, router])
+  }, [primera, onboarding, demoClientId, router, training.ready, training.enabled])
 
   function openNewTemplate() {
     router.push({ pathname: '/coach/program-builder', params: { mode: 'template' } })
@@ -359,6 +403,21 @@ export default function BuilderScreen() {
     )
   }
 
+  // Dominio Entrenamiento apagado: se conserva el chasis y el título «Programas» (mockup 9801fec7,
+  // decisión 3A) y se reemplaza SOLO el cuerpo. Sin «Nueva»: no se ofrece crear en una sección que
+  // el propio coach apagó. Va DESPUÉS del loader para que no haya flash de la lista real.
+  if (!training.enabled) {
+    return (
+      <View className="flex-1 bg-surface-app">
+        <AppBackground />
+        <SafeAreaView edges={['top']} style={{ flex: 1 }}>
+          <LibraryHeader showNew={false} />
+          <DomainOffNotice domain="training" />
+        </SafeAreaView>
+      </View>
+    )
+  }
+
   const tabCounts: Record<FilterType, number> = { all: programs.length, templates: stats.templates, assigned: stats.active }
 
   return (
@@ -367,26 +426,13 @@ export default function BuilderScreen() {
       {/* QA F4: el header quedaba bajo el status bar — edges 'top' espeja el hub
           nutrición (insets.top, coach/nutrition-v2/index.tsx:361). */}
       <SafeAreaView edges={['top']} style={{ flex: 1 }}>
-        {/* Header minimal (1:1 web): eyebrow + Programas + Nueva */}
-        <View className="flex-row items-end justify-between gap-space-3 px-space-5 pb-space-3 pt-space-6">
-          <View className="min-w-0 flex-1">
-            <Text style={T_EYEBROW} className="text-muted">Biblioteca</Text>
-            <Text numberOfLines={1} style={T_TITLE} className="text-strong">Programas</Text>
-          </View>
-          <Pressable
-            testID="new-template-button"
-            accessibilityRole="button"
-            accessibilityLabel="Crear programa o ejercicio"
-            onPress={() => {
-              captureAppEvent('library_new_pressed')
-              setNewSheetOpen(true)
-            }}
-            className="shrink-0 flex-row items-center gap-space-2 rounded-control bg-sport-500 px-space-4 py-space-3 active:opacity-85"
-          >
-            <IconPlus size={16} className="text-on-sport" />
-            <Text style={T_NUEVA} className="text-on-sport">Nueva</Text>
-          </Pressable>
-        </View>
+        <LibraryHeader
+          showNew
+          onNew={() => {
+            captureAppEvent('library_new_pressed')
+            setNewSheetOpen(true)
+          }}
+        />
 
         <FlashList
           data={filtered}
