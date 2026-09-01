@@ -704,23 +704,35 @@ Independiente de W2/W3 en lo funcional (comparte archivos con W1, correr despué
 6. W4.6c: no se toca hasta que el owner decida Cobros (P1–P8). `client-tabs.ts` conserva
    `'facturacion'` fuera de `CLIENT_TAB_DOMAIN` (nunca se oculta por dominio).
 
+### QA del owner ronda 2 (01-09, celular) — ejecutada el mismo día
+
+| Pedido | Estado | Commit |
+|---|---|---|
+| Tarjeta «Herramientas» fuera de Alumnos (RN + web): Funciones es la única puerta | ✅ | `284fcbf3` |
+| «Cerrar sesión» sale del hub Opciones RN y vive al final de «Más» (RN y hoja web) | ✅ | `284fcbf3` |
+| Ordenar la barra (PWA/responsive/RN): ▲▼ en «Qué se ve en tu panel», fila `_nav` de `coach_feature_prefs` (sin migración), `resolveNavOrder` en web y RN | ✅ | `a6f3fad8` |
+| Punto 3: switch por dominio del POOL para gestores de team (web `setTeamDomainAction`, RN `writeTeamDomainEnabled`) | ✅ | `a6f3fad8` |
+| Punto 2: **7C fase 2** — tabla `coach_kpi_snapshots` (migración `20260901230436`, aditiva, advisors 0), cron diario `api/cron/coach-kpi-snapshot` 04:30Z, delta real de «En riesgo» (T−7) y saldo neto de Alumnos; snapshot de hoy sembrado (91 filas) ⇒ primer delta visible el 2026-09-08 | ✅ | `852d5be2` |
+| Detalle 9: badge de módulos en Suscripción «Incluido» | ✅ | `bac46edc` |
+| Detalles 5 y 6: fila «Funciones» oculta a org-managed sin team; tile de Equipo sin `activeModuleCount` | ✅ | `284fcbf3` |
+| Regla nueva del owner: **ENTERPRISE está eliminado** — no diseñar/testear ese caso; a futuro demolerlo | anotada | — |
+
 ### Pendientes declarados de W2–W4 (no bloquean; entran a QA o a la siguiente ola)
-- Cápsula móvil WEB (< md): sigue con lista fija + `.slice(0,5)` (un coach de team pierde «Equipo»
-  en mobile web; Soporte/Cardio/Movimiento no aparecen ahí). Paralelo de W2.5 para web.
+- ~~Cápsula móvil WEB con `.slice(0,5)`~~ → cerrado en `f9cf8ae9` (buildMobileBar + CoachMoreSheet).
 - Cardio/Movimiento desde la barra RN: push de stack (la cápsula queda debajo). Si en QA molesta,
   registrarlas como tabs re-exportadas exige quitar el ← de sus headers.
-- Team: switch por dominio del pool en «Funciones del equipo» (hoy solo lectura).
-- Coach org-gestionado: fila «Funciones» del hub RN lleva a un aviso sin acción.
-- `team.tsx` RN: `activeModuleCount` bajo «Funciones» ya no significa nada (siempre 4).
+- ~~Team: switch por dominio del pool~~ → cerrado en `a6f3fad8`.
+- ~~Coach org-gestionado: fila «Funciones» del hub RN~~ → oculta en `284fcbf3` (enterprise muerto).
+- ~~`team.tsx` RN `activeModuleCount`~~ → tile sin número en `284fcbf3` (`activeModuleCount` de `lib/team.ts` queda sin consumidor: borrar en una limpieza).
 - 6 CTAs RN «Ver módulos»/«Ver mi plan»/`onUpgrade` (nutrition-v2 builder, QuickEdit ×2, ProgresoTab,
   `NUTRITION_PRO_UPGRADE_HREF`) siguen gateados por `nutrition_exchanges`/`body_composition` y con
   copy de plan («no incluido en tu plan actual»): con D1 son código muerto o mentiroso — revisar.
-- `SubscriptionContent.tsx:758` conserva «Con plan pago» para la lista de módulos de la pantalla de
-  suscripción.
+- `SubscriptionContent.tsx`: el badge ya dice «Incluido» (`bac46edc`); quedan el párrafo «vienen incluidos en cualquier plan pago…» y el candado gris atados a `hasActivePaidPlan`.
 - `apps/mobile/lib/mi-panel.ts` mantiene nombres `MI_PANEL_*` salvo la ruta (renombre integral
   pendiente); `apps/web/src/app/coach/tools/loading.tsx` borrado con el launcher.
-- 7C fase 2 (delta de «En riesgo» y saldo neto de alumnos con snapshot diario por coach; molde
-  `api/cron/weekly-snapshot`) y «reach global» del buscador RN (overlay en `(tabs)/_layout.tsx`).
+- ~~7C fase 2~~ → hecha (`852d5be2`); queda «reach global» del buscador RN (overlay en `(tabs)/_layout.tsx`; hoy solo en Inicio).
+- Tras «Ordenar mi panel según mi especialidad», la tarjeta web conserva el orden manual viejo hasta refrescar (cosmético).
+- Logout duplicado: «Más» y «Mi cuenta» (/coach/perfil) — decidir si queda uno solo.
 - Theme RN no expone `success-600`/`danger-600` (el hero usa el 500 vía `theme.success`/
   `theme.destructive`): escalones en `lib/theme.ts` si se quiere 1:1 con el web.
 - Adherencia: el denominador es el programa actual (mismo sesgo que el número principal).
