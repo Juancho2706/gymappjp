@@ -26,6 +26,7 @@ import type { DirectoryPulseRow } from '@/services/dashboard.service'
 import type { DirectoryRiskFilter } from './directory-types'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
+import { FUNCIONES_PATH } from '@/lib/domain-off'
 import { cn } from '@/lib/utils'
 
 export type { DirectoryRiskFilter } from './directory-types'
@@ -281,18 +282,18 @@ export function CoachWarRoom({
                     </div>
                 </div>
 
-                {/* ===== Herramientas / Módulos (entrada tool-first, arriba del directorio) —
-                    solo si el coach tiene ≥1 módulo del hub activo (cardio/movimiento/composición). ===== */}
+                {/* ===== Funciones (entrada tool-first, arriba del directorio) — solo si el coach
+                    tiene ≥1 módulo del hub activo (cardio/movimiento/composición). ===== */}
                 {toolsEnabled && (
                     <Link
-                        href="/coach/tools"
+                        href={FUNCIONES_PATH}
                         className="eva-press flex w-full items-center gap-3 rounded-card border border-subtle bg-surface-card px-[13px] py-[11px] text-left shadow-[var(--shadow-xs)]"
                     >
                         <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[11px] bg-sport-100 text-sport-600">
                             <LayoutGrid className="h-[19px] w-[19px]" />
                         </span>
                         <span className="min-w-0 flex-1">
-                            <span className="block text-sm font-bold text-strong">Herramientas</span>
+                            <span className="block text-sm font-bold text-strong">Funciones</span>
                             <span className="block truncate text-[11.5px] text-muted">
                                 Cardio · Movimiento · Composición
                             </span>

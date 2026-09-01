@@ -39,7 +39,8 @@ export default async function CoachClientsPage({
     const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
     const activeTeamId = workspace?.type === 'coach_team' ? workspace.teamId : null
 
-    // Acceso a Herramientas (hub /coach/tools) — MISMO gate que el sidebar y las páginas de
+    // Acceso a Funciones (`/coach/settings/funciones`, que absorbió el hub /coach/tools en la Ola
+    // de orden W3.7) — MISMO gate que el sidebar y las páginas de
     // módulo: enabled_modules del contexto activo (team manda; standalone usa los flags del
     // coach; enterprise v1 ⇒ ninguno) + kill-switch de operador. Solo se muestra el acceso si
     // ≥1 de los módulos del hub (cardio/movimiento/composición) está activo.

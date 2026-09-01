@@ -1,8 +1,8 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { Suspense, type ReactNode } from 'react'
-import { ADDON_MODULE_KEYS, type SubscriptionTier } from '@/lib/constants'
-import { Palette, Package, ChevronRight, Users, CreditCard, SlidersHorizontal, LayoutGrid, LifeBuoy, type LucideIcon } from 'lucide-react'
+import { type SubscriptionTier } from '@/lib/constants'
+import { Palette, ChevronRight, Users, CreditCard, SlidersHorizontal, LayoutGrid, LifeBuoy, type LucideIcon } from 'lucide-react'
 import { SupportPane } from './_components/SupportPane'
 import type { Persona } from '@eva/schemas'
 import { SubscriptionContent } from '../subscription/_components/SubscriptionContent'
@@ -11,13 +11,11 @@ import { CoachSignOutCard } from './_components/CoachSignOut'
 import { ThemeToggleCard } from './_components/ThemeToggleCard'
 import { getCoachSettingsForUser } from './_data/settings.queries'
 import { BrandSettingsForm } from './BrandSettingsForm'
-import { ModulesForm } from './modules/_components/ModulesForm'
-import { FeaturePrefsPanel } from '@/components/coach/FeaturePrefsPanel'
 import { CoachBrandAvatar, EvaBrandFallback } from '@/components/coach/CoachBrandAvatar'
 import { AreasManager } from './areas/_components/AreasManager'
-import { getModulesContext } from './modules/_data/modules.queries'
-import { domainsWithSectionEditor, getFuncionesContext } from './funciones/_data/funciones.queries'
+import { getFuncionesContext } from './funciones/_data/funciones.queries'
 import { MiPanelPane } from './funciones/_components/MiPanelPane'
+import { TeamFuncionesPane } from './funciones/_components/TeamFuncionesPane'
 import { getAreasContext } from './areas/_data/areas.queries'
 import { CoachSettingsDesktop, type SettingsSectionId } from './_components/CoachSettingsDesktop'
 import type { Metadata } from 'next'
@@ -178,13 +176,9 @@ export default async function CoachSettingsPage() {
     const displayName = coach.brand_name || coach.full_name || 'Coach'
     const standaloneBrandingVisible = isBrandingAllowed((coach.subscription_tier ?? 'free') as EvaSubscriptionTier)
     const clientLabel = `${clientCount} ${clientCount === 1 ? 'alumno' : 'alumnos'}`
-    const enabledModules = (coach.enabled_modules && typeof coach.enabled_modules === 'object'
-        ? (coach.enabled_modules as Record<string, unknown>)
-        : {})
-    const activeModuleCount = ADDON_MODULE_KEYS.filter((k) => enabledModules[k] === true).length
 
     // C (Settings hub): en contexto team la marca es DEL EQUIPO (Brand Studio en /coach/team)
-    // y la facturación la maneja EVA — acá queda lo del coach como persona: módulos y cuenta.
+    // y la facturación la maneja EVA — acá queda lo del coach como persona: funciones y cuenta.
     if (coach.subscription_status === 'team_managed') {
         return (
             // Móvil: SIN px/py propios — CoachMainWrapper ya da el gutter px-5 py-6 (patrón
@@ -221,24 +215,14 @@ export default async function CoachSettingsPage() {
                     />
                 </div>
 
-                {/* Funciones del equipo — visibilidad de nutrición (solo gestores; la query/RLS gatean) */}
-                <div className="space-y-3">
-                    <Eyebrow>Incluido con el equipo</Eyebrow>
-                    <HubCard
-                        href="/coach/settings/modules"
-                        icon={Package}
-                        title="Módulos del equipo"
-                        desc="Herramientas profesionales del pool"
-                        badge={{ label: `${activeModuleCount} activos`, tone: 'sport' }}
-                    />
-                </div>
+                {/* Funciones del equipo — qué se ve del pool (solo gestores; la query/RLS gatean) */}
                 <div className="space-y-3">
                     <Eyebrow>Configuración</Eyebrow>
                     <HubCard
                         href="/coach/settings/funciones"
                         icon={SlidersHorizontal}
                         title="Funciones del equipo"
-                        desc="Visibilidad de nutrición del equipo"
+                        desc="Qué ve el equipo y sus alumnos"
                     />
                     <HubCard
                         href="/coach/settings/areas"
@@ -273,11 +257,7 @@ export default async function CoachSettingsPage() {
     // ── Desktop (≥760): SettingsShell de 2 paneles (rail + sección embebida) ──
     // Las sub-páginas siguen vivas como rutas directas; en desktop embebemos su contenido REAL
     // (mismos componentes + mismos datos) sin navegación. Data de cada sección en paralelo.
-    const [modulesRes, funcionesRes, areasRes] = await Promise.all([
-        getModulesContext(),
-        getFuncionesContext(),
-        getAreasContext(),
-    ])
+    const [funcionesRes, areasRes] = await Promise.all([getFuncionesContext(), getAreasContext()])
 
     const sections: Partial<Record<SettingsSectionId, ReactNode>> = {
         marca: (
@@ -308,34 +288,21 @@ export default async function CoachSettingsPage() {
             </PaneBody>
         ),
     }
-    if (modulesRes.ctx) {
-        sections.modulos = (
-            <PaneBody desc="Herramientas profesionales incluidas en los planes pagos.">
-                <ModulesForm
-                    modules={modulesRes.ctx.modules}
-                    killedByOperator={modulesRes.ctx.killedByOperator}
-                    scope={modulesRes.ctx.scope}
-                    hasPaidPlan={modulesRes.ctx.hasPaidPlan}
-                    nutritionVisible={modulesRes.ctx.nutritionVisible}
-                />
-            </PaneBody>
-        )
-    }
     if (funcionesRes.ctx) {
-        // Onboarding v2 (W2.6): en standalone esta zona pasó a ser «Mi panel» (especialidad +
-        // dominios visibles + alumno de ejemplo, con el detalle de nutrición al pie). En team
-        // sigue siendo el editor de secciones del pool: la persona es PERSONAL, no del equipo.
+        // Ola de orden W3.1: en standalone esta zona es «Funciones» y absorbió el catálogo de
+        // Módulos y el launcher Herramientas (especialidad + áreas con su «Abrir» + detalle de
+        // nutrición + guía + alumno de ejemplo). En team sigue siendo el editor de secciones del
+        // pool: la persona es PERSONAL, no del equipo.
         sections.funciones =
             funcionesRes.ctx.scope === 'team' ? (
-                <PaneBody desc="Elige qué tan a fondo trabaja la nutrición tu equipo y qué secciones ven sus alumnos.">
-                    <FeaturePrefsPanel
-                        scope="team"
+                <PaneBody desc="Qué ve el equipo y sus alumnos, y qué tan a fondo trabaja la nutrición.">
+                    <TeamFuncionesPane
                         teamId={funcionesRes.ctx.teamId!}
-                        domains={domainsWithSectionEditor(funcionesRes.ctx.domains)}
+                        domains={funcionesRes.ctx.domains}
                     />
                 </PaneBody>
             ) : (
-                <PaneBody desc="Tu especialidad, qué módulos ves en el menú y tu alumno de ejemplo.">
+                <PaneBody desc="Tu especialidad, qué ves en tu panel y tu alumno de ejemplo.">
                     <MiPanelPane domains={funcionesRes.ctx.domains} />
                 </PaneBody>
             )
@@ -386,7 +353,6 @@ export default async function CoachSettingsPage() {
                     />
                 </div>
 
-                {/* Plan: suscripción base + módulos incluidos, juntos. */}
                 <div className="space-y-3">
                     <Eyebrow>Plan</Eyebrow>
                     <HubCard
@@ -395,13 +361,6 @@ export default async function CoachSettingsPage() {
                         title="Suscripción"
                         desc="Tu plan, facturación, alumnos activos y métodos de pago"
                     />
-                    <HubCard
-                        href="/coach/settings/modules"
-                        icon={Package}
-                        title="Módulos"
-                        desc="Herramientas profesionales incluidas en los planes pagos"
-                        badge={{ label: `${ADDON_MODULE_KEYS.length} módulos`, tone: 'sport' }}
-                    />
                 </div>
 
                 <div className="space-y-3">
@@ -409,8 +368,8 @@ export default async function CoachSettingsPage() {
                     <HubCard
                         href="/coach/settings/funciones"
                         icon={SlidersHorizontal}
-                        title="Mi panel"
-                        desc="Tu especialidad, qué módulos ves y tu alumno de ejemplo"
+                        title="Funciones"
+                        desc="Tu especialidad, qué ves en tu panel y tu alumno de ejemplo"
                     />
                     <HubCard
                         href="/coach/settings/areas"

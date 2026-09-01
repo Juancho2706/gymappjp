@@ -43,11 +43,15 @@ import { hasModule } from '@/services/entitlements.service'
  * Metadata de presentacion por dominio (label + icono + descripcion). Una entrada por
  * `FeatureDomain`.
  *
- * `description` la consume «Opciones › Mi panel» (onboarding v2 W2.6): explica en una linea QUE se
- * apaga, para que el master switch no sea una palabra suelta. El icono es un componente de
- * `lucide-react` — este archivo importa service-role, asi que NUNCA se importa desde un client
- * component: la pagina baja `label`/`description` como props (strings) y el cliente resuelve su
- * propio icono por key.
+ * `description` la consume «Opciones › Funciones» (onboarding v2 W2.6; Ola de orden W3.1): el
+ * PITCH corto del area en una linea — que hace, no que se apaga. Se condensa de
+ * `@eva/module-catalog` (cardio / movimiento / composicion / nutricion) para que el catalogo de
+ * `/coach/settings/modules`, ahora demolido, no se pierda: la fila es catalogo + interruptor +
+ * puerta de entrada al mismo tiempo. Sin promesas de plan: todo esta en todos los planes.
+ *
+ * El icono es un componente de `lucide-react` — este archivo importa service-role, asi que NUNCA
+ * se importa desde un client component: la pagina baja `label`/`description` como props (strings)
+ * y el cliente resuelve su propio icono por key.
  */
 export interface DomainMeta {
     label: string
@@ -59,27 +63,27 @@ export const DOMAIN_META: Record<FeatureDomain, DomainMeta> = {
     nutrition: {
         label: 'Nutrición',
         icon: Apple,
-        description: 'Pautas, porciones e intercambios, y lo que ve tu alumno de su alimentación.',
+        description: 'Pautas por porciones e intercambios, y el plan que ve tu alumno.',
     },
     training: {
         label: 'Entrenamiento',
         icon: Dumbbell,
-        description: 'Rutinas, programas y ejercicios del planificador.',
+        description: 'Programas, biblioteca de ejercicios y ejecución guiada.',
     },
     cardio: {
         label: 'Cardio',
         icon: HeartPulse,
-        description: 'Zonas de frecuencia cardíaca, ritmos e intervalos.',
+        description: 'Bloques por tiempo, ritmo o distancia con zonas de frecuencia cardíaca.',
     },
     movement: {
         label: 'Movimiento',
         icon: PersonStanding,
-        description: 'Screening de 7 patrones y la pauta de ejercicios para la casa.',
+        description: 'Screening de 7 patrones con semáforo de prioridad y evolución.',
     },
     bodycomp: {
         label: 'Composición corporal',
         icon: Ruler,
-        description: 'Mediciones por BIA o antropometría ISAK y su evolución.',
+        description: 'Bioimpedancia y antropometría ISAK en un mismo historial.',
     },
 }
 
@@ -88,7 +92,7 @@ export const DOMAIN_META: Record<FeatureDomain, DomainMeta> = {
  * `DOMAIN_META`, no de `FEATURE_DOMAINS`.
  *
  * Onboarding v2 (SPEC coach-onboarding-v2 §2): los cinco dominios entran acá porque la persona
- * del coach escribe el master switch `_enabled` de TODOS, y «Mi panel» los pinta todos. Ojo: no
+ * del coach escribe el master switch `_enabled` de TODOS, y «Funciones» los pinta todos. Ojo: no
  * todos tienen secciones internas que ajustar — para eso está `domainsWithSectionEditor`.
  */
 const DOMAIN_KEYS = Object.keys(DOMAIN_META) as FeatureDomain[]
@@ -108,7 +112,7 @@ export type FuncionesScope = 'coach' | 'team'
 export interface DomainFuncionesConfig {
     domain: FeatureDomain
     label: string
-    /** Una linea: que se apaga con el master switch. La baja «Mi panel» como prop al cliente. */
+    /** Una linea: el pitch corto del area. La baja «Funciones» como prop al cliente. */
     description: string
     sections: readonly FeatureSection[]
     /** Preset guardado de ese dominio (coercionado a un Preset valido). Default `'basico'`. */
@@ -270,7 +274,7 @@ async function resolveEntitlement(
 /**
  * Dominios con SECCIONES internas ajustables — los unicos que tienen algo que mostrar en el
  * editor fino (`FeaturePrefsPanel`: preset + expander «Ajustar secciones»). Hoy es solo
- * Nutricion; los otros cuatro son master-switch puro y viven en «Mi panel».
+ * Nutricion; los otros cuatro son master-switch puro y viven en la tarjeta de areas de «Funciones».
  *
  * Sin este filtro, sumar los 4 dominios nuevos a `DOMAIN_META` haria que el panel de secciones
  * pintara cuatro areas con la pregunta de preset («¿Qué tan a fondo trabajas entrenamiento?») y

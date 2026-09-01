@@ -128,10 +128,10 @@ export default async function CoachTeamPage() {
                                     <div className="mt-1 text-[10.5px] font-bold uppercase tracking-[0.04em] text-on-dark-muted">Alumnos</div>
                                 </div>
 
-                                <Link href="/coach/settings/modules" className="flex-1 text-center">
+                                <Link href="/coach/settings/funciones" className="flex-1 text-center">
                                     <div className="font-display text-[26px] font-black leading-none text-on-dark">{activeModules}</div>
                                     <div className="mt-1 inline-flex items-center gap-0.5 text-[10.5px] font-bold uppercase tracking-[0.04em] text-sport-300">
-                                        Módulos <ChevronRight className="h-[11px] w-[11px]" />
+                                        Funciones <ChevronRight className="h-[11px] w-[11px]" />
                                     </div>
                                 </Link>
                             </div>

@@ -25,7 +25,7 @@ export function canAccessWorkspacePath(workspace: ActiveWorkspace, pathname: str
 
     // C (Settings hub): /coach/settings es CONTEXT-AWARE — standalone ve Mi Marca completa;
     // coach_team ve el hub del team (Módulos + Mi Equipo + cuenta). La página decide el contenido.
-    // /coach/settings/modules incluido (el owner/co-gestor del team edita los toggles del pool).
+    // /coach/settings/modules incluido (hoy es un redirect a /coach/settings/funciones, W3.2).
     if (pathname.startsWith('/coach/settings')) {
         if (workspace.type === 'coach_standalone' || workspace.type === 'coach_team') return { allowed: true }
         return { allowed: false, reason: 'settings_require_coach_workspace', redirectTo: defaultWorkspaceHome(workspace) }

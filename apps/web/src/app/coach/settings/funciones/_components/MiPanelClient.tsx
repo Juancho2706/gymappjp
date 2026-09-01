@@ -1,31 +1,33 @@
 'use client'
 
-import { useRef, useState, useTransition } from 'react'
+import { useRef, useState, useTransition, type ReactNode } from 'react'
 import { toast } from 'sonner'
-import { Apple, Dumbbell, HeartPulse, PersonStanding, Ruler, Sparkles, Trash2, UserPlus } from 'lucide-react'
+import { Apple, Dumbbell, HeartPulse, PersonStanding, Sparkles, Trash2, UserPlus } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { PERSONA_COPY, PERSONA_TILE_ORDER, type Persona } from '@eva/schemas'
-import type { FeatureDomain } from '@eva/feature-prefs'
 import { Button } from '@/components/ui/button'
 import { SegmentedControl } from '@/components/ui/segmented-control'
-import { Switch } from '@/components/ui/switch'
 import { cn } from '@/lib/utils'
 import {
     deleteDemoStudentAction,
     reseedDemoStudentAction,
     saveMiPanelPersonaAction,
-    setMiPanelDomainAction,
 } from '../_actions/mi-panel.actions'
+import { DomainsCard, type MiPanelDomainRow } from './DomainsCard'
+import type { BodycompClient } from '../_data/bodycomp-clients.queries'
 
 /**
- * «Opciones › Mi panel» (onboarding v2, TASKS F2.6): la misma pregunta del primer ingreso, pero
- * reversible y sin gate — más el master switch de cada dominio y el alumno de ejemplo.
+ * «Opciones › Funciones» (onboarding v2 TASKS F2.6; retitulada en la Ola de orden W3.1): la misma
+ * pregunta del primer ingreso, pero reversible y sin gate — más las áreas del panel y el alumno
+ * de ejemplo.
  *
- * Dos decisiones de producto que se ven en el código:
- *  - Cambiar de especialidad NO reordena el panel solo. El checkbox «Ordenar mi panel según mi
- *    especialidad» es explícito y arranca APAGADO: quien ya ajustó sus dominios a mano no puede
- *    perderlos por cambiar una etiqueta.
- *  - Apagar un dominio oculta su menú y su contenido, no borra nada. El copy lo dice.
+ * Orden de la pantalla (W3.1, decisión 5A): especialidad › áreas › detalle de nutrición › guía ›
+ * alumno de ejemplo. Los dos del medio son SERVER y llegan por el slot `afterDomains`; la tarjeta
+ * de áreas vive aparte en `DomainsCard` porque el scope team también la monta.
+ *
+ * Una decisión de producto que se ve en el código: cambiar de especialidad NO reordena el panel
+ * solo. El checkbox «Ordenar mi panel según mi especialidad» es explícito y arranca APAGADO: quien
+ * ya ajustó sus áreas a mano no puede perderlas por cambiar una etiqueta.
  *
  * Los iconos se resuelven ACÁ por key: `funciones.queries.ts` (que tiene los mismos en
  * `DOMAIN_META`) importa service-role y no puede cruzar al bundle del cliente.
@@ -39,34 +41,35 @@ const PERSONA_ICONS: Record<Persona, LucideIcon> = {
     other: Sparkles,
 }
 
-const DOMAIN_ICONS: Record<FeatureDomain, LucideIcon> = {
-    nutrition: Apple,
-    training: Dumbbell,
-    cardio: HeartPulse,
-    movement: PersonStanding,
-    bodycomp: Ruler,
-}
-
-export interface MiPanelDomainRow {
-    domain: FeatureDomain
-    label: string
-    description: string
-    enabled: boolean
-}
-
 export interface MiPanelClientProps {
     persona: Persona | null
     alsoOther: boolean
     domains: MiPanelDomainRow[]
+    /** Alumnos del workspace activo — los usa el picker de Composición corporal. */
+    bodycompClients: BodycompClient[]
     /** `true` = el coach ya tiene alumno de ejemplo sembrado. */
     hasDemo: boolean
+    /**
+     * Bloques SERVER que van entre las áreas y el alumno de ejemplo (W3.1: detalle de nutrición
+     * + vuelta a la guía). Llegan como slot porque este componente es cliente y esos dos leen
+     * datos del servidor: partirlos en dos islas rompería el orden de la pantalla.
+     */
+    afterDomains?: ReactNode
 }
 
-export function MiPanelClient({ persona, alsoOther, domains, hasDemo }: MiPanelClientProps) {
+export function MiPanelClient({
+    persona,
+    alsoOther,
+    domains,
+    bodycompClients,
+    hasDemo,
+    afterDomains,
+}: MiPanelClientProps) {
     return (
         <div className="space-y-5">
             <PersonaCard persona={persona} alsoOther={alsoOther} />
-            <DomainsCard domains={domains} />
+            <DomainsCard domains={domains} bodycompClients={bodycompClients} />
+            {afterDomains}
             <DemoCard persona={persona} hasDemo={hasDemo} />
         </div>
     )
@@ -219,71 +222,6 @@ function PersonaCard({ persona, alsoOther }: { persona: Persona | null; alsoOthe
             >
                 Guardar especialidad
             </Button>
-        </section>
-    )
-}
-
-// ── 2. Dominios ──────────────────────────────────────────────────────────────────────────────
-
-function DomainsCard({ domains }: { domains: MiPanelDomainRow[] }) {
-    const [state, setState] = useState<Record<string, boolean>>(() =>
-        Object.fromEntries(domains.map((d) => [d.domain, d.enabled])),
-    )
-    const [isPending, startTransition] = useTransition()
-
-    function toggle(domain: FeatureDomain, next: boolean) {
-        const previous = state[domain] ?? true
-        setState((current) => ({ ...current, [domain]: next }))
-        startTransition(async () => {
-            const result = await setMiPanelDomainAction({ domain, enabled: next })
-            if (!result.ok) {
-                // Revertir: el switch no puede quedar mostrando algo que la base no guardó.
-                setState((current) => ({ ...current, [domain]: previous }))
-                toast.error(result.error)
-                return
-            }
-            toast.success(result.message)
-        })
-    }
-
-    return (
-        <section className="rounded-2xl border border-subtle bg-surface-card p-4">
-            <h2 className="text-sm font-semibold text-strong">Qué se ve en tu panel</h2>
-            <p className="mt-1 text-xs leading-relaxed text-muted">
-                Apaga lo que no uses: se oculta del menú, para ti y para tus alumnos. No se borra
-                ningún dato y lo puedes volver a prender cuando quieras.
-            </p>
-
-            <ul className="mt-3 space-y-2">
-                {domains.map((row) => {
-                    const Icon = DOMAIN_ICONS[row.domain]
-                    const enabled = state[row.domain] ?? true
-                    return (
-                        <li
-                            key={row.domain}
-                            className="flex items-center justify-between gap-4 rounded-control border border-subtle bg-background p-3"
-                        >
-                            <div className="flex min-w-0 items-start gap-2.5">
-                                <Icon className="mt-0.5 h-4 w-4 shrink-0 text-[var(--sport-600)]" aria-hidden="true" />
-                                <div className="min-w-0">
-                                    <p className="text-[13px] font-semibold text-strong">{row.label}</p>
-                                    <p className="mt-0.5 text-xs leading-relaxed text-muted">
-                                        {row.description}
-                                    </p>
-                                </div>
-                            </div>
-                            <label className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center">
-                                <span className="sr-only">Mostrar {row.label}</span>
-                                <Switch
-                                    checked={enabled}
-                                    disabled={isPending}
-                                    onCheckedChange={(next) => toggle(row.domain, next)}
-                                />
-                            </label>
-                        </li>
-                    )
-                })}
-            </ul>
         </section>
     )
 }

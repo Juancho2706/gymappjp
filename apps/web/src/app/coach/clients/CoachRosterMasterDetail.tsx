@@ -5,6 +5,7 @@ import { differenceInDays } from 'date-fns'
 import { Search, LayoutGrid, Plus, Users, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
+import { FUNCIONES_PATH } from '@/lib/domain-off'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { DirectoryPulseRow } from '@/services/dashboard.service'
 import { useAddStudentFlow } from './_components/add-student-flow-context'
@@ -180,14 +181,14 @@ export function CoachRosterMasterDetail({
                         </span>
                         {showTools && (
                             <Link
-                                href="/coach/tools"
+                                href={FUNCIONES_PATH}
                                 prefetch={false}
-                                title="Herramientas · Cardio · Movimiento · Composición"
+                                title="Funciones · Cardio · Movimiento · Composición"
                                 className="group ml-1 inline-flex h-[30px] shrink-0 items-center gap-1.5 rounded-[10px] border border-[color-mix(in_srgb,var(--sport-500)_28%,transparent)] bg-sport-100 px-2 text-sport-700 transition-colors hover:bg-sport-200"
                             >
                                 <LayoutGrid className="h-[15px] w-[15px] shrink-0" />
                                 <span className="hidden text-[12px] font-extrabold min-[1000px]:inline">
-                                    Herramientas
+                                    Funciones
                                 </span>
                             </Link>
                         )}

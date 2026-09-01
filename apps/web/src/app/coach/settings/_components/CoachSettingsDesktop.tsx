@@ -4,7 +4,6 @@ import { useState, type ReactNode } from 'react'
 import {
     Palette,
     CreditCard,
-    LayoutGrid,
     SlidersHorizontal,
     LayoutList,
     Upload,
@@ -24,15 +23,17 @@ import { ImportPane } from './ImportPane'
  *
  * Rail izquierdo de secciones agrupadas + panel derecho que renderiza EMBEBIDA la sección
  * activa (sin doble back / sin navegación de página). El contenido de cada panel lo arma la
- * page (RSC) con los componentes REALES (BrandStudio, ModulesForm, FeaturePrefsPanel,
+ * page (RSC) con los componentes REALES (BrandStudio, MiPanelPane/TeamFuncionesPane,
  * AreasManager, ThemeToggleCard, DangerZone) y se pasa acá como slots `sections[id]`.
+ *
+ * Ola de orden W3.6: el pane «Módulos» salió del rail — su catálogo lo absorbió «Funciones»
+ * (antes «Mi panel»), que ahora es la única pantalla de qué-se-ve-y-cómo-entro.
  *
  * Solo se monta en md+ (`hidden md:block` en la page); <760px usa el hub móvil verbatim.
  */
 export type SettingsSectionId =
     | 'marca'
     | 'suscripcion'
-    | 'modulos'
     | 'funciones'
     | 'areas'
     | 'apariencia'
@@ -60,8 +61,7 @@ interface Cat {
 const CATS: Cat[] = [
     { id: 'marca', label: 'Mi Marca', icon: Palette, group: 'Cuenta' },
     { id: 'suscripcion', label: 'Suscripción', icon: CreditCard, group: 'Cuenta' },
-    { id: 'modulos', label: 'Módulos', icon: LayoutGrid, group: 'Entrenamiento' },
-    { id: 'funciones', label: 'Mi panel', icon: SlidersHorizontal, group: 'Entrenamiento' },
+    { id: 'funciones', label: 'Funciones', icon: SlidersHorizontal, group: 'Entrenamiento' },
     { id: 'areas', label: 'Áreas del builder', icon: LayoutList, group: 'Entrenamiento' },
     { id: 'importar', label: 'Importar alumnos', icon: Upload, group: 'Entrenamiento', local: true },
     { id: 'apariencia', label: 'Apariencia', icon: Moon, group: 'Preferencias' },

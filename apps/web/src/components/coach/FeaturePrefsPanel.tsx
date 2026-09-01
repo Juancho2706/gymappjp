@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { toast } from 'sonner'
-import { Apple, ChevronDown, Sparkles, Save } from 'lucide-react'
+import { Apple, ChevronDown, Save } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import {
     DOMAIN_ENABLED_KEY,
@@ -37,10 +37,11 @@ import {
  * UI por area (plan §4 / spec UI-UX), dentro de cada grupo:
  *  1. Selector de PRESET (1 pregunta, doble como onboarding, descartable).
  *  2. Master switch del dominio (key reservada `_enabled`).
- *  3. Expander "Ajustar secciones" -> toggles por seccion (skip core), con badge Base/Pro +
- *     InfoTooltip. TODAS las secciones toggleables se muestran como un toggle normal (W4.1,
- *     2026-09-01): la UI no bloquea ninguna. El entitlement lo sigue aplicando el servidor
- *     (`entitled && wants`) y esta preferencia solo achica — nunca prende algo no entitled.
+ *  3. Expander "Ajustar secciones" -> toggles por seccion (skip core), con InfoTooltip
+ *     (sin chips: ni «Pro» ni «Base», W3 11B). TODAS las secciones toggleables se muestran como un toggle normal (W4.1,
+ *     2026-09-01) y ya sin badge «Pro» (W3, decision 11B): la UI no bloquea ninguna. El
+ *     entitlement lo sigue aplicando el servidor (`entitled && wants`) y esta preferencia solo
+ *     achica — nunca prende algo no entitled.
  *
  * Todos los writes son optimistas (estado local) + toast, y revierten el estado si la action falla.
  * Cada grupo escribe via setCoach/TeamFeaturePrefs con SU dominio. Targets >=44px, respeta
@@ -107,12 +108,11 @@ export function FeaturePrefsPanel({ scope, teamId, domains }: FeaturePrefsPanelP
                 />
             ))}
 
-            {/* Explainer Modulos vs Funciones — UNA vez para todo el panel. */}
+            {/* Explainer — UNA vez para todo el panel (W3: ya no existe la pantalla Módulos). */}
             <p className="px-1 text-xs leading-relaxed text-muted-foreground">
-                <span className="font-semibold text-foreground">Módulos</span> es lo que compraste
-                (entitlements de pago). <span className="font-semibold text-foreground">Funciones</span>{' '}
-                es lo que decides mostrar de eso. Apagar una función nunca cancela un módulo ni borra
-                datos — solo la oculta.
+                Todo está incluido en tu cuenta.{' '}
+                <span className="font-semibold text-foreground">Funciones</span> es lo que decides
+                mostrar. Apagar una función nunca borra datos — solo la oculta.
             </p>
         </div>
     )
@@ -355,7 +355,6 @@ function DomainFuncionesGroup({
                                         >
                                             <ul className="divide-y divide-border border-t border-border">
                                                 {toggleableSections.map((section) => {
-                                                    const isPro = section.requiresModule !== null
                                                     // wants = pref guardada ?? default del preset actual.
                                                     const checked =
                                                         (sections[section.key] ??
@@ -371,7 +370,6 @@ function DomainFuncionesGroup({
                                                                     <span className="text-sm font-medium text-foreground">
                                                                         {section.label}
                                                                     </span>
-                                                                    <SectionBadge isPro={isPro} />
                                                                     <InfoTooltip
                                                                         content={section.tooltip}
                                                                     />
@@ -434,17 +432,3 @@ function DomainFuncionesGroup({
     )
 }
 
-function SectionBadge({ isPro }: { isPro: boolean }) {
-    if (isPro) {
-        return (
-            <span className="inline-flex items-center gap-1 rounded-full bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-600 dark:text-amber-400">
-                <Sparkles className="h-2.5 w-2.5" /> Pro
-            </span>
-        )
-    }
-    return (
-        <span className="inline-flex items-center rounded-full bg-muted px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-            Base
-        </span>
-    )
-}
