@@ -8,7 +8,7 @@ import { DomainOffNotice } from './DomainOffNotice'
  *
  * Lo que se protege acá es el CONTRATO del aviso, no las palabras exactas (que W3 va a mover
  * cuando renombre la pantalla): que el copy salga de `domainOffCopy` con el dominio recibido
- * (género incluido), que haya DOS salidas (prender en Mi panel + volver al inicio) y que NO se
+ * (género incluido), que haya DOS salidas (prender en Funciones + volver al inicio) y que NO se
  * cuele ningún gesto de venta — esto es una preferencia del coach, no un upsell.
  */
 describe('DomainOffNotice (W1.4b)', () => {

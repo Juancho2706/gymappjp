@@ -34,6 +34,6 @@ describe('domain-off — contrato del aviso «dominio apagado» (W1.3)', () => {
         }
         expect(DOMAIN_LABELS.bodycomp).toBe('Composición corporal')
         expect(FUNCIONES_PATH).toBe('/coach/settings/funciones')
-        expect(FUNCIONES_LABEL).toBe('Mi panel')
+        expect(FUNCIONES_LABEL).toBe('Funciones')
     })
 })

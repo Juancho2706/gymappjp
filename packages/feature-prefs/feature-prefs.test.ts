@@ -547,31 +547,31 @@ describe('@eva/feature-prefs — resolvePersonaPrefs (matriz de SPEC §2)', () =
 })
 
 describe('copy compartido «dominio apagado» (Ola de orden W1, mockup 9801fec7 1A/2A/3A)', () => {
-    it('hay label y genero para los 5 dominios; la pantalla se nombra como se llama HOY (1A)', () => {
+    it('hay label y genero para los 5 dominios; la pantalla se nombra «Funciones» (1A + W3)', () => {
         for (const domain of FEATURE_DOMAIN_KEYS) {
             expect(DOMAIN_LABELS[domain]).toBeTruthy()
             expect(['m', 'f']).toContain(DOMAIN_GENDER[domain])
         }
-        expect(FUNCIONES_LABEL).toBe('Mi panel')
-        expect(FUNCIONES_BREADCRUMB).toBe('Opciones › Mi panel')
+        expect(FUNCIONES_LABEL).toBe('Funciones')
+        expect(FUNCIONES_BREADCRUMB).toBe('Opciones › Funciones')
     })
 
     it('el aviso in-page concuerda en genero y nombra la pantalla real, sin plan ni precio', () => {
         const cardio = domainOffCopy('cardio')
         expect(cardio.title).toBe('Cardio está apagado en tu panel')
         expect(cardio.body).toBe(
-            'Lo apagaste en Opciones › Mi panel. Tus datos se conservan; préndelo para volver a usar zonas, pace e intervalos.',
+            'Lo apagaste en Opciones › Funciones. Tus datos se conservan; préndelo para volver a usar zonas, pace e intervalos.',
         )
-        expect(cardio.cta).toBe('Prender en Mi panel')
+        expect(cardio.cta).toBe('Prender en Funciones')
 
         const nutrition = domainOffCopy('nutrition')
         expect(nutrition.title).toBe('Nutrición está apagada en tu panel')
-        expect(nutrition.body.startsWith('La apagaste en Opciones › Mi panel.')).toBe(true)
+        expect(nutrition.body.startsWith('La apagaste en Opciones › Funciones.')).toBe(true)
 
         const training = domainOffCopy('training')
         expect(training.title).toBe('Entrenamiento está apagado en tu panel')
         expect(training.body).toBe(
-            'Lo apagaste en Opciones › Mi panel. Tus programas se conservan; préndelo para volver a verlos.',
+            'Lo apagaste en Opciones › Funciones. Tus programas se conservan; préndelo para volver a verlos.',
         )
 
         for (const domain of FEATURE_DOMAIN_KEYS) {
@@ -586,12 +586,12 @@ describe('copy compartido «dominio apagado» (Ola de orden W1, mockup 9801fec7 
     it('el banner del dashboard dice como re-prender y a donde ir (2A)', () => {
         const nutrition = domainOffBannerCopy('nutrition')
         expect(nutrition.title).toBe('Nutrición está apagada en tu panel.')
-        expect(nutrition.hint).toBe('Préndela en Opciones › Mi panel para volver a verla.')
-        expect(nutrition.cta).toBe('Ir a Mi panel')
+        expect(nutrition.hint).toBe('Préndela en Opciones › Funciones para volver a verla.')
+        expect(nutrition.cta).toBe('Ir a Funciones')
 
         const movement = domainOffBannerCopy('movement')
         expect(movement.title).toBe('Movimiento está apagado en tu panel.')
-        expect(movement.hint).toBe('Préndelo en Opciones › Mi panel para volver a verlo.')
+        expect(movement.hint).toBe('Préndelo en Opciones › Funciones para volver a verlo.')
 
         for (const domain of FEATURE_DOMAIN_KEYS) {
             expect(domainOffBannerCopy(domain).hint).toContain(FUNCIONES_BREADCRUMB)

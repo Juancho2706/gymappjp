@@ -186,7 +186,7 @@ export const NUTRITION_SECTIONS: readonly FeatureSection<NutritionSectionKey>[] 
     {
         key: 'micros_advanced',
         label: 'Micronutrientes (avanzado)',
-        tooltip: 'Micros por intercambios. Requiere Nutricion por intercambios.',
+        tooltip: 'Micronutrientes calculados desde las porciones e intercambios del plan.',
         core: false,
         defaultOn: false,
         requiresModule: 'nutrition_exchanges',
@@ -195,7 +195,7 @@ export const NUTRITION_SECTIONS: readonly FeatureSection<NutritionSectionKey>[] 
     {
         key: 'goals_bodycomp',
         label: 'Objetivos por composicion corporal',
-        tooltip: 'Objetivos atados a composicion corporal. Requiere Composicion corporal.',
+        tooltip: 'Objetivos del plan atados a la ultima medicion de composicion corporal del alumno.',
         core: false,
         defaultOn: false,
         requiresModule: 'body_composition',
@@ -283,7 +283,7 @@ export const FEATURE_DOMAINS = {
 
 export type FeatureDomain = keyof typeof FEATURE_DOMAINS
 
-/** Lista canonica de dominios (orden estable para iterar y para pintar Opciones › Mi panel). */
+/** Lista canonica de dominios (orden estable para iterar y para pintar Opciones › Funciones). */
 export const FEATURE_DOMAIN_KEYS = [
     'nutrition',
     'training',
@@ -414,7 +414,7 @@ export function resolveSections(
  * MATRIZ DE PERSONA → dominios visibles (onboarding v2, SPEC §2).
  *
  * La pregunta «¿A qué te dedicas?» REDUCE lo que se muestra: cada rama deja prendidos los
- * dominios de su mundo y apaga los demás, siempre reactivables desde Opciones › Mi panel. Lo que
+ * dominios de su mundo y apaga los demás, siempre reactivables desde Opciones › Funciones. Lo que
  * devuelve esta funcion es EXACTAMENTE lo que se persiste en `coach_feature_prefs` (una fila por
  * dominio, `sections` = `{ _enabled: boolean }`), asi que web y RN siembran lo mismo.
  *
@@ -477,7 +477,7 @@ export function resolvePersonaPrefs(
             })
         case 'other':
         default:
-            // El escape: panel completo, se ajusta despues desde Opciones › Mi panel.
+            // El escape: panel completo, se ajusta despues desde Opciones › Funciones.
             return prefs({
                 nutrition: true,
                 training: true,
@@ -537,15 +537,15 @@ export const PERSONA_DOMAIN_ORDER: Record<Persona, readonly FeatureDomain[]> = {
 // Vive ACA y no en `apps/web/src/lib` porque lo pintan web (DomainOffNotice, DomainOffBanner) y
 // RN (DomainOffNotice) con las MISMAS palabras: el coach no puede leer «Funciones» en un lado y
 // «Mi panel» en el otro. Decision 1A del owner: se nombra la pantalla como se llama HOY
-// («Opciones › Mi panel»); W3 la renombra a «Funciones» cambiando SOLO `FUNCIONES_LABEL`.
+// («Opciones › Funciones»); W3 la renombro a «Funciones» cambiando SOLO `FUNCIONES_LABEL` (01-09).
 // Las RUTAS no se comparten (web `/coach/settings/funciones`, RN `/coach/settings/mi-panel`):
 // cada app las declara en su propio `lib/domain-off.ts`.
 // ---------------------------------------------------------------------------------------------
 
-/** Nombre visible de la pantalla donde se prende/apaga un dominio. W3 lo cambia a «Funciones» SOLO aca. */
-export const FUNCIONES_LABEL = 'Mi panel' as const
+/** Nombre visible de la pantalla donde se prende/apaga un dominio (W3: «Funciones» en web y RN). */
+export const FUNCIONES_LABEL = 'Funciones' as const
 
-/** Ruta de migas que precede a `FUNCIONES_LABEL` en el copy («Opciones › Mi panel»). */
+/** Ruta de migas que precede a `FUNCIONES_LABEL` en el copy («Opciones › Funciones»). */
 export const FUNCIONES_BREADCRUMB = `Opciones › ${FUNCIONES_LABEL}` as const
 
 /** Nombre visible de cada dominio (banner, avisos in-page y pantalla de funciones). */
@@ -578,9 +578,9 @@ const DOMAIN_OFF_KEEP: Record<FeatureDomain, string> = {
 export interface DomainOffCopy {
     /** «Cardio está apagado en tu panel» */
     title: string
-    /** «Lo apagaste en Opciones › Mi panel. Tus datos se conservan; préndelo para…» */
+    /** «Lo apagaste en Opciones › Funciones. Tus datos se conservan; préndelo para…» */
     body: string
-    /** «Prender en Mi panel» */
+    /** «Prender en Funciones» */
     cta: string
 }
 
@@ -601,7 +601,7 @@ export function domainOffCopy(domain: FeatureDomain): DomainOffCopy {
 export interface DomainOffBannerCopy {
     /** «Nutrición está apagada en tu panel.» */
     title: string
-    /** «Préndela en Opciones › Mi panel para volver a verla.» */
+    /** «Préndela en Opciones › Funciones para volver a verla.» */
     hint: string
     /** «Ir a Mi panel» */
     cta: string
