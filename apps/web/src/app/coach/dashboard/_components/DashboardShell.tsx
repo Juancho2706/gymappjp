@@ -8,6 +8,7 @@ import { CoachBrandAvatar, EvaBrandFallback } from '@/components/coach/CoachBran
 import { NewsBellButton } from '@/components/coach/NewsBellButton'
 import { AmbientBrandGlow } from '@/components/coach/AmbientBrandGlow'
 import { BillingBanners } from './banners/BillingBanners'
+import { DomainOffBanner } from './banners/DomainOffBanner'
 import { VerifyEmailBanner } from './banners/VerifyEmailBanner'
 import { RegistrationMirror } from '../../_components/RegistrationMirror'
 import { PulseHero } from './PulseHero'
@@ -138,9 +139,19 @@ export function DashboardShell({
                     colapsa el bloque (y su margen) cuando no hay ningún banner que mostrar → sin
                     aire muerto extra bajo el notch para coaches sin avisos. */}
                 <div className="mb-4 flex flex-col gap-2 empty:hidden">
-                    {/* W3.11 — verificación blanda: primero de la pila porque es el único aviso que
-                        habla de perder la CUENTA (sin correo probado no hay reset de clave), y el
-                        único que no bloquea nada. Sin CTA de pago (regla de tiendas iOS). */}
+                    {/* W1.5 — dominio apagado: PRIMERO de la pila porque es el único que responde a
+                        la acción que el coach ACABA de hacer (abrió/tipeó una ruta de un dominio que
+                        él mismo apagó y `assertDomainEnabled` lo devolvió acá con
+                        `?notice=domain_off&domain=…`). Los demás hablan de estados que vienen de
+                        antes, y este además se va solo: se cierra con × y no se persiste (2A).
+                        `Suspense` porque lee `useSearchParams` (mismo motivo que el espejo de
+                        registro de arriba). */}
+                    <Suspense>
+                        <DomainOffBanner />
+                    </Suspense>
+                    {/* W3.11 — verificación blanda: el aviso de CUENTA (sin correo probado no hay
+                        reset de clave), y el único que no bloquea nada. Sin CTA de pago (regla de
+                        tiendas iOS). */}
                     {!emailVerified && <VerifyEmailBanner />}
                     <BillingBanners
                         subscriptionStatus={data.subscriptionStatus}
