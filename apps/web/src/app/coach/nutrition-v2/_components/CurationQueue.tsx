@@ -51,6 +51,11 @@ export function CurationQueue({ countryCode = 'CL' }: { countryCode?: string }) 
       setNextOffset(res.nextOffset)
       setError(null)
       setLoading(false)
+    }).catch(() => {
+      // Espejo del camino de fallo de arriba (EVA-NEXTJS-19).
+      if (!active) return
+      setError('No pudimos cargar la bandeja de curación.')
+      setLoading(false)
     })
     return () => {
       active = false
@@ -358,6 +363,12 @@ function CatalogPicker({
         return
       }
       setItems(res.items)
+      setLoading(false)
+    }).catch(() => {
+      // Espejo del camino de fallo de arriba (EVA-NEXTJS-19).
+      if (!active || latestQuery.current !== debounced) return
+      setSearchError('No pudimos buscar en el catálogo.')
+      setItems([])
       setLoading(false)
     })
     return () => {

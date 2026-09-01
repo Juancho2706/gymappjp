@@ -293,7 +293,9 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
           toast.success('PDF descargado')
           // Bitácora AC7 — fire-and-forget; solo inserta si el contexto activo es team.
           if (exchange.planId) {
-            void logNutritionPdfGeneratedAction({ planId: exchange.planId, format })
+            void logNutritionPdfGeneratedAction({ planId: exchange.planId, format }).catch(() => {
+              // best-effort: sin red o respuesta no-RSC no rompe nada (EVA-NEXTJS-19)
+            })
           }
         } catch (e) {
           console.error('[module:nutrition_exchanges] pdf coach', e)
@@ -307,11 +309,15 @@ export function PlanBuilder({ mode, coachId, clientId, initialData, clientProfil
 
   useEffect(() => {
     if (!clientId) return
-    getClientFoodFavorites(clientId).then((ids) => setClientFavoriteIds(new Set(ids)))
+    getClientFoodFavorites(clientId).then((ids) => setClientFavoriteIds(new Set(ids))).catch(() => {
+      // best-effort: sin red o respuesta no-RSC no rompe nada (EVA-NEXTJS-19)
+    })
     getClientFoodRestrictions(clientId).then((rows) => {
       setClientAllergyIds(new Set(rows.filter((r) => r.preference_type === 'allergy').map((r) => r.food_id)))
       setClientIntoleranceIds(new Set(rows.filter((r) => r.preference_type === 'intolerance').map((r) => r.food_id)))
       setClientDislikeIds(new Set(rows.filter((r) => r.preference_type === 'dislike').map((r) => r.food_id)))
+    }).catch(() => {
+      // best-effort: sin red o respuesta no-RSC no rompe nada (EVA-NEXTJS-19)
     })
   }, [clientId])
 

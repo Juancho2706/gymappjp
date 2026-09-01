@@ -118,10 +118,15 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
         void getCoachSubscriptionEvents(coach.id).then(data => {
             setEvents(data)
             setLoadingEvents(false)
+        }).catch(() => {
+            // Espejo del unico camino de fallo: liberar el "Cargando..." (EVA-NEXTJS-19).
+            setLoadingEvents(false)
         })
         // Modulos del coach para el bloque de override del tab Editar (ROTO-9).
         setModules(null)
-        void getCoachModulesAction(coach.id).then(setModules)
+        void getCoachModulesAction(coach.id).then(setModules).catch(() => {
+            // best-effort: sin red o respuesta no-RSC no rompe nada (EVA-NEXTJS-19)
+        })
     }, [coach.id])
 
     function refresh() {

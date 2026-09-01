@@ -143,6 +143,11 @@ export function FoodPicker({
       setCoachTop(res.suggestions.coachTop)
       setClientRecent(res.suggestions.clientRecent)
       setClientFavorites(res.suggestions.clientFavorites)
+    }).catch(() => {
+      // Espejo del camino de fallo de arriba: sin sugerencias el picker sigue siendo un
+      // buscador, no se pinta error (EVA-NEXTJS-19).
+      if (cancelled) return
+      setSuggestionsLoading(false)
     })
     return () => {
       cancelled = true

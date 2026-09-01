@@ -219,6 +219,10 @@ export function FoodCatalogBrowser({
         return
       }
       setExchangeGroups(res.groups)
+    }).catch(() => {
+      // Espejo del camino de fallo de arriba: libera el candado para reintentar (EVA-NEXTJS-19).
+      exchangeGroupsRequested.current = false
+      setExchangeGroupsLoading(false)
     })
   }, [])
 

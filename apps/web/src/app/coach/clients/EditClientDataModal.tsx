@@ -55,6 +55,10 @@ export function EditClientDataModal({ clientId, clientName, open, onClose }: Pro
             if (error) setFetchError(error)
             else setIntake(data ?? null)
             setLoading(false)
+        }).catch(() => {
+            // Espejo del camino de fallo de arriba (EVA-NEXTJS-19).
+            setFetchError('No pudimos cargar los datos del alumno.')
+            setLoading(false)
         })
     }, [open, clientId])
 

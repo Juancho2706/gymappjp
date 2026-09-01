@@ -62,6 +62,12 @@ export function NutritionGuidanceDialog({ planId, clientName, disabled = false }
         setSupplements(guidance.supplementGuidance.join('\n'))
         setProtocolNotes(guidance.protocolNotes ?? '')
       })
+      .catch(() => {
+        // Espejo del camino de fallo de arriba (EVA-NEXTJS-19).
+        if (!active) return
+        toast.error('No se pudo cargar el protocolo.')
+        setOpen(false)
+      })
       .finally(() => {
         if (active) setLoading(false)
       })

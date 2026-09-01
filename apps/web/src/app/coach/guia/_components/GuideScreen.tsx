@@ -372,7 +372,9 @@ function useGuideSeenStamp(guideSeenAt: string | null): void {
         if (guideSeenAt != null && guideSeenAt !== '') return
         if (stampedRef.current) return
         stampedRef.current = true
-        void persistOnboardingGuideAction({ [GUIDE_SEEN_AT_KEY]: new Date().toISOString() })
+        void persistOnboardingGuideAction({ [GUIDE_SEEN_AT_KEY]: new Date().toISOString() }).catch(() => {
+            // best-effort: sin red o respuesta no-RSC no rompe nada (EVA-NEXTJS-19)
+        })
     }, [guideSeenAt])
 }
 

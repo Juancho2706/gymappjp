@@ -460,6 +460,8 @@ export function EditableItemRow({
                   foodId: item.food.id,
                   quantity: item.quantity,
                   unit: item.unit,
+                }).catch(() => {
+                  // best-effort: sin red o respuesta no-RSC no rompe nada (EVA-NEXTJS-19)
                 })
               }}
               onStep={(direction) =>

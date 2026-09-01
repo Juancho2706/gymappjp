@@ -1777,9 +1777,13 @@ function RegisterFoodDialog({
     let active = true
     void getFavoriteFoodIdsAction({ clientId }).then((res) => {
       if (active && res.ok) setFavoriteIds(new Set(res.ids))
+    }).catch(() => {
+      // best-effort: sin red o respuesta no-RSC no rompe nada (EVA-NEXTJS-19)
     })
     void listFavoriteFoodsAction({ clientId }).then((res) => {
       if (active && res.ok) setFavoriteFoods(res.items)
+    }).catch(() => {
+      // best-effort: sin red o respuesta no-RSC no rompe nada (EVA-NEXTJS-19)
     })
     return () => {
       active = false
@@ -1816,6 +1820,20 @@ function RegisterFoodDialog({
         })
         toast.error(humanizeStudentWriteError(res.error))
       }
+    }).catch(() => {
+      // Espejo del camino de fallo de arriba: liberar el busy y revertir el optimismo (EVA-NEXTJS-19).
+      setFavBusyId((cur) => (cur === food.id ? null : cur))
+      setFavoriteIds((prev) => {
+        const next = new Set(prev)
+        if (wasFav) next.add(food.id)
+        else next.delete(food.id)
+        return next
+      })
+      setFavoriteFoods((prev) => {
+        if (wasFav) return prev.some((f) => f.id === food.id) ? prev : [food, ...prev]
+        return prev.filter((f) => f.id !== food.id)
+      })
+      toast.error(humanizeStudentWriteError(undefined))
     })
   }
 
@@ -1852,6 +1870,11 @@ function RegisterFoodDialog({
         }
         setResults(res.result.items)
         if (res.result.items.length === 0) setSearchError('Sin resultados en el catálogo local.')
+      }).catch(() => {
+        // Espejo del camino de fallo de arriba: liberar el loading y avisar (EVA-NEXTJS-19).
+        if (searchSeqRef.current !== seq) return
+        setSearching(false)
+        setSearchError(humanizeStudentWriteError(undefined))
       })
     }, 300)
     return () => clearTimeout(timer)

@@ -455,6 +455,10 @@ function ApplyTemplateDialog({
           if (res.ok) setEntries(res.items)
           else setError(res.error)
         })
+        .catch(() => {
+          // Espejo del camino de fallo de arriba (EVA-NEXTJS-19).
+          setError('No pudimos buscar alumnos. Intenta de nuevo.')
+        })
         .finally(() => setSearching(false))
     }, 300)
     return () => clearTimeout(timer)
@@ -569,6 +573,10 @@ function CreateFromClientDialog({
         .then((res) => {
           if (res.ok) setEntries(res.items.filter((entry) => entry.planStatus != null))
           else setError(res.error)
+        })
+        .catch(() => {
+          // Espejo del camino de fallo de arriba (EVA-NEXTJS-19).
+          setError('No pudimos buscar alumnos. Intenta de nuevo.')
         })
         .finally(() => setSearching(false))
     }, 300)

@@ -497,6 +497,9 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
         getExerciseHistoryAction(clientId, block.exercise_id).then(result => {
             setHistory(result.data || [])
             setLoadingHistory(false)
+        }).catch(() => {
+            // Espejo: liberar el loading (EVA-NEXTJS-19).
+            setLoadingHistory(false)
         })
     }, [block?.exercise_id, clientId, effectiveType])
 

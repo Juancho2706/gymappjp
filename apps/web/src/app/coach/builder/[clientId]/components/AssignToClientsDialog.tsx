@@ -52,6 +52,9 @@ export function AssignToClientsDialog({ open, onClose, programId, programName }:
         getCoachClientsAction().then(result => {
             setClients(result.data || [])
             setLoading(false)
+        }).catch(() => {
+            // Espejo: liberar el loading (EVA-NEXTJS-19).
+            setLoading(false)
         })
     }, [open])
 

@@ -161,6 +161,11 @@ export function ClassifyFoodFlow({
       setCatalogGroupId(res.classification.columns?.groupId ?? null)
       setCurrent(resolved)
       setDraft(draftFromClassification(resolved))
+    }).catch(() => {
+      // Espejo del camino de fallo de arriba (EVA-NEXTJS-19).
+      if (cancelled) return
+      setLoading(false)
+      setLoadError('No pudimos cargar la clasificación de este alimento.')
     })
     return () => {
       cancelled = true

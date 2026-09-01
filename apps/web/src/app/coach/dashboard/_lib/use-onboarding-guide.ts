@@ -140,6 +140,9 @@ export function useOnboardingGuide(input: {
             if (guideStateHasActivity(local)) {
                 void persistOnboardingGuideAction(local).then((r) => {
                     if (!r.ok) toast.error('No se pudo guardar la guía en tu cuenta', { description: r.error })
+                }).catch(() => {
+                    // Espejo del camino de fallo de arriba (EVA-NEXTJS-19).
+                    toast.error('No se pudo guardar la guía en tu cuenta')
                 })
             }
         }
@@ -162,6 +165,9 @@ export function useOnboardingGuide(input: {
                     ahaMomentSent: next.ahaMomentSent,
                 }).then((r) => {
                     if (!r.ok) toast.error('No se pudo sincronizar la guía', { description: r.error })
+                }).catch(() => {
+                    // Espejo del camino de fallo de arriba (EVA-NEXTJS-19).
+                    toast.error('No se pudo sincronizar la guía')
                 })
             }, 450)
         },

@@ -70,6 +70,9 @@ export function TemplatePickerDialog({ open, onClose, hasExistingData, onApply }
         getTemplatesForBuilderAction().then(result => {
             setTemplates(result.data || [])
             setLoading(false)
+        }).catch(() => {
+            // Espejo: liberar el loading (EVA-NEXTJS-19).
+            setLoading(false)
         })
     }, [open])
 

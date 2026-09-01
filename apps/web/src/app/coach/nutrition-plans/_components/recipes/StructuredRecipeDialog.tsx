@@ -146,6 +146,12 @@ export function StructuredRecipeDialog({ recipe, trigger }: Props) {
           })),
         )
       })
+      .catch(() => {
+        // Espejo del camino de fallo de arriba (EVA-NEXTJS-19).
+        if (!active) return
+        toast.error('No se pudo cargar la receta.')
+        setOpen(false)
+      })
       .finally(() => {
         if (active) setLoadingRecipe(false)
       })

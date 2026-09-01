@@ -90,7 +90,10 @@ function NotesPopover({ coachId, onClose }: { coachId: string; onClose: () => vo
     const ref = useRef<HTMLDivElement>(null)
 
     useEffect(() => {
-        getCoachNotesAction(coachId).then(n => { setNotes(n); setLoading(false) })
+        getCoachNotesAction(coachId).then(n => { setNotes(n); setLoading(false) }).catch(() => {
+            // Espejo: liberar el "Cargando..." (EVA-NEXTJS-19).
+            setLoading(false)
+        })
     }, [coachId])
 
     useEffect(() => {
