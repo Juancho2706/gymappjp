@@ -31,6 +31,11 @@ overrides:
   'ws@6': '>=6.2.4 <7'
   'ws@7': '>=7.5.11 <8'
   'ws@8': '>=8.21.0 <9'
+  # Dependabot #99 / CVE-2026-45822 (GHSA-vcc3-ghjq-m6fr): DoS por decodificacion exponencial de
+  # percent-encoding malformado. Llega via query-string@7 (react-navigation/core -> expo-router), o sea
+  # el parseo de deep links de la app. Cruza minor 0.2 -> 0.5 a proposito: el paquete es una sola
+  # funcion `decodeUriComponent(str)` sin cambio de firma; verificado con tsc mobile + expo export.
+  decode-uri-component: '>=0.5.0 <1'
   # @expo/plist@0.0.18 (via @bacons/apple-targets > @bacons/xcode) pide ~0.7.0 => 0.7.13 vulnerable.
   # ACOTADO A ESA RUTA a proposito: 0.9.x exige mimeType en parseFromString y las 4 copias de
   # @expo/plist del arbol lo llaman sin el (build/parse.js:69) => un override global rompe el
