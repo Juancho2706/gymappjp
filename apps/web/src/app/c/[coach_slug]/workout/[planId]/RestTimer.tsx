@@ -126,7 +126,13 @@ export function RestTimer({
 
   useEffect(() => {
     if (!isAlarmRinging) return;
-    const handleInteraction = () => stopAlarm();
+    // Solo un gesto REAL del alumno apaga la alarma. El háptico de repetición (`triggerHaptic`)
+    // dispara un `click` sintético (`isTrusted: false`) que, sin este guard, apagaba la alarma sola
+    // a los 3 s en vez de repetirla 5 veces (bug medido vía rage clicks falsos en PostHog, 01-09).
+    const handleInteraction = (event: Event) => {
+      if (!event.isTrusted) return;
+      stopAlarm();
+    };
     document.addEventListener("click", handleInteraction);
     document.addEventListener("touchstart", handleInteraction);
     return () => {

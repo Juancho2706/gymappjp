@@ -21,8 +21,19 @@ function ensureSwitchLabel(): HTMLLabelElement | null {
     if (switchLabel && switchLabel.isConnected) return switchLabel
     const label = document.createElement('label')
     label.setAttribute('aria-hidden', 'true')
+    // `ph-no-capture`: el `label.click()` de `triggerHaptic` es un click SINTÉTICO en (0,0) que el
+    // autocapture de posthog-js tomaba por un tap real. Medido en PostHog (14 días al 2026-09-01):
+    // 21.898 `$autocapture` y 1.267 `$rageclick` —el 94 % de los «rage clicks» del ejecutor del
+    // alumno— eran este label, no alumnos frustrados. La clase lo saca de autocapture, rageclick y
+    // del replay (lista de ignorados por defecto de posthog-js: `.ph-no-rageclick`, `.ph-no-capture`).
+    label.className = 'ph-no-capture'
     // display:none NO rompe el háptico en WebKit (el tap viene del toggle del switch, no del pintado).
     label.style.display = 'none'
+    // El click sintético burbujeaba hasta `document`, así que cualquier «un click apaga X» lo tomaba
+    // por un gesto del alumno (RestTimer: la alarma se apagaba SOLA a los 3 s con su propio háptico
+    // de repetición). Cortar la propagación no toca la activación del label ⇒ el switch sigue
+    // toggleando y el háptico iOS sigue saliendo.
+    label.addEventListener('click', (event) => event.stopPropagation())
     const input = document.createElement('input')
     input.type = 'checkbox'
     input.setAttribute('switch', '') // atributo clave del háptico iOS 18+

@@ -216,7 +216,9 @@ function NavButton({
             disabled={disabled}
             aria-label={ariaLabel}
             className={cn(
-                'flex h-11 w-11 shrink-0 items-center justify-center rounded-control border transition-colors',
+                // `ph-no-rageclick`: tocar 3× «siguiente» para saltar ejercicios es navegación, no
+                // frustración — posthog-js solo ignora next/prev/</> en inglés por defecto.
+                'ph-no-rageclick flex h-11 w-11 shrink-0 items-center justify-center rounded-control border transition-colors',
                 disabled
                     ? 'border-[var(--border-inverse)] text-on-dark-muted/30'
                     : 'border-[var(--border-inverse)] bg-white/[0.06] text-on-dark hover:bg-white/[0.12] active:scale-95',
