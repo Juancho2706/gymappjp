@@ -1,7 +1,11 @@
 import type { SubscriptionTier } from '@/lib/constants'
 import type { Persona } from '@eva/schemas'
 import { getCoachDashboardDataV2 } from '../_data/dashboard.queries'
-import { listUserWorkspacesForRender } from '@/services/auth/workspace-render-cache'
+import {
+    getPreferredWorkspaceForRender,
+    listUserWorkspacesForRender,
+} from '@/services/auth/workspace-render-cache'
+import { resolveDomainsEnabled } from '@/services/feature-prefs.service'
 import { DashboardShell } from './DashboardShell'
 
 export async function DashboardContent({
@@ -52,11 +56,23 @@ export async function DashboardContent({
     // dashboard —marca, «vive tu app», artefacto por persona, alumno real, actividad real— y hoy
     // solo se paga al abrir la guía. El rastro en el panel es la píldora flotante del layout.
 
+    // Espacio preferido: React.cache-memoizado por userId (el layout ya lo resolvió en este mismo
+    // request → dedup, sin costo extra de DB). Se necesita ANTES del resto porque define la base
+    // de las preferencias de dominio (team si el coach mira un pool, coach si es standalone).
+    const workspace = await getPreferredWorkspaceForRender(userId)
     // workspaces: React.cache-memoizado por userId (ya lo resuelve el layout en el mismo
     // request → dedup, sin costo extra de DB). Habilita el switcher de espacio del header móvil.
-    const [data, workspaces] = await Promise.all([
+    const [data, workspaces, domainsEnabled] = await Promise.all([
         getCoachDashboardDataV2(userId),
         listUserWorkspacesForRender(userId),
+        // Master switch por dominio (Ola de orden W2.7): UNA query para los 5, memoizada por
+        // request. Acá NO gatea la ruta (el panel es el destino del redirect de W1.4a) — solo le
+        // dice al FAB qué atajos ofrecer. Visibilidad, nunca autorización.
+        resolveDomainsEnabled({
+            coachId: userId,
+            clientTeamId: workspace?.type === 'coach_team' ? workspace.teamId : null,
+            clientOrgId: workspace?.type === 'enterprise_coach' ? workspace.orgId : null,
+        }),
     ])
     return (
         <DashboardShell
@@ -75,6 +91,7 @@ export async function DashboardContent({
             coachCreatedAt={coachCreatedAt}
             emailVerified={emailVerified}
             workspaces={workspaces}
+            domainsEnabled={domainsEnabled}
         />
     )
 }

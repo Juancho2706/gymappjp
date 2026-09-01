@@ -5,8 +5,18 @@ import { useRouter } from 'next/navigation'
 import { type LucideIcon, Plus, UserPlus, Upload, Dumbbell } from 'lucide-react'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { CreateClientModal } from '../../clients/CreateClientModal'
+import {
+    dashboardQuickActions,
+    type DomainsEnabled,
+    type QuickActionId,
+} from '../_lib/quick-actions'
 
-type Action = { label: string; icon: LucideIcon; run: () => void }
+/** Ícono por acción: vive acá (capa de UI) para que el catálogo de `_lib` siga siendo puro. */
+const ACTION_ICONS: Record<QuickActionId, LucideIcon> = {
+    create_client: UserPlus,
+    import: Upload,
+    program: Dumbbell,
+}
 
 /**
  * FAB — quick actions. Verbatim from coach-dashboard.jsx: floating sport button →
@@ -21,17 +31,22 @@ type Action = { label: string; icon: LucideIcon; run: () => void }
  * de acciones se monta con el componente `Sheet` (portal a `document.body`, z-[71]) para
  * que SIEMPRE quede por encima de la cápsula de navegación flotante (z-50) — antes el
  * `<div fixed>` propio quedaba atrapado en el stacking context del <main> y la barra lo tapaba.
+ *
+ * `domainsEnabled` (Ola de orden W2.7): master switch por dominio ya resuelto server-side. Es el
+ * paralelo del gate de ruta W1.4a — el FAB no ofrece un atajo a una ruta que redirige. Opcional y
+ * fail-OPEN: sin la prop (o sin la key) se ofrece todo; solo el `false` explícito esconde.
  */
-export function DashboardFab() {
+export function DashboardFab({ domainsEnabled }: { domainsEnabled?: DomainsEnabled }) {
     const router = useRouter()
     const [open, setOpen] = useState(false)
     const [createOpen, setCreateOpen] = useState(false)
 
-    const actions: Action[] = [
-        { label: 'Crear alumno', icon: UserPlus, run: () => setCreateOpen(true) },
-        { label: 'Importar', icon: Upload, run: () => router.push('/coach/clients') },
-        { label: 'Programa', icon: Dumbbell, run: () => router.push('/coach/workout-programs') },
-    ]
+    const actions = dashboardQuickActions(domainsEnabled)
+    const runAction = (id: QuickActionId) => {
+        if (id === 'create_client') setCreateOpen(true)
+        else if (id === 'import') router.push('/coach/clients')
+        else router.push('/coach/workout-programs')
+    }
 
     return (
         <>
@@ -66,14 +81,14 @@ export function DashboardFab() {
                             </SheetTitle>
                         </SheetHeader>
                         {actions.map((a) => {
-                            const Icon = a.icon
+                            const Icon = ACTION_ICONS[a.id]
                             return (
                                 <button
-                                    key={a.label}
+                                    key={a.id}
                                     type="button"
                                     onClick={() => {
                                         setOpen(false)
-                                        a.run()
+                                        runAction(a.id)
                                     }}
                                     className="flex w-full items-center gap-3.5 px-1.5 py-3.5 text-left"
                                 >

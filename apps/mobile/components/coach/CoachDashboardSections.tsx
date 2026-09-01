@@ -94,6 +94,7 @@ import { ClientCapMeter } from './ClientCapMeter'
 // tienen que pintar el MISMO `--warning-500`; dos copias del hex divergen al primer ajuste del DS.
 import { CAP_FULL_LABEL, capMeterLabel, capTone, WARNING_500 } from '../../lib/client-cap'
 import { isStoreSafeUrl } from '../../lib/store-compliance'
+import { useDomainGuard } from '../../lib/domain-guard'
 import { AnimatedNumber } from '../AnimatedNumber'
 
 function hexToRgba(hex: string, alpha: number): string {
@@ -706,6 +707,11 @@ export function MobileQuickActionsFab({
   const [sheet, setSheet] = useState(false)
   const [modal, setModal] = useState<null | 'client' | 'payment'>(null)
   const wall = useQuickClientWall(cap, onClientCreated)
+  // Master switch del dominio Entrenamiento (Ola de orden W2.7): paralelo del gate de la pantalla
+  // `(tabs)/builder` — el FAB no ofrece un atajo a una ruta que va a pintar «dominio apagado».
+  // Fail-OPEN: antes de `ready`, `enabled` es true y la acción se muestra (aceptable: es
+  // visibilidad, no autorización). Sin early-return: los hooks corren siempre en el mismo orden.
+  const training = useDomainGuard('training')
   // Relleno de marca white-safe + su texto legible (mismo motor que alimenta `--cta-fill`).
   const { ctaFill: brandFill, textOnSport: onBrandFill } = useMemo(
     () => deriveSportTokens(theme.primary),
@@ -724,7 +730,9 @@ export function MobileQuickActionsFab({
       },
     },
     { label: 'Importar', icon: Upload, on: () => { setSheet(false); router.push('/coach/(tabs)/clientes') } },
-    { label: 'Programa', icon: Dumbbell, on: () => { setSheet(false); router.push('/coach/(tabs)/builder') } },
+    ...(training.enabled
+      ? [{ label: 'Programa', icon: Dumbbell, on: () => { setSheet(false); router.push('/coach/(tabs)/builder') } }]
+      : []),
   ]
 
   return (

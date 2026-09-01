@@ -21,6 +21,7 @@ import { InviteCodePill } from './invite/InviteCodePill'
 import { ClientStatsSheet } from './sheets/ClientStatsSheet'
 import { WorkspaceSwitchSheet } from './sheets/WorkspaceSwitchSheet'
 import { todayLabel } from '../_lib/dashboard-design'
+import type { DomainsEnabled } from '../_lib/quick-actions'
 import type { DashboardV2Data } from '../_data/types'
 import type { WorkspaceSummary } from '@/domain/auth/types'
 import type { Persona } from '@eva/schemas'
@@ -69,6 +70,12 @@ interface Props {
      */
     emailVerified?: boolean
     workspaces: WorkspaceSummary[]
+    /**
+     * Master switch por dominio ya resuelto por el RSC (`resolveDomainsEnabled`, W2.7). Hoy solo
+     * gobierna el FAB de acciones rápidas. OPCIONAL y fail-OPEN a propósito: sin la prop (o sin la
+     * key del dominio) se ofrece todo — visibilidad, nunca autorización.
+     */
+    domainsEnabled?: DomainsEnabled
 }
 
 export function DashboardShell({
@@ -83,6 +90,7 @@ export function DashboardShell({
     coachCreatedAt,
     emailVerified = true,
     workspaces,
+    domainsEnabled,
 }: Props) {
     const [statsSheetOpen, setStatsSheetOpen] = useState(false)
     const [wsSheetOpen, setWsSheetOpen] = useState(false)
@@ -279,7 +287,7 @@ export function DashboardShell({
 
             </div>
 
-            <DashboardFab />
+            <DashboardFab domainsEnabled={domainsEnabled} />
 
             <ClientStatsSheet
                 open={statsSheetOpen}
