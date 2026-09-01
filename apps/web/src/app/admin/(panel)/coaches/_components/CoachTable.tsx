@@ -5,8 +5,7 @@ import Link from 'next/link'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { toast } from 'sonner'
 import { Trash2, AlertTriangle, ChevronDown, ChevronsUpDown, ChevronUp, Users, Plus, StickyNote, Settings2 } from 'lucide-react'
-import { format } from 'date-fns'
-import { es } from 'date-fns/locale'
+import { formatSantiagoDdMmYy } from '@/lib/date-utils'
 import { AdminStatusBadge } from '../../_components/AdminStatusBadge'
 import { AdminSortHeader } from '../../_components/AdminSortHeader'
 import { AdminEmptyState } from '../../_components/AdminEmptyState'
@@ -612,7 +611,7 @@ export function CoachTable({ coaches, total }: Props) {
                                         </td>
                                         <td className="px-3 py-2.5">
                                             <span className="font-mono text-[11px] tabular-nums text-muted" title={c.created_at}>
-                                                {format(new Date(c.created_at), 'dd/MM/yy', { locale: es })}
+                                                {formatSantiagoDdMmYy(c.created_at)}
                                             </span>
                                         </td>
                                         <td className="relative px-3 py-2.5 text-right" onClick={e => e.stopPropagation()}>

@@ -7,6 +7,9 @@ import {
   getSantiagoUtcBoundsForDay,
   getSantiagoMonthPrefix,
   formatLongDateSantiago,
+  formatSantiagoDdMmHhMm,
+  formatSantiagoDdMmYy,
+  formatDateDdMmYyyySantiago,
   formatSantiagoMonthLabel,
   getTodayInSantiago,
   nutritionMealAppliesOnIsoYmdInSantiago,
@@ -178,5 +181,62 @@ describe('date-utils — borde nocturno UTC vs Santiago (regresión EVA-NEXTJS-1
   it('el mediodía chileno no se corre al saludo de la tarde por el offset UTC', () => {
     // 15:30Z = 11:30 en Santiago: en UTC ya es tarde, en Chile todavía es mañana.
     expect(timeGreetingSantiago(new Date('2026-08-08T15:30:00.000Z'))).toBe('Buenos días')
+  })
+})
+
+/**
+ * EVA-NEXTJS-18 — Hydration Error en /admin/coaches.
+ *
+ * Los formatters del panel admin (`format()` de date-fns, `toLocaleDateString('es-CL')`) usan la
+ * TZ del PROCESO: Vercel genera el HTML en UTC y el navegador del admin hidrata en
+ * America/Santiago, así que entre las 20:00 y las 24:00 hora chilena el día impreso difería y
+ * React marcaba mismatch en cada carga. Estos casos fijan el borde de medianoche en las DOS
+ * estaciones (UTC-4 en invierno; UTC-3 desde el primer domingo de septiembre, 2026-09-06) y son
+ * ABSOLUTOS: valen igual corriendo el test en UTC, en hora chilena o en cualquier otra TZ.
+ */
+describe('date-utils — formatters Santiago para el panel admin (regresión EVA-NEXTJS-18)', () => {
+  it('invierno (UTC-4): 01-sep 02:30Z todavía es el 31-ago 22:30 en Chile', () => {
+    expect(formatSantiagoDdMmYy('2026-09-01T02:30:00Z')).toBe('31/08/26')
+    expect(formatDateDdMmYyyySantiago('2026-09-01T02:30:00Z')).toBe('31-08-2026')
+    expect(formatSantiagoDdMmHhMm('2026-09-01T02:30:00Z')).toBe('31/08 22:30')
+  })
+
+  it('invierno (UTC-4): 31-ago 23:30Z es el mismo día 19:30 en Chile', () => {
+    expect(formatSantiagoDdMmYy('2026-08-31T23:30:00Z')).toBe('31/08/26')
+    expect(formatDateDdMmYyyySantiago('2026-08-31T23:30:00Z')).toBe('31-08-2026')
+    expect(formatSantiagoDdMmHhMm('2026-08-31T23:30:00Z')).toBe('31/08 19:30')
+  })
+
+  it('verano (UTC-3): 15-oct 02:30Z todavía es el 14-oct 23:30 en Chile', () => {
+    expect(formatSantiagoDdMmYy('2026-10-15T02:30:00Z')).toBe('14/10/26')
+    expect(formatDateDdMmYyyySantiago('2026-10-15T02:30:00Z')).toBe('14-10-2026')
+    expect(formatSantiagoDdMmHhMm('2026-10-15T02:30:00Z')).toBe('14/10 23:30')
+  })
+
+  it('verano (UTC-3): 15-oct 03:30Z ya cruzó a las 00:30 del 15-oct en Chile', () => {
+    expect(formatSantiagoDdMmYy('2026-10-15T03:30:00Z')).toBe('15/10/26')
+    expect(formatDateDdMmYyyySantiago('2026-10-15T03:30:00Z')).toBe('15-10-2026')
+    // Medianoche imprime 00, nunca 24 (algunos ICU devuelven h24 para el borde del día).
+    expect(formatSantiagoDdMmHhMm('2026-10-15T03:30:00Z')).toBe('15/10 00:30')
+  })
+
+  it('el resultado NO depende de la TZ del proceso que corre el test', () => {
+    // Mismo instante, mismo string, sea cual sea process.env.TZ: es exactamente la propiedad
+    // que hace que SSR (UTC en Vercel) e hidratación (Chile en el navegador) coincidan.
+    const instante = '2026-09-01T02:30:00Z'
+    const enUtcYEnChile = { ddMmYy: '31/08/26', ddMmYyyy: '31-08-2026', ddMmHhMm: '31/08 22:30' }
+    expect({
+      ddMmYy: formatSantiagoDdMmYy(instante),
+      ddMmYyyy: formatDateDdMmYyyySantiago(instante),
+      ddMmHhMm: formatSantiagoDdMmHhMm(instante),
+    }).toEqual(enUtcYEnChile)
+    // Y el mismo instante escrito con offset explícito da idéntico resultado.
+    expect(formatSantiagoDdMmHhMm('2026-08-31T22:30:00-04:00')).toBe('31/08 22:30')
+  })
+
+  it('timestamp inválido → cadena vacía (defensivo, no "Invalid Date")', () => {
+    expect(formatSantiagoDdMmYy('no-es-fecha')).toBe('')
+    expect(formatDateDdMmYyyySantiago('no-es-fecha')).toBe('')
+    expect(formatSantiagoDdMmHhMm('no-es-fecha')).toBe('')
   })
 })

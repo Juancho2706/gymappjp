@@ -195,17 +195,70 @@ export function formatSantiagoMonthLabel(now = new Date()): string {
  * vacía (defensivo; el llamador decide si ocultar el dato).
  */
 export function formatDateDdMmYyyySantiago(isoTimestamp: string): string {
-    const instant = new Date(isoTimestamp)
-    if (Number.isNaN(instant.getTime())) return ''
-    const parts = Object.fromEntries(
-        new Intl.DateTimeFormat('en-CA', {
-            timeZone: SANTIAGO_TZ,
-            day: '2-digit',
-            month: '2-digit',
-            year: 'numeric',
-        })
+    const parts = getSantiagoDateTimeParts(isoTimestamp, {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+    })
+    if (!parts) return ''
+    return `${parts.day}-${parts.month}-${parts.year}`
+}
+
+/**
+ * Descompone un instante UTC en sus componentes de calendario en America/Santiago.
+ * Siempre vía `Intl.DateTimeFormat` + `timeZone` (nunca `toLocaleString` reparseado ni
+ * `format()` de date-fns): así el resultado depende SOLO del instante y no de la TZ del proceso.
+ * Instante inválido → `null` (el llamador decide el fallback).
+ */
+function getSantiagoDateTimeParts(
+    isoUtc: string,
+    options: Intl.DateTimeFormatOptions
+): Record<string, string> | null {
+    const instant = new Date(isoUtc)
+    if (Number.isNaN(instant.getTime())) return null
+    return Object.fromEntries(
+        new Intl.DateTimeFormat('en-CA', { timeZone: SANTIAGO_TZ, ...options })
             .formatToParts(instant)
             .map((p) => [p.type, p.value])
     )
-    return `${parts.day}-${parts.month}-${parts.year}`
+}
+
+/**
+ * Instante UTC (`timestamptz`) → `31/08/26` en **America/Santiago**.
+ *
+ * Existe por hidratación (Sentry EVA-NEXTJS-18): `format(new Date(iso), 'dd/MM/yy')` de date-fns
+ * formatea en la TZ del PROCESO. El HTML lo genera Vercel en UTC y el navegador del admin hidrata
+ * en hora chilena, así que para instantes entre las 20:00 y las 24:00 de Chile el día impreso
+ * difiere y React marca hydration mismatch. Con `Intl` + `timeZone` fijo, servidor y cliente
+ * imprimen siempre lo mismo. Timestamp inválido → cadena vacía (defensivo).
+ */
+export function formatSantiagoDdMmYy(isoUtc: string): string {
+    const parts = getSantiagoDateTimeParts(isoUtc, {
+        day: '2-digit',
+        month: '2-digit',
+        year: '2-digit',
+    })
+    if (!parts) return ''
+    return `${parts.day}/${parts.month}/${parts.year}`
+}
+
+/**
+ * Instante UTC (`timestamptz`) → `31/08 22:30` (24 h) en **America/Santiago**.
+ *
+ * Existe por hidratación (Sentry EVA-NEXTJS-18): `format(new Date(iso), 'dd/MM HH:mm')` de
+ * date-fns usa la TZ del proceso, así que la tabla de auditoría mostraba una hora en el HTML del
+ * servidor (UTC) y otra tras hidratar (Chile). La hora se re-pad a mano para neutralizar el
+ * `h24` de algunos ICU (medianoche como `24`). Timestamp inválido → cadena vacía (defensivo).
+ */
+export function formatSantiagoDdMmHhMm(isoUtc: string): string {
+    const parts = getSantiagoDateTimeParts(isoUtc, {
+        day: '2-digit',
+        month: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+    })
+    if (!parts) return ''
+    const hour = String(Number(parts.hour) % 24).padStart(2, '0')
+    return `${parts.day}/${parts.month} ${hour}:${parts.minute}`
 }

@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { GlassCard } from '@/components/ui/glass-card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Search, Pencil, Trash2, Plus } from 'lucide-react'
+import { formatDateDdMmYyyySantiago } from '@/lib/date-utils'
 import type { ClientListItem } from '../../dashboard/_data/types'
 import { ClientEditSheet } from './ClientEditSheet'
 import { ClientCreateSheet } from './ClientCreateSheet'
@@ -223,7 +224,7 @@ export function ClientTable({ clients, total, coaches }: Props) {
                             <EstadoBadge client={client} />
                             <OnboardingBadge done={client.onboarding_completed} />
                             <span className="ml-auto text-[11px] text-muted">
-                                {new Date(client.created_at).toLocaleDateString('es-CL')}
+                                {formatDateDdMmYyyySantiago(client.created_at)}
                             </span>
                         </div>
                     </div>
@@ -277,7 +278,7 @@ export function ClientTable({ clients, total, coaches }: Props) {
                                         <OnboardingBadge done={client.onboarding_completed} />
                                     </td>
                                     <td className="px-4 py-3 text-muted">
-                                        {new Date(client.created_at).toLocaleDateString('es-CL')}
+                                        {formatDateDdMmYyyySantiago(client.created_at)}
                                     </td>
                                     <td className="px-4 py-3">
                                         <div className="flex items-center justify-end gap-1">

@@ -3,10 +3,10 @@
 import { useState } from 'react'
 import Link from 'next/link'
 import { Check, ChevronDown, Copy } from 'lucide-react'
-import { formatDistanceToNow, format } from 'date-fns'
-import { es } from 'date-fns/locale'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
+import { formatSantiagoDdMmHhMm } from '@/lib/date-utils'
+import { AdminRelativeTime } from '../../_components/AdminRelativeTime'
 import { getAdminActionMeta } from '../../_components/admin-action-catalog'
 import type { AuditLogRow } from '../_data/auditoria.queries'
 
@@ -142,11 +142,12 @@ export function AuditTable({ rows }: Props) {
                                 <td className="px-3 py-2.5">
                                     <div>
                                         <span className="font-mono text-xs tabular-nums text-body">
-                                            {format(new Date(ev.created_at), 'dd/MM HH:mm')}
+                                            {formatSantiagoDdMmHhMm(ev.created_at)}
                                         </span>
-                                        <p className="font-mono text-[10px] text-muted">
-                                            {formatDistanceToNow(new Date(ev.created_at), { addSuffix: true, locale: es })}
-                                        </p>
+                                        <AdminRelativeTime
+                                            iso={ev.created_at}
+                                            className="block font-mono text-[10px] text-muted"
+                                        />
                                     </div>
                                 </td>
                                 <td className="px-3 py-2.5">

@@ -4,8 +4,8 @@ import { useRef, useState, type KeyboardEvent } from 'react'
 import Link from 'next/link'
 import { AdminStatusBadge } from '../../_components/AdminStatusBadge'
 import { AdminEmptyState } from '../../_components/AdminEmptyState'
-import { formatDistanceToNow, differenceInDays } from 'date-fns'
-import { es } from 'date-fns/locale'
+import { AdminRelativeTime } from '../../_components/AdminRelativeTime'
+import { differenceInDays } from 'date-fns'
 import { AlertTriangle, Clock, UserPlus, TrendingDown, ScrollText, type LucideIcon } from 'lucide-react'
 
 interface Signup {
@@ -271,9 +271,10 @@ export function RecentActivity({ signups, auditEvents, expiringSoon, pendingPaym
                                 <span className="block truncate text-sm font-medium text-strong">
                                     {coach.brand_name || coach.full_name || 'Sin nombre'}
                                 </span>
-                                <span className="block text-[11px] text-muted">
-                                    {formatDistanceToNow(new Date(coach.created_at), { addSuffix: true, locale: es })}
-                                </span>
+                                <AdminRelativeTime
+                                    iso={coach.created_at}
+                                    className="block text-[11px] text-muted"
+                                />
                             </span>
                             <span className="flex shrink-0 items-center gap-2">
                                 {coach.subscription_tier && (
@@ -314,9 +315,10 @@ export function RecentActivity({ signups, auditEvents, expiringSoon, pendingPaym
                                     <span className="block truncate text-sm font-medium text-strong">
                                         {coach.coach_name || 'Sin nombre'}
                                     </span>
-                                    <span className="block text-[11px] text-muted">
-                                        {formatDistanceToNow(new Date(coach.churned_at), { addSuffix: true, locale: es })}
-                                    </span>
+                                    <AdminRelativeTime
+                                        iso={coach.churned_at}
+                                        className="block text-[11px] text-muted"
+                                    />
                                 </span>
                             </span>
                             {coach.tier && <AdminStatusBadge value={coach.tier} type="tier" />}
@@ -349,9 +351,10 @@ export function RecentActivity({ signups, auditEvents, expiringSoon, pendingPaym
                                     {ev.admin_email}
                                 </p>
                             </div>
-                            <p className="shrink-0 text-[11px] text-muted">
-                                {formatDistanceToNow(new Date(ev.created_at), { addSuffix: true, locale: es })}
-                            </p>
+                            <AdminRelativeTime
+                                iso={ev.created_at}
+                                className="shrink-0 text-[11px] text-muted"
+                            />
                         </div>
                     ))}
                 </div>
