@@ -8,6 +8,24 @@ export interface KpiTrendPoint {
     value: number
 }
 
+/**
+ * Delta de un KPI del bento, ya resuelto en la capa de datos: número, copy y tono.
+ *
+ * `null` significa «sin dato honesto»: el tile no pinta línea de delta y nunca inventa un número.
+ * El `text` viaja armado desde el servidor para que web desktop, web móvil y RN digan exactamente
+ * lo mismo (copy en un solo lugar, regla anti-drift). El `tone` ya incorpora la dirección «buena»
+ * de cada KPI, así que la UI solo mapea tono → token de color.
+ */
+export type KpiDelta = { value: number; text: string; tone: 'positive' | 'negative' | 'neutral' } | null
+
+/** Los cuatro deltas del bento del coach. `risk` es `null` en fase 1 (exige snapshot diario). */
+export type KpiDeltas = {
+    clients: KpiDelta
+    risk: KpiDelta
+    adherence: KpiDelta
+    sessionsToday: KpiDelta
+}
+
 export interface KpiSummary {
     mrrCurrentMonth: number
     mrrPreviousMonth: number
@@ -16,6 +34,11 @@ export interface KpiSummary {
     riskCount: number
     avgAdherence: number
     avgNutrition: number
+    /**
+     * Deltas reales de los tiles del bento, resueltos en la capa de datos (`_lib/kpi-deltas`).
+     * Requerido: si un KPI no tiene comparación honesta, su entrada vale `null`, no se omite.
+     */
+    deltas: KpiDeltas
 }
 
 export interface ExpiringProgramItem {

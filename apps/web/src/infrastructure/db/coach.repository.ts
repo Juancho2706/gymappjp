@@ -114,11 +114,18 @@ export async function findCoachRecentClients(db: DB, coachId: string, limit = 5,
     return data ?? []
 }
 
+/**
+ * Altas del coach (`created_at`) dentro de una ventana. Alimenta el BarChart de crecimiento y el
+ * delta «+N esta semana» del KPI «Alumnos», así que excluye al alumno de ejemplo (`is_demo`) con
+ * el MISMO predicado que `countCoachClients`: el delta y el número que lo acompaña tienen que
+ * contar la misma cartera.
+ */
 export async function findCoachClientSignupDates(db: DB, coachId: string, orgId?: string | null, teamId?: string | null, sinceIso?: string) {
     let query = db
         .from('clients')
         .select('created_at')
         .eq('is_archived', false)
+        .eq('is_demo', false)
     if (sinceIso) {
         query = query.gte('created_at', sinceIso)
     }

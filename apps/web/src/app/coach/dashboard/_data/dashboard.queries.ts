@@ -27,6 +27,7 @@ import {
 } from '@/services/onboarding/onboarding-v2.queries'
 import { parseLoaderConfig, serializeLoaderConfig } from '@/lib/brand-composer'
 import { BRAND_PRIMARY_COLOR } from '@/lib/brand-assets'
+import { buildKpiDeltas } from '../_lib/kpi-deltas'
 
 const FLAG_LABELS: Record<AttentionFlag, string> = {
     SIN_CHECKIN_1M: 'Adherencia critica · sin check-in en 1 mes',
@@ -186,6 +187,43 @@ export interface RiskAlertItem {
     label: string
 }
 
+/** Los dos flags que definen «alumno en riesgo» en el panel del coach (KPI y card oscura). */
+const CRITICAL_RISK_FLAGS: AttentionFlag[] = ['SIN_CHECKIN_1M', 'SIN_EJERCICIO_7D']
+
+/** Lo mínimo que el predicado de riesgo necesita de una fila del pulse. */
+export interface RiskPulseRow {
+    clientId: string
+    clientName: string
+    attentionScore: number
+    attentionFlags: AttentionFlag[]
+}
+
+/**
+ * Separa el KPI «En riesgo» (conteo completo) de la card «top 5 en riesgo».
+ *
+ * Hasta 7C el KPI era `topRiskClients.length` sobre una lista ya recortada con `.slice(0, 5)`: un
+ * coach con 12 alumnos en riesgo leía «5». Ahora `riskCount` cuenta TODAS las filas del pulse con
+ * el mismo predicado y `topRiskClients` sigue siendo el top 5 que pinta la card.
+ *
+ * Pura y exportada a propósito: el resto de `getCoachDashboardDataInner` son ~12 consultas en
+ * paralelo y el conteo no se puede fijar en un test sin extraerlo.
+ */
+export function splitRiskClients(pulse: RiskPulseRow[]): { riskCount: number; topRiskClients: RiskAlertItem[] } {
+    const atRisk = pulse.filter((row) => row.attentionFlags.some((flag) => CRITICAL_RISK_FLAGS.includes(flag)))
+    const topRiskClients: RiskAlertItem[] = [...atRisk]
+        .sort((a, b) => b.attentionScore - a.attentionScore)
+        .slice(0, 5)
+        .map((row) => ({
+            clientId: row.clientId,
+            clientName: row.clientName,
+            attentionScore: row.attentionScore,
+            flags: row.attentionFlags,
+            label: row.attentionFlags.length > 0 ? FLAG_LABELS[row.attentionFlags[0]] : 'Seguimiento recomendado',
+        }))
+
+    return { riskCount: atRisk.length, topRiskClients }
+}
+
 export async function getCoachDashboardDataV2(userId: string) {
     return measureServer('getCoachDashboardDataV2', async () => {
         const supabase = await createClient()
@@ -206,22 +244,32 @@ export async function getCoachDashboardDataV2(userId: string) {
 
         const agenda = buildAgendaFromPulse(pulse, base.expiringPrograms)
 
-        const riskCount = base.topRiskClients.length
+        // Las entradas de los deltas salen del snapshot que el inner YA cargó (cero round-trips
+        // nuevos) y no viajan al cliente: se consumen acá y quedan fuera del payload.
+        const { _rawSignupDates, areaTodayKey, areaYesterdayKey, ...rest } = base
 
         const kpi = {
             mrrCurrentMonth: base.mrrCurrentMonth,
             mrrPreviousMonth: base.mrrPreviousMonth,
             mrrDeltaPct,
             totalClients: base.totalClients,
-            riskCount,
+            riskCount: base.riskCount,
             avgAdherence: base.avgAdherence,
             avgNutrition: base.avgNutrition,
+            deltas: buildKpiDeltas({
+                areaData: base.areaData,
+                todayKey: areaTodayKey,
+                yesterdayKey: areaYesterdayKey,
+                adherenceStats: base.adherenceStats,
+                signupDates: _rawSignupDates,
+                nowIso: new Date().toISOString(),
+            }),
         }
 
         const clientList = pulse.map((p) => ({ id: p.clientId, name: p.clientName }))
         const clientPaymentSummary = buildClientPaymentSummary(base._rawClientPayments ?? [], pulse)
 
-        return { ...base, pulse, mrrDeltaPct, agenda, kpi, clientList, clientPaymentSummary }
+        return { ...rest, pulse, mrrDeltaPct, agenda, kpi, clientList, clientPaymentSummary }
     })
 }
 
@@ -239,22 +287,32 @@ export async function getCoachDashboardDataV2WithClient(userId: string, supabase
                 : 0
 
         const agenda = buildAgendaFromPulse(pulse, base.expiringPrograms)
-        const riskCount = base.topRiskClients.length
+
+        // Mismo helper que el camino RSC: web y RN reciben el mismo delta y el mismo copy.
+        const { _rawSignupDates, areaTodayKey, areaYesterdayKey, ...rest } = base
 
         const kpi = {
             mrrCurrentMonth: base.mrrCurrentMonth,
             mrrPreviousMonth: base.mrrPreviousMonth,
             mrrDeltaPct,
             totalClients: base.totalClients,
-            riskCount,
+            riskCount: base.riskCount,
             avgAdherence: base.avgAdherence,
             avgNutrition: base.avgNutrition,
+            deltas: buildKpiDeltas({
+                areaData: base.areaData,
+                todayKey: areaTodayKey,
+                yesterdayKey: areaYesterdayKey,
+                adherenceStats: base.adherenceStats,
+                signupDates: _rawSignupDates,
+                nowIso: new Date().toISOString(),
+            }),
         }
 
         const clientList = pulse.map((p) => ({ id: p.clientId, name: p.clientName }))
         const clientPaymentSummary = buildClientPaymentSummary(base._rawClientPayments ?? [], pulse)
 
-        return { ...base, pulse, mrrDeltaPct, agenda, kpi, clientList, clientPaymentSummary }
+        return { ...rest, pulse, mrrDeltaPct, agenda, kpi, clientList, clientPaymentSummary }
     })
 }
 
@@ -327,6 +385,14 @@ async function getCoachDashboardDataInner(
         timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit',
     })
     const ymdSantiago = (date: Date) => santiagoYmdFmt.format(date)
+    // Clave `DD/MM` del AreaChart. Única fuente de esa forma en el archivo: la serie y los deltas
+    // de «Sesiones hoy» tienen que buscar por la MISMA clave o el delta sale siempre contra 0.
+    const areaDayKey = (date: Date) => {
+        const [, m, d] = ymdSantiago(date).split('-')
+        return `${d}/${m}`
+    }
+    const areaTodayKey = areaDayKey(now)
+    const areaYesterdayKey = areaDayKey(new Date(now.getTime() - 24 * 60 * 60 * 1000))
     const [nowY, nowM] = ymdSantiago(now).split('-').map(Number)
     // Ventana del BarChart de altas: desde el primer dia del mes (hoy - 5 meses). El margen de horas
     // por usar medianoche UTC es inocuo: la agrupacion posterior por mes Santiago lo reubica.
@@ -583,29 +649,17 @@ async function getCoachDashboardDataInner(
         })
         .filter((p) => p.daysLeft <= 3)
 
-    const criticalFlags: AttentionFlag[] = ['SIN_CHECKIN_1M', 'SIN_EJERCICIO_7D']
-    const topRiskClients: RiskAlertItem[] = pulse
-        .filter((row) => row.attentionFlags.some((flag) => criticalFlags.includes(flag)))
-        .sort((a, b) => b.attentionScore - a.attentionScore)
-        .slice(0, 5)
-        .map((row) => ({
-            clientId: row.clientId,
-            clientName: row.clientName,
-            attentionScore: row.attentionScore,
-            flags: row.attentionFlags,
-            label: row.attentionFlags.length > 0 ? FLAG_LABELS[row.attentionFlags[0]] : 'Seguimiento recomendado',
-        }))
+    // `riskCount` es el conteo COMPLETO; `topRiskClients` sigue siendo el top 5 de la card.
+    const { riskCount, topRiskClients } = splitRiskClients(pulse)
 
     // AreaChart: unique workout sessions per day (last 30 days, deduplicated by client+day, zona Chile)
     const sessionsByDay: Record<string, number> = {}
     for (let i = 29; i >= 0; i -= 1) {
-        const [, m, d] = ymdSantiago(new Date(Date.now() - i * 24 * 60 * 60 * 1000)).split('-')
-        sessionsByDay[`${d}/${m}`] = 0
+        sessionsByDay[areaDayKey(new Date(Date.now() - i * 24 * 60 * 60 * 1000))] = 0
     }
     const seenSessionKeys = new Set<string>()
     workoutLogs30d.forEach((w) => {
-        const [, m, d] = ymdSantiago(new Date(w.logged_at)).split('-')
-        const dayKey = `${d}/${m}`
+        const dayKey = areaDayKey(new Date(w.logged_at))
         const sessionKey = `${(w as { client_id?: string }).client_id ?? ''}|${dayKey}`
         if (!seenSessionKeys.has(sessionKey)) {
             seenSessionKeys.add(sessionKey)
@@ -643,8 +697,13 @@ async function getCoachDashboardDataInner(
         recentActivities,
         pendingCheckinsCount,
         expiringPrograms,
+        riskCount,
         topRiskClients,
         areaData,
+        // Claves `DD/MM` (zona Santiago) que usan las funciones V2 para el delta de «Sesiones hoy».
+        // No viajan al cliente: las V2 las consumen y las sacan del payload.
+        areaTodayKey,
+        areaYesterdayKey,
         barData,
         mrrCurrentMonth,
         mrrPreviousMonth,
@@ -652,6 +711,9 @@ async function getCoachDashboardDataInner(
         currentPeriodEnd: coachSubscription?.current_period_end ?? null,
         trialEndsAt: coachSubscription?.trial_ends_at ?? null,
         _rawClientPayments: clientPayments,
+        // Altas crudas de la ventana del BarChart (ya cargadas): alimentan el delta «+N esta
+        // semana» sin una consulta más. Tampoco viajan al cliente.
+        _rawSignupDates: (signupDatesRaw ?? []) as { created_at: string }[],
     }
 }
 
