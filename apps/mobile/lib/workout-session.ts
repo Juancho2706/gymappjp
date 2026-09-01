@@ -622,7 +622,8 @@ export function useWorkoutSession(
           .from('workout_plans')
           .select(
             `id, title, week_variant, program_id, day_of_week,
-             workout_blocks ( *, exercises ( id, name, muscle_group, video_url, video_start_time, video_end_time, gif_url, thumbnail_url, instructions, exercise_type, cardio_modality ) )`,
+             workout_blocks ( *, exercises ( id, name, muscle_group, video_url, video_start_time, video_end_time, gif_url, thumbnail_url, instructions, exercise_type, cardio_modality ) ),
+             workout_programs ( name, start_date, weeks_to_repeat, program_structure_type, cycle_length, program_phases, ab_mode )`,
           )
           .eq('id', planId)
           .maybeSingle(),
@@ -699,27 +700,25 @@ export function useWorkoutSession(
       // vez de la activa. Se resuelve tras cargar el programa; sin programa/sin ab_mode ⇒ null (sin badge).
       let resolvedWeekVariant: string | null = null
 
-      const programId = (data as { program_id?: string | null }).program_id
-      if (programId) {
-        const { data: prog } = await supabase
-          .from('workout_programs')
-          .select('name, start_date, weeks_to_repeat, program_structure_type, cycle_length, program_phases, ab_mode')
-          .eq('id', programId)
-          .maybeSingle()
-        if (prog) {
-          const week = programWeekIndex1Based(prog as { start_date?: string | null; weeks_to_repeat?: number | null })
-          setProgramName((prog as { name?: string | null }).name ?? null)
-          setWeeksToRepeat((prog as { weeks_to_repeat?: number | null }).weeks_to_repeat ?? null)
-          setCurrentWeek(week)
-          setProgramStructure((prog as { program_structure_type?: 'weekly' | 'cycle' | null }).program_structure_type ?? null)
-          setCycleLength((prog as { cycle_length?: number | null }).cycle_length ?? null)
-          setPhaseName(currentPhaseName((prog as { program_phases?: { name: string; weeks: number }[] | null }).program_phases, week))
-          resolvedWeekVariant = (prog as { ab_mode?: boolean | null }).ab_mode
-            ? resolveActiveWeekVariantForDisplay(
-                prog as { ab_mode?: boolean | null; start_date?: string | null; weeks_to_repeat?: number | null },
-              )
-            : null
-        }
+      // Embebido en el select del plan (workout_plans.program_id → workout_programs, FK única). El cliente
+      // mobile no está tipado sobre `Database` (createClient() sin genéricos, ver supabase.ts), así que
+      // postgrest-js no puede inferir cardinalidad y tipa la relación como array — igual que ya pasa con
+      // `workout_blocks` más arriba. `[0]` es undefined cuando `program_id` es null, misma forma que
+      // devolvía el `.maybeSingle()` de la query aparte que reemplaza.
+      const prog = (data as { workout_programs?: Record<string, unknown>[] | null }).workout_programs?.[0]
+      if (prog) {
+        const week = programWeekIndex1Based(prog as { start_date?: string | null; weeks_to_repeat?: number | null })
+        setProgramName((prog as { name?: string | null }).name ?? null)
+        setWeeksToRepeat((prog as { weeks_to_repeat?: number | null }).weeks_to_repeat ?? null)
+        setCurrentWeek(week)
+        setProgramStructure((prog as { program_structure_type?: 'weekly' | 'cycle' | null }).program_structure_type ?? null)
+        setCycleLength((prog as { cycle_length?: number | null }).cycle_length ?? null)
+        setPhaseName(currentPhaseName((prog as { program_phases?: { name: string; weeks: number }[] | null }).program_phases, week))
+        resolvedWeekVariant = (prog as { ab_mode?: boolean | null }).ab_mode
+          ? resolveActiveWeekVariantForDisplay(
+              prog as { ab_mode?: boolean | null; start_date?: string | null; weeks_to_repeat?: number | null },
+            )
+          : null
       }
       setActiveWeekVariant(resolvedWeekVariant)
       // Cache offline con la variante YA resuelta (no el `week_variant` crudo): al reabrir sin red el badge
