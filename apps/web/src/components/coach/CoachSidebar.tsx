@@ -28,7 +28,7 @@ import { CoachBrandAvatar } from '@/components/coach/CoachBrandAvatar'
 import { CoachNavIcon, type CoachNavConcept } from '@/components/coach/CoachNavIcon'
 import { useTabbarMinimized } from '@/components/coach/use-tabbar-minimized'
 import { EvaBrandIcon } from '@/components/landing/LandingBrandMark'
-import { getVisibleNavItems, splitForSidebar, isNavItemActiveForPath, type NavModule } from '@eva/coach-nav'
+import { getVisibleNavItems, groupNavItems, isNavItemActiveForPath, type NavModule } from '@eva/coach-nav'
 import type { WorkspaceSummary, WorkspaceType } from '@/domain/auth/types'
 import type { EnabledModules } from '@/services/entitlements.service'
 
@@ -185,7 +185,17 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
 
     const disabledDomainSet = disabledDomains && disabledDomains.length > 0 ? new Set(disabledDomains) : null
     const visibleNavItems = getVisibleNavItems({ activeWorkspaceType, subscriptionStatus, enabledModules, disabledDomains: disabledDomainSet })
-    const { primary: primaryNavItems } = splitForSidebar(visibleNavItems)
+    const groups = groupNavItems(visibleNavItems)
+
+    // W2.4 (mockup 1A) — las 3 secciones del sidebar, ya sin las vacías: si un coach apagó los
+    // 4 dominios, «Tu trabajo» desaparece entera (encabezado incluido); en enterprise sin
+    // dominios quedan solo Principal + Gestión. Filtrar acá evita pintar encabezados huérfanos
+    // y separadores dobles en el modo colapsado.
+    const navSections = [
+        { id: 'principal', label: 'Principal', items: groups.principal },
+        { id: 'trabajo', label: 'Tu trabajo', items: groups.trabajo },
+        { id: 'gestion', label: 'Gestión', items: groups.gestion },
+    ].filter((section) => section.items.length > 0)
 
     // Item-aware: además de `href` respeta `activeAliases` (swap V2 bajo canary ilumina Nutrición).
     // Con pending activo, el ítem tocado es EL ÚNICO activo (pendingHref ?? pathname). El OR
@@ -297,7 +307,14 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
                     )}
                 </div>
 
-                {/* .dt-nav */}
+                {/* .dt-nav — TRES grupos (W2.4, mockup 1A).
+                    Hasta acá el <nav> mapeaba solo el `primary` de `splitForSidebar`: todo lo que
+                    caía en `secondary` (Soporte, Cardio, Movimiento) NUNCA llegaba al DOM aunque
+                    `getVisibleNavItems` lo devolviera visible — el hallazgo wf-webIA era literal,
+                    no un problema de orden. Ahora `groupNavItems` reparte en Principal / Tu trabajo
+                    / Gestión y las tres secciones se pintan, cada una como `role="group"` para que
+                    el lector de pantalla las anuncie. Colapsado: sin encabezados, separador fino
+                    entre secciones. */}
                 <nav className="flex min-h-0 flex-1 flex-col gap-[3px] overflow-y-auto" aria-label="Navegación principal">
                     {enterpriseContext && isOrgAdmin && (
                         <Link
@@ -316,7 +333,25 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
                             <span className={cn('overflow-hidden whitespace-nowrap', isCollapsed && 'hidden')}>Panel empresa</span>
                         </Link>
                     )}
-                    {primaryNavItems.map((item) => renderNavLink(item))}
+                    {navSections.map((section, index) => (
+                        <div key={section.id} role="group" aria-label={section.label} className="flex flex-col gap-[3px]">
+                            {isCollapsed
+                                ? index > 0 && (
+                                      <div className="mx-auto my-1.5 h-px w-8 bg-[var(--border-subtle)]" aria-hidden="true" />
+                                  )
+                                : (
+                                      <div
+                                          className={cn(
+                                              'px-3 pb-1 text-[11px] font-bold uppercase tracking-[0.08em] text-[var(--text-subtle)]',
+                                              index > 0 && 'pt-3'
+                                          )}
+                                      >
+                                          {section.label}
+                                      </div>
+                                  )}
+                            {section.items.map((item) => renderNavLink(item))}
+                        </div>
+                    ))}
                 </nav>
 
                 {/* .dt-side-foot — bloque COACH / {nombre} + Colapsar menú */}
