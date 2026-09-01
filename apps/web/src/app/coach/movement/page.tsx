@@ -30,7 +30,7 @@ export default async function MovementHubPage() {
     const firstRun = clients.every((c) => c.latest_final == null && c.draft_id == null)
 
     return (
-        <div className="min-h-dvh bg-background">
+        <div className="min-h-dvh">
             {firstRun && (
                 <div className="mx-auto w-full max-w-3xl px-4 pt-6">
                     <MovementFirstRunEmpty

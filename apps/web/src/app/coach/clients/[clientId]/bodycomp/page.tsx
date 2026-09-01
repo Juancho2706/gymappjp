@@ -24,7 +24,7 @@ export default async function BodyCompositionPage({ params }: Props) {
     if (result.status === 'not_found') notFound()
 
     return (
-        <div className="min-h-dvh bg-background px-4 pb-24 pt-4 md:px-6 md:pb-10">
+        <div className="min-h-dvh px-4 pb-24 pt-4 md:px-6 md:pb-10">
             <BodyCompositionTabB6b
                 clientId={result.data.clientId}
                 bia={result.data.bia}

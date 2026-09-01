@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, type CSSProperties } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import {
@@ -20,15 +20,26 @@ import {
     Building2,
     ChevronsLeft,
     ChevronsRight,
+    Ellipsis,
     type LucideIcon,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { NavPendingFeedback } from '@/components/navigation/NavPendingFeedback'
 import { CoachBrandAvatar } from '@/components/coach/CoachBrandAvatar'
+import { CoachMoreSheet } from '@/components/coach/CoachMoreSheet'
 import { CoachNavIcon, type CoachNavConcept } from '@/components/coach/CoachNavIcon'
 import { useTabbarMinimized } from '@/components/coach/use-tabbar-minimized'
 import { EvaBrandIcon } from '@/components/landing/LandingBrandMark'
-import { getVisibleNavItems, groupNavItems, isNavItemActiveForPath, type NavModule } from '@eva/coach-nav'
+import {
+    MORE_NAV_ITEM,
+    buildMobileBar,
+    getVisibleNavItems,
+    groupNavItems,
+    isNavItemActiveForPath,
+    type NavModule,
+} from '@eva/coach-nav'
+import { PERSONA_DOMAIN_ORDER } from '@eva/feature-prefs'
+import type { Persona } from '@eva/schemas'
 import type { WorkspaceSummary, WorkspaceType } from '@/domain/auth/types'
 import type { EnabledModules } from '@/services/entitlements.service'
 
@@ -58,6 +69,13 @@ interface CoachSidebarProps {
      * Ausente/vacío ⇒ ningún dominio apagado (fail-open).
      */
     disabledDomains?: string[] | null
+    /**
+     * Persona (especialidad) del coach, resuelta server-side en el layout. Solo gobierna el ORDEN
+     * de prioridad de los dominios en la cápsula móvil (`PERSONA_DOMAIN_ORDER`): cuáles 2 de sus
+     * dominios prendidos se ganan un slot y cuáles caen a la hoja «Más». No decide visibilidad —
+     * eso sigue siendo `disabledDomains`. `null`/ausente ⇒ `other` (orden neutro).
+     */
+    persona?: Persona | null
 }
 
 /**
@@ -105,13 +123,13 @@ const ICON_BY_NAME: Record<string, LucideIcon> = {
     LifeBuoy,
     HeartPulse,
     PersonStanding,
+    // Slot «Más» de la cápsula (`MORE_NAV_ITEM.icon`): no vive en NAV_MODULES ni tiene glifo
+    // propio, así que se resuelve por su key de icono como cualquier otra entrada del registro.
+    Ellipsis,
 }
 
 const displayLabel = (item: NavModule) => DISPLAY_LABELS[item.key] ?? item.label
 const navIcon = (item: NavModule): LucideIcon => ICON_OVERRIDE[item.key] ?? ICON_BY_NAME[item.icon] ?? Settings
-
-/** Capsula flotante movil — claves de los tabs PRIMARIOS (espejo del coachTabs del diseño eva-app). */
-const MOBILE_TAB_KEYS = ['dashboard', 'clients', 'programs', 'nutrition', 'options', 'settings_team', 'team', 'reactivate'] as const
 
 /**
  * Glifo propio (silueta del CEO) por clave de nav — cápsula móvil Y sidebar desktop (el
@@ -130,9 +148,11 @@ const NAV_GLYPH_BY_KEY: Record<string, CoachNavConcept> = {
     movement: 'movimiento',
 }
 
-export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterpriseContext, activeWorkspaceType, enabledModules, disabledDomains, logoUrl, logoUrlDark }: CoachSidebarProps) {
+export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterpriseContext, activeWorkspaceType, enabledModules, disabledDomains, persona, logoUrl, logoUrlDark }: CoachSidebarProps) {
     const pathname = usePathname()
     const [manualCollapsed, setManualCollapsed] = useState(false)
+    // Hoja «Más» (W2.6): rescata lo visible que no entró en la cápsula. Solo móvil.
+    const [moreOpen, setMoreOpen] = useState(false)
     // Modo "compact" del diseño (760 ≤ vw < 1080): el sidebar SIEMPRE es el rail de 76px;
     // el toggle manual solo manda en "wide" (≥1080). Espejo de eva-desktop
     // `collapsed = mode === 'compact' || (mode === 'wide' && sidebarCollapsed)`.
@@ -147,8 +167,12 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
     const [isNavigating, setIsNavigating] = useState<string | null>(null)
 
     // Confirmación: la ruta cambió (commit) → limpiar pending (el activo vuelve a pathname).
+    // La hoja «Más» también se cierra acá: además del tap en la fila, cubre las rutas que cambian
+    // sin pasar por ella (atrás del navegador, link del contenido) y evita dejarla tapando la
+    // pantalla nueva.
     useEffect(() => {
         setIsNavigating(null)
+        setMoreOpen(false)
     }, [pathname])
 
     // Revert: navegación fallida/colgada (offline, error de red) → soltar el pending para no
@@ -204,12 +228,25 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
     const isNavItemActive = (item: NavModule) =>
         isNavigating != null ? isNavigating === item.href : isNavItemActiveForPath(item, pathname)
 
-    // MOBILE — cápsula flotante (eva-app coachTabs): hasta 5 tabs full-label, sin "Más".
-    const mobileTabs = MOBILE_TAB_KEYS
-        .map((k) => visibleNavItems.find((i) => i.key === k))
-        .filter((i): i is NavModule => i != null)
-        .slice(0, 5)
-    const mobileActiveIndex = mobileTabs.findIndex((i) => isNavItemActive(i))
+    // MOBILE — cápsula flotante (Ola de orden W2.5, decisión 2A del owner): [Inicio, Alumnos, los
+    // 2 dominios que la especialidad del coach pone primero, «Más»]. Antes era un
+    // `.slice(0, 5)` sobre una lista fija de claves: un corte CIEGO que no solo dejaba a los
+    // coaches de team sin «Equipo», sino que tiraba a la basura TODO lo que no entraba —en
+    // responsive el coach veía «Opciones» y nada más (hallazgo del QA del owner, 01-09).
+    // `buildMobileBar` es la MISMA función que arma la barra de RN, así que la PWA y la app pintan
+    // exactamente los mismos 5 slots; el `overflow` es lo que rescata la hoja «Más».
+    const { bar: mobileTabs, overflow: mobileOverflow } = buildMobileBar(
+        visibleNavItems,
+        PERSONA_DOMAIN_ORDER[persona ?? 'other']
+    )
+    // «Más» se pinta activo cuando la ruta actual pertenece a algo que quedó DENTRO de la hoja
+    // (Cardio, Movimiento, Equipo, Funciones, Opciones, Soporte): si no, el coach navega a Cardio
+    // y la cápsula queda sin ningún slot iluminado. Usa `isNavItemActive` (no el matcher pelado)
+    // para que el pending del tap también corra: tocar una fila ilumina «Más» al instante.
+    const moreActive = mobileOverflow.some((item) => isNavItemActive(item))
+    const isMobileTabActive = (item: NavModule) =>
+        item.key === MORE_NAV_ITEM.key ? moreActive : isNavItemActive(item)
+    const mobileActiveIndex = mobileTabs.findIndex((i) => isMobileTabActive(i))
     const mobileN = mobileTabs.length || 1
 
     // DESKTOP — link vertical del sidebar (.dt-nav-item). Transcripción verbatim del diseño.
@@ -260,6 +297,60 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
                     {label}
                 </span>
             </Link>
+        )
+    }
+
+    // MOBILE — chasis visual de UN slot de la cápsula. Se extrae del `.map` porque el slot «Más»
+    // NO es un <Link> (abre la hoja, no navega) y tiene que verse EXACTAMENTE igual que sus
+    // vecinos: mismo flex, mismo color por estado, mismo colapso de label al minimizar.
+    const mobileTabStyle = (active: boolean): CSSProperties => ({
+        position: 'relative',
+        zIndex: 1,
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: tabbarMinimized ? 0 : 3,
+        padding: tabbarMinimized ? '5px 0' : '6px 0',
+        border: 'none',
+        background: 'transparent',
+        color: active ? 'var(--sport-600)' : 'var(--ink-400)',
+        textDecoration: 'none',
+        WebkitTapHighlightColor: 'transparent',
+        transition: 'color var(--dur-base) var(--ease-out), padding var(--dur-base) var(--ease-out)',
+    })
+
+    const renderMobileTabInner = (item: NavModule, active: boolean) => {
+        const Icon = navIcon(item)
+        const glyph = NAV_GLYPH_BY_KEY[item.key]
+        return (
+            <>
+                <span
+                    className={cn(
+                        'inline-flex h-6 w-6 items-center justify-center',
+                        // El fill-current es un truco para el trazo lucide del activo;
+                        // los glifos ya son siluetas rellenas (heredan `color`).
+                        active && !glyph && '[&_svg]:fill-current [&_svg]:[fill-opacity:0.18]'
+                    )}
+                    style={{ transform: active ? 'translateY(-1px)' : 'none', transition: 'transform var(--dur-base) var(--ease-spring)' }}
+                >
+                    {glyph ? <CoachNavIcon concept={glyph} className="h-6 w-6" /> : <Icon size={24} />}
+                </span>
+                <span
+                    style={{
+                        fontSize: 10,
+                        fontWeight: active ? 800 : 600,
+                        letterSpacing: '0.01em',
+                        maxHeight: tabbarMinimized ? 0 : 14,
+                        opacity: tabbarMinimized ? 0 : 1,
+                        overflow: 'hidden',
+                        transition:
+                            'max-height var(--dur-base) var(--ease-out), opacity var(--dur-base) var(--ease-out)',
+                    }}
+                >
+                    {displayLabel(item)}
+                </span>
+            </>
         )
     }
 
@@ -440,10 +531,27 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
                         }}
                     />
                     {mobileTabs.map((item) => {
-                        const active = isNavItemActive(item)
-                        const Icon = navIcon(item)
-                        const glyph = NAV_GLYPH_BY_KEY[item.key]
-                        const label = displayLabel(item)
+                        const active = isMobileTabActive(item)
+
+                        // Slot «Más»: <button>, no <Link> — no es una ruta del panel sino el
+                        // disparador de la hoja. Mismo chasis visual que sus vecinos.
+                        if (item.key === MORE_NAV_ITEM.key) {
+                            return (
+                                <button
+                                    key={item.key}
+                                    type="button"
+                                    aria-label={displayLabel(item)}
+                                    aria-haspopup="dialog"
+                                    aria-expanded={moreOpen}
+                                    onClick={() => setMoreOpen(true)}
+                                    className="eva-tabbar-press"
+                                    style={mobileTabStyle(active)}
+                                >
+                                    {renderMobileTabInner(item, active)}
+                                </button>
+                            )
+                        }
+
                         return (
                             <Link
                                 key={item.href}
@@ -451,58 +559,30 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
                                 // Prefetch default (auto): baja solo hasta el loading.tsx del
                                 // segmento y el proxy excluye prefetch de /coach — ver nota en
                                 // renderNavLink. Tap → skeleton al instante.
-                                aria-label={label}
+                                aria-label={displayLabel(item)}
                                 onClick={() => {
                                     if (!isNavItemActiveForPath(item, pathname)) setIsNavigating(item.href)
                                 }}
                                 className={cn('eva-tabbar-press', isNavigating === item.href && 'animate-pulse')}
-                                style={{
-                                    position: 'relative',
-                                    zIndex: 1,
-                                    flex: 1,
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'center',
-                                    gap: tabbarMinimized ? 0 : 3,
-                                    padding: tabbarMinimized ? '5px 0' : '6px 0',
-                                    border: 'none',
-                                    background: 'transparent',
-                                    color: active ? 'var(--sport-600)' : 'var(--ink-400)',
-                                    textDecoration: 'none',
-                                    WebkitTapHighlightColor: 'transparent',
-                                    transition:
-                                        'color var(--dur-base) var(--ease-out), padding var(--dur-base) var(--ease-out)',
-                                }}
+                                style={mobileTabStyle(active)}
                             >
-                                <span
-                                    className={cn(
-                                        'inline-flex h-6 w-6 items-center justify-center',
-                                        // El fill-current es un truco para el trazo lucide del activo;
-                                        // los glifos ya son siluetas rellenas (heredan `color`).
-                                        active && !glyph && '[&_svg]:fill-current [&_svg]:[fill-opacity:0.18]'
-                                    )}
-                                    style={{ transform: active ? 'translateY(-1px)' : 'none', transition: 'transform var(--dur-base) var(--ease-spring)' }}
-                                >
-                                    {glyph ? <CoachNavIcon concept={glyph} className="h-6 w-6" /> : <Icon size={24} />}
-                                </span>
-                                <span
-                                    style={{
-                                        fontSize: 10,
-                                        fontWeight: active ? 800 : 600,
-                                        letterSpacing: '0.01em',
-                                        maxHeight: tabbarMinimized ? 0 : 14,
-                                        opacity: tabbarMinimized ? 0 : 1,
-                                        overflow: 'hidden',
-                                        transition:
-                                            'max-height var(--dur-base) var(--ease-out), opacity var(--dur-base) var(--ease-out)',
-                                    }}
-                                >
-                                    {label}
-                                </span>
+                                {renderMobileTabInner(item, active)}
                             </Link>
                         )
                     })}
                 </nav>
+            )}
+
+            {/* Hoja «Más» — hermana de la cápsula: mismo `overflow` de `buildMobileBar`, mismo
+                criterio de secciones que el sidebar. Montada fuera del <nav> (portal a body) para
+                que quede POR ENCIMA de la cápsula flotante (z-50), igual que el sheet del FAB. */}
+            {!isBuilder && (
+                <CoachMoreSheet
+                    open={moreOpen}
+                    onOpenChange={setMoreOpen}
+                    items={mobileOverflow}
+                    pathname={pathname}
+                />
             )}
         </>
     )

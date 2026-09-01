@@ -363,6 +363,11 @@ export default async function CoachLayout({
                     activeWorkspaceType={activeWorkspace?.type ?? null}
                     enabledModules={enabledModules}
                     disabledDomains={disabledDomains}
+                    // Ola de orden W2.5: la persona ordena los dominios de la cápsula móvil
+                    // (`PERSONA_DOMAIN_ORDER`) — cuáles 2 se ganan un slot y cuáles caen a «Más».
+                    // La lectura ya está hecha (`getPersonaScreenContext` es `React.cache`, la
+                    // comparte con GuidePill): cero query extra.
+                    persona={personaContext.persona}
                     logoUrl={coachPanelLogoUrl}
                     logoUrlDark={coachPanelLogoDarkUrl}
                 />

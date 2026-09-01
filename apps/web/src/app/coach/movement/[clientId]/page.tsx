@@ -42,7 +42,7 @@ export default async function MovementClientPage({ params, searchParams }: Props
     const rehabTemplate = templatesForSurface('movement', onboarding?.persona ?? null)[0] ?? null
 
     return (
-        <div className="min-h-dvh bg-background">
+        <div className="min-h-dvh">
             {entry && onboarding?.coachId && rehabTemplate ? (
                 <div className="mx-auto w-full max-w-3xl px-4 pt-6">
                     <PautaDomiciliariaCta
