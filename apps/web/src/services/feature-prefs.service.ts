@@ -480,7 +480,9 @@ export async function assertDomainEnabled(
  *   "heredando" de la base coach/team). Es lo que muestra el estado "heredar".
  * - `override`: la fila cruda `client_feature_prefs.sections` (parcial) — solo las keys que el
  *   coach ya forzo para ESTE alumno. `undefined`/ausente en una key => "heredar".
- * - `entitledByModule`: para LOCKear las secciones Pro sin entitlement (la pref solo achica).
+ * - `entitledByModule`: entitlement por módulo (fail-closed). Desde W4.1 (2026-09-01) la UI ya no
+ *   lo usa para candar secciones: todas se muestran como toggle; el resolver sigue aplicando
+ *   `entitled && wants` (la pref solo achica).
  * - `domainEnabledBase` / `domainEnabledOverride`: master switch del dominio (base vs override
  *   crudo del alumno) para el toggle "Mostrar Nutricion".
  *
@@ -492,7 +494,7 @@ export interface ClientFeaturePrefsOverrideContext {
     baseEffective: Record<NutritionSectionKey, boolean>
     /** Fila cruda `client_feature_prefs.sections` (parcial). Key ausente => heredar. */
     override: SectionPrefs
-    /** Entitlement por modulo (fail-closed) para LOCKear secciones Pro. */
+    /** Entitlement por modulo (fail-closed). Informativo: la UI ya no canda secciones (W4.1). */
     entitledByModule: Partial<Record<ModuleKey, boolean>>
     /** Master switch del dominio que resulta de la base coach/team (sin override). */
     domainEnabledBase: boolean

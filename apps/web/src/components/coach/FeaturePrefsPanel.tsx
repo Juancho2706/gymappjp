@@ -4,7 +4,7 @@ import { useState, useTransition } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { toast } from 'sonner'
-import { Apple, ChevronDown, Lock, Sparkles, Save } from 'lucide-react'
+import { Apple, ChevronDown, Sparkles, Save } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import {
     DOMAIN_ENABLED_KEY,
@@ -15,7 +15,6 @@ import {
     type Preset,
     type SectionPrefs,
 } from '@eva/feature-prefs'
-import { MODULE_CATALOG } from '@eva/module-catalog'
 import { Switch } from '@/components/ui/switch'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { cn } from '@/lib/utils'
@@ -39,8 +38,9 @@ import {
  *  1. Selector de PRESET (1 pregunta, doble como onboarding, descartable).
  *  2. Master switch del dominio (key reservada `_enabled`).
  *  3. Expander "Ajustar secciones" -> toggles por seccion (skip core), con badge Base/Pro +
- *     InfoTooltip. Las secciones Pro sin entitlement van LOCKED con CTA al upgrade de plan
- *     (/coach/subscription) — los módulos vienen incluidos en los planes pagos (CEO 2026-07-17).
+ *     InfoTooltip. TODAS las secciones toggleables se muestran como un toggle normal (W4.1,
+ *     2026-09-01): la UI no bloquea ninguna. El entitlement lo sigue aplicando el servidor
+ *     (`entitled && wants`) y esta preferencia solo achica — nunca prende algo no entitled.
  *
  * Todos los writes son optimistas (estado local) + toast, y revierten el estado si la action falla.
  * Cada grupo escribe via setCoach/TeamFeaturePrefs con SU dominio. Targets >=44px, respeta
@@ -56,6 +56,10 @@ export interface DomainConfig {
     sections: readonly FeatureSection[]
     preset: Preset
     sectionPrefs: SectionPrefs
+    /**
+     * Ya no bloquea la UI (W4.1, 2026-09-01): el resolver server-side sigue aplicando
+     * `entitled && wants`; se conserva por contrato con los callers.
+     */
     entitledByModule: Partial<Record<ModuleKey, boolean>>
 }
 
@@ -352,12 +356,6 @@ function DomainFuncionesGroup({
                                             <ul className="divide-y divide-border border-t border-border">
                                                 {toggleableSections.map((section) => {
                                                     const isPro = section.requiresModule !== null
-                                                    const entitled = section.requiresModule
-                                                        ? config.entitledByModule[
-                                                              section.requiresModule
-                                                          ] === true
-                                                        : true
-                                                    const locked = isPro && !entitled
                                                     // wants = pref guardada ?? default del preset actual.
                                                     const checked =
                                                         (sections[section.key] ??
@@ -378,42 +376,20 @@ function DomainFuncionesGroup({
                                                                         content={section.tooltip}
                                                                     />
                                                                 </div>
-                                                                {locked && (
-                                                                    <p className="mt-0.5 text-xs text-muted-foreground">
-                                                                        {
-                                                                            MODULE_CATALOG[
-                                                                                section.requiresModule!
-                                                                            ].label
-                                                                        }
-                                                                    </p>
-                                                                )}
                                                             </div>
 
-                                                            {locked ? (
-                                                                <a
-                                                                    href="/coach/subscription"
-                                                                    className="inline-flex min-h-[44px] shrink-0 items-center gap-1.5 rounded-xl border border-primary/30 bg-primary/5 px-3 text-xs font-semibold text-primary transition-colors hover:bg-primary/10"
-                                                                >
-                                                                    <Lock className="h-3.5 w-3.5" />{' '}
-                                                                    Incluido en planes pagos
-                                                                </a>
-                                                            ) : (
-                                                                <label className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center">
-                                                                    <span className="sr-only">
-                                                                        {section.label}
-                                                                    </span>
-                                                                    <Switch
-                                                                        checked={checked}
-                                                                        onCheckedChange={(v) =>
-                                                                            toggleSection(
-                                                                                section.key,
-                                                                                v,
-                                                                            )
-                                                                        }
-                                                                        disabled={isPending}
-                                                                    />
-                                                                </label>
-                                                            )}
+                                                            <label className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center">
+                                                                <span className="sr-only">
+                                                                    {section.label}
+                                                                </span>
+                                                                <Switch
+                                                                    checked={checked}
+                                                                    onCheckedChange={(v) =>
+                                                                        toggleSection(section.key, v)
+                                                                    }
+                                                                    disabled={isPending}
+                                                                />
+                                                            </label>
                                                         </li>
                                                     )
                                                 })}
