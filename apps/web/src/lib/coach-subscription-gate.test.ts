@@ -35,6 +35,22 @@ describe('resolveCoachSubscriptionRedirect', () => {
         expect(resolveCoachSubscriptionRedirect('/coach/subscription/processing', 'expired')).toBeNull()
     })
 
+    // Incidente 2026-09-01: la vuelta de Flow (urlReturn → /flow/retorno → flow-processing) de una coach
+    // EXPIRADA reactivando por Flow rebotaba a /coach/reactivate?reason=subscription_blocked y la Fase 2
+    // (confirm-enrollment) nunca corría: tarjeta enrolada en Flow, suscripción jamás creada, loop
+    // infinito de checkout. flow-processing es tan transaccional como processing (MP) y debe pasar
+    // el gate para cualquier estado bloqueado (pending_payment / expired).
+    it('deja pasar la vuelta de Flow (/coach/subscription/flow-processing) a un coach BLOQUEADO', () => {
+        expect(
+            resolveCoachSubscriptionRedirect('/coach/subscription/flow-processing?tier=pro&cycle=monthly', 'pending_payment')
+        ).toBeNull()
+        expect(resolveCoachSubscriptionRedirect('/coach/subscription/flow-processing', 'expired')).toBeNull()
+    })
+
+    it('deja a un coach CON acceso entrar a /coach/subscription/flow-processing (alta free→pago por Flow)', () => {
+        expect(resolveCoachSubscriptionRedirect('/coach/subscription/flow-processing', 'active')).toBeNull()
+    })
+
     it('does not redirect active coaches on normal pages', () => {
         expect(resolveCoachSubscriptionRedirect('/coach/dashboard', 'active')).toBeNull()
         expect(resolveCoachSubscriptionRedirect('/coach/clients', 'trialing', periodEndFuture)).toBeNull()

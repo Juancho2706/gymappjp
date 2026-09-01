@@ -75,7 +75,16 @@ export function resolveCoachSubscriptionRedirect(
     if (!subscriptionStatus || isManagedSubscription(subscriptionStatus)) return null
 
     const isReactivatePage = pathname.startsWith('/coach/reactivate')
-    const isSubscriptionProcessingPage = pathname.startsWith('/coach/subscription/processing')
+    // Pantallas TRANSACCIONALES del checkout (vuelta de la pasarela). Las dos deben pasar el gate
+    // aunque el coach esté BLOQUEADO: son justamente el paso que lo desbloquea.
+    //   · /coach/subscription/processing      → back_url de Mercado Pago (confirm-subscription).
+    //   · /coach/subscription/flow-processing → urlReturn de Flow vía /flow/retorno (confirm-enrollment).
+    // Incidente 2026-09-01 (coach expirada reactivando por Flow): solo `processing` estaba exento, el
+    // proxy rebotaba `flow-processing` a /coach/reactivate?reason=subscription_blocked y la Fase 2
+    // (confirm-enrollment) NUNCA corría — tarjeta enrolada en Flow, sub jamás creada, loop infinito.
+    const isSubscriptionProcessingPage =
+        pathname.startsWith('/coach/subscription/processing') ||
+        pathname.startsWith('/coach/subscription/flow-processing')
     const isSubscriptionGatePage = isReactivatePage || isSubscriptionProcessingPage
     const isFreeStandaloneOverCapacity =
         context?.subscriptionTier === 'free' &&
