@@ -298,9 +298,38 @@ export async function uploadCoachLogo(
   }
 
   try {
+    // CROP CENTRADO 1:1 antes del resize (EVA-MOBILE-A, 2026-08-31).
+    //
+    // El encuadre cuadrado lo hacía el recortador NATIVO del picker (`allowsEditing` + `aspect`),
+    // que en Android es exactamente lo que crashea con `ENOENT`. Al sacarlo de `settings/brand.tsx`
+    // hay que reponer el encuadre acá, o el logo llega con su proporción original.
+    //
+    // POR QUÉ NO ALCANZA CON DEJARLO RECTANGULAR: `CircularBrandLogo` tiene `contentFit: 'contain'`
+    // por DEFAULT, pero `session-morph.tsx:976` y `SessionIntro.tsx:168` le pasan `"cover"`
+    // explícito — o sea recortan al frame circular. Un logo apaisado perdería los bordes justo en
+    // el arranque del entrenamiento del alumno, que es la superficie que el white-label existe para
+    // cuidar. Con el crop centrado acá, el resultado visual es idéntico al de hoy en TODA la app.
+    //
+    // La primera pasada sin acciones es solo para leer las dimensiones reales del archivo (el
+    // asset del picker no siempre las trae fiables entre plataformas).
+    const probe = await ImageManipulator.manipulateAsync(uri, [], {
+      compress: 1,
+      format: ImageManipulator.SaveFormat.PNG,
+    })
+    const side = Math.min(probe.width, probe.height)
     const manipulated = await ImageManipulator.manipulateAsync(
       uri,
-      [{ resize: { width: 512 } }],
+      [
+        {
+          crop: {
+            originX: Math.round((probe.width - side) / 2),
+            originY: Math.round((probe.height - side) / 2),
+            width: side,
+            height: side,
+          },
+        },
+        { resize: { width: 512 } },
+      ],
       { compress: 0.85, format: ImageManipulator.SaveFormat.PNG, base64: true }
     )
     if (!manipulated.base64) return { ok: false, error: 'No se pudo procesar la imagen.' }

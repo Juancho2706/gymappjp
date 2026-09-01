@@ -566,7 +566,30 @@ export function useWorkoutSession(
     // `silent`: refetch de frescura (foco/foreground) que NO debe parpadear al loader — la pantalla ya
     // está montada con datos. El load inicial y el pull-to-refresh sí muestran el loader (silent=false).
     if (!opts?.silent) setLoading(true)
-    const client = await getClientProfile()
+
+    // El perfil y el plan viajan JUNTOS (Sentry EVA-MOBILE-9). `getClientProfile()` hace I/O real
+    // (`client.ts:21`: `auth.getUser()` + un select a `clients`) y el select del plan de más abajo
+    // solo necesita `planId`, que ya tenemos: no dependían entre sí y estaban en serie, pagando dos
+    // viajes donde alcanza uno. Esta pantalla pelea contra el fallback de ~4,6 s del despegue
+    // (`session-morph.tsx:72`), así que un viaje entero es una tajada grande del presupuesto.
+    //
+    // El `await` de cada una queda EXACTAMENTE donde estaba, así que el orden de los `setState`, del
+    // snapshot local y del render desde caché no cambia en nada: lo único que cambia es cuándo
+    // arrancan los requests.
+    const clientPromise = getClientProfile()
+    const planPromise = supabase
+      .from('workout_plans')
+      .select(
+        `id, title, week_variant, program_id, day_of_week,
+         workout_blocks ( *, exercises ( id, name, muscle_group, video_url, video_start_time, video_end_time, gif_url, thumbnail_url, instructions, exercise_type, cardio_modality ) )`,
+      )
+      .eq('id', planId)
+      .maybeSingle()
+    // Marca la promesa como manejada: si `getClientProfile()` lanza, el `await` de abajo no llega a
+    // correr y quedaría un unhandled rejection. El `await` real sigue leyendo el resultado igual.
+    void Promise.resolve(planPromise).catch(() => { /* lo maneja el await de abajo */ })
+
+    const client = await clientPromise
     if (client) {
       setClientId(client.id)
       clientIdRef.current = client.id
@@ -603,14 +626,8 @@ export function useWorkoutSession(
       setLoading(false)
     }
 
-    const { data } = await supabase
-      .from('workout_plans')
-      .select(
-        `id, title, week_variant, program_id, day_of_week,
-         workout_blocks ( *, exercises ( id, name, muscle_group, video_url, video_start_time, video_end_time, gif_url, thumbnail_url, instructions, exercise_type, cardio_modality ) )`,
-      )
-      .eq('id', planId)
-      .maybeSingle()
+    // Ya viajó en paralelo con el perfil (ver arriba): acá normalmente ya resolvió.
+    const { data } = await planPromise
 
     if (!data) {
       setLoading(false)

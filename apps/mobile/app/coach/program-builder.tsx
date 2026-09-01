@@ -87,8 +87,23 @@ function blockIncomplete(b: BuilderBlock): boolean {
 function emptyDays(): DayState[] {
   return buildDaySkeleton('weekly', 7, [])
 }
+/**
+ * Etiqueta del tab de un día. El `?? \`D${d.id}\`` NO es defensivo de más: cierra el crash de
+ * Sentry EVA-MOBILE-9/D.
+ *
+ * `ProgramConfigSheet` cambia el tipo de estructura llamando SOLO a `setStructureType`, y el efecto
+ * que reconcilia `days` corre DESPUÉS del commit. Con un ciclo largo (hasta 14 días) y volviendo de
+ * Ciclo a Semanal hay un render intermedio con `structureType === 'weekly'` pero `days` todavía con
+ * ids 8-14 ⇒ `DAY_SHORT[8..14]` es `undefined` ⇒ el `.slice()` de más abajo revienta. Y como acá no
+ * hay ErrorBoundary propio, el error sube a la raíz y REMONTA LA APP ENTERA: el coach pierde el
+ * programa que estaba armando.
+ *
+ * `tsc` no lo ve porque `apps/mobile` todavía no tiene `noUncheckedIndexedAccess`.
+ * Misma fórmula que ya usa `program-model.ts:181`; el arreglo de fondo (unificar el cambio de
+ * estructura con la reconstrucción de `days` en un handler síncrono) queda declarado aparte.
+ */
 function dayLabel(structure: ProgramStructureType, d: DayState): string {
-  return structure === 'weekly' ? DAY_SHORT[d.id] : `D${d.id}`
+  return structure === 'weekly' ? (DAY_SHORT[d.id] ?? `D${d.id}`) : `D${d.id}`
 }
 
 // PostgREST puede devolver la FK `exercises` como objeto o como array de un elemento.
