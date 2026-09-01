@@ -505,6 +505,33 @@ export function disabledDomainsForPersona(
     return disabled
 }
 
+/**
+ * ORDEN DE PRIORIDAD de los 5 dominios por persona (Ola de orden W2.1).
+ *
+ * Es la MISMA tabla de `resolvePersonaPrefs` leida de otra forma: primero los dominios que la
+ * persona deja PRENDIDOS con la segunda pregunta en [No] (en el orden en que los usa en su dia a
+ * dia), despues el resto. No decide visibilidad — eso lo siguen haciendo `_enabled` /
+ * `disabledDomains`; esto solo decide QUE VA PRIMERO cuando la superficie hay que recortarla o
+ * agruparla.
+ *
+ * Consumidores: la barra inferior de RN (W2.5), que pinta «2 dominios + Mas» y necesita saber
+ * CUALES 2, y la hoja «Mas» (W2.6), que lista el resto en el mismo orden. El sidebar web (W2.4)
+ * no la usa: alli manda el orden del registro de `@eva/coach-nav`.
+ *
+ * `other` es ademas el FALLBACK para persona `null` (coach anterior al onboarding v2, o que la
+ * salteo): panel completo, orden neutro entrenamiento-primero.
+ *
+ * Invariante testeado: cada array trae los 5 `FEATURE_DOMAIN_KEYS` sin duplicados, y los
+ * dominios ON de `resolvePersonaPrefs(persona, false)` ocupan el PREFIJO del array.
+ */
+export const PERSONA_DOMAIN_ORDER: Record<Persona, readonly FeatureDomain[]> = {
+    strength: ['training', 'nutrition', 'cardio', 'movement', 'bodycomp'],
+    nutrition: ['nutrition', 'bodycomp', 'training', 'cardio', 'movement'],
+    rehab: ['training', 'movement', 'nutrition', 'cardio', 'bodycomp'],
+    endurance: ['training', 'cardio', 'nutrition', 'movement', 'bodycomp'],
+    other: ['training', 'nutrition', 'cardio', 'movement', 'bodycomp'],
+}
+
 // ---------------------------------------------------------------------------------------------
 // Copy compartido del aviso «dominio apagado» (Ola de orden W1, mockup `9801fec7` 1A/2A/3A).
 // Vive ACA y no en `apps/web/src/lib` porque lo pintan web (DomainOffNotice, DomainOffBanner) y

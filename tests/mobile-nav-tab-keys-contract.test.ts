@@ -25,11 +25,13 @@ describe('MOBILE_TAB_KEYS <-> NAV_MODULES', () => {
     expect(new Set(MOBILE_TAB_KEYS).size).toBe(MOBILE_TAB_KEYS.length)
   })
 
-  it('(c) drift conocido: las entradas del registro ausentes de la barra son exactamente 3', () => {
+  it('(c) drift conocido: las entradas del registro ausentes de la barra son exactamente 4', () => {
     const enBarra = new Set<string>(MOBILE_TAB_KEYS)
     const ausentes = REGISTRY_KEYS.filter((key) => !enBarra.has(key))
-    // Soporte no tiene tab propio en RN; Cardio y Movimiento son modulos comprables que hoy se
-    // alcanzan desde el hub de herramientas, no desde la barra. W2.5 los mueve a «Mas».
-    expect(ausentes).toEqual(['support', 'cardio', 'movement'])
+    // Actualizado A CONCIENCIA en W2.2: la entrada `funciones` (acceso directo a
+    // /coach/settings/funciones) se sumo al registro y todavia no tiene lugar en la barra — RN la
+    // alcanza hoy por `settings/mi-panel`. Soporte no tiene tab propio en RN; Cardio y Movimiento
+    // se alcanzan desde el hub de herramientas. W2.5/W2.6 mueven los cuatro a la hoja «Mas».
+    expect(ausentes).toEqual(['funciones', 'support', 'cardio', 'movement'])
   })
 })

@@ -8,6 +8,7 @@ import {
     FUNCIONES_BREADCRUMB,
     FUNCIONES_LABEL,
     NUTRITION_SECTIONS,
+    PERSONA_DOMAIN_ORDER,
     PRESETS,
     disabledDomainsForPersona,
     domainOffBannerCopy,
@@ -595,5 +596,60 @@ describe('copy compartido «dominio apagado» (Ola de orden W1, mockup 9801fec7 
         for (const domain of FEATURE_DOMAIN_KEYS) {
             expect(domainOffBannerCopy(domain).hint).toContain(FUNCIONES_BREADCRUMB)
         }
+    })
+})
+
+describe('W2 · PERSONA_DOMAIN_ORDER (orden de prioridad por persona)', () => {
+    const enabledDomains = (persona: Persona): FeatureDomain[] => {
+        const prefs = resolvePersonaPrefs(persona, false)
+        return FEATURE_DOMAIN_KEYS.filter((d) => prefs[d][DOMAIN_ENABLED_KEY])
+    }
+
+    it('cubre las 5 personas del CHECK de `coaches.persona` (ni una de mas, ni una de menos)', () => {
+        expect(Object.keys(PERSONA_DOMAIN_ORDER).sort()).toEqual([...PERSONAS].sort())
+    })
+
+    it('cada persona lista los 5 dominios EXACTAMENTE una vez (mismo conjunto que FEATURE_DOMAIN_KEYS)', () => {
+        for (const persona of PERSONAS) {
+            const order = PERSONA_DOMAIN_ORDER[persona]
+            expect({ persona, len: order.length }).toEqual({ persona, len: FEATURE_DOMAIN_KEYS.length })
+            expect({ persona, dup: new Set(order).size }).toEqual({ persona, dup: order.length })
+            expect({ persona, set: [...order].sort() }).toEqual({
+                persona,
+                set: [...FEATURE_DOMAIN_KEYS].sort(),
+            })
+        }
+    })
+
+    it('consistencia con resolvePersonaPrefs: los dominios ON ocupan el PREFIJO del array', () => {
+        // Este es el contrato que hace util al mapa: la barra RN toma `.slice(0, 2)` y tiene que
+        // caer sobre dominios que la persona efectivamente dejo prendidos.
+        for (const persona of PERSONAS) {
+            const on = new Set(enabledDomains(persona))
+            const order = PERSONA_DOMAIN_ORDER[persona]
+            const prefix = order.slice(0, on.size)
+            expect({ persona, prefix: [...prefix].sort() }).toEqual({
+                persona,
+                prefix: [...on].sort(),
+            })
+            // Y el sufijo son exactamente los apagados (complemento, sin solapamiento).
+            for (const domain of order.slice(on.size)) {
+                expect({ persona, domain, on: on.has(domain) }).toEqual({ persona, domain, on: false })
+            }
+        }
+    })
+
+    it('el orden refleja el mundo de cada persona (tabla de SPEC §2, no un orden alfabetico)', () => {
+        expect(PERSONA_DOMAIN_ORDER.strength[0]).toBe('training')
+        expect(PERSONA_DOMAIN_ORDER.nutrition.slice(0, 2)).toEqual(['nutrition', 'bodycomp'])
+        expect(PERSONA_DOMAIN_ORDER.rehab.slice(0, 2)).toEqual(['training', 'movement'])
+        expect(PERSONA_DOMAIN_ORDER.endurance.slice(0, 2)).toEqual(['training', 'cardio'])
+    })
+
+    it('`other` es el fallback de persona `null` y no prioriza ningun mundo (panel completo)', () => {
+        // `other` deja los 5 dominios ON, asi que el prefijo es todo el array: el orden es solo
+        // una preferencia de presentacion (entrenamiento primero), no un recorte.
+        expect(enabledDomains('other')).toEqual([...FEATURE_DOMAIN_KEYS])
+        expect(PERSONA_DOMAIN_ORDER.other).toEqual(['training', 'nutrition', 'cardio', 'movement', 'bodycomp'])
     })
 })

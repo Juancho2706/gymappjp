@@ -12,8 +12,9 @@
  * que web y mobile deriven la MISMA matriz de tabs (evita el drift del smoke 2026-06-09:
  * josefit standalone veia "Equipo").
  *
- * `getVisibleNavItems` / `splitNavItems` / `splitForSidebar` son funciones PURAS
- * (unit-testeables sin render). `coachWorkspaceTypeFromKind` puentea el enum de mobile
+ * `getVisibleNavItems` / `groupNavItems` (y las heredadas `splitNavItems` / `splitForSidebar`, hoy
+ * `@deprecated`) son funciones PURAS (unit-testeables sin render). `coachWorkspaceTypeFromKind`
+ * puentea el enum de mobile
  * (`WorkspaceKind`) al de la web (`CoachWorkspaceType`) para que mobile no re-derive.
  */
 
@@ -103,6 +104,17 @@ export const NAV_MODULES: ReadonlyArray<NavModule> = [
     // Movida 2 (declutter IA): 'exercises' ya NO es entrada top-level (paso a un boton dentro de
     // Programas). La ruta /coach/exercises sigue VIVA (deep links / app alumno). Cero cambio de capability.
     { key: 'nutrition', href: '/coach/nutrition-plans', label: 'Nutrición', shortLabel: 'Nutri', icon: 'Apple', contexts: ALL, featureDomain: 'nutrition', activeAliases: ['/coach/nutrition-v2'] },
+    // Ola de orden W2.2 — acceso DIRECTO a la pantalla que prende/apaga dominios (la ruta
+    // /coach/settings/funciones ya existe desde el onboarding v2, commit d8286e95). Va ANTES de
+    // "Opciones" porque el grupo Gestion y la hoja «Mas» de RN se leen Equipo -> Funciones ->
+    // Opciones -> Soporte. Sin `entitlement` y sin `featureDomain`: es el interruptor, no puede
+    // apagarse a si mismo.
+    //
+    // El label "Funciones" ADELANTA el renombre de W3: la pagina web hoy se titula «Mi panel» y
+    // W3.1/W3.3 la renombran (y cambian `FUNCIONES_LABEL` en @eva/feature-prefs). Este paquete NO
+    // importa @eva/feature-prefs a proposito (ambos son puros y desacoplados, ver el comentario de
+    // `featureDomain` mas arriba), por eso el literal se repite aca.
+    { key: 'funciones', href: '/coach/settings/funciones', label: 'Funciones', shortLabel: 'Func.', icon: 'SlidersHorizontal', contexts: ['coach_standalone', 'coach_team'] },
     // Movida 1 (hub "Opciones"): standalone colapsa Mi Marca + Suscripcion en UNA entrada
     // "Opciones" -> /coach/settings (cards dentro del hub). Cero cambio de capability.
     { key: 'options', href: '/coach/settings', label: 'Opciones', shortLabel: 'Opcs.', icon: 'Settings', contexts: ['coach_standalone'] },
@@ -110,9 +122,14 @@ export const NAV_MODULES: ReadonlyArray<NavModule> = [
     // context-aware (hub: modulos del pool + Mi Equipo + cuenta; sin marca personal).
     { key: 'settings_team', href: '/coach/settings', label: 'Opciones', shortLabel: 'Opcs.', icon: 'Settings', contexts: ['coach_team'] },
     { key: 'support', href: '/coach/support', label: 'Soporte', shortLabel: 'Ayuda', icon: 'LifeBuoy', contexts: ALL },
-    // Modulos toggleables (compra-only): visibles solo con el entitlement ON; enterprise excluido en v1.
-    { key: 'cardio', href: '/coach/cardio', label: 'Cardio', shortLabel: 'Cardio', icon: 'HeartPulse', contexts: ['coach_standalone', 'coach_team'], entitlement: 'cardio', featureDomain: 'cardio' },
-    { key: 'movement', href: '/coach/movement', label: 'Movimiento', shortLabel: 'Movim.', icon: 'PersonStanding', contexts: ['coach_standalone', 'coach_team'], entitlement: 'movement_assessment', featureDomain: 'movement' },
+    // Cardio y Movimiento (Ola de orden W2.1B): ya NO llevan `entitlement`. D1 («todo incluido en
+    // todos los planes, solo se cobra el cupo») dejo sin sentido el gate por modulo comprado, asi
+    // que la visibilidad la gobierna SOLO `featureDomain` + `disabledDomains` — es decir, la
+    // preferencia del coach. El kill-switch de operador, si algun dia hace falta, vive en la RUTA
+    // (server-side), nunca en este registro. Siguen al final del array a proposito: en mobile el
+    // bottom bar renderiza plano por orden de registro.
+    { key: 'cardio', href: '/coach/cardio', label: 'Cardio', shortLabel: 'Cardio', icon: 'HeartPulse', contexts: ['coach_standalone', 'coach_team'], featureDomain: 'cardio' },
+    { key: 'movement', href: '/coach/movement', label: 'Movimiento', shortLabel: 'Movim.', icon: 'PersonStanding', contexts: ['coach_standalone', 'coach_team'], featureDomain: 'movement' },
 ]
 
 export const REACTIVATE_NAV_ITEM: NavModule = {
@@ -165,8 +182,12 @@ export function coachWorkspaceTypeFromKind(kind: CoachWorkspaceKind): CoachWorks
  * Modulos visibles para el contexto activo. Reglas:
  *  1. Status bloqueado (past_due/expired/...) => solo "Reactivar".
  *  2. Cada modulo se muestra solo en sus `contexts`. Sin workspace => standalone.
- *  3. Cuentas managed (org_managed/team_managed) nunca ven "Opciones" standalone (cinturon extra).
- *  4. Item con `entitlement` OFF => oculto (espejo visual; el gate real es server-side).
+ *  3. Cuentas managed (org_managed/team_managed) nunca ven "Opciones" standalone NI "Funciones"
+ *     (cinturon extra): a un coach administrado por team/org el panel se lo define el tenant, y
+ *     las dos pantallas ya lo rechazan (RN `settings/mi-panel.tsx`, web `settings/funciones`).
+ *  4. Item con `entitlement` OFF => oculto (espejo visual; el gate real es server-side). Desde
+ *     W2.1B NINGUNA entrada del registro declara `entitlement` — el mecanismo queda vivo para un
+ *     modulo futuro, pero hoy no filtra nada.
  *  5. Item con `featureDomain` en `disabledDomains` (master switch apagado) => oculto.
  */
 export function getVisibleNavItems(ctx: VisibleNavContext): NavModule[] {
@@ -185,7 +206,7 @@ export function getVisibleNavItems(ctx: VisibleNavContext): NavModule[] {
 
     return NAV_MODULES.filter((item) => {
         if (!item.contexts.includes(active)) return false
-        if (isManaged && item.key === 'options') return false
+        if (isManaged && (item.key === 'options' || item.key === 'funciones')) return false
         if (item.entitlement && ctx.enabledModules?.[item.entitlement] !== true) return false
         if (item.featureDomain && disabledDomains?.has(item.featureDomain)) return false
         return true
@@ -208,6 +229,11 @@ export function isNavItemActiveForPath(item: NavModule, pathname: string): boole
 /**
  * Particiona los items visibles en `core` (siempre presentes) y `modules` (toggleables).
  * Discriminador: `item.entitlement != null`. Funcion PURA; preserva el orden relativo.
+ *
+ * @deprecated Ola de orden W2.1B — ninguna entrada del registro declara ya `entitlement`, asi que
+ * `modules` sale SIEMPRE vacio y `core` es la lista entera. Se conserva porque el mecanismo
+ * `entitlement` sigue vivo en el tipo para un modulo futuro. Para agrupar el nav usar
+ * `groupNavItems`.
  */
 export function splitNavItems(items: NavModule[]): { core: NavModule[]; modules: NavModule[] } {
     const core: NavModule[] = []
@@ -224,6 +250,11 @@ export function splitNavItems(items: NavModule[]): { core: NavModule[]; modules:
  *  - `primary`: navegacion principal (nucleo de trabajo).
  *  - `secondary`: grupo "Mas" (Soporte + los modulos comprados/toggleables).
  * Discriminador: `item.key === 'support'` OR `item.entitlement != null`. PURA; preserva el orden.
+ *
+ * @deprecated Ola de orden W2.3 — su unico consumidor real (`CoachSidebar.tsx`) destructura solo
+ * `primary`, por lo que `secondary` NUNCA se pinta: Soporte (y antes Cardio/Movimiento) quedaban
+ * invisibles en el sidebar. Ademas, tras W2.1B el tramo de modulos de `secondary` sale siempre
+ * vacio. Usar `groupNavItems`; W2.4 migra CoachSidebar y ahi esta funcion se retira.
  */
 export function splitForSidebar(items: NavModule[]): { primary: NavModule[]; secondary: NavModule[] } {
     const primary: NavModule[] = []
@@ -233,4 +264,65 @@ export function splitForSidebar(items: NavModule[]): { primary: NavModule[]; sec
         else primary.push(item)
     }
     return { primary, secondary }
+}
+
+/**
+ * Orden CANONICO del grupo «Gestion» (`groupNavItems`). Es un orden de LECTURA, no el del
+ * registro: primero el equipo, despues el interruptor del panel, despues el hub de opciones y al
+ * final la ayuda. Las keys que no figuren aca caen al final del grupo, en orden de registro.
+ */
+export const GESTION_ORDER: ReadonlyArray<string> = ['team', 'funciones', 'options', 'settings_team', 'support']
+
+/** Los 3 grupos con los que el sidebar (W2.4) y la hoja «Mas» de RN (W2.6) pintan el nav. */
+export type NavGroups = {
+    /** Entrada al panel: Dashboard + Alumnos, en ese orden. */
+    principal: NavModule[]
+    /** Los dominios de trabajo prendidos (items con `featureDomain`), en orden de registro. */
+    trabajo: NavModule[]
+    /** Todo lo demas (equipo, funciones, opciones, soporte), en `GESTION_ORDER`. */
+    gestion: NavModule[]
+}
+
+/**
+ * Agrupa los items YA FILTRADOS por `getVisibleNavItems` en Principal / Tu trabajo / Gestion.
+ * PURA: no vuelve a filtrar nada (ni contexto, ni dominios, ni status) — lo que entra, sale.
+ *
+ * Por que existe: `splitForSidebar` devolvia `{primary, secondary}` y `CoachSidebar` solo pintaba
+ * `primary` (observacion wf-webIA), asi que Soporte —y, con el entitlement puesto, Cardio y
+ * Movimiento— eran invisibles en el sidebar aunque estuvieran habilitados. Agrupar por SIGNIFICADO
+ * (`featureDomain` != null = «tu trabajo») en vez de por mecanismo de gating deja los 3 grupos
+ * pintables y hace imposible que un item se pierda: la union de los 3 es la lista de entrada.
+ *
+ * Reglas:
+ *  - `principal`: keys `dashboard` y `clients`, en ESE orden (no el de entrada).
+ *  - `trabajo`: items con `featureDomain != null`, en orden de entrada (= orden de registro:
+ *    programs, nutrition, cardio, movement). `bodycomp` no tiene entrada de nav (OUTLINE §3).
+ *  - `gestion`: el resto, reordenado por `GESTION_ORDER`; lo no listado (p. ej. `reactivate`, si
+ *    el llamador pasa el item de status bloqueado) va al final en orden de entrada.
+ *
+ * Consumidores: `CoachSidebar` (W2.4) y la hoja «Mas» de RN (W2.6).
+ */
+export function groupNavItems(items: NavModule[]): NavGroups {
+    const principal: NavModule[] = []
+    const trabajo: NavModule[] = []
+    const gestion: NavModule[] = []
+
+    for (const item of items) {
+        if (item.key === 'dashboard' || item.key === 'clients') principal.push(item)
+        else if (item.featureDomain != null) trabajo.push(item)
+        else gestion.push(item)
+    }
+
+    // Principal se pinta en orden fijo (Dashboard, Alumnos), no en el de entrada.
+    const principalOrder = ['dashboard', 'clients']
+    principal.sort((a, b) => principalOrder.indexOf(a.key) - principalOrder.indexOf(b.key))
+
+    // Gestion: las keys conocidas en GESTION_ORDER; las desconocidas quedan al final, estables.
+    const rank = (item: NavModule) => {
+        const i = GESTION_ORDER.indexOf(item.key)
+        return i === -1 ? GESTION_ORDER.length : i
+    }
+    gestion.sort((a, b) => rank(a) - rank(b))
+
+    return { principal, trabajo, gestion }
 }
