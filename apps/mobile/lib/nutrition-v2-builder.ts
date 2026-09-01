@@ -1696,8 +1696,14 @@ export function mapFoodCatalogItemToBuilderFood(item: FoodCatalogItem): BuilderF
 /** El addon Pro es el MISMO module key que V1 (nutrition_exchanges). */
 export const NUTRITION_PRO_MODULE_KEY = 'nutrition_exchanges' as const
 
-/** Ruta de compra/activacion del addon (deep-link a Modulos del coach). */
-export const NUTRITION_PRO_UPGRADE_HREF = '/coach/modules' as const
+/**
+ * Destino del CTA del gate (deep-link a «Opciones › Funciones»).
+ *
+ * W3.7: apuntaba al catalogo `/coach/modules`, demolido en W4.3 — hoy esa ruta es solo un
+ * redirect, asi que se apunta directo para no hacer el salto doble. La LOGICA del gate no se
+ * toca aca: sigue siendo el mismo predicado de addon Pro.
+ */
+export const NUTRITION_PRO_UPGRADE_HREF = '/coach/settings/funciones' as const
 
 /** Capacidad Pro que dispara el gate de un draft. */
 export type NutritionProFeature = 'hybrid_strategy' | 'multi_variant' | 'private_notes' | 'protocol_notes'

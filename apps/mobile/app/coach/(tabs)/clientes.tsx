@@ -755,7 +755,7 @@ export default function ClientesScreen() {
         <TouchableOpacity
           testID="directory-tools-card"
           activeOpacity={0.85}
-          onPress={() => router.push('/coach/tools')}
+          onPress={() => router.push('/coach/settings/funciones')}
           style={[
             styles.toolsCard,
             shadow('xs', theme.scheme),

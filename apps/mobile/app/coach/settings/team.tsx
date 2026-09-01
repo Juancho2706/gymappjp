@@ -432,17 +432,21 @@ export default function CoachTeamScreen() {
                 <Text className="font-display-black text-on-dark" style={{ fontSize: 25 }}>{team.poolClientCount}</Text>
                 <Text className="font-sans-bold text-on-dark-muted" style={{ fontSize: 10, letterSpacing: 0.4, textTransform: 'uppercase', marginTop: 4 }}>Alumnos</Text>
               </View>
+              {/* Ola de orden W3.5: el atajo llevaba al catálogo de Módulos, que ya no existe (una
+                  lista de candados no tiene sentido con «todo en todos los planes»). Ahora abre
+                  «Funciones del equipo» —lo que el equipo SÍ decide— conservando el contador de
+                  módulos activos del pool como dato del hero. */}
               <Pressable
-                testID="team-modules-link"
+                testID="team-funciones-link"
                 accessibilityRole="button"
-                accessibilityLabel="Ver módulos del equipo"
-                onPress={() => router.push('/coach/modules')}
+                accessibilityLabel="Ver las funciones del equipo"
+                onPress={() => router.push('/coach/settings/funciones')}
                 style={{ flex: 1, alignItems: 'center' }}
                 hitSlop={6}
               >
                 <Text className="font-display-black text-on-dark" style={{ fontSize: 25 }}>{team.activeModuleCount}</Text>
                 <View className="flex-row items-center" style={{ gap: 2, marginTop: 4 }}>
-                  <Text className="font-sans-bold text-sport-300" style={{ fontSize: 10, letterSpacing: 0.4, textTransform: 'uppercase' }}>Módulos</Text>
+                  <Text className="font-sans-bold text-sport-300" style={{ fontSize: 10, letterSpacing: 0.4, textTransform: 'uppercase' }}>Funciones</Text>
                   <ChevronRight size={11} strokeWidth={2.4} className="text-sport-300" />
                 </View>
               </Pressable>

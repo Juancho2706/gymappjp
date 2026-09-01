@@ -12,12 +12,12 @@ import {
     DOMAIN_LABELS,
     FUNCIONES_BREADCRUMB,
     FUNCIONES_LABEL,
-    MI_PANEL_PATH,
+    FUNCIONES_PATH,
     domainOffCopy,
 } from '../../apps/mobile/lib/domain-off'
 
 /**
- * `apps/mobile/lib/domain-off.ts` (Ola de orden W1.6c) — ruta local de «Mi panel» + re-export del
+ * `apps/mobile/lib/domain-off.ts` (Ola de orden W1.6c) — ruta local de «Funciones» + re-export del
  * copy compartido del aviso «dominio apagado».
  *
  * Lo que este test pinnea:
@@ -26,24 +26,24 @@ import {
  *    que poder testearse sin el bundle nativo);
  *  - la PARIDAD web/RN del copy: `domainOffCopy` re-exportado es EL MISMO del paquete, no una
  *    copia. Es la garantia de que el coach no lee «Mi panel» en un lado y otra cosa en el otro;
- *  - el literal de la ruta y su coincidencia con `MI_PANEL_ROUTE` (`lib/mi-panel.ts`), duplicado a
+ *  - el literal de la ruta y su coincidencia con `FUNCIONES_ROUTE` (`lib/mi-panel.ts`), duplicado a
  *    proposito porque ese modulo habla con Supabase. Si uno de los dos cambia, esto se pone rojo.
  */
 
 describe('apps/mobile/lib/domain-off', () => {
-    it('MI_PANEL_PATH apunta a la pantalla de Expo Router de «Mi panel»', () => {
-        expect(MI_PANEL_PATH).toBe('/coach/settings/mi-panel')
+    it('FUNCIONES_PATH apunta a la pantalla de Expo Router de «Funciones»', () => {
+        expect(FUNCIONES_PATH).toBe('/coach/settings/funciones')
     })
 
-    it('MI_PANEL_PATH no diverge de MI_PANEL_ROUTE (lib/mi-panel.ts)', () => {
+    it('FUNCIONES_PATH no diverge de FUNCIONES_ROUTE (lib/mi-panel.ts)', () => {
         // Se lee como TEXTO a proposito: importar `lib/mi-panel.ts` arrastraria `./api` y
         // `./supabase` al runner, que es justo lo que este modulo evita.
         const source = readFileSync(
             path.resolve(__dirname, '..', '..', 'apps', 'mobile', 'lib', 'mi-panel.ts'),
             'utf8',
         )
-        const match = source.match(/export const MI_PANEL_ROUTE = '([^']+)'/)
-        expect(match?.[1]).toBe(MI_PANEL_PATH)
+        const match = source.match(/export const FUNCIONES_ROUTE = '([^']+)'/)
+        expect(match?.[1]).toBe(FUNCIONES_PATH)
     })
 
     it('re-exporta los nombres compartidos sin reescribirlos', () => {

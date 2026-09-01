@@ -38,7 +38,7 @@ import { MI_PANEL_DOMAINS, buildDomainSwitchPayload, loadMiPanelDomains, type Mi
  * decidir y el componente se borra solo. El guard vive también en quien arma el param
  * (`onboarding/persona.tsx`); acá es defensa en profundidad.
  *
- * El write es EXACTAMENTE el de «Opciones › Mi panel» (`app/coach/settings/mi-panel.tsx`):
+ * El write es EXACTAMENTE el de «Opciones › Funciones» (`app/coach/settings/funciones.tsx`):
  * `buildDomainSwitchPayload` (preserva preset y toggles finos, solo pisa `_enabled`) →
  * `saveFeaturePrefs` → `refreshEntitlements()`, porque la barra de tabs lee el store de
  * entitlements y no esta tabla. Apagar es una PREFERENCIA: no compra módulos ni borra datos.

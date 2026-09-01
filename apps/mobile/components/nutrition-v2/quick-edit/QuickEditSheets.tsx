@@ -144,8 +144,9 @@ export function ProUpsellSheet({
           <NutritionMotionButton
             accessibilityLabel="Ver módulos"
             onPress={() => {
+              // W3.7: destino directo a Funciones (`/coach/modules` es solo un redirect).
               onClose()
-              router.push('/coach/modules')
+              router.push('/coach/settings/funciones')
             }}
           >
             Ver módulos

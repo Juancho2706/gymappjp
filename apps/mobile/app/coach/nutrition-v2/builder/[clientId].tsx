@@ -1143,7 +1143,8 @@ export function CoachNutritionV2BuilderScreen() {
       dispatch({ type: 'SET_VARIANT_TARGETS', variantKey, field, value }),
     onCopyDayTo: handleDuplicateVariantToDays,
     onRemove: handleRemoveVariant,
-    onUpgrade: () => router.push('/coach/modules'),
+    // W3.7: `/coach/modules` es redirect desde W3.4; se apunta directo para evitar el salto doble.
+    onUpgrade: () => router.push('/coach/settings/funciones'),
   }
 
   /**
@@ -3775,8 +3776,9 @@ function UpsellSheet({ reason, onClose }: { reason: string | null; onClose: () =
               <NutritionMotionButton
                 accessibilityLabel="Ver módulos"
                 onPress={() => {
+                  // W3.7: destino directo a Funciones (`/coach/modules` es solo un redirect).
                   onClose()
-                  router.push('/coach/modules')
+                  router.push('/coach/settings/funciones')
                 }}
               >
                 Ver módulos

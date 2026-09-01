@@ -381,8 +381,10 @@ describe('claves y rutas', () => {
     })
 
     it('las rutas apuntan a las pantallas reales del árbol', async () => {
-        const { MI_PANEL_ROUTE, MI_PANEL_GUIA_ROUTE } = await loadModule()
-        expect(MI_PANEL_ROUTE).toBe('/coach/settings/mi-panel')
+        // W3.3/W3.4: «Mi panel» se fusionó en `settings/funciones.tsx`; la ruta vieja quedó como
+        // redirect y los enlaces internos apuntan directo a la nueva.
+        const { FUNCIONES_ROUTE, MI_PANEL_GUIA_ROUTE } = await loadModule()
+        expect(FUNCIONES_ROUTE).toBe('/coach/settings/funciones')
         expect(MI_PANEL_GUIA_ROUTE).toBe('/coach/guia')
     })
 })

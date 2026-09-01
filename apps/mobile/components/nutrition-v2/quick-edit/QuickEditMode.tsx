@@ -2488,8 +2488,9 @@ export function QuickEditMode({
             <NutritionMotionButton
               accessibilityLabel="Ver módulos"
               onPress={() => {
+                // W3.7: destino directo a Funciones (`/coach/modules` es solo un redirect).
                 setAddDayOpen(false)
-                router.push('/coach/modules')
+                router.push('/coach/settings/funciones')
               }}
             >
               Ver módulos

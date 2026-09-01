@@ -3,13 +3,11 @@ import { Alert, Pressable, ScrollView, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { cssInterop } from 'nativewind'
 import {
-  Compass,
   CreditCard,
   LayoutGrid,
   LifeBuoy,
   LogOut,
   Moon,
-  Package,
   Palette,
   SlidersHorizontal,
   Sun,
@@ -20,7 +18,6 @@ import {
 import type { LucideIcon } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { SafeAreaView } from 'react-native-safe-area-context'
-import { MODULE_CATALOG_KEYS } from '@eva/module-catalog'
 import { deriveSportTokens } from '@eva/brand-kit'
 import { Avatar, Badge, Button, Card, Dialog } from '../../../components'
 import { ListRow } from '../../../components/ListRow'
@@ -45,17 +42,21 @@ import { requestAccountDeletion } from '../../../lib/account-deletion'
  * Suscripción personales (los gestiona el equipo/organización), como en la web.
  *
  * Rutas (contrato del arquitecto E7):
- *  · Mi Marca    → /coach/settings/brand    (el brand studio de E3, mudado bajo el hub)
- *  · Mi plan     → /coach/subscription      (tab existente, solo estado del plan)
- *  · Módulos     → /coach/modules           (catálogo E6-12)
- *  · Mi panel    → /coach/settings/mi-panel  (persona, módulos del panel, guía y alumno de ejemplo)
- *  · Funciones   → /coach/settings/features  (completo: presets + master switch + secciones)
- *  · Áreas       → /coach/settings/areas     (completo: CRUD de áreas del builder)
- *  · Equipo      → /coach/team                (solo si kind es team_*)
+ *  · Mi Marca    → /coach/settings/brand      (el brand studio de E3, mudado bajo el hub)
+ *  · Mi plan     → /coach/subscription        (tab existente, solo estado del plan)
+ *  · Funciones   → /coach/settings/funciones  (especialidad, qué se ve en el panel, detalle de
+ *                                              nutrición, guía y alumno de ejemplo)
+ *  · Áreas       → /coach/settings/areas      (completo: CRUD de áreas del builder)
+ *  · Equipo      → /coach/team                 (solo si kind es team_*)
+ *
+ * Ola de orden W3.5: «Módulos» (/coach/modules), «Mi panel» (/coach/settings/mi-panel) y
+ * «Funciones de nutrición» (/coach/settings/features) eran TRES filas para el mismo concepto —
+ * qué usa el coach y qué se le ve. Colapsaron en UNA: «Funciones». Las tres rutas viejas siguen
+ * vivas como redirect (W3.4).
  */
 
 // Let NativeWind drive the lucide icon `color` via `text-*` classes (DS pattern, ver perfil.tsx).
-for (const Icon of [Compass, CreditCard, LayoutGrid, LifeBuoy, LogOut, Moon, Package, Palette, SlidersHorizontal, Sun, Trash2, UserCog, Users]) {
+for (const Icon of [CreditCard, LayoutGrid, LifeBuoy, LogOut, Moon, Palette, SlidersHorizontal, Sun, Trash2, UserCog, Users]) {
   cssInterop(Icon, { className: { target: 'style', nativeStyleToProp: { color: true } } })
 }
 
@@ -443,61 +444,39 @@ export default function CoachSettingsHubScreen() {
             </View>
           ) : null}
 
-          {/* Plan — Suscripción (personal) + Módulos. */}
-          <View>
-            <SectionTitle>{managed ? 'Lo que paga el equipo' : 'Plan'}</SectionTitle>
-            <Card padding="none">
-              {!managed ? (
-                <>
-                  <ListRow
-                    testID="hub-subscription"
-                    leading={<IconTile Icon={CreditCard} />}
-                    title="Mi plan"
-                    subtitle="Estado de tu plan y alumnos activos"
-                    showChevron
-                    onPress={() => router.push('/coach/subscription')}
-                  />
-                  <RowDivider />
-                </>
-              ) : null}
-              <ListRow
-                testID="hub-modules"
-                leading={<IconTile Icon={Package} tone="brand" />}
-                title={managed ? 'Módulos del equipo' : 'Módulos'}
-                subtitle="Catálogo de módulos disponibles"
-                trailing={<Badge tone="sport" variant="soft" label={`${MODULE_CATALOG_KEYS.length} módulos`} toneColor={theme.primary} />}
-                showChevron
-                onPress={() => router.push('/coach/modules')}
-              />
-            </Card>
-          </View>
+          {/* Plan — Suscripción personal. El catálogo de Módulos se demolió (W3.5/W4.3): con «todo
+              en todos los planes» no había nada que un coach tuviera o no tuviera, y a un coach
+              gestionado la sección quedaba sin una sola fila propia. */}
+          {!managed ? (
+            <View>
+              <SectionTitle>Plan</SectionTitle>
+              <Card padding="none">
+                <ListRow
+                  testID="hub-subscription"
+                  leading={<IconTile Icon={CreditCard} />}
+                  title="Mi plan"
+                  subtitle="Estado de tu plan y alumnos activos"
+                  showChevron
+                  onPress={() => router.push('/coach/subscription')}
+                />
+              </Card>
+            </View>
+          ) : null}
 
           {/* Configuración — Funciones + Áreas. */}
           <View>
             <SectionTitle>Configuración</SectionTitle>
             <Card padding="none">
-              {/* «Mi panel» — SOLO coach standalone: a un coach de team/org el panel se lo define su
-                  tenant, y el endpoint lo rechaza igual (espejo de `requireStandaloneCoach` web). */}
-              {!managed && !isTeam ? (
-                <>
-                  <ListRow
-                    testID="hub-mi-panel"
-                    leading={<IconTile Icon={Compass} tone="brand" />}
-                    title="Mi panel"
-                    subtitle="Tu especialidad, qué módulos ves y tu guía de inicio"
-                    showChevron
-                    onPress={() => router.push('/coach/settings/mi-panel')}
-                  />
-                  <RowDivider />
-                </>
-              ) : null}
+              {/* UNA puerta a todo lo que el coach decide sobre su panel (W3.5). Se muestra también
+                  a un coach de team: la pantalla decide qué bloques pinta (a un coach gestionado la
+                  especialidad se la define su tenant, igual que hoy). */}
               <ListRow
-                testID="hub-features"
-                leading={<IconTile Icon={SlidersHorizontal} />}
-                title="Funciones de nutrición"
-                subtitle="Qué tan a fondo trabajas la nutrición y qué ven los alumnos"
+                testID="hub-funciones"
+                leading={<IconTile Icon={SlidersHorizontal} tone="brand" />}
+                title="Funciones"
+                subtitle="Tu especialidad, qué ves en tu panel y tu alumno de ejemplo"
                 showChevron
-                onPress={() => router.push('/coach/settings/features')}
+                onPress={() => router.push('/coach/settings/funciones')}
               />
               <RowDivider />
               <ListRow

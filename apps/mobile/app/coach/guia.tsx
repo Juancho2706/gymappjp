@@ -484,11 +484,10 @@ export default function CoachGuiaScreen() {
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel={`${PERSONA_CHIP_LABEL[v2.persona]}. Cambiar en Opciones`}
-                // «Opciones» y no «Mi panel» como en la web: el editor de persona de RN todavía no
-                // existe (deuda de W5-A/F5.1) y el hub de Opciones es donde va a vivir. Prometer un
-                // nombre de pantalla que no está sería mandar al coach a buscar algo que no hay.
-                // «Mi panel» (W8.2.2): la pantalla propia, no el hub de Opciones (QA owner 22-08).
-                onPress={() => router.push('/coach/settings/mi-panel')}
+                // El destino es la PANTALLA propia, no el hub de Opciones (QA owner 22-08). Desde
+                // la Ola de orden W3.3 esa pantalla se llama «Funciones» y absorbió «Mi panel»: se
+                // apunta DIRECTO a la ruta nueva para no hacer el salto doble por el redirect.
+                onPress={() => router.push('/coach/settings/funciones')}
                 className="flex-row items-center self-start rounded-pill border border-subtle bg-surface-card"
                 style={{ gap: 6, paddingHorizontal: 12, minHeight: 36, marginTop: 4, marginBottom: 14 }}
               >

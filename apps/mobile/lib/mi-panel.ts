@@ -30,8 +30,15 @@ import { supabase } from './supabase'
  *    piden las dos acciones y se refleja el resultado.
  */
 
-/** Ruta de la pantalla en Expo Router. La usan el hub de Opciones y la guía. */
-export const MI_PANEL_ROUTE = '/coach/settings/mi-panel'
+/**
+ * Ruta de la pantalla en Expo Router. La usan el hub de Opciones y la guía.
+ *
+ * Ola de orden W3.3/W3.4: «Mi panel» se fusionó con «Funciones de nutrición», el catálogo de
+ * Módulos y el launcher Herramientas en `app/coach/settings/funciones.tsx`. La ruta vieja
+ * (`/coach/settings/mi-panel`) sigue viva como redirect, pero los enlaces internos apuntan
+ * DIRECTO acá para no hacer el salto doble.
+ */
+export const FUNCIONES_ROUTE = '/coach/settings/funciones'
 
 /** Destino de «Ver mi guía de inicio». Mismo literal que `COACH_GUIA_ROUTE` de `coach-persona`. */
 export const MI_PANEL_GUIA_ROUTE = '/coach/guia'

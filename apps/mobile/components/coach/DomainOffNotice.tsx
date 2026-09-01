@@ -3,7 +3,7 @@ import { SlidersHorizontal } from 'lucide-react-native'
 import { useRouter } from 'expo-router'
 import { useTheme } from '../../context/ThemeContext'
 import { Button } from '../Button'
-import { MI_PANEL_PATH, domainOffCopy, type FeatureDomain } from '../../lib/domain-off'
+import { FUNCIONES_PATH, domainOffCopy, type FeatureDomain } from '../../lib/domain-off'
 
 /**
  * DomainOffNotice (RN) — aviso in-page de un DOMINIO apagado (Ola de orden W1, decision 3A del
@@ -16,7 +16,7 @@ import { MI_PANEL_PATH, domainOffCopy, type FeatureDomain } from '../../lib/doma
  *    2026-09-01): copy de mantenimiento y boton secundario «Volver», sin accion de compra.
  *  - DomainOffNotice = PREFERENCIA del propio coach (`coach_feature_prefs._enabled`, fail-OPEN).
  *    El coach lo apago y lo puede prender ahora mismo: cero plan, cero precio, cero urgencia. Su
- *    CTA lleva a «Opciones › Mi panel».
+ *    CTA lleva a «Opciones › Funciones» (W3.3).
  * Cuando una superficie tiene los dos, la PREFERENCIA se evalua ANTES que el modulo: preguntarle
  * por el plan a alguien que solo apago una seccion suya es hostigamiento.
  *
@@ -68,7 +68,7 @@ export function DomainOffNotice({
         <Button
           label={copy.cta}
           variant="sport"
-          onPress={() => router.push(MI_PANEL_PATH)}
+          onPress={() => router.push(FUNCIONES_PATH)}
           style={styles.cta}
         />
       ) : cta ? (
