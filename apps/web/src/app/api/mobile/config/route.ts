@@ -12,8 +12,10 @@ import {
 } from '@/services/entitlements.service'
 import {
     FEATURE_DOMAINS,
+    FEATURE_DOMAIN_KEYS,
     resolveDomainEnabled,
     resolveSections,
+    type FeatureDomain,
     type ModuleKey,
     type NutritionSectionKey,
     type Preset,
@@ -24,7 +26,7 @@ import { resolveStudentAccessForCoach } from '@/lib/student-access.server'
 /**
  * Config operacional + entitlements para el cliente mobile. Fuente única de verdad de:
  *  - módulos de pago efectivos del scope,
- *  - master switch y secciones de Nutrición.
+ *  - master switch (`_enabled`) de los 5 dominios + secciones de Nutrición.
  */
 
 type DB = ReturnType<typeof createServiceRoleClient>
@@ -42,36 +44,26 @@ type NutritionScope = {
     orgId: string | null
 }
 
-async function readBaseNutritionPrefs(
-    admin: DB,
-    useTeamBase: boolean,
-    scope: NutritionScope,
-): Promise<{ preset: string | null; sections: SectionPrefs | null }> {
-    if (useTeamBase && scope.teamId) {
-        const { data } = await admin
-            .from('team_feature_prefs')
-            .select('preset, sections')
-            .eq('team_id', scope.teamId)
-            .eq('domain', 'nutrition')
-            .maybeSingle()
-        return {
-            preset: (data?.preset ?? null) as string | null,
-            sections: (data?.sections ?? null) as SectionPrefs | null,
-        }
-    }
-    if (scope.coachId) {
-        const { data } = await admin
-            .from('coach_feature_prefs')
-            .select('preset, sections')
-            .eq('coach_id', scope.coachId)
-            .eq('domain', 'nutrition')
-            .maybeSingle()
-        return {
-            preset: (data?.preset ?? null) as string | null,
-            sections: (data?.sections ?? null) as SectionPrefs | null,
-        }
-    }
-    return { preset: null, sections: null }
+/** Fila cruda de `coach_feature_prefs` / `team_feature_prefs`: una por dominio (PK compuesta). */
+type FeaturePrefsRow = {
+    domain: string
+    preset: string | null
+    sections: SectionPrefs | null
+}
+
+/** Master switch resuelto de los 5 dominios, en el orden canónico de `FEATURE_DOMAIN_KEYS`. */
+type DomainFlags = Record<FeatureDomain, boolean>
+
+type ResolvedFeaturePrefs = {
+    domains: DomainFlags
+    sections: Record<NutritionSectionKey, boolean>
+}
+
+/** Los 5 dominios prendidos (fail-open / audiencias que no leen prefs). */
+function allDomainsEnabled(): DomainFlags {
+    const out = {} as DomainFlags
+    for (const domain of FEATURE_DOMAIN_KEYS) out[domain] = true
+    return out
 }
 
 function failOpenSections(
@@ -88,43 +80,103 @@ function failOpenSections(
     return out
 }
 
-async function resolveNutritionPrefs(
+function failOpenPrefs(
+    entitledByModule: Partial<Record<ModuleKey, boolean>>,
+): ResolvedFeaturePrefs {
+    return { domains: allDomainsEnabled(), sections: failOpenSections(entitledByModule) }
+}
+
+/**
+ * UNA sola lectura por request para los 5 dominios: sin `.eq('domain', …)` y sin `.maybeSingle()`,
+ * las filas se agrupan después en un Map por `domain`. Las secciones de Nutrición salen de la
+ * MISMA lectura (la fila `nutrition` del Map), así que no queda una segunda query.
+ * Error de PostgREST => se tira para que el `catch` del llamador resuelva fail-open.
+ */
+async function readFeaturePrefsRows(
+    admin: DB,
+    useTeamBase: boolean,
+    scope: NutritionScope,
+): Promise<FeaturePrefsRow[]> {
+    if (useTeamBase && scope.teamId) {
+        const { data, error } = await admin
+            .from('team_feature_prefs')
+            .select('domain, preset, sections')
+            .eq('team_id', scope.teamId)
+        if (error) throw error
+        return (data ?? []) as unknown as FeaturePrefsRow[]
+    }
+    if (scope.coachId) {
+        const { data, error } = await admin
+            .from('coach_feature_prefs')
+            .select('domain, preset, sections')
+            .eq('coach_id', scope.coachId)
+        if (error) throw error
+        return (data ?? []) as unknown as FeaturePrefsRow[]
+    }
+    return []
+}
+
+/**
+ * Resuelve el master switch de los 5 dominios + las secciones de Nutrición con una única lectura.
+ */
+async function resolveFeaturePrefs(
     admin: DB,
     scope: NutritionScope,
     applied: EnabledModules,
-): Promise<{ nutritionEnabled: boolean; sections: Record<NutritionSectionKey, boolean> }> {
+): Promise<ResolvedFeaturePrefs> {
     const entitledByModule: Partial<Record<ModuleKey, boolean>> = {
         nutrition_exchanges: applied.nutrition_exchanges === true,
         body_composition: applied.body_composition === true,
     }
-    // D9-A (owner, 22-08 ratificada 26-08): la preferencia de modulos es SOLO del panel del COACH.
+    // D9-A (owner, 22-08 ratificada 26-08): la preferencia de módulos es SOLO del panel del COACH.
     // Scope ALUMNO (`clientId` presente — en scope coach siempre es null) => las prefs no
-    // participan: todo prendido, modulado unicamente por los entitlements reales del plan. El
-    // scope COACH sigue igual: su `nutritionEnabled` (CoachMobileChrome) respeta su propia
-    // preferencia, ahora siempre (prefs siempre-on desde W1.10, 2026-09-01).
+    // participan: todo prendido, modulado únicamente por los entitlements reales del plan. El
+    // scope COACH sigue igual: su panel (CoachMobileChrome) respeta su propia preferencia, ahora
+    // siempre (prefs siempre-on desde W1.10, 2026-09-01).
     if (scope.clientId || (!scope.coachId && !scope.teamId)) {
-        return { nutritionEnabled: true, sections: failOpenSections(entitledByModule) }
+        return failOpenPrefs(entitledByModule)
     }
-    const useTeamBase = !!scope.teamId && !scope.orgId
+    // ENTERPRISE (SPEC §10 / OUTLINE §5): el coach `org_managed` NO tiene la zona «Funciones» —
+    // no hay dónde volver a prender un dominio, así que un gate acá sería un lockout sin puerta.
+    // Los 5 quedan prendidos y ni siquiera se leen las prefs.
+    if (scope.orgId) {
+        return failOpenPrefs(entitledByModule)
+    }
+    // `orgId` ya quedó descartado arriba: base = team si hay `teamId`, si no el coach standalone.
+    const useTeamBase = !!scope.teamId
     try {
-        // Solo llega scope COACH (el ALUMNO retorno arriba), o sea nunca hay capa por-alumno:
+        // Solo llega scope COACH (el ALUMNO retornó arriba), o sea nunca hay capa por-alumno:
         // `client_feature_prefs` ya no se lee en este endpoint.
-        const base = await readBaseNutritionPrefs(admin, useTeamBase, scope)
-        const resolverInput = {
-            domain: 'nutrition' as const,
-            entitledByModule,
-            preset: base.preset as Preset | string | null,
-            useTeamBase,
-            coachSections: useTeamBase ? null : base.sections,
-            teamSections: useTeamBase ? base.sections : null,
-            clientSections: null,
+        const rows = await readFeaturePrefsRows(admin, useTeamBase, scope)
+        const byDomain = new Map<string, FeaturePrefsRow>(rows.map((row) => [row.domain, row]))
+
+        const domains = {} as DomainFlags
+        let nutritionSections: Record<NutritionSectionKey, boolean> | null = null
+        for (const domain of FEATURE_DOMAIN_KEYS) {
+            const row = byDomain.get(domain) ?? null
+            const rowSections = (row?.sections ?? null) as SectionPrefs | null
+            const resolverInput = {
+                domain,
+                preset: (row?.preset ?? null) as Preset | string | null,
+                useTeamBase,
+                coachSections: useTeamBase ? null : rowSections,
+                teamSections: useTeamBase ? rowSections : null,
+                clientSections: null,
+            }
+            // El master switch `_enabled` es PURA preferencia: no lo modula ningún entitlement
+            // (el gate de dinero lo aplican los módulos, no esta key) => `entitledByModule` vacío.
+            domains[domain] = resolveDomainEnabled({ ...resolverInput, entitledByModule: {} })
+            if (domain === 'nutrition') {
+                // Misma fila, misma lectura: las secciones sí se modulan por entitlement.
+                nutritionSections = resolveSections({
+                    ...resolverInput,
+                    entitledByModule,
+                }) as Record<NutritionSectionKey, boolean>
+            }
         }
-        return {
-            nutritionEnabled: resolveDomainEnabled(resolverInput),
-            sections: resolveSections(resolverInput) as Record<NutritionSectionKey, boolean>,
-        }
+        return { domains, sections: nutritionSections ?? failOpenSections(entitledByModule) }
     } catch {
-        return { nutritionEnabled: true, sections: failOpenSections(entitledByModule) }
+        return failOpenPrefs(entitledByModule)
     }
 }
 
@@ -224,12 +276,17 @@ export async function GET(request: NextRequest) {
         ? await resolveStudentAccessForCoach(admin, scope.coachId)
         : null
 
-    const { nutritionEnabled, sections } = await resolveNutritionPrefs(admin, scope, applied)
+    const { domains, sections } = await resolveFeaturePrefs(admin, scope, applied)
 
     return NextResponse.json({
         enabledModules,
         disabledModules,
-        featurePrefs: { nutritionEnabled, sections },
+        featurePrefs: {
+            // ESPEJO LEGACY (W1.1, 2026-09-01): binarios/OTAs anteriores leen este campo plano; retirar junto con featurePrefsEnabled en la wave siguiente.
+            nutritionEnabled: domains.nutrition,
+            sections,
+            domains,
+        },
         // ESPEJO LEGACY (W1.10, 2026-09-01): lo lee apps/mobile/lib/coach-client-detail.ts en binarios/OTAs anteriores; el valor real ya no existe (prefs siempre-on). Retirar junto con featurePrefs.nutritionEnabled en la wave siguiente.
         featurePrefsEnabled: true,
         studentAccess: studentAccess
