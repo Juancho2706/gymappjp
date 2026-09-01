@@ -91,6 +91,31 @@ export function formatNutritionShortDate(
     return withYear ? `${base} ${part('year')}` : base
 }
 
+const SHORT_MONTHS_ES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sept', 'oct', 'nov', 'dic']
+
+/**
+ * Fecha `YYYY-MM-DD` → `"1 sept"` (día sin cero a la izquierda + abreviatura fija, sin punto).
+ *
+ * Existe por hidratación (Sentry EVA-NEXTJS-18, regresó 2026-09-01): `new Date(...).toLocaleDateString('es-CL',
+ * { month: 'short' })` depende de la ICU/CLDR del runtime — Node 24 en Vercel imprime "1 sept" pero la ICU de
+ * Safari iOS puede imprimir otra abreviatura ("sept.", "sep"), y el mismatch de texto SSR↔cliente dispara
+ * hydration error. Justo se hizo visible al empezar septiembre (primer PR con fecha de septiembre). La tabla
+ * es fija y determinista — nunca vía `Intl`/`toLocaleDateString` — así el HTML es idéntico en cualquier
+ * runtime/ICU. Regla: en un client component que se hidrata (SSR), nunca formatear fechas con `Intl` sin
+ * tabla fija (misma familia que los helpers `formatSantiago*` de más abajo, agregados por el mismo issue).
+ * `ymd` fuera de patrón o inválido → se devuelve tal cual (defensivo).
+ */
+export function formatShortDayMonthEs(ymd: string): string {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd)
+    if (!match) return ymd
+    const month = Number(match[2])
+    const day = Number(match[3])
+    if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(day) || day < 1 || day > 31) {
+        return ymd
+    }
+    return `${day} ${SHORT_MONTHS_ES[month - 1]}`
+}
+
 export function timeGreetingSantiago(now = new Date()): 'Buenos días' | 'Buenas tardes' | 'Buenas noches' {
     const tzStr = now.toLocaleString('en-US', { timeZone: SANTIAGO_TZ })
     const d = new Date(tzStr)

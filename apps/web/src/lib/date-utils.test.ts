@@ -11,6 +11,7 @@ import {
   formatSantiagoDdMmYy,
   formatDateDdMmYyyySantiago,
   formatSantiagoMonthLabel,
+  formatShortDayMonthEs,
   getTodayInSantiago,
   nutritionMealAppliesOnIsoYmdInSantiago,
   timeGreetingSantiago,
@@ -238,5 +239,28 @@ describe('date-utils — formatters Santiago para el panel admin (regresión EVA
     expect(formatSantiagoDdMmYy('no-es-fecha')).toBe('')
     expect(formatDateDdMmYyyySantiago('no-es-fecha')).toBe('')
     expect(formatSantiagoDdMmHhMm('no-es-fecha')).toBe('')
+  })
+})
+
+/**
+ * Regresión EVA-NEXTJS-18 (reapareció 2026-09-01): tabla fija, cero dependencia de Intl/ICU, para
+ * que el HTML de la grilla de PRs no cambie entre el Node de Vercel y el Safari del alumno.
+ */
+describe('date-utils — formatShortDayMonthEs (tabla fija, sin Intl — regresión EVA-NEXTJS-18)', () => {
+  it('enero: sin cero a la izquierda en el día', () => {
+    expect(formatShortDayMonthEs('2026-01-05')).toBe('5 ene')
+  })
+
+  it('septiembre: abreviatura "sept" (la divergencia real entre ICUs — nunca "sep"/"sept.")', () => {
+    expect(formatShortDayMonthEs('2026-09-01')).toBe('1 sept')
+  })
+
+  it('diciembre: día de dos dígitos', () => {
+    expect(formatShortDayMonthEs('2026-12-25')).toBe('25 dic')
+  })
+
+  it('ymd fuera de patrón o inválido → se devuelve tal cual (defensivo)', () => {
+    expect(formatShortDayMonthEs('no-es-fecha')).toBe('no-es-fecha')
+    expect(formatShortDayMonthEs('2026-13-01')).toBe('2026-13-01')
   })
 })

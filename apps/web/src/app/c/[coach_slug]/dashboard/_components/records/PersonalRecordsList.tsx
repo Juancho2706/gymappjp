@@ -2,19 +2,18 @@
 
 import { useCallback, useState, useTransition } from 'react'
 
-import { getSantiagoIsoYmdForUtcInstant } from '@/lib/date-utils'
+import { formatShortDayMonthEs, getSantiagoIsoYmdForUtcInstant } from '@/lib/date-utils'
 import { getExercisePRHistoryAction } from '../../_actions/dashboard.actions'
 import type { ExercisePRDetail, PersonalRecordItem } from '../../_data/dashboard.queries'
 import { PRDetailSheet } from './PRDetailSheet'
 
-/** "12 jun" — fecha corta es-CL, día calendario Santiago. */
+/**
+ * "12 jun" — fecha corta es-CL, día calendario Santiago.
+ * Corre en el render inicial (SSR, esta grilla se monta sin `dynamic({ ssr:false })`) ⇒ usa la
+ * tabla fija `formatShortDayMonthEs` y NO `toLocaleDateString`/`Intl` (Sentry EVA-NEXTJS-18).
+ */
 function fmtShort(iso: string): string {
-    const ymd = getSantiagoIsoYmdForUtcInstant(iso)
-    return new Date(`${ymd}T12:00:00Z`).toLocaleDateString('es-CL', {
-        day: 'numeric',
-        month: 'short',
-        timeZone: 'UTC',
-    })
+    return formatShortDayMonthEs(getSantiagoIsoYmdForUtcInstant(iso))
 }
 
 interface PersonalRecordsListProps {
