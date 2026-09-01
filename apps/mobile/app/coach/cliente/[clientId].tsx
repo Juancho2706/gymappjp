@@ -49,6 +49,8 @@ import { clientActionWorkspaceQuery } from '../../../lib/client-action-workspace
 import { tempPasswordFirstName, tempPasswordMessage, tempPasswordWhatsappUrl } from '../../../lib/temp-password-copy'
 import { FONT } from '../../../lib/typography'
 import { getWorkspaceEntitlements } from '../../../lib/entitlements'
+import { DEFAULT_CONFIG, type FeatureDomain } from '../../../lib/entitlements-core'
+import { resolveClientTab, visibleClientTabs } from '../../../lib/client-tabs'
 import { useWorkspace } from '../../../lib/workspace'
 import { getCoachProfile } from '../../../lib/coach'
 import { getApiBaseUrl } from '../../../lib/api'
@@ -112,6 +114,10 @@ export default function ClientDetailScreen() {
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [resourceModuleFlags, setResourceModuleFlags] = useState({ cardio: false, movement: false, bodycomp: false })
+  // W1.9 — master switch por DOMINIO del workspace del RECURSO (el alumno puede vivir en otro
+  // workspace que el activo del coach, por eso NO se usa `useEntitlements()` global). Fail-OPEN:
+  // arranca con los 5 en `true` y solo el payload puede apagar alguno.
+  const [resourceDomains, setResourceDomains] = useState<Record<FeatureDomain, boolean>>(DEFAULT_CONFIG.featurePrefs.domains)
   const [resourceModulesReady, setResourceModulesReady] = useState(false)
   const resourceModulesReadyRef = useRef(false)
   const resourceModulesScopeRef = useRef('')
@@ -242,7 +248,11 @@ export default function ClientDetailScreen() {
     }, [data?.client?.team_id]),
   )
 
-  const activeDayKind = tab === 'analisis' ? 'training' : tab === 'nutricion' ? 'nutrition' : null
+  // W1.9 — la pestaña que se PINTA (si su dominio se apagó, cae a Resumen sin tocar `tab`). Se
+  // calcula acá arriba para que el detalle diario de abajo lea la misma pestaña que el usuario ve:
+  // con Nutrición/Entreno apagados no se dispara ningún fetch de día (cero fetch, contrato del guard).
+  const shownTab = resolveClientTab(tab, resourceDomains)
+  const activeDayKind = shownTab === 'analisis' ? 'training' : shownTab === 'nutricion' ? 'nutrition' : null
   const activeDayDate = activeDayKind === 'training' ? trainingDate : activeDayKind === 'nutrition' ? nutritionDate : null
   const activeDayRetry = activeDayKind === 'training'
     ? trainingDayRetry
@@ -336,6 +346,9 @@ export default function ClientDetailScreen() {
       if (!resourceModulesReadyRef.current) {
         setResourceModulesReady(false)
         setResourceModuleFlags({ cardio: false, movement: false, bodycomp: false })
+        // Los módulos vuelven a `false` (kill-switch cerrado hasta saber), los DOMINIOS vuelven a
+        // fail-OPEN: cambiar de scope no puede esconderle pestañas a nadie mientras carga.
+        setResourceDomains(DEFAULT_CONFIG.featurePrefs.domains)
       }
       void getWorkspaceEntitlements(actionWorkspace)
         .then((config) => {
@@ -346,6 +359,7 @@ export default function ClientDetailScreen() {
             bodycomp: config.enabledModules.includes('body_composition'),
           }
           setResourceModuleFlags(next)
+          setResourceDomains(config.featurePrefs.domains)
           resourceModulesReadyRef.current = true
           setResourceModulesReady(true)
         })
@@ -637,6 +651,13 @@ export default function ClientDetailScreen() {
     },
   ]
 
+  // W1.9 — el master switch por dominio gobierna la tira: Entreno y Programa caen con `training`,
+  // Nutrición con `nutrition`; Resumen y Progreso nunca se ocultan. Si la pestaña activa
+  // desaparece se pinta Resumen (regla 4A) SIN tocar `tab`: al re-prender el dominio, la que el
+  // coach tenía elegida vuelve sola. El override por-alumno no participa (es la puerta para
+  // re-prender, ver `lib/client-tabs.ts`).
+  const visibleTabs = visibleClientTabs(tabs, resourceDomains)
+
   function onOpenPhoto(photos: string[], index: number) { setLightbox({ photos, index }) }
 
   // Export dossier PDF (E5-13): arma el dossier oscuro desde el modelo mobile + fotos firmadas
@@ -737,7 +758,7 @@ export default function ClientDetailScreen() {
             setTabNear(progress > 0)
           }}
         >
-          <ClientTabBar items={tabs} value={tab} onChange={setTab} stuck={tabStuck} near={tabNear} backdropProgress={tabBackdrop} />
+          <ClientTabBar items={visibleTabs} value={shownTab} onChange={setTab} stuck={tabStuck} near={tabNear} backdropProgress={tabBackdrop} />
         </View>
 
         {/* 2 — Content */}
@@ -748,20 +769,24 @@ export default function ClientDetailScreen() {
               <Button label="Reintentar" variant="outline" onPress={() => setResourceModulesRetry((value) => value + 1)} />
             </View>
           ) : null}
-          {tab === 'overview' ? (
+          {shownTab === 'overview' ? (
             <OverviewTab
               data={data}
               reload={() => { void load({ silent: true }) }}
               onOpenPhoto={onOpenPhoto}
               onEditProgram={openBuilder}
-              onViewNutrition={() => setTab('nutricion')}
+              // W1.9 — con Nutrición apagada la pestaña no existe: el atajo del ring se apaga (prop
+              // opcional ⇒ press inerte) en vez de mandar a una pestaña que cae a Resumen. El de
+              // Programa se deja: su fallback en OverviewTab es `onEditProgram` (abre el editor, que
+              // W1 no gatea) y eso sería peor que un tap sin efecto.
+              onViewNutrition={resourceDomains.nutrition === false ? undefined : () => setTab('nutricion')}
               onViewProgress={() => setTab('progreso')}
               onOpenProgram={() => setTab('plan')}
               workspace={actionWorkspace}
               moduleFlags={resourceModuleFlags}
               modulesReady={resourceModulesReady}
             />
-          ) : tab === 'progreso' ? (
+          ) : shownTab === 'progreso' ? (
             <ProgresoTab
               data={data}
               onOpenPhoto={onOpenPhoto}
@@ -771,7 +796,7 @@ export default function ClientDetailScreen() {
               bodyCompReady={resourceModulesReady}
               workspace={actionWorkspace}
             />
-          ) : tab === 'analisis' ? (
+          ) : shownTab === 'analisis' ? (
             <AnalisisTab
               data={data}
               selectedDate={trainingDate}
@@ -781,7 +806,7 @@ export default function ClientDetailScreen() {
               dayError={trainingDayError}
               onRetryDay={() => setTrainingDayRetry((value) => value + 1)}
             />
-          ) : tab === 'plan' ? (
+          ) : shownTab === 'plan' ? (
             <PlanTab data={data} onEdit={openBuilder} />
           ) : (
             <NutricionTab clientId={client.id} data={data} selectedDate={nutritionDate} onSelectDate={selectNutritionDate}
