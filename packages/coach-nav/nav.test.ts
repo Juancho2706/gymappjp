@@ -6,8 +6,13 @@ import {
     coachWorkspaceTypeFromKind,
     isNavItemActiveForPath,
     NAV_MODULES,
+    REACTIVATE_NAV_ITEM,
     type NavModule,
 } from './nav'
+// FEATURE_DOMAIN_KEYS es la lista canonica de dominios de @eva/feature-prefs (paquete puro,
+// aliaseado por el vitest raiz). nav.ts NO lo importa (se mantiene desacoplado, ver comentario
+// de `featureDomain` en nav.ts), pero el TEST si puede — es el contrato cruzado de W1.12.
+import { FEATURE_DOMAIN_KEYS } from '@eva/feature-prefs'
 
 // Matriz de modulos por contexto (separacion de flujos — regresion del smoke 2026-06-09:
 // josefit en standalone veia "Equipo").
@@ -411,5 +416,86 @@ describe('isNavItemActiveForPath — matcher de ruta activa (href + activeAliase
         expect(dashboard.activeAliases).toBeUndefined()
         expect(isNavItemActiveForPath(dashboard, '/coach/nutrition-v2')).toBe(false)
         expect(isNavItemActiveForPath(dashboard, '/coach/dashboard')).toBe(true)
+    })
+})
+
+describe('W1 · Ola de orden — contrato de dominios', () => {
+    it('training en disabledDomains oculta "programs" y deja el resto (mismo caso que la linea 132-140 de arriba, no duplicado — solo se referencia)', () => {
+        // Cobertura ya exacta en 'el filtro por dominio es GENERICO: apaga training igual que
+        // nutrition' (describe "master switch de dominio" mas arriba): assert.toEqual completo
+        // sin 'programs' y con el resto intacto. No se repite aqui.
+        const k = keys(getVisibleNavItems({
+            activeWorkspaceType: 'coach_standalone',
+            subscriptionStatus: 'active',
+            disabledDomains: new Set(['training']),
+        }))
+        expect(k).not.toContain('programs')
+    })
+
+    it('bodycomp en disabledDomains es un no-op: ningun NavModule declara featureDomain "bodycomp" hoy', () => {
+        // OUTLINE §3: bodycomp no tiene superficie top-level en el nav (a diferencia de
+        // nutrition/training/cardio/movement). W2/W3 pueden agregar una entrada con
+        // featureDomain: 'bodycomp' a conciencia — si eso pasa, este assert se rompe adrede
+        // y hay que revisar el caso nuevo, no solo actualizar el expect.
+        expect(NAV_MODULES.every((m) => m.featureDomain !== 'bodycomp')).toBe(true)
+
+        const withBodycomp = keys(getVisibleNavItems({
+            activeWorkspaceType: 'coach_standalone',
+            subscriptionStatus: 'active',
+            disabledDomains: new Set(['bodycomp']),
+        }))
+        const withoutDisabled = keys(getVisibleNavItems({
+            activeWorkspaceType: 'coach_standalone',
+            subscriptionStatus: 'active',
+        }))
+        expect(withBodycomp).toEqual(withoutDisabled)
+    })
+
+    it('los 5 dominios apagados a la vez, en standalone: quedan solo las entradas sin featureDomain', () => {
+        const k = keys(getVisibleNavItems({
+            activeWorkspaceType: 'coach_standalone',
+            subscriptionStatus: 'active',
+            enabledModules: { cardio: true, movement_assessment: true },
+            disabledDomains: new Set(['nutrition', 'training', 'cardio', 'movement', 'bodycomp']),
+        }))
+        expect(k).toEqual(['dashboard', 'clients', 'options', 'support'])
+    })
+
+    it('los 5 dominios apagados a la vez, en coach_team: quedan Equipo + hub team', () => {
+        const k = keys(getVisibleNavItems({
+            activeWorkspaceType: 'coach_team',
+            subscriptionStatus: 'team_managed',
+            enabledModules: { cardio: true, movement_assessment: true },
+            disabledDomains: new Set(['nutrition', 'training', 'cardio', 'movement', 'bodycomp']),
+        }))
+        expect(k).toEqual(['dashboard', 'clients', 'team', 'settings_team', 'support'])
+    })
+
+    it('los 5 dominios apagados a la vez, en enterprise_coach: solo dashboard/clients/support (sin settings)', () => {
+        const k = keys(getVisibleNavItems({
+            activeWorkspaceType: 'enterprise_coach',
+            subscriptionStatus: 'org_managed',
+            disabledDomains: new Set(['nutrition', 'training', 'cardio', 'movement', 'bodycomp']),
+        }))
+        expect(k).toEqual(['dashboard', 'clients', 'support'])
+    })
+
+    it('contrato cruzado: todo featureDomain declarado en NAV_MODULES pertenece a FEATURE_DOMAIN_KEYS de @eva/feature-prefs', () => {
+        const declaredDomains = NAV_MODULES
+            .map((m) => m.featureDomain)
+            .filter((d): d is string => d != null)
+        expect(declaredDomains.length).toBeGreaterThan(0)
+        for (const domain of declaredDomains) {
+            expect(FEATURE_DOMAIN_KEYS as readonly string[]).toContain(domain)
+        }
+    })
+
+    it('regresion: el set de dominios apagado no afecta a REACTIVATE_NAV_ITEM cuando el status esta bloqueado', () => {
+        const items = getVisibleNavItems({
+            activeWorkspaceType: 'coach_standalone',
+            subscriptionStatus: 'past_due',
+            disabledDomains: new Set(['nutrition', 'training', 'cardio', 'movement', 'bodycomp']),
+        })
+        expect(items).toEqual([REACTIVATE_NAV_ITEM])
     })
 })
