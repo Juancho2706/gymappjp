@@ -1,5 +1,5 @@
 ---
-status: draft
+status: active
 owner: product-engineering
 last_verified: "2026-09-01"
 canonical: false
@@ -371,6 +371,36 @@ por W1.9B, R4).
 Sidebar web agrupado (pinta Cardio/Movimiento por fin) + barra RN con «Más» adaptativa. Depende de
 W1 (necesita `domainsEnabled` reales).
 
+### Estado de ejecución W2 (2026-09-01) — mockup «Menú, Más y Funciones» `bff90120`, decisiones 1A 2A 3A 4A
+
+| Tarea | Estado | Commit | Verde real |
+|---|---|---|---|
+| W2.1 `PERSONA_DOMAIN_ORDER` | ✅ | `dd637047` | feature-prefs.test.ts 44 → 49 (prefijo = dominios ON de resolvePersonaPrefs) |
+| W2.1B retiro `entitlement` cardio/movement | ✅ | `dd637047` | nav.test.ts reescrito (52 → 71) |
+| W2.2 entrada `funciones` | ✅ | `dd637047` | standalone + team, no enterprise, no managed |
+| W2.3 `groupNavItems` | ✅ | `dd637047` (+`60e4ca54`: «Reactivar» a Principal, `splitForSidebar`/`splitNavItems` retiradas) | 3 contextos × 4 sets de dominios |
+| W2.4 sidebar en 3 grupos | ✅ | `60e4ca54` | eslint; sin test de render (lógica en coach-nav) |
+| W2.5 barra RN «2 dominios + Más» | ✅ | `3ef12925` | `buildMobileBar` ×13 casos (nav.test.ts 76); contrato MOBILE_TAB_KEYS |
+| W2.6 hoja «Más» (`(tabs)/more.tsx`) | ✅ | `3ef12925` | tsc mobile · eslint |
+| W2.7 FAB por dominio (web + RN) | ✅ | `0726dfea` | quick-actions.test.ts (4) |
+| W2.8 copy honesto «Listo, ya se ve» | ✅ | `f7e532e2` (RN `lib/funciones-copy.ts`) · web verificado sin cambio | funciones-copy.test.ts (8) |
+
+### Juicio del jefe — W2
+1. `funciones` se oculta a coaches administrados igual que `options` (la pantalla los rechaza).
+2. El label «Funciones» del registro adelantó el renombre; `FUNCIONES_LABEL` se cambió al cierre
+   de W3 (`6a33a52d`) — coach-nav no importa feature-prefs a propósito.
+3. `groupNavItems` NO filtra (recibe lo ya visible) y manda «Reactivar» a Principal: cuando aparece
+   es lo único visible y bajo «Gestión» se leía raro.
+4. `MORE_NAV_ITEM` es un slot de barra, no una entrada de `NAV_MODULES` (en web el nav se pinta
+   entero). `buildMobileBar` recibe `domainOrder` como `readonly string[]` para no acoplar paquetes.
+5. Cardio y Movimiento en la barra RN son pantallas de STACK (`tab: null`): al tocarlas se hace push,
+   la cápsula queda debajo y se vuelve con ←. Alternativa descartada: re-exportarlas como tabs
+   rompía el ← de sus headers.
+6. La cápsula móvil WEB (viewport < md) conserva su `MOBILE_TAB_KEYS` local + `.slice(0,5)`: fuera
+   del alcance de la SDD (W2.5 es RN). Brecha declarada abajo.
+7. `funciones` no tiene `NAV_ROUTE` propio en RN: la hoja «Más» navega por el `href` compartido.
+
+
 **W2.1 — `PERSONA_DOMAIN_ORDER`**
 Archivo: `packages/feature-prefs/index.ts` (junto a `resolvePersonaPrefs`, línea 429). Qué cambia:
 exporta `PERSONA_DOMAIN_ORDER: Record<Persona, FeatureDomain[]>` (mapa persona → dominios
@@ -510,6 +540,42 @@ cardio/movement a esta wave).
 Reemplaza Módulos (catálogo) + Mi panel + Funciones-de-nutrición y absorbe el launcher
 Herramientas, en web y RN.
 
+### Estado de ejecución W3 (2026-09-01) — decisiones 5A 6A 11B
+
+| Tarea | Estado | Commit | Verde real |
+|---|---|---|---|
+| W3.1 web `/coach/settings/funciones` absorbe todo | ✅ | `52c41357` | DomainsCard.test.tsx · domain-open-routes.test.ts · MiPanelPane.test.tsx |
+| W3.2 web redirects modules/tools | ✅ | `52c41357` | modules/page.test.tsx · tools/page.test.tsx |
+| W3.3 RN `settings/funciones.tsx` | ✅ | `f7e532e2` | tsc mobile · tests/mobile 1539 |
+| W3.4 RN redirects (mi-panel, features, modules, tools) | ✅ | `f7e532e2` | `<Redirect>` (molde foods.tsx; TASKS decía router.replace) |
+| W3.5 hub Opciones RN: 1 fila «Funciones» | ✅ | `f7e532e2` | — |
+| W3.6 rail desktop sin pane «Módulos», «Mi panel» → «Funciones» | ✅ | `52c41357` | — |
+| W3.7 enlaces cruzados (web Alumnos ×3, Equipo; RN guía, Equipo, Herramientas de Alumnos, 6 CTAs a /coach/modules) | ✅ | `52c41357` · `f7e532e2` | grep de rutas viejas = 0 en código (quedan los redirects) |
+| Renombre `FUNCIONES_LABEL` → «Funciones» | ✅ | `6a33a52d` | tests de copy actualizados |
+
+### Juicio del jefe — W3
+1. Team: las filas de dominio son de SOLO lectura (pitch + «Abrir», sin Switch) porque no existe
+   write-action de `team_feature_prefs._enabled` por dominio; el detalle de nutrición sigue
+   editable por el gestor. Si el owner quiere el switch por dominio del pool, es tarea aparte
+   (server action + RLS).
+2. RN: el master switch de nutrición NO se repite en «Detalle de nutrición» para standalone (única
+   fuente = «Qué se ve en tu panel»), pero SÍ se pinta para team (su bloque 2 no existe): sin eso
+   el team perdía la única forma de apagar nutrición que tenía en `features.tsx`.
+3. «Abrir» de Nutrición apunta a `/coach/nutrition-v2` (hub V2), no al href `/coach/nutrition-plans`
+   del registro: divergencia deliberada (`_lib/domain-open-routes.ts`).
+4. Composición corporal no tiene ruta propia: «Abrir» abre el selector de alumno (mudado del
+   launcher); la lista de alumnos se lee siempre (no solo con el dominio prendido) y ya no se gatea
+   por `enabled_modules`.
+5. Los 4 redirects RN usan `<Redirect href>` (patrón real del repo), no `router.replace`.
+6. 11B completo: fuera «Pro» Y «Base» de `SectionBadge` (un chip en todas las secciones no
+   informa nada); el explainer del panel dejó de decir «Módulos es lo que compraste».
+7. Coach ORG-gestionado: la fila «Funciones» del hub RN lo lleva al aviso «lo administra tu
+   organización» — mismo callejón que tenía «Funciones de nutrición»; el nav ya se la oculta en la
+   barra. Se deja para W4/owner.
+8. `team.tsx` (RN) sigue mostrando `activeModuleCount` bajo «Funciones»: con todo incluido es 4
+   para todos. Pendiente declarado.
+
+
 **W3.1 — Web: `/coach/settings/funciones` absorbe todo**
 Archivo: `apps/web/src/app/coach/settings/funciones/page.tsx` (ruta existente, título cambia de
 «Mi panel» a «Funciones» per OUTLINE §3). Qué se suma sobre lo que YA tiene (especialidad + 5
@@ -601,6 +667,91 @@ Estimación: 0.5 d-a.
 
 Convierte los últimos candados de «plan pago» en toggles normales y elimina UI/código muerto.
 Independiente de W2/W3 en lo funcional (comparte archivos con W1, correr después para no pisarse).
+
+### Estado de ejecución W4 (2026-09-01) — decisiones 7C 8A 9A 10A; ejecutada en gran parte por la sesión «Asistente Principal» bajo juicio del jefe
+
+| Tarea | Estado | Commit | Verde real |
+|---|---|---|---|
+| W4.1 micros avanzados / objetivos por composición sin candado | ✅ web `a8878555` · RN dentro de `f7e532e2` (funciones.tsx nace sin candados) | — | vitest components/coach 27/27; tsc mobile |
+| W4.2 `ModuleOffNotice` retemplado (web + RN) | ✅ | `319d32a8` (+ test gemelo `9ad81c6b`) | grep `Ver planes|plan pago|no está incluido` = 0 |
+| W4.3 demolición «Módulos» (catálogo) web + RN | ✅ | `52c41357` · `f7e532e2` | ModulesForm/modules.queries/ToolsHub/tools.queries/ModuleToolRow borrados |
+| W4.4 `entitlements.service` un solo criterio | ✅ | `e0d80dd1` (+ comentarios RN `9ad81c6b`) | derive.test.ts verde; firma pública intacta |
+| W4.5 `TIER_CAPABILITIES`: solo `canUseAdvancedReports` | ✅ | `ead241bf` | tiers 113/113 + constants.test; los 9 call sites de las otras 3 siguen |
+| W4.6a tab «Check-ins» huérfana | ✅ | `cacc017c` | grep `check-ins\.tsx` / `name="check-ins"` = 0; tsc mobile |
+| W4.6b buscador global RN | ✅ (9A: cablear la lupa) | `b2c8aea9` | lupa en `MobileGreetingHeader` (home), `coach-search-trigger` |
+| W4.6c FacturacionTab / CTA «Ir a facturación» | ⏸ no aplica (10A) | — | bloqueado por la SDD de Cobros (SPEC:1127, PLAN:466,470) y por la alerta «MRR cayendo» viva |
+| W4.7 flags muertas | ✅ | `a3c972d7` | feature-flags.test |
+| W4.7 deltas KPI | ✅ fase 1 (7C: deltas REALES) | `b64b8648` · `9d275345` · `be2d0cdb` | contrato `kpi.deltas` servido por el servidor; kpi-deltas.test · dashboard.queries.test (primer test de esa capa); RN nunca inventa |
+| W4.8 verificación final | ✅ | — | suite completa UNA vez al cierre (ver CURRENT) |
+
+### Juicio del jefe — W4
+1. W4.2: `nutrition_exchanges` NO se borra del `Record<ModuleKey>` (TASKS lo pedía):
+   `nutrition-plans/exchanges/page.tsx` la consume y el tipo exige las 4 keys. Copy nuevo
+   «temporalmente no disponible» + «Volver al inicio»/«Volver»; sin CTA de pago (Apple 3.1.1).
+2. W4.4 es SOLO renombre (`hasActiveModuleAccess`, `deriveModulesForActiveAccess`) + JSDoc; cero
+   cambio de lógica; el kill-switch de operador sigue por encima en `hasModule`/`hasModuleFromMap`.
+3. W4.5: los 4 hits de test se actualizaron en el mismo commit (el criterio «grep = 0» de TASKS era
+   inaprobable tal cual). PLAN §4.3 corregido antes de ejecutar.
+4. W4.7 (7C, ruling del owner): fase 1 sin queries nuevas ni migración — Alumnos (altas 7 d,
+   `is_demo` excluido), Adherencia (semana vs. previa desde `adherenceHistory4w`), Sesiones hoy
+   (vs. ayer desde `areaData`); «En riesgo» conserva caption fija (no hay historial honesto sin
+   snapshot diario ⇒ **fase 2 = pendiente declarado**, ~1,5 d-a + protocolo Supabase). Bug
+   colateral cerrado: `riskCount` estaba topeado a 5 por el `.slice(0,5)` del top de riesgo.
+   Sparkline del PulseHero no se toca en esta ola. Efecto visible: el alumno de ejemplo deja de
+   contar como alta en el BarChart de 6 meses.
+5. W4.6b: anclaje B (lupa en el header del dashboard, gesto = topbar web). «Reach global» (trigger
+   en el layout de tabs) = pendiente declarado.
+6. W4.6c: no se toca hasta que el owner decida Cobros (P1–P8). `client-tabs.ts` conserva
+   `'facturacion'` fuera de `CLIENT_TAB_DOMAIN` (nunca se oculta por dominio).
+
+### Pendientes declarados de W2–W4 (no bloquean; entran a QA o a la siguiente ola)
+- Cápsula móvil WEB (< md): sigue con lista fija + `.slice(0,5)` (un coach de team pierde «Equipo»
+  en mobile web; Soporte/Cardio/Movimiento no aparecen ahí). Paralelo de W2.5 para web.
+- Cardio/Movimiento desde la barra RN: push de stack (la cápsula queda debajo). Si en QA molesta,
+  registrarlas como tabs re-exportadas exige quitar el ← de sus headers.
+- Team: switch por dominio del pool en «Funciones del equipo» (hoy solo lectura).
+- Coach org-gestionado: fila «Funciones» del hub RN lleva a un aviso sin acción.
+- `team.tsx` RN: `activeModuleCount` bajo «Funciones» ya no significa nada (siempre 4).
+- 6 CTAs RN «Ver módulos»/«Ver mi plan»/`onUpgrade` (nutrition-v2 builder, QuickEdit ×2, ProgresoTab,
+  `NUTRITION_PRO_UPGRADE_HREF`) siguen gateados por `nutrition_exchanges`/`body_composition` y con
+  copy de plan («no incluido en tu plan actual»): con D1 son código muerto o mentiroso — revisar.
+- `SubscriptionContent.tsx:758` conserva «Con plan pago» para la lista de módulos de la pantalla de
+  suscripción.
+- `apps/mobile/lib/mi-panel.ts` mantiene nombres `MI_PANEL_*` salvo la ruta (renombre integral
+  pendiente); `apps/web/src/app/coach/tools/loading.tsx` borrado con el launcher.
+- 7C fase 2 (delta de «En riesgo» y saldo neto de alumnos con snapshot diario por coach; molde
+  `api/cron/weekly-snapshot`) y «reach global» del buscador RN (overlay en `(tabs)/_layout.tsx`).
+- Theme RN no expone `success-600`/`danger-600` (el hero usa el 500 vía `theme.success`/
+  `theme.destructive`): escalones en `lib/theme.ts` si se quiere 1:1 con el web.
+- Adherencia: el denominador es el programa actual (mismo sesgo que el número principal).
+- No existe test de `ModuleOffNotice` RN (el web sí).
+- W4.6c (Facturación RN) espera la decisión de Cobros.
+
+### QA del owner — W2/W3/W4 (contra el PREVIEW de la rama: ver CURRENT)
+- **Web desktop (kut, jesus-coach, jpl):** sidebar en 3 grupos con encabezados; con cardio OFF
+  desaparece de «Tu trabajo»; con los 4 OFF desaparece la sección entera; colapsado (768–1079 px)
+  separadores finos; «Reactivar» en Principal si el status está vencido (cuenta de prueba).
+  Opciones › Funciones: 5 filas con «Abrir» solo en dominios prendidos; Composición abre el
+  selector de alumno; `/coach/settings/modules` y `/coach/tools` redirigen; rail sin «Módulos»;
+  hub con una sola card «Funciones». Dashboard desktop: los 4 KPI con delta real (Alumnos «+N esta
+  semana»/«sin altas esta semana», Adherencia «±N pts vs. semana previa», Sesiones hoy «±N vs.
+  ayer», En riesgo «requieren revisión»); alumno de ejemplo no cuenta como alta en el BarChart de
+  6 meses; «En riesgo» puede mostrar más de 5 por primera vez. Hero móvil WEB a 390 px: la línea de
+  delta envuelve a 2 líneas sin sufijo «sem.» y la sparkline de Adherencia baja de fila (flex-wrap).
+- **RN (cable adb + Metro contra la rama):** barra = Inicio · Alumnos · 2 dominios por especialidad ·
+  Más (kut nutrición: Nutrición · Programas; jesus-coach fuerza: Programas · Nutrición; team con
+  «Equipo» dentro de Más); hoja «Más» con «Tu trabajo» (dominios sobrantes prendidos) y «Gestión»
+  (Equipo, Funciones, Opciones, Soporte); con todo apagado, barra de 3 y «Más» sin sección de
+  trabajo. Opciones › Funciones: 5 bloques, «Abrir ›» por dominio prendido, detalle de nutrición
+  sin candados; deep links `eva://coach/settings/mi-panel`, `/coach/settings/features`,
+  `/coach/modules`, `/coach/tools` aterrizan en Funciones sin pantalla intermedia; tab «Check-ins»
+  desaparecida (`eva://coach/check-ins` cae al índice); lupa en el header del dashboard abre el
+  buscador (cluster del header con 4 botones: que no apriete en pantallas angostas); FAB sin
+  «Programa» con Entrenamiento apagado. Hero del dashboard RN: deltas reales o ninguno (nunca
+  «+1/+3» inventados); la frase del delta envuelve a 2 líneas.
+- Transversal: dark mode, safe areas, white-label (marca custom en tiles/íconos de «Más» y
+  Funciones), matriz standalone / team_owner / team_member / enterprise.
+
 
 ### Todo-incluido
 

@@ -14,6 +14,23 @@ source_of_truth: apps/web responsive + apps/mobile
 
 ## Resumen ejecutivo
 
+> **2026-09-01 (Ola de orden W2→W4 en RN — navegación, «Más», Funciones única, todo-incluido; EN CÓDIGO sin OTA)** (SDD
+> [ola-de-orden](../specs/ola-de-orden/TASKS.md), mockup `bff90120`): la barra del coach deja de ser un `.slice(0,5)` de una
+> lista fija — `buildMobileBar` (@eva/coach-nav) arma «Inicio · Alumnos · 2 dominios prendidos según `PERSONA_DOMAIN_ORDER`
+> · Más» y el sobrante vive en la hoja `(tabs)/more.tsx` (Tu trabajo / Gestión, chasis del hub Opciones); «Equipo» ya no se
+> cae para coaches de team; Cardio/Movimiento entran a la barra como push de stack (`tab: null`). `settings/funciones.tsx`
+> (nueva) es la ÚNICA puerta a especialidad + 5 master switches (con «Abrir ›») + detalle de nutrición sin candados + guía +
+> alumno de ejemplo; `mi-panel.tsx`, `features.tsx`, `modules.tsx` y `tools.tsx` son `<Redirect>`; hub Opciones con una fila
+> «Funciones»; `lib/funciones-copy.ts` (toast honesto desde `NAV_MODULES`). Todo-incluido: `ModuleOffNotice` RN
+> «temporalmente no disponible» + «Volver» (sin RefreshPlanButton), tab «Check-ins» huérfana borrada, lupa del buscador global
+> en `MobileGreetingHeader` (`coach-search-trigger`), FAB sin «Programa» con Entrenamiento apagado, hero del dashboard con
+> `kpi.deltas` servidos por el API (nunca «+1/+3» inventados). **Paridad web ↔ RN completa en código** (web: sidebar en 3
+> grupos, Funciones única, redirects, KPI con deltas reales). Tests: nav.test.ts (buildMobileBar ×13), contrato
+> MOBILE_TAB_KEYS, tests/mobile/funciones-copy · domain-off · mi-panel. **QA device del owner PENDIENTE** (kut · jesus-coach
+> · jpl, por cable adb+Metro contra la rama; lista en TASKS § W4 «QA del owner»). Brechas declaradas: cápsula móvil WEB
+> sigue con `.slice(0,5)`; team sin switch por dominio del pool; CTAs de plan en nutrition-v2 RN; «reach global» del
+> buscador. Requiere OTA 1.1.2 (sin cambio nativo) tras el go.
+>
 > **2026-09-01 (Ola de orden W1 «Interruptores de verdad» — feature-prefs por dominio, EN CÓDIGO sin OTA)** (SDD
 > [ola-de-orden](../specs/ola-de-orden/TASKS.md) § W1, mockup `9801fec7` 1A 2A 3A 4A, 14 commits locales
 > `11ebbbbc..29c4a669`): la app del coach lee los 5 dominios de `coach_feature_prefs` (`/api/mobile/config` →
