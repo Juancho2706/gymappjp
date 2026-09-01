@@ -18,7 +18,11 @@ export interface KpiTrendPoint {
  */
 export type KpiDelta = { value: number; text: string; tone: 'positive' | 'negative' | 'neutral' } | null
 
-/** Los cuatro deltas del bento del coach. `risk` es `null` en fase 1 (exige snapshot diario). */
+/**
+ * Los cuatro deltas del bento del coach. `risk` es `null` solo hasta que exista la fila de hace 7
+ * días del snapshot diario (`coach_kpi_snapshots`): coach recién dado de alta, o cron sin historial
+ * todavía. Con esa fila también `clients` pasa de altas brutas a saldo NETO.
+ */
 export type KpiDeltas = {
     clients: KpiDelta
     risk: KpiDelta

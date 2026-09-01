@@ -1,5 +1,6 @@
 export * from './interfaces'
 export * from './coach.repository'
+export * from './coach-kpi-snapshots.repository'
 export * from './client.repository'
 export * from './org.repository'
 export * from './workout.repository'

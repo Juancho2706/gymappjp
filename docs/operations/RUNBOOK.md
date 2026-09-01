@@ -93,6 +93,7 @@ Usar [FOOD_CATALOG_CL_IMPORT.md](FOOD_CATALOG_CL_IMPORT.md). Detener applies y c
 | `/api/cron/mirror-exercise-thumbnails` | `0 4 * * *` | mirror de thumbnails |
 | `/api/cron/paid-expiry` | `30 12 * * *` | backstop provider-verified de suscripciones vencidas |
 | `/api/cron/cap-nudge` | `0 13 * * *` | nudge de venta por cupo alcanzado (escalera 0/7/28 d; kill-switch `EVA_SALES_EMAILS_DISABLED=client_limit_reached`; `?dry=1` lista sin enviar) |
+| `/api/cron/coach-kpi-snapshot` | `30 4 * * *` | foto diaria de KPI por coach (7C fase 2: delta «En riesgo» y saldo neto de «Alumnos» leen la fila T−7; `?coach_id=` siembra uno; idempotente) |
 
 Handlers sin schedule automático:
 

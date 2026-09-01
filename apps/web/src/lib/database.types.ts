@@ -1256,6 +1256,44 @@ export type Database = {
           },
         ]
       }
+      coach_kpi_snapshots: {
+        Row: {
+          active_clients: number
+          avg_adherence: number
+          coach_id: string
+          created_at: string
+          day: string
+          risk_count: number
+          sessions_7d: number
+        }
+        Insert: {
+          active_clients?: number
+          avg_adherence?: number
+          coach_id: string
+          created_at?: string
+          day: string
+          risk_count?: number
+          sessions_7d?: number
+        }
+        Update: {
+          active_clients?: number
+          avg_adherence?: number
+          coach_id?: string
+          created_at?: string
+          day?: string
+          risk_count?: number
+          sessions_7d?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "coach_kpi_snapshots_coach_id_fkey"
+            columns: ["coach_id"]
+            isOneToOne: false
+            referencedRelation: "coaches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       coach_leads: {
         Row: {
           coach_id: string

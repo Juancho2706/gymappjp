@@ -1,7 +1,13 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCachedDirectoryPulse } from '@/lib/coach/directory-pulse-cache'
 import { measureServer } from '@/lib/perf/measure-server'
-import { countCoachClients, findCoachById, findCoachClientSignupDates, findCoachRecentClients } from '@/infrastructure/db'
+import {
+    countCoachClients,
+    findCoachById,
+    findCoachClientSignupDates,
+    findCoachKpiSnapshotForDay,
+    findCoachRecentClients,
+} from '@/infrastructure/db'
 import {
     DashboardService,
     type AttentionFlag,
@@ -28,6 +34,7 @@ import {
 import { parseLoaderConfig, serializeLoaderConfig } from '@/lib/brand-composer'
 import { BRAND_PRIMARY_COLOR } from '@/lib/brand-assets'
 import { buildKpiDeltas } from '../_lib/kpi-deltas'
+import { averageAdherence, KPI_SNAPSHOT_LOOKBACK_DAYS, ymdMinusDays } from '../_lib/kpi-snapshot'
 
 const FLAG_LABELS: Record<AttentionFlag, string> = {
     SIN_CHECKIN_1M: 'Adherencia critica · sin check-in en 1 mes',
@@ -102,7 +109,12 @@ function applyJoinedClientScope<T extends { eq: (column: string, value: string) 
         : scoped.is('clients.team_id', null)
 }
 
-function applyJoinedClientOwnerScope<T extends { eq: (column: string, value: string) => T; is: (column: string, value: null) => T }>(
+/**
+ * Exportada para `_data/kpi-snapshot.queries` (7C fase 2): la foto diaria tiene que consultar los
+ * `workout_logs` con EXACTAMENTE el mismo scope que el dashboard, o el `sessions_7d` guardado no
+ * sería comparable con lo que el coach ve. Misma lógica, un solo lugar.
+ */
+export function applyJoinedClientOwnerScope<T extends { eq: (column: string, value: string) => T; is: (column: string, value: null) => T }>(
     query: T,
     userId: string,
     scope: DashboardClientScope,
@@ -125,7 +137,11 @@ function scopeFromWorkspace(workspace: WorkspaceSummary | null): DashboardClient
     return { orgId: null, teamId: null }
 }
 
-async function resolveCoachDashboardScope(db: DbClient, userId: string): Promise<DashboardClientScope> {
+/**
+ * Exportada para el cron de snapshots (7C fase 2): la foto se toma con el workspace preferido del
+ * coach, el MISMO camino que `/api/mobile/coach/dashboard`. La foto es lo que el coach ve.
+ */
+export async function resolveCoachDashboardScope(db: DbClient, userId: string): Promise<DashboardClientScope> {
     return scopeFromWorkspace(await resolvePreferredWorkspace(db, userId))
 }
 
@@ -246,7 +262,7 @@ export async function getCoachDashboardDataV2(userId: string) {
 
         // Las entradas de los deltas salen del snapshot que el inner YA cargó (cero round-trips
         // nuevos) y no viajan al cliente: se consumen acá y quedan fuera del payload.
-        const { _rawSignupDates, areaTodayKey, areaYesterdayKey, ...rest } = base
+        const { _rawSignupDates, areaTodayKey, areaYesterdayKey, _snapshot7d, ...rest } = base
 
         const kpi = {
             mrrCurrentMonth: base.mrrCurrentMonth,
@@ -263,6 +279,9 @@ export async function getCoachDashboardDataV2(userId: string) {
                 adherenceStats: base.adherenceStats,
                 signupDates: _rawSignupDates,
                 nowIso: new Date().toISOString(),
+                riskCount: base.riskCount,
+                totalClients: base.totalClients,
+                snapshot7d: _snapshot7d,
             }),
         }
 
@@ -289,7 +308,7 @@ export async function getCoachDashboardDataV2WithClient(userId: string, supabase
         const agenda = buildAgendaFromPulse(pulse, base.expiringPrograms)
 
         // Mismo helper que el camino RSC: web y RN reciben el mismo delta y el mismo copy.
-        const { _rawSignupDates, areaTodayKey, areaYesterdayKey, ...rest } = base
+        const { _rawSignupDates, areaTodayKey, areaYesterdayKey, _snapshot7d, ...rest } = base
 
         const kpi = {
             mrrCurrentMonth: base.mrrCurrentMonth,
@@ -306,6 +325,9 @@ export async function getCoachDashboardDataV2WithClient(userId: string, supabase
                 adherenceStats: base.adherenceStats,
                 signupDates: _rawSignupDates,
                 nowIso: new Date().toISOString(),
+                riskCount: base.riskCount,
+                totalClients: base.totalClients,
+                snapshot7d: _snapshot7d,
             }),
         }
 
@@ -416,6 +438,7 @@ async function getCoachDashboardDataInner(
         clientPaymentsRaw,
         pulse,
         coachSubscription,
+        snapshot7d,
     ] = await Promise.all([
         // KPI «Alumnos»: `countCoachClients` excluye al alumno de ejemplo (`is_demo`) del onboarding
         // v2 — misma cuenta que el cupo. Las consultas de ACTIVIDAD de abajo (check-ins, logs,
@@ -509,14 +532,18 @@ async function getCoachDashboardDataInner(
         ).gte('payment_date', clientPaymentsLookbackStart),
         pulseOverride ? Promise.resolve(pulseOverride) : getCachedDirectoryPulse(userId, scope),
         findCoachById(supabase, userId),
+        // ÚNICA consulta nueva de 7C fase 2, y va DENTRO de este mismo `Promise.all`: no agrega un
+        // salto serial al TTFB del panel. Camino RSC: la lee el propio coach y RLS la acota a sus
+        // filas. Camino móvil (`/api/mobile/coach/dashboard`): service-role, filtrada por
+        // `coach_id = userId` en el repositorio. Fail-soft: si falla, devuelve null y no hay delta.
+        findCoachKpiSnapshotForDay(supabase, userId, ymdMinusDays(ymdSantiago(now), KPI_SNAPSHOT_LOOKBACK_DAYS)),
     ])
 
     const adherenceStats = mapDirectoryPulseToAdherenceStats(pulse)
     const nutritionStats = mapDirectoryPulseToNutritionStats(pulse)
-    const avgAdherence =
-        adherenceStats.length > 0
-            ? Math.round(adherenceStats.reduce((acc, s) => acc + s.percentage, 0) / adherenceStats.length)
-            : 0
+    // Misma fórmula de siempre, ahora en `_lib/kpi-snapshot`: el cron que ESCRIBE `avg_adherence`
+    // usa esta misma función, así que el KPI vivo y la fila guardada no pueden redondear distinto.
+    const avgAdherence = averageAdherence(adherenceStats)
     const avgNutrition =
         nutritionStats.length > 0
             ? Math.round(nutritionStats.reduce((acc, s) => acc + s.percentage, 0) / nutritionStats.length)
@@ -714,6 +741,14 @@ async function getCoachDashboardDataInner(
         // Altas crudas de la ventana del BarChart (ya cargadas): alimentan el delta «+N esta
         // semana» sin una consulta más. Tampoco viajan al cliente.
         _rawSignupDates: (signupDatesRaw ?? []) as { created_at: string }[],
+        // Fila `coach_kpi_snapshots` de hace 7 días (o null). Alimenta los deltas de «En riesgo» y
+        // el saldo neto de «Alumnos»; las V2 la consumen y la sacan del payload.
+        //
+        // CAVEAT de scope: la fila es del coach (`coach_id = userId`) y el cron la calculó con su
+        // workspace preferido en ESE momento. Si cambió de workspace desde entonces, la comparación
+        // cruza dos scopes distintos. Aceptado: enterprise está muerto y el caso real (standalone
+        // ↔ team) es raro y transitorio; el alternativo sería guardar una fila por scope.
+        _snapshot7d: snapshot7d,
     }
 }
 

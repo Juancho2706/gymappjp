@@ -140,9 +140,9 @@ export function DesktopBento({ data, coachName, coachInviteCode, onAdherence }: 
             value: data.kpi.riskCount,
             icon: TriangleAlert,
             tone: 'danger',
-            // Sin delta hasta que exista el snapshot diario (fase 2 del mini-plan 7C): reconstruir
-            // el riesgo de hace 7 días es imposible con los datos de hoy. La caption describe el
-            // número que acompaña, no una tendencia inventada.
+            // Delta real contra la fila de hace 7 días de `coach_kpi_snapshots` (7C fase 2). Sin
+            // fila (coach nuevo, cron aún sin historial) cae a la caption, que describe el número
+            // y no una tendencia.
             delta: data.kpi.deltas.risk,
             caption: 'requieren revisión',
             onClick: () => router.push('/coach/clients?filter=risk'),

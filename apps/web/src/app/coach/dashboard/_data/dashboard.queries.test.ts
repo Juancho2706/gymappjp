@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DirectoryPulseRow } from '@/services/dashboard.service'
 
 /**
@@ -89,9 +89,12 @@ function thenable(result: unknown) {
     return proxy
 }
 
-const TABLE_RESULTS: Record<string, { data?: unknown[]; count?: number | null }> = {
+const TABLE_RESULTS: Record<string, { data?: unknown[] | null; count?: number | null }> = {
     workout_plans: { count: 5 },
     workout_logs: { data: WORKOUT_LOGS },
+    // El repositorio del snapshot está mockeado más abajo: acá solo se garantiza que, si alguna
+    // vez llegara a `from`, la tabla responde vacío en vez de inventar una fila.
+    coach_kpi_snapshots: { data: null },
 }
 
 const fakeDb = {
@@ -105,12 +108,19 @@ vi.mock('@/services/auth/workspace-render-cache', () => ({
     getPreferredWorkspaceForRender: async () => null,
     listUserWorkspacesForRender: async () => [],
 }))
+/**
+ * Fila `coach_kpi_snapshots` de hace 7 días (7C fase 2). `null` por default: el repositorio está
+ * mockeado, así que el fake db nunca ve la tabla; cada test decide si el coach tiene historial.
+ */
+let snapshotRow: { day: string; risk_count: number; active_clients: number; avg_adherence: number; sessions_7d: number } | null =
+    null
 vi.mock('@/infrastructure/db', async (importOriginal) => ({
     ...(await importOriginal<Record<string, unknown>>()),
     countCoachClients: async () => 15,
     findCoachRecentClients: async () => [],
     findCoachClientSignupDates: async () => SIGNUP_DATES,
     findCoachById: async () => null,
+    findCoachKpiSnapshotForDay: async () => snapshotRow,
 }))
 
 const { getCoachDashboardDataV2, splitRiskClients } = await import('./dashboard.queries')
@@ -151,6 +161,9 @@ describe('getCoachDashboardDataV2 — kpi.riskCount y kpi.deltas', () => {
     afterAll(() => {
         vi.useRealTimers()
     })
+    beforeEach(() => {
+        snapshotRow = null
+    })
 
     it('el KPI cuenta los 12 y la card sigue mostrando 5', async () => {
         const data = await getCoachDashboardDataV2('coach-1')
@@ -158,10 +171,21 @@ describe('getCoachDashboardDataV2 — kpi.riskCount y kpi.deltas', () => {
         expect(data.topRiskClients).toHaveLength(5)
     })
 
-    it('kpi.deltas trae las 4 llaves, con «risk» en null (fase 1)', async () => {
+    it('sin fila T−7: «risk» queda en null y «clients» son las altas de la semana', async () => {
         const data = await getCoachDashboardDataV2('coach-1')
         expect(Object.keys(data.kpi.deltas).sort()).toEqual(['adherence', 'clients', 'risk', 'sessionsToday'])
         expect(data.kpi.deltas.risk).toBeNull()
+        expect(data.kpi.deltas.clients).toEqual({ value: 2, text: '+2 esta semana', tone: 'positive' })
+    })
+
+    it('con fila T−7: «risk» es el delta real y «clients» pasa a saldo neto', async () => {
+        snapshotRow = { day: '2026-08-25', risk_count: 9, active_clients: 13, avg_adherence: 55, sessions_7d: 8 }
+        const data = await getCoachDashboardDataV2('coach-1')
+
+        // riskCount 12 contra 9 hace una semana: subió, y subir riesgo es malo.
+        expect(data.kpi.deltas.risk).toEqual({ value: 3, text: '+3 vs. hace 7 días', tone: 'negative' })
+        // totalClients 15 contra 13: saldo neto, no altas brutas (que darían +2 «esta semana»).
+        expect(data.kpi.deltas.clients).toEqual({ value: 2, text: '+2 vs. hace 7 días', tone: 'positive' })
     })
 
     it('los tres deltas calculables salen de los datos ya cargados', async () => {
@@ -181,9 +205,11 @@ describe('getCoachDashboardDataV2 — kpi.riskCount y kpi.deltas', () => {
     })
 
     it('no filtra al cliente las entradas internas de los deltas', async () => {
+        snapshotRow = { day: '2026-08-25', risk_count: 9, active_clients: 13, avg_adherence: 55, sessions_7d: 8 }
         const data = await getCoachDashboardDataV2('coach-1')
         expect(data).not.toHaveProperty('_rawSignupDates')
         expect(data).not.toHaveProperty('areaTodayKey')
         expect(data).not.toHaveProperty('areaYesterdayKey')
+        expect(data).not.toHaveProperty('_snapshot7d')
     })
 })

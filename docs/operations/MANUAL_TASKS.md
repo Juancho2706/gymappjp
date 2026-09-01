@@ -52,6 +52,14 @@ Aviso «Tu plan Free ahora incluye tu marca» ([spec](../specs/pricing-v3/SPEC.m
 - [ ] Confirmar el envío real y anotar `sent / failed / skipped`; el botón deduplica contra `admin_audit_logs` (`coach.pricing_v3_notice`), así que un reintento tras un corte no reescribe a quien ya recibió.
 - [ ] Revisar los `failed` en Auditoría y decidir uno por uno (rebote, casilla inexistente) antes de reintentar.
 
+### DATA-02 — Sembrar el primer snapshot de KPI del coach tras el deploy
+
+El cron `/api/cron/coach-kpi-snapshot` (`30 4 * * *`) escribe la foto diaria de `coach_kpi_snapshots`; el delta de «En riesgo» y el saldo neto de «Alumnos» leen la fila de **hace 7 días**. Sin sembrar, el primer delta aparece recién una semana después de la primera corrida automática. Es opcional y sin riesgo: el upsert va por `(coach_id, day)`, así que correrlo a mano el mismo día no duplica nada.
+
+- [ ] Tras el deploy, correr una vez desde un entorno seguro: `curl -H "Authorization: Bearer $CRON_SECRET" https://www.eva-app.cl/api/cron/coach-kpi-snapshot` (no pegar el valor del secreto en el comando ni en un ticket).
+- [ ] Verificar en la respuesta `snapshotted` (≈ total de coaches) y `errors` vacío; si hay parciales, la respuesta lista los `coach <id>` afectados.
+- [ ] Si se saltea: no hay que hacer nada, el delta simplemente aparece 7 días después de la primera corrida automática.
+
 ### OPS-RESEND-01 — Crear el webhook de Resend y pegar el secreto en Vercel
 
 El endpoint `POST /api/webhooks/resend` ya existe en el código, pero está **fail-closed**: sin `RESEND_WEBHOOK_SECRET` responde 503 y el ledger de correos (`coach_email_ledger`) nunca sabe si un correo se entregó o rebotó. Solo el dueño de la cuenta de Resend puede crearlo.

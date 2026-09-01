@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { adherenceDelta, buildKpiDeltas, clientsDelta, riskDelta, sessionsTodayDelta } from './kpi-deltas'
+import { adherenceDelta, buildKpiDeltas, clientsDelta, clientsNetDelta, riskDelta, sessionsTodayDelta } from './kpi-deltas'
 
 /**
  * Los deltas del bento del coach son el ÚNICO número del panel que se lee como juicio («vamos
@@ -170,25 +170,89 @@ describe('clientsDelta — altas de los ultimos 7 dias', () => {
     })
 })
 
-describe('riskDelta — fase 1 sin delta', () => {
-    it('siempre null: el historico de riesgo exige snapshot diario (fase 2)', () => {
-        expect(riskDelta()).toBeNull()
+describe('riskDelta — hoy vs. la fila de hace 7 dias (fase 2)', () => {
+    it('sin fila T−7 ⇒ null: el tile cae a su caption, no inventa tendencia', () => {
+        expect(riskDelta(12, null)).toBeNull()
+    })
+
+    it('sube ⇒ tono NEGATIVO (mas alumnos en riesgo es peor)', () => {
+        expect(riskDelta(12, { risk_count: 9, active_clients: 13 })).toEqual({
+            value: 3,
+            text: '+3 vs. hace 7 días',
+            tone: 'negative',
+        })
+    })
+
+    it('baja ⇒ tono POSITIVO, con signo menos tipografico', () => {
+        const delta = riskDelta(4, { risk_count: 9, active_clients: 13 })
+        expect(delta).toEqual({ value: -5, text: `${MINUS_SIGN}5 vs. hace 7 días`, tone: 'positive' })
+        expect(delta?.text).not.toContain('-')
+    })
+
+    it('igual ⇒ neutro', () => {
+        expect(riskDelta(9, { risk_count: 9, active_clients: 13 })).toEqual({
+            value: 0,
+            text: 'igual que hace 7 días',
+            tone: 'neutral',
+        })
+    })
+})
+
+describe('clientsNetDelta — saldo neto de la cartera', () => {
+    it('sin fila T−7 ⇒ null (el llamador cae a las altas de fase 1)', () => {
+        expect(clientsNetDelta(15, null)).toBeNull()
+    })
+
+    it('sube ⇒ positivo', () => {
+        expect(clientsNetDelta(15, { risk_count: 9, active_clients: 13 })).toEqual({
+            value: 2,
+            text: '+2 vs. hace 7 días',
+            tone: 'positive',
+        })
+    })
+
+    it('baja neta: lo que fase 1 NO podia decir (10 hoy contra 12 hace una semana)', () => {
+        const delta = clientsNetDelta(10, { risk_count: 0, active_clients: 12 })
+        expect(delta).toEqual({ value: -2, text: `${MINUS_SIGN}2 vs. hace 7 días`, tone: 'negative' })
+        expect(delta?.text).not.toContain('-')
+    })
+
+    it('igual ⇒ neutro', () => {
+        expect(clientsNetDelta(12, { risk_count: 0, active_clients: 12 })).toEqual({
+            value: 0,
+            text: 'igual que hace 7 días',
+            tone: 'neutral',
+        })
     })
 })
 
 describe('buildKpiDeltas — punto de entrada unico de las dos funciones V2', () => {
-    it('arma las 4 llaves con «risk» en null', () => {
-        const deltas = buildKpiDeltas({
-            areaData: [
-                { name: '31/08', sesiones: 2 },
-                { name: '01/09', sesiones: 5 },
-            ],
-            todayKey: '01/09',
-            yesterdayKey: '31/08',
-            adherenceStats: [{ adherenceHistory4w: [0, 0, 50, 60] }],
-            signupDates: [{ created_at: '2026-08-31T00:00:00.000Z' }],
-            nowIso: '2026-09-01T12:00:00.000Z',
-        })
+    const BASE = {
+        areaData: [
+            { name: '31/08', sesiones: 2 },
+            { name: '01/09', sesiones: 5 },
+        ],
+        todayKey: '01/09',
+        yesterdayKey: '31/08',
+        adherenceStats: [{ adherenceHistory4w: [0, 0, 50, 60] }],
+        signupDates: [{ created_at: '2026-08-31T00:00:00.000Z' }],
+        nowIso: '2026-09-01T12:00:00.000Z',
+        riskCount: 12,
+        totalClients: 15,
+    }
+
+    it('con fila T−7: «clients» es el NETO y «risk» deja de ser null', () => {
+        const deltas = buildKpiDeltas({ ...BASE, snapshot7d: { risk_count: 9, active_clients: 13 } })
+
+        expect(Object.keys(deltas).sort()).toEqual(['adherence', 'clients', 'risk', 'sessionsToday'])
+        expect(deltas.risk).toEqual({ value: 3, text: '+3 vs. hace 7 días', tone: 'negative' })
+        expect(deltas.clients).toEqual({ value: 2, text: '+2 vs. hace 7 días', tone: 'positive' })
+        expect(deltas.adherence).toEqual({ value: 10, text: '+10 pts vs. semana previa', tone: 'positive' })
+        expect(deltas.sessionsToday).toEqual({ value: 3, text: '+3 vs. ayer', tone: 'positive' })
+    })
+
+    it('sin fila T−7: «clients» cae a las altas brutas y «risk» queda en null', () => {
+        const deltas = buildKpiDeltas({ ...BASE, snapshot7d: null })
 
         expect(Object.keys(deltas).sort()).toEqual(['adherence', 'clients', 'risk', 'sessionsToday'])
         expect(deltas.risk).toBeNull()
@@ -205,6 +269,9 @@ describe('buildKpiDeltas — punto de entrada unico de las dos funciones V2', ()
             adherenceStats: [],
             signupDates: [],
             nowIso: '2026-09-01T12:00:00.000Z',
+            riskCount: 0,
+            totalClients: 0,
+            snapshot7d: null,
         })
 
         expect(deltas.clients).toEqual({ value: 0, text: 'sin altas esta semana', tone: 'neutral' })
