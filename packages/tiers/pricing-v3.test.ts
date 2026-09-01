@@ -37,7 +37,6 @@ describe('TIER_CAPABILITIES.free — white-label abierto + sello', () => {
         expect(getTierCapabilities('free')).toEqual({
             canUseNutrition: true,
             canUseBranding: true,
-            canUseAdvancedReports: false,
             canCreateCustomExercises: true,
             canImportClients: true,
             showsEvaBadge: true,

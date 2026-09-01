@@ -144,7 +144,6 @@ describe('capabilities de free — TODO liberado, white-label incluido (pricing 
             // Pricing v3 (owner 2026-08-21): el white-label pasa a estar en todos los planes
             // vendidos. Revierte «branding = Pro+ ENTERO» (decision CEO 2026-06-21).
             canUseBranding: true,
-            canUseAdvancedReports: false, // gate aún no activo — sin cambio en esta tanda
             canCreateCustomExercises: true,
             canImportClients: true,
             // El gancho de Pro pasa a ser el sello, no la marca.
@@ -156,7 +155,6 @@ describe('capabilities de free — TODO liberado, white-label incluido (pricing 
         expect(getTierCapabilities('starter')).toEqual({
             canUseNutrition: false,
             canUseBranding: false,
-            canUseAdvancedReports: true,
             canCreateCustomExercises: true,
             canImportClients: true,
             showsEvaBadge: true,

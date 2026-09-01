@@ -61,7 +61,6 @@ export type TierConfig = {
 export type TierCapabilities = {
     canUseNutrition: boolean
     canUseBranding: boolean
-    canUseAdvancedReports: boolean
     canCreateCustomExercises: boolean
     canImportClients: boolean
     /**
@@ -214,7 +213,6 @@ export const TIER_CONFIG: Record<SubscriptionTier, TierConfig> = {
  *
  * starter (fuera de venta) conserva su set histórico grandfathered: sigue SIN nutrición y SIN
  * branding — v3 abre el white-label a los tiers VENDIDOS, no reescribe el histórico.
- * canUseAdvancedReports reserved for future implementation — gate not active yet.
  */
 const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
     free: {
@@ -222,7 +220,6 @@ const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
         // Pricing v3: el free tiene su marca propia completa (logo, color, preset, fuente, loader,
         // layout de login). Lo que paga Pro es el cupo y sacarse el sello.
         canUseBranding: true,
-        canUseAdvancedReports: false,
         canCreateCustomExercises: true,
         canImportClients: true,
         showsEvaBadge: true,
@@ -230,7 +227,6 @@ const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
     starter: {
         canUseNutrition: false,
         canUseBranding: false,
-        canUseAdvancedReports: true,
         canCreateCustomExercises: true,
         canImportClients: true,
         showsEvaBadge: true,
@@ -238,7 +234,6 @@ const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
     pro: {
         canUseNutrition: true,
         canUseBranding: true,
-        canUseAdvancedReports: true,
         canCreateCustomExercises: true,
         canImportClients: true,
         showsEvaBadge: false,
@@ -246,7 +241,6 @@ const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
     elite: {
         canUseNutrition: true,
         canUseBranding: true,
-        canUseAdvancedReports: true,
         canCreateCustomExercises: true,
         canImportClients: true,
         showsEvaBadge: false,
@@ -255,7 +249,6 @@ const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
     growth: {
         canUseNutrition: true,
         canUseBranding: true,
-        canUseAdvancedReports: true,
         canCreateCustomExercises: true,
         canImportClients: true,
         showsEvaBadge: false,
@@ -264,7 +257,6 @@ const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
     scale: {
         canUseNutrition: true,
         canUseBranding: true,
-        canUseAdvancedReports: true,
         canCreateCustomExercises: true,
         canImportClients: true,
         showsEvaBadge: false,

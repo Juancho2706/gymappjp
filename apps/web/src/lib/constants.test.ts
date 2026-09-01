@@ -105,7 +105,6 @@ describe('subscription constants', () => {
         expect(getTierCapabilities('free').canCreateCustomExercises).toBe(true)
         expect(getTierCapabilities('free').canImportClients).toBe(true)
         expect(getTierCapabilities('free').canUseBranding).toBe(true)
-        expect(getTierCapabilities('free').canUseAdvancedReports).toBe(false)
         expect(getTierCapabilities('free').showsEvaBadge).toBe(true)
         expect(getTierCapabilities('pro').showsEvaBadge).toBe(false)
     })
