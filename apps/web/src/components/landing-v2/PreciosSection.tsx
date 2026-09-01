@@ -310,7 +310,7 @@ export function PreciosSection({ exerciseCount }: { exerciseCount: number }) {
                         </li>
                         {/* Pricing v3 (owner 2026-08-21): los 4 módulos Y el white-label van
                             incluidos en TODOS los planes, Free incluido — el gate server ya los
-                            libera (hasPaidModuleAccess / isBrandingAllowed). */}
+                            libera (hasActiveModuleAccess / isBrandingAllowed). */}
                         <li style={liStyle}>
                             <span style={{ color: '#4ADE80' }}>✓</span>
                             {t('pf_5', '4 módulos profesionales incluidos')}

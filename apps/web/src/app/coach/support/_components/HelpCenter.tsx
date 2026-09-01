@@ -174,7 +174,7 @@ const FAQS: Faq[] = [
     },
     {
         q: '¿Cómo funcionan los módulos profesionales?',
-        // Pricing v2 (P3): `hasPaidModuleAccess` ya NO mira el tier — los 4 módulos son de todo
+        // Pricing v2 (P3): `hasActiveModuleAccess` no mira el tier — los 4 módulos son de todo
         // coach con suscripción vigente, plan gratuito incluido. Lo que los apaga es la cuenta
         // inactiva (vencida/bloqueada), no el plan.
         a: 'Cardio, Evaluación de movimiento, Composición corporal y Nutrición Pro vienen incluidos en todos los planes, también en el gratuito, sin costo extra. Mientras tu cuenta esté activa se habilitan solos: los usas desde Alumnos › Herramientas y el builder.',

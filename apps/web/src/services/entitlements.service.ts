@@ -50,7 +50,7 @@ function asModules(value: unknown): EnabledModules {
     return (value && typeof value === 'object' ? (value as EnabledModules) : {})
 }
 
-/** Los 4 módulos en ON (mapa completo). Base de la derivación "coach ACTIVO ⇒ todos incluidos". */
+/** Los 4 módulos en ON (mapa completo). Base de la derivación "acceso vigente ⇒ todos incluidos". */
 const ALL_MODULES_ON: EnabledModules = {
     cardio: true,
     movement_assessment: true,
@@ -59,21 +59,25 @@ const ALL_MODULES_ON: EnabledModules = {
 }
 
 /**
- * Decisión CEO (2026-07-17) + Pricing v2 P3 (2026-08-17, `docs/specs/pricing-v2/SPEC.md`): los 4
- * módulos quedan INCLUIDOS para TODO coach ACTIVO — free incluido. Señal de "activo":
- *   - managed (org/team): el pool/org paga ⇒ acceso siempre (isManagedSubscription).
+ * CRITERIO ÚNICO de módulos: coach con ACCESO VIGENTE ⇒ los 4 módulos incluidos. No hay ninguna
+ * distinción por tipo de suscripción; lo único que se cobra es el CUPO de alumnos.
+ * Señal de "acceso vigente":
+ *   - managed (org/team): la suscripción la administra el pool/org ⇒ acceso siempre
+ *     (`isManagedSubscription`).
  *   - standalone: `hasEffectiveAccess(status, current_period_end)` (respeta gracia por cancel/
- *     trial/dunning hasta el corte; bloquea pending_payment/expired). El tier YA NO gatea:
- *     un free activo deriva módulos igual que un pago.
+ *     trial/dunning hasta el corte; bloquea pending_payment/expired).
  * INACTIVO / expirado / bloqueado ⇒ false (sin derivación; sus cortesías `admin_grant` siguen
  * valiendo porque no se tocan las filas crudas).
- * Nombre histórico: hoy significa "acceso a módulos por suscripción vigente" (paga o free);
- * `subscriptionTier` queda en la firma por compatibilidad de call sites, pero ya no influye.
+ * El kill-switch de operador (`isModuleKilledByOperator`) NO se evalúa acá: se aplica por encima,
+ * en `hasModule` / `hasModuleFromMap`.
+ * `subscriptionTier` queda en la firma por compatibilidad de los call sites, pero no influye.
+ * Renombrada en W4.4 (antes decía "Paid" en el nombre; Pricing v2 P3, 2026-08-17,
+ * `docs/specs/pricing-v2/SPEC.md`).
  */
-export function hasPaidModuleAccess(access: {
+export function hasActiveModuleAccess(access: {
     subscriptionStatus?: string | null
     currentPeriodEnd?: string | null
-    /** Ya no gatea (Pricing v2): se conserva para no romper a los llamadores que arman el snapshot. */
+    /** No gatea nada: se conserva para no romper a los llamadores que arman el snapshot. */
     subscriptionTier?: string | null
 }): boolean {
     if (isManagedSubscription(access.subscriptionStatus)) return true
@@ -81,13 +85,15 @@ export function hasPaidModuleAccess(access: {
 }
 
 /**
- * Deriva el mapa de módulos efectivo para un STANDALONE a partir de sus flags crudos + su acceso
- * de suscripción. Desde Pricing v2 aplica también a FREE: todo coach ACTIVO deriva los 4 en ON.
+ * Deriva el mapa de módulos efectivo para un STANDALONE a partir de sus flags crudos + su acceso.
+ * Criterio único: con acceso vigente (`hasActiveModuleAccess`) los 4 módulos quedan en ON.
  * UNION con las filas crudas (cortesías `admin_grant` ya presentes = no-op, quedan todos en true).
  * Solo el INACTIVO (expirado/bloqueado) respeta el raw tal cual, incluida una cortesía puntual.
+ * El kill-switch de operador se aplica después, en `hasModule` / `hasModuleFromMap`.
  * Derivar SOLO en LECTURA: jamás escribe `coach_addons` ni `coaches.enabled_modules` (billing intacto).
+ * Renombrada en W4.4 (antes decía "Paid" en el nombre; Pricing v2 P3, 2026-08-17).
  */
-export function deriveModulesForPaidAccess(
+export function deriveModulesForActiveAccess(
     raw: EnabledModules,
     access: {
         subscriptionStatus?: string | null
@@ -95,14 +101,14 @@ export function deriveModulesForPaidAccess(
         subscriptionTier?: string | null
     }
 ): EnabledModules {
-    if (!hasPaidModuleAccess(access)) return raw
+    if (!hasActiveModuleAccess(access)) return raw
     return { ...raw, ...ALL_MODULES_ON }
 }
 
 export async function getTeamEnabledModules(db: DB, teamId: string): Promise<EnabledModules> {
     const { data } = await db.from('teams').select('enabled_modules').eq('id', teamId).maybeSingle()
     if (!data) return {}
-    // Un team es un pool PAGO por diseño (coaches del pool = `team_managed`, acceso siempre):
+    // Un team es un pool con acceso siempre vigente por diseño (sus coaches son `team_managed`):
     // los 4 módulos quedan incluidos. UNION con `teams.enabled_modules` crudo (idempotente).
     return { ...asModules(data.enabled_modules), ...ALL_MODULES_ON }
 }
@@ -114,7 +120,7 @@ export async function getCoachEnabledModules(db: DB, coachId: string): Promise<E
         .eq('id', coachId)
         .maybeSingle()
     if (!data) return {}
-    return deriveModulesForPaidAccess(asModules(data.enabled_modules), {
+    return deriveModulesForActiveAccess(asModules(data.enabled_modules), {
         subscriptionStatus: data.subscription_status,
         currentPeriodEnd: data.current_period_end,
         subscriptionTier: data.subscription_tier,

@@ -166,7 +166,7 @@ export function PlanStep({
                             // del add-on en billing, por eso esta fila no lo consulta.
                             { label: 'Planes de nutrición', included: true },
                             // Pricing v2 (P3): los 4 módulos van incluidos en TODOS los planes,
-                            // Free incluido — el gate server ya los libera (hasPaidModuleAccess).
+                            // Free incluido — el gate server ya los libera (hasActiveModuleAccess).
                             { label: '4 módulos profesionales incluidos', included: true },
                             { label: 'Branding personalizado', included: caps.canUseBranding },
                         ]
