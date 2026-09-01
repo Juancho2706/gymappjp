@@ -93,7 +93,10 @@ Marcar solo con evidencia real. Prohibido dar un gate por verde sin haberlo corr
       Dashboard» (`ExecutorV3.tsx:1788`). Un `finally` a secas cambiaría el spinner infinito por ese
       mensaje **falso y sin reintento**. Hace falta un estado de error con «Reintentar».
 - [x] O4.3 `Promise.all` de `getClientProfile()` con el select de `workout_plans`.
-- [ ] O4.4 Commit aparte: embeber `workout_programs` vía `workout_plans_program_id_fkey` (sin hint).
+- [x] O4.4 Commit aparte: embeber `workout_programs` vía `workout_plans_program_id_fkey` (sin hint) —
+      `51d84b56` (01-09): mismas 7 columnas embebidas en el select del plan, segunda query eliminada,
+      misma forma de datos y mismo orden de `setState`; tsc mobile 0, test celebration 7/7. QA device:
+      badge Semana A/B y nombre/fase del programa deben pintar igual (pendiente del OTA).
 - [x] O4.5 Gate mobile: typecheck.
 - [x] O4.6 ⚠ QA device: primera apertura de un plan **sin caché local** con la **conexión cortada a
       mitad de la petición** (no solo «red lenta», que no dispara excepción) · con programa activo ·
@@ -157,6 +160,14 @@ Marcar solo con evidencia real. Prohibido dar un gate por verde sin haberlo corr
       host objects → native states, PR #3964, con regresión reportada en #4003) — exige build
       nativo 1.1.3 + QA de charts/AppBackground/GlowBorderCard. 2 crashes en 7 días, 2 usuarios.
       Decisión del owner. En Sentry quedan archivados hasta que escalen.
-- [ ] P4 Refactor del timing de `setStructureType` (SPEC §D3).
-- [ ] P5 `noUncheckedIndexedAccess` en `apps/mobile` — habría cazado `EVA-MOBILE-D` en compilación.
-- [ ] P6 Debouncear el preview de volumen en los dos sliders (hoy dispara por tick del drag).
+- [ ] P4 Refactor del timing de `setStructureType` (SPEC §D3) — **no se hace sin QA de fluidez del
+      owner**: cambia el comportamiento de una hoja aprobada (D3). El crash ya está cerrado por el
+      fallback (O2). Queda como deuda de la hoja de programa, no de Sentry.
+- [ ] P5 `noUncheckedIndexedAccess` en `apps/mobile` — **medido el 01-09: 431 errores de tsc** al
+      activarlo (63 en `ExecutorV3.tsx`, 29 en `Sparkline.tsx`, 29 en `program-builder.tsx`, 18 en
+      `packages/workout-engine/workout-block-grouping.ts`, resto repartido en 25+ archivos incluidos
+      `packages/*` que también compila mobile). Es una tanda propia de ~1-2 d-a con riesgo de
+      regresión por cada `?? fallback`; no entra en el cierre de errores. Candidata a W4 de la Ola de
+      orden o tanda aparte.
+- [x] P6 Debouncear el preview de volumen en los dos sliders — `fe2c7965` (01-09): 180 ms trailing
+      edge, `setVolumePersist` inmediato, timer cancelado al desmontar; muteado no agenda nada.
