@@ -3,6 +3,7 @@ import { WorkoutProgramsClientShell } from './WorkoutProgramsClientShell'
 import { getCoach } from '@/lib/coach/get-coach'
 import { getWorkoutProgramsWithClients } from './_data/workout-programs.queries'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
+import { assertDomainEnabled } from '@/services/feature-prefs.service'
 import {
     getCoachOnboardingEmptyContext,
     templatesForSurface,
@@ -15,6 +16,12 @@ export default async function WorkoutProgramsPage() {
     const workspace = await getPreferredWorkspaceForRender(coach.id)
     const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
     const activeTeamId = workspace?.type === 'coach_team' ? workspace.teamId : null
+    // Gate de dominio (Ola de orden W1): visibilidad, nunca autorización.
+    await assertDomainEnabled('training', {
+        coachId: coach.id,
+        clientTeamId: activeTeamId,
+        clientOrgId: orgId,
+    })
     const [{ programs, clients, areas }, onboarding] = await Promise.all([
         getWorkoutProgramsWithClients(coach.id, { orgId, activeTeamId }),
         // Persona + alumno de ejemplo (memoizado por request, ver `_data/onboarding-empty.queries`):

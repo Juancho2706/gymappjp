@@ -8,8 +8,8 @@ import { createClient } from '@/lib/supabase/server'
 import type { PlanBuilderInitialData } from '../_components/PlanBuilder/types'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
 import {
+  assertDomainEnabled,
   resolveFeaturePrefs,
-  resolveNutritionDomainEnabled,
 } from '@/services/feature-prefs.service'
 import { shouldSwapCockpitToNutritionV2 } from '../_lib/nutrition-v2-swap'
 
@@ -36,10 +36,12 @@ export default async function NewNutritionTemplatePage({ searchParams }: Props) 
   const wsOrgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
   const wsTeamId = workspace?.type === 'coach_team' ? workspace.teamId : null
 
-  // Master switch del dominio + flags de seccion Pro (fail-OPEN con flag OFF). Dominio OFF =>
-  // el builder no se construye (atrapa refresh/visita directa). Render-only: no borra datos.
-  const [nutritionDomainEnabled, sectionFlags] = await Promise.all([
-    resolveNutritionDomainEnabled({
+  // Gate de dominio (Ola de orden W1) + flags de seccion Pro (fail-OPEN sin fila). Dominio OFF =>
+  // `assertDomainEnabled` redirige y el builder no se construye (atrapa refresh/visita directa).
+  // Esto es visibilidad, nunca autorización: render-only, no borra datos. El rechazo del
+  // `redirect()` se propaga por el `Promise.all`, así que no perdemos el paralelismo.
+  const [, sectionFlags] = await Promise.all([
+    assertDomainEnabled('nutrition', {
       coachId: user.id,
       clientTeamId: wsTeamId,
       clientOrgId: wsOrgId,
@@ -51,7 +53,6 @@ export default async function NewNutritionTemplatePage({ searchParams }: Props) 
       clientOrgId: wsOrgId,
     }),
   ])
-  if (!nutritionDomainEnabled) redirect('/coach/dashboard')
 
   const { org_template } = await searchParams
 

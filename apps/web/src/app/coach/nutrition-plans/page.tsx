@@ -13,7 +13,7 @@ import { getNutritionPlansPageCoach, getCoachOrgNutritionTemplates } from './_da
 import { OrgTemplatesSection } from './_components/OrgTemplatesSection'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
 import { getCoachRecipes } from './_data/recipes.queries'
-import { resolveNutritionDomainEnabled } from '@/services/feature-prefs.service'
+import { assertDomainEnabled } from '@/services/feature-prefs.service'
 import { createClient } from '@/lib/supabase/server'
 import { hasModule } from '@/services/entitlements.service'
 import { getTodayInSantiago } from '@/lib/date-utils'
@@ -174,12 +174,12 @@ export default async function NutritionPlansPage() {
   const activeTeamId = workspace?.type === 'coach_team' ? workspace.teamId : null
   const scope = { orgId, activeTeamId }
 
-  const nutritionDomainEnabled = await resolveNutritionDomainEnabled({
+  // Gate de dominio (Ola de orden W1): visibilidad, nunca autorización.
+  await assertDomainEnabled('nutrition', {
     coachId,
     clientTeamId: activeTeamId,
     clientOrgId: orgId,
   })
-  if (!nutritionDomainEnabled) redirect('/coach/dashboard')
 
   const entitlementDb = await createClient()
   const [

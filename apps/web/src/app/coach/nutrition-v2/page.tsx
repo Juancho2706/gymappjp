@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import { NutritionPageShell } from '@/components/nutrition-v2'
 import { getCurrentCoachSession as getNutritionPlansPageCoach } from '@/services/auth/current-coach.service'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
+import { assertDomainEnabled } from '@/services/feature-prefs.service'
 import {
   getNutritionCoachHubV2ForWeb,
   getNutritionCoachRosterV2ForWeb,
@@ -44,6 +45,15 @@ export default async function CoachNutritionV2Page({ searchParams }: Props) {
 
   const workspace = await getPreferredWorkspaceForRender(user.id)
   if (workspace?.type === 'enterprise_coach') redirect('/coach/nutrition-plans')
+
+  // Gate de dominio (Ola de orden W1): visibilidad, nunca autorización. El coach enterprise ya
+  // salió por el redirect de arriba, así que acá el contexto nunca es de org.
+  const activeTeamId = workspace?.type === 'coach_team' ? workspace.teamId : null
+  await assertDomainEnabled('nutrition', {
+    coachId: user.id,
+    clientTeamId: activeTeamId,
+    clientOrgId: null,
+  })
 
   // Propagate the active workspace to the scoped RPC so the roster never mixes coach pools.
   const scope = nutritionV2CoachScopeFromWorkspace(workspace)

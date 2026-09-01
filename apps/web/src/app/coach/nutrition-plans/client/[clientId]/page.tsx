@@ -17,8 +17,8 @@ import { AdherenceStrip } from '@/app/c/[coach_slug]/nutrition/_components/Adher
 import { getClientNutritionPlanPageAuthData, getCoachDisplayName } from './_data/client-plan-page.queries'
 import { EditedByBadge } from '@/components/coach/EditedByBadge'
 import {
+  assertDomainEnabled,
   resolveFeaturePrefs,
-  resolveNutritionDomainEnabled,
 } from '@/services/feature-prefs.service'
 import { nutritionV2ClientPath, shouldSwapCockpitToNutritionV2 } from '../../_lib/nutrition-v2-swap'
 
@@ -53,10 +53,11 @@ export default async function CoachClientNutritionPlanPage({ params }: Props) {
     clientOrgId: (client as { org_id?: string | null }).org_id ?? orgId ?? null,
   }
 
-  // Master switch del dominio (fail-OPEN con flag OFF). Dominio OFF => el editor no se
-  // construye (atrapa refresh/visita directa aunque el menú esté oculto). Render-only.
-  const nutritionDomainEnabled = await resolveNutritionDomainEnabled(featurePrefsInput)
-  if (!nutritionDomainEnabled) redirect('/coach/dashboard')
+  // Gate de dominio (Ola de orden W1; fail-OPEN sin fila). Dominio OFF => el editor no se
+  // construye (atrapa refresh/visita directa aunque el menú esté oculto). Render-only: esto es
+  // visibilidad, nunca autorización. Conserva `clientId` en el ctx: el override por alumno sigue
+  // contando en esta ruta.
+  await assertDomainEnabled('nutrition', featurePrefsInput)
 
   const plan = await getClientNutritionPlan(clientId, user.id, orgId ?? null, activeTeamId ?? null)
   const initialData = plan ? mapClientPlanRowToInitialData(plan) : null
