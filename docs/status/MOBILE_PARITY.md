@@ -14,6 +14,28 @@ source_of_truth: apps/web responsive + apps/mobile
 
 ## Resumen ejecutivo
 
+> **2026-09-01 (Ola de orden W1 «Interruptores de verdad» — feature-prefs por dominio, EN CÓDIGO sin OTA)** (SDD
+> [ola-de-orden](../specs/ola-de-orden/TASKS.md) § W1, mockup `9801fec7` 1A 2A 3A 4A, 14 commits locales
+> `11ebbbbc..29c4a669`): la app del coach lee los 5 dominios de `coach_feature_prefs` (`/api/mobile/config` →
+> `featurePrefs.domains`, `lib/entitlements-core.ts` fail-open, `nutritionEnabled` queda como espejo legacy para
+> binarios viejos) y `disabledDomains` del nav sale de los 5, no solo de nutrición. **Gates RN (W1.7)** con
+> `useDomainGuard` (`lib/domain-guard.ts`: se gatea el EFECTO de fetch y se elige rama en el JSX, nunca early-return
+> antes de los hooks) + `components/coach/DomainOffNotice.tsx` (chasis de `ModuleOffNotice`, copy compartido con la
+> web desde `@eva/feature-prefs`, CTA «Prender en Mi panel» → `/coach/settings/mi-panel`): `(tabs)/builder.tsx`
+> (conserva «Programas», sin «Nueva»; no consume `?primera=1`), `nutrition-v2/index.tsx`, `cardio/index` +
+> `cardio/[clientId]`, `movement/index` + `movement/[clientId]` (incl. wizard `?start=1`), `bodycomp/[clientId]`
+> (lee el dominio del MISMO `getWorkspaceEntitlements` del recurso). Precedencia: preferencia ANTES que módulo
+> (`ModuleOffNotice` queda como kill-switch de operador). **Ficha del alumno (W1.9)**: `lib/client-tabs.ts`
+> esconde `analisis`/`plan` con `training:false` y `nutricion` con `nutrition:false`, cae a Resumen sin mutar
+> `tab`, y el detalle diario no dispara fetch con el dominio apagado; el override por-alumno no oculta pestañas.
+> Paridad web ↔ RN **completa en código** (web: `assertDomainEnabled` + `DomainOffNotice`/`DomainOffBanner` +
+> `_lib/profile-tabs.ts`). Tests: `tests/mobile-entitlements-domains.test.ts`, `tests/mobile-nav-tab-keys-contract.test.ts`,
+> `tests/mobile/domain-guard.test.ts`, `domain-off.test.ts`, `client-tabs.test.ts`. **QA device del owner
+> PENDIENTE** (kut · jesus-coach · jpl; lista en TASKS § W1); sin OTA hasta su go. Pendientes declarados:
+> `program-builder` (editor) sin gate `training`; CTA a Mi panel para coach de team cae en la pantalla
+> solo-standalone (aviso «lo define el equipo», sin crash) hasta W3; bodycomp apagado muestra «Alumno» en el
+> subtítulo (cero fetch). Requiere OTA 1.1.2 (sin cambio nativo).
+>
 > **2026-09-01 (cierre Sentry en RN + tercer estado del ejecutor + Despegue honesto)**: en OTA 1.1.2 `production` (android `0877558f` / ios `b5cf3973`, `master` `cc2a2def`, QA device del owner verde) — el builder ya no remonta la app al volver de Ciclo 14 a Semanal (`DAY_SHORT[8..14] ?? D${id}` en `program-builder.tsx`, `HeroSection.tsx`, `ActiveProgramSection.tsx`; EVA-MOBILE-D), el logo del coach sube sin `ENOENT` en Android (`settings/brand.tsx` sin `allowsEditing`; crop centrado 1:1 en `uploadCoachLogo`; EVA-MOBILE-A) y el ejecutor pide perfil y plan en paralelo con UNA sola query (`workout-session.ts`; EVA-MOBILE-9). **En OTA 1.1.2 (android `05227828` / ios `6a3ea4e9`, 01-09 01:36Z; QA device del owner verde)** (`19b1138b`, mockup «Reintentar y Despegue honesto» 1A + 2A aprobado): `useWorkoutSession` expone `loadError: 'offline' | 'error' | null` + `retry()` (`lib/workout-load-state.ts` puro; NetInfo como verdad de red; solo cuando no hubo caché) y `ExecutorV3` pinta «No pudimos cargar tu rutina» con «Reintentar» / «Volver al inicio» antes del vacío real; el Despegue (`session-morph.tsx` + `lib/despegue-ready.ts`) separa `signalsReady` de `degraded`: al ganar el fallback de 4,6 s dice «ESTO ESTÁ TARDANDO» con los dots vivos y «TOCAR PARA ENTRAR IGUAL» (paridad con `WorkoutLaunchMorph.tsx` web). Tests: `tests/mobile/workout-session-load-error.test.ts`, `session-morph-degraded.test.ts`. QA device del owner **verde** (01-09): plan nunca abierto en modo avión (copy offline + Reintentar + Volver), regresión con caché, y Despegue con red muerta («ESTO ESTÁ TARDANDO» → entrar igual).
 >
 > **2026-08-29 (guard de acceso RN contaba al alumno demo — 6 coaches free en el muro)**: `lib/coach-access.ts` hacía el head-count de cupo con `is_archived = false` pero SIN `is_demo = false`, así que un coach free v3 (cupo 1) con el alumno de ejemplo del onboarding + su primer alumno real sumaba 2 > 1 y el layout lo mandaba a `/coach/reactivate`; ahí el overview (API, que sí excluye el demo) decía «1 alumno» y ofrecía «Continuar gratis», y `activate-free` lo rechazaba («solo disponible para suscripciones bloqueadas») porque el status seguía `active` — deadlock sin salida desde el teléfono (reporte de `gf.riquelmevera`, 29-08; 5 coaches más en la misma condición). W6.9 (22-08) había corregido el banner del home pero no este guard. Fix: el guard aplica el MISMO predicado canónico que `capacity.service.ts` (web) y `occupiesCap`; `tests/mobile/coach-access.test.ts` pinnea los filtros. La web nunca estuvo afectada (el proxy usa `countActiveStandaloneClients`). Requiere OTA 1.1.2.

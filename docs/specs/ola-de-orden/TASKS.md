@@ -1,7 +1,7 @@
 ---
 status: draft
 owner: product-engineering
-last_verified: "2026-08-31"
+last_verified: "2026-09-01"
 canonical: false
 ---
 
@@ -27,6 +27,119 @@ correrlas después para no pisarse.
 Hace que apagar un dominio cierre la ruta de verdad (server-side en web, guard de pantalla en RN),
 no solo el ítem de menú. Motor: `coach_feature_prefs` (ya existe, sin cambios de esquema) vía
 `resolveDomainEnabled` (`packages/feature-prefs/index.ts:341`, pura, ya acepta `domain` genérico).
+
+### Estado de ejecución W1 (2026-09-01) — 14 commits locales en `rnmobiledenuevo`, SIN push ni OTA
+
+Precondición SPEC §6.3 cerrada antes de tocar código: `FEATURE_PREFS_ENABLED = true` vivo en Edge
+Config (store `eva-config`, actualizado 17-jul); filas `_enabled=false` en LIVE: bodycomp 28/43 ·
+cardio 27/43 · movement 25/43 · nutrition 22/58 · training 1/43; `team_feature_prefs` 1 fila sin
+key; `client_feature_prefs` 0. Muestra QA: **kut** (nutrition+bodycomp OFF), **jesus-coach**
+(cardio/movement/bodycomp OFF), **jpl** (persona nutrition; cardio/movement OFF). Mockup-lote
+aprobado por el owner: artifact `9801fec7`, decisiones **1A 2A 3A 4A**.
+
+| Tarea | Estado | Commit | Verde real |
+|---|---|---|---|
+| W1.10 retiro `FEATURE_PREFS_ENABLED` | ✅ | `11ebbbbc` | grep 0 fuera de docs; tests del service actualizados |
+| W1.2 RN consume los 5 dominios | ✅ | `57e22de6` | tsc mobile; `tests/mobile-entitlements-domains.test.ts` |
+| W1.6 hook `useDomainGuard` | ✅ | `de5c831a` | contrato documentado en `lib/domain-guard.ts` |
+| W1.11 contrato `MOBILE_TAB_KEYS` ↔ `NAV_MODULES` | ✅ | `3bea5565` | `tests/mobile-nav-tab-keys-contract.test.ts` |
+| W1.12 extensión `nav.test.ts` | ✅ | `04c2ef62` | 45 → 52 casos |
+| W1.1 `/api/mobile/config` 5 dominios (+W1.13.d) | ✅ | `eb656674` | test de contrato del route handler |
+| W1.3 resolvers + `assertDomainEnabled` (+W1.13.a) | ✅ | `01d57935` | `feature-prefs.service.test.ts` (+20 casos), `domain-off.test.ts` |
+| W1.4a gates redirect (training, nutrition-v2, 4× nutrition-plans) | ✅ | `322d6911` | `workout-programs/page.test.tsx`, `nutrition-v2/page.test.tsx` |
+| W1.4b status `domain_off` + `DomainOffNotice` web (+W1.13.c status) | ✅ | `c902b8a0` | cardio.queries (7) · movement.queries (5) · body-composition.queries (5) · DomainOffNotice (4) |
+| W1.5 banner `notice=domain_off` | ✅ | `74bff737` | `DomainOffBanner.test.tsx` (9) |
+| W1.6 componente `DomainOffNotice` RN (+W1.13.b) | ✅ | `30d14fbe` | `tests/mobile/domain-guard.test.ts` (6) · `domain-off.test.ts` (4) |
+| W1.7 gates RN (7 pantallas) | ✅ | `aa36ea84` | tsc mobile; sin render tests (el repo no monta pantallas RN) |
+| W1.8 ficha web | ✅ | `072c09b0` | `_lib/profile-tabs.test.ts` (9); incluye `CoachFichaPanel` (master-detail) |
+| W1.9 ficha RN | ✅ | `29c4a669` | `tests/mobile/client-tabs.test.ts` (10) |
+| W1.9B | anulada (R15) | — | — |
+
+Suite completa (lint · typecheck · test · tsc mobile · tokens · boundaries · docs · expo export
+android): ver CURRENT.md — se corre UNA vez al cierre. QA en device/navegador del owner: PENDIENTE
+(lista abajo).
+
+### Juicio del jefe (2026-09-01) — decisiones tomadas al ejecutar, con su porqué
+
+1. **W1.10 primero.** Con el flag vivo en `true`, retirarlo es un no-op en prod; hacerlo antes que
+   los gates evita que un gate nuevo lea una fuente que después cambia.
+2. **`featurePrefsEnabled: true` y `nutritionEnabled` se conservan como espejo legacy** en
+   `/api/mobile/config` (PLAN §1.8 decía borrarlos): binarios anteriores a este OTA (p. ej.
+   `coach-client-detail.ts`) los leen; se retiran cuando el piso OTA los deje atrás.
+3. **Enterprise (`clientOrgId` / `scope.orgId`) ⇒ 5 dominios ON sin leer** (SPEC §10: el coach
+   enterprise no entra a Funciones; gatearlo sería un lockout sin puerta). Cambia el comportamiento
+   de los 2 call-sites de `nutrition-plans` que pasaban `clientOrgId`.
+4. **`resolveDomainsEnabled` agregador de UNA query** (base coach/team + override alumno) del que
+   cuelgan los 5 wrappers boolean; PLAN §1.3 pedía 5 wrappers con lecturas propias.
+5. **PLAN §1.6 «early return antes de hooks» rompe rules-of-hooks**: el contrato real (gatear el
+   efecto de fetch + rama en el JSX) vive en el JSDoc de `apps/mobile/lib/domain-guard.ts`; el hook
+   vive ahí y no en `feature-prefs.queries.ts`. `MOBILE_TAB_KEYS` se movió a `coach-tab-keys.ts`
+   (puro) para que el test de contrato no arrastre RN.
+6. **`settings/modules/_data/modules.queries.ts` conserva `resolveNutritionDomainEnabled`**: es
+   lectura de estado del toggle, no gate; migrarlo a `assertDomainEnabled` encerraría al coach
+   fuera de la pantalla donde re-prende.
+7. **Precedencia pref → módulo en las DOS plataformas.** En web la decide la función `_data`
+   (devuelve `domain_off` antes de llamar `assertModule`); el orden de los `if` en `page.tsx` es
+   irrelevante porque los status son excluyentes. En RN es la cadena `!domain.enabled ?
+   DomainOffNotice : !hasModule ? ModuleOffNotice : contenido`. Corrige la lectura del preflight
+   W2/W4 (que veía «web module_off primero»): no hay divergencia.
+8. **Copy compartido en `@eva/feature-prefs`** (`DOMAIN_LABELS`, `DOMAIN_GENDER`,
+   `FUNCIONES_LABEL = 'Mi panel'`, `domainOffCopy`, `domainOffBannerCopy`): decisión 1A exige UNA
+   constante web+RN y `apps/web/src/lib` no es alcanzable desde mobile. Las rutas sí son por app
+   (`FUNCIONES_PATH` web `/coach/settings/funciones`; `MI_PANEL_PATH` RN `/coach/settings/mi-panel`).
+   W3 renombra tocando `FUNCIONES_LABEL` + las dos rutas.
+9. **Ficha: el override por-alumno NO oculta pestañas** (4A): `resolveDomainsEnabled` se llama SIN
+   `clientId` en `[clientId]/page.tsx`, `ficha-panel.data.ts` y `bodycomp/_data`; el coachId es el
+   DUEÑO del recurso (misma fuente que `getEnabledModulesForRender`).
+10. **`cardio/[clientId]` web redirige al hub** (donde vive el aviso) en vez de duplicar el aviso;
+    las subrutas RN `cardio/[clientId]` y `movement/[clientId]` (incl. wizard `?start=1`) sí se
+    gatean porque comparten el patrón `hasModule + ModuleOffNotice`.
+11. **Builder RN espera `training.ready`** (contrato del guard: «todavía no se sabe: no se pega a
+    la DB»). Trade-off aceptado: en un arranque frío SIN caché con `/api/mobile/config` caído (y
+    workspace resuelto), la pestaña Programas muestra el loader hasta el próximo foreground; el hub
+    de Nutrición ya se comportaba así (`entitlements.ready`). Vigilar en QA.
+12. **Banner W1.5 primero en la pila** (antes de VerifyEmail): responde al gesto que el coach
+    acaba de hacer y se va solo; la × limpia la query con `history.replaceState` (sin
+    `router.replace`, que refetchearía el RSC del dashboard entero).
+
+### Pendientes declarados de W1 (no bloquean el cierre; entran a QA o a W2/W4)
+
+- Subrutas web de Movimiento por alumno (`movement/[clientId]`, `/new`, `/print`) NO gatean por
+  dominio: sus `_data` devuelven `null ⇒ notFound()`, sin patrón `status`. El hub y el nav sí
+  cierran; un deep link directo con `movement` apagado sigue sirviendo (visibilidad, no permisos).
+- `program-builder` RN y `/coach/builder/[id]` web (editores) no gatean `training`: W1.7 cubre la
+  biblioteca (`builder.tsx`); el atajo «Programa» del Resumen RN cae a Resumen (no-op) en vez de
+  abrir el editor.
+- Resumen de la ficha (web y RN) sigue pintando el ring/tarjeta «Nutrición» y los widgets del
+  dominio aunque esté apagado (solo se apaga el atajo a la pestaña en RN): los widgets por dominio
+  son W2/W4.
+- CTA RN a `/coach/settings/mi-panel` para coach de **team**: esa pantalla es solo-standalone y
+  muestra su aviso «lo define el equipo»; no crashea. W3 unifica el destino.
+- Bodycomp RN con dominio apagado muestra subtítulo «Alumno» (no lee el nombre: cero fetch).
+- Sin cobertura automática del ctx exacto de `resolveDomainsEnabled` en `[clientId]/page.tsx`
+  (no existe test de esa page; verificado por lectura). `ficha-panel.data.ts` tampoco tiene test.
+- `builder.tsx` arrastra 3 errores previos de `react-hooks` (reglas nuevas) fuera del lint raíz.
+
+### QA en device / navegador del owner — W1 (con kut · jesus-coach · jpl)
+
+- **Web, kut (nutrition+bodycomp OFF):** `/coach/nutrition-v2` y `/coach/nutrition-plans` ⇒
+  redirect al dashboard con el banner «Nutrición está apagada en tu panel.» + «Ir a Mi panel» + ×
+  (la × limpia la URL; F5 no lo revive). Ficha de un alumno (standalone y panel desktop): sin
+  pestaña Nutrición; `/coach/clients/<id>/bodycomp` ⇒ aviso in-page «Composición corporal está
+  apagada en tu panel» con los dos botones. Dark mode y marca del coach en el ícono/botón.
+- **Web, jesus-coach (cardio/movement/bodycomp OFF):** `/coach/cardio` ⇒ conserva el header
+  «♥ Cardio · Módulo · Herramientas» + aviso; `/coach/cardio/<clientId>` ⇒ vuelve al hub;
+  `/coach/movement` ⇒ aviso a pantalla completa. Prender Cardio en Mi panel y volver: la página
+  carga normal.
+- **RN, jesus-coach:** deep link `eva://coach/cardio`, `/coach/cardio/<id>`,
+  `/coach/movement/<id>?start=1`, `/coach/bodycomp/<id>` ⇒ `DomainOffNotice` con header, CTA
+  «Prender en Mi panel» abre Mi panel; sin flash de contenido ni request (ver Metro/Network).
+- **RN, jpl (cardio/movement OFF, nutrition ON):** Programas (tab) y Nutrición cargan normal; la
+  ficha muestra las 5 pestañas. Apagar Entrenamiento en Mi panel ⇒ Programas muestra «Programas» +
+  aviso sin «Nueva»; la ficha pierde Entreno y Programa y cae a Resumen si estaba ahí.
+- Transversal: safe areas (notch/home indicator no tapan el CTA), dark mode, marca custom, y que
+  el aviso de bodycomp RN no confunda con «Alumno» en el subtítulo.
+
 
 ### Contrato / config
 
@@ -235,7 +348,7 @@ Estimación: 0.5 d-a (incluye a-d).
 `nutrition-plans/*` y precisar el patrón `status` de cardio/movement/bodycomp, per PLAN §1.4; +0,25
 por W1.9B, R4).
 
-### QA en device — W1
+### QA en device — W1 (lista original de la SDD; la ejecutable con kut/jesus-coach/jpl está arriba)
 - Deep link `eva://coach/cardio` (o el que corresponda por allowlist de `+native-intent.ts`) con el
   dominio Cardio apagado: debe caer en `DomainOffNotice` o redirect, nunca crash ni pantalla en
   blanco.
@@ -638,3 +751,62 @@ W4 pueden correr en paralelo entre sí una vez cerrado W1 (comparten poco códig
 `funciones/page.tsx` consolidada (W3.1/W3.3) — si se corre W4 antes que W3, W4.1 apunta a los
 archivos viejos (`FeaturePrefsPanel` standalone, `features.tsx` RN) y hay que re-tocarlo tras la
 consolidación. Orden recomendado: W1 → W2 → W3 → W4.
+
+---
+
+## Anexo — Preflight solo-lectura de W2 y W4 (2026-09-01, sesión paralela; 8 verificadores + 5 refutadores)
+
+Correcciones a incorporar en las tareas de W2/W4 ANTES de ejecutarlas (verificadas contra `HEAD`
+tras los 14 commits de W1). PLAN §4.3 ya fue corregido en el mismo cierre de W1.
+- **W2.1B — reemplazar «extensión de `nav.test.ts`» por**: «Reescritura de `packages/coach-nav/nav.test.ts`: retirar `entitlement` de las entradas cardio/movement invalida los describes de `getVisibleNavItems — módulos toggleables` (~157-234) y el test «discriminador: items con entitlement van a modules» (270-279). Decidir además qué pasa con `splitNavItems` (`nav.ts:212-219`) y `splitForSidebar` (`nav.ts:228-235`), que usan `item.entitlement != null` como discriminador general y cambian de comportamiento aunque nadie los pidió tocar.»
+- **W2.1B — corregir el criterio Verde**: «Verde: `grep -n "entitlement" packages/coach-nav/nav.ts` no devuelve hits en las entradas `cardio`/`movement` (líneas 114-115). El campo sigue existiendo en el tipo y en `getVisibleNavItems`, así que el grep global NO puede dar 0.»
+- **W2.2 — agregar nota**: «La ruta `/coach/settings/funciones` YA EXISTE (feature «Mi panel» del onboarding-v2, commit `d8286e95`, 21-08): la nueva entrada de nav apunta a una página real, no a un placeholder.»
+- **W2.3 — precisar**: «La entrada de nav se llama `programs` pero su `featureDomain` es `'training'` (los 5 dominios válidos son nutrition/training/cardio/movement/bodycomp). `bodycomp` no tiene entrada de nav.»
+- **W2.5 — corregir refs**: «`MOBILE_TAB_KEYS` vive en `apps/mobile/components/coach/coach-tab-keys.ts:10` desde W1.11 (commit `3bea5565`), NO en `CoachMobileChrome.tsx:39`; el import está en `CoachMobileChrome.tsx:21` y el uso en 115-118. El `.slice(0, 5)` está en la línea **118**. El test de contrato a actualizar es `tests/mobile-nav-tab-keys-contract.test.ts` (raíz de `tests/`), no `tests/mobile/*`.»
+- **W2.5 / W2.6 — agregar dependencia dura**: «Bloqueada por W2.1: `PERSONA_DOMAIN_ORDER` no existe en código (0 matches en `apps/` y `packages/`), solo en la SDD.»
+- **W2.6 — corregir la premisa del patrón de ocultamiento**: «Las tabs NO se ocultan con `href: null` (0 hits de `href` en `_layout.tsx`). El patrón real es un tabBar custom: `<Tabs tabBar={(props) => <CoachMobileTabBar {...props} />}>` (`_layout.tsx:25`); las 12 screens quedan registradas y navegables por `router.push`, y solo se filtra qué botones pinta la barra (`CoachMobileChrome.tsx:115-118`).»
+- **W2.7 — completar el archivo y el plumbing**: «Archivos: `apps/web/src/app/coach/dashboard/_components/DashboardFab.tsx` (acciones en :30-34), montado en `DashboardShell.tsx:282`. Plumbing: llamar `resolveDomainsEnabled` (`services/feature-prefs.service.ts:340`) en `DashboardContent.tsx` y encadenar `domainsEnabled` por `DashboardShell` → `DashboardFab`, replicando el patrón de `coach/clients/[clientId]/page.tsx:83,168`. Coordinar con W1, que edita `DashboardShell.tsx` sin commitear.»
+- **W2.7 — agregar el FAB RN**: «Existe un FAB gemelo en RN con las mismas 3 acciones: `MobileQuickActionsFab` (`apps/mobile/components/coach/CoachDashboardSections.tsx:692-820`, «Programa» → `/coach/(tabs)/builder`), montado en `home.tsx:223-228`. Decidir si entra en el alcance; si entra, usa `useDomainGuard('training')` (`apps/mobile/lib/domain-guard.ts:53`) sin plumbing extra.»
+- **W2.8 — precisar el alcance real**: «El riesgo no está en un string de UI sino en el comentario y el `Set` de `apps/mobile/app/coach/settings/mi-panel.tsx:108-118` (`DOMAINS_VISIBLE_IN_NAV = ['nutrition','training']`), que es honesto HOY y solo queda mintiendo una vez que W2.5 le dé lugar a cardio/movement. En web, `domainToggleMessage` (`_actions/mi-panel.actions.ts:211-219`) ya devuelve «Listo, ya se ve.» para cardio/movement aunque el sidebar todavía no los pinte: es una mentira preexistente que W2.4 cierra. Ejecutar W2.8 solo DESPUÉS de W2.4 y W2.5.»
+- **W4.1 — retargetear el half RN**: «Mientras W3.3 no exista, el archivo RN es `apps/mobile/app/coach/settings/features.tsx` (candado :336-338, CTA :368-379), no `funciones.tsx`. El half web es ejecutable hoy sobre `apps/web/src/components/coach/FeaturePrefsPanel.tsx` (:354-360, :392-399).»
+- **W4.2 — precisar la convivencia**: «`domain_off` y `module_off` son ramas EXCLUYENTES (nunca se pintan juntas) con la MISMA precedencia en ambas plataformas: preferencia antes que módulo. En web la decide la función `_data` (devuelve `domain_off` antes de llamar `assertModule`; el orden de los `if` en `page.tsx` no cambia nada); en RN, la cadena `!domain.enabled ? DomainOffNotice : !hasModule ? ModuleOffNotice : contenido`. [Corregido por el jefe de W1: el preflight leía «web module_off primero» a partir del orden de los `if` de la page.] W4.2 solo cambia el copy de `ModuleOffNotice`.»
+- **W4.3 — agregar bloqueo de secuencia**: «Bloqueada por W3.2 y W3.4: `apps/web/src/app/coach/settings/modules/page.tsx` (48 líneas de UI con `<ModulesForm>`) y `apps/mobile/app/coach/modules.tsx` (219 líneas) NO son redirects todavía, y siguen siendo la única vía de acceso real (6+ consumidores web, 11+ RN). Demoler ahora deja esas rutas sin contenido.»
+- **W4.5 — corregir el criterio Verde**: «Verde: `grep -rn "canUseAdvancedReports" apps/ packages/` devuelve cero consumidores **de producción**; los 4 hits de test (`packages/tiers/pricing-v3.test.ts:40`, `packages/tiers/pricing-v2.test.ts:147,159`, `apps/web/src/lib/constants.test.ts:108`) se actualizan en el MISMO commit — son `toEqual` de snapshot exacto y acceso de propiedad tipada, así que sin tocarlos `pnpm test` y `pnpm typecheck` quedan rojos.»
+- **W4.5 — agregar advertencia**: «`docs/specs/ola-de-orden/PLAN.md:654-661` (§4.3) todavía ordena podar también `canUseNutrition`, `canImportClients` y `canCreateCustomExercises`. Ese texto está OBSOLETO y debe corregirse antes de ejecutar: esas 3 capabilities gatean pagos, importación masiva y creación de ejercicios en 9 call sites vivos.»
+- **W4.6 — corregir el criterio Verde**: «Verde: `grep -rn --exclude-dir=dist --exclude-dir=node_modules "check-ins.tsx\|CoachSearchPalette\|coach-search\|FacturacionTab\|Ir a facturacion\|mrr-cayendo\|onRevenuePress" apps/mobile` = 0. Sin `--exclude-dir=dist` el bundle de `expo export` (`apps/mobile/dist/*.hbc`, ignorado por git) produce falsos rojos. El comentario de `ejercicios.tsx:45` debe reescribirse, no contarse como hit.»
+- **W4.6a — agregar prerrequisito**: «Ruling del owner previo: `docs/status/REDESIGN_FEATURE_MATRIX.md:162,179` marca el tab Check-ins como ❓ dudoso, pendiente de decidir si se acepta la distribución o hace falta un inbox. Si se borra, actualizar esas dos filas en el mismo commit. Nunca confundir con `apps/mobile/app/alumno/(tabs)/check-in.tsx`, destino vivo del cron `api/cron/checkin-reminder/route.ts:132`.»
+- **W4.6b — agregar colaterales y scope**: «El borrado arrastra `apps/mobile/components/CommandPalette.tsx` + sus 2 líneas de barrel en `components/index.ts:9-10`, `apps/web/src/app/api/mobile/coach/search/route.ts`, y el `useFocusEffect` de `ejercicios.tsx:86-92`. Scope del grep OBLIGATORIO `apps/mobile tests`, nunca `apps/`: existe `apps/web/src/services/search/coach-search.service.ts` vivo en producción con símbolos homónimos. Gate: `pnpm typecheck` completo, no solo el de mobile.»
+- **W4.6c — marcar bloqueo por SDD hermana**: «Contradice `docs/specs/cobros-coach-alumno/SPEC.md:1127` y `PLAN.md:466,470`, versionadas en el mismo commit `edf6a07c`, que declaran `FacturacionTab.tsx`, la unión `ClientTab` y el CTA `:2146` como puntos de inserción verificados. Además el bloque `mrr-cayendo` (`CoachDashboardSections.tsx:2141-2150`) NO es código muerto: `MobileFocusList` está montado en `home.tsx:184` y la alerta se dispara con `mrrDeltaPct <= -10`. Requiere ruling del owner antes de tocar.»
+- **W4.7 — corregir alcance y agregar el paso de tipo**: «Son CUATRO literales (`:104`, `:113`, `:123` y `:132 'registradas'`), y `'requieren revisión'` es caption honesto de `riskCount` real — `PLAN.md:672` solo pide borrar los dos numéricos inventados. El campo `delta` es REQUERIDO en el tipo (`DesktopBento.tsx:95`) y se pinta sin guarda en `:201`: hay que volverlo opcional (o eliminar el badge completo, `:200-202`) o `pnpm typecheck` falla con TS2741. En `feature-flags.ts` el bloque a borrar es **14-17** (incluye los JSDoc) y además queda huérfano el helper `envIsTrue` (`:5-7`).»
+- **W4.8 — precisar**: «Secuencial: corre al final de la wave, no en paralelo. El 7mo comando no es un script nombrado sino `pnpm --filter @eva/mobile exec tsc --noEmit`.»
+
+### Orden de ejecución sugerido por el preflight
+**Bloque 0 — antes de tocar código (jefe/owner, no worker)**
+1. Corregir `docs/specs/ola-de-orden/PLAN.md:654-661` (poda de capabilities) — prerrequisito duro de W4.5.
+2. Ruling del owner sobre: tab Check-ins (`REDESIGN_FEATURE_MATRIX.md:179`), buscador global RN (borrar vs cablear la lupa), y `FacturacionTab`/CTA vs la SDD de Cobros.
+3. Commitear W1 (o al menos `packages/feature-prefs/*` y `DashboardShell.tsx`) para liberar los dos archivos compartidos.
+
+**Ola A — paralelizable, archivos disjuntos, sin bloqueos**
+- **W2.1** (`packages/feature-prefs/index.ts` + su test) — desbloquea W2.5/W2.6. Coordinar con W1 en ese archivo.
+- **W2.2** (`packages/coach-nav/nav.ts`, entrada `funciones`) — puede correr antes o después de W2.1B si se secuencia dentro del mismo worker de nav.
+- **W4.2** (`ModuleOffNotice.tsx` web + RN, `nutrition-plans/exchanges/page.tsx`).
+- **W4.4** (`entitlements.service.ts` + `derive.test.ts`).
+- **W4.1 half web** (`FeaturePrefsPanel.tsx`).
+- **W4.7 paso 1** (flags en `feature-flags.ts` + `.test.ts`) — aislado y barato.
+
+**Ola B — cadena de nav (un solo worker, secuencial, mismo archivo)**
+- **W2.1B** → **W2.3** → **W2.4** sobre `packages/coach-nav/nav.ts` + `nav.test.ts` + `CoachSidebar.tsx`. No paralelizar: los tres tocan el mismo archivo y `splitNavItems`/`splitForSidebar` comparten discriminador.
+- En paralelo con la ola B (archivos disjuntos): **W4.5** (tras el bloque 0) sobre `packages/tiers/*` + 2 tests; **W4.7 paso 2-3** sobre `DesktopBento.tsx`; **W4.6a** sobre `check-ins.tsx` + `_layout.tsx`.
+
+**Ola C — RN, depende de W2.1**
+- **W2.5** (`coach-tab-keys.ts`, `CoachMobileChrome.tsx`, `tests/mobile-nav-tab-keys-contract.test.ts`) → luego **W2.6** (`more.tsx`, `_layout.tsx`, `settings.tsx`). Secuencial entre sí.
+- En paralelo: **W2.7** (`DashboardFab.tsx` + `DashboardContent.tsx` + `DashboardShell.tsx`) solo con W1 ya commiteado.
+
+**Ola D — depende de W2 cerrada o de rulings**
+- **W2.8** (auditoría de copys) — solo tras W2.4 y W2.5, o daría falso verde.
+- **W4.6b / W4.6c** — solo con ruling del owner; W4.6c en tres commits separados y coordinado con W1.9 en `client-tabs.ts`.
+- **W4.3** — bloqueada hasta W3.2 y W3.4.
+- **W4.1 half RN** — bloqueada hasta W3.3, o retargeteada a `features.tsx`.
+
+**Cierre**
+- **W4.8**: suite completa una sola vez, al final, con W4.5/W4.6/W4.7 ya cerradas.

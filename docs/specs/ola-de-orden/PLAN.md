@@ -654,12 +654,16 @@ vez de la fusión que pide R8. Marcar como pendiente de decisión del owner ante
 
 `packages/tiers/index.ts` — de las 6 capacidades (`canUseNutrition`, `canUseBranding`,
 `canUseAdvancedReports`, `canCreateCustomExercises`, `canImportClients`, `showsEvaBadge`),
-`wf-machinery.json` confirma que solo `canUseBranding` y `showsEvaBadge` están vivas. Se retiran
-`canUseNutrition` (ya no gatea nada — V2 en todos los planes), `canUseAdvancedReports` (comentada
-"gate not active yet") y `canCreateCustomExercises`/`canImportClients` (no se consultan como gate
-real). Antes de borrar cada campo, grep de su nombre sobre `apps/web/src` y `apps/mobile` para
-confirmar 0 consumidores vivos (el mapa ya lo afirma, pero el implementador re-verifica en el
-momento del cambio, código en movimiento entre el mapeo 31-08 y la ejecución).
+**se retira SOLO `canUseAdvancedReports`** (comentada "gate not active yet", cero consumidores de
+producción). **CORRECCIÓN 2026-09-01 (preflight, sesión paralela):** la versión anterior de este
+párrafo ordenaba podar también `canUseNutrition`, `canCreateCustomExercises` y `canImportClients`
+apoyándose en `wf-machinery.json`; ese mapa estaba desactualizado — las tres siguen gateando
+rutas vivas (pagos en `create-preference`/`confirm-enrollment`, importación masiva y creación de
+ejercicios, 9 call sites; ver TASKS W4.5 y SPEC §«capabilities»). Quien ejecute W4.5 sigue a
+TASKS/SPEC, no a este párrafo viejo. Antes de borrar el campo, grep de su nombre sobre `apps/` y
+`packages/`: los 4 hits que quedan son tests (`pricing-v3.test.ts:40`, `pricing-v2.test.ts:147,159`,
+`constants.test.ts:108`) y se actualizan en el MISMO commit (snapshots `toEqual` + acceso tipado:
+sin tocarlos, `pnpm test` y `pnpm typecheck` quedan rojos).
 
 ### 4.4 Demoliciones (BRIEF §1.7)
 
