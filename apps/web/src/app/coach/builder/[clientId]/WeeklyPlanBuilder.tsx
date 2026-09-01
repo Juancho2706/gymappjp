@@ -265,6 +265,39 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
     const [previewDayId, setPreviewDayId] = useState<number | null>(null)
     /** La vista del alumno en <lg es plegable y arranca cerrada (el lienzo manda). */
     const [isPreviewOpen, setIsPreviewOpen] = useState(false)
+    // Vista del alumno en desktop (≥1024 px): abierta por defecto, pero el coach puede plegarla y la
+    // decisión se recuerda por navegador. Antes era un panel FIJO sin cierre: un coach con laptop
+    // chica reportó (01-09) «una ventana que no puedo cerrar» que le tapaba las columnas de días.
+    // Se lee en efecto (no en el initializer) para no desincronizar el HTML del SSR.
+    const [isDesktopPreviewOpen, setIsDesktopPreviewOpen] = useState(true)
+    const [isDesktopViewport, setIsDesktopViewport] = useState(false)
+    useEffect(() => {
+        const mql = window.matchMedia('(min-width: 1024px)')
+        const sync = () => setIsDesktopViewport(mql.matches)
+        sync()
+        mql.addEventListener('change', sync)
+        try {
+            if (localStorage.getItem('eva.builder.livePreviewDesktop.v1') === '0') setIsDesktopPreviewOpen(false)
+        } catch {
+            // localStorage bloqueado (modo privado): queda abierta, como siempre.
+        }
+        return () => mql.removeEventListener('change', sync)
+    }, [])
+    const setDesktopPreview = useCallback((open: boolean) => {
+        setIsDesktopPreviewOpen(open)
+        try {
+            localStorage.setItem('eva.builder.livePreviewDesktop.v1', open ? '1' : '0')
+        } catch {
+            // sin memoria: el toggle sigue funcionando en la sesión.
+        }
+    }, [])
+    // Un solo ojo en la cabecera para los tres anchos: en desktop pliega el panel derecho, debajo
+    // de 1024 px abre/cierra el plegable al pie del lienzo.
+    const togglePreview = useCallback(() => {
+        if (isDesktopViewport) setDesktopPreview(!isDesktopPreviewOpen)
+        else setIsPreviewOpen((v) => !v)
+    }, [isDesktopViewport, isDesktopPreviewOpen, setDesktopPreview])
+    const previewExpanded = isDesktopViewport ? isDesktopPreviewOpen : isPreviewOpen
     /** Post-guardado del alumno de ejemplo: barra con «Vive tu app». */
     const [showViveTuApp, setShowViveTuApp] = useState(false)
     /** `first_artifact` se emite una sola vez por montaje (la DB lo deduplica por coach). */
@@ -1200,13 +1233,13 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => setIsPreviewOpen(v => !v)}
-                                aria-expanded={isPreviewOpen}
-                                aria-controls="student-live-preview"
+                                onClick={togglePreview}
+                                aria-expanded={previewExpanded}
+                                aria-controls={isDesktopViewport ? 'student-live-preview-desktop' : 'student-live-preview'}
                                 aria-label={`Así lo ve ${studentFirstName || 'tu alumno'}`}
                                 title={`Así lo ve ${studentFirstName || 'tu alumno'}`}
-                                className={`eva-press h-8 w-8 shrink-0 rounded-pill px-0 lg:hidden md:h-10 md:w-10 ${
-                                    isPreviewOpen
+                                className={`eva-press h-8 w-8 shrink-0 rounded-pill px-0 md:h-10 md:w-10 ${
+                                    previewExpanded
                                         ? 'border-primary/60 bg-primary/10 text-primary'
                                         : 'border-subtle text-muted hover:text-strong'
                                 }`}
@@ -1610,15 +1643,18 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                         )}
                     </div>
 
-                    {/* Vista del alumno — panel fijo a la derecha en desktop (≥1024 px). */}
-                    {client && (
+                    {/* Vista del alumno — panel a la derecha en desktop (≥1024 px), plegable: se
+                        cierra con su «✕» o con el ojo de la cabecera, y la decisión se recuerda. */}
+                    {client && isDesktopPreviewOpen && (
                         <StudentLivePreview
+                            id="student-live-preview-desktop"
                             studentName={client.full_name ?? null}
                             days={days}
                             activeDayId={previewDayId}
                             onSelectDay={setPreviewDayId}
                             areas={areas}
                             variant={isABMode ? activeVariant : null}
+                            onClose={() => setDesktopPreview(false)}
                             className="hidden w-[330px] shrink-0 border-l border-subtle lg:flex xl:w-[360px]"
                         />
                     )}

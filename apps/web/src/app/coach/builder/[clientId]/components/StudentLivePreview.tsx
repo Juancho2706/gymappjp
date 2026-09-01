@@ -146,9 +146,9 @@ export interface StudentLivePreviewProps {
      */
     floatingActionsBelow?: boolean
     /**
-     * Cierra la vista previa. Solo lo pasa el modo plegable de <1024 px: el panel fijo de desktop
-     * no se cierra. Cuando viene, la cabecera pinta su «✕» — es el único camino de vuelta ahora
-     * que el toggle vive en la cabecera del builder y no en una barra al pie.
+     * Cierra la vista previa. Cuando viene, la cabecera pinta su «✕». Lo pasan los dos modos:
+     * el plegable de <1024 px y, desde el 01-09, también el panel derecho de desktop (un coach con
+     * laptop chica reportó «una ventana que no puedo cerrar»; el builder recuerda la decisión).
      */
     onClose?: () => void
     className?: string
