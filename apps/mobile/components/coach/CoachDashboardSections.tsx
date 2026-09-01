@@ -57,6 +57,7 @@ import type {
   MobileClientPaymentSummary,
   MobileClientStats,
   MobileExpiringProgramItem,
+  MobileKpiDelta,
   MobileKpiSummary,
   MobileRiskAlertItem,
 } from '../../lib/coach-dashboard'
@@ -1680,31 +1681,35 @@ function PulseSparkline({ data, color, w = 60, h = 22 }: { data: number[]; color
   )
 }
 
-// P1 — delta de tendencia (verde si la dirección es buena para el negocio).
-// 1:1 con coach-dashboard.jsx → deltaView.
+/**
+ * P1 — delta de tendencia del hero. 1:1 con `deltaView` de PulseHero.tsx (web).
+ *
+ * El texto viene ARMADO desde la capa de datos del server (`_lib/kpi-deltas`), así que acá no se
+ * redacta copy ni se decide si subir es bueno: eso ya está en `tone`. El ícono sigue el SIGNO del
+ * cambio, no su bondad. `null` = sin comparación honesta ⇒ el stat no pinta línea de delta.
+ *
+ * Colores: mismo mapeo que el delta REAL de «Ingresos del mes» (StatCard.tsx → `theme.success` /
+ * `theme.destructive`), para que los dos deltas del dashboard se pinten con los mismos tokens.
+ */
 function pulseDeltaView(
-  delta: number,
-  goodDir: 'up' | 'down',
+  delta: MobileKpiDelta,
   theme: ReturnType<typeof useTheme>['theme'],
-  scheme: 'light' | 'dark',
-): { txt: string; color: string; icon: LucideIcon } {
-  if (!delta) return { txt: 'igual', color: theme.mutedForeground, icon: Minus }
-  const dir = delta > 0 ? 'up' : 'down'
-  const good = dir === goodDir
-  const dark = scheme === 'dark'
+): { txt: string; color: string; icon: LucideIcon } | null {
+  if (!delta) return null
+  const color =
+    delta.tone === 'positive' ? theme.success : delta.tone === 'negative' ? theme.destructive : theme.mutedForeground
   return {
-    txt: (delta > 0 ? '+' : '') + delta,
-    // success-600 / danger-600 scheme-aware (1:1 con deltaView web).
-    color: good ? (dark ? '#4FD9A0' : '#0F7D50') : (dark ? '#FF7C97' : '#BE183C'),
-    icon: dir === 'up' ? TrendingUp : TrendingDown,
+    txt: delta.text,
+    color,
+    icon: delta.value > 0 ? TrendingUp : delta.value < 0 ? TrendingDown : Minus,
   }
 }
 
 /**
  * P1 — Pulse hero: 3 stats tocables en una sola card (Activos · En riesgo · Adherencia)
  * con delta de tendencia + sparkline. 1:1 con coach-dashboard.jsx → heroStats.
- * Los deltas/sparkline son placeholders derivados (la data real aún no expone la
- * tendencia semanal) — el elemento visual se renderiza igual que el diseño.
+ * Los deltas son los REALES que sirve el endpoint (`kpi.deltas`); la sparkline sigue siendo
+ * una serie derivada (la pipeline no expone histórico agregado).
  */
 export function MobilePulseHero({
   kpi,
@@ -1730,7 +1735,8 @@ export function MobilePulseHero({
     value: string
     danger: boolean
     onPress: () => void
-    sub: { txt: string; color: string; icon: LucideIcon }
+    sub: { txt: string; color: string; icon: LucideIcon } | null
+    caption?: string
     spark?: number[]
   }> = [
     {
@@ -1739,7 +1745,7 @@ export function MobilePulseHero({
       value: String(kpi.totalClients),
       danger: false,
       onPress: onActivosPress,
-      sub: pulseDeltaView(1, 'up', theme, resolvedScheme),
+      sub: pulseDeltaView(kpi.deltas.clients, theme),
     },
     {
       key: 'riesgo',
@@ -1747,7 +1753,11 @@ export function MobilePulseHero({
       value: String(kpi.riskCount),
       danger: kpi.riskCount > 0,
       onPress: onRiesgoPress,
-      sub: pulseDeltaView(0, 'down', theme, resolvedScheme),
+      // Sin delta hasta el snapshot diario (fase 2 del mini-plan 7C): el riesgo de hace una semana
+      // no es reconstruible. La caption describe el número, no una tendencia, y evita que la fila
+      // de 3 stats quede desbalanceada — misma línea que el hero web.
+      sub: pulseDeltaView(kpi.deltas.risk, theme),
+      caption: 'requieren revisión',
     },
     {
       key: 'adherencia',
@@ -1755,7 +1765,7 @@ export function MobilePulseHero({
       value: `${kpi.avgAdherence}%`,
       danger: false,
       onPress: onAdherencePress,
-      sub: pulseDeltaView(3, 'up', theme, resolvedScheme),
+      sub: pulseDeltaView(kpi.deltas.adherence, theme),
       spark: adherenceSpark,
     },
   ]
@@ -1763,7 +1773,34 @@ export function MobilePulseHero({
   return (
     <Card padding="none" radius="card" style={{ flexDirection: 'row', overflow: 'hidden' }}>
       {stats.map((s, i) => {
-        const SubIcon = s.sub.icon
+        const SubIcon = s.sub?.icon
+        /* Delta real → caption fija → nada (mismo orden que el hero web). El copy del server es
+           una FRASE («−2 pts vs. semana previa»), no un número suelto: en un stat de ~95 px un
+           `numberOfLines={1}` lo cortaba con «…», así que la línea envuelve hasta 2 líneas y el
+           Text lleva `flexShrink: 1` para ceder ancho en vez de empujar al ícono fuera de la card. */
+        const subLine =
+          s.sub && SubIcon ? (
+            <View className="flex-row items-start" style={{ gap: 2, flexShrink: 1 }}>
+              <View style={{ paddingTop: 1 }}>
+                <SubIcon size={12} color={s.sub.color} strokeWidth={2.4} />
+              </View>
+              <Text
+                className="font-sans-extra text-[11px]"
+                style={{ color: s.sub.color, flexShrink: 1, lineHeight: 14 }}
+                numberOfLines={2}
+              >
+                {s.sub.txt}
+              </Text>
+            </View>
+          ) : s.caption ? (
+            <Text
+              className="font-sans-semibold text-[11px] text-muted"
+              style={{ flexShrink: 1, lineHeight: 14 }}
+              numberOfLines={2}
+            >
+              {s.caption}
+            </Text>
+          ) : null
         return (
           <TouchableOpacity
             key={s.key}
@@ -1790,25 +1827,20 @@ export function MobilePulseHero({
               style={{ fontFamily: FONT.displayBold, fontSize: 27, lineHeight: 27, letterSpacing: -0.27, color: s.danger ? (resolvedScheme === 'dark' ? '#FF7C97' : '#BE183C') : theme.foreground, fontVariant: ['tabular-nums'] }}
             />
             {s.spark ? (
-              <View className="flex-row items-end" style={{ gap: 6, width: '100%' }}>
-                <View className="flex-row items-center" style={{ gap: 2 }}>
-                  <SubIcon size={12} color={s.sub.color} strokeWidth={2.4} />
-                  <Text className="font-sans-extra text-[11px]" style={{ color: s.sub.color }} numberOfLines={1}>
-                    {s.sub.txt}
-                  </Text>
-                </View>
+              /* `flexWrap`: con la frase completa del delta ya no entran lado a lado en un stat
+                 angosto, así que la sparkline baja sola a la línea de abajo (y sigue pegada a la
+                 derecha) en vez de aplastar el texto. Igual que el hero web. */
+              <View
+                className="flex-row flex-wrap items-end"
+                style={{ columnGap: 6, rowGap: 4, width: '100%' }}
+              >
+                {subLine}
                 <View style={{ marginLeft: 'auto' }}>
                   <PulseSparkline data={s.spark} color={theme.primary} />
                 </View>
               </View>
             ) : (
-              <View className="flex-row items-center" style={{ gap: 2 }}>
-                <SubIcon size={12} color={s.sub.color} strokeWidth={2.4} />
-                <Text className="font-sans-extra text-[11px]" style={{ color: s.sub.color }} numberOfLines={1}>
-                  {s.sub.txt}
-                </Text>
-                <Text className="font-sans-semibold text-[11px] text-subtle"> sem.</Text>
-              </View>
+              subLine
             )}
           </TouchableOpacity>
         )

@@ -14,6 +14,24 @@ import { selectWithFallback } from './db-compat'
 import { isUuid } from './safe-uuid'
 import { getActiveCoachWorkspace } from './workspace'
 
+/**
+ * Delta de un KPI del hero, ya resuelto por el servidor: número, copy y tono.
+ *
+ * Espejo de KpiDelta web (`apps/web/src/app/coach/dashboard/_data/types.ts`), copiado a mano
+ * porque el contrato del dashboard no vive en `packages/*`: RN no importa tipos de `apps/web`.
+ * RN pinta el `text` TAL CUAL (el copy se redacta en un solo lugar, regla anti-drift) y solo
+ * mapea `tone` → color. `null` = «sin dato honesto» ⇒ la UI no pinta delta y jamás lo inventa.
+ */
+export type MobileKpiDelta = { value: number; text: string; tone: 'positive' | 'negative' | 'neutral' } | null
+
+/** Espejo de KpiDeltas web (types.ts): los cuatro deltas del hero/bento del coach. */
+export type MobileKpiDeltas = {
+  clients: MobileKpiDelta
+  risk: MobileKpiDelta
+  adherence: MobileKpiDelta
+  sessionsToday: MobileKpiDelta
+}
+
 export type MobileKpiSummary = {
   mrrCurrentMonth: number
   mrrPreviousMonth: number
@@ -22,6 +40,44 @@ export type MobileKpiSummary = {
   riskCount: number
   avgAdherence: number
   avgNutrition: number
+  /**
+   * Deltas reales de los KPI, resueltos en la capa de datos del server (`_lib/kpi-deltas`).
+   * Requerido: un KPI sin comparación honesta vale `null` (no se omite) y la UI no pinta la línea.
+   */
+  deltas: MobileKpiDeltas
+}
+
+const KPI_DELTA_TONES = new Set(['positive', 'negative', 'neutral'])
+
+/** Los cuatro deltas en `null`: el estado «no sé nada» que usan el fallback local y el parser. */
+function emptyKpiDeltas(): MobileKpiDeltas {
+  return { clients: null, risk: null, adherence: null, sessionsToday: null }
+}
+
+/** Valida UN delta del payload. Forma incompleta o rara ⇒ `null`: RN no muestra medio delta. */
+function parseKpiDelta(raw: unknown): MobileKpiDelta {
+  if (!raw || typeof raw !== 'object') return null
+  const delta = raw as { value?: unknown; text?: unknown; tone?: unknown }
+  if (typeof delta.value !== 'number' || !Number.isFinite(delta.value)) return null
+  if (typeof delta.text !== 'string' || delta.text.trim() === '') return null
+  if (typeof delta.tone !== 'string' || !KPI_DELTA_TONES.has(delta.tone)) return null
+  return { value: delta.value, text: delta.text, tone: delta.tone as NonNullable<MobileKpiDelta>['tone'] }
+}
+
+/**
+ * Normaliza `kpi.deltas` del endpoint. La app viaja por binario y por OTA, así que un teléfono
+ * puede pegarle a un deploy VIEJO que todavía no sirve `deltas`: eso NO puede romper el dashboard
+ * ⇒ los cuatro quedan en `null`. Exportada aparte (función pura) para poder testearla.
+ */
+export function mapKpiDeltas(raw: unknown): MobileKpiDeltas {
+  if (!raw || typeof raw !== 'object') return emptyKpiDeltas()
+  const src = raw as Record<string, unknown>
+  return {
+    clients: parseKpiDelta(src.clients),
+    risk: parseKpiDelta(src.risk),
+    adherence: parseKpiDelta(src.adherence),
+    sessionsToday: parseKpiDelta(src.sessionsToday),
+  }
 }
 
 export type MobileRiskAlertItem = {
@@ -635,7 +691,11 @@ type MobileDashboardApiResponse = {
    */
   onboardingV2?: unknown
   dashboard: {
-    kpi: MobileKpiSummary
+    /**
+     * `deltas` llega como `unknown` a propósito: un deploy viejo del backend no los sirve (y uno
+     * roto podría servirlos a medias). Los normaliza `mapKpiDeltas` en `mapApiDashboard`.
+     */
+    kpi: Omit<MobileKpiSummary, 'deltas'> & { deltas?: unknown }
     activePlans: number
     hasStudentSignal30d: boolean
     clientList: Array<{ id: string; name: string }>
@@ -754,7 +814,8 @@ function mapApiDashboard(
     clientStats,
     areaData: payload.dashboard.areaData ?? [],
     barData: payload.dashboard.barData ?? [],
-    kpi: payload.dashboard.kpi,
+    // Los deltas del server pasan por el validador: nada de pintar un delta a medias.
+    kpi: { ...payload.dashboard.kpi, deltas: mapKpiDeltas(payload.dashboard.kpi.deltas) },
     // El endpoint no sirve el conteo del gate; lo resuelve `getCoachDashboardDataMobile` con una
     // consulta propia y lo pisa. Acá arranca en el KPI para que el tipo nunca quede a medias.
     capClients: payload.dashboard.kpi.totalClients,
@@ -1208,6 +1269,9 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
       riskCount: topRiskClients.length,
       avgAdherence,
       avgNutrition,
+      // Fallback degradado: sin deltas. No hay ventana anterior calculada acá y esta adherencia
+      // sale de OTRA fórmula que la del server, así que cualquier comparación sería inventada.
+      deltas: emptyKpiDeltas(),
     },
     capClients: capClients ?? clients.length,
     topRiskClients,
