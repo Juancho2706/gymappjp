@@ -19,6 +19,7 @@ import {
   MobileTodayAgenda,
   teamsBridgeThresholdFor,
 } from '../../../components/coach/CoachDashboardSections'
+import { CoachSearchPalette } from '../../../components/coach/CoachSearchPalette'
 import { InviteCodePill } from '../../../components/coach/InviteStudent'
 import { VerifyEmailBanner } from '../../../components/coach/VerifyEmailBanner'
 import { useTheme } from '../../../context/ThemeContext'
@@ -37,6 +38,7 @@ export default function CoachHomeScreen() {
   const [data, setData] = useState<MobileDashboardData | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [statsOpen, setStatsOpen] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
   // Espejo de `data` para decidir initial vs refresh en cada foco sin re-disparar en loop.
   const dataRef = useRef<MobileDashboardData | null>(null)
 
@@ -160,10 +162,11 @@ export default function CoachHomeScreen() {
           <MobileTierUsageBanners coach={data.coach} capClients={data.capClients} />
         ) : null}
 
-        {/* Header — fecha + "Hola, {nombre}" + acciones (Insights / Notificaciones / avatar) */}
+        {/* Header — fecha + "Hola, {nombre}" + acciones (Buscar / Insights / Notificaciones / avatar) */}
         <MobileGreetingHeader
           coachName={data.coach.fullName || data.coach.brandName || 'Coach'}
           logoUrl={data.coach.logoUrl}
+          onSearch={() => setSearchOpen(true)}
           onInsights={() => setStatsOpen(true)}
           onAvatar={() => router.push('/coach/(tabs)/settings')}
           pendingCount={data.topRiskClients.length + data.expiringPrograms.length + data.pendingCheckinsCount}
@@ -217,6 +220,10 @@ export default function CoachHomeScreen() {
           inviteCode={data.publicCode?.inviteCode ?? ''}
           onConfirmed={() => load('refresh')}
         />
+        {/* W4.6b (Ola de orden, 2026-09-01): el buscador global del coach se abre desde la lupa del
+            header del dashboard (paridad con el topbar web). Reach global desde otros tabs =
+            pendiente declarado. */}
+        <CoachSearchPalette visible={searchOpen} onClose={() => setSearchOpen(false)} />
       </CoachMainWrapper>
 
       {/* FAB — acciones rapidas (fijo sobre el scroll) */}

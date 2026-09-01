@@ -27,6 +27,7 @@ import {
   Pin,
   Plus,
   Receipt,
+  Search,
   Sparkles,
   Wrench,
   TrendingDown,
@@ -1267,11 +1268,14 @@ export function MobileGreetingHeader({
   coachName,
   logoUrl,
   onInsights,
+  onSearch,
   onAvatar,
 }: {
   coachName: string
   logoUrl?: string | null
   onInsights?: () => void
+  /** W4.6b — abre el buscador global del coach (lupa). Sin handler, la lupa no se renderiza. */
+  onSearch?: () => void
   onAvatar?: () => void
   /** Pendientes accionables de hoy (riesgo + programas por vencer + check-ins por revisar). */
   pendingCount?: number
@@ -1330,6 +1334,18 @@ export function MobileGreetingHeader({
       </View>
 
       <View className="flex-row items-center" style={{ gap: 6 }}>
+        {onSearch ? (
+          <TouchableOpacity
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Buscar"
+            testID="coach-search-trigger"
+            onPress={onSearch}
+            style={iconBtn}
+          >
+            <Search size={19} color={theme.foreground} strokeWidth={2.1} />
+          </TouchableOpacity>
+        ) : null}
         <TouchableOpacity activeOpacity={0.8} accessibilityLabel="Insights" onPress={onInsights} style={iconBtn}>
           <Sparkles size={19} color={theme.foreground} strokeWidth={2.1} />
         </TouchableOpacity>
