@@ -5,12 +5,14 @@
  * vive en `entitlements.ts`; aca solo va lo testeable con el runner del repo (vitest).
  *
  * El TYPE `ModuleKey` se importa de @eva/feature-prefs (paquete puro, cuyo test lo cruza contra
- * `MODULE_KEYS` de la app => sin drift). El ARRAY runtime se declara local porque el paquete
- * solo exporta el type.
+ * `MODULE_KEYS` de la app => sin drift). El ARRAY runtime `MODULE_KEYS` se declara local porque el
+ * paquete NO exporta ese array (solo el type). En cambio los DOMINIOS sí viajan completos desde el
+ * paquete: `FEATURE_DOMAIN_KEYS` es un export runtime y se usa tal cual, sin espejo local.
  */
-import type { ModuleKey, NutritionSectionKey } from '@eva/feature-prefs'
+import { FEATURE_DOMAIN_KEYS, type FeatureDomain, type ModuleKey, type NutritionSectionKey } from '@eva/feature-prefs'
 
-export type { ModuleKey, NutritionSectionKey }
+export type { FeatureDomain, ModuleKey, NutritionSectionKey }
+export { FEATURE_DOMAIN_KEYS }
 
 /** Espejo runtime de MODULE_KEYS (fuente de verdad: entitlements.service.ts de la web). */
 export const MODULE_KEYS: readonly ModuleKey[] = [
@@ -21,7 +23,16 @@ export const MODULE_KEYS: readonly ModuleKey[] = [
 ] as const
 
 export interface MobileFeaturePrefs {
-    /** Master switch del dominio Nutricion (gate del tab del alumno). Fail-open => true. */
+    /**
+     * Master switch por DOMINIO (los 5 de `FEATURE_DOMAIN_KEYS`), ya resuelto server-side por
+     * /api/mobile/config (aplica el `_enabled` de `coach_feature_prefs`/`team_feature_prefs`).
+     * Fail-OPEN: ausente / no-bool => `true`; SOLO el `false` explicito apaga.
+     */
+    domains: Record<FeatureDomain, boolean>
+    /**
+     * DERIVADO = `domains.nutrition`. Se conserva para los consumidores existentes (tab del
+     * alumno, hub de nutricion, home) que ya leen este campo; no es una segunda fuente de verdad.
+     */
     nutritionEnabled: boolean
     /**
      * Visibilidad por seccion del dominio Nutricion (espejo de `sectionFlags` de web). Fail-OPEN:
@@ -55,7 +66,8 @@ export const DEFAULT_STUDENT_ACCESS: StudentAccess = { state: 'active', graceEnd
 export interface RawMobileConfig {
     enabledModules?: unknown
     disabledModules?: unknown
-    featurePrefs?: { nutritionEnabled?: unknown; sections?: unknown } | null
+    featurePrefs?: { domains?: unknown; nutritionEnabled?: unknown; sections?: unknown } | null
+    // legacy: el servidor lo manda como espejo, la app ya no lo lee
     featurePrefsEnabled?: unknown
     studentAccess?: unknown
 }
@@ -68,11 +80,18 @@ export interface MobileConfig {
     studentAccess: StudentAccess
 }
 
-/** Config por defecto fail-safe (sin red / sin cache): 0 modulos, nutricion visible, sin gating. */
+/** Los 5 dominios en `true` (fail-OPEN). Se construye desde `FEATURE_DOMAIN_KEYS` => sin drift. */
+function allDomainsEnabled(): Record<FeatureDomain, boolean> {
+    const out = {} as Record<FeatureDomain, boolean>
+    for (const domain of FEATURE_DOMAIN_KEYS) out[domain] = true
+    return out
+}
+
+/** Config por defecto fail-safe (sin red / sin cache): 0 modulos, los 5 dominios visibles, sin gating. */
 export const DEFAULT_CONFIG: MobileConfig = {
     enabledModules: [],
     disabledModules: [],
-    featurePrefs: { nutritionEnabled: true, nutritionSections: {} },
+    featurePrefs: { domains: allDomainsEnabled(), nutritionEnabled: true, nutritionSections: {} },
     studentAccess: DEFAULT_STUDENT_ACCESS,
 }
 
@@ -98,6 +117,27 @@ function toSectionFlags(v: unknown): Partial<Record<NutritionSectionKey, boolean
 }
 
 /**
+ * Master switch por dominio a partir del payload. Fail-OPEN en dos niveles:
+ *  - por key: `false` SOLO si el payload trae el `false` explicito (ausente / no-bool => `true`);
+ *  - por payload: si `rawDomains` no es objeto (binario viejo contra servidor nuevo, servidor
+ *    viejo que todavia no manda `domains`, o basura) los 5 quedan en `true` SALVO `nutrition`,
+ *    que hereda el unico gate que ya existia en el contrato viejo (`nutritionEnabled === false`).
+ * Asi una app vieja no se queda con nutricion prendida cuando el coach ya la apago.
+ */
+function toDomainFlags(rawDomains: unknown, legacyNutritionEnabled: unknown): Record<FeatureDomain, boolean> {
+    const legacyNutritionOff = legacyNutritionEnabled === false
+    if (!rawDomains || typeof rawDomains !== 'object') {
+        const fallback = allDomainsEnabled()
+        if (legacyNutritionOff) fallback.nutrition = false
+        return fallback
+    }
+    const source = rawDomains as Record<string, unknown>
+    const out = {} as Record<FeatureDomain, boolean>
+    for (const domain of FEATURE_DOMAIN_KEYS) out[domain] = source[domain] === false ? false : true
+    return out
+}
+
+/**
  * Normaliza `studentAccess` del payload. Acepta ambos vocabularios del server (web
  * student-access.ts emite 'ok'/'grace'/'readonly'; el espejo mobile usa 'active'/'grace'/'blocked'):
  * 'readonly' => 'blocked', 'ok'/desconocido/invalido => fail-OPEN a 'active'.
@@ -116,14 +156,41 @@ function toStudentAccess(v: unknown): StudentAccess {
 /** Normaliza (y valida tipos de) el payload crudo del endpoint. NUNCA lanza. */
 export function normalizeConfig(raw: RawMobileConfig | null | undefined): MobileConfig {
     if (!raw || typeof raw !== 'object') return DEFAULT_CONFIG
-    // Solo el `false` explicito oculta la nutricion; ausente / no-bool => fail-open (true).
-    const nutritionEnabled = raw.featurePrefs?.nutritionEnabled === false ? false : true
+    // Solo el `false` explicito apaga un dominio; ausente / no-bool => fail-open (true).
+    const domains = toDomainFlags(raw.featurePrefs?.domains, raw.featurePrefs?.nutritionEnabled)
     return {
         enabledModules: toModuleKeys(raw.enabledModules),
         disabledModules: toModuleKeys(raw.disabledModules),
-        featurePrefs: { nutritionEnabled, nutritionSections: toSectionFlags(raw.featurePrefs?.sections) },
+        featurePrefs: {
+            domains,
+            // DERIVADO: una sola fuente de verdad (el espejo legacy del payload ya se consumio arriba).
+            nutritionEnabled: domains.nutrition,
+            nutritionSections: toSectionFlags(raw.featurePrefs?.sections),
+        },
         studentAccess: toStudentAccess(raw.studentAccess),
     }
+}
+
+/**
+ * ¿Esta prendido el dominio `domain` en esta config? Fail-OPEN (ver `toDomainFlags`). PURA =>
+ * testeable. Es el predicado que consume `useDomainGuard` (domain-guard.ts) y, por su lado, el
+ * armado de `disabledDomains` del nav.
+ */
+export function isDomainEnabledIn(config: MobileConfig, domain: FeatureDomain): boolean {
+    return config.featurePrefs.domains[domain] !== false
+}
+
+/**
+ * Dominios APAGADOS, en la forma que consume `getVisibleNavItems` (`disabledDomains`) — espejo
+ * exacto de `disabledDomainsFromPrefs` / `disabledDomainsForPersona` de la web, para que el nav de
+ * ambas plataformas derive el set desde la MISMA regla. Solo entran los `false`. PURA.
+ */
+export function disabledDomainsFromFlags(domains: Record<FeatureDomain, boolean>): Set<FeatureDomain> {
+    const disabled = new Set<FeatureDomain>()
+    for (const domain of FEATURE_DOMAIN_KEYS) {
+        if (domains[domain] === false) disabled.add(domain)
+    }
+    return disabled
 }
 
 /**

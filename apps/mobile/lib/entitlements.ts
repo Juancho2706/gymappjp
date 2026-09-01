@@ -23,11 +23,13 @@ import type { ClientActionWorkspace } from './client-actions'
 import {
     DEFAULT_CONFIG,
     hasModuleIn,
+    isDomainEnabledIn,
     isNutritionSectionVisibleIn,
     normalizeConfig,
     parseCachedConfigEnvelope,
     resolveEffectiveModules,
     serializeConfigEnvelope,
+    type FeatureDomain,
     type MobileConfig,
     type ModuleKey,
     type NutritionSectionKey,
@@ -204,10 +206,21 @@ export interface EntitlementsValue {
     ready: boolean
     /** Modulos de pago EFECTIVOS (post kill-switch) del scope del usuario. */
     enabledModules: Set<ModuleKey>
-    /** Master switch del dominio Nutricion (gate del tab del alumno). Fail-open => true. */
+    /**
+     * Master switch de los 5 dominios (`nutrition`/`training`/`cardio`/`movement`/`bodycomp`),
+     * resuelto server-side por /api/mobile/config. Fail-open => `true`. Es la fuente para el
+     * `disabledDomains` del nav y para `useDomainGuard` (lib/domain-guard.ts).
+     */
+    domains: Record<FeatureDomain, boolean>
+    /**
+     * DERIVADO = `domains.nutrition`. Se conserva para los consumidores existentes (tab del alumno,
+     * hub de nutricion, home); para codigo nuevo usar `isDomainEnabled('nutrition')`.
+     */
     nutritionEnabled: boolean
     /** ¿El modulo `key` esta habilitado para este usuario? */
     hasModule: (key: ModuleKey) => boolean
+    /** ¿Esta prendido el dominio `domain`? Fail-open => `true`. */
+    isDomainEnabled: (domain: FeatureDomain) => boolean
     /**
      * ¿Es visible la seccion `key` de Nutricion? (notas/compras/plato/off-plan/recetas/…). Espejo
      * de `sectionFlags` de web, fail-OPEN: ausente/`true` => visible; solo `false` explicito oculta.
@@ -234,8 +247,10 @@ export function useEntitlements(): EntitlementsValue {
         loading: s.loading,
         ready: s.ready,
         enabledModules: resolveEffectiveModules(s.config),
+        domains: s.config.featurePrefs.domains,
         nutritionEnabled: s.config.featurePrefs.nutritionEnabled,
         hasModule: (key) => hasModuleIn(s.config, key),
+        isDomainEnabled: (domain) => isDomainEnabledIn(s.config, domain),
         isNutritionSectionEnabled: (key) => isNutritionSectionVisibleIn(s.config, key),
         studentAccess: s.config.studentAccess,
         refresh: refreshEntitlements,

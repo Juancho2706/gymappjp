@@ -15,8 +15,10 @@ import { coachWorkspaceTypeFromKind, getVisibleNavItems, type NavModule } from '
 import { EvaBlur } from '../EvaBlur'
 import { useTheme } from '../../context/ThemeContext'
 import { useWorkspace } from '../../lib/workspace'
+import { disabledDomainsFromFlags } from '../../lib/entitlements-core'
 import { useEntitlements } from '../../lib/entitlements'
 import { NavIconRN, type NavConceptRN } from '../NavIconRN'
+import { MOBILE_TAB_KEYS } from './coach-tab-keys'
 import { resetCoachTabbarScroll, useCoachTabbarMinimized } from './CoachTabbarScroll'
 
 type TabRoute = { key: string; name: string }
@@ -33,10 +35,6 @@ const NAV_ROUTE: Record<string, MobileNavRoute> = {
   team: { tab: 'team', path: '/coach/team', icon: Shield, label: 'Equipo', concept: 'equipo' },
   reactivate: { tab: 'reactivate', path: '/coach/reactivate', icon: LayoutDashboard, label: 'Mi plan' },
 }
-
-// Orden verbatim del responsive web; despues de filtrar permisos toma hasta cinco
-// accesos directos y nunca reserva un slot artificial para "Mas".
-const MOBILE_TAB_KEYS = ['dashboard', 'clients', 'programs', 'nutrition', 'options', 'settings_team', 'team', 'reactivate'] as const
 
 // Resorte compartido SPRING.ui de @eva/brand-kit (damping 18 / stiffness 220 /
 // mass 1) — MISMO resorte que la capsula del alumno (AlumnoMobileChrome) y que la
@@ -80,7 +78,7 @@ export function CoachMobileTabBar({
   const { theme, mode } = useTheme()
   const router = useRouter()
   const { kind, subscriptionState } = useWorkspace()
-  const { hasModule, nutritionEnabled } = useEntitlements()
+  const { hasModule, domains } = useEntitlements()
   const minimized = useCoachTabbarMinimized()
   const isDark = mode !== 'light'
 
@@ -99,7 +97,10 @@ export function CoachMobileTabBar({
       cardio: hasModule('cardio'),
       movement_assessment: hasModule('movement_assessment'),
     },
-    disabledDomains: nutritionEnabled ? undefined : new Set(['nutrition']),
+    // Los 5 dominios de feature-prefs, no solo nutricion: paridad exacta con el
+    // `disabledDomainsFromPrefs` del nav web (misma fuente, misma regla fail-open).
+    // `bodycomp` no tiene entrada en NAV_MODULES => viaja igual y es inocuo.
+    disabledDomains: disabledDomainsFromFlags(domains),
   })
 
   const blocked = visible.length === 1 && visible[0].key === 'reactivate'
