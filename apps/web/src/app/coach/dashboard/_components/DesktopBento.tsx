@@ -27,7 +27,12 @@ import {
     getTodayInSantiago,
     timeGreetingSantiago,
 } from '@/lib/date-utils'
-import type { DashboardV2Data, ExpiringProgramItem, ActivityItemClient } from '../_data/types'
+import type {
+    DashboardV2Data,
+    ExpiringProgramItem,
+    ActivityItemClient,
+    KpiDelta,
+} from '../_data/types'
 
 interface Props {
     data: DashboardV2Data
@@ -44,6 +49,25 @@ const TONE_ICON: Record<KpiTone, string> = {
     danger: 'bg-[var(--danger-100)] text-[var(--danger-600)]',
     success: 'bg-[var(--success-100)] text-[var(--success-700)]',
     ember: 'bg-[var(--ember-100)] text-[var(--ember-600)]',
+}
+
+/**
+ * Tono del delta → token de color del DS.
+ *
+ * El `tone` llega YA resuelto desde la capa de datos (`_lib/kpi-deltas`): incorpora la dirección
+ * «buena» de cada KPI, así que acá no se decide qué es bueno ni se lee el signo del número — solo
+ * se mapea tono a color. Tokens gobernados por `check:tokens`, con par claro/oscuro y white-label
+ * en `globals.css`; `PulseHero` (hero móvil) usa exactamente los mismos tres.
+ */
+const DELTA_TONE_CLASS: Record<NonNullable<KpiDelta>['tone'], string> = {
+    positive: 'text-[var(--success-600)]',
+    negative: 'text-[var(--danger-600)]',
+    neutral: 'text-[var(--text-muted)]',
+}
+
+/** Clase de color para el tono de un delta. Exportada para pinnearla desde el test. */
+export function deltaToneClass(tone: NonNullable<KpiDelta>['tone']): string {
+    return DELTA_TONE_CLASS[tone]
 }
 
 /**
@@ -92,7 +116,13 @@ export function DesktopBento({ data, coachName, coachInviteCode, onAdherence }: 
         suffix?: string
         icon: LucideIcon
         tone: KpiTone
-        delta: string
+        /**
+         * Delta real calculado en la capa de datos (texto y tono incluidos). `null` = sin
+         * comparación honesta: el tile cae a su `caption` fija, y si tampoco tiene, no pinta línea.
+         */
+        delta: KpiDelta
+        /** Línea fija para un tile sin delta posible (hoy solo «En riesgo»). Nunca es un delta. */
+        caption?: string
         onClick: () => void
     }[] = [
         {
@@ -101,7 +131,7 @@ export function DesktopBento({ data, coachName, coachInviteCode, onAdherence }: 
             value: data.kpi.totalClients,
             icon: Users,
             tone: 'sport',
-            delta: '+1 esta semana',
+            delta: data.kpi.deltas.clients,
             onClick: () => router.push('/coach/clients'),
         },
         {
@@ -110,7 +140,11 @@ export function DesktopBento({ data, coachName, coachInviteCode, onAdherence }: 
             value: data.kpi.riskCount,
             icon: TriangleAlert,
             tone: 'danger',
-            delta: 'requieren revisión',
+            // Sin delta hasta que exista el snapshot diario (fase 2 del mini-plan 7C): reconstruir
+            // el riesgo de hace 7 días es imposible con los datos de hoy. La caption describe el
+            // número que acompaña, no una tendencia inventada.
+            delta: data.kpi.deltas.risk,
+            caption: 'requieren revisión',
             onClick: () => router.push('/coach/clients?filter=risk'),
         },
         {
@@ -120,7 +154,7 @@ export function DesktopBento({ data, coachName, coachInviteCode, onAdherence }: 
             suffix: '%',
             icon: Activity,
             tone: 'success',
-            delta: '+3 vs. semana previa',
+            delta: data.kpi.deltas.adherence,
             onClick: onAdherence,
         },
         {
@@ -129,7 +163,7 @@ export function DesktopBento({ data, coachName, coachInviteCode, onAdherence }: 
             value: sessionsToday,
             icon: Flame,
             tone: 'ember',
-            delta: 'registradas',
+            delta: data.kpi.deltas.sessionsToday,
             onClick: () => router.push('/coach/clients'),
         },
     ]
@@ -197,9 +231,20 @@ export function DesktopBento({ data, coachName, coachInviteCode, onAdherence }: 
                             <div className="font-display text-[34px] font-extrabold leading-none tabular-nums tracking-[-0.01em] text-[var(--text-strong)]">
                                 <EvaCountUp value={k.value} suffix={k.suffix} />
                             </div>
-                            <div className="mt-[7px] text-xs font-semibold text-[var(--text-muted)]">
-                                {k.delta}
-                            </div>
+                            {/* Delta real → caption fija → nada. El alto del tile no depende de
+                                esta línea: los 4 son celdas de un grid con `align-items: stretch`,
+                                así que la fila iguala alturas aunque un tile se quede sin línea. */}
+                            {k.delta ? (
+                                <div
+                                    className={`mt-[7px] text-xs font-semibold ${deltaToneClass(k.delta.tone)}`}
+                                >
+                                    {k.delta.text}
+                                </div>
+                            ) : k.caption ? (
+                                <div className="mt-[7px] text-xs font-semibold text-[var(--text-muted)]">
+                                    {k.caption}
+                                </div>
+                            ) : null}
                         </button>
                     )
                 })}

@@ -5,7 +5,7 @@ import { type LucideIcon, TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { EvaCountUp } from './EvaCountUp'
 import { Sparkline } from './Sparkline'
-import type { KpiSummary } from '../_data/types'
+import type { KpiDelta, KpiSummary } from '../_data/types'
 
 interface Props {
     kpi: KpiSummary
@@ -19,20 +19,30 @@ interface DeltaView {
 }
 
 /**
- * P1 — delta de tendencia (verbatim de coach-dashboard.jsx deltaView). Verde si la
- * dirección es buena para el negocio. La pipeline real no calcula `coachPulse`
- * (delta semana-a-semana), así que pasamos placeholders derivados — la meta es que
- * el elemento visual (icono de tendencia + valor) se vea EXACTO.
+ * Tono del delta → token de color del DS. Los mismos tres que usa `DesktopBento` en el bento de
+ * escritorio, para que el hero móvil y el desktop pinten idéntico en claro, oscuro y white-label.
  */
-function deltaView(delta: number, goodDir: 'up' | 'down'): DeltaView {
-    if (!delta)
-        return { txt: 'igual', color: 'var(--text-subtle)', Icon: Minus }
-    const dir = delta > 0 ? 'up' : 'down'
-    const good = dir === goodDir
+const TONE_COLOR: Record<NonNullable<KpiDelta>['tone'], string> = {
+    positive: 'var(--success-600)',
+    negative: 'var(--danger-600)',
+    neutral: 'var(--text-muted)',
+}
+
+/**
+ * P1 — delta de tendencia (estructura verbatim de coach-dashboard.jsx deltaView).
+ *
+ * El texto viene ARMADO desde la capa de datos (`_lib/kpi-deltas`), así que el hero móvil, el
+ * bento de escritorio y RN dicen exactamente lo mismo: acá no se redacta copy ni se decide si
+ * subir es bueno (eso ya está en `tone`). El ícono sigue el SIGNO del cambio, no su bondad.
+ *
+ * `null` = sin comparación honesta ⇒ el stat no pinta línea de delta y jamás inventa un número.
+ */
+function deltaView(delta: KpiDelta): DeltaView | null {
+    if (!delta) return null
     return {
-        txt: (delta > 0 ? '+' : '') + delta,
-        color: good ? 'var(--success-600)' : 'var(--danger-600)',
-        Icon: dir === 'up' ? TrendingUp : TrendingDown,
+        txt: delta.text,
+        color: TONE_COLOR[delta.tone],
+        Icon: delta.value > 0 ? TrendingUp : delta.value < 0 ? TrendingDown : Minus,
     }
 }
 
@@ -58,7 +68,8 @@ export function PulseHero({ kpi, onAdherence }: Props) {
             num: kpi.totalClients,
             suffix: '',
             danger: false,
-            sub: deltaView(1, 'up'),
+            sub: deltaView(kpi.deltas.clients),
+            caption: undefined as string | undefined,
             spark: null as number[] | null,
             onClick: () => router.push('/coach/clients'),
         },
@@ -68,7 +79,11 @@ export function PulseHero({ kpi, onAdherence }: Props) {
             num: kpi.riskCount,
             suffix: '',
             danger: kpi.riskCount > 0,
-            sub: deltaView(0, 'down'),
+            // Sin delta hasta el snapshot diario (fase 2 del mini-plan 7C): el riesgo de hace una
+            // semana no es reconstruible. La caption describe el número, no una tendencia — es la
+            // misma línea que el bento de escritorio, para no contar dos historias distintas.
+            sub: deltaView(kpi.deltas.risk),
+            caption: 'requieren revisión' as string | undefined,
             spark: null as number[] | null,
             onClick: () => router.push('/coach/clients?filter=risk'),
         },
@@ -78,7 +93,8 @@ export function PulseHero({ kpi, onAdherence }: Props) {
             num: kpi.avgAdherence,
             suffix: '%',
             danger: false,
-            sub: deltaView(3, 'up'),
+            sub: deltaView(kpi.deltas.adherence),
+            caption: undefined as string | undefined,
             spark: sparkSeries(kpi.avgAdherence),
             onClick: onAdherence,
         },
@@ -87,7 +103,23 @@ export function PulseHero({ kpi, onAdherence }: Props) {
     return (
         <Card padding="none" className="mb-3.5 flex flex-row gap-0 overflow-hidden">
             {stats.map((c, i) => {
-                const SubIcon = c.sub.Icon
+                const sub = c.sub
+                /* Delta real → caption fija → nada. El texto del servidor es una frase completa
+                   («+2 vs. ayer»), no un número suelto, así que la línea YA NO es
+                   `whitespace-nowrap`: en un stat de ~95 px envuelve en vez de desbordar. */
+                const subLine = sub ? (
+                    <span
+                        className="inline-flex min-w-0 items-start gap-0.5 text-[11px] font-extrabold leading-[1.25]"
+                        style={{ color: sub.color }}
+                    >
+                        <sub.Icon className="mt-px size-3 shrink-0" />
+                        {sub.txt}
+                    </span>
+                ) : c.caption ? (
+                    <span className="min-w-0 text-[11px] font-semibold leading-[1.25] text-[var(--text-muted)]">
+                        {c.caption}
+                    </span>
+                ) : null
                 return (
                     <button
                         key={c.key}
@@ -111,29 +143,17 @@ export function PulseHero({ kpi, onAdherence }: Props) {
                             <EvaCountUp value={c.num} suffix={c.suffix} />
                         </span>
                         {c.spark ? (
-                            <div className="flex w-full items-end gap-1.5">
-                                <span
-                                    className="inline-flex items-center gap-0.5 whitespace-nowrap text-[11px] font-extrabold"
-                                    style={{ color: c.sub.color }}
-                                >
-                                    <SubIcon className="size-3" />
-                                    {c.sub.txt}
-                                </span>
+                            /* `flex-wrap`: con la frase completa del delta ya no caben lado a lado
+                               en un stat angosto, así que la sparkline baja sola a la línea de
+                               abajo (y sigue a la derecha) en vez de aplastar el texto. */
+                            <div className="flex w-full flex-wrap items-end gap-x-1.5 gap-y-1">
+                                {subLine}
                                 <span className="ml-auto">
                                     <Sparkline data={c.spark} color="var(--sport-500)" />
                                 </span>
                             </div>
                         ) : (
-                            <span
-                                className="inline-flex items-center gap-0.5 whitespace-nowrap text-[11px] font-extrabold"
-                                style={{ color: c.sub.color }}
-                            >
-                                <SubIcon className="size-3" />
-                                {c.sub.txt}
-                                <span className="font-semibold text-[var(--text-subtle)]">
-                                    &nbsp;sem.
-                                </span>
-                            </span>
+                            subLine
                         )}
                     </button>
                 )
