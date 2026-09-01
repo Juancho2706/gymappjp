@@ -755,7 +755,7 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                                             <p className="text-sm font-bold text-strong">{cfg.label}</p>
                                             <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${included ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-surface-sunken text-muted'}`}>
                                                 {included ? <Check className="h-3 w-3" /> : <LockKeyhole className="h-3 w-3" />}
-                                                {included ? 'Incluido en tu plan' : 'Con plan pago'}
+                                                {included ? 'Incluido en tu plan' : 'Incluido'}
                                             </span>
                                         </div>
                                     </div>
