@@ -577,17 +577,25 @@ export function useWorkoutSession(
     // snapshot local y del render desde caché no cambia en nada: lo único que cambia es cuándo
     // arrancan los requests.
     const clientPromise = getClientProfile()
-    const planPromise = supabase
-      .from('workout_plans')
-      .select(
-        `id, title, week_variant, program_id, day_of_week,
-         workout_blocks ( *, exercises ( id, name, muscle_group, video_url, video_start_time, video_end_time, gif_url, thumbnail_url, instructions, exercise_type, cardio_modality ) )`,
-      )
-      .eq('id', planId)
-      .maybeSingle()
+    // `Promise.resolve(...)` ENVUELVE el builder UNA sola vez, y esa llamada es la que dispara el
+    // request. NO guardar el builder pelado para awaitearlo después: `PostgrestBuilder.then()` ejecuta
+    // un fetch NUEVO en cada llamada (no memoiza), así que un `.catch()` acá más un `await` abajo
+    // sobre el builder serían DOS queries idénticas — y la segunda arrancaría recién después del
+    // perfil, o sea el viaje que esta paralelización quiere ahorrar, pagado igual y con una query de
+    // regalo. Con el wrapper, el `.catch()` y el `await` leen la MISMA promesa.
+    const planPromise = Promise.resolve(
+      supabase
+        .from('workout_plans')
+        .select(
+          `id, title, week_variant, program_id, day_of_week,
+           workout_blocks ( *, exercises ( id, name, muscle_group, video_url, video_start_time, video_end_time, gif_url, thumbnail_url, instructions, exercise_type, cardio_modality ) )`,
+        )
+        .eq('id', planId)
+        .maybeSingle(),
+    )
     // Marca la promesa como manejada: si `getClientProfile()` lanza, el `await` de abajo no llega a
     // correr y quedaría un unhandled rejection. El `await` real sigue leyendo el resultado igual.
-    void Promise.resolve(planPromise).catch(() => { /* lo maneja el await de abajo */ })
+    planPromise.catch(() => { /* lo maneja el await de abajo */ })
 
     const client = await clientPromise
     if (client) {
