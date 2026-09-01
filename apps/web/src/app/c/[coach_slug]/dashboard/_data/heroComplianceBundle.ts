@@ -269,28 +269,25 @@ function computeNutritionComplianceScore(
  * nutricion del dashboard (anillo + resumen diario) sigan compartiendo UN solo criterio y nunca
  * queden en esqueleto roto (NN/g pitfall) si el dominio se apagara por otra via.
  *
- * Resuelve el scope (coach/team/org) desde la fila `clients` del propio alumno (RLS techo:
- * `clients.id = auth.uid()`), igual que `getClientScope` de la pagina de nutricion. Usar el scope
- * del alumno (no el `coach_id` del plan) cubre el caso "sin plan": el dominio puede estar apagado
- * aunque todavia no exista un plan nutricional.
+ * D9-A (owner): superficie de ALUMNO => `audience: 'student'`, o sea la preferencia del panel del
+ * coach no participa y el resolver devuelve siempre `true`.
  *
- * React.cache => una sola lectura por request aunque el sidebar se monte 2x (mobile + desktop) y
- * el anillo + el resumen llamen ambos. D9-A (owner): superficie de ALUMNO => `audience: 'student'`,
- * o sea la preferencia del panel del coach no participa y el resolver devuelve siempre `true`.
+ * SIN LECTURA A `clients` (auditoría de waterfall 2026-08-31). Acá había un
+ * `SELECT coach_id, team_id, org_id FROM clients` para armar el scope, y su resultado NO se usaba:
+ * `resolveNutritionDomainEnabled` arranca con `prefsApplyFor(audience)`, que para `'student'`
+ * devuelve `false` en su primera línea (`feature-prefs.service.ts:102`), y la línea siguiente es
+ * `if (!enabled) return true`. O sea: retornaba `true` sin mirar jamás `coachId`, `clientTeamId`
+ * ni `clientOrgId`. Era una query cuyo resultado se descartaba entero, en el camino del dashboard
+ * del alumno — la ruta con peor TTFB de la app.
+ *
+ * SI ALGÚN DÍA SE REVIERTE D9-A y `'student'` vuelve a participar de las preferencias, hay que
+ * restaurar el scope ANTES de tocar nada más: sin esos tres campos el resolver no puede decidir.
+ * No la reintroduzcas "por las dudas" mientras `prefsApplyFor` siga cortando en `student`.
  */
 export const getDashboardNutritionDomainEnabled = cache(async (userId: string): Promise<boolean> => {
-    const supabase = await createClient()
-    const { data } = await supabase
-        .from('clients')
-        .select('coach_id, team_id, org_id')
-        .eq('id', userId)
-        .maybeSingle()
-
     return resolveNutritionDomainEnabled({
-        coachId: (data?.coach_id ?? '') as string,
+        coachId: '',
         clientId: userId,
-        clientTeamId: (data?.team_id ?? null) as string | null,
-        clientOrgId: (data?.org_id ?? null) as string | null,
         audience: 'student',
     })
 })

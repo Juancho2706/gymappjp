@@ -339,7 +339,14 @@ export default function MiMarcaScreen() {
   async function pickLogo(variant: 'light' | 'dark' = 'light') {
     const perm = await ImagePicker.requestMediaLibraryPermissionsAsync()
     if (!perm.granted) { toast.error('Permiso de galería denegado.'); return }
-    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [1, 1], quality: 0.9 })
+    // SIN `allowsEditing`/`aspect` (EVA-MOBILE-A). En Android eso abre la `ExpoCropImageActivity`,
+    // que devuelve un URI de un archivo temporal que puede haber expirado cuando lo vamos a leer:
+    // `FileNotFoundException: open failed: ENOENT`. Es la MISMA regla que ya estaba escrita en
+    // `app/alumno/(tabs)/check-in.tsx:197` («NUNCA `allowsEditing: true`, en NINGUNA plataforma») y
+    // que este archivo era el último en el repo que seguía violando.
+    // El encuadre cuadrado NO se pierde: lo hace `uploadCoachLogo` con un crop centrado, sin pasar
+    // por el recortador nativo.
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.9 })
     if (res.canceled || !res.assets?.[0]?.uri) return
     const setBusy = variant === 'dark' ? setUploadingDark : setUploading
     setBusy(true)

@@ -443,7 +443,11 @@ function DayCard({ view, onPress }: { view: PlanDayView; onPress: (origin: Morph
       >
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <Text className={labelClass} style={{ fontFamily: FONT.uiExtra, fontSize: 10.5, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-            {DAY_SHORT[dow]}
+            {/* `?? D${dow}`: con un programa por CICLOS `dow` llega 8-14 y `DAY_SHORT` solo cubre
+                1-7. Acá el valor va como hijo JSX, así que React descartaba el `undefined` en
+                silencio y la etiqueta del día quedaba EN BLANCO (no imprimía "undefined" como en
+                HeroSection). Mismo hueco que el crash del builder, EVA-MOBILE-D. */}
+            {DAY_SHORT[dow] ?? `D${dow}`}
           </Text>
           {done ? (
             <CheckCircle2 size={14} color={theme.success} strokeWidth={2.4} />

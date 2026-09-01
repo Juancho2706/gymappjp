@@ -298,7 +298,11 @@ function RestDayCard({ nextPlan, nutritionEnabled, onRest }: { nextPlan: Plan | 
           {nextPlan ? (
             <>
               Próximo: <Text className="text-body font-sans-semibold">{nextPlan.title}</Text>
-              {nextPlan.day_of_week ? ` · ${DAY_SHORT[nextPlan.day_of_week]}` : ''}
+              {/* `?? D${n}`: un plan de un programa por CICLOS trae `day_of_week` 8-14, fuera del
+                  rango de `DAY_SHORT` (1-7). Interpolado en un template string, `undefined` se
+                  imprimía literal en pantalla ("Próximo: Fuerza · undefined"). Mismo hueco que
+                  cerró el crash del builder (EVA-MOBILE-D). */}
+              {nextPlan.day_of_week ? ` · ${DAY_SHORT[nextPlan.day_of_week] ?? `D${nextPlan.day_of_week}`}` : ''}
             </>
           ) : (
             'Recupera bien para la próxima sesión.'

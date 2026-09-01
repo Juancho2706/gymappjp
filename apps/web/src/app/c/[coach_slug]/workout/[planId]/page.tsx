@@ -5,6 +5,7 @@ import { getWorkoutExecutionData } from './_data/workout-execution.queries'
 import { getExecutorWeekStatusDays } from './_data/week-status.queries'
 import { resolveRepeatDate, validateTargetDate } from '@eva/workout-engine'
 import { getClientBasePath } from '@/lib/client/base-path'
+import { getClientRootUser } from '@/app/c/[coach_slug]/_data/client-root.queries'
 import { getTodayInSantiago } from '@/lib/date-utils'
 
 export const metadata: Metadata = { title: 'Rutina | EVA' }
@@ -42,19 +43,34 @@ export default async function WorkoutExecutionPage({ params, searchParams }: Pro
     // El base path sale de un header del proxy (sin I/O) y la data del ejecutor de Supabase: no
     // dependen entre sí, así que van juntas — el ejecutor pelea contra un presupuesto de 3,3 s
     // antes de que el "Despegue" del alumno caiga al fallback (Sentry EVA-NEXTJS-1C).
-    const [base, data] = await Promise.all([
+    //
+    // UNA SOLA OLA (auditoría de waterfall 2026-08-31). La racha semanal (E4.4, Inicio + Final V3)
+    // vivía en una SEGUNDA tanda serial, awaiteada después de esta, porque necesitaba `user.id` y
+    // `user` salía de `data`. Eso costaba un salto entero a la DB — y de los caros: sus 3 lecturas
+    // bajan `workout_programs` con `workout_plans` + `workout_blocks` + `exercises` anidados.
+    //
+    // La dependencia era ILUSORIA: ese `user.id` no es una lectura, es `claims.sub` de
+    // `supabase.auth.getClaims()` (verificación LOCAL del JWT con ES256 + JWKS cacheado, cero
+    // round-trip), exactamente el mismo que resuelve `getClientRootUser()`. Resolviéndolo acá arriba
+    // la racha entra en la MISMA ola que el resto y el ejecutor pierde un salto del presupuesto.
+    //
+    // Los dos redirects de abajo siguen dependiendo SOLO de `data`, así que el guard no cambia de
+    // orden ni de criterio. La lectura extra es del PROPIO alumno bajo RLS (`clients.id = auth.uid()`),
+    // así que adelantarla no expone nada: en el peor caso se desperdicia una query en un request que
+    // igual iba a redirigir.
+    const rootUser = await getClientRootUser()
+    const [base, data, weekStatusDays] = await Promise.all([
         getClientBasePath(coach_slug),
         getWorkoutExecutionData(planId, targetDate ?? undefined, repeatDate ?? undefined),
+        // `catch → null` a propósito: la racha es decorativa y `SessionStart` ya trata `null` como
+        // "no mostrar la pieza". Antes, al ir en su propio `await` después de los guards, un fallo
+        // acá reventaba la página entera; ahora degrada. NO cambiar por un throw.
+        rootUser ? getExecutorWeekStatusDays(rootUser.id).catch(() => null) : Promise.resolve(null),
     ])
     const { user, plan } = data
 
     if (!user) redirect(`${base}/login`)
     if (!plan) redirect(`${base}/dashboard`)
-
-    // Racha semanal (E4.4): estado de la semana actual para Inicio + Final V3. El ejecutor V3 es el
-    // único camino (decisión CEO 2026-07-23: se eliminó el flag `executor_v3`), así que siempre se
-    // consulta. Sin programa activo ⇒ `null` y la UI omite la racha.
-    const weekStatusDays = await getExecutorWeekStatusDays(user.id)
 
     return (
         <WorkoutExecutionClient
