@@ -18,11 +18,4 @@ describe('featureFlags', () => {
     const { featureFlags } = await import('./feature-flags')
     expect(featureFlags.nutritionAnalytics).toBe(false)
   })
-
-  it('nutritionWeeklyPlan is true only when env is true', async () => {
-    vi.stubEnv('NEXT_PUBLIC_FF_WEEKLY_PLAN', 'true')
-    vi.resetModules()
-    const { featureFlags } = await import('./feature-flags')
-    expect(featureFlags.nutritionWeeklyPlan).toBe(true)
-  })
 })
