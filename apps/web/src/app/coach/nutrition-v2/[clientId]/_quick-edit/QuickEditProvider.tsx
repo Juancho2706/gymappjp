@@ -593,7 +593,10 @@ export function QuickEditProvider({
           return
         }
         setConfirmOpen(false)
-        if (res.code === 'STALE_BASE') {
+        // PLAN_ALREADY_ACTIVE (Vercel: 34 reintentos manuales / 5 coaches en 3 semanas): el editor
+        // se abrio en modo creacion (sin plan vigente al cargar) y otra sesion publico entremedio.
+        // Mismo desenlace que STALE_BASE: el StaleBaseDialog YA es "recargar y ver el vigente".
+        if (res.code === 'STALE_BASE' || res.code === 'PLAN_ALREADY_ACTIVE') {
           setStaleOpen(true)
           return
         }

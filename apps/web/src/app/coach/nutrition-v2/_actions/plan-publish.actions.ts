@@ -27,6 +27,23 @@ import {
 // La persistencia + publicacion transaccional vive en `persistAndPublishDraft` (modulo
 // compartido `_actions/plan-persistence.ts`), reusado por `assignPlanToClientsAction`.
 
+// Codigos de `mapWriteError`/`fail` que son fallos de NEGOCIO esperados (colisiones de
+// concurrencia, validacion del draft, permisos) — no bugs. Verificados por grep contra los
+// `fail('...'` reales de plan-persistence.ts para no inventar ninguno; lo que NO esta aca
+// (WRITE_FAILED, DB_ERROR, INVALID_RESPONSE, o cualquier codigo nuevo) sigue en console.error.
+const EXPECTED_PUBLISH_FAILURE_CODES = new Set([
+  'PLAN_ALREADY_ACTIVE',
+  'STALE_BASE',
+  'EFFECTIVE_DATE',
+  'NEEDS_SLOT',
+  'NEEDS_VARIANT',
+  'EMPTY_DAY_VARIANT',
+  'INVALID_DRAFT',
+  'CLIENT_NOT_FOUND',
+  'PLAN_NOT_FOUND',
+  'SCOPE_DENIED',
+])
+
 const PublishInputSchema = z.object({
   draft: NutritionPlanDraftSchema,
   idempotencyKey: z.string().trim().min(8).max(200),
@@ -118,13 +135,23 @@ export async function publishPlanAction(input: unknown): Promise<PublishSuccess 
     // Rastro server-side (Vercel logs): en el QA 05-08 un publish del flujo archivar-y-reemplazar
     // fallo y la causa no quedo registrada en NINGUNA parte (la UI de entonces la descartaba y
     // el error no llego a Postgres). El coach nunca ve este log; ve result.error en pantalla.
-    console.error('[nutrition-v2] publishPlanAction fallo', {
+    //
+    // Nivel por codigo (Vercel runtime errors: PLAN_ALREADY_ACTIVE se logueaba como error 34
+    // veces / 5 coaches en 3 semanas siendo una colision ESPERADA de concurrencia — dos pestañas
+    // publicando al mismo tiempo — no una falla real). Los codigos de negocio conocidos bajan a
+    // warn; lo desconocido (fallas de escritura/DB genuinas) se mantiene en error.
+    const logContext = {
       code: result.code,
       clientId: draft.clientId,
       planId: draft.planId,
       strategy: draft.strategy,
       variants: draft.dayVariants.length,
-    })
+    }
+    if (EXPECTED_PUBLISH_FAILURE_CODES.has(result.code)) {
+      console.warn('[nutrition-v2] publishPlanAction fallo (esperado)', logContext)
+    } else {
+      console.error('[nutrition-v2] publishPlanAction fallo', logContext)
+    }
     return result
   }
 

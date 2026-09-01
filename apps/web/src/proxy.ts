@@ -1,5 +1,5 @@
 import { createServerClient } from '@supabase/ssr'
-import { createClient as createBareClient, type SupabaseClient } from '@supabase/supabase-js'
+import { createClient as createBareClient, isAuthApiError, type SupabaseClient } from '@supabase/supabase-js'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { NextResponse, after, type NextRequest } from 'next/server'
 import type { Database, Tables } from '@/lib/database.types'
@@ -786,7 +786,29 @@ async function proxyInner(request: NextRequest) {
         // Perder alguna escritura en un cierre abrupto es aceptable: es telemetría debounced.
         if (!isPrefetchRequest(request.headers)) {
             after(async () => {
-                await supabase.rpc('touch_coach_activity', { p_coach_id: user.id })
+                try {
+                    await supabase.rpc('touch_coach_activity', { p_coach_id: user.id })
+                } catch (error: unknown) {
+                    // La sesión pudo invalidarse entre el request y el vuelo del after() (refresh
+                    // token consumido/expirado, usuario baneado): supabase.rpc() resuelve el token
+                    // vía auth.getSession() y ahí lanza. Sin este catch, Vercel lo registra como
+                    // «Invalid Refresh Token: Refresh Token Not Found» / «User Banned» en /middleware
+                    // (28 y 2 ocurrencias respectivamente desde junio) — es solo telemetría best-effort.
+                    if (
+                        isAuthApiError(error) &&
+                        (error.code === 'refresh_token_not_found' ||
+                            error.code === 'user_banned' ||
+                            error.code === 'session_not_found' ||
+                            error.code === 'refresh_token_already_used')
+                    ) {
+                        // eslint no-console solo permite warn/error; esto es informativo (sesión
+                        // inválida esperada), no un fallo real, pero usamos warn para respetar la regla.
+                        console.warn('[proxy] touch_coach_activity omitido: sesión inválida', error.code)
+                    } else {
+                        const message = error instanceof Error ? error.message : String(error)
+                        console.warn('[proxy] touch_coach_activity falló (best-effort):', message)
+                    }
+                }
             })
         }
 
