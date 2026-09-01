@@ -146,6 +146,14 @@ Marcar solo con evidencia real. Prohibido dar un gate por verde sin haberlo corr
       deploy (cliente y servidor eran el mismo release `064da7a2`).
 - [ ] O6.9 `EVA-MOBILE-9`: tras el OTA, los eventos nuevos caen en un issue propio con el nombre
       real; resolver el viejo con nota cuando lleve 72 h sin eventos.
+- [x] O6.10 Dependabot a cero (01-09): #99 `decode-uri-component` 0.2.2→0.5.0 (CVE-2026-45822, deep
+      links vía `query-string`/react-navigation; override + OTA tren 2) y #100/#101/#102
+      `postcss-selector-parser` 6.1.4 + `browserslist` 4.28.8 (tooling de build; override, sin OTA).
+      Todos in-major salvo el 0.2→0.5 de decode-uri-component (función única, firma intacta).
+      Gates por cada tanda: `pnpm install` limpio, build web, `expo export android`, tsc mobile, vitest.
+- [ ] O6.11 Panel «Así lo ve tu alumno» plegable en desktop (`9b283488`): QA visual del owner en
+      ≥1024 px — ojo de la cabecera pliega/abre, «✕» del panel, memoria tras recargar. Reporte de un
+      coach con captura (01-09).
 
 ## Cierre
 
