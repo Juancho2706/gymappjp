@@ -131,7 +131,15 @@ Marcar solo con evidencia real. Prohibido dar un gate por verde sin haberlo corr
 - [x] O6.6 Gates: tsc web 0 · tsc mobile 0 · eslint por archivo (solo warnings preexistentes) ·
       vitest 135/135 en los 10 archivos de test relacionados. NO se corrió la suite completa ni
       `pnpm build` (sin push en esta tanda).
-- [ ] O6.7 Deploy web + OTA android/ios 1.1.2 desde `master` con estos commits (owner da el go).
+- [x] O6.7 Deploy web + OTA android/ios 1.1.2 desde `master` — hecho el 01-09 (el owner pidió
+      «master y rnmobiledenuevo en orden, Sentry y PostHog impecables»): gates completos verdes
+      (lint 0 errores · vitest 8015/8019, 1 flaky de `redeem-coupon-signup` que pasa solo · build ·
+      tokens · boundaries · docs · tsc mobile), ff-merge a `master` = `2fe820b7`, deploy
+      `dpl_F4DXU6vLvouUaVADMK3Btqj2Q3gv` READY, OTA tren 1 android `66e32589` / ios `b53e8e5d`;
+      tren 2 (`231d2937`, override `decode-uri-component` 0.5.0 por Dependabot #99) android
+      `d2f948a0` / ios `d40564a9`. En Sentry: 18/19/1C/8 «resolved in next release» con nota.
+      **QA device del owner pendiente** (O4.4: badge Semana A/B y nombre/fase del programa; P6:
+      arrastrar el slider de volumen en iOS; deep link tras el override).
 - [ ] O6.8 A las 72 h del deploy de O6: `EVA-NEXTJS-19` debe quedar en 0 eventos nuevos; si
       persiste, el mecanismo de la respuesta 200/no-RSC de 2 bytes (registrada en el proxy en
       `serverless-middleware` a las 20:49:17Z del 31-08) es lo siguiente a cazar — no es skew de
