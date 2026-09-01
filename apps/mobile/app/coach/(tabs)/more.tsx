@@ -1,5 +1,5 @@
 import { Fragment } from 'react'
-import { ScrollView, Text, View } from 'react-native'
+import { Alert, ScrollView, Text, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { cssInterop } from 'nativewind'
@@ -7,6 +7,7 @@ import {
   Dumbbell,
   HeartPulse,
   LifeBuoy,
+  LogOut,
   PersonStanding,
   Settings,
   Shield,
@@ -22,6 +23,7 @@ import { COACH_TABBAR_CLEARANCE, coachNavRoute } from '../../../components/coach
 import { useCoachTabbarScroll } from '../../../components/coach/CoachTabbarScroll'
 import { useTheme } from '../../../context/ThemeContext'
 import { useCoachNavState } from '../../../lib/coach-nav-state'
+import { signOutAndRedirectHome } from '../../../lib/auth-actions'
 import { hexToRgba } from '../../../lib/theme'
 
 /**
@@ -45,8 +47,8 @@ import { hexToRgba } from '../../../lib/theme'
 // Let NativeWind drive the lucide icon `color` via `text-*` classes (DS pattern, ver settings.tsx).
 // Es la lista COMPLETA de íconos que una fila puede pintar: los del registro que pueden sobrar de
 // la barra (Programas, Nutrición, Cardio, Movimiento, Equipo, Opciones) + los dos que no tienen
-// pantalla propia en RN y por eso no viven en `NAV_ROUTE` (Funciones, Soporte).
-for (const Icon of [Dumbbell, HeartPulse, LifeBuoy, PersonStanding, Settings, Shield, SlidersHorizontal, Utensils]) {
+// pantalla propia en RN y por eso no viven en `NAV_ROUTE` (Funciones, Soporte) + «Cerrar sesión».
+for (const Icon of [Dumbbell, HeartPulse, LifeBuoy, LogOut, PersonStanding, Settings, Shield, SlidersHorizontal, Utensils]) {
   cssInterop(Icon, { className: { target: 'style', nativeStyleToProp: { color: true } } })
 }
 
@@ -154,6 +156,15 @@ export default function CoachMoreScreen() {
     router.push((coachNavRoute(item.key)?.path ?? item.href) as never)
   }
 
+  // «Cerrar sesión» salió del hub Opciones (QA owner 01-09) y vive acá: es la última fila de «Más»,
+  // debajo de Gestión. MISMA confirmación que tenía el hub — nadie cierra sesión de un toque.
+  function confirmLogout() {
+    Alert.alert('Cerrar sesión', '¿Seguro que quieres cerrar tu sesión en este dispositivo?', [
+      { text: 'Cancelar', style: 'cancel' },
+      { text: 'Cerrar sesión', style: 'destructive', onPress: () => { void signOutAndRedirectHome() } },
+    ])
+  }
+
   return (
     <View className="flex-1 bg-surface-app">
       <AppBackground />
@@ -175,6 +186,24 @@ export default function CoachMoreScreen() {
 
           <NavSection title="Tu trabajo" items={groups.trabajo} onOpen={open} />
           <NavSection title="Gestión" items={groups.gestion} onOpen={open} />
+
+          {/* Cerrar sesión — fila aparte, siempre al final (no depende de que Gestión tenga filas). */}
+          <View style={{ marginTop: 20 }}>
+            <Card padding="none">
+              <ListRow
+                testID="coach-more-logout"
+                accessibilityLabel="Cerrar sesión"
+                leading={
+                  <View className="items-center justify-center rounded-control bg-danger-100" style={{ width: 46, height: 46 }}>
+                    <LogOut size={22} strokeWidth={2} className="text-danger-600" />
+                  </View>
+                }
+                title={<Text className="text-danger-600">Cerrar sesión</Text>}
+                subtitle="Salir de tu cuenta en este dispositivo"
+                onPress={confirmLogout}
+              />
+            </Card>
+          </View>
         </ScrollView>
       </SafeAreaView>
     </View>

@@ -7,6 +7,8 @@ import {
     Dumbbell,
     HeartPulse,
     LifeBuoy,
+    Loader2,
+    LogOut,
     PersonStanding,
     Settings,
     SlidersHorizontal,
@@ -15,6 +17,7 @@ import {
 } from 'lucide-react'
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { CoachNavIcon, type CoachNavConcept } from '@/components/coach/CoachNavIcon'
+import { useCoachSignOut } from '@/app/coach/settings/_components/CoachSignOut'
 import { cn } from '@/lib/utils'
 import { groupNavItems, isNavItemActiveForPath, type NavModule } from '@eva/coach-nav'
 
@@ -143,6 +146,52 @@ function MoreRow({ item, active, onNavigate }: { item: NavModule; active: boolea
     )
 }
 
+/**
+ * «Cerrar sesión» — cierra la hoja «Más» (QA del owner 01-09, ronda 2). En móvil el coach no tiene
+ * otra salida a mano: el sidebar de desktop es el único que muestra el rail con esta acción, y el
+ * hub de Opciones queda a dos toques. Reusa `useCoachSignOut` (el MISMO camino que la card del hub
+ * y que el rail de la SettingsShell): signOut de Supabase, `posthog.reset()`, Sentry limpio, vuelta
+ * a /login. No pide confirmación — es reversible (basta volver a entrar).
+ *
+ * Tono DANGER a propósito: es la única fila de la hoja que no navega, y en un menú de accesos
+ * rápidos tiene que leerse distinta de «Opciones» o «Soporte». Va fuera de `NavSection` para no
+ * romper su regla de «sección sin filas no se pinta»: visualmente cierra la lista de «Gestión»
+ * (mismo alto, mismo tile de 44px), estructuralmente es su propia lista.
+ */
+function SignOutRow() {
+    const { signOut, pending } = useCoachSignOut()
+    return (
+        <ul className="flex flex-col">
+            <li>
+                <button
+                    type="button"
+                    data-testid="coach-more-signout"
+                    onClick={signOut}
+                    disabled={pending}
+                    className={cn(
+                        'flex w-full items-center gap-3.5 rounded-[var(--radius-md)] px-1.5 py-2.5 text-left transition-colors',
+                        'text-[var(--danger-600)] disabled:opacity-60',
+                    )}
+                >
+                    <span className="flex size-11 shrink-0 items-center justify-center rounded-control bg-[var(--danger-100)] text-[var(--danger-600)]">
+                        {pending ? (
+                            <Loader2 className="size-[22px] animate-spin" aria-hidden="true" />
+                        ) : (
+                            <LogOut className="size-[22px]" aria-hidden="true" />
+                        )}
+                    </span>
+                    <span className="flex min-w-0 flex-1 flex-col gap-px">
+                        <span className="truncate text-[15px] font-bold leading-tight">Cerrar sesión</span>
+                        <span className="truncate text-[12.5px] font-medium leading-tight opacity-80">
+                            Salir de tu cuenta en este dispositivo
+                        </span>
+                    </span>
+                </button>
+            </li>
+        </ul>
+    )
+}
+
 function NavSection({
     title,
     items,
@@ -180,7 +229,9 @@ function NavSection({
  * agrupación/estado activo sin pelear con el portal de base-ui en jsdom.
  *
  * `groupNavItems` reparte en los mismos 3 grupos que el sidebar; acá se pintan solo «Tu trabajo» y
- * «Gestión» porque `principal` (Inicio / Alumnos) vive en la barra y nunca sobra.
+ * «Gestión» porque `principal` (Inicio / Alumnos) vive en la barra y nunca sobra. «Cerrar sesión»
+ * cierra la hoja al final de «Gestión» y es lo único que no sale del registro de nav: no es una
+ * pantalla, es la salida.
  */
 export function CoachMoreSheetBody({
     items,
@@ -196,6 +247,7 @@ export function CoachMoreSheetBody({
         <div className="flex flex-col">
             <NavSection title="Tu trabajo" items={groups.trabajo} pathname={pathname} onNavigate={onNavigate} />
             <NavSection title="Gestión" items={groups.gestion} pathname={pathname} onNavigate={onNavigate} />
+            <SignOutRow />
         </div>
     )
 }

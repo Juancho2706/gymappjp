@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Alert, Pressable, ScrollView, Text, View } from 'react-native'
+import { Pressable, ScrollView, Text, View } from 'react-native'
 import { useRouter } from 'expo-router'
 import { cssInterop } from 'nativewind'
 import {
   CreditCard,
   LayoutGrid,
   LifeBuoy,
-  LogOut,
   Moon,
   Palette,
   SlidersHorizontal,
@@ -56,7 +55,7 @@ import { requestAccountDeletion } from '../../../lib/account-deletion'
  */
 
 // Let NativeWind drive the lucide icon `color` via `text-*` classes (DS pattern, ver perfil.tsx).
-for (const Icon of [CreditCard, LayoutGrid, LifeBuoy, LogOut, Moon, Palette, SlidersHorizontal, Sun, Trash2, UserCog, Users]) {
+for (const Icon of [CreditCard, LayoutGrid, LifeBuoy, Moon, Palette, SlidersHorizontal, Sun, Trash2, UserCog, Users]) {
   cssInterop(Icon, { className: { target: 'style', nativeStyleToProp: { color: true } } })
 }
 
@@ -341,13 +340,6 @@ export default function CoachSettingsHubScreen() {
       : `Plan ${TIER_LABEL[tier] ?? 'Gratis'}`
   const heroSubtitle = isTeam ? 'Pool de coaches' : managed ? 'Cuenta gestionada por tu organización' : 'Tu negocio EVA'
 
-  function confirmLogout() {
-    Alert.alert('Cerrar sesión', '¿Seguro que quieres cerrar tu sesión en este dispositivo?', [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Cerrar sesión', style: 'destructive', onPress: () => { void signOutAndRedirectHome() } },
-    ])
-  }
-
   if (loading) {
     return <EvaLoaderScreen subtitle="Cargando opciones…" />
   }
@@ -469,16 +461,21 @@ export default function CoachSettingsHubScreen() {
             <Card padding="none">
               {/* UNA puerta a todo lo que el coach decide sobre su panel (W3.5). Se muestra también
                   a un coach de team: la pantalla decide qué bloques pinta (a un coach gestionado la
-                  especialidad se la define su tenant, igual que hoy). */}
-              <ListRow
-                testID="hub-funciones"
-                leading={<IconTile Icon={SlidersHorizontal} tone="brand" />}
-                title="Funciones"
-                subtitle="Tu especialidad, qué ves en tu panel y tu alumno de ejemplo"
-                showChevron
-                onPress={() => router.push('/coach/settings/funciones')}
-              />
-              <RowDivider />
+                  especialidad se la define su tenant, igual que hoy). Se OCULTA solo al coach
+                  administrado por una organización sin team: ahí no decide nada de esto. */}
+              {managed && !isTeam ? null : (
+                <>
+                  <ListRow
+                    testID="hub-funciones"
+                    leading={<IconTile Icon={SlidersHorizontal} tone="brand" />}
+                    title="Funciones"
+                    subtitle="Tu especialidad, qué ves en tu panel y tu alumno de ejemplo"
+                    showChevron
+                    onPress={() => router.push('/coach/settings/funciones')}
+                  />
+                  <RowDivider />
+                </>
+              )}
               <ListRow
                 testID="hub-areas"
                 leading={<IconTile Icon={LayoutGrid} />}
@@ -510,19 +507,6 @@ export default function CoachSettingsHubScreen() {
                 subtitle="Tema, contraseña y cierre de sesión"
                 showChevron
                 onPress={() => router.push('/coach/perfil')}
-              />
-              <RowDivider />
-              <ListRow
-                testID="hub-logout"
-                accessibilityLabel="Cerrar sesión"
-                leading={
-                  <View className="items-center justify-center rounded-control bg-danger-100" style={{ width: 46, height: 46 }}>
-                    <LogOut size={22} strokeWidth={2} className="text-danger-600" />
-                  </View>
-                }
-                title={<Text className="text-danger-600">Cerrar sesión</Text>}
-                subtitle="Salir de tu cuenta en este dispositivo"
-                onPress={confirmLogout}
               />
             </Card>
           </View>

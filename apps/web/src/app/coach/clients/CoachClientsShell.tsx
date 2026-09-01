@@ -16,8 +16,6 @@ interface CoachClientsShellProps {
     coach: CoachPublicIdentifierSource | null
     appUrl: string
     pulse: DirectoryPulseRow[]
-    /** ≥1 módulo del hub activo (cardio/movimiento/composición) → habilita el acceso a Herramientas. */
-    toolsEnabled: boolean
     /** «Alumno/Paciente/Atleta de ejemplo» según la persona del coach (onboarding v2 F3.7). */
     demoLabel?: string
     /**
@@ -32,7 +30,6 @@ export function CoachClientsShell({
     coach,
     appUrl,
     pulse,
-    toolsEnabled,
     demoLabel = 'Alumno de ejemplo',
     addStudentFlow = null,
 }: CoachClientsShellProps) {
@@ -67,7 +64,6 @@ export function CoachClientsShell({
                     pulse={pulse}
                     activeFilter={riskFilter}
                     onFilterChange={setRiskFilter}
-                    toolsEnabled={toolsEnabled}
                 />
             </div>
             <ClientsDirectoryClient
@@ -80,7 +76,6 @@ export function CoachClientsShell({
                 pulseByClientId={pulseByClientId}
                 rosterMode={rosterMode}
                 onRosterModeChange={setRosterMode}
-                toolsEnabled={toolsEnabled}
                 demoLabel={demoLabel}
             />
         </AddStudentFlowProvider>

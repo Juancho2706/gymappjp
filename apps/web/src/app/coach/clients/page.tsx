@@ -8,11 +8,6 @@ import { getCoachClientsWithPrograms, getCoachClientsPulse } from './_data/clien
 import { getCoachLeads } from './_data/leads.queries'
 import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render-cache'
 import { createClient } from '@/lib/supabase/server'
-import {
-    applyOperatorKillSwitch,
-    getCoachEnabledModules,
-    getTeamEnabledModules,
-} from '@/services/entitlements.service'
 import { getCoachOnboardingEmptyContext } from '../_data/onboarding-empty.queries'
 import { getCoachPublicIdentifier } from '@/lib/coach/public-identifier'
 import { showsEvaBadge, type SubscriptionTier } from '@/lib/constants'
@@ -39,30 +34,15 @@ export default async function CoachClientsPage({
     const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
     const activeTeamId = workspace?.type === 'coach_team' ? workspace.teamId : null
 
-    // Acceso a Funciones (`/coach/settings/funciones`, que absorbió el hub /coach/tools en la Ola
-    // de orden W3.7) — MISMO gate que el sidebar y las páginas de
-    // módulo: enabled_modules del contexto activo (team manda; standalone usa los flags del
-    // coach; enterprise v1 ⇒ ninguno) + kill-switch de operador. Solo se muestra el acceso si
-    // ≥1 de los módulos del hub (cardio/movimiento/composición) está activo.
+    // El acceso a Funciones (`/coach/settings/funciones`) vive en «Más» / el hub de ajustes: el
+    // directorio de alumnos ya no lo repite (QA owner 01-09), así que esta pantalla tampoco
+    // resuelve el gate de módulos.
     const supabase = await createClient()
-    const resolveToolsEnabled = async (): Promise<boolean> => {
-        if (workspace?.type === 'enterprise_coach') return false
-        const raw = activeTeamId
-            ? await getTeamEnabledModules(supabase, activeTeamId)
-            : await getCoachEnabledModules(supabase, coachSession.id)
-        const modules = applyOperatorKillSwitch(raw)
-        return (
-            modules.cardio === true ||
-            modules.movement_assessment === true ||
-            modules.body_composition === true
-        )
-    }
 
-    const [clients, headersList, pulse, toolsEnabled, leads, params, onboarding, authUser] = await Promise.all([
+    const [clients, headersList, pulse, leads, params, onboarding, authUser] = await Promise.all([
         getCoachClientsWithPrograms(coachSession.id, { orgId, activeTeamId }),
         headers(),
         getCoachClientsPulse(coachSession.id, { orgId, activeTeamId }),
-        resolveToolsEnabled(),
         // Solicitudes del `/join` standalone (coach_leads). Lectura RLS con el cliente del usuario.
         getCoachLeads(coachSession.id),
         searchParams,
@@ -131,7 +111,6 @@ export default async function CoachClientsPage({
                 coach={coach}
                 appUrl={appUrl}
                 pulse={pulse}
-                toolsEnabled={toolsEnabled}
                 demoLabel={onboarding.demoLabel}
                 addStudentFlow={addStudentFlow}
             />

@@ -38,8 +38,6 @@ interface ClientsDirectoryClientProps {
     /** Vista de nivel superior (solo desktop): ficha (master-detail) | tabla (directorio). */
     rosterMode: 'ficha' | 'tabla'
     onRosterModeChange: (m: 'ficha' | 'tabla') => void
-    /** Acceso a Herramientas (≥1 módulo del hub activo): gatea el botón del rail Ficha. */
-    toolsEnabled?: boolean
     /** «Alumno/Paciente/Atleta de ejemplo» según la persona del coach (onboarding v2 F3.7). */
     demoLabel?: string
 }
@@ -118,7 +116,6 @@ export function ClientsDirectoryClient({
     pulseByClientId,
     rosterMode,
     onRosterModeChange,
-    toolsEnabled = false,
     demoLabel = 'Alumno de ejemplo',
 }: ClientsDirectoryClientProps) {
     const router = useRouter()
@@ -280,7 +277,6 @@ export function ClientsDirectoryClient({
                     <CoachRosterMasterDetail
                         clients={clients}
                         pulseByClientId={pulseByClientId}
-                        showTools={toolsEnabled}
                         demoLabel={demoLabel}
                     />
                 </div>

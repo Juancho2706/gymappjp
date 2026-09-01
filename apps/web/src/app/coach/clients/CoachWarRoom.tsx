@@ -1,7 +1,6 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import {
     UserPlus,
@@ -11,10 +10,8 @@ import {
     AlertOctagon,
     RefreshCw,
     ChevronDown,
-    ChevronRight,
     ArrowRight,
     FileUp,
-    LayoutGrid,
     Link as LinkIcon,
 } from 'lucide-react'
 import { motion } from 'framer-motion'
@@ -26,7 +23,6 @@ import type { DirectoryPulseRow } from '@/services/dashboard.service'
 import type { DirectoryRiskFilter } from './directory-types'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
-import { FUNCIONES_PATH } from '@/lib/domain-off'
 import { cn } from '@/lib/utils'
 
 export type { DirectoryRiskFilter } from './directory-types'
@@ -42,8 +38,6 @@ interface CoachWarRoomProps {
     pulse: DirectoryPulseRow[]
     activeFilter: DirectoryRiskFilter
     onFilterChange: (f: DirectoryRiskFilter) => void
-    /** Acceso a Herramientas solo si el coach tiene ≥1 módulo del hub activo (cardio/movimiento/composición). */
-    toolsEnabled?: boolean
 }
 
 /** Contador del pulso del directorio. Mismo resorte de siempre, sin estado por frame. */
@@ -185,7 +179,6 @@ export function CoachWarRoom({
     pulse,
     activeFilter,
     onFilterChange,
-    toolsEnabled = false,
 }: CoachWarRoomProps) {
     const router = useRouter()
     const { t } = useTranslation()
@@ -282,25 +275,8 @@ export function CoachWarRoom({
                     </div>
                 </div>
 
-                {/* ===== Funciones (entrada tool-first, arriba del directorio) — solo si el coach
-                    tiene ≥1 módulo del hub activo (cardio/movimiento/composición). ===== */}
-                {toolsEnabled && (
-                    <Link
-                        href={FUNCIONES_PATH}
-                        className="eva-press flex w-full items-center gap-3 rounded-card border border-subtle bg-surface-card px-[13px] py-[11px] text-left shadow-[var(--shadow-xs)]"
-                    >
-                        <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[11px] bg-sport-100 text-sport-600">
-                            <LayoutGrid className="h-[19px] w-[19px]" />
-                        </span>
-                        <span className="min-w-0 flex-1">
-                            <span className="block text-sm font-bold text-strong">Funciones</span>
-                            <span className="block truncate text-[11.5px] text-muted">
-                                Cardio · Movimiento · Composición
-                            </span>
-                        </span>
-                        <ChevronRight className="h-[18px] w-[18px] shrink-0 text-[var(--ink-300)]" />
-                    </Link>
-                )}
+                {/* La entrada a Funciones vive en «Más» / el hub de ajustes; el directorio de
+                    alumnos ya no la repite (QA owner 01-09). */}
 
                 {/* ===== Resumen · hoy — pulso colapsable ===== */}
                 <div className="relative z-10">

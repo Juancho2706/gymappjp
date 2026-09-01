@@ -434,8 +434,9 @@ export default function CoachTeamScreen() {
               </View>
               {/* Ola de orden W3.5: el atajo llevaba al catálogo de Módulos, que ya no existe (una
                   lista de candados no tiene sentido con «todo en todos los planes»). Ahora abre
-                  «Funciones del equipo» —lo que el equipo SÍ decide— conservando el contador de
-                  módulos activos del pool como dato del hero. */}
+                  «Funciones del equipo» —lo que el equipo SÍ decide—. QA owner 01-09: el contador
+                  de módulos activos se fue (con todo incluido siempre marcaba lo mismo); el tile
+                  queda como acceso, no como dato. */}
               <Pressable
                 testID="team-funciones-link"
                 accessibilityRole="button"
@@ -444,7 +445,7 @@ export default function CoachTeamScreen() {
                 style={{ flex: 1, alignItems: 'center' }}
                 hitSlop={6}
               >
-                <Text className="font-display-black text-on-dark" style={{ fontSize: 25 }}>{team.activeModuleCount}</Text>
+                <Text className="font-display-black text-on-dark" style={{ fontSize: 25 }}>Ver</Text>
                 <View className="flex-row items-center" style={{ gap: 2, marginTop: 4 }}>
                   <Text className="font-sans-bold text-sport-300" style={{ fontSize: 10, letterSpacing: 0.4, textTransform: 'uppercase' }}>Funciones</Text>
                   <ChevronRight size={11} strokeWidth={2.4} className="text-sport-300" />

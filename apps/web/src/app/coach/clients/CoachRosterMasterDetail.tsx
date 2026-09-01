@@ -2,10 +2,9 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { differenceInDays } from 'date-fns'
-import { Search, LayoutGrid, Plus, Users, AlertCircle } from 'lucide-react'
+import { Search, Plus, Users, AlertCircle } from 'lucide-react'
 import Link from 'next/link'
 import { cn } from '@/lib/utils'
-import { FUNCIONES_PATH } from '@/lib/domain-off'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { DirectoryPulseRow } from '@/services/dashboard.service'
 import { useAddStudentFlow } from './_components/add-student-flow-context'
@@ -76,8 +75,6 @@ function initialsOf(name?: string | null): string {
 interface CoachRosterMasterDetailProps {
     clients: any[]
     pulseByClientId: Record<string, DirectoryPulseRow>
-    /** Muestra el acceso a Herramientas en la cabecera del rail (≥1 módulo del hub activo). */
-    showTools?: boolean
     /** «Alumno/Paciente/Atleta de ejemplo» según la persona del coach (onboarding v2 F3.7). */
     demoLabel?: string
 }
@@ -85,7 +82,6 @@ interface CoachRosterMasterDetailProps {
 export function CoachRosterMasterDetail({
     clients,
     pulseByClientId,
-    showTools = false,
     demoLabel = 'Alumno de ejemplo',
 }: CoachRosterMasterDetailProps) {
     const [search, setSearch] = useState('')
@@ -179,19 +175,6 @@ export function CoachRosterMasterDetail({
                         <span className="rounded-full bg-surface-sunken px-2 py-0.5 text-[12px] font-bold text-subtle">
                             {activeClients.length}
                         </span>
-                        {showTools && (
-                            <Link
-                                href={FUNCIONES_PATH}
-                                prefetch={false}
-                                title="Funciones · Cardio · Movimiento · Composición"
-                                className="group ml-1 inline-flex h-[30px] shrink-0 items-center gap-1.5 rounded-[10px] border border-[color-mix(in_srgb,var(--sport-500)_28%,transparent)] bg-sport-100 px-2 text-sport-700 transition-colors hover:bg-sport-200"
-                            >
-                                <LayoutGrid className="h-[15px] w-[15px] shrink-0" />
-                                <span className="hidden text-[12px] font-extrabold min-[1000px]:inline">
-                                    Funciones
-                                </span>
-                            </Link>
-                        )}
                         <div className="ml-auto flex gap-1.5">
                             <button
                                 type="button"

@@ -11,7 +11,16 @@ import { CoachMoreSheetBody } from './CoachMoreSheet'
  * encabezado — el bug que dejaba encabezados huérfanos en el sidebar antes de W2.4) y que la fila
  * de la ruta actual quede marcada. El chasis del `Sheet` (portal de base-ui) queda fuera a
  * propósito: se testea el CUERPO, que es donde vive la lógica.
+ *
+ * QA del owner 01-09 (ronda 2): la hoja cierra con «Cerrar sesión» — en móvil era la única salida
+ * que no estaba a mano. Es lo único que no sale del registro de nav, así que se prueba aparte.
  */
+
+/** El hook real toca Supabase/PostHog/Sentry: acá interesa que la fila EXISTA y dispare la acción. */
+const { signOutMock } = vi.hoisted(() => ({ signOutMock: vi.fn() }))
+vi.mock('@/app/coach/settings/_components/CoachSignOut', () => ({
+    useCoachSignOut: () => ({ signOut: signOutMock, pending: false }),
+}))
 
 /** Items reales del registro por key — nada de fixtures inventados. */
 function pick(...keys: string[]): NavModule[] {
@@ -91,6 +100,24 @@ describe('CoachMoreSheetBody (W2.6)', () => {
         render(<CoachMoreSheetBody items={items} pathname="/coach/nutrition-v2" onNavigate={noop} />)
 
         expect(screen.getByTestId('coach-more-nutrition')).toHaveAttribute('aria-current', 'page')
+    })
+
+    it('la hoja cierra con «Cerrar sesión» y el tap dispara el signOut', () => {
+        render(<CoachMoreSheetBody items={pick('options')} pathname="/coach/dashboard" onNavigate={noop} />)
+
+        const row = screen.getByRole('button', { name: /Cerrar sesión/ })
+        expect(row).toBeInTheDocument()
+        // Tono danger del DS: es la única fila que no navega.
+        expect(row.className).toContain('text-[var(--danger-600)]')
+
+        row.click()
+        expect(signOutMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('«Cerrar sesión» está incluso sin overflow: en móvil es la única salida a mano', () => {
+        render(<CoachMoreSheetBody items={[]} pathname="/coach/dashboard" onNavigate={noop} />)
+
+        expect(screen.getByTestId('coach-more-signout')).toBeInTheDocument()
     })
 
     it('el tap en una fila avisa para cerrar la hoja', () => {

@@ -8,7 +8,6 @@ import {
   ArrowUpDown,
   Check,
   ChevronDown,
-  ChevronRight,
   ChevronUp,
   FileUp,
   LayoutGrid,
@@ -22,9 +21,7 @@ import {
   UserPlus,
   X,
 } from 'lucide-react-native'
-import { deriveSportTokens } from '@eva/brand-kit'
 import { useTheme } from '../../../context/ThemeContext'
-import { useEntitlements } from '../../../lib/entitlements'
 import { Button, Input, NativeDialog } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
@@ -81,7 +78,7 @@ import { getCoachOrgContext, type CoachOrgContext } from '../../../lib/org'
 import { useWorkspace } from '../../../lib/workspace'
 import { getCachedCoachPersonaStatus } from '../../../lib/coach-persona'
 import { FONT } from '../../../lib/typography'
-import { GLOWS, shadow } from '../../../lib/shadows'
+import { GLOWS } from '../../../lib/shadows'
 import { supabase } from '../../../lib/supabase'
 
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -328,10 +325,6 @@ export default function ClientesScreen() {
   const { theme } = useTheme()
   const router = useRouter()
   const workspace = useWorkspace()
-  // Acceso a Herramientas (hub /coach/tools): mismo gate que el sidebar web (toolsEnabled)
-  // — visible solo con ≥1 modulo del hub activo (cardio/movimiento/composicion).
-  const { hasModule } = useEntitlements()
-  const toolsEnabled = hasModule('cardio') || hasModule('movement_assessment') || hasModule('body_composition')
 
   const [clients, setClients] = useState<DirectoryClient[]>([])
   const [loading, setLoading] = useState(true)
@@ -356,7 +349,6 @@ export default function ClientesScreen() {
   const [pulseError, setPulseError] = useState(false)
   const [coachSlug, setCoachSlug] = useState<string>('')
   const [teamSlug, setTeamSlug] = useState<string>('')
-  const [coachPrimaryColor, setCoachPrimaryColor] = useState<string | null>(null)
   const [maxClients, setMaxClients] = useState<number>(0)
   const [subscriptionTier, setSubscriptionTier] = useState<SubscriptionTier | null>(null)
   const [profileReady, setProfileReady] = useState(false)
@@ -467,7 +459,6 @@ export default function ClientesScreen() {
         if (c?.slug) setCoachSlug(c.slug)
         if (c?.maxClients) setMaxClients(c.maxClients)
         setSubscriptionTier(c?.subscriptionTier ?? null)
-        if (c?.primaryColor) setCoachPrimaryColor(c.primaryColor)
         setProfileReady(true)
         setOrgRole(org?.orgRole ?? null)
         setOrgContextReady(true)
@@ -587,9 +578,6 @@ export default function ClientesScreen() {
         : 'No pudimos validar el cupo del workspace.'
 
   const sortLabel = SORT_OPTIONS.find((o) => o.value === sortKey)?.label ?? 'Urgencia'
-  const sportTokens = useMemo(() => deriveSportTokens(coachPrimaryColor || theme.primary), [coachPrimaryColor, theme.primary])
-  const toolsTileBackground = theme.scheme === 'dark' ? sportTokens.dark['100'] : sportTokens.ramp['100']
-  const toolsTileForeground = theme.scheme === 'dark' ? sportTokens.dark['600'] : sportTokens.ramp['600']
 
   const handleSortChange = (key: DirectorySortKey) => {
     setSortKey(key)
@@ -750,28 +738,8 @@ export default function ClientesScreen() {
     <>
       <DirectoryScreenHeader theme={theme} trailing={headerActions} />
 
-      {/* Entrada Herramientas (hub /coach/tools) — card prominente, espejo CoachWarRoom móvil */}
-      {toolsEnabled && (
-        <TouchableOpacity
-          testID="directory-tools-card"
-          activeOpacity={0.85}
-          onPress={() => router.push('/coach/settings/funciones')}
-          style={[
-            styles.toolsCard,
-            shadow('xs', theme.scheme),
-            { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.card },
-          ]}
-        >
-          <View style={[styles.toolsTile, { backgroundColor: toolsTileBackground }]}>
-            <LayoutGrid size={19} color={toolsTileForeground} />
-          </View>
-          <View style={{ flex: 1, minWidth: 0 }}>
-            <Text style={[styles.toolsCardTitle, { color: theme.foreground }]}>Herramientas</Text>
-            <Text numberOfLines={1} style={[styles.toolsCardSub, { color: theme.mutedForeground }]}>Cardio · Movimiento · Composición</Text>
-          </View>
-          <ChevronRight size={18} color={theme.ink300} />
-        </TouchableOpacity>
-      )}
+      {/* La entrada a Funciones vive en «Más» / el hub Opciones; el directorio de alumnos ya no la
+          repite (QA owner 01-09). */}
 
       {/* Resumen · hoy — pulso de prioridad + métricas secundarias (espejo CoachWarRoom) */}
       <DirectorySummary
@@ -1228,10 +1196,6 @@ const styles = StyleSheet.create({
   barBadgeTxt: { color: '#fff', fontSize: 10, fontFamily: FONT.uiExtra },
   headerActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   headerIconBtn: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  toolsCard: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 16, marginBottom: 12, borderWidth: 1, paddingHorizontal: 13, paddingVertical: 11 },
-  toolsTile: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  toolsCardTitle: { fontSize: 14, fontFamily: FONT.uiBold },
-  toolsCardSub: { fontSize: 11.5, marginTop: 1, fontFamily: FONT.ui },
   chipRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
