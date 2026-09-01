@@ -1,13 +1,17 @@
 import {
   DOMAIN_ENABLED_KEY,
   FEATURE_DOMAIN_KEYS,
+  NAV_ORDER_DOMAIN,
+  NAV_ORDER_KEY,
   normalizePreset,
+  parseNavOrder,
   type FeatureDomain,
   type Preset,
   type SectionPrefs,
 } from '@eva/feature-prefs'
 import { PERSONA_COPY, type Persona } from '@eva/schemas'
 import { apiFetch } from './api'
+import { saveFeaturePrefs } from './feature-prefs.queries'
 import { supabase } from './supabase'
 
 /**
@@ -171,15 +175,158 @@ export async function loadMiPanelDomains(coachId: string | null): Promise<MiPane
 /**
  * Payload del upsert del master switch de UN dominio. PURO: preserva preset y secciones y solo
  * pisa `_enabled` — espejo de `setCoachDomainEnabled` del servicio web.
+ *
+ * Acepta cualquier objeto con `domain`/`preset`/`sections` (no solo una fila del catálogo) para que
+ * el write del POOL (`writeTeamDomainEnabled`) arme el mismo payload desde la fila cruda del team.
  */
 export function buildDomainSwitchPayload(
-  row: MiPanelDomainRow,
+  row: Pick<MiPanelDomainRow, 'domain' | 'preset' | 'sections'>,
   enabled: boolean,
 ): { domain: FeatureDomain; preset: Preset; sections: Record<string, boolean> } {
   return {
     domain: row.domain,
     preset: row.preset,
     sections: { ...row.sections, [DOMAIN_ENABLED_KEY]: enabled } as Record<string, boolean>,
+  }
+}
+
+/**
+ * Lee las 5 filas de `team_feature_prefs` del POOL. Mismo cruce que `loadMiPanelDomains`, otra
+ * tabla: el master switch de un coach de equipo lo define el pool (RLS: escriben solo los gestores).
+ *
+ * No se usa `loadFeaturePrefs` de `lib/feature-prefs.queries.ts` por la misma razón que en el caso
+ * coach: ese lector itera SOLO los dominios de su `DOMAIN_LABELS` parcial (hoy Nutrición).
+ */
+export async function loadTeamPanelDomains(teamId: string | null): Promise<MiPanelDomainRow[]> {
+  if (!teamId) return buildDomainRows([])
+  try {
+    const { data } = await supabase
+      .from('team_feature_prefs')
+      .select('domain, preset, sections')
+      .eq('team_id', teamId)
+      .in('domain', FEATURE_DOMAIN_KEYS as unknown as string[])
+    return buildDomainRows((data ?? []) as RawDomainPrefsRow[])
+  } catch {
+    return buildDomainRows([])
+  }
+}
+
+/** Resultado de un write por PostgREST. Misma forma que `SavePrefsResult` de feature-prefs.queries. */
+export type PrefsWriteResult = { ok: true } | { error: string }
+
+const TEAM_SAVE_FALLBACK = 'No pudimos guardar el cambio del equipo. Inténtalo de nuevo.'
+
+/**
+ * Master switch de UN dominio del POOL. Lee la fila del team, pisa SOLO `_enabled` (preset y
+ * toggles finos sobreviven) y la upsertea con `saveFeaturePrefs` en scope team.
+ *
+ * La AUTORIZACIÓN es la RLS (`team_feature_prefs_mgr_*` = gestores del pool): la pantalla esconde el
+ * switch a un no-gestor por claridad, nunca como barrera. Un error de permiso vuelve como el mensaje
+ * humano de `saveFeaturePrefs` («No tienes permiso para editar estas funciones.»).
+ */
+export async function writeTeamDomainEnabled(
+  teamId: string | null,
+  domain: FeatureDomain,
+  enabled: boolean,
+): Promise<PrefsWriteResult> {
+  if (!teamId) return { error: 'Contexto de equipo inválido.' }
+  try {
+    const { data } = await supabase
+      .from('team_feature_prefs')
+      .select('preset, sections')
+      .eq('team_id', teamId)
+      .eq('domain', domain)
+      .maybeSingle()
+    const payload = buildDomainSwitchPayload(
+      { domain, preset: normalizePreset(data?.preset), sections: asSections(data?.sections) },
+      enabled,
+    )
+    return await saveFeaturePrefs({ scope: 'team', coachId: null, teamId }, payload)
+  } catch {
+    return { error: TEAM_SAVE_FALLBACK }
+  }
+}
+
+// ── Orden de la barra (fila reservada `_nav`) ────────────────────────────────────────────────
+//
+// Preferencia PERSONAL del coach (QA del owner 01-09: «los coaches van a querer reordenar la barra
+// para elegir qué dos ítems aparecen»). Vive en `coach_feature_prefs` con `domain = '_nav'` y
+// `sections = { order: [...] }` — sin migración, y los demás lectores mapean por dominio y la
+// ignoran. Es del COACH incluso en un team: la barra es su teléfono, no la del pool.
+
+const ORDER_SAVE_FALLBACK = 'No pudimos guardar el orden de tu panel. Inténtalo de nuevo.'
+
+/** Extrae y valida el orden guardado desde el `sections` crudo de la fila `_nav`. PURO. */
+export function navOrderFromRow(sections: unknown): FeatureDomain[] | null {
+  if (sections == null || typeof sections !== 'object' || Array.isArray(sections)) return null
+  return parseNavOrder((sections as Record<string, unknown>)[NAV_ORDER_KEY])
+}
+
+/** Payload del upsert de la fila `_nav` (sin `updated_at`, que lo pone el caller). PURO. */
+export function buildNavOrderPayload(
+  coachId: string,
+  order: readonly FeatureDomain[],
+): { coach_id: string; domain: string; sections: Record<string, FeatureDomain[]> } {
+  return {
+    coach_id: coachId,
+    domain: NAV_ORDER_DOMAIN,
+    sections: { [NAV_ORDER_KEY]: [...order] },
+  }
+}
+
+/**
+ * Orden guardado por el coach. `null` = nunca lo tocó (o la fila es basura) ⇒ el caller cae en
+ * `resolveNavOrder`, que usa el orden de su especialidad. Cualquier error degrada a `null`.
+ */
+export async function readNavOrder(coachId: string | null): Promise<FeatureDomain[] | null> {
+  if (!coachId) return null
+  try {
+    const { data } = await supabase
+      .from('coach_feature_prefs')
+      .select('sections')
+      .eq('coach_id', coachId)
+      .eq('domain', NAV_ORDER_DOMAIN)
+      .maybeSingle()
+    return navOrderFromRow(data?.sections)
+  } catch {
+    return null
+  }
+}
+
+/** Persiste el orden completo (los 5 dominios). RLS `coach_feature_prefs_owner_*` es el gate. */
+export async function writeNavOrder(
+  coachId: string | null,
+  order: readonly FeatureDomain[],
+): Promise<PrefsWriteResult> {
+  if (!coachId) return { error: 'No autenticado.' }
+  try {
+    const { error } = await supabase
+      .from('coach_feature_prefs')
+      .upsert({ ...buildNavOrderPayload(coachId, order), updated_at: new Date().toISOString() }, {
+        onConflict: 'coach_id,domain',
+      })
+    return error ? { error: ORDER_SAVE_FALLBACK } : { ok: true }
+  } catch {
+    return { error: ORDER_SAVE_FALLBACK }
+  }
+}
+
+/**
+ * Borra el orden manual (vuelve al de la especialidad). Lo llama «Ordenar mi panel según mi
+ * especialidad»: si la fila sobreviviera, el coach pediría el orden de su especialidad y la barra
+ * le seguiría mostrando el viejo. Sin coach (o sin fila) no hay nada que borrar: `ok`.
+ */
+export async function clearNavOrder(coachId: string | null): Promise<PrefsWriteResult> {
+  if (!coachId) return { ok: true }
+  try {
+    const { error } = await supabase
+      .from('coach_feature_prefs')
+      .delete()
+      .eq('coach_id', coachId)
+      .eq('domain', NAV_ORDER_DOMAIN)
+    return error ? { error: ORDER_SAVE_FALLBACK } : { ok: true }
+  } catch {
+    return { error: ORDER_SAVE_FALLBACK }
   }
 }
 

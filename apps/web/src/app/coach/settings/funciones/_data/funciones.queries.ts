@@ -17,6 +17,7 @@ import { getCoach } from '@/lib/coach/get-coach'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { isCurrentUserTeamManager } from '@/services/auth/team.service'
 import { hasModule } from '@/services/entitlements.service'
+import { readCoachNavOrder } from '@/services/coach/persona.service'
 
 /**
  * Datos de la zona "Funciones" (plan §4 / §9 Fase C) para el editor del coach/owner.
@@ -130,6 +131,16 @@ export interface FuncionesContext {
     teamName: string | null
     /** Una entrada por dominio de `FEATURE_DOMAINS` (Nutricion hoy; extensible). */
     domains: DomainFuncionesConfig[]
+    /**
+     * Orden PERSONAL de la barra guardado por el coach (fila `_nav`), o `null` si nunca reordeno.
+     * Se lee tambien en scope team: la barra del telefono es suya, no del pool.
+     */
+    navOrder: FeatureDomain[] | null
+    /**
+     * ¿Este usuario puede tocar los interruptores de ESTE scope? Standalone: siempre (son sus
+     * prefs). Team: solo el gestor del pool. Es visibilidad de affordance — el gate real es la RLS.
+     */
+    canManage: boolean
 }
 
 function asSections(value: unknown): SectionPrefs {
@@ -202,9 +213,11 @@ export const getFuncionesContext = cache(
         // ── Team ──────────────────────────────────────────────────────────────
         if (workspace?.type === 'coach_team') {
             const teamId = workspace.teamId
-            const [{ data: team }, isManager, domains] = await Promise.all([
+            const [{ data: team }, isManager, navOrder, domains] = await Promise.all([
                 userDb.from('teams').select('name').eq('id', teamId).maybeSingle(),
                 isCurrentUserTeamManager(userDb, teamId),
+                // El orden de la barra es del COACH aunque esté en team (fila `_nav` propia).
+                readCoachNavOrder(userDb, coach.id),
                 resolveDomains(serviceDb, { teamId }, async (domain) => {
                     const { data } = await serviceDb
                         .from('team_feature_prefs')
@@ -228,20 +241,25 @@ export const getFuncionesContext = cache(
                     teamId,
                     teamName: team?.name ?? 'Equipo',
                     domains,
+                    navOrder,
+                    canManage: isManager,
                 },
             }
         }
 
         // ── Standalone ────────────────────────────────────────────────────────
-        const domains = await resolveDomains(serviceDb, { coachId: coach.id }, async (domain) => {
-            const { data } = await serviceDb
-                .from('coach_feature_prefs')
-                .select('preset, sections')
-                .eq('coach_id', coach.id)
-                .eq('domain', domain)
-                .maybeSingle()
-            return data
-        })
+        const [navOrder, domains] = await Promise.all([
+            readCoachNavOrder(userDb, coach.id),
+            resolveDomains(serviceDb, { coachId: coach.id }, async (domain) => {
+                const { data } = await serviceDb
+                    .from('coach_feature_prefs')
+                    .select('preset, sections')
+                    .eq('coach_id', coach.id)
+                    .eq('domain', domain)
+                    .maybeSingle()
+                return data
+            }),
+        ])
 
         return {
             coachId: coach.id,
@@ -251,6 +269,9 @@ export const getFuncionesContext = cache(
                 teamId: null,
                 teamName: null,
                 domains,
+                navOrder,
+                // Sus propias prefs: no hay a quién pedirle permiso.
+                canManage: true,
             },
         }
     },

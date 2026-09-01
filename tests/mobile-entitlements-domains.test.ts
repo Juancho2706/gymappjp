@@ -30,6 +30,10 @@ describe('entitlements-core: contrato de forma', () => {
     expect(DEFAULT_CONFIG.featurePrefs.domains).toEqual(ALL_ON)
     expect(DEFAULT_CONFIG.featurePrefs.nutritionEnabled).toBe(true)
   })
+
+  it('DEFAULT_CONFIG no inventa un orden de barra (null = manda la especialidad)', () => {
+    expect(DEFAULT_CONFIG.featurePrefs.navOrder).toBeNull()
+  })
 })
 
 describe('entitlements-core: normalizeConfig -> domains', () => {
@@ -98,6 +102,44 @@ describe('entitlements-core: normalizeConfig -> domains', () => {
   })
 })
 
+describe('entitlements-core: normalizeConfig -> navOrder', () => {
+  const SAVED = ['cardio', 'nutrition', 'training', 'movement', 'bodycomp']
+
+  it('el orden guardado por el coach viaja tal cual', () => {
+    expect(normalizeConfig({ featurePrefs: { navOrder: SAVED } }).featurePrefs.navOrder).toEqual(SAVED)
+  })
+
+  it('sin navOrder (servidor viejo) => null: la barra cae en el orden de la especialidad', () => {
+    expect(normalizeConfig({}).featurePrefs.navOrder).toBeNull()
+    expect(normalizeConfig({ featurePrefs: {} }).featurePrefs.navOrder).toBeNull()
+    expect(normalizeConfig({ featurePrefs: null }).featurePrefs.navOrder).toBeNull()
+  })
+
+  it('basura => null, nunca un orden a medias', () => {
+    for (const navOrder of ['cardio', 42, {}, [], ['nope', 7], null]) {
+      expect(normalizeConfig({ featurePrefs: { navOrder } }).featurePrefs.navOrder).toBeNull()
+    }
+  })
+
+  it('un orden PARCIAL se completa con los dominios que falten (orden canonico)', () => {
+    expect(normalizeConfig({ featurePrefs: { navOrder: ['bodycomp'] } }).featurePrefs.navOrder).toEqual([
+      'bodycomp',
+      'nutrition',
+      'training',
+      'cardio',
+      'movement',
+    ])
+  })
+
+  it('el orden NO decide visibilidad: convive con dominios apagados', () => {
+    const cfg = normalizeConfig({
+      featurePrefs: { navOrder: SAVED, domains: { cardio: false } },
+    })
+    expect(cfg.featurePrefs.navOrder).toEqual(SAVED)
+    expect(cfg.featurePrefs.domains.cardio).toBe(false)
+  })
+})
+
 describe('entitlements-core: isDomainEnabledIn / disabledDomainsFromFlags', () => {
   it('isDomainEnabledIn refleja el flag del dominio', () => {
     const cfg = normalizeConfig({ featurePrefs: { domains: { cardio: false } } })
@@ -128,6 +170,15 @@ describe('entitlements-core: cache', () => {
     const parsed = parseCachedConfigEnvelope(serializeConfigEnvelope(original, now), now + 1000)
     expect(parsed.featurePrefs.domains).toEqual(original.featurePrefs.domains)
     expect(parsed.featurePrefs.nutritionEnabled).toBe(false)
+  })
+
+  it('el roundtrip conserva el orden de la barra', () => {
+    const now = 1_700_000_000_000
+    const original = normalizeConfig({
+      featurePrefs: { navOrder: ['movement', 'cardio', 'nutrition', 'training', 'bodycomp'] },
+    })
+    const parsed = parseCachedConfigEnvelope(serializeConfigEnvelope(original, now), now + 1000)
+    expect(parsed.featurePrefs.navOrder).toEqual(original.featurePrefs.navOrder)
   })
 
   it('cache con la forma VIEJA (sin domains) se re-normaliza fail-open', () => {

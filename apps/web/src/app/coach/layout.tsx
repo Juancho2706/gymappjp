@@ -32,7 +32,8 @@ import {
     getTeamEnabledModules,
     type EnabledModules,
 } from '@/services/entitlements.service'
-import { disabledDomainsFromPrefs, readCoachDomainPrefs } from '@/services/coach/persona.service'
+import { disabledDomainsFromPrefs, navOrderFromPrefs, readCoachDomainPrefs } from '@/services/coach/persona.service'
+import type { FeatureDomain } from '@eva/feature-prefs'
 import { getPersonaScreenContext } from './onboarding/persona/_data/persona.queries'
 import { isGuideActive } from '@eva/onboarding'
 import { parseOnboardingGuide } from './dashboard/_lib/onboarding-guide-state'
@@ -126,20 +127,28 @@ export default async function CoachLayout({
     // rutas leen ahora la MISMA fuente: `coach_feature_prefs._enabled`, con fail-open sin fila.
     // La fila es una elección EXPLÍCITA del coach (la pantalla de persona o Opciones › Mi panel)
     // y honrarla es justamente el producto.
-    const resolveDisabledDomains = async (): Promise<string[]> => {
+    //
+    // La MISMA lectura resuelve el ORDEN de la barra (QA del owner 01-09): vive en la fila
+    // reservada `_nav` de la misma tabla, así que `navOrderFromPrefs` la saca de las filas ya
+    // traídas — cero query extra. Sin fila o con basura guardada ⇒ `null` y manda la especialidad.
+    const resolveDomainPrefs = async (): Promise<{
+        disabled: string[]
+        navOrder: FeatureDomain[] | null
+    }> => {
         try {
-            return disabledDomainsFromPrefs(await readCoachDomainPrefs(supabase, coach.id))
+            const rows = await readCoachDomainPrefs(supabase, coach.id)
+            return { disabled: disabledDomainsFromPrefs(rows), navOrder: navOrderFromPrefs(rows) }
         } catch {
-            return []
+            return { disabled: [], navOrder: null }
         }
     }
 
-    const [enterpriseContext, teamContext, enabledModules, disabledDomains, activeStandaloneCount, personaContext] =
+    const [enterpriseContext, teamContext, enabledModules, domainPrefs, activeStandaloneCount, personaContext] =
         await Promise.all([
             getCoachEnterpriseContext(coach, activeEnterpriseCoach?.orgId ?? null),
             getCoachTeamContext(activeTeamWorkspace?.teamId ?? null),
             resolveEnabledModules(),
-            resolveDisabledDomains(),
+            resolveDomainPrefs(),
             isStandalone ? getActiveStandaloneClientCount(coach.id) : Promise.resolve<number | null>(null),
             // Píldora de la guía (decisión del owner 22-08): necesita la persona, que `getCoach()`
             // no trae. `getPersonaScreenContext` es `React.cache`: la MISMA lectura la reusan
@@ -362,12 +371,15 @@ export default async function CoachLayout({
                     currentWorkspaceLabel={currentWorkspaceLabel}
                     activeWorkspaceType={activeWorkspace?.type ?? null}
                     enabledModules={enabledModules}
-                    disabledDomains={disabledDomains}
+                    disabledDomains={domainPrefs.disabled}
                     // Ola de orden W2.5: la persona ordena los dominios de la cápsula móvil
                     // (`PERSONA_DOMAIN_ORDER`) — cuáles 2 se ganan un slot y cuáles caen a «Más».
                     // La lectura ya está hecha (`getPersonaScreenContext` es `React.cache`, la
                     // comparte con GuidePill): cero query extra.
                     persona={personaContext.persona}
+                    // QA del owner 01-09: si el coach reordenó sus áreas en «Funciones», su orden
+                    // MANDA sobre el de la especialidad (`resolveNavOrder` lo resuelve adentro).
+                    navOrder={domainPrefs.navOrder}
                     logoUrl={coachPanelLogoUrl}
                     logoUrlDark={coachPanelLogoDarkUrl}
                 />

@@ -299,11 +299,16 @@ export default async function CoachSettingsPage() {
                     <TeamFuncionesPane
                         teamId={funcionesRes.ctx.teamId!}
                         domains={funcionesRes.ctx.domains}
+                        navOrder={funcionesRes.ctx.navOrder}
+                        canManage={funcionesRes.ctx.canManage}
                     />
                 </PaneBody>
             ) : (
                 <PaneBody desc="Tu especialidad, qué ves en tu panel y tu alumno de ejemplo.">
-                    <MiPanelPane domains={funcionesRes.ctx.domains} />
+                    <MiPanelPane
+                        domains={funcionesRes.ctx.domains}
+                        navOrder={funcionesRes.ctx.navOrder}
+                    />
                 </PaneBody>
             )
     }

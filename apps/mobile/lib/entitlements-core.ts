@@ -9,7 +9,13 @@
  * paquete NO exporta ese array (solo el type). En cambio los DOMINIOS sí viajan completos desde el
  * paquete: `FEATURE_DOMAIN_KEYS` es un export runtime y se usa tal cual, sin espejo local.
  */
-import { FEATURE_DOMAIN_KEYS, type FeatureDomain, type ModuleKey, type NutritionSectionKey } from '@eva/feature-prefs'
+import {
+    FEATURE_DOMAIN_KEYS,
+    parseNavOrder,
+    type FeatureDomain,
+    type ModuleKey,
+    type NutritionSectionKey,
+} from '@eva/feature-prefs'
 
 export type { FeatureDomain, ModuleKey, NutritionSectionKey }
 export { FEATURE_DOMAIN_KEYS }
@@ -40,6 +46,13 @@ export interface MobileFeaturePrefs {
      * booleanas del payload (el resto queda ausente = visible).
      */
     nutritionSections: Partial<Record<NutritionSectionKey, boolean>>
+    /**
+     * Orden PERSONAL de la barra del coach (fila reservada `_nav` de `coach_feature_prefs`), ya
+     * validado server-side con `parseNavOrder`. `null` = el coach nunca lo tocó => manda el orden de
+     * su especialidad (`PERSONA_DOMAIN_ORDER`). Es preferencia, no visibilidad: quién ENTRA a la
+     * barra lo siguen decidiendo `domains` + los entitlements.
+     */
+    navOrder: FeatureDomain[] | null
 }
 
 /**
@@ -66,7 +79,12 @@ export const DEFAULT_STUDENT_ACCESS: StudentAccess = { state: 'active', graceEnd
 export interface RawMobileConfig {
     enabledModules?: unknown
     disabledModules?: unknown
-    featurePrefs?: { domains?: unknown; nutritionEnabled?: unknown; sections?: unknown } | null
+    featurePrefs?: {
+        domains?: unknown
+        nutritionEnabled?: unknown
+        sections?: unknown
+        navOrder?: unknown
+    } | null
     // legacy: el servidor lo manda como espejo, la app ya no lo lee
     featurePrefsEnabled?: unknown
     studentAccess?: unknown
@@ -91,7 +109,13 @@ function allDomainsEnabled(): Record<FeatureDomain, boolean> {
 export const DEFAULT_CONFIG: MobileConfig = {
     enabledModules: [],
     disabledModules: [],
-    featurePrefs: { domains: allDomainsEnabled(), nutritionEnabled: true, nutritionSections: {} },
+    featurePrefs: {
+        domains: allDomainsEnabled(),
+        nutritionEnabled: true,
+        nutritionSections: {},
+        // Sin config no hay orden guardado: la barra cae en el de la especialidad (fail-safe).
+        navOrder: null,
+    },
     studentAccess: DEFAULT_STUDENT_ACCESS,
 }
 
@@ -166,6 +190,9 @@ export function normalizeConfig(raw: RawMobileConfig | null | undefined): Mobile
             // DERIVADO: una sola fuente de verdad (el espejo legacy del payload ya se consumio arriba).
             nutritionEnabled: domains.nutrition,
             nutritionSections: toSectionFlags(raw.featurePrefs?.sections),
+            // `parseNavOrder` valida y completa: basura / campo ausente (servidor o cache viejos)
+            // => `null`, que es exactamente «usa el orden de tu especialidad».
+            navOrder: parseNavOrder(raw.featurePrefs?.navOrder),
         },
         studentAccess: toStudentAccess(raw.studentAccess),
     }

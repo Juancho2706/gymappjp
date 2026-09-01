@@ -12,6 +12,10 @@ import { FEATURE_DOMAIN_KEYS } from '@eva/feature-prefs'
  * W1.1 (2026-09-01): el endpoint expone `featurePrefs.domains` con los 5 dominios resueltos por
  * `resolveDomainEnabled`, en UNA sola lectura de la tabla de prefs. `nutritionEnabled` queda como
  * espejo legacy y debe ser SIEMPRE `=== domains.nutrition`.
+ *
+ * QA del owner 01-09: se suma `featurePrefs.navOrder`, el orden PERSONAL de la barra del coach
+ * (fila reservada `domain = '_nav'`). En standalone sale de la MISMA lectura; en team se pide
+ * aparte y SOLO esa fila, porque el orden es del coach y no del pool.
  */
 
 // ── Mocks ────────────────────────────────────────────────────────────────────────
@@ -43,8 +47,8 @@ vi.mock('@/services/entitlements.service', async (importOriginal) => ({
     getTeamEnabledModules: (...a: unknown[]) => getTeamEnabledModules(...a),
 }))
 
-/** Filas que devuelve el fake admin, enrutadas por tabla. */
-type PrefsRow = { domain: string; preset: string | null; sections: Record<string, boolean> | null }
+/** Filas que devuelve el fake admin, enrutadas por tabla. `sections` guarda también la key `order`. */
+type PrefsRow = { domain: string; preset: string | null; sections: Record<string, unknown> | null }
 let coachRow: { enabled_modules: Record<string, boolean> | null } | null = null
 let clientRow: { coach_id: string | null; team_id: string | null; org_id: string | null } | null =
     null
@@ -55,6 +59,8 @@ let teamPrefsRows: PrefsRow[] = []
 let prefsReadRejects = false
 /** Tablas efectivamente consultadas: pinnea que el camino alumno NI SIQUIERA lee las prefs. */
 let touchedTables: string[] = []
+/** Filtros `.eq('domain', …)` por tabla: en team la tabla del coach solo se toca por la fila `_nav`. */
+let domainFilters: { table: string; domain: string }[] = []
 
 const PREFS_TABLES = ['coach_feature_prefs', 'team_feature_prefs']
 
@@ -64,6 +70,11 @@ const fakeAdmin = {
         const maybeSingle = vi.fn(async () => {
             if (table === 'coaches') return { data: coachRow, error: null }
             if (table === 'clients') return { data: clientRow, error: null }
+            // Lectura puntual de la fila `_nav` del coach (camino team).
+            if (table === 'coach_feature_prefs') {
+                if (prefsReadRejects) throw new Error('prefs read boom')
+                return { data: coachPrefsRows.find((row) => row.domain === '_nav') ?? null, error: null }
+            }
             return { data: null, error: null }
         })
         const rowsForTable = () => {
@@ -75,7 +86,10 @@ const fakeAdmin = {
         // asi que la cadena tiene que ser THENABLE como el builder de PostgREST.
         const chain = {
             select: vi.fn(() => chain),
-            eq: vi.fn(() => chain),
+            eq: vi.fn((column: string, value: unknown) => {
+                if (column === 'domain') domainFilters.push({ table, domain: String(value) })
+                return chain
+            }),
             maybeSingle,
             then: (
                 resolve: (v: { data: PrefsRow[]; error: null }) => unknown,
@@ -108,6 +122,7 @@ type ConfigBody = {
         nutritionEnabled: boolean
         sections: Record<string, boolean>
         domains: Record<string, boolean>
+        navOrder: string[] | null
     }
 }
 
@@ -126,6 +141,7 @@ beforeEach(() => {
     teamPrefsRows = []
     prefsReadRejects = false
     touchedTables = []
+    domainFilters = []
 })
 
 describe('GET /api/mobile/config — D9-A: la pref del coach no gobierna a sus alumnos', () => {
@@ -271,7 +287,11 @@ describe('GET /api/mobile/config — W1.1: featurePrefs.domains con los 5 domini
         ).json()) as ConfigBody
 
         expect(touchedTables).toContain('team_feature_prefs')
-        expect(touchedTables).not.toContain('coach_feature_prefs')
+        // La ÚNICA fila del coach que se lee en team es `_nav` (su orden personal): sus prefs de
+        // dominio no se consultan, y por eso la Nutrición que él apagó no aplica en el pool.
+        expect(
+            domainFilters.filter((f) => f.table === 'coach_feature_prefs').map((f) => f.domain),
+        ).toEqual(['_nav'])
         expect(body.featurePrefs.domains.training).toBe(false)
         // La fila apagada del coach standalone no aplica en modo team.
         expect(body.featurePrefs.domains.nutrition).toBe(true)
@@ -307,6 +327,18 @@ describe('GET /api/mobile/config — W1.1: featurePrefs.domains con los 5 domini
         expect(body.featurePrefs.sections.plan).toBe(true)
     })
 
+    it('la fila reservada `_nav` no ensucia `domains` (no es un dominio)', async () => {
+        coachRow = { enabled_modules: null }
+        coachPrefsRows = [
+            { domain: '_nav', preset: null, sections: { order: ['cardio', 'nutrition'] } },
+        ]
+
+        const body = (await (await GET(req())).json()) as ConfigBody
+
+        expect(Object.keys(body.featurePrefs.domains)).toEqual([...FEATURE_DOMAIN_KEYS])
+        expect(Object.values(body.featurePrefs.domains).every((v) => v === true)).toBe(true)
+    })
+
     it('UNA sola lectura: `coach_feature_prefs` se consulta exactamente una vez por request', async () => {
         coachRow = { enabled_modules: null }
 
@@ -316,5 +348,109 @@ describe('GET /api/mobile/config — W1.1: featurePrefs.domains con los 5 domini
         expect(
             fakeAdmin.from.mock.calls.filter(([t]) => t === 'coach_feature_prefs'),
         ).toHaveLength(1)
+    })
+})
+
+describe('GET /api/mobile/config — QA 01-09: featurePrefs.navOrder (orden de la barra)', () => {
+    const SAVED = ['cardio', 'nutrition', 'training', 'movement', 'bodycomp']
+
+    it('COACH standalone: devuelve el orden guardado en la fila `_nav`', async () => {
+        coachRow = { enabled_modules: null }
+        coachPrefsRows = [
+            { domain: 'nutrition', preset: null, sections: { _enabled: true } },
+            { domain: '_nav', preset: null, sections: { order: SAVED } },
+        ]
+
+        const body = (await (await GET(req())).json()) as ConfigBody
+
+        expect(body.featurePrefs.navOrder).toEqual(SAVED)
+        // Sigue siendo UNA sola lectura: la fila `_nav` viaja con las demás.
+        expect(touchedTables.filter((t) => t === 'coach_feature_prefs')).toHaveLength(1)
+    })
+
+    it('COACH sin fila `_nav`: null (la app cae en el orden de su especialidad)', async () => {
+        coachRow = { enabled_modules: null }
+        coachPrefsRows = [{ domain: 'nutrition', preset: null, sections: { _enabled: false } }]
+
+        const body = (await (await GET(req())).json()) as ConfigBody
+
+        expect(body.featurePrefs.navOrder).toBeNull()
+    })
+
+    it('orden PARCIAL o con basura: se completa con los faltantes y se limpia lo inválido', async () => {
+        coachRow = { enabled_modules: null }
+        coachPrefsRows = [
+            { domain: '_nav', preset: null, sections: { order: ['bodycomp', 'nope', 'bodycomp', 7] } },
+        ]
+
+        const body = (await (await GET(req())).json()) as ConfigBody
+
+        expect(body.featurePrefs.navOrder).toEqual([
+            'bodycomp',
+            'nutrition',
+            'training',
+            'cardio',
+            'movement',
+        ])
+    })
+
+    it('fila `_nav` basura (no-array / sin la key): null, nunca a medias', async () => {
+        coachRow = { enabled_modules: null }
+        for (const sections of [{ order: 'cardio' }, { order: [] }, {}, null]) {
+            touchedTables = []
+            coachPrefsRows = [{ domain: '_nav', preset: null, sections }]
+            const body = (await (await GET(req())).json()) as ConfigBody
+            expect(body.featurePrefs.navOrder).toBeNull()
+        }
+    })
+
+    it('TEAM: el orden es del COACH, no del pool (se lee su fila `_nav` aparte)', async () => {
+        resolveMobileClientMutationContext.mockResolvedValue({
+            scope: { type: 'team', teamId: 'team-1' },
+        })
+        coachPrefsRows = [{ domain: '_nav', preset: null, sections: { order: SAVED } }]
+        teamPrefsRows = [{ domain: 'nutrition', preset: null, sections: { _enabled: false } }]
+
+        const body = (await (
+            await GET(req('?workspaceKind=team_owner&teamId=team-1'))
+        ).json()) as ConfigBody
+
+        expect(body.featurePrefs.navOrder).toEqual(SAVED)
+        // El pool sigue mandando en la VISIBILIDAD; el orden no lo toca.
+        expect(body.featurePrefs.domains.nutrition).toBe(false)
+    })
+
+    it('ALUMNO: null (no tiene barra de coach que ordenar) y sin tocar prefs', async () => {
+        clientRow = { coach_id: 'coach-1', team_id: null, org_id: null }
+        coachPrefsRows = [{ domain: '_nav', preset: null, sections: { order: SAVED } }]
+
+        const body = (await (await GET(req())).json()) as ConfigBody
+
+        expect(body.featurePrefs.navOrder).toBeNull()
+        expect(touchedTables).not.toContain('coach_feature_prefs')
+    })
+
+    it('ENTERPRISE: null (no hay zona Funciones donde ordenar)', async () => {
+        resolveMobileClientMutationContext.mockResolvedValue({
+            scope: { type: 'enterprise', orgId: 'org-1' },
+        })
+
+        const body = (await (
+            await GET(req('?workspaceKind=org_owner&orgId=org-1'))
+        ).json()) as ConfigBody
+
+        expect(body.featurePrefs.navOrder).toBeNull()
+    })
+
+    it('FAIL-OPEN: si la lectura revienta, navOrder es null y el 200 se mantiene', async () => {
+        coachRow = { enabled_modules: null }
+        coachPrefsRows = [{ domain: '_nav', preset: null, sections: { order: SAVED } }]
+        prefsReadRejects = true
+
+        const res = await GET(req())
+        const body = (await res.json()) as ConfigBody
+
+        expect(res.status).toBe(200)
+        expect(body.featurePrefs.navOrder).toBeNull()
     })
 })

@@ -217,6 +217,11 @@ export interface EntitlementsValue {
      * hub de nutricion, home); para codigo nuevo usar `isDomainEnabled('nutrition')`.
      */
     nutritionEnabled: boolean
+    /**
+     * Orden PERSONAL de la barra elegido por el coach en «Funciones» (fila `_nav` de sus prefs).
+     * `null` => manda el orden de su especialidad. Lo consume `useCoachNavState` (`resolveNavOrder`).
+     */
+    navOrder: FeatureDomain[] | null
     /** ¿El modulo `key` esta habilitado para este usuario? */
     hasModule: (key: ModuleKey) => boolean
     /** ¿Esta prendido el dominio `domain`? Fail-open => `true`. */
@@ -249,6 +254,7 @@ export function useEntitlements(): EntitlementsValue {
         enabledModules: resolveEffectiveModules(s.config),
         domains: s.config.featurePrefs.domains,
         nutritionEnabled: s.config.featurePrefs.nutritionEnabled,
+        navOrder: s.config.featurePrefs.navOrder,
         hasModule: (key) => hasModuleIn(s.config, key),
         isDomainEnabled: (domain) => isDomainEnabledIn(s.config, domain),
         isNutritionSectionEnabled: (key) => isNutritionSectionVisibleIn(s.config, key),

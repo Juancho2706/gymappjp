@@ -1,6 +1,7 @@
+import { useMemo } from 'react'
 import type { Persona } from '@eva/schemas'
 import { coachWorkspaceTypeFromKind, getVisibleNavItems, type NavModule } from '@eva/coach-nav'
-import { PERSONA_DOMAIN_ORDER, type FeatureDomain } from '@eva/feature-prefs'
+import { resolveNavOrder, type FeatureDomain } from '@eva/feature-prefs'
 import { getCachedCoachPersonaStatus } from './coach-persona'
 import { useEntitlements } from './entitlements'
 import { disabledDomainsFromFlags } from './entitlements-core'
@@ -23,7 +24,10 @@ export type CoachNavState = {
     visible: NavModule[]
     /** Especialidad del coach; `null` = coach anterior al onboarding v2 o gate sin resolver. */
     persona: Persona | null
-    /** Prioridad de dominios a usar con `buildMobileBar`. Con persona `null` cae en `other`. */
+    /**
+     * Prioridad de dominios a usar con `buildMobileBar`: el orden que el coach guardó a mano en
+     * «Funciones» (fila `_nav`) y, si nunca lo tocó, el de su especialidad (persona `null` => `other`).
+     */
     domainOrder: readonly FeatureDomain[]
     /** Status bloqueado: el unico item visible es «Reactivar» (la capsula pinta su barra propia). */
     blocked: boolean
@@ -31,7 +35,7 @@ export type CoachNavState = {
 
 export function useCoachNavState(): CoachNavState {
     const { kind, subscriptionState } = useWorkspace()
-    const { hasModule, domains } = useEntitlements()
+    const { hasModule, domains, navOrder } = useEntitlements()
 
     const visible = getVisibleNavItems({
         activeWorkspaceType: coachWorkspaceTypeFromKind(kind),
@@ -52,10 +56,15 @@ export function useCoachNavState(): CoachNavState {
     // arbol del coach se re-monta y la barra se rearma sola: no hace falta un listener nuevo.
     const persona = getCachedCoachPersonaStatus()?.persona ?? null
 
+    // El orden GUARDADO gana sobre el de la especialidad (QA del owner 01-09: el coach elige qué dos
+    // dominios ve en la barra). `navOrder` viene ya validado por `/api/mobile/config` + `normalizeConfig`
+    // y su referencia solo cambia cuando el store se revalida => el memo evita rearmar el array por render.
+    const domainOrder = useMemo(() => resolveNavOrder(navOrder, persona), [navOrder, persona])
+
     return {
         visible,
         persona,
-        domainOrder: PERSONA_DOMAIN_ORDER[persona ?? 'other'],
+        domainOrder,
         blocked: visible.length === 1 && visible[0]?.key === 'reactivate',
     }
 }

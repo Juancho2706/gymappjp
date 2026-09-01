@@ -38,7 +38,7 @@ import {
     isNavItemActiveForPath,
     type NavModule,
 } from '@eva/coach-nav'
-import { PERSONA_DOMAIN_ORDER } from '@eva/feature-prefs'
+import { resolveNavOrder, type FeatureDomain } from '@eva/feature-prefs'
 import type { Persona } from '@eva/schemas'
 import type { WorkspaceSummary, WorkspaceType } from '@/domain/auth/types'
 import type { EnabledModules } from '@/services/entitlements.service'
@@ -76,6 +76,13 @@ interface CoachSidebarProps {
      * eso sigue siendo `disabledDomains`. `null`/ausente ⇒ `other` (orden neutro).
      */
     persona?: Persona | null
+    /**
+     * Orden MANUAL de los dominios elegido por el coach en «Funciones» (fila `_nav` de
+     * `coach_feature_prefs`, resuelto server-side en el layout). Gana sobre el de la especialidad:
+     * es una elección explícita y la barra tiene solo dos slots de dominio. `null`/ausente ⇒ manda
+     * `persona`. Preferencia PERSONAL, vale también dentro de un pool.
+     */
+    navOrder?: FeatureDomain[] | null
 }
 
 /**
@@ -148,7 +155,7 @@ const NAV_GLYPH_BY_KEY: Record<string, CoachNavConcept> = {
     movement: 'movimiento',
 }
 
-export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterpriseContext, activeWorkspaceType, enabledModules, disabledDomains, persona, logoUrl, logoUrlDark }: CoachSidebarProps) {
+export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterpriseContext, activeWorkspaceType, enabledModules, disabledDomains, persona, navOrder, logoUrl, logoUrlDark }: CoachSidebarProps) {
     const pathname = usePathname()
     const [manualCollapsed, setManualCollapsed] = useState(false)
     // Hoja «Más» (W2.6): rescata lo visible que no entró en la cápsula. Solo móvil.
@@ -229,7 +236,9 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
         isNavigating != null ? isNavigating === item.href : isNavItemActiveForPath(item, pathname)
 
     // MOBILE — cápsula flotante (Ola de orden W2.5, decisión 2A del owner): [Inicio, Alumnos, los
-    // 2 dominios que la especialidad del coach pone primero, «Más»]. Antes era un
+    // 2 dominios que el coach puso primero, «Más»]. El orden lo decide `resolveNavOrder`: si el
+    // coach reordenó sus áreas en «Funciones» (fila `_nav`), MANDA su orden; si no, el de su
+    // especialidad (QA del owner 01-09: «van a querer elegir qué dos ítems aparecen»). Antes era un
     // `.slice(0, 5)` sobre una lista fija de claves: un corte CIEGO que no solo dejaba a los
     // coaches de team sin «Equipo», sino que tiraba a la basura TODO lo que no entraba —en
     // responsive el coach veía «Opciones» y nada más (hallazgo del QA del owner, 01-09).
@@ -237,7 +246,7 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
     // exactamente los mismos 5 slots; el `overflow` es lo que rescata la hoja «Más».
     const { bar: mobileTabs, overflow: mobileOverflow } = buildMobileBar(
         visibleNavItems,
-        PERSONA_DOMAIN_ORDER[persona ?? 'other']
+        resolveNavOrder(navOrder, persona)
     )
     // «Más» se pinta activo cuando la ruta actual pertenece a algo que quedó DENTRO de la hoja
     // (Cardio, Movimiento, Equipo, Funciones, Opciones, Soporte): si no, el coach navega a Cardio

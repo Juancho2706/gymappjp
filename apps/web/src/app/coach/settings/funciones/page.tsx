@@ -60,9 +60,15 @@ export default async function CoachFuncionesPage() {
 
             {isTeam ? (
                 // El equipo no tiene persona ni alumno de ejemplo: áreas + editor de secciones.
-                <TeamFuncionesPane teamId={ctx.teamId!} domains={ctx.domains} />
+                // `navOrder` viaja igual: el orden de la barra es del coach, no del pool.
+                <TeamFuncionesPane
+                    teamId={ctx.teamId!}
+                    domains={ctx.domains}
+                    navOrder={ctx.navOrder}
+                    canManage={ctx.canManage}
+                />
             ) : (
-                <MiPanelPane domains={ctx.domains} />
+                <MiPanelPane domains={ctx.domains} navOrder={ctx.navOrder} />
             )}
         </div>
     )

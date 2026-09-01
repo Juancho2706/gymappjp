@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Compass,
   Dumbbell,
   HeartPulse,
@@ -24,7 +25,9 @@ import type { LucideIcon } from 'lucide-react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import {
   DOMAIN_ENABLED_KEY,
+  moveNavOrder,
   normalizePreset,
+  resolveNavOrder,
   type FeatureDomain,
   type FeatureSection,
   type Preset,
@@ -62,12 +65,17 @@ import {
   GUIDE_PILL_EXPANDED,
   MI_PANEL_GUIA_ROUTE,
   buildDomainSwitchPayload,
+  clearNavOrder,
   guidePillStorageKey,
   isPersonaDirty,
   loadMiPanelDomains,
+  loadTeamPanelDomains,
+  readNavOrder,
   reseedDemoStudent,
   resolveMiPanelVisibility,
   saveMiPanelPersona,
+  writeNavOrder,
+  writeTeamDomainEnabled,
   type MiPanelDomainRow,
 } from '../../../lib/mi-panel'
 
@@ -86,16 +94,21 @@ import {
  *     «Ordenar mi panel según mi especialidad» (APAGADO por defecto: cambiar de etiqueta no puede
  *     borrarle los toggles a quien ya los ajustó) y «Guardar».
  *  2. Qué se ve en tu panel — el master switch (`_enabled`) de los 5 dominios, ÚNICA fuente de ese
- *     dato, cada uno con su «Abrir ›» cuando está prendido (6A: el launcher se disuelve acá).
+ *     dato, cada uno con su «Abrir ›» cuando está prendido (6A: el launcher se disuelve acá) y con
+ *     ▲▼ para ordenarlos (QA del owner 01-09: los dos primeros PRENDIDOS son los que la barra
+ *     inferior muestra, así que el orden tiene que ser del coach y no solo de su especialidad).
  *  3. Detalle de nutrición — preset + secciones. Sin candados ni CTA de plan (W4.1: regla del
  *     owner «todo está en todos los planes, solo se cobra el cupo»).
  *  4. Tu guía de inicio · 5. Alumno de ejemplo — tal cual venían de «Mi panel».
  *
- * Contextos: a un coach ADMINISTRADO (org, o team) el panel se lo define el tenant — mismo rechazo
- * que hace el endpoint y que el server action de la web, así que los bloques 1/2/4/5 se reemplazan
- * por un aviso. El bloque 3 SÍ se pinta para un team (escribe `team_feature_prefs`, editable solo
- * por el gestor), igual que hacía `features.tsx`; ahí, y solo ahí, el master switch de nutrición
- * viaja DENTRO del bloque 3, porque el bloque 2 no está para sostenerlo.
+ * Contextos:
+ *  - ORG (enterprise, o standalone con suscripción gestionada): el panel se lo define el tenant y no
+ *    hay dónde volver a prender nada — todos los bloques se reemplazan por un aviso.
+ *  - TEAM: la ESPECIALIDAD y el alumno de ejemplo los define el pool (bloques 1/4/5 fuera, mismo
+ *    rechazo que hace el endpoint), pero el bloque 2 SÍ se pinta sobre `team_feature_prefs`: el
+ *    gestor prende y apaga los dominios del equipo, y cualquier coach del pool ordena SU barra
+ *    (el orden es fila propia en `coach_feature_prefs`, no del pool). Con el bloque 2 presente, el
+ *    master switch de nutrición ya no se repite dentro del bloque 3.
  *
  * Colores: nunca literales de marca. Los iconos lucide toman su color por `className` gracias al
  * `cssInterop` de abajo (dark mode + white-label en runtime); el enlace «Abrir» usa `theme.primary`
@@ -108,6 +121,7 @@ for (const Icon of [
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Compass,
   Dumbbell,
   HeartPulse,
@@ -216,6 +230,38 @@ function ManagedNotice({ children }: { children: string }) {
   )
 }
 
+interface MoveButtonProps {
+  testID: string
+  direction: 'up' | 'down'
+  /** Nombre del dominio: entra en el `accessibilityLabel` («Subir Cardio»). */
+  label: string
+  disabled: boolean
+  onPress: () => void
+}
+
+/**
+ * Una flecha del reordenamiento. 44 de ancho + `hitSlop` para llegar al área táctil mínima sin
+ * pisarse con su vecina (los dos `hitSlop` verticales suman justo el `gap` de 2 que las separa).
+ */
+function MoveButton({ testID, direction, label, disabled, onPress }: MoveButtonProps) {
+  const Icon = direction === 'up' ? ChevronUp : ChevronDown
+  return (
+    <Pressable
+      testID={testID}
+      accessibilityRole="button"
+      accessibilityLabel={`${direction === 'up' ? 'Subir' : 'Bajar'} ${label}`}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
+      onPress={onPress}
+      hitSlop={{ top: 1, bottom: 1, left: 4, right: 4 }}
+      className="items-center justify-center rounded-control"
+      style={{ width: 44, height: 32, opacity: disabled ? 0.3 : 1 }}
+    >
+      <Icon size={18} strokeWidth={2.4} className="text-muted" />
+    </Pressable>
+  )
+}
+
 export default function CoachFuncionesScreen() {
   const router = useRouter()
   const { theme } = useTheme()
@@ -231,8 +277,12 @@ export default function CoachFuncionesScreen() {
   const [alsoOther, setAlsoOther] = useState(false)
   const [reorder, setReorder] = useState(false)
 
+  // Orden PERSONAL de la barra (fila `_nav`). `null` = nunca lo tocó ⇒ manda su especialidad.
+  const [navOrder, setNavOrder] = useState<FeatureDomain[] | null>(null)
+
   const [savingPersona, setSavingPersona] = useState(false)
   const [busyDomain, setBusyDomain] = useState<FeatureDomain | null>(null)
+  const [busyOrder, setBusyOrder] = useState(false)
   const [busyDemo, setBusyDemo] = useState(false)
   const [busyGuide, setBusyGuide] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
@@ -247,17 +297,23 @@ export default function CoachFuncionesScreen() {
 
   const isTeam = ws.kind === 'team_owner' || ws.kind === 'team_member'
   /**
-   * Un coach administrado no edita su panel acá: se lo define el tenant. Mismo predicado que tenía
-   * `mi-panel.tsx` (y que el endpoint `/api/mobile/coach/persona` rechaza igual).
+   * Panel definido por la ORG: no hay zona «Funciones» que valga (enterprise, o el borde «managed
+   * sin team visible»). Espejo exacto de `managedLock` de `settings/features.tsx`. Un TEAM ya NO
+   * entra acá: su pool sí configura dominios y su coach sí ordena la barra.
    */
-  const managed = isTeam || ws.kind === 'enterprise' || ws.isManaged
+  const orgManaged = ws.kind === 'enterprise' || (ws.kind === 'standalone' && ws.isManaged)
+  /** Especialidad, guía y alumno de ejemplo: solo standalone (en team los define el pool). */
+  const showPersonaBlocks = !isTeam && !orgManaged
+  /** Bloque 2: standalone (sobre sus prefs) y team (sobre las del pool). */
+  const showPanelBlock = !orgManaged
   /**
-   * Nutrición es la excepción: un TEAM sí configura su detalle (sobre `team_feature_prefs`), y solo
-   * el gestor lo edita. Enterprise —y el borde «managed sin team visible»— no ven el editor.
-   * Espejo exacto de `managedLock` / `canEdit` de `settings/features.tsx`.
+   * Quién puede EDITAR los switches del bloque 2 / del detalle de nutrición. En team, solo el
+   * gestor; la RLS (`team_feature_prefs_mgr_*`) es el gate real, esto solo evita ofrecer un
+   * control que va a rebotar. El ▲▼ del orden NO usa esto: es preferencia personal de cada coach.
    */
-  const nutritionLocked = ws.kind === 'enterprise' || (ws.kind === 'standalone' && ws.isManaged)
-  const canEditNutrition = isTeam ? ws.canManageTeam : true
+  const canEditDomains = isTeam ? ws.canManageTeam : true
+  const nutritionLocked = orgManaged
+  const canEditNutrition = canEditDomains
 
   /**
    * Recarga la foto del onboarding y la PUBLICA en el store compartido, igual que hace
@@ -290,16 +346,28 @@ export default function CoachFuncionesScreen() {
     }
   }, [loadDashboard])
 
+  /** Las 5 filas del bloque 2: las del POOL en team, las del propio coach en standalone. */
+  const loadPanelRows = useCallback(
+    () => (isTeam ? loadTeamPanelDomains(ws.teamId) : loadMiPanelDomains(coachId)),
+    [isTeam, ws.teamId, coachId],
+  )
+
   useEffect(() => {
-    if (managed || coachId == null) return
+    if (!showPanelBlock || coachId == null) return
+    // En team el `teamId` recién existe con el workspace resuelto: pedir antes lee el pool vacío.
+    if (isTeam && !ws.ready) return
     let alive = true
-    void loadMiPanelDomains(coachId).then((rows) => {
-      if (alive) setDomains(rows)
-    })
+    void (async () => {
+      // El ORDEN es del coach aunque las filas sean del pool: dos lecturas distintas, una sola espera.
+      const [rows, order] = await Promise.all([loadPanelRows(), readNavOrder(coachId)])
+      if (!alive) return
+      setDomains(rows)
+      setNavOrder(order)
+    })()
     return () => {
       alive = false
     }
-  }, [managed, coachId])
+  }, [showPanelBlock, isTeam, ws.ready, coachId, loadPanelRows])
 
   const nutritionScope: FeaturePrefsScope = useMemo(
     () => ({ scope: isTeam ? 'team' : 'coach', coachId, teamId: isTeam ? ws.teamId : null }),
@@ -341,6 +409,24 @@ export default function CoachFuncionesScreen() {
     [coachId],
   )
 
+  /**
+   * Orden efectivo del bloque 2: el que el coach guardó y, si nunca lo tocó, el de su especialidad
+   * GUARDADA — no la del borrador de arriba, porque tocar un tile no puede reordenarle la lista
+   * antes de que apriete «Guardar».
+   */
+  const orderedDomains = useMemo(
+    () => resolveNavOrder(navOrder, v2?.persona ?? null),
+    [navOrder, v2?.persona],
+  )
+
+  /** Las filas del bloque 2 en ese orden. Un dominio sin fila (aún cargando) se saltea. */
+  const orderedRows = useMemo(() => {
+    const byDomain = new Map((domains ?? []).map((row) => [row.domain, row]))
+    return orderedDomains
+      .map((domain) => byDomain.get(domain))
+      .filter((row): row is MiPanelDomainRow => row != null)
+  }, [domains, orderedDomains])
+
   const secondQuestion = persona ? PERSONA_COPY[persona].secondQuestion : null
   const personaDirty =
     persona != null &&
@@ -364,6 +450,13 @@ export default function CoachFuncionesScreen() {
       toast.error(result.error)
       return
     }
+    // «Ordenar mi panel según mi especialidad» también borra el orden MANUAL: si la fila `_nav`
+    // sobreviviera, el coach pediría el orden de su especialidad y la barra le seguiría mostrando
+    // el que había armado a mano. Se borra ANTES de revalidar para que el config ya no la lea.
+    if (reorder) {
+      await clearNavOrder(coachId)
+      setNavOrder(null)
+    }
     // El gate de persona cachea su veredicto por sesión: sin esto, la app seguiría creyendo la
     // especialidad vieja hasta el próximo arranque.
     resetCoachPersonaCache()
@@ -372,8 +465,7 @@ export default function CoachFuncionesScreen() {
     await refreshEntitlements().catch(() => {})
     await loadDashboard().catch(() => null)
     if (reorder && coachId != null) {
-      const rows = await loadMiPanelDomains(coachId)
-      setDomains(rows)
+      setDomains(await loadPanelRows())
     }
     setSavingPersona(false)
     toast.success(result.message)
@@ -387,7 +479,11 @@ export default function CoachFuncionesScreen() {
       current?.map((item) => (item.domain === row.domain ? { ...item, enabled: next } : item)) ?? current,
     )
     const payload = buildDomainSwitchPayload(row, next)
-    const result = await saveFeaturePrefs(panelScope, payload)
+    // Team: la fila es del POOL y la RLS de gestores es el gate real; standalone: su propia fila.
+    // El payload es el mismo en los dos casos — solo se pisa `_enabled`.
+    const result = isTeam
+      ? await writeTeamDomainEnabled(ws.teamId, row.domain, next)
+      : await saveFeaturePrefs(panelScope, payload)
     setBusyDomain(null)
     if ('ok' in result) {
       setDomains((current) =>
@@ -407,6 +503,32 @@ export default function CoachFuncionesScreen() {
       current?.map((item) => (item.domain === row.domain ? { ...item, enabled: row.enabled } : item)) ?? current,
     )
     toast.error(result.error)
+  }
+
+  /**
+   * ▲▼ — mueve un dominio un lugar. El orden es PERSONAL (fila `_nav` del coach) incluso en team:
+   * la barra es su teléfono. Optimista y sin toast por movimiento (sería ruido en 4 toques
+   * seguidos); si la base lo rechaza, la lista vuelve donde estaba y ahí sí hay error.
+   */
+  async function onMoveDomain(domain: FeatureDomain, delta: -1 | 1) {
+    if (busyOrder || coachId == null) return
+    const current = orderedDomains
+    const next = moveNavOrder(current, domain, delta)
+    if (next.every((item, i) => item === current[i])) return
+    setBusyOrder(true)
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {})
+    const previous = navOrder
+    setNavOrder(next)
+    const result = await writeNavOrder(coachId, next)
+    setBusyOrder(false)
+    if (!('ok' in result)) {
+      setNavOrder(previous)
+      toast.error(result.error)
+      return
+    }
+    // La barra lee el store de entitlements (no esta tabla): sin revalidar, el orden nuevo no se
+    // ve hasta el próximo foreground.
+    await refreshEntitlements().catch(() => {})
   }
 
   /** «Abrir ›» — el launcher disuelto: cada dominio prendido se abre desde su propia fila. */
@@ -523,8 +645,8 @@ export default function CoachFuncionesScreen() {
             </Text>
           </View>
 
-          {managed ? (
-            <ManagedNotice>Tu panel lo administra tu organización o tu equipo.</ManagedNotice>
+          {orgManaged ? (
+            <ManagedNotice>Tu panel lo administra tu organización.</ManagedNotice>
           ) : loading ? (
             <Text
               testID="funciones-loading"
@@ -533,6 +655,13 @@ export default function CoachFuncionesScreen() {
             >
               Cargando…
             </Text>
+          ) : !showPersonaBlocks ? (
+            // TEAM: la especialidad, la guía y el alumno de ejemplo los define el pool. El bloque 2
+            // no entra en este ternario — se pinta abajo, porque ese SÍ lo ve todo coach del equipo.
+            <ManagedNotice>
+              Tu especialidad y tu alumno de ejemplo los define tu equipo. Lo de abajo sí es tuyo:
+              el orden en que ves tus módulos.
+            </ManagedNotice>
           ) : (
             <>
               {/* ── 1. Especialidad ─────────────────────────────────────────────────────── */}
@@ -649,11 +778,38 @@ export default function CoachFuncionesScreen() {
                   }}
                 />
               </Card>
+            </>
+          )}
 
-              {/* ── 2. Qué se ve en tu panel ────────────────────────────────────────────── */}
+          {/* ── 2. Qué se ve en tu panel ──────────────────────────────────────────────────
+              Fuera del ternario de arriba: en un TEAM el coach no elige especialidad pero SÍ ve
+              (y ordena) sus módulos; el gestor además los prende y apaga para todo el pool. */}
+          {orgManaged || loading ? null : (
+            <>
               <SectionTitle>Qué se ve en tu panel</SectionTitle>
+              <Text
+                className="font-sans text-muted"
+                style={{ fontSize: 12, lineHeight: 17, marginBottom: 10, paddingHorizontal: 2 }}
+              >
+                Los dos primeros que estén prendidos van a la barra.
+              </Text>
+              {!canEditDomains ? (
+                <Card
+                  variant="default"
+                  padding="md"
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 }}
+                >
+                  <Lock size={16} strokeWidth={2} className="text-muted" />
+                  <Text
+                    className="font-sans text-muted"
+                    style={{ flex: 1, fontSize: 12.5, lineHeight: 18 }}
+                  >
+                    Solo el gestor del equipo puede prender y apagar módulos. El orden sí es tuyo.
+                  </Text>
+                </Card>
+              ) : null}
               <Card variant="default" padding="none">
-                {(domains ?? []).map((row, index) => {
+                {orderedRows.map((row, index) => {
                   const Icon = DOMAIN_ICONS[row.domain]
                   return (
                     <View
@@ -703,13 +859,47 @@ export default function CoachFuncionesScreen() {
                           </Pressable>
                         ) : null}
                       </View>
-                      <Switch
-                        value={row.enabled}
-                        onValueChange={(next) => {
-                          void onToggleDomain(row, next)
-                        }}
-                        disabled={busyDomain != null}
-                      />
+                      {/* ▲▼: preferencia PERSONAL, así que la tiene también el coach de team que no
+                          gestiona. En los bordes la flecha queda apagada en vez de desaparecer,
+                          para que la fila no cambie de ancho al moverse. */}
+                      <View style={{ gap: 2 }}>
+                        <MoveButton
+                          testID={`funciones-move-up-${row.domain}`}
+                          direction="up"
+                          label={row.label}
+                          disabled={index === 0}
+                          onPress={() => {
+                            void onMoveDomain(row.domain, -1)
+                          }}
+                        />
+                        <MoveButton
+                          testID={`funciones-move-down-${row.domain}`}
+                          direction="down"
+                          label={row.label}
+                          disabled={index === orderedRows.length - 1}
+                          onPress={() => {
+                            void onMoveDomain(row.domain, 1)
+                          }}
+                        />
+                      </View>
+                      {canEditDomains ? (
+                        <Switch
+                          value={row.enabled}
+                          onValueChange={(next) => {
+                            void onToggleDomain(row, next)
+                          }}
+                          disabled={busyDomain != null}
+                        />
+                      ) : (
+                        // Sin permiso no se pinta un switch muerto: se dice el estado y ya.
+                        <Text
+                          testID={`funciones-domain-state-${row.domain}`}
+                          className="font-sans-bold text-muted"
+                          style={{ fontSize: 11.5 }}
+                        >
+                          {row.enabled ? 'Prendido' : 'Apagado'}
+                        </Text>
+                      )}
                     </View>
                   )
                 })}
@@ -718,14 +908,14 @@ export default function CoachFuncionesScreen() {
                 className="font-sans text-muted"
                 style={{ fontSize: 12, lineHeight: 17, marginTop: 10, paddingHorizontal: 2 }}
               >
-                Esto ordena tu panel. Por ahora, apagar un módulo también lo oculta en la app de tus alumnos.
+                Por ahora, apagar un módulo también lo oculta en la app de tus alumnos.
               </Text>
             </>
           )}
 
           {/* ── 3. Detalle de nutrición ─────────────────────────────────────────────────
-              `nutritionLocked` implica `managed`, así que el aviso de arriba ya lo dijo: acá la
-              sección simplemente no existe en vez de repetir el mismo candado. */}
+              `nutritionLocked` es el caso ORG, que el aviso de arriba ya explicó: acá la sección
+              simplemente no existe en vez de repetir el mismo candado. */}
           {nutritionLocked ? null : (
             <>
               <SectionTitle>Detalle de nutrición</SectionTitle>
@@ -756,16 +946,16 @@ export default function CoachFuncionesScreen() {
                     data={prefs}
                     scopeCtx={nutritionScope}
                     canEdit={canEditNutrition}
-                    // El master switch vive en el bloque 2 (única fuente). Solo viaja acá cuando ese
-                    // bloque no se pinta —un team— para no dejar al equipo sin cómo apagar nutrición.
-                    showMasterSwitch={managed}
+                    // El master switch vive en el bloque 2, que ahora se pinta también para el team
+                    // (W-QA2): repetirlo acá era el SEGUNDO control del mismo dato que W3 vino a matar.
+                    showMasterSwitch={!showPanelBlock}
                   />
                 ))
               )}
             </>
           )}
 
-          {managed || loading ? null : (
+          {!showPersonaBlocks || loading ? null : (
             <>
               {/* ── 4. Guía de inicio ───────────────────────────────────────────────────── */}
               <SectionTitle>Tu guía de inicio</SectionTitle>

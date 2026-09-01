@@ -4,6 +4,9 @@ import { PERSONA_COPY, type Persona } from '@eva/schemas'
 import {
     DOMAIN_ENABLED_KEY,
     FEATURE_DOMAIN_KEYS,
+    NAV_ORDER_DOMAIN,
+    NAV_ORDER_KEY,
+    parseNavOrder,
     resolvePersonaPrefs,
     type FeatureDomain,
     type SectionPrefs,
@@ -238,6 +241,91 @@ export function disabledDomainsFromPrefs(rows: readonly CoachDomainPrefsRow[]): 
         if (row.sections[DOMAIN_ENABLED_KEY] === false) disabled.push(row.domain)
     }
     return disabled
+}
+
+// ── Orden de la barra (fila reservada `_nav` de `coach_feature_prefs`) ───────────────────────
+//
+// QA del owner 01-09: «los coaches van a querer reordenar la barra para elegir qué dos ítems
+// aparecen». El orden vive en UNA fila con `domain = '_nav'` y `sections = { order: [...] }` — sin
+// migración, porque `domain` es `text` libre. Los demás lectores de la tabla mapean por dominio
+// (`FEATURE_DOMAIN_KEYS`) y por lo tanto la ignoran; `disabledDomainsFromPrefs` tampoco la ve
+// porque esa fila no tiene la key `_enabled`.
+//
+// Es preferencia PERSONAL del coach: la barra es su teléfono, aunque trabaje en un pool.
+
+/** La `sections` de una fila leída como mapa crudo (el valor de `_nav.order` es un array). */
+function rawSections(sections: SectionPrefs): Record<string, unknown> {
+    return sections as unknown as Record<string, unknown>
+}
+
+/**
+ * ORDEN de la barra guardado por el coach, extraído de las filas que YA leyó
+ * `readCoachDomainPrefs` — cero query extra para el layout, que necesita las dos cosas.
+ *
+ * `null` = sin fila o con basura guardada ⇒ el caller cae al orden de la especialidad
+ * (`resolveNavOrder`, @eva/feature-prefs).
+ */
+export function navOrderFromPrefs(rows: readonly CoachDomainPrefsRow[]): FeatureDomain[] | null {
+    const row = rows.find((candidate) => candidate.domain === NAV_ORDER_DOMAIN)
+    if (!row) return null
+    return parseNavOrder(rawSections(row.sections)[NAV_ORDER_KEY])
+}
+
+/**
+ * Lee SOLO la fila del orden de la barra. Para los callers que no necesitan las otras cinco
+ * («Funciones», que ya trae sus dominios por otro camino). Fail-open: error o basura ⇒ `null`.
+ */
+export async function readCoachNavOrder(db: DB, coachId: string): Promise<FeatureDomain[] | null> {
+    const { data, error } = await db
+        .from('coach_feature_prefs')
+        .select('sections')
+        .eq('coach_id', coachId)
+        .eq('domain', NAV_ORDER_DOMAIN)
+        .maybeSingle()
+    if (error || !data) return null
+    return parseNavOrder(rawSections(asSections(data.sections))[NAV_ORDER_KEY])
+}
+
+/**
+ * Guarda el orden elegido por el coach. Con el cliente del USUARIO (RLS
+ * `coach_feature_prefs_owner_all` es el gate). `preset` va en el default seguro del catálogo: esta
+ * fila no tiene preset real, es un contenedor.
+ */
+export async function setCoachNavOrder(
+    db: DB,
+    coachId: string,
+    order: readonly FeatureDomain[],
+): Promise<{ ok: true } | { ok: false; error: string }> {
+    const { error } = await db.from('coach_feature_prefs').upsert(
+        {
+            coach_id: coachId,
+            domain: NAV_ORDER_DOMAIN,
+            preset: 'basico',
+            sections: { [NAV_ORDER_KEY]: [...order] } as unknown as Json,
+            updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'coach_id,domain' },
+    )
+    if (error) return { ok: false, error: error.message }
+    return { ok: true }
+}
+
+/**
+ * Borra el orden manual: la barra vuelve a ordenarse por especialidad. Es lo que corresponde
+ * cuando el coach marca «Ordenar mi panel según mi especialidad» — pedir eso y quedarse con un
+ * orden viejo hecho a mano sería contradecirlo.
+ */
+export async function clearCoachNavOrder(
+    db: DB,
+    coachId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+    const { error } = await db
+        .from('coach_feature_prefs')
+        .delete()
+        .eq('coach_id', coachId)
+        .eq('domain', NAV_ORDER_DOMAIN)
+    if (error) return { ok: false, error: error.message }
+    return { ok: true }
 }
 
 /** Fila lista para el upsert de `coach_feature_prefs`. */

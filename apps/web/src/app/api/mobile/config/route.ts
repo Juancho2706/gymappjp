@@ -13,6 +13,9 @@ import {
 import {
     FEATURE_DOMAINS,
     FEATURE_DOMAIN_KEYS,
+    NAV_ORDER_DOMAIN,
+    NAV_ORDER_KEY,
+    parseNavOrder,
     resolveDomainEnabled,
     resolveSections,
     type FeatureDomain,
@@ -26,7 +29,8 @@ import { resolveStudentAccessForCoach } from '@/lib/student-access.server'
 /**
  * Config operacional + entitlements para el cliente mobile. Fuente única de verdad de:
  *  - módulos de pago efectivos del scope,
- *  - master switch (`_enabled`) de los 5 dominios + secciones de Nutrición.
+ *  - master switch (`_enabled`) de los 5 dominios + secciones de Nutrición,
+ *  - orden PERSONAL de la barra del coach (fila reservada `_nav`).
  */
 
 type DB = ReturnType<typeof createServiceRoleClient>
@@ -57,6 +61,12 @@ type DomainFlags = Record<FeatureDomain, boolean>
 type ResolvedFeaturePrefs = {
     domains: DomainFlags
     sections: Record<NutritionSectionKey, boolean>
+    /**
+     * Orden PERSONAL de la barra del coach (fila reservada `domain = '_nav'`), ya validado con
+     * `parseNavOrder`. `null` = nunca lo tocó ⇒ la app cae en el orden de su especialidad.
+     * Scope alumno / enterprise ⇒ siempre `null` (no hay barra de coach que ordenar).
+     */
+    navOrder: FeatureDomain[] | null
 }
 
 /** Los 5 dominios prendidos (fail-open / audiencias que no leen prefs). */
@@ -83,7 +93,35 @@ function failOpenSections(
 function failOpenPrefs(
     entitledByModule: Partial<Record<ModuleKey, boolean>>,
 ): ResolvedFeaturePrefs {
-    return { domains: allDomainsEnabled(), sections: failOpenSections(entitledByModule) }
+    return {
+        domains: allDomainsEnabled(),
+        sections: failOpenSections(entitledByModule),
+        navOrder: null,
+    }
+}
+
+/** Lee `sections.order` de una fila `_nav` cruda y lo valida. `null` = sin orden guardado. */
+function navOrderFromRow(sections: unknown): FeatureDomain[] | null {
+    if (!sections || typeof sections !== 'object') return null
+    return parseNavOrder((sections as Record<string, unknown>)[NAV_ORDER_KEY])
+}
+
+/**
+ * Orden de la barra del coach en modo TEAM. La fila `_nav` es preferencia PERSONAL (la barra es su
+ * teléfono, aunque trabaje en un pool), así que NO está entre las filas del team: se pide aparte,
+ * por PK y solo esa fila — las prefs de dominio del coach standalone siguen sin aplicar en team.
+ * Error de PostgREST => se tira para que el `catch` del llamador resuelva fail-open.
+ */
+async function readCoachNavOrder(admin: DB, coachId: string | null): Promise<FeatureDomain[] | null> {
+    if (!coachId) return null
+    const { data, error } = await admin
+        .from('coach_feature_prefs')
+        .select('sections')
+        .eq('coach_id', coachId)
+        .eq('domain', NAV_ORDER_DOMAIN)
+        .maybeSingle()
+    if (error) throw error
+    return navOrderFromRow((data as { sections?: unknown } | null)?.sections)
 }
 
 /**
@@ -150,6 +188,12 @@ async function resolveFeaturePrefs(
         const rows = await readFeaturePrefsRows(admin, useTeamBase, scope)
         const byDomain = new Map<string, FeaturePrefsRow>(rows.map((row) => [row.domain, row]))
 
+        // Standalone: la fila `_nav` ya vino en la MISMA lectura (se mapea por dominio como el resto
+        // y los demás lectores la ignoran). Team: hay que pedirla aparte, es del coach y no del pool.
+        const navOrder = useTeamBase
+            ? await readCoachNavOrder(admin, scope.coachId)
+            : navOrderFromRow(byDomain.get(NAV_ORDER_DOMAIN)?.sections)
+
         const domains = {} as DomainFlags
         let nutritionSections: Record<NutritionSectionKey, boolean> | null = null
         for (const domain of FEATURE_DOMAIN_KEYS) {
@@ -174,7 +218,11 @@ async function resolveFeaturePrefs(
                 }) as Record<NutritionSectionKey, boolean>
             }
         }
-        return { domains, sections: nutritionSections ?? failOpenSections(entitledByModule) }
+        return {
+            domains,
+            sections: nutritionSections ?? failOpenSections(entitledByModule),
+            navOrder,
+        }
     } catch {
         return failOpenPrefs(entitledByModule)
     }
@@ -276,7 +324,7 @@ export async function GET(request: NextRequest) {
         ? await resolveStudentAccessForCoach(admin, scope.coachId)
         : null
 
-    const { domains, sections } = await resolveFeaturePrefs(admin, scope, applied)
+    const { domains, sections, navOrder } = await resolveFeaturePrefs(admin, scope, applied)
 
     return NextResponse.json({
         enabledModules,
@@ -286,6 +334,9 @@ export async function GET(request: NextRequest) {
             nutritionEnabled: domains.nutrition,
             sections,
             domains,
+            // Orden de la barra elegido por el coach en «Funciones». `null` = usa el de su
+            // especialidad; la app NUNCA lo deriva de acá para decidir visibilidad, solo prioridad.
+            navOrder,
         },
         // ESPEJO LEGACY (W1.10, 2026-09-01): lo lee apps/mobile/lib/coach-client-detail.ts en binarios/OTAs anteriores; el valor real ya no existe (prefs siempre-on). Retirar junto con featurePrefs.nutritionEnabled en la wave siguiente.
         featurePrefsEnabled: true,

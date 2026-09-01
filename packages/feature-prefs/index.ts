@@ -620,3 +620,60 @@ export function domainOffBannerCopy(domain: FeatureDomain): DomainOffBannerCopy 
         cta: `Ir a ${FUNCIONES_LABEL}`,
     }
 }
+
+// ---------------------------------------------------------------------------------------------
+// Orden de la barra del coach (Ola de orden, QA del owner 01-09: «los coaches van a querer
+// reordenar la barra para elegir qué dos ítems aparecen»). Persistencia SIN migración: una fila
+// reservada de `coach_feature_prefs` con `domain = NAV_ORDER_DOMAIN` y `sections = { order: [...] }`.
+// Todos los lectores de esa tabla mapean por dominio (`FEATURE_DOMAIN_KEYS`), así que la fila extra
+// es inocua para ellos. Es una preferencia PERSONAL del coach (no del pool): la barra es su
+// teléfono, aunque trabaje en un team.
+// ---------------------------------------------------------------------------------------------
+
+/** `domain` reservado de la fila que guarda el orden de la barra (empieza con `_` como `_enabled`). */
+export const NAV_ORDER_DOMAIN = '_nav' as const
+
+/** Key dentro de `sections` de esa fila. El valor es `FeatureDomain[]` (los 5, sin repetir). */
+export const NAV_ORDER_KEY = 'order' as const
+
+/**
+ * Valida un orden guardado. Devuelve los 5 dominios sin repetir: los reconocidos primero (en el
+ * orden guardado) y cualquier dominio faltante al final en orden canónico — así un orden viejo
+ * sigue valiendo si mañana aparece un dominio nuevo. Basura (no-array, vacío, sin ningún dominio
+ * válido) ⇒ `null` (el caller cae al orden por especialidad).
+ */
+export function parseNavOrder(raw: unknown): FeatureDomain[] | null {
+    if (!Array.isArray(raw)) return null
+    const seen = new Set<FeatureDomain>()
+    const out: FeatureDomain[] = []
+    for (const v of raw) {
+        if (typeof v !== 'string') continue
+        if (!(FEATURE_DOMAIN_KEYS as readonly string[]).includes(v)) continue
+        const d = v as FeatureDomain
+        if (seen.has(d)) continue
+        seen.add(d)
+        out.push(d)
+    }
+    if (out.length === 0) return null
+    for (const d of FEATURE_DOMAIN_KEYS) if (!seen.has(d)) out.push(d)
+    return out
+}
+
+/**
+ * Orden efectivo de dominios para la barra: el guardado por el coach si existe y es válido, si no
+ * el de su especialidad (`PERSONA_DOMAIN_ORDER`; `other` cuando no respondió).
+ */
+export function resolveNavOrder(saved: unknown, persona: Persona | null | undefined): readonly FeatureDomain[] {
+    return parseNavOrder(saved) ?? PERSONA_DOMAIN_ORDER[persona ?? 'other']
+}
+
+/** Mueve el dominio `domain` un lugar hacia arriba (`-1`) o abajo (`+1`); en los bordes no hace nada. */
+export function moveNavOrder(order: readonly FeatureDomain[], domain: FeatureDomain, delta: -1 | 1): FeatureDomain[] {
+    const i = order.indexOf(domain)
+    const j = i + delta
+    if (i === -1 || j < 0 || j >= order.length) return [...order]
+    const next = [...order]
+    next[i] = order[j]!
+    next[j] = domain
+    return next
+}

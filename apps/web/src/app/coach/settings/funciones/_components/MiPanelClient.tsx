@@ -5,6 +5,7 @@ import { toast } from 'sonner'
 import { Apple, Dumbbell, HeartPulse, PersonStanding, Sparkles, Trash2, UserPlus } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { PERSONA_COPY, PERSONA_TILE_ORDER, type Persona } from '@eva/schemas'
+import type { FeatureDomain } from '@eva/feature-prefs'
 import { Button } from '@/components/ui/button'
 import { SegmentedControl } from '@/components/ui/segmented-control'
 import { cn } from '@/lib/utils'
@@ -45,6 +46,11 @@ export interface MiPanelClientProps {
     persona: Persona | null
     alsoOther: boolean
     domains: MiPanelDomainRow[]
+    /**
+     * Orden PERSONAL de la barra guardado por el coach (fila `_nav`), o `null` si nunca reordenó
+     * — ahí manda su especialidad. Lo consume la tarjeta de áreas (▲▼).
+     */
+    navOrder?: FeatureDomain[] | null
     /** Alumnos del workspace activo — los usa el picker de Composición corporal. */
     bodycompClients: BodycompClient[]
     /** `true` = el coach ya tiene alumno de ejemplo sembrado. */
@@ -61,6 +67,7 @@ export function MiPanelClient({
     persona,
     alsoOther,
     domains,
+    navOrder = null,
     bodycompClients,
     hasDemo,
     afterDomains,
@@ -68,7 +75,12 @@ export function MiPanelClient({
     return (
         <div className="space-y-5">
             <PersonaCard persona={persona} alsoOther={alsoOther} />
-            <DomainsCard domains={domains} bodycompClients={bodycompClients} />
+            <DomainsCard
+                domains={domains}
+                bodycompClients={bodycompClients}
+                navOrder={navOrder}
+                persona={persona}
+            />
             {afterDomains}
             <DemoCard persona={persona} hasDemo={hasDemo} />
         </div>

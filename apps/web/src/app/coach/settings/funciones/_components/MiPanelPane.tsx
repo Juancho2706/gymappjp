@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { ArrowRight, Compass } from 'lucide-react'
-import { DOMAIN_ENABLED_KEY } from '@eva/feature-prefs'
+import { DOMAIN_ENABLED_KEY, type FeatureDomain } from '@eva/feature-prefs'
 import { FeaturePrefsPanel } from '@/components/coach/FeaturePrefsPanel'
 import { GUIDE_ROUTE } from '@/app/coach/guia/_lib/guide-first-entry'
 import { domainsWithSectionEditor, type DomainFuncionesConfig } from '../_data/funciones.queries'
@@ -25,7 +25,14 @@ import type { MiPanelDomainRow } from './DomainsCard'
  * entrada, un coach que la cerró se quedaba sin ninguna forma de volver que no fuera escribir la
  * URL a mano.
  */
-export async function MiPanelPane({ domains }: { domains: DomainFuncionesConfig[] }) {
+export async function MiPanelPane({
+    domains,
+    navOrder = null,
+}: {
+    domains: DomainFuncionesConfig[]
+    /** Orden PERSONAL de la barra (fila `_nav`), tal como lo devolvió `getFuncionesContext`. */
+    navOrder?: FeatureDomain[] | null
+}) {
     const [ctx, bodycompClients] = await Promise.all([getMiPanelContext(), getBodycompClients()])
 
     const rows: MiPanelDomainRow[] = domains.map((domain) => ({
@@ -43,6 +50,7 @@ export async function MiPanelPane({ domains }: { domains: DomainFuncionesConfig[
             persona={ctx.persona}
             alsoOther={ctx.alsoOther}
             domains={rows}
+            navOrder={navOrder}
             bodycompClients={bodycompClients}
             hasDemo={ctx.demoClientId != null}
             afterDomains={

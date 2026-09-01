@@ -9,6 +9,11 @@ import {
     FUNCIONES_LABEL,
     NUTRITION_SECTIONS,
     PERSONA_DOMAIN_ORDER,
+    NAV_ORDER_DOMAIN,
+    NAV_ORDER_KEY,
+    moveNavOrder,
+    parseNavOrder,
+    resolveNavOrder,
     PRESETS,
     disabledDomainsForPersona,
     domainOffBannerCopy,
@@ -651,5 +656,43 @@ describe('W2 · PERSONA_DOMAIN_ORDER (orden de prioridad por persona)', () => {
         // una preferencia de presentacion (entrenamiento primero), no un recorte.
         expect(enabledDomains('other')).toEqual([...FEATURE_DOMAIN_KEYS])
         expect(PERSONA_DOMAIN_ORDER.other).toEqual(['training', 'nutrition', 'cardio', 'movement', 'bodycomp'])
+    })
+})
+
+describe('orden de la barra del coach (fila `_nav` de coach_feature_prefs)', () => {
+    it('la fila reservada no es un dominio y guarda el orden bajo `order`', () => {
+        expect((FEATURE_DOMAIN_KEYS as readonly string[]).includes(NAV_ORDER_DOMAIN)).toBe(false)
+        expect(NAV_ORDER_DOMAIN.startsWith('_')).toBe(true)
+        expect(NAV_ORDER_KEY).toBe('order')
+    })
+
+    it('parseNavOrder: acepta los 5, descarta basura y completa los faltantes en orden canónico', () => {
+        expect(parseNavOrder(['cardio', 'training', 'nutrition', 'movement', 'bodycomp'])).toEqual([
+            'cardio', 'training', 'nutrition', 'movement', 'bodycomp',
+        ])
+        expect(parseNavOrder(['cardio', 'workouts', 'cardio', 7, null])).toEqual([
+            'cardio', 'nutrition', 'training', 'movement', 'bodycomp',
+        ])
+        expect(parseNavOrder([])).toBeNull()
+        expect(parseNavOrder('cardio')).toBeNull()
+        expect(parseNavOrder(undefined)).toBeNull()
+        expect(parseNavOrder(['zzz'])).toBeNull()
+    })
+
+    it('resolveNavOrder: guardado manda; sin guardado cae a la especialidad; sin persona a `other`', () => {
+        expect(resolveNavOrder(['movement', 'training'], 'strength')).toEqual([
+            'movement', 'training', 'nutrition', 'cardio', 'bodycomp',
+        ])
+        expect(resolveNavOrder(null, 'nutrition')).toEqual(PERSONA_DOMAIN_ORDER.nutrition)
+        expect(resolveNavOrder(undefined, null)).toEqual(PERSONA_DOMAIN_ORDER.other)
+    })
+
+    it('moveNavOrder: sube/baja un lugar y no hace nada en los bordes ni con un dominio ausente', () => {
+        const base = ['training', 'nutrition', 'cardio', 'movement', 'bodycomp'] as const
+        expect(moveNavOrder(base, 'cardio', -1)).toEqual(['training', 'cardio', 'nutrition', 'movement', 'bodycomp'])
+        expect(moveNavOrder(base, 'cardio', 1)).toEqual(['training', 'nutrition', 'movement', 'cardio', 'bodycomp'])
+        expect(moveNavOrder(base, 'training', -1)).toEqual([...base])
+        expect(moveNavOrder(base, 'bodycomp', 1)).toEqual([...base])
+        expect(moveNavOrder(['training', 'nutrition'], 'cardio', 1)).toEqual(['training', 'nutrition'])
     })
 })
