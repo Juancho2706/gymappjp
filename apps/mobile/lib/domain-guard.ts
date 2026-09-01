@@ -35,8 +35,9 @@
  *
  * Asi no hay flash de contenido real ni request disparada antes del aviso.
  *
- * `DomainOffNotice` todavia NO existe: el componente visual espera el mockup del owner (regla
- * «UI ⇒ mockup primero»). Este archivo entrega solo la logica.
+ * `DomainOffNotice` ya existe: vive en `components/coach/DomainOffNotice.tsx` (W1.6c, sobre el
+ * mockup aprobado `9801fec7`) y es la rama «apagado» del JSX de arriba. Este archivo sigue
+ * entregando solo la logica: no navega, no pinta.
  */
 import type { FeatureDomain } from '@eva/feature-prefs'
 import { useEntitlements } from './entitlements'
