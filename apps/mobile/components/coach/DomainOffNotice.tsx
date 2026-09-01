@@ -11,8 +11,9 @@ import { MI_PANEL_PATH, domainOffCopy, type FeatureDomain } from '../../lib/doma
  * contenido, en vez de redirigir.
  *
  * No confundir con `components/ModuleOffNotice.tsx`, del que calca el chasis visual:
- *  - ModuleOffNotice = MODULO no habilitado. Es DINERO (entitlement server-side, fail-CLOSED) y
- *    kill-switch de operador; su CTA habla del estado del plan.
+ *  - ModuleOffNotice = MODULO apagado por el OPERADOR (kill-switch `EVA_DISABLED_MODULES`) o acceso
+ *    de la cuenta inactivo (entitlement server-side, fail-CLOSED). No es un gate de plan (W4.2,
+ *    2026-09-01): copy de mantenimiento y boton secundario «Volver», sin accion de compra.
  *  - DomainOffNotice = PREFERENCIA del propio coach (`coach_feature_prefs._enabled`, fail-OPEN).
  *    El coach lo apago y lo puede prender ahora mismo: cero plan, cero precio, cero urgencia. Su
  *    CTA lleva a «Opciones › Mi panel».

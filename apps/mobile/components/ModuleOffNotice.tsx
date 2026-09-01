@@ -1,23 +1,23 @@
 import { StyleSheet, Text, View } from 'react-native'
 import { HeartPulse, Activity, Ruler, Apple, type LucideIcon } from 'lucide-react-native'
+import { useRouter } from 'expo-router'
 import { useTheme } from '../context/ThemeContext'
 import { Button } from './Button'
-import { RefreshPlanButton } from './coach/RefreshPlanButton'
 import type { ModuleKey } from '../lib/entitlements-core'
 
 /**
- * ModuleOffNotice (RN) — port del aviso web `components/coach/ModuleOffNotice.tsx` (E0-C2).
- * Se muestra cuando se navega a una superficie de un modulo que NO esta habilitado (mensaje
- * NEUTRO, sin urgencia ni precio — regla anti-hostigamiento del plan 05 §2.6). Copy verbatim de
- * la web por las 4 superficies (cardio, movement, body_composition, nutrition_exchanges).
+ * ModuleOffNotice (RN) — port del aviso web `components/coach/ModuleOffNotice.tsx`. Se muestra
+ * cuando se navega a una superficie de un modulo APAGADO por el OPERADOR (kill-switch
+ * `EVA_DISABLED_MODULES`) o porque el acceso de la cuenta esta inactivo. Copy verbatim de la web
+ * por las 4 superficies (cardio, movement, body_composition, nutrition_exchanges).
  *
- * Decision CEO 2026-07-17: los modulos vienen INCLUIDOS con cualquier plan pago, asi que este
- * aviso solo lo ve un coach en plan Free. CTA CONTEXTUAL: por defecto (coach) el aviso es solo
- * ESTADO del plan + "Actualizar estado" (revalida entitlements) — sin link-out a la pagina de
- * pago ni precios (anti-steering Apple 3.1.1 / politica de pagos de Google, ver
- * `docs/research/cta-pagos-externos-stores-2026-07-31.md`). Los consumidores pueden pasar un
- * `cta` propio (p. ej. la vista del alumno: "contacta a tu coach") o `cta={null}` para no
- * mostrar boton.
+ * NO es un gate de plan (regla del owner 2026-08-31: todo esta en todos los planes, solo se cobra
+ * el cupo de alumnos). El copy es de MANTENIMIENTO: no habla de planes ni de cobros, y no ofrece
+ * ninguna accion de compra — eso ademas lo deja del lado seguro del anti-steering (Apple 3.1.1 /
+ * politica de pagos de Google): aca adentro no hay ningun camino a pagar.
+ *
+ * La PREFERENCIA del coach (dominio que el mismo apago en «Opciones › Mi panel») la cubre
+ * `components/coach/DomainOffNotice.tsx`, que vive al lado y se evalua ANTES que este aviso.
  */
 
 type ModuleCopy = { icon: LucideIcon; title: string; description: string }
@@ -25,27 +25,27 @@ type ModuleCopy = { icon: LucideIcon; title: string; description: string }
 const MODULE_COPY: Record<ModuleKey, ModuleCopy> = {
     cardio: {
         icon: HeartPulse,
-        title: 'El módulo Cardio no está habilitado',
+        title: 'Cardio temporalmente no disponible',
         description:
-            'Las zonas de frecuencia cardiaca personalizadas, la calculadora de pace y las plantillas de intervalos son parte del módulo Cardio.',
+            'Las zonas de frecuencia cardiaca, la calculadora de pace y las plantillas de intervalos no están disponibles en este momento.',
     },
     movement_assessment: {
         icon: Activity,
-        title: 'El módulo Evaluación de movimiento no está habilitado',
+        title: 'Evaluación de movimiento temporalmente no disponible',
         description:
-            'El screening de movilidad y los patrones de movimiento para personalizar la prescripción son parte del módulo Evaluación de movimiento.',
+            'El screening de movilidad y los patrones de movimiento para personalizar la prescripción no están disponibles en este momento.',
     },
     body_composition: {
         icon: Ruler,
-        title: 'El módulo Composición corporal no está habilitado',
+        title: 'Composición corporal temporalmente no disponible',
         description:
-            'La antropometría y la composición corporal (protocolo ISAK completo) son parte del módulo Composición corporal.',
+            'La antropometría y la composición corporal (protocolo ISAK completo) no están disponibles en este momento.',
     },
     nutrition_exchanges: {
         icon: Apple,
-        title: 'El módulo Nutrición Pro no está habilitado',
+        title: 'Nutrición Pro temporalmente no disponible',
         description:
-            'Las pautas por intercambios, las plantillas reutilizables, los objetivos por composición corporal y el PDF con tu marca son parte del módulo Nutrición Pro.',
+            'Las pautas por intercambios, las plantillas reutilizables, los objetivos por composición corporal y el PDF con tu marca no están disponibles en este momento.',
     },
 }
 
@@ -56,10 +56,14 @@ export function ModuleOffNotice({
     cta,
 }: {
     moduleKey: ModuleKey
-    /** CTA override. `undefined` => default (coach: estado + "Actualizar estado"). `null` => sin boton. */
+    /**
+     * CTA override. `undefined` => default: aviso de mantenimiento + boton secundario «Volver»
+     * (vuelve a la pantalla anterior). `null` => sin boton (p. ej. la vista del alumno).
+     */
     cta?: CtaProp
 }) {
     const { theme } = useTheme()
+    const router = useRouter()
     const copy = MODULE_COPY[moduleKey]
     const Icon = copy.icon
 
@@ -85,9 +89,9 @@ export function ModuleOffNotice({
             {cta === undefined ? (
                 <>
                     <Text style={[styles.description, { color: theme.foreground, fontFamily: theme.fontSans, fontWeight: '600' }]}>
-                        Este módulo no está incluido en tu plan actual.
+                        Estamos haciendo mantenimiento en esta función. Tus datos están a salvo; vuelve a intentarlo más tarde.
                     </Text>
-                    <RefreshPlanButton size="sm" />
+                    <Button label="Volver" variant="secondary" onPress={() => router.back()} style={styles.cta} />
                 </>
             ) : cta ? (
                 <Button label={cta.label} variant="sport" onPress={cta.onPress} style={styles.cta} />

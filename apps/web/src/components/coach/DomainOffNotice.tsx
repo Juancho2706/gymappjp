@@ -8,8 +8,9 @@ import type { FeatureDomain } from '@eva/feature-prefs'
  * MISMO apagó en Opciones › Mi panel (Ola de orden W1, mockup `9801fec7` decisión 3A).
  *
  * NO confundir con `ModuleOffNotice`, que vive al lado:
- *   - `ModuleOffNotice` = el módulo de pago no está habilitado para el tenant (entitlement /
- *     kill-switch de operador). Es plata: su CTA va a `/coach/subscription`.
+ *   - `ModuleOffNotice` = el módulo está apagado por el OPERADOR (kill-switch `EVA_DISABLED_MODULES`)
+ *     o el acceso de la cuenta está inactivo. No es un gate de plan (W4.2, 2026-09-01): copy de
+ *     mantenimiento y CTA «Volver al inicio», sin ninguna acción de compra.
  *   - `DomainOffNotice` (esto) = PREFERENCIA del propio coach. No hay plan, ni precio, ni
  *     urgencia: apagó una función y se la ofrecemos de vuelta con un click. Sus datos siguen
  *     intactos (lo dice el copy) y sus permisos también: esto es VISIBILIDAD, nunca autorización
