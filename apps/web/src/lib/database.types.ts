@@ -7213,6 +7213,7 @@ export type Database = {
         Returns: Json
       }
       get_coach_id_by_email: { Args: { p_email: string }; Returns: string }
+      get_coach_public_branding: { Args: { p_identifier: string }; Returns: Json }
       get_coach_workout_sessions_30d: {
         Args: { p_coach_id: string }
         Returns: {

@@ -37,6 +37,7 @@ import {
 } from '@/lib/rate-limit'
 import { getEnterpriseDomain } from '@/lib/enterprise/domain'
 import { encodeBrandHeaderValue } from '@/lib/brand-header-codec'
+import { fetchPublicCoachBranding, type PublicCoachBranding } from '@/lib/branding/public-branding'
 import { getCoachPublicIdentifier } from '@/lib/coach/public-identifier'
 import {
     parseVtaMode,
@@ -322,14 +323,15 @@ async function proxyInner(request: NextRequest) {
         ? (() => {
               const cached = coachBrandingCache.get(cRouteSlug)
               if (cached && Date.now() - cached.ts < COACH_BRANDING_TTL_MS) {
-                  return Promise.resolve({ data: cached.data, error: null })
+                  return Promise.resolve({ data: cached.data as unknown as PublicCoachBranding, error: null })
               }
-              const base = brandingAnonClient()
-                  .from('coaches')
-                  .select('id, brand_name, primary_color, logo_url, slug, loader_text, use_custom_loader, loader_text_color, loader_icon_mode, subscription_tier, brand_secondary_color, accent_light, accent_dark, neutral_tint, logo_url_dark, brand_font_key, loader_variant, theme_preset_key, login_layout_key, loader_config, executor_theme')
-              if (INVITE_CODE_RE.test(cRouteSlug)) return base.eq('invite_code', cRouteSlug).maybeSingle()
-              if (SLUG_RE.test(cRouteSlug)) return base.eq('slug', cRouteSlug).maybeSingle()
-              return null
+              // SEC-01 fase 2: el branding sale del RPC SECURITY DEFINER (una fila por
+              // slug-o-código) en vez de un SELECT directo a `coaches` con la anon key. La
+              // bifurcación código/slug vive dentro del RPC (mismo regex), pero los dos formatos
+              // se siguen chequeando ACÁ: un identificador que no matchea ninguno no consulta la
+              // DB y devuelve null (⇒ /not-found aguas abajo), exactamente como antes.
+              if (!INVITE_CODE_RE.test(cRouteSlug) && !SLUG_RE.test(cRouteSlug)) return null
+              return fetchPublicCoachBranding(brandingAnonClient(), cRouteSlug)
           })()
         : null
 
@@ -1104,26 +1106,21 @@ async function proxyInner(request: NextRequest) {
         // Coach branding fetch was started in parallel with getUser() above — await the result
         let { data: coachData, error: coachBrandingError } = await coachBrandingPromise
 
-        // Hardening (incidente 2026-06-21): si el SELECT rich de branding falla —p.ej. una
-        // columna nueva del select sin GRANT a `anon` (el login pre-auth corre como anon)—
-        // supabase-js devuelve {data:null,error}. NO tumbar el login de TODOS los coaches con
-        // un /not-found por eso. Reintentar con un SELECT MÍNIMO de identidad (columnas
-        // siempre granteadas: id/slug/brand_name/primary_color/logo_url) para resolver el
-        // coach.id (que el layout /c exige) y degradar a branding EVA-default. Un column-grant
-        // faltante a futuro degrada en vez de romper. Solo el "coach genuinamente inexistente"
-        // (sin error y sin fila) debe 404.
+        // Hardening (incidente 2026-06-21): si la lectura de branding falla, NO tumbar el login de
+        // TODOS los coaches con un /not-found. Se reintenta una vez para resolver el coach.id (que
+        // el layout /c exige). Solo el "coach genuinamente inexistente" (sin error y sin fila) 404.
+        //
+        // SEC-01 fase 2: el reintento era un SELECT MÍNIMO porque el fallo típico era una columna
+        // nueva del select sin GRANT a `anon`. Con el RPC SECURITY DEFINER ese caso ya no existe
+        // (la forma del payload la fija la función, no los column-grants), así que el reintento
+        // queda como red contra un fallo transitorio de red/DB, contra la misma fuente.
         if (coachBrandingError && coachSlug) {
-            console.error('[proxy] coach branding rich select failed; falling back to minimal', {
+            console.error('[proxy] coach branding rpc failed; retrying once', {
                 path: pathname,
                 error: coachBrandingError.message,
             })
-            const idCol = INVITE_CODE_RE.test(coachSlug) ? 'invite_code' : 'slug'
-            const { data: minData } = await brandingAnonClient()
-                .from('coaches')
-                .select('id, brand_name, primary_color, logo_url, slug')
-                .eq(idCol, coachSlug)
-                .maybeSingle()
-            coachData = minData as typeof coachData
+            const { data: retryData } = await fetchPublicCoachBranding(brandingAnonClient(), coachSlug)
+            coachData = retryData as typeof coachData
         }
 
         // Solo HITS limpios entran al cache (ni errores ni misses — ver nota del modulo).

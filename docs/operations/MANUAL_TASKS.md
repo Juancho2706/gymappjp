@@ -57,12 +57,12 @@ web y app: Postgres exige SELECT sobre la columna también para FILTRAR, y hoy h
 - [x] **Fase 0 (02-09, LIVE `20260902012559`)**: `REVOKE ALL ON client_payments FROM anon` +
       `REVOKE TRIGGER, TRUNCATE, REFERENCES ON coaches FROM anon`. Probada en transacción con rollback, advisors
       sin ERROR, prod 200.
-- [ ] **Fase 1**: RPC `public.get_coach_public_branding(text)` SECURITY DEFINER, UNA fila por slug-o-código con
-      exactamente las columnas de branding que `anon` ya puede leer + `invite_code` de esa fila. Mata la
-      enumeración masiva sin quitarle a nadie el dato que ya conoce.
-- [ ] **Fase 2**: migrar los 9 call sites (web: `proxy.ts:327,1120`, `c/[coach_slug]/login/_data/login.queries.ts`,
-      `api/manifest|splash|og|pwa-screenshot/[coach_slug]`; RN: `apps/mobile/lib/branding.ts`
-      `fetchBrandingByCoachIdentifier` + fallback `BRANDING_COLS_MIN`) al RPC. Deploy web + OTA RN por GH Actions.
+- [x] **Fase 1 (02-09, LIVE `20260902014246`)**: RPC `public.get_coach_public_branding(text)` SECURITY DEFINER, UNA
+      fila por slug-o-código con exactamente las 31 columnas de branding que `anon` ya puede leer. Probada en
+      transacción como `anon` (slug, código, desconocidos ⇒ null) antes de aplicar.
+- [x] **Fase 2 (02-09)**: los 9 call sites migrados al RPC (web: `lib/branding/public-branding.ts` usado por
+      `proxy.ts`, `c/[coach_slug]/login/_data/login.queries.ts`, `api/manifest|splash|og|pwa-screenshot`; RN:
+      `apps/mobile/lib/branding.ts` `fetchBrandingByCoachIdentifier`). Deploy web + OTA RN por GH Actions.
 - [ ] **Fase 3 (solo cuando la OTA esté adoptada — verificar en PostHog/EAS que no queden sesiones con el
       bundle viejo entrando por código)**: `REVOKE SELECT (invite_code) ON public.coaches FROM anon` +
       `REVOKE EXECUTE ON FUNCTION generate_unique_invite_code(), generate_invite_code() FROM anon`. Después,
@@ -134,6 +134,16 @@ Fuentes: [`docs/legal/`](../legal/) y [APP_REVIEW_NOTES.md](APP_REVIEW_NOTES.md)
 
 Las suites E2E no bloquean PR automáticamente porque utilizan un entorno Supabase real y aún requieren preparación de datos.
 
+Desde el 2026-09-02 el job `e2e` del dispatch corre **solo el project `prod-suave`**
+(`npx playwright test --project=prod-suave`): un navegador, sin paralelismo, `retries: 0`, header
+`x-eva-qa` y el guardián de `/api/health`. El project `chromium` —specs que escriben en producción
+sobre un coach real— ya no se lanza desde CI, y el paso de RLS de `apps/enterprise` (app congelada,
+B15) se eliminó.
+
+- [ ] **Bloqueante hoy**: cargar en GitHub los secrets `E2E_QA_COACH_EMAIL` y
+  `E2E_QA_COACH_PASSWORD` con la cuenta del coach QA `evademo`. Mientras no existan, el project
+  `setup` se salta solo y la tanda entera queda skipped (comportamiento seguro, pero no valida
+  nada). Las credenciales no se anotan acá ni en ningún archivo del repo.
 - [ ] Ejecutar manualmente el workflow **CI** con `workflow_dispatch` antes de cambios de auth, RLS, pagos, nutrición o releases de tienda.
 - [ ] Confirmar que los secrets E2E existen en el environment de GitHub.
 - [ ] Guardar el run y resultado consolidado en [TEST_STATUS.md](../testing/TEST_STATUS.md).

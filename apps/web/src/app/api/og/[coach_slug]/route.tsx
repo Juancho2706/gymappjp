@@ -1,7 +1,7 @@
 import { ImageResponse } from 'next/og'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { coachIdentifierColumn } from '@/lib/coach/invite-code'
+import { fetchPublicCoachBranding } from '@/lib/branding/public-branding'
 import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 import { BRAND_APP_ICON, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 import { COACH_OG_IMAGE_HEIGHT, COACH_OG_IMAGE_WIDTH } from '@/lib/coach-og-image'
@@ -34,11 +34,9 @@ export async function GET(request: NextRequest, { params }: Params) {
     const { coach_slug } = await params
 
     const supabase = await createClient()
-    const { data: coach } = await supabase
-        .from('coaches')
-        .select('brand_name, primary_color, logo_url, subscription_tier')
-        .eq(coachIdentifierColumn(coach_slug), coach_slug)
-        .maybeSingle()
+    // SEC-01 fase 2: branding público por RPC (una fila, resuelve código o slug adentro) — la
+    // preview la pide el scraper de WhatsApp SIEMPRE sin sesión.
+    const { data: coach } = await fetchPublicCoachBranding(supabase, coach_slug)
 
     const tier = (coach?.subscription_tier ?? 'free') as SubscriptionTier
     const brandingAllowed = isBrandingAllowed(tier)

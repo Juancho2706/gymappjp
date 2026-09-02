@@ -2,7 +2,7 @@ import { ImageResponse } from 'next/og'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
-import { coachIdentifierColumn } from '@/lib/coach/invite-code'
+import { fetchPublicCoachBranding } from '@/lib/branding/public-branding'
 import { safeColor, rasterLogo } from '@/lib/records/pr-card'
 import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 import { BRAND_APP_ICON, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
@@ -64,11 +64,9 @@ async function resolveBrand(
     coachSlug: string,
     evaLogoUrl: string,
 ): Promise<Brand> {
-    const { data: coach } = await supabase
-        .from('coaches')
-        .select('brand_name, primary_color, logo_url, subscription_tier')
-        .eq(coachIdentifierColumn(coachSlug), coachSlug)
-        .maybeSingle()
+    // SEC-01 fase 2: branding público por RPC (una fila, resuelve código o slug adentro); el
+    // fetch del richer UI de Chrome puede llegar sin cookies.
+    const { data: coach } = await fetchPublicCoachBranding(supabase, coachSlug)
 
     const brandingAllowed = isBrandingAllowed((coach?.subscription_tier ?? 'free') as SubscriptionTier)
     let brandName = coach?.brand_name ?? 'EVA'

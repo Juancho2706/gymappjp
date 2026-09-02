@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createServiceRoleClient } from '@/lib/supabase/admin-client';
+import { fetchPublicCoachBranding } from '@/lib/branding/public-branding';
 import { BRAND_APP_ICON_512, BRAND_APP_ICON_MASKABLE } from '@/lib/brand-assets';
 import { resolveBrandTheme } from '@eva/brand-kit';
 import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers';
@@ -30,14 +31,18 @@ export async function GET(
 
   const supabase = await createClient();
 
-  // Gap 7: support invite_code (5 uppercase chars) in addition to slug
-  const INVITE_CODE_RE = /^[A-Z2-9]{5}$/
-  const coachQuery = supabase.from('coaches').select('id, brand_name, logo_url, primary_color, subscription_tier')
-  const { data: coach } = await (
-    INVITE_CODE_RE.test(slug)
-      ? coachQuery.eq('invite_code', slug).maybeSingle()
-      : coachQuery.eq('slug', slug).maybeSingle()
-  )
+  // Gap 7: invite_code (5 chars) además del slug. SEC-01 fase 2: la bifurcación vive dentro del
+  // RPC `get_coach_public_branding` (mismo regex), que además evita leer `coaches` con la anon key.
+  const { data: coachRow } = await fetchPublicCoachBranding(supabase, slug)
+  const coach = coachRow
+    ? {
+        id: coachRow.id,
+        brand_name: coachRow.brand_name,
+        logo_url: coachRow.logo_url,
+        primary_color: coachRow.primary_color,
+        subscription_tier: coachRow.subscription_tier,
+      }
+    : null
 
   const brandingAllowed = coach
     ? isBrandingAllowed((coach.subscription_tier ?? 'free') as SubscriptionTier)

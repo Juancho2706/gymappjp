@@ -42,13 +42,11 @@ vi.mock('@supabase/ssr', () => ({
     createServerClient: vi.fn(() => fakeDb(sessionRows)),
 }))
 
+// Cliente anonimo del branding /c: desde SEC-01 fase 2 el proxy lo consulta por el RPC
+// `get_coach_public_branding` (una fila por slug-o-codigo), no por `from('coaches')`.
 vi.mock('@supabase/supabase-js', () => ({
     createClient: vi.fn(() => ({
-        from: () => ({
-            select: () => ({
-                eq: () => ({ maybeSingle: async () => ({ data: coachBrandingRow, error: null }) }),
-            }),
-        }),
+        rpc: async () => ({ data: coachBrandingRow, error: null }),
     })),
 }))
 

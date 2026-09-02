@@ -2,7 +2,7 @@ import { ImageResponse } from 'next/og'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
-import { coachIdentifierColumn } from '@/lib/coach/invite-code'
+import { fetchPublicCoachBranding } from '@/lib/branding/public-branding'
 import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 import { BRAND_APP_ICON, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 
@@ -29,11 +29,9 @@ export async function GET(request: NextRequest, { params }: Params) {
     const height = Math.min(2732, Math.max(320, Number(searchParams.get('h')) || 2532))
 
     const supabase = await createClient()
-    const { data: coach } = await supabase
-        .from('coaches')
-        .select('brand_name, primary_color, logo_url, subscription_tier')
-        .eq(coachIdentifierColumn(coach_slug), coach_slug)
-        .maybeSingle()
+    // SEC-01 fase 2: branding público por RPC (una fila, resuelve código o slug adentro) en vez
+    // de leer `coaches` con la anon key — el splash lo pide iOS sin sesión.
+    const { data: coach } = await fetchPublicCoachBranding(supabase, coach_slug)
 
     // Marca base: coach (standalone) o coach con marca org embebida (managed). El alumno de pool
     // la sobrescribe con la del TEAM más abajo.

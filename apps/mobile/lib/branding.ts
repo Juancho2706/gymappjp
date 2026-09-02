@@ -91,8 +91,7 @@ export function normalizeCoachIdentifier(input: string): string {
 }
 
 // Nota: `display_name` NO es columna de `coaches` (fuente de verdad = `brand_name`, alineado con la
-// query del login web). El select rich pide todo el payload white-label del login; el min es el
-// fallback DB-compat para DBs viejas que no tengan las columnas v2 (todas con GRANT anon).
+// query del login web). El select rich pide todo el payload white-label del panel del coach.
 // W-brand B1/B2/B4 (dueño 2026-08-17): `brand_secondary_color`, `accent_light`, `accent_dark` y
 // `loader_text_color` SALIERON del select — las columnas quedan en DB (grandfather pasivo) pero
 // dejan de leerse: el par se deriva vía `sealPair` y el color del texto del loader lo decide el
@@ -101,25 +100,32 @@ const BRANDING_COLS_RICH =
   'id, slug, primary_color, brand_name, invite_code, logo_url, logo_url_dark, welcome_message, subscription_tier, login_layout_key, neutral_tint, brand_font_key, theme_preset_key, loader_variant, loader_config, use_custom_loader, loader_text, loader_icon_mode, executor_theme, instagram_handle'
 const BRANDING_COLS_MIN = 'id, slug, primary_color, brand_name, invite_code'
 
+/**
+ * Marca del coach por código-o-slug, ANTES de loguearse (la pantalla «ingresá tu código» corre
+ * como `anon`).
+ *
+ * SEC-01 fase 2: ya no lee `coaches` directo — llama al RPC `get_coach_public_branding`
+ * (SECURITY DEFINER, devuelve UNA fila), que es lo que permite revocarle a `anon` el SELECT de
+ * `invite_code` y cerrar la enumeración de los códigos de todos los coaches. La bifurcación
+ * código/slug la resuelve el RPC con el mismo regex, así que se le pasa el valor ya normalizado
+ * por `parseCoachIdentifier` (código en MAYÚSCULAS, slug en minúsculas).
+ *
+ * El fallback a `BRANDING_COLS_MIN` desapareció de este camino: existía por si a una DB vieja le
+ * faltaba alguna columna v2 del select, y el RPC fija la forma del payload del lado del servidor.
+ * (El camino AUTENTICADO, `fetchOwnCoachBranding`, sí lo conserva: sigue leyendo la tabla.)
+ */
 export async function fetchBrandingByCoachIdentifier(identifierInput: string): Promise<CoachBranding | null> {
   const identifier = parseCoachIdentifier(identifierInput)
   if (identifier.type === 'invalid') return null
 
-  const runQuery = (cols: string) => {
-    const q = supabase.from('coaches').select(cols)
-    return identifier.type === 'code'
-      ? q.eq('invite_code', identifier.value).maybeSingle()
-      : q.eq('slug', identifier.value).maybeSingle()
-  }
-
-  // M-F1: intenta columnas de loader; si la DB no las tiene, cae a las mínimas.
-  let res = (await runQuery(BRANDING_COLS_RICH)) as { data: any; error: any }
-  if (res.error) res = (await runQuery(BRANDING_COLS_MIN)) as { data: any; error: any }
-  const data = res.data
-  if (res.error) throw new CoachBrandingLookupError()
+  const { data, error } = await supabase.rpc('get_coach_public_branding', { p_identifier: identifier.value })
+  if (error) throw new CoachBrandingLookupError()
   if (!data) return null
 
-  return mapCoachRowToBranding(data)
+  // El RPC devuelve TODAS las columnas públicas, `use_brand_colors_coach` incluida; el camino
+  // anónimo la sigue ignorando a propósito (es preferencia del panel PROPIO del coach, ver la
+  // nota del tipo) — se descarta acá para que el payload del alumno quede igual que antes.
+  return mapCoachRowToBranding({ ...(data as Record<string, unknown>), use_brand_colors_coach: null })
 }
 
 /** Fila cruda de `coaches` → payload de marca. Unica fuente del mapeo (anon + autenticado). */
