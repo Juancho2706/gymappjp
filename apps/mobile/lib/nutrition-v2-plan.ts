@@ -10,11 +10,19 @@
  * La regla de "qué nota se muestra" (`resolveItemDisplayNote`) ya NO vive acá ni en el web: es
  * gramática compartida de `@eva/nutrition-v2/plan-substitutions`. Se re-exporta desde este módulo
  * porque la pantalla del alumno la consume junto con la guía y así el import de la vista es uno
- * solo.
+ * solo. Lo mismo vale para `planSubstitutionsByItem`, que decide si los reemplazos ya vienen en el
+ * read-model del plan (RPC nuevo) o hay que leerlos con el select directo (RPC viejo / caché).
  */
-import { formatNutritionAmount, resolveItemDisplayNote } from '@eva/nutrition-v2'
+import {
+  EMPTY_PLAN_SUBSTITUTIONS,
+  formatNutritionAmount,
+  planSubstitutionsByItem,
+  resolveItemDisplayNote,
+  type PlanSubstitutionsByItem,
+} from '@eva/nutrition-v2'
 
-export { resolveItemDisplayNote }
+export { EMPTY_PLAN_SUBSTITUTIONS, planSubstitutionsByItem, resolveItemDisplayNote }
+export type { PlanSubstitutionsByItem }
 
 /** Forma estructural mínima del ítem prescrito que consume la guía (espejo del read-model). */
 export type PlanItemGuidance = {

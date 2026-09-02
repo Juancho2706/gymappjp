@@ -165,6 +165,10 @@ export const NutritionPrescriptionItemReadSchema = z.object({
   // resueltos en lectura desde `food_id`, no congelados. `.nullable().optional()` para
   // que el deploy web salga antes o después de la migración SQL sin romper el parse.
   media: FoodMediaReadSchema.nullable().optional(),
+  // Reemplazos autorizados (F-02) en la MISMA lectura del plan (migración
+  // `nutrition_v2_plan_read_substitutions`). `optional()`: clave ausente = RPC viejo ⇒ el
+  // cliente cae al select directo RLS-scoped; `[]` = RPC nuevo sin reemplazos.
+  substitutions: z.array(NutritionItemSubstitutionReadSchema).optional(),
   category: z.string().nullable().optional(),
 })
 

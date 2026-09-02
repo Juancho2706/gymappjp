@@ -4,9 +4,11 @@ import {
   formatNutritionAmount,
   formatNutritionCalories,
   mapNutritionItemSubstitutionRow,
+  planSubstitutionsByItem,
   resolveItemDisplayNote,
   type NutritionPlanReadModel,
   type PlanItemSubstitutionLike,
+  type PlanSubstitutionsByItem,
 } from '@eva/nutrition-v2'
 import { MacroChipRow, NutritionCard, PrescribedPortionChips } from '@/components/nutrition-v2'
 import { createClient } from '@/lib/supabase/server'
@@ -25,9 +27,10 @@ import { resolveFoodImageUrl } from './food-result-image'
  * diciendo fracciones de lo mismo. Esa información ahora la da UN solo selector arriba, que
  * además navega. Componente de servidor: cero estado, cero controles de registro.
  *
- * SUB-T10: es `async` porque lee los reemplazos autorizados del coach (una consulta indexada por
- * card, degradable a vacío — ver `fetchPlanSubstitutionsByItem`). Sus dos llamadores
- * (`page.tsx` y `FutureDayPreview`) son Server Components, así que la espera la resuelve React.
+ * SUB-T10: sigue siendo `async` por el FALLBACK de reemplazos (`fetchPlanSubstitutionsByItem`),
+ * que solo corre si el RPC del plan no trae `substitutions`. Con el RPC vigente no hay ninguna
+ * consulta extra. Sus dos llamadores (`page.tsx` y `FutureDayPreview`) son Server Components, así
+ * que la espera la resuelve React.
  */
 
 export type PlanVariant = NutritionPlanReadModel['dayVariants'][number]
@@ -37,23 +40,24 @@ export type PlanItem = PlanSlot['prescriptionItems'][number]
 /** Base pública de Storage para resolver la ilustración del producto (server-side, NEXT_PUBLIC). */
 const SUPABASE_BASE = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null
 
-/** Mapa `prescriptionItemId → reemplazos`. Vacío ⇒ la tarjeta queda idéntica a antes de SUB-T10. */
-export type PlanSubstitutionsByItem = Readonly<Record<string, PlanItemSubstitutionLike[]>>
+/** Mapa `prescriptionItemId → reemplazos`. Vive en `@eva/nutrition-v2` (lo comparten web y RN). */
+export type { PlanSubstitutionsByItem }
 
 const NO_SUBSTITUTIONS: PlanItemSubstitutionLike[] = []
 
 /**
- * Reemplazos autorizados del coach (F-02) para los items de UNA variante.
+ * FALLBACK: reemplazos autorizados del coach (F-02) para los items de UNA variante.
+ *
+ * Desde la migración `20260902220850_nutrition_v2_plan_read_substitutions`, `substitutions` viaja
+ * dentro de `get_nutrition_plan_read_v2` y esta consulta NO se ejecuta. Sigue acá solo para el
+ * caso "clave ausente" (RPC viejo, p. ej. un rollback de la función), que `planSubstitutionsByItem`
+ * detecta devolviendo `null`.
  *
  * Lectura directa RLS-scoped de `nutrition_item_substitutions_v2` (policy `can_read_version`: el
  * propio alumno sobre versiones `published`/`superseded`). Se filtra por los ids de items que la
  * tarjeta ya tiene en la mano y NO por `version_id`, que el read-model del plan no expone a nivel
  * de variante; el índice `nis_prescription_item_id_idx (prescription_item_id, order_index)` cubre
  * exactamente ese acceso, así que es UNA consulta indexada por card.
- *
- * Por qué no viene en el read-model: `get_nutrition_plan_read_v2` es de julio y la tabla de
- * reemplazos nació después (migración `20260721150000`). Sumarla al RPC es una migración aparte;
- * hasta entonces esta lectura es lo que hace visible en el plan lo que el coach ya cargó.
  *
  * No-bloqueante por diseño: cualquier fallo degrada a mapa vacío — la línea de reemplazos es
  * informativa y jamás debe tumbar la vista del plan.
@@ -101,10 +105,14 @@ export async function PlanVariantCard({
    */
   showTargets?: boolean
 }) {
-  // SUB-T10: una sola lectura por card para TODOS los items de la variante (no una por franja).
-  const substitutionsByItem = await fetchPlanSubstitutionsByItem(
-    variant.mealSlots.flatMap((slot) => slot.prescriptionItems.map((item) => item.id)),
-  )
+  // SUB-T10 cierre: los reemplazos ya vienen en el read-model del plan (migración
+  // `20260902220850_nutrition_v2_plan_read_substitutions`) ⇒ cero consultas extra. `null` solo si
+  // el RPC no trae la clave; ahí sí cae al select directo (una lectura por card, como antes).
+  const substitutionsByItem =
+    planSubstitutionsByItem([variant]) ??
+    (await fetchPlanSubstitutionsByItem(
+      variant.mealSlots.flatMap((slot) => slot.prescriptionItems.map((item) => item.id)),
+    ))
   return (
     <NutritionCard>
       {/* Auditoría P2/P3: fuera el chip "Por defecto" (concepto interno del builder, el alumno no

@@ -8,7 +8,9 @@
 // la condición inline con `startsWith('Alternativas:')` que vivía dentro del render.
 import { describe, it, expect } from 'vitest'
 import {
+  EMPTY_PLAN_SUBSTITUTIONS,
   describeItemGuidance,
+  planSubstitutionsByItem,
   resolveItemDisplayNote,
   type PlanItemGuidance,
 } from '../../apps/mobile/lib/nutrition-v2-plan'
@@ -66,5 +68,44 @@ describe('describeItemGuidance (RN, "Plan")', () => {
     )
     expect(describeItemGuidance(legacy, true)).toBe('Ajustable entre 80 g y 120 g')
     expect(describeItemGuidance(item({ notes: 'Alternativas: Pavo, Atún' }), true)).toBeNull()
+  })
+})
+
+// SUB-T10 cierre: de donde salen los reemplazos del tab "Plan". `planSubstitutionsByItem` se
+// consume por este módulo (igual que `resolveItemDisplayNote`) y es la MISMA función que usa el
+// web, así que acá se cubre el contrato tal como lo ve la pantalla RN: un mapa ⇒ el efecto NO
+// consulta `nutrition_item_substitutions_v2`; `null` ⇒ cae al select directo por `version_id`.
+describe('planSubstitutionsByItem (RN, "Plan")', () => {
+  const pavo = { name: 'Pavo', quantity: null, unit: null }
+
+  it('clave presente ⇒ mapa: la pantalla no dispara el select directo', () => {
+    const map = planSubstitutionsByItem([
+      { mealSlots: [{ prescriptionItems: [{ id: 'i1', substitutions: [pavo] }] }] },
+    ])
+    expect(map).not.toBeNull()
+    expect(map?.i1).toEqual([pavo])
+  })
+
+  it('clave en [] ⇒ mapa vacío: sin reemplazos y sin select', () => {
+    expect(
+      planSubstitutionsByItem([
+        { mealSlots: [{ prescriptionItems: [{ id: 'i1', substitutions: [] }] }] },
+      ]),
+    ).toEqual({})
+  })
+
+  it('clave ausente (caché escrita por una app previa) ⇒ null ⇒ fallback al select', () => {
+    expect(
+      planSubstitutionsByItem([{ mealSlots: [{ prescriptionItems: [{ id: 'i1' }] }] }]),
+    ).toBeNull()
+  })
+
+  it('plan sin variantes ⇒ mapa vacío, no fallback', () => {
+    expect(planSubstitutionsByItem([])).toEqual({})
+    expect(planSubstitutionsByItem([])).not.toBeNull()
+  })
+
+  it('EMPTY_PLAN_SUBSTITUTIONS es la referencia estable que la pantalla pasa como prop', () => {
+    expect(EMPTY_PLAN_SUBSTITUTIONS).toEqual({})
   })
 })

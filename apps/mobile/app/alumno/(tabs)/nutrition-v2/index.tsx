@@ -117,7 +117,13 @@ import { supabase } from '../../../../lib/supabase'
 import { humanizeStudentWriteError } from '../../../../lib/student-access-copy'
 import { formatNutritionShortDate } from '../../../../lib/date-utils'
 import { foodMediaThumbnailUrl } from '../../../../lib/nutrition-v2-food-media'
-import { describeItemGuidance, resolveItemDisplayNote } from '../../../../lib/nutrition-v2-plan'
+import {
+  EMPTY_PLAN_SUBSTITUTIONS,
+  describeItemGuidance,
+  planSubstitutionsByItem,
+  resolveItemDisplayNote,
+  type PlanSubstitutionsByItem,
+} from '../../../../lib/nutrition-v2-plan'
 import { useEntitlements } from '../../../../lib/entitlements'
 import { getNutritionHistoryV2, getNutritionPlanV2, getNutritionTodayV2 } from '../../../../lib/nutrition-v2.api'
 import {
@@ -196,11 +202,8 @@ const EMPTY_PORTION_VOIDS: PendingPortionVoid[] = []
 // Idem para la semana: sin plan cargado, `?? []` inline recompondría las 7 celdas en cada render.
 const EMPTY_DAY_VARIANTS: PlanVariant[] = []
 // SUB-T10: reemplazos autorizados del coach por item prescrito, en el tab "Plan".
+// `EMPTY_PLAN_SUBSTITUTIONS` es la referencia compartida de `@eva/nutrition-v2`.
 const EMPTY_ITEM_SUBSTITUTIONS: PlanItemSubstitutionLike[] = []
-const EMPTY_PLAN_SUBSTITUTIONS: PlanSubstitutionsByItem = {}
-
-/** Mapa `prescriptionItemId → reemplazos` que consume la tarjeta del plan (SUB-T10). */
-type PlanSubstitutionsByItem = Readonly<Record<string, PlanItemSubstitutionLike[]>>
 
 /**
  * Tab "Hoy". Con la semana Lu-Do (SPEC nutrition-week-view) esta pantalla muestra UN día:
@@ -3270,22 +3273,30 @@ function PlanTab({
   }, [load, userId])
 
   // ── Reemplazos autorizados del coach (SUB-T10) ──────────────────────────────
-  // Lectura directa RLS-scoped de `nutrition_item_substitutions_v2` (policy `can_read_version`:
-  // el propio alumno sobre versiones `published`/`superseded`), filtrada por la versión vigente:
-  // UNA consulta para las 7 variantes, no una por franja.
+  // Desde la migración `20260902220850_nutrition_v2_plan_read_substitutions`, cada item prescrito
+  // del read-model trae su `substitutions` ⇒ cero consultas extra en el tab "Plan".
   //
-  // Por qué no viaja en el read-model: `get_nutrition_plan_read_v2` es de julio y la tabla nació
-  // después (migración `20260721150000`); sumarla al RPC es una migración aparte. Mientras tanto
-  // esto es lo que hace visible en el plan lo que el coach ya cargó en el builder.
+  // El select directo sigue vivo como FALLBACK y solo corre cuando la clave NO viene: un plan que
+  // salió de la caché escrita por una versión anterior de la app, o un RPC viejo (rollback de la
+  // función). `planSubstitutionsByItem` devuelve `null` exactamente en ese caso; `[]` en un item
+  // es respuesta válida del RPC nuevo ("sin reemplazos") y NO dispara la lectura.
   //
-  // No-bloqueante y NO cacheado: sin red el plan sigue saliendo de la cache y esta capa degrada a
-  // vacío — la tarjeta queda exactamente como antes de SUB-T10, nunca en error.
-  const [planSubstitutions, setPlanSubstitutions] =
+  // El fallback es lectura directa RLS-scoped de `nutrition_item_substitutions_v2` (policy
+  // `can_read_version`: el propio alumno sobre versiones `published`/`superseded`), filtrada por
+  // la versión vigente: UNA consulta para las 7 variantes, no una por franja. No-bloqueante y NO
+  // cacheado: sin red el plan sale de la caché y esta capa degrada a vacío, nunca en error.
+  const planSubstitutionsFromRead = useMemo(
+    () => planSubstitutionsByItem(plan?.dayVariants ?? EMPTY_DAY_VARIANTS),
+    [plan],
+  )
+  const [fetchedSubstitutions, setFetchedSubstitutions] =
     useState<PlanSubstitutionsByItem>(EMPTY_PLAN_SUBSTITUTIONS)
+  const planSubstitutions = planSubstitutionsFromRead ?? fetchedSubstitutions
+  const needsSubstitutionsFallback = planSubstitutionsFromRead === null
   const planVersionId = plan?.plan?.versionId ?? null
   useEffect(() => {
-    if (!planVersionId) {
-      setPlanSubstitutions(EMPTY_PLAN_SUBSTITUTIONS)
+    if (!planVersionId || !needsSubstitutionsFallback) {
+      setFetchedSubstitutions(EMPTY_PLAN_SUBSTITUTIONS)
       return
     }
     let active = true
@@ -3298,7 +3309,7 @@ function PlanTab({
           .order('order_index', { ascending: true })
         if (!active) return
         if (error || !data) {
-          setPlanSubstitutions(EMPTY_PLAN_SUBSTITUTIONS)
+          setFetchedSubstitutions(EMPTY_PLAN_SUBSTITUTIONS)
           return
         }
         const rows = data as unknown as Parameters<typeof mapNutritionItemSubstitutionRow>[0][]
@@ -3310,15 +3321,15 @@ function PlanTab({
           if (bucket) bucket.push(option)
           else byItem[mapped.prescriptionItemId] = [option]
         }
-        setPlanSubstitutions(byItem)
+        setFetchedSubstitutions(byItem)
       } catch {
-        if (active) setPlanSubstitutions(EMPTY_PLAN_SUBSTITUTIONS)
+        if (active) setFetchedSubstitutions(EMPTY_PLAN_SUBSTITUTIONS)
       }
     })()
     return () => {
       active = false
     }
-  }, [planVersionId])
+  }, [needsSubstitutionsFallback, planVersionId])
 
   // ── Semana Lu-Do del plan (SPEC nutrition-week-view) ────────────────────────
   // Las 7 variantes ya viajaron en `plan.dayVariants`; el historial de la semana entra solo para

@@ -93,3 +93,64 @@ export function resolveItemDisplayNote(
   if (hasStructuredSubstitutions && trimmed.startsWith(LEGACY_ALTERNATIVES_NOTE_PREFIX)) return null
   return notes ?? null
 }
+
+// ---------------------------------------------------------------------------
+// De donde salen los reemplazos: el read model del plan, o el select directo.
+// ---------------------------------------------------------------------------
+
+/** Mapa `prescriptionItemId -> reemplazos`. Vacio ⇒ la tarjeta queda identica a antes de SUB-T10. */
+export type PlanSubstitutionsByItem = Readonly<Record<string, readonly PlanItemSubstitutionLike[]>>
+
+/**
+ * Referencia ESTABLE para "sin reemplazos". Importa que sea una sola: RN la pasa como prop a
+ * cards memoizadas y un `{}` inline recompondria el arbol en cada render.
+ */
+export const EMPTY_PLAN_SUBSTITUTIONS: PlanSubstitutionsByItem = Object.freeze({})
+
+/** Item prescrito del read model, en lo minimo que mira esta capa. */
+export interface PlanReadItemWithSubstitutions extends PlanItemWithSubstitutions {
+  id: string
+}
+
+/** Variante de dia del read model, en lo minimo que mira esta capa. */
+export interface PlanReadVariantWithSubstitutions {
+  mealSlots: readonly { prescriptionItems: readonly PlanReadItemWithSubstitutions[] }[]
+}
+
+/**
+ * Reemplazos por item A PARTIR del read model del plan, o `null` si el plan no los trae.
+ *
+ * `get_nutrition_plan_read_v2` incluye `substitutions` en cada item prescrito desde la migracion
+ * `20260902220850_nutrition_v2_plan_read_substitutions` — SIEMPRE presente, array vacio cuando el
+ * coach no cargo ninguno. Antes de eso, web y RN hacian UN select extra RLS-scoped por version
+ * sobre `nutrition_item_substitutions_v2`; ese camino sigue vivo como FALLBACK porque una app
+ * vieja (OTA anterior) o una cache RN escrita antes de la migracion no tienen la clave.
+ *
+ * Deteccion, a proposito por presencia de clave y no por contenido: `[]` es una respuesta VALIDA
+ * del RPC nuevo ("este item no tiene reemplazos") y no debe disparar la lectura extra. Basta que
+ * UN item traiga la clave para dar por nuevo al plan entero — el RPC la construye para todos.
+ *
+ * - devuelve un mapa (posiblemente vacio) ⇒ el llamador NO consulta la tabla;
+ * - devuelve `null` ⇒ RPC viejo o cache previa: el llamador cae al select directo;
+ * - plan sin items prescritos ⇒ mapa vacio: no hay nada que resolver, tampoco con el select.
+ */
+export function planSubstitutionsByItem(
+  variants: Iterable<PlanReadVariantWithSubstitutions>,
+): PlanSubstitutionsByItem | null {
+  const byItem: Record<string, readonly PlanItemSubstitutionLike[]> = {}
+  let sawKey = false
+  let sawItem = false
+  for (const variant of variants) {
+    for (const slot of variant.mealSlots) {
+      for (const item of slot.prescriptionItems) {
+        sawItem = true
+        if (item.substitutions === undefined) continue
+        sawKey = true
+        const subs = item.substitutions ?? []
+        if (subs.length > 0) byItem[item.id] = subs
+      }
+    }
+  }
+  if (sawItem && !sawKey) return null
+  return byItem
+}
