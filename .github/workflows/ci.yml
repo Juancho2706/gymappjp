@@ -11,7 +11,8 @@ on:
     #     (validateEnvironmentCredentialFallbacks) buscando fallbacks literales de credenciales:
     #     cualquier archivo versionado puede ponerlo rojo, incluidos `apps/enterprise/**` y los
     #     otros workflows de `.github/`.
-    #   - `npx vitest run` corre `tests/**` (vitest.config.ts) y esos tests IMPORTAN apps/mobile
+    #   - el job `unit` (`npx vitest run --shard`) corre `tests/**` (vitest.config.ts) y esos
+    #     tests IMPORTAN apps/mobile
     #     por ruta relativa (p.ej. tests/mobile/brand-vars-identity.test.ts ->
     #     ../../apps/mobile/lib/theme, tests/coach-invite-code-url.test.ts lee
     #     apps/mobile/lib/student-links.ts). Excluir apps/mobile pierde cobertura real.
@@ -56,10 +57,43 @@ jobs:
       - run: pnpm run typecheck
       # EVA DS token parity gate: web globals.css (contract) must match mobile global.css
       - run: pnpm run check:tokens
-      - run: npx vitest run
+      # Vitest ya NO corre aca: se movio al job `unit` (3 shards en paralelo). Ver mas abajo.
       - name: pnpm audit (high+)
         run: pnpm audit --audit-level=high --prod
         continue-on-error: true
+
+  # Vitest salio de `quality` y corre en 3 shards paralelos (auditoria de costo 2026-09-02).
+  # La suite son ~8.900 tests en 676 archivos y en un runner de 4 vCPU era de lejos el paso mas
+  # largo de `quality`; `--shard=i/3` reparte ARCHIVOS, asi que la union de los tres shards es la
+  # suite COMPLETA: no se pierde un solo test, solo se paraleliza el tiempo de pared.
+  # SIN job de merge a proposito: cada shard falla por su cuenta y con eso el check ya queda rojo.
+  # `--reporter=blob` + `vitest run --merge-reports` solo agregaria un cuarto job cuyo unico
+  # producto es un resumen unificado; no cambia el veredicto del gate.
+  # OJO branch protection: esto publica 3 checks nuevos (`unit (1)`, `unit (2)`, `unit (3)`) y
+  # `quality` dejo de cubrir vitest. Si `quality` esta marcado como required, hay que sumar los
+  # tres o el gate de tests deja de bloquear.
+  unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      # Sin fail-fast: si un shard se cae, los otros dos igual reportan que rompieron y cuales.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v7
+      # version comes from the root package.json "packageManager" field (pnpm@11.5.0);
+      # passing `version:` here too triggers ERR_PNPM_BAD_PM_VERSION.
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: lts/*
+          cache: pnpm
+      # --ignore-scripts blocks postinstall supply chain attacks (pnpm v10+ protection)
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      # CI=true lo pone GitHub solo: vitest.config.ts lo lee para usar el runner entero
+      # (maxWorkers 100%), mientras que en local se limita al 50 % de los cores.
+      - run: npx vitest run --shard=${{ matrix.shard }}/3
 
   hygiene:
     # Paralelo a `quality` (a proposito SIN `needs`): son gates de higiene del repo/monorepo,

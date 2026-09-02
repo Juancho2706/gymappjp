@@ -1,3 +1,6 @@
+// @vitest-environment jsdom
+// Opt-in por archivo: desde el reparto por projects (vitest.config.ts, 2026-09-02) los
+// `*.test.ts` corren en `node`, y este ejercita DOM real (window/document/localStorage).
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, renderHook, waitFor } from '@testing-library/react'
 import type { OnboardingSignals } from '@eva/onboarding'

@@ -1,3 +1,6 @@
+// @vitest-environment jsdom
+// Opt-in por archivo: desde el reparto por projects (vitest.config.ts, 2026-09-02) los
+// `*.test.ts` corren en `node`, y este ejercita DOM real (window/document/localStorage).
 import { describe, it, expect, beforeEach } from 'vitest'
 import { DEFAULT_KEYPAD_STEP, KEYPAD_STEP_KEY } from '@eva/workout-engine'
 import { readKeypadStep, writeKeypadStep } from './keypad-step'

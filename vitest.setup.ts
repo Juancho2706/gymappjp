@@ -1,7 +1,17 @@
-import '@testing-library/jest-dom'
 import { vi } from 'vitest'
 
-// Mock de Next.js router
+// Los setupFiles corren DESPUES de montar el environment del archivo, asi que estos dos
+// chequeos son la forma correcta de compartir un unico setup entre los projects `*-node`
+// (environment: 'node') y `*-dom` (environment: 'jsdom'), y siguen valiendo para un
+// `.test.ts` que pida DOM por archivo con `// @vitest-environment jsdom`.
+
+// Matchers de jest-dom: solo tienen sentido con DOM. En `node` ni se importan (ahorra el
+// import y evita que un test puro dependa por accidente de `toBeInTheDocument`).
+if (typeof document !== 'undefined') {
+  await import('@testing-library/jest-dom')
+}
+
+// Mock de Next.js router (vale para node y para jsdom: es logica, no DOM)
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
     push: vi.fn(),

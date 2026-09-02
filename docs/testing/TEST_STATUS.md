@@ -1,7 +1,7 @@
 ---
 status: active
 owner: engineering
-last_verified: "2026-08-19 @ ce601562"
+last_verified: "2026-09-02 @ 794aee52"
 canonical: true
 ---
 
@@ -11,14 +11,25 @@ Fuente canónica de cómo se valida el repositorio y cuáles son los gates pendi
 
 ## Gates que bloquean PR
 
-El job `quality` de `.github/workflows/ci.yml` corre en pull requests hacia `main`, `master` o `rnmobiledenuevo`, y en pushes a `main`/`master`:
+Los jobs `quality` y `unit` de `.github/workflows/ci.yml` corren en paralelo en pull requests hacia `main`, `master` o `rnmobiledenuevo`, y en pushes a `main`/`master`.
+
+`quality`:
 
 1. `pnpm docs:check` (sin dependencias instaladas);
 2. `pnpm install --frozen-lockfile --ignore-scripts`;
 3. `pnpm lint`;
 4. `pnpm typecheck` para web;
-5. `pnpm check:tokens` para paridad del design system;
-6. `pnpm exec vitest run`.
+5. `pnpm check:tokens` para paridad del design system.
+
+`unit` (matriz de 3 shards, desde el 2026-09-02):
+
+6. `npx vitest run --shard=${{ matrix.shard }}/3`, un job por shard.
+
+Vitest salió de `quality` para no dejar los ~8.900 tests serializados detrás de lint/typecheck. `--shard` reparte **archivos**, así que la unión de los tres shards es la suite completa: no se pierde cobertura, solo se paraleliza el tiempo de pared. No hay job de merge a propósito — cada shard falla por su cuenta y con eso el check ya queda rojo.
+
+Verificado localmente el 2026-09-02 corriendo los tres shards: 226 + 225 + 225 = **676 archivos** y 3.029 + 2.812 + 3.051 = **8.892 tests** (8.888 passed, 4 skipped), exactamente el total de la suite completa.
+
+> **Branch protection**: este cambio publica tres checks nuevos (`unit (1)`, `unit (2)`, `unit (3)`) y `quality` dejó de cubrir Vitest. Si `quality` está marcado como required, hay que sumar los tres o el gate de tests deja de bloquear.
 
 `pnpm audit --audit-level=high --prod` también corre, pero permanece informativo (`continue-on-error`) para evitar que una indisponibilidad/advisory externo bloquee código sin revisión.
 
@@ -97,7 +108,53 @@ relaciones existentes.
 
 Las cifras de las dos tablas de arriba son evidencia fechada de julio (3.940 y 4.130 tests): **no describen la suite de hoy**. Las últimas registradas por las sesiones que efectivamente las corrieron, según [CURRENT.md](../status/CURRENT.md): **5.776** (Guía Viva), **5.889** (Pricing v2) y **5.933** (retiro del par viejo), las tres del 2026-08-17. El saneo documental del 19-08 **no volvió a correr la suite completa**, así que aquí no se declara ningún verde nuevo: quien la corra actualiza esta sección con fecha, SHA y resultado.
 
-**Última corrida completa: 2026-08-26** (cierre de la ola VTA + FCN W0/W1, pre-push): **589 archivos / 7.747 tests — 7.741 passed, 4 skipped, 2 corregidos en la misma tanda** (los gemelos de `client-status`/`directory-status` pinneaban «corte en el futuro» con la constante real, que ese mismo día se fijó al ISO del deploy; re-corridos 37/37 verdes). Además: `pnpm typecheck` y `tsc` mobile 0 errores, lint 0 errores (517 warnings preexistentes), `docs:check`, `check:tokens`, boundaries y `expo export --platform android` VERDES, todos sobre el árbol asentado.
+**Corrida completa del 2026-09-02** (sobre `794aee52` + el reparto por projects, rama `rnmobiledenuevo`): **676 archivos — 674 passed, 2 skipped; 8.892 tests — 8.888 passed, 4 skipped.** Mismo conteo exacto que la corrida base de ese mismo día: el reparto por environment no perdió un solo test.
+
+### Costo de la suite: por qué Vitest ya no levanta jsdom para todo (2026-09-02)
+
+Hasta el 02-09 `vitest.config.ts` tenía un solo `test` con `environment: 'jsdom'` global, así que los 676 archivos pagaban el arranque de jsdom — incluidos los 619 `*.test.ts` de lógica pura (endpoints, servicios, schemas, motores) que nunca tocan el DOM. Medido en la misma máquina (16 cores), mismo árbol, misma suite:
+
+| | antes (jsdom global) | después (projects) |
+|---|---|---|
+| `Duration` | **284,18 s** | **102,88 s** (−64 %) |
+| `environment` | **2.166,94 s** | **128,12 s** (5,9 % del original) |
+| `setup` | 443,33 s | 31,31 s |
+| `import` | 921,71 s | 309,35 s |
+| `transform` | 131,02 s | 45,89 s |
+| `tests` | 289,15 s | 111,06 s |
+| resultado | 674 passed / 2 skipped · 8.888 passed / 4 skipped | idéntico |
+
+Salidas reales:
+
+```
+# antes
+Duration  284.18s (transform 131.02s, setup 443.33s, import 921.71s, tests 289.15s, environment 2166.94s)
+# después
+Duration  102.88s (transform 45.89s, setup 31.31s, import 309.35s, tests 111.06s, environment 128.12s)
+```
+
+Cómo quedó el reparto (`vitest list --filesOnly`): `web-node` 553 archivos, `mobile-node` 66, `web-dom` 54, `mobile-dom` 3. Solo 57 de 676 archivos levantan jsdom.
+
+Reglas que hay que respetar al escribir un test nuevo:
+
+- `*.test.tsx` ⇒ project `*-dom`, `environment: 'jsdom'`;
+- `*.test.ts` ⇒ project `*-node`, `environment: 'node'`;
+- un `.test.ts` que **sí** necesita DOM real (`window`, `document`, `localStorage`, `renderHook`) lo pide por archivo con `// @vitest-environment jsdom` en la primera línea. Son 20 archivos hoy y cada uno lleva el comentario que explica por qué;
+- `vitest.setup.ts` es único para los cuatro projects: los `setupFiles` corren **después** de montar el environment, así que los matchers de `@testing-library/jest-dom` y el mock de `matchMedia` se aplican solo cuando hay DOM (`typeof document !== 'undefined'`). El mock de `next/navigation` es lógica y vale en los dos.
+
+`tests/mobile/**` vive en sus propios projects (`mobile-node` / `mobile-dom`) por una única razón: sus tests montan módulos de `apps/mobile` con `vi.doMock` + `import()` dinámico dentro del propio caso, así que la primera transformación del grafo de RN cae **dentro** del timeout. Ahí el `testTimeout` es 15 s; el global sigue en el default de 5 s.
+
+Costo de `pnpm test:changed` según qué se toque (medido con `vitest related`, mismo grafo que usa `--changed`):
+
+| archivo tocado | corre |
+|---|---|
+| `apps/web/src/lib/pwa/install-signals.ts` | 1 archivo / 6 tests / 1,17 s |
+| `apps/web/src/lib/nutrition-offline-queue.ts` | 1 archivo / 5 tests / 1,22 s |
+| `packages/tiers/index.ts` (paquete transversal) | 189 archivos / 2.299 tests / 48,66 s |
+
+Aviso honesto: mientras `vitest.setup.ts` o `vitest.config.ts` estén en el diff contra `origin/master`, `--changed` corre la suite **entera** — el setup está en el grafo de todos los tests. Es correcto, no es un bug; en un diff normal de producto el número es el de la tabla.
+
+**Última corrida completa anterior: 2026-08-26** (cierre de la ola VTA + FCN W0/W1, pre-push): **589 archivos / 7.747 tests — 7.741 passed, 4 skipped, 2 corregidos en la misma tanda** (los gemelos de `client-status`/`directory-status` pinneaban «corte en el futuro» con la constante real, que ese mismo día se fijó al ISO del deploy; re-corridos 37/37 verdes). Además: `pnpm typecheck` y `tsc` mobile 0 errores, lint 0 errores (517 warnings preexistentes), `docs:check`, `check:tokens`, boundaries y `expo export --platform android` VERDES, todos sobre el árbol asentado.
 
 ## Comandos locales
 
@@ -114,8 +171,13 @@ pnpm docs:check
 pnpm lint
 pnpm typecheck
 pnpm check:tokens
-pnpm exec vitest run
+pnpm test:changed   # durante el trabajo
+pnpm exec vitest run  # UNA vez, pre-push
 ```
+
+**Regla de Vitest en local** (gates proporcionales, 2026-09-02): mientras se trabaja se corre `pnpm test:changed` (`vitest run --changed origin/master`), que ejecuta solo los archivos afectados por el diff contra `origin/master` — incluidos los cambios sin commitear. La suite completa se corre **una sola vez antes del push**, que es la regla del repo, y en CI la cubren los tres shards del job `unit`.
+
+`vitest.config.ts` limita `maxWorkers` al 50 % de los cores en local (16 cores ⇒ 8 workers) para que la corrida completa no deje el PC inusable; en CI (`process.env.CI`) sube al 100 % porque el runner es dedicado.
 
 TypeScript móvil no forma parte todavía del script raíz `typecheck`; ejecutarlo cuando cambia RN:
 

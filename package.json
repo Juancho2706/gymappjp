@@ -13,6 +13,7 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
+    "test:changed": "vitest run --changed origin/master",
     "test:e2e": "playwright test",
     "qa:prod:suave": "playwright test --project=prod-suave",
     "qa:prod:suave:headed": "playwright test --project=prod-suave --headed",

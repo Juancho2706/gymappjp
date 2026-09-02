@@ -1,3 +1,6 @@
+// @vitest-environment jsdom
+// Opt-in por archivo: desde el reparto por projects (vitest.config.ts, 2026-09-02) los
+// `*.test.ts` corren en `node`, y este ejercita DOM real (window/document/localStorage).
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { FEATURE_DOMAIN_KEYS, type FeatureDomain } from '@eva/feature-prefs'
