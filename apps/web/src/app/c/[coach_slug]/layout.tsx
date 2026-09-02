@@ -9,7 +9,7 @@ import {
     BRAND_PRIMARY_COLOR,
 } from '@/lib/brand-assets'
 import { resolveMetadataBase } from '@/lib/site-url'
-import { COACH_OG_IMAGE_HEIGHT, COACH_OG_IMAGE_WIDTH } from '@/lib/coach-og-image'
+import { COACH_OG_IMAGE_HEIGHT, COACH_OG_IMAGE_WIDTH, coachOgImageVersion } from '@/lib/coach-og-image'
 import { ClientNavGates } from './_components/ClientNavGates'
 import { ClientNavFallback } from './_components/ClientNavFallback'
 import { BasePathProvider } from '@/components/client/BasePathProvider'
@@ -72,13 +72,32 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const headersList = await headers()
     const brandName = decodeBrandHeaderValue(headersList.get('x-coach-brand-name')) ?? 'Mi Coach'
     const logoUrl = headersList.get('x-coach-logo-url') || null
+    const logoUrlDark = headersList.get('x-coach-logo-url-dark') || null
+    const primaryColor = headersList.get('x-coach-primary-color') || null
+    // El tier entra en la versión del og: es la única entrada del arte que no viaja en los headers
+    // de marca (`isBrandingAllowed` fail-closed ⇒ preview de EVA en vez de la del coach).
+    const subscriptionTier = headersList.get('x-coach-subscription-tier') || null
 
     const metadataBase = resolveMetadataBase()
     // OG por coach (22-08, pedido del owner): la preview de WhatsApp del link de acceso mostraba
-    // el logo de EVA para cualquier coach. `api/og/[coach_slug]` dibuja logo + color + nombre de
-    // la marca (Free cae a EVA, como el splash). 1200×630 = el tamaño que WhatsApp/Meta recortan
+    // el logo de EVA para cualquier coach. `api/og/[coach_slug]` dibuja SOLO el logo del coach
+    // sobre su color de marca (owner 02-09). 1200×630 = el tamaño que WhatsApp/Meta recortan
     // menos; la imagen estática 1920×1080 queda como fallback del resto del sitio.
-    const openGraphImageAbsoluteUrl = new URL(`/api/og/${coach_slug}`, metadataBase).href
+    //
+    // El `?v=` es la ÚNICA forma de invalidar la miniatura: WhatsApp cachea la preview por URL, en
+    // el teléfono del que comparte, 72 h o más, y no existe herramienta oficial para limpiarla. La
+    // versión sale de las MISMAS entradas que el route dibuja (logo, logo dark, color, nombre) más
+    // el tier, así que cambia justo cuando cambia el arte y no antes. El route ignora el query.
+    //
+    // LÍMITE DECLARADO (hallazgo B-8): acá las partes salen de los HEADERS del proxy y el route las
+    // lee del RPC `get_coach_public_branding`. Casi siempre coinciden, pero no son la misma fuente:
+    // el proxy rellena con `BRAND_APP_ICON` cuando el coach no tiene logo, y en el camino de team el
+    // header trae el logo del TEAM mientras el route resuelve el del coach. Un cambio de arte que no
+    // moviera ningún header dejaría la miniatura vieja pegada 72 h. Cerrarlo pide consultar el mismo
+    // RPC desde `generateMetadata` (query extra por request en la ruta más caliente del portal): no
+    // se paga hoy; el impacto es cosmético y acotado a esa ventana.
+    const openGraphImageVersion = coachOgImageVersion(logoUrl, logoUrlDark, primaryColor, brandName, subscriptionTier)
+    const openGraphImageAbsoluteUrl = new URL(`/api/og/${coach_slug}?v=${openGraphImageVersion}`, metadataBase).href
     const coachPath = `/c/${coach_slug}`
     const pageUrl = new URL(coachPath, metadataBase).href
 
@@ -119,6 +138,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
             images: [
                 {
                     url: openGraphImageAbsoluteUrl,
+                    // og:image:secure_url — Meta lo lee históricamente en páginas https y algunos
+                    // clientes prefieren ese sobre og:image. Misma URL (el sitio es https).
+                    secureUrl: openGraphImageAbsoluteUrl,
                     width: COACH_OG_IMAGE_WIDTH,
                     height: COACH_OG_IMAGE_HEIGHT,
                     alt: brandName,
