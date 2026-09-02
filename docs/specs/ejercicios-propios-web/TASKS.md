@@ -1,5 +1,5 @@
 ---
-status: implemented-pending-qa
+status: done
 owner: product-engineering
 last_verified: "2026-09-02"
 canonical: false
@@ -7,8 +7,9 @@ canonical: false
 
 # TASKS — Editar, eliminar y duplicar ejercicios propios
 
-Ver [SPEC](SPEC.md) · [PLAN](PLAN.md). Estado: **implementada en código el 2026-09-02** (W1 + W2 web y
-RN + W3), 5 workers Opus por zona + juicio del jefe. Queda el QA del owner.
+Ver [SPEC](SPEC.md) · [PLAN](PLAN.md). Estado: **CERRADA el 2026-09-02** — en producción (código
+`322f2c39`, docs `a99c501a`) con QA del owner verde en web y device. 5 workers Opus por zona + juicio
+del jefe. Lo que queda vive en «Backlog heredado» (abajo), no en esta feature.
 
 ## W0 · Decisión del owner (2026-09-02)
 
@@ -30,12 +31,13 @@ RN + W3), 5 workers Opus por zona + juicio del jefe. Queda el QA del owner.
 - [x] W1.5 `ExerciseFormModal`: prop `onSaved` en modo editar (una vez por guardado).
 - [x] W1.6 `ExerciseCatalogClient`: pie del preview (Editar / Eliminar / Duplicar), `AlertDialog`,
       toast con «Deshacer», chip «Propio»/«Del equipo»; la línea de origen decide por `isOwn`.
-- [x] W1.7 Gates: ver «Gates» abajo.
-- [x] W1.8 Docs: auditoría de menús corregida (2 copias), MOBILE_PARITY, CURRENT, esta SDD.
-- [ ] W1.9 **QA owner** en producción: preview propio (Editar guarda y refresca; Eliminar → confirmación
-      con conteo → desaparece → «Deshacer» lo devuelve), preview de sistema (Duplicar), chip «Propio»,
-      light/dark, PWA 390 px (pie apilado, dialog sobre preview). Verificar con el coach reportante que
-      ya puede editar y eliminar (sin WhatsApp: regla de la casa).
+- [x] W1.7 Gates: ver «Gates y salida» abajo.
+- [x] W1.8 Docs: MOBILE_PARITY, CURRENT, MOBILE_RELEASES_OTA, esta SDD. La auditoría de menús
+      (`docs/audits/menus/_md/coach-03-programas-planner.md` y su copia en `design-source`) se
+      corrigió en local, pero esos archivos están gitignored: no viajan en el repo.
+- [x] W1.9 **QA owner web VERDE (02-09)**: editar, eliminar con confirmación, «Deshacer», duplicar,
+      chip «Propio», light/dark, PWA. Falta solo confirmar con el coach reportante que lo vio (sin
+      WhatsApp: regla de la casa; se entera al usar la app).
 
 ## W2 · «Editar» desde el builder (web + RN)
 
@@ -46,9 +48,7 @@ RN + W3), 5 workers Opus por zona + juicio del jefe. Queda el QA del owner.
 - [x] W2.3 RN: `ExerciseSearchSheet.tsx` — «Editar ejercicio» en el preview de propios reusando el
       `ExerciseFormSheet` embebido; `program-builder.tsx` relee el catálogo (`catalogReloadKey`);
       «Usados recientemente» se resuelve contra el catálogo.
-- [ ] W2.4 QA owner: editar desde el builder (web desktop, PWA, Android) y ver el cambio en el
-      catálogo lateral. Deuda declarada: un bloque YA colocado en el día conserva el nombre viejo
-      hasta recargar (web y RN).
+- [x] W2.4 **QA owner VERDE (02-09)** en web y device.
 
 ## W3 · RN hardening / paridad
 
@@ -56,8 +56,8 @@ RN + W3), 5 workers Opus por zona + juicio del jefe. Queda el QA del owner.
 - [x] W3.2 `deleteExercise` verifica filas; `restoreExercise` y `countExerciseUsage` nuevas.
 - [x] W3.3 Toast «Ejercicio eliminado» con acción «Deshacer» (soporte `action` aditivo en
       `components/Toast.tsx`); `onRestored` en el sheet; línea «Usado en N bloques» en el preview.
-- [ ] W3.4 QA device Android del owner: confirmación, «Deshacer» responde al toque (el pill vive
-      dentro del `GestureDetector` del toast), edición desde el builder.
+- [x] W3.4 **QA device Android del owner VERDE (02-09)**: confirmación, «Deshacer» responde al toque,
+      edición desde el builder.
 
 ## Gates y salida (2026-09-02, ejecución real)
 
@@ -72,12 +72,19 @@ RN + W3), 5 workers Opus por zona + juicio del jefe. Queda el QA del owner.
 
 Salida: commit `322f2c39` en `rnmobiledenuevo` = `master`; deploy web `dpl_7TjwZBD2rk2mBuswTs5Vvh2MLRnb`
 READY (02-09 00:41Z); OTA 1.1.2 canal `production` android `547ba203` (run 33576258157) / ios
-`26ef40d2` (run 33576265663). Sin `expo export` local: el bundler corrió en el workflow.
+`26ef40d2` (run 33576265663). Sin `expo export` local: el bundler corrió en el workflow. **QA del owner
+verde en web y device (02-09).**
 
-## Deuda / decisiones abiertas
+## Backlog heredado (para próximas sesiones; ninguno bloquea)
 
-- `revalidatePath('/coach/builder')` no cubre `/coach/builder/[clientId]` (ruta dinámica); mitigado
-  con `router.refresh()` en la UI. Dejar así o revalidar con `type: 'layout'` (decisión aparte).
-- `template-builder.queries.ts` no scopea el catálogo por workspace (preexistente): un coach con team
-  activo ve «Editar» en un personal y recibe el error explícito de la action.
-- `countExerciseUsage` / `usageByExercise` cuentan BLOQUES, no programas (copy dice «bloques»).
+| # | Deuda | Dónde | Costo estimado |
+|---|---|---|---|
+| E1 | Un bloque YA colocado en el día conserva el nombre/media viejos tras editar el ejercicio hasta recargar el builder (web y RN): `exercise_name` se copia al agregar el bloque. Arreglo = reconciliar los días contra el catálogo al volver de `onSaved`. | `WeeklyPlanBuilder.tsx`, `program-builder.tsx` | 2–3 h |
+| E2 | `revalidatePath('/coach/builder')` no cubre la ruta dinámica `/coach/builder/[clientId]`; hoy lo tapa `router.refresh()` en la UI. Decidir `type: 'layout'` o dejar. | `exercises.actions.ts` | 30 min |
+| E3 | `template-builder.queries.ts` no scopea el catálogo por workspace (preexistente): un coach con team activo ve «Editar» en un ejercicio personal y recibe el error explícito de la action. Arreglo = mismo scope 3 vías que `getExerciseCatalog`. | `workout-programs/builder/_data/template-builder.queries.ts` | 1 h |
+| E4 | `usageByExercise` (web) y `countExerciseUsage` (RN) cuentan BLOQUES, no programas (el copy dice «bloques»). Si el owner prefiere «programas»: `distinct` por plan. | `_data/exercises.queries.ts`, `lib/exercises.ts` | 1 h |
+| E5 | El clon web no espeja el thumbnail (`mirrorAndSaveExerciseThumbnail`) ni copia `thumbnail_url` (a propósito, para no compartir el archivo); el render cae al GIF/hotlink de YouTube. Paridad con create = 3 líneas. | `cloneExerciseAction` | 30 min |
+| E6 | `cloneExerciseAction` sin tests (3 queries encadenadas sobre `exercises`; el harness actual asume una tabla). | `exercises.actions.test.ts` | 1–2 h |
+| E7 | Gate por tier muerto: `caps.canCreateCustomExercises` es `true` en todos los planes (regla owner: nada por tier); queda en create/update/media como código inerte. Limpieza opcional. | `exercises.actions.ts`, `exercise-media.actions.ts` | 30 min |
+| E8 | La auditoría de menús que afirmaba «editar/borrar/restaurar» en web vive en carpetas gitignored (`docs/audits/menus`, `docs/design-source`): la corrección es solo local. Si se vuelve a generar, regenerar desde el código. | docs locales | — |
+| E9 | RN: `countExerciseUsage` dispara una query extra (`head: true`) al abrir la ficha o el sheet de un propio. Barata; vigilar en PostHog/Sentry si crece el catálogo. | `ExercisePreviewSheet.tsx`, `ExerciseFormSheet.tsx` | — |

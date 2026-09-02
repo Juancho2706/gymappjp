@@ -1,5 +1,5 @@
 ---
-status: implemented-pending-qa
+status: done
 owner: product-engineering
 last_verified: "2026-09-02"
 canonical: false
@@ -7,11 +7,13 @@ canonical: false
 
 # SPEC — Editar, eliminar y duplicar ejercicios propios (web + RN)
 
-> **IMPLEMENTADA EN CÓDIGO — 2026-09-02** (W1 web + W2 builder web y RN + W3 RN; el owner pidió
-> paridad total RN/PWA/desktop). Mockup aprobado: artifact `9d6f222f-26b4-4f04-b44a-a7e7482c913f`.
-> Queda el QA visual/device del owner (ver [TASKS](TASKS.md)). Origen: reporte del coach Gerardo
-> («no puedo eliminar ejercicios que yo mismo creé»). Detalle de lo que cambió en cada plataforma
-> en [MOBILE_PARITY](../../status/MOBILE_PARITY.md) (entrada 02-09).
+> **CERRADA — 2026-09-02.** En producción (`master` = `rnmobiledenuevo` = `322f2c39` + docs
+> `a99c501a`; deploy `dpl_7TjwZBD2rk2mBuswTs5Vvh2MLRnb`; OTA 1.1.2 android `547ba203` / ios
+> `26ef40d2`) con **QA del owner verde en web y device** («prístino y premium»). W1 web + W2 builder
+> web y RN + W3 RN; el owner pidió paridad total RN/PWA/desktop. Mockup aprobado: artifact
+> `9d6f222f-26b4-4f04-b44a-a7e7482c913f`. Origen: reporte del coach Gerardo («no puedo eliminar
+> ejercicios que yo mismo creé»). Backlog heredado para próximas sesiones en [TASKS](TASKS.md)
+> § «Backlog heredado». Detalle por plataforma en [MOBILE_PARITY](../../status/MOBILE_PARITY.md).
 
 ## Problema
 
