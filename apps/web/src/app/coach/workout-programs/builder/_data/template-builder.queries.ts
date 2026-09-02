@@ -4,6 +4,7 @@ import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { listAvailableWorkoutAreas } from '@/services/workout/workout-areas.service'
 import { hasModule } from '@/services/entitlements.service'
 import { EXERCISE_LIST_COLUMNS } from '@/lib/exercises/exercise-catalog-select'
+import { exerciseVisibilityOrFilter } from '@/lib/exercises/exercise-visibility-filter'
 import type { Tables } from '@/lib/database.types'
 import type { WorkoutArea } from '@/domain/workout/types'
 import type { BuilderCardioContext } from '../../../builder/[clientId]/types'
@@ -26,7 +27,15 @@ export const getTemplateBuilderData = cache(async (programId?: string) => {
         supabase
             .from('exercises')
             .select(EXERCISE_LIST_COLUMNS)
-            .or(`coach_id.is.null,coach_id.eq.${user.id}`)
+            // Mismo scope 3 vías que el catálogo real (`getExerciseCatalog`). El filtro anterior
+            // (`coach_id.is.null,coach_id.eq.<id>`) tenía dos agujeros: colaba como "del sistema"
+            // cualquier fila de team/org (coach_id NULL) y, en workspace team, ofrecía los
+            // ejercicios PERSONALES del coach — «Editar» sobre uno de ellos terminaba en el error
+            // explícito de la action, y arrastrarlo al plan es un bloque fantasma para el alumno.
+            .or(exerciseVisibilityOrFilter({ coachId: user.id, orgId, teamId: activeTeamId }))
+            // El catálogo también esconde los eliminados: sin esto el builder de plantillas seguía
+            // ofreciendo un ejercicio que el coach ya borró de su biblioteca.
+            .is('deleted_at', null)
             .order('muscle_group')
             .order('name'),
         // Areas del builder segun workspace activo (enterprise: solo system en v1).

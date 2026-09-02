@@ -154,6 +154,12 @@ interface DraggableExerciseCatalogProps {
     onSelectedMuscleGroupChange?: (group: string) => void
     /** Sin scope no se ofrece «Editar ejercicio»: no sabríamos cuál es propio. */
     ownerScope?: ExerciseOwnerScope
+    /**
+     * Se editó un ejercicio propio desde acá y ya tenemos la fila fresca (E1). El padre la usa para
+     * reconciliar los bloques YA colocados en los días, que copiaron nombre/media al crearse y si no
+     * seguirían mostrando los viejos hasta recargar.
+     */
+    onExerciseSaved?: (exercise: Exercise) => void
 }
 
 export function DraggableExerciseCatalog({
@@ -164,6 +170,7 @@ export function DraggableExerciseCatalog({
     selectedMuscleGroup: selectedMuscleProp,
     onSelectedMuscleGroupChange,
     ownerScope,
+    onExerciseSaved,
 }: DraggableExerciseCatalogProps) {
     const router = useRouter()
     const [search, setSearch] = useState('')
@@ -507,7 +514,11 @@ export function DraggableExerciseCatalog({
                             .eq('id', editedId)
                             .single()
                             .then(({ data }) => {
-                                if (data) setEditedExercises(prev => ({ ...prev, [editedId]: data }))
+                                if (!data) return
+                                setEditedExercises(prev => ({ ...prev, [editedId]: data }))
+                                // Los bloques ya colocados en los días copiaron nombre/media al
+                                // crearse: sin este aviso al padre seguían mostrando los viejos.
+                                onExerciseSaved?.(data)
                             })
                     }}
                 />

@@ -121,6 +121,49 @@ export function enrichDaysWithExerciseMedia(days: DayState[], exerciseById: Map<
     }))
 }
 
+/**
+ * Reconcilia los bloques YA colocados en los días contra la versión fresca de UN ejercicio del
+ * catálogo (E1). El bloque COPIA nombre/media al crearse (`createDefaultBlock`,
+ * `mapDbBlockToBuilderBlock`), así que tras editar el ejercicio desde el builder el día seguía
+ * mostrando el nombre y el GIF viejos hasta recargar la página.
+ *
+ * Diferencia con `enrichDaysWithExerciseMedia`, que solo RELLENA huecos: acá la media del catálogo
+ * PISA la del bloque, incluso a vacío. Si el coach le sacó el GIF al ejercicio, el bloque tiene que
+ * quedarse sin GIF; si no, seguiría mostrando un archivo que el coach ya quitó.
+ *
+ * Lo que NO se toca: la prescripción del coach (series, reps, descansos, notas, superserie, área) y
+ * `exercise_type_override`, que es una decisión explícita a nivel bloque y manda sobre el tipo del
+ * catálogo. Eliminar un ejercicio tampoco saca bloques del plan: el borrado es soft, la fila sigue
+ * ahí y el bloque conserva su nombre (misma promesa que el diálogo de borrado del catálogo).
+ *
+ * Devuelve el MISMO array si ningún bloque referencia al ejercicio, para no disparar un re-render
+ * (ni una entrada de historial) por una edición que no toca este plan.
+ */
+export function reconcileDaysWithExercise(days: DayState[], exercise: Exercise): DayState[] {
+    let touched = false
+    const next = days.map(d => {
+        let dayTouched = false
+        const blocks = d.blocks.map(blk => {
+            if (blk.exercise_id !== exercise.id) return blk
+            dayTouched = true
+            return {
+                ...blk,
+                exercise_name: exercise.name,
+                muscle_group: exercise.muscle_group,
+                gif_url: exercise.gif_url ?? undefined,
+                video_url: exercise.video_url ?? undefined,
+                thumbnail_url: exercise.thumbnail_url ?? undefined,
+                exercise_type: ((exercise as { exercise_type?: string | null }).exercise_type ?? null) as BuilderBlock['exercise_type'],
+                cardio_modality: (exercise as { cardio_modality?: string | null }).cardio_modality ?? null,
+            }
+        })
+        if (!dayTouched) return d
+        touched = true
+        return { ...d, blocks }
+    })
+    return touched ? next : days
+}
+
 export function createDefaultBlock(exercise: Exercise): BuilderBlock {
     const exerciseType = effectiveExerciseType(null, { exercise_type: (exercise as { exercise_type?: string | null }).exercise_type })
     const base: BuilderBlock = {

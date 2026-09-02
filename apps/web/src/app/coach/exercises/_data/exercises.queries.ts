@@ -1,6 +1,7 @@
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { EXERCISE_CATALOG_COLUMNS } from '@/lib/exercises/exercise-catalog-select'
+import { exerciseVisibilityOrFilter } from '@/lib/exercises/exercise-visibility-filter'
 import type { Tables } from '@/lib/database.types'
 
 type Exercise = Tables<'exercises'>
@@ -28,21 +29,9 @@ export const getExerciseCatalog = cache(async (
 ): Promise<ExerciseCatalog> => {
     const supabase = await createClient()
 
-    // Build filter: system exercises always visible; owner exercises by team_id, coach_id or
-    // org_id. El predicado system exige team_id NULL (espejo de exercises_select_visible —
-    // sin eso, filas team colarían como "system" para un coach multi-workspace).
-    let filterStr: string
-    if (teamId) {
-        // Workspace team activo (AC6/AC11): system + catálogo del POOL — espejo del builder.
-        // Los personales no se listan acá: en contexto team no son asignables (anti-fantasma).
-        filterStr = `and(coach_id.is.null,org_id.is.null,team_id.is.null),team_id.eq.${teamId}`
-    } else if (orgId) {
-        // Org context: system OR org exercises
-        filterStr = `and(coach_id.is.null,org_id.is.null,team_id.is.null),org_id.eq.${orgId}`
-    } else {
-        // Standalone coach: system OR own exercises
-        filterStr = `and(coach_id.is.null,org_id.is.null,team_id.is.null),coach_id.eq.${coachId}`
-    }
+    // Scope 3 vías (team > org > coach) — helper compartido con el builder de plantillas, que
+    // scopeaba con solo 2 vías. Ver `@/lib/exercises/exercise-visibility-filter`.
+    const filterStr = exerciseVisibilityOrFilter({ coachId, orgId, teamId })
 
     let exercisesQuery = await supabase
         .from('exercises')

@@ -14,6 +14,23 @@ import { mirrorAndSaveExerciseThumbnail, clearExerciseThumbnail } from '@/lib/ex
 
 const SUPABASE_MEDIA_PREFIX = `${process.env.NEXT_PUBLIC_SUPABASE_URL ?? ''}/storage/v1/object/public/exercise-media/`
 
+/**
+ * Superficies que listan el catálogo de ejercicios y hay que invalidar tras cualquier mutación.
+ *
+ * `/coach/builder` NO matchea la página real del builder por alumno: el archivo es
+ * `coach/builder/[clientId]/page.tsx` y `revalidatePath` opera sobre el ÁRBOL DE RUTAS, no sobre
+ * la URL. Una ruta con segmento dinámico exige el patrón + `type: 'page'`
+ * (`node_modules/next/dist/docs/01-app/03-api-reference/04-functions/revalidatePath.md`,
+ * Next 16.3: «If `path` contains a dynamic segment … this parameter is required»). Sin esto el
+ * builder del alumno servía el catálogo viejo y solo lo tapaba el `router.refresh()` del cliente.
+ */
+function revalidateExerciseCatalogSurfaces() {
+    revalidatePath('/coach/exercises')
+    revalidatePath('/coach/builder')
+    revalidatePath('/coach/builder/[clientId]', 'page')
+    revalidatePath('/coach/workout-programs/builder')
+}
+
 const exerciseSchema = z.object({
     name: z.string().min(2, 'El nombre debe tener al menos 2 caracteres').max(100),
     muscle_group: z.string().min(1, 'Selecciona un grupo muscular'),
@@ -174,7 +191,7 @@ export async function cloneExerciseAction(formData: FormData) {
     // Fila origen: de acá sale la media (y el tipo/modalidad, que el FormData no trae).
     const { data: source } = await supabase
       .from('exercises')
-      .select('exercise_type, cardio_modality, body_part, video_url, gif_url, image_url, video_start_time, video_end_time')
+      .select('exercise_type, cardio_modality, body_part, video_url, gif_url, image_url, thumbnail_url, video_start_time, video_end_time')
       .eq('id', validated.id)
       .maybeSingle()
 
@@ -213,6 +230,11 @@ export async function cloneExerciseAction(formData: FormData) {
         video_url: source.video_url,
         gif_url: source.gif_url,
         image_url: source.image_url,
+        // Se COPIA la URL ya espejada, no se re-espeja: el objeto de Storage es content-addressed
+        // y compartido a propósito (`yt/<videoId>.webp`, `gifthumb/…`), y `clearExerciseThumbnail`
+        // solo pone la columna en NULL — nunca borra el archivo. Sin esto el clon caía al hotlink
+        // de YouTube (JPEG gris cuando el canal borra el video) mientras el original se veía bien.
+        thumbnail_url: source.thumbnail_url,
         video_start_time: source.video_start_time,
         video_end_time: source.video_end_time,
         source: owner.orgId ? 'org' : owner.teamId ? 'team' : 'coach',
@@ -220,9 +242,7 @@ export async function cloneExerciseAction(formData: FormData) {
 
     if (error) throw error
 
-    revalidatePath('/coach/exercises')
-    revalidatePath('/coach/builder')
-    revalidatePath('/coach/workout-programs/builder')
+    revalidateExerciseCatalogSurfaces()
     return { success: true }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Error al clonar ejercicio'
@@ -371,11 +391,7 @@ export async function createExerciseAction(
     // Mirror del thumbnail de YouTube a Storage (durabilidad). Best-effort: nunca tira.
     if (media.video_url) await mirrorAndSaveExerciseThumbnail(exercise.id, media.video_url)
 
-    revalidatePath('/coach/exercises')
-    revalidatePath('/coach/builder')
-    // El builder de PLANTILLAS vive en otra ruta y también lista el catálogo: sin esto seguía
-    // sirviendo la lista vieja (el ejercicio nuevo no aparecía hasta un refresh duro).
-    revalidatePath('/coach/workout-programs/builder')
+    revalidateExerciseCatalogSurfaces()
     return { success: true, exerciseId: exercise.id }
 }
 
@@ -481,9 +497,7 @@ export async function updateExerciseAction(
         }
     }
 
-    revalidatePath('/coach/exercises')
-    revalidatePath('/coach/builder')
-    revalidatePath('/coach/workout-programs/builder')
+    revalidateExerciseCatalogSurfaces()
     return { success: true, exerciseId }
 }
 
@@ -506,9 +520,7 @@ export async function softDeleteExerciseAction(exerciseId: string): Promise<Exer
         return { error: 'No se pudo eliminar: el ejercicio no es tuyo o ya no existe.' }
     }
 
-    revalidatePath('/coach/exercises')
-    revalidatePath('/coach/builder')
-    revalidatePath('/coach/workout-programs/builder')
+    revalidateExerciseCatalogSurfaces()
     return { success: true }
 }
 
@@ -529,8 +541,6 @@ export async function restoreExerciseAction(exerciseId: string): Promise<Exercis
         return { error: 'No se pudo restaurar: el ejercicio no es tuyo o ya no existe.' }
     }
 
-    revalidatePath('/coach/exercises')
-    revalidatePath('/coach/builder')
-    revalidatePath('/coach/workout-programs/builder')
+    revalidateExerciseCatalogSurfaces()
     return { success: true }
 }

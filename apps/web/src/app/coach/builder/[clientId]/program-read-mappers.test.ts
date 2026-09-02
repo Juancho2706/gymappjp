@@ -6,6 +6,7 @@ import {
     mapDbBlockToBuilderBlock,
     enrichDaysWithExerciseMedia,
     createDefaultBlock,
+    reconcileDaysWithExercise,
 } from './program-read-mappers'
 import type { DayState } from './types'
 
@@ -142,5 +143,60 @@ describe('createDefaultBlock', () => {
         expect(createDefaultBlock(ex({ id: 'c', name: 'Bici', muscle_group: '-', exercise_type: 'cardio' }))).toMatchObject({ sets: 1, reps: '10min', duration_sec: 600, rest_time: '' })
         expect(createDefaultBlock(ex({ id: 'm', name: 'Estiramiento', muscle_group: '-', exercise_type: 'mobility' }))).toMatchObject({ sets: 3, reps: '30s', duration_sec: 30, rest_time: '' })
         expect(createDefaultBlock(ex({ id: 'r', name: 'Foam', muscle_group: '-', exercise_type: 'roller' }))).toMatchObject({ sets: 1, reps: '10 pasadas', reps_value: 10, reps_unit: 'passes', rest_time: '' })
+    })
+})
+
+/**
+ * E1 — un bloque YA colocado conserva el nombre/media que copió al crearse. Al volver de editar el
+ * ejercicio desde el propio builder hay que reconciliar, y a diferencia de `enrich…` acá el
+ * catálogo PISA (incluso a vacío: si el coach le sacó el GIF, el bloque tiene que perderlo).
+ */
+describe('reconcileDaysWithExercise', () => {
+    const daysWith = (blocks: Partial<DayState['blocks'][number]>[]): DayState[] => [
+        { id: 1, name: 'Lunes', title: 'L', is_rest: false, blocks: blocks as DayState['blocks'] },
+    ]
+
+    it('pisa nombre, músculo y media de los bloques del ejercicio editado', () => {
+        const days = daysWith([
+            { uid: 'b1', exercise_id: 'e1', exercise_name: 'Press viejo', muscle_group: 'Pecho', gif_url: 'viejo.gif', sets: 4, reps: '10', notes: 'tocar el pecho' },
+            { uid: 'b2', exercise_id: 'e2', exercise_name: 'Remo', muscle_group: 'Espalda', gif_url: 'remo.gif' },
+        ])
+        const out = reconcileDaysWithExercise(days, ex({
+            id: 'e1', name: 'Press nuevo', muscle_group: 'Pectoral', gif_url: 'nuevo.gif',
+            video_url: 'v.mp4', thumbnail_url: 't.webp', exercise_type: 'strength',
+        }))
+
+        expect(out[0].blocks[0]).toMatchObject({
+            exercise_name: 'Press nuevo',
+            muscle_group: 'Pectoral',
+            gif_url: 'nuevo.gif',
+            video_url: 'v.mp4',
+            thumbnail_url: 't.webp',
+            exercise_type: 'strength',
+        })
+        // La prescripción del coach queda intacta.
+        expect(out[0].blocks[0]).toMatchObject({ sets: 4, reps: '10', notes: 'tocar el pecho' })
+        // Los bloques de OTRO ejercicio no se tocan (misma referencia).
+        expect(out[0].blocks[1]).toBe(days[0].blocks[1])
+    })
+
+    it('media borrada en el catálogo ⇒ el bloque la pierde (no la conserva como enrich)', () => {
+        const days = daysWith([{ uid: 'b1', exercise_id: 'e1', exercise_name: 'Press', gif_url: 'viejo.gif', video_url: 'viejo.mp4' }])
+        const out = reconcileDaysWithExercise(days, ex({ id: 'e1', name: 'Press', muscle_group: 'Pecho', gif_url: null, video_url: null }))
+        expect(out[0].blocks[0].gif_url).toBeUndefined()
+        expect(out[0].blocks[0].video_url).toBeUndefined()
+    })
+
+    it('preserva el override de tipo del bloque y actualiza modalidad de cardio', () => {
+        const days = daysWith([{ uid: 'b1', exercise_id: 'e1', exercise_name: 'Cuerda', exercise_type: 'strength', exercise_type_override: 'mobility' }])
+        const out = reconcileDaysWithExercise(days, ex({ id: 'e1', name: 'Cuerda', muscle_group: '-', exercise_type: 'cardio', cardio_modality: 'jump_rope' }))
+        expect(out[0].blocks[0].exercise_type).toBe('cardio')
+        expect(out[0].blocks[0].cardio_modality).toBe('jump_rope')
+        expect(out[0].blocks[0].exercise_type_override).toBe('mobility')
+    })
+
+    it('ningún bloque referencia al ejercicio ⇒ devuelve el MISMO array (sin re-render)', () => {
+        const days = daysWith([{ uid: 'b1', exercise_id: 'e2', exercise_name: 'Remo' }])
+        expect(reconcileDaysWithExercise(days, ex({ id: 'e1', name: 'Press', muscle_group: 'Pecho' }))).toBe(days)
     })
 })

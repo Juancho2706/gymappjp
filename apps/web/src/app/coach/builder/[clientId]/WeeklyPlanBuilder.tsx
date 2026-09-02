@@ -65,7 +65,7 @@ import {
     shouldConfirmExit,
 } from '@eva/plan-builder'
 import { buildAreaVMs } from './area-ui'
-import { parseProgramPhases, mapDbBlockToBuilderBlock, enrichDaysWithExerciseMedia, createDefaultBlock } from './program-read-mappers'
+import { parseProgramPhases, mapDbBlockToBuilderBlock, enrichDaysWithExerciseMedia, createDefaultBlock, reconcileDaysWithExercise } from './program-read-mappers'
 
 type Client = Tables<'clients'>
 type Exercise = Tables<'exercises'>
@@ -341,6 +341,28 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
         teamId: ownerScope?.teamId ?? null,
         orgId: ownerScope?.orgId ?? null,
     }), [ownerScope?.coachId, ownerScope?.teamId, ownerScope?.orgId, coachId])
+
+    /**
+     * Se editó un ejercicio propio desde el catálogo del builder (E1). Los bloques ya colocados
+     * COPIARON nombre/media al crearse, así que sin esto el día seguía mostrando el nombre y el GIF
+     * viejos hasta recargar. Se reconcilian AMBAS variantes (A y B): el catálogo es uno solo.
+     *
+     * `setDays` y no `dispatchWithHistory`: es metadata que baja del catálogo, no una acción del
+     * coach — deshacerla solo devolvería el nombre viejo y confundiría el undo del plan.
+     *
+     * Los días se leen de un ref y no del closure: el aviso llega DESPUÉS de un fetch de la fila
+     * fresca, y `setDays` reemplaza el estado entero — con un `days` viejo capturado revertiría
+     * cualquier cambio que el coach hiciera entremedio.
+     */
+    const buildersRef = useRef({ a: builderA, b: builderB })
+    useEffect(() => { buildersRef.current = { a: builderA, b: builderB } })
+
+    const handleExerciseSaved = (exercise: Exercise) => {
+        for (const builder of [buildersRef.current.a, buildersRef.current.b]) {
+            const next = reconcileDaysWithExercise(builder.days, exercise)
+            if (next !== builder.days) builder.setDays(next)
+        }
+    }
 
     const scrollBoard = (dir: 'left' | 'right') => {
         const el = boardScrollRef.current
@@ -1494,6 +1516,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                 selectedMuscleGroup={catalogMuscleFilter}
                                 onSelectedMuscleGroupChange={setCatalogMuscleFilter}
                                 ownerScope={catalogOwnerScope}
+                                onExerciseSaved={handleExerciseSaved}
                             />
                         </div>
                     </div>
@@ -1755,6 +1778,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                         selectedMuscleGroup={catalogMuscleFilter}
                                         onSelectedMuscleGroupChange={setCatalogMuscleFilter}
                                         ownerScope={catalogOwnerScope}
+                                        onExerciseSaved={handleExerciseSaved}
                                         onTapAdd={(exercise) => {
                                             const dayId = days[activeMobileDayIndex]?.id
                                             if (dayId != null) {

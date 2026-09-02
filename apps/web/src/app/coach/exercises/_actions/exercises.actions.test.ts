@@ -43,6 +43,7 @@ vi.mock('@/lib/exercises/thumbnail-mirror', () => ({
 }))
 
 import {
+    cloneExerciseAction,
     createExerciseAction,
     restoreExerciseAction,
     softDeleteExerciseAction,
@@ -56,24 +57,42 @@ type EqCall = [string, string]
  * update(…).eq(…)+scope→select('id'). `updatedRows` simula cuántas filas tocó el UPDATE:
  * `[]` = el scope del owner no matcheó (ejercicio ajeno/inexistente), el caso que PostgREST
  * devuelve como éxito silencioso.
+ *
+ * `sourceRow`/`nameCount` cubren las 3 queries encadenadas del CLON: lectura de la fila origen
+ * (`maybeSingle`), conteo de nombre duplicado scopeado al owner (thenable) e insert.
  */
-function makeExercisesTable(options: { updatedRows?: { id: string }[] } = {}) {
+function makeExercisesTable(options: {
+    updatedRows?: { id: string }[]
+    /** Fila devuelta por `maybeSingle()`: origen del clon, o media vieja en el update. */
+    sourceRow?: Record<string, unknown> | null
+    /** Duplicados de nombre en el catálogo del owner (>0 ⇒ la action rechaza). */
+    nameCount?: number
+} = {}) {
     const updatedRows = options.updatedRows ?? [{ id: 'ex-1' }]
+    const nameCount = options.nameCount ?? 0
     const eqCalls: EqCall[] = []
+    const ilikeCalls: string[] = []
     const insertPayloads: Record<string, unknown>[] = []
     const updatePayloads: Record<string, unknown>[] = []
     let updating = false
-    const insertBuilder = {
+    const insertBuilder: Record<string, unknown> = {}
+    Object.assign(insertBuilder, {
         select: vi.fn(() => insertBuilder),
         single: vi.fn().mockResolvedValue({ data: { id: 'ex-1' }, error: null }),
-    }
+        // El clon hace `await ...insert(...)` sin `.select()`: el insert también es thenable.
+        then: (resolve: (value: { error: null }) => void) => resolve({ error: null }),
+    })
     const builder: Record<string, unknown> = {}
     Object.assign(builder, {
         select: vi.fn(() => builder),
-        ilike: vi.fn(() => builder),
+        ilike: vi.fn((_col: string, val: string) => {
+            ilikeCalls.push(val)
+            return builder
+        }),
         neq: vi.fn(() => builder),
         // Lectura de la media vieja en el update: sin fila previa no hay limpieza de storage.
-        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+        // En el clon es la FILA ORIGEN (tipo + media que el FormData no trae).
+        maybeSingle: vi.fn().mockResolvedValue({ data: options.sourceRow ?? null, error: null }),
         eq: vi.fn((col: string, val: string) => {
             eqCalls.push([col, val])
             return builder
@@ -87,12 +106,12 @@ function makeExercisesTable(options: { updatedRows?: { id: string }[] } = {}) {
             updating = true
             return builder
         }),
-        // El builder es thenable: el nameQuery resuelve count 0 (sin duplicados) y, una vez que
+        // El builder es thenable: el nameQuery resuelve el count de duplicados y, una vez que
         // hubo `.update()`, resuelve las filas devueltas por `.select('id')`.
         then: (resolve: (value: { count?: number; data?: { id: string }[]; error: null }) => void) =>
-            resolve(updating ? { data: updatedRows, error: null } : { count: 0, error: null }),
+            resolve(updating ? { data: updatedRows, error: null } : { count: nameCount, error: null }),
     })
-    return { builder, eqCalls, insertPayloads, updatePayloads }
+    return { builder, eqCalls, ilikeCalls, insertPayloads, updatePayloads }
 }
 
 function makeCoachesTable(tier = 'pro') {
@@ -369,5 +388,183 @@ describe('updateExerciseAction — 0 filas', () => {
         expect(result.success).toBeUndefined()
         expect(result.error).toBe('No se pudo guardar: el ejercicio no es tuyo o ya no existe.')
         expect(revalidatePathMock).not.toHaveBeenCalled()
+    })
+})
+
+// ── Clon (E6) ────────────────────────────────────────────────────────────────
+function buildCloneForm(overrides: Record<string, string> = {}) {
+    const form = new FormData()
+    form.set('id', 'ex-origen')
+    form.set('name', 'Press banca')
+    form.set('muscle_group', 'Pecho')
+    form.set('equipment', 'Barra')
+    form.set('difficulty', 'intermediate')
+    // Las listas viajan como JSON desde la UI (un paso con coma no debe partirse en dos).
+    form.set('instructions', JSON.stringify(['Baja controlado, sube fuerte']))
+    form.set('secondary_muscles', JSON.stringify(['Tríceps', 'Hombro']))
+    for (const [k, v] of Object.entries(overrides)) form.set(k, v)
+    return form
+}
+
+/** Fila origen típica del catálogo del SISTEMA: media externa + thumbnail ya espejado. */
+const CLONE_SOURCE_ROW = {
+    exercise_type: 'strength',
+    cardio_modality: null,
+    body_part: 'chest',
+    video_url: 'https://www.youtube.com/embed/abc12345678',
+    gif_url: 'https://cdn.exercisedb.dev/press.gif',
+    image_url: null,
+    thumbnail_url: 'https://sb.example/storage/v1/object/public/exercise-media/yt/abc12345678.webp',
+    video_start_time: 5,
+    video_end_time: 30,
+}
+
+/**
+ * `cloneExerciseAction` encadena TRES queries sobre `exercises` (fila origen → conteo de nombre
+ * duplicado scopeado al owner → insert) y hasta ahora no tenía red: un cambio en cualquiera de
+ * las tres se colaba a producción. La media y el tipo salen de la FILA ORIGEN leída en DB, no del
+ * FormData (los ejercicios del sistema traen GIFs de un CDN externo que el schema rechazaría).
+ *
+ * OJO: el clon NO renombra («… (copia)»): copia el nombre tal cual y por eso duplicar un
+ * ejercicio PROPIO choca con el dup-check. Es el comportamiento vigente de la UI (ExerciseCatalogClient).
+ */
+describe('cloneExerciseAction — 3 queries encadenadas, owner y media del origen', () => {
+    beforeEach(() => {
+        vi.clearAllMocks()
+    })
+
+    it('standalone ⇒ copia campos del form + tipo/media/thumbnail del origen, owner coach_id', async () => {
+        asStandalone()
+        const exercises = makeExercisesTable({ sourceRow: CLONE_SOURCE_ROW })
+        wireSupabase(exercises)
+
+        const result = await cloneExerciseAction(buildCloneForm())
+
+        expect(result).toEqual({ success: true })
+        const payload = insertOf(exercises)
+        expect(payload).toMatchObject({
+            coach_id: 'coach-1',
+            org_id: null,
+            team_id: null,
+            source: 'coach',
+            // Del FormData (contrato CloneExerciseSchema)
+            name: 'Press banca',
+            muscle_group: 'Pecho',
+            equipment: 'Barra',
+            difficulty: 'intermediate',
+            instructions: ['Baja controlado, sube fuerte'],
+            secondary_muscles: ['Tríceps', 'Hombro'],
+            // De la fila origen (el FormData ni siquiera los manda)
+            exercise_type: 'strength',
+            cardio_modality: null,
+            body_part: 'chest',
+            video_url: CLONE_SOURCE_ROW.video_url,
+            gif_url: CLONE_SOURCE_ROW.gif_url,
+            image_url: null,
+            video_start_time: 5,
+            video_end_time: 30,
+        })
+        // E5: sin esto el clon caía al hotlink de YouTube mientras el original se veía bien.
+        expect(payload.thumbnail_url).toBe(CLONE_SOURCE_ROW.thumbnail_url)
+        // La fila origen se lee por id y el dup-check se scopea al owner.
+        expect(exercises.eqCalls).toContainEqual(['id', 'ex-origen'])
+        expect(exercises.eqCalls).toContainEqual(['coach_id', 'coach-1'])
+        expect(exercises.ilikeCalls).toEqual(['Press banca'])
+    })
+
+    it('workspace team ⇒ el clon nace en el catálogo del POOL y el dup-check va por team_id', async () => {
+        asWorkspaceTeam()
+        const exercises = makeExercisesTable({ sourceRow: CLONE_SOURCE_ROW })
+        wireSupabase(exercises)
+
+        const result = await cloneExerciseAction(buildCloneForm())
+
+        expect(result).toEqual({ success: true })
+        expect(insertOf(exercises)).toMatchObject({
+            coach_id: null,
+            org_id: null,
+            team_id: 'team-1',
+            source: 'team',
+        })
+        expect(exercises.eqCalls).toContainEqual(['team_id', 'team-1'])
+        expect(exercises.eqCalls).not.toContainEqual(['coach_id', 'coach-1'])
+    })
+
+    it('org admin ⇒ owner org_id y source org', async () => {
+        asOrgAdmin()
+        const exercises = makeExercisesTable({ sourceRow: CLONE_SOURCE_ROW })
+        wireSupabase(exercises)
+
+        const result = await cloneExerciseAction(buildCloneForm())
+
+        expect(result).toEqual({ success: true })
+        expect(insertOf(exercises)).toMatchObject({ coach_id: null, org_id: 'org-1', team_id: null, source: 'org' })
+    })
+
+    it('no es dueño de nada (rol coach dentro de org) ⇒ rechazado sin tocar exercises', async () => {
+        resolvePreferredWorkspaceMock.mockResolvedValue({
+            type: 'enterprise_coach',
+            userId: 'coach-1',
+            orgId: 'org-1',
+            coachId: 'coach-1',
+        })
+        getCoachOrgContextMock.mockResolvedValue({ isOrgUser: true, isOrgAdmin: false, orgId: 'org-1' })
+        const exercises = makeExercisesTable({ sourceRow: CLONE_SOURCE_ROW })
+        wireSupabase(exercises)
+
+        const result = await cloneExerciseAction(buildCloneForm())
+
+        expect(result).toEqual({ error: 'Tu rol no permite crear ejercicios.' })
+        expect(exercises.insertPayloads).toHaveLength(0)
+        expect(revalidatePathMock).not.toHaveBeenCalled()
+    })
+
+    it('la fila origen no existe o la RLS no la deja ver ⇒ error explícito, sin insert', async () => {
+        asStandalone()
+        const exercises = makeExercisesTable({ sourceRow: null })
+        wireSupabase(exercises)
+
+        const result = await cloneExerciseAction(buildCloneForm())
+
+        expect(result).toEqual({ error: 'No se pudo duplicar: el ejercicio no existe o no es visible.' })
+        expect(exercises.insertPayloads).toHaveLength(0)
+        expect(revalidatePathMock).not.toHaveBeenCalled()
+    })
+
+    it('ya hay un ejercicio con ese nombre en el catálogo del owner ⇒ error, sin insert', async () => {
+        asStandalone()
+        const exercises = makeExercisesTable({ sourceRow: CLONE_SOURCE_ROW, nameCount: 1 })
+        wireSupabase(exercises)
+
+        const result = await cloneExerciseAction(buildCloneForm())
+
+        expect(result).toEqual({ error: 'Ya existe un ejercicio con ese nombre.' })
+        expect(exercises.insertPayloads).toHaveLength(0)
+    })
+
+    it('datos inválidos (sin muscle_group) ⇒ mensaje legible, no el ZodError crudo', async () => {
+        asStandalone()
+        const exercises = makeExercisesTable({ sourceRow: CLONE_SOURCE_ROW })
+        wireSupabase(exercises)
+        const form = buildCloneForm()
+        form.delete('muscle_group')
+
+        const result = await cloneExerciseAction(form)
+
+        expect(result).toEqual({ error: 'No se pudo duplicar: datos del ejercicio inválidos.' })
+        expect(exercises.insertPayloads).toHaveLength(0)
+    })
+
+    it('al duplicar revalida también la ruta DINÁMICA del builder (E2)', async () => {
+        asStandalone()
+        const exercises = makeExercisesTable({ sourceRow: CLONE_SOURCE_ROW })
+        wireSupabase(exercises)
+
+        await cloneExerciseAction(buildCloneForm())
+
+        // `/coach/builder` no matchea el archivo real `coach/builder/[clientId]/page.tsx`.
+        expect(revalidatePathMock).toHaveBeenCalledWith('/coach/builder/[clientId]', 'page')
+        expect(revalidatePathMock).toHaveBeenCalledWith('/coach/exercises')
+        expect(revalidatePathMock).toHaveBeenCalledWith('/coach/workout-programs/builder')
     })
 })
