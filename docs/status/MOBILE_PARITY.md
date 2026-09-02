@@ -14,6 +14,19 @@ source_of_truth: apps/web responsive + apps/mobile
 
 ## Resumen ejecutivo
 
+> **2026-09-02 (QA del owner del 02-09: ejecutor, Share Entreno y accesos — EN PRODUCCIÓN, QA pendiente)** (SDD
+> [qa-ejecutor-share-0209](../specs/qa-ejecutor-share-0209/SPEC.md), mockup `c4a77ab0` opción B): `master` = `rnmobiledenuevo` =
+> `0f545926`, deploy web `dpl_35ZT6w7oLzBrnMEAsXjmVQVdCy2R` READY, OTA 1.1.2 canal `production` android `bd2bc6e8` (run 33593759289) /
+> ios `025d158f` (run 33593765074). Paridad web ↔ RN de lo nuevo: **cardio cronometrado se registra solo** al vencer (MIN = tiempo
+> prescrito, envío, ✓, avance; pausar/saltar solo rellena; continuo e intervalos; motor `workout-engine/cardio-autolog`) en
+> `CardioStepV3` (web) y `CardioScreenV3` (RN); **permiso de notificaciones del timer** desde Ajustes del entreno (RN «Temporizador en la
+> pantalla bloqueada» con Abrir Ajustes; web «Avisarme al terminar el descanso»); **confirmación al salir del builder** con cambios
+> (RN flecha/atrás Android/gesto iOS; web beforeunload + diálogo); **selector de grupo muscular por región** (RN pestañas + pills,
+> web Select agrupado; catálogo único con Movilidad y Rehabilitación). Solo RN: tarjeta de Share sin fondos (texto blanco con
+> contorno fino, color del coach solo en la silueta) y Stories/WhatsApp/Guardar con aviso dentro del composer; pegar un link
+> `/join/<código>` deja el código. Solo web: Despegue con logo desde las hojas portaleadas, vista previa (og) = solo logo del coach
+> con Content-Length y `?v=`, guardián E394 de deploy skew. **QA del owner PENDIENTE en device y web** (lista en la SDD § QA).
+>
 > **2026-09-01 (Ola de orden CERRADA — QA del owner verde en celular; supersede las dos entradas siguientes del mismo día)** (SDD
 > [ola-de-orden](../specs/ola-de-orden/TASKS.md) § «Cierre de la ola»): todo lo descrito abajo como «EN CÓDIGO sin OTA» está en el
 > canal `production` de OTA 1.1.2 — tren 1 (`f9cf8ae9`) android `6cd2d29d` / ios `8548c0c0` y tren 2 (`935cd4c8`) android `27e920aa` /

@@ -1,5 +1,5 @@
 ---
-status: implementing
+status: implemented-pending-qa
 owner: product-engineering
 last_verified: "2026-09-02"
 canonical: false
@@ -14,43 +14,43 @@ ni desplegado.
 
 ## W0 · Decisiones del owner (2026-09-02)
 
-- [ ] W0.1 Mockup del selector de grupo muscular RN aprobado: artifact `c4a77ab0`, **opción B**
+- [x] W0.1 Mockup del selector de grupo muscular RN aprobado: artifact `c4a77ab0`, **opción B**
       (pestañas de región + pills), no dropdown.
-- [ ] W0.2 Preview de WhatsApp: **solo el logo del coach sobre su color**, sin nombre, sin tagline y
+- [x] W0.2 Preview de WhatsApp: **solo el logo del coach sobre su color**, sin nombre, sin tagline y
       sin sello EVA dentro de la imagen (reemplaza la decisión del 22-08).
-- [ ] W0.3 Notificaciones: la causa fue el **permiso negado**, confirmado por el owner. «No molestar»
+- [x] W0.3 Notificaciones: la causa fue el **permiso negado**, confirmado por el owner. «No molestar»
       queda como limitación documentada; no se pide bypass de DND.
-- [ ] W0.4 Cardio: termina solo ⇒ rellena, envía y avanza; pausa o salto ⇒ solo rellena. La ronda
+- [x] W0.4 Cardio: termina solo ⇒ rellena, envía y avanza; pausa o salto ⇒ solo rellena. La ronda
       siguiente **no** auto-arranca.
-- [ ] W0.5 Tarjeta de Share: contorno en vez de fondos; el color del coach solo en la silueta.
-- [ ] W0.6 Builder: se pregunta al salir en las dos plataformas, con copy honesto sobre el autosave.
-- [ ] W0.7 Listas de ejercicios unificadas con `Movilidad` y `Rehabilitación`; «Equipo» en inglés.
+- [x] W0.5 Tarjeta de Share: contorno en vez de fondos; el color del coach solo en la silueta.
+- [x] W0.6 Builder: se pregunta al salir en las dos plataformas, con copy honesto sobre el autosave.
+- [x] W0.7 Listas de ejercicios unificadas con `Movilidad` y `Rehabilitación`; «Equipo» en inglés.
 
 ## A · `/join/<CÓDIGO>` en el parser
 
-- [ ] A1 `packages/schemas/coach-identifier.ts`: `IDENTIFIER_ROUTES` con `join`, `candidateFromQuery`
+- [x] A1 `packages/schemas/coach-identifier.ts`: `IDENTIFIER_ROUTES` con `join`, `candidateFromQuery`
       y su uso en las dos ramas URL de `extractCandidate`. Sin filtrar host (comentado por qué).
-- [ ] A2 `apps/mobile/lib/coach-identifier-form.ts`: kind `'clipboard'` con copy propio +
+- [x] A2 `apps/mobile/lib/coach-identifier-form.ts`: kind `'clipboard'` con copy propio +
       `resolveClipboardIdentifier`. Cero imports de React Native en el módulo.
-- [ ] A3 `apps/mobile/components/entry/CoachIdentifierForm.tsx`: el botón escribe el identificador
+- [x] A3 `apps/mobile/components/entry/CoachIdentifierForm.tsx`: el botón escribe el identificador
       extraído (no la URL), el chip «Pegar» no castiga al que tipea, etiqueta «Pegar mi enlace de
       invitación», `testID` y estilos intactos.
-- [ ] A4 Tests: +9 válidos y +7 inválidos en `coach-identifier.test.ts`; **nuevo**
+- [x] A4 Tests: +9 válidos y +7 inválidos en `coach-identifier.test.ts`; **nuevo**
       `tests/mobile/coach-identifier-form.test.ts` con el caso exacto del owner y el test de contrato
       emisor↔parser (`studentJoinUrl` ↔ `parseCoachIdentifier`).
-- [ ] A5 `native-intent.test.ts` y `applinks-claims.test.ts` verdes **sin tocarlos**.
+- [x] A5 `native-intent.test.ts` y `applinks-claims.test.ts` verdes **sin tocarlos**.
 - [ ] A6 Rama opcional `eva://join/<código>` en `+native-intent.ts` (si no se hace, queda anotada).
 
 ## B · Preview de WhatsApp
 
-- [ ] B1 `apps/web/src/lib/coach-og-image.ts`: composición pura (`resolveCoachOgArtwork`,
+- [x] B1 `apps/web/src/lib/coach-og-image.ts`: composición pura (`resolveCoachOgArtwork`,
       `coachOgFallbackArtwork`, `safeHexColor`, `isDarkBackground`, `coachOgBrandNameFontSize`),
       `coachOgImageVersion` y `buildCoachOgPngResponse` con `Content-Length`.
-- [ ] B2 `api/og/[coach_slug]/route.tsx`: dibuja y `await`-ea el buffer ⇒ el fallback sin logo **corre
+- [x] B2 `api/og/[coach_slug]/route.tsx`: dibuja y `await`-ea el buffer ⇒ el fallback sin logo **corre
       de verdad**; se conservan `runtime = 'nodejs'` y la URL absoluta del ícono EVA.
-- [ ] B3 `c/[coach_slug]/layout.tsx`: `?v=` derivado de logo/logo dark/color/nombre + `secureUrl`.
+- [x] B3 `c/[coach_slug]/layout.tsx`: `?v=` derivado de logo/logo dark/color/nombre + `secureUrl`.
       **No** se declara `openGraph` parcial en `login/page.tsx`.
-- [ ] B4 **Nuevo** `apps/web/src/lib/coach-og-image.test.ts` (el caso que blinda el header es el que
+- [x] B4 **Nuevo** `apps/web/src/lib/coach-og-image.test.ts` (el caso que blinda el header es el que
       compara `Content-Length` con el largo real del cuerpo).
 - [ ] B5 Verificación post-deploy: `curl -I` con UA de WhatsApp trae `Content-Length` y no `chunked`;
       el HTML del login conserva **todos** los `og:*`; prueba en teléfono con una URL nunca compartida.
@@ -58,46 +58,46 @@ ni desplegado.
 
 ## C · Despegue sin logo
 
-- [ ] C1 `apps/web/src/lib/workout/exec-launch-brand.ts`: fallback a nivel documento cuando el
+- [x] C1 `apps/web/src/lib/workout/exec-launch-brand.ts`: fallback a nivel documento cuando el
       trigger vive en un portal; `LAUNCH_BRAND_FALLBACK_LOGO` exportado; `ownLogo` sin cambios de
       semántica.
-- [ ] C2 `WorkoutLaunchMorph.tsx`: cadena `logo → inicial → ícono EVA`, fuera el ▶.
-- [ ] C3 **Nuevo** `tests/exec-launch-brand.test.ts`, 5 casos con la regresión del portal (falla hoy,
+- [x] C2 `WorkoutLaunchMorph.tsx`: cadena `logo → inicial → ícono EVA`, fuera el ▶.
+- [x] C3 **Nuevo** `tests/exec-launch-brand.test.ts`, 5 casos con la regresión del portal (falla hoy,
       pasa con el fix).
-- [ ] C4 Verificar que `SessionIntro` sigue compilando y que no se le mete el ícono EVA a su avatar.
+- [x] C4 Verificar que `SessionIntro` sigue compilando y que no se le mete el ícono EVA a su avatar.
 - [ ] C5 Limpieza opcional: borrar la escritura muerta de `eva:exec-v3-morph-logo`.
 
 ## D · Permiso de notificaciones en el ejecutor v3
 
-- [ ] D1 **Nuevo** `packages/workout-engine/notif-permission.ts` + export en `index.ts`.
-- [ ] D2 **Nuevo** `apps/web/src/lib/client/use-notification-permission.ts` (confirmación por service
+- [x] D1 **Nuevo** `packages/workout-engine/notif-permission.ts` + export en `index.ts`.
+- [x] D2 **Nuevo** `apps/web/src/lib/client/use-notification-permission.ts` (confirmación por service
       worker, nunca `new Notification()`).
-- [ ] D3 Fila «Avisarme al terminar el descanso» en el `ExecSettingsSheet` **web**, con `Toggle`
+- [x] D3 Fila «Avisarme al terminar el descanso» en el `ExecSettingsSheet` **web**, con `Toggle`
       deshabilitado cuando no hay acción posible.
-- [ ] D4 Fila «Temporizador en la pantalla bloqueada» en el `ExecSettingsSheet` **RN**, con «Abrir
+- [x] D4 Fila «Temporizador en la pantalla bloqueada» en el `ExecSettingsSheet` **RN**, con «Abrir
       ajustes» en el bloqueo duro y relectura en `AppState` `active`.
-- [ ] D5 Tests: `notif-permission.test.ts` (4 estados × 2 superficies) y
+- [x] D5 Tests: `notif-permission.test.ts` (4 estados × 2 superficies) y
       `use-notification-permission.test.ts`.
-- [ ] D6 No se toca `RestTimer.tsx`, ni `live-timer-notification.ts`, ni ningún id de canal.
+- [x] D6 No se toca `RestTimer.tsx`, ni `live-timer-notification.ts`, ni ningún id de canal.
 - [ ] D7 Documentar la limitación de DND (y la de la PWA sin cronómetro vivo) donde el owner la vea.
 
 ## E · Cardio: auto-relleno y auto-registro
 
-- [ ] E1 **Nuevo** `packages/workout-engine/cardio-autolog.ts` + export en `index.ts`.
-- [ ] E2 `useExecCountdown`: `elapsedSec` + re-sync por `visibilitychange`.
-- [ ] E3 `useIntervalRunner` (web): `onSegmentEnd({reason, phaseIndex})` emitido una vez por avance,
+- [x] E1 **Nuevo** `packages/workout-engine/cardio-autolog.ts` + export en `index.ts`.
+- [x] E2 `useExecCountdown`: `elapsedSec` + re-sync por `visibilitychange`.
+- [x] E3 `useIntervalRunner` (web): `onSegmentEnd({reason, phaseIndex})` emitido una vez por avance,
       antes de mover el índice, también al terminar la secuencia.
-- [ ] E4 `CardioStepV3`: estado del auto-log en el raíz, `handleSegment` único, `resetKey` por ronda
+- [x] E4 `CardioStepV3`: estado del auto-log en el raíz, `handleSegment` único, `resetKey` por ronda
       y remonte del runner por ronda.
-- [ ] E5 `LogSetForm`: prop `cardioAutolog` con el patrón uncontrolled de `holdPrefill` +
+- [x] E5 `LogSetForm`: prop `cardioAutolog` con el patrón uncontrolled de `holdPrefill` +
       `requestSubmit()`; nada del motor de guardado se duplica.
-- [ ] E6 `timing.ts` (RN): `onSegmentEnd` en el runner y `reset(seconds?)` en el countdown.
-- [ ] E7 `CardioScreenV3`: acumulador, semilla con el draft en vuelo, commit con `buildTypedPayload`
+- [x] E6 `timing.ts` (RN): `onSegmentEnd` en el runner y `reset(seconds?)` en el countdown.
+- [x] E7 `CardioScreenV3`: acumulador, semilla con el draft en vuelo, commit con `buildTypedPayload`
       y los tres heroes envolviendo `toggle`/`skip` (los mismos wrappers van como `controls` del
       timer vivo ⇒ los botones de la notificación quedan cubiertos sin tocar el puente).
-- [ ] E8 **Nuevo** `packages/workout-engine/cardio-autolog.test.ts` (tabla completa + acumulador +
+- [x] E8 **Nuevo** `packages/workout-engine/cardio-autolog.test.ts` (tabla completa + acumulador +
       rondas sobre secuencias reales + formato de la caja).
-- [ ] E9 Tests de hook web (`useExecCountdown`, `useIntervalRunner`) con timers falsos.
+- [x] E9 Tests de hook web (`useExecCountdown`, `useIntervalRunner`) con timers falsos.
 - [ ] E10 QA: continuo 3 rondas (termina sola ⇒ ✓ y ronda 2 en 30:00 detenido; pausa a los ~40 s ⇒
       rellena y no envía); intervalos 4×(1:00/0:30) con 2 rondas; última ronda ⇒ avanza de ejercicio;
       bloque por distancia; RN en background; pausa desde la notificación; regresión de movilidad,
@@ -105,14 +105,14 @@ ni desplegado.
 
 ## F · Tarjeta de Share sin fondos
 
-- [ ] F1 **Nuevo** `StrokedText.tsx` (copias apiladas, `transform`, props propagadas a todas las
+- [x] F1 **Nuevo** `StrokedText.tsx` (copias apiladas, `transform`, props propagadas a todas las
       copias, sin font scaling, fuera de la accesibilidad).
-- [ ] F2 `sticker-kit.ts`: `OUTLINE_COLOR` y neutros documentados.
-- [ ] F3 Los 9 stickers de datos sin fondos, bordes, separadores ni divisorias; todo blanco +
+- [x] F2 `sticker-kit.ts`: `OUTLINE_COLOR` y neutros documentados.
+- [x] F3 Los 9 stickers de datos sin fondos, bordes, separadores ni divisorias; todo blanco +
       contorno escalado; emojis sin contorno; imports huérfanos limpiados.
-- [ ] F4 El acento sale de todo lo que no sea la silueta (chips, título del set-list, barra lateral,
+- [x] F4 El acento sale de todo lo que no sea la silueta (chips, título del set-list, barra lateral,
       eyebrow del volumen, `@handle`).
-- [ ] F5 `share-presets.ts` reajustado: 6 presets × 3 fondos sin solapes ni recortes.
+- [x] F5 `share-presets.ts` reajustado: 6 presets × 3 fondos sin solapes ni recortes.
 - [ ] F6 QA en `/dev-harness/share-canvas` + entreno real con foto clara y foto oscura, mirando el
       **PNG capturado**, no el preview.
 - [ ] F7 Reportar las tres decisiones abiertas (ámbar del récord, ember de la racha, halo del fondo
@@ -120,54 +120,54 @@ ni desplegado.
 
 ## G · Destinos de Share en Android
 
-- [ ] G1 Banner de aviso dentro de la ventana del composer (los toasts del root son invisibles ahí).
-- [ ] G2 `ShareTargetResult.notice` + `share-targets.ts` deja de llamar al singleton de toast.
-- [ ] G3 Fuera los tres pre-gates `isTargetInstalled` (y la función huérfana): el `catch` del intento
+- [x] G1 Banner de aviso dentro de la ventana del composer (los toasts del root son invisibles ahí).
+- [x] G2 `ShareTargetResult.notice` + `share-targets.ts` deja de llamar al singleton de toast.
+- [x] G3 Fuera los tres pre-gates `isTargetInstalled` (y la función huérfana): el `catch` del intento
       directo es el único camino de decisión.
-- [ ] G4 Cada `fallback` devuelve su aviso honesto; el guard de `FACEBOOK_APP_ID` se conserva.
-- [ ] G5 `saveToGallery`: éxito visible, permiso denegado vs. bloqueo duro, `catch` que no se traga el
+- [x] G4 Cada `fallback` devuelve su aviso honesto; el guard de `FACEBOOK_APP_ID` se conserva.
+- [x] G5 `saveToGallery`: éxito visible, permiso denegado vs. bloqueo duro, `catch` que no se traga el
       error y reintento con `createAssetAsync`.
 - [ ] G6 Verificar en device: ¿«Guardar» ya funcionaba? ¿está el `<queries>` en el binario 1.1.2?
 - [ ] G7 QA con y sin Instagram/WhatsApp instalados; «Más…» debe seguir igual.
 
 ## H · Catálogo compartido y selector por región
 
-- [ ] H1 **Nuevo** `packages/workout-engine/muscle-catalog.ts` + export en `index.ts`.
-- [ ] H2 `apps/web/src/lib/constants.ts` y `apps/mobile/lib/exercises.ts` re-exportan del paquete;
+- [x] H1 Taxonomía `MUSCLE_GROUP_REGIONS` + catálogo canónico en `packages/workout-engine/muscle-map.ts` (no archivo nuevo: `muscle-catalog` chocaba con `MUSCLE_REGIONS` de la silueta).
+- [x] H2 `apps/web/src/lib/constants.ts` y `apps/mobile/lib/exercises.ts` re-exportan del paquete;
       `MUSCLE_MAPPING` intacto.
-- [ ] H3 `ExerciseFormSheet.tsx` (RN): pestañas de región + pills, resueltas in-place dentro de la
+- [x] H3 `ExerciseFormSheet.tsx` (RN): pestañas de región + pills, resueltas in-place dentro de la
       hoja (sin anidar un `Modal` en el `BottomSheetModal`).
-- [ ] H4 «Equipo» al catálogo compartido, con los valores en inglés del sistema.
-- [ ] H5 Regla de valor legado (RN + web): lo guardado fuera de catálogo se ofrece y queda marcado.
-- [ ] H6 **Nuevo** `packages/workout-engine/muscle-catalog.test.ts` (sin duplicados, partición
+- [x] H4 «Equipo»: etiquetas en ESPAÑOL (la UI es en español) que marcan los valores en inglés del catálogo de sistema vía sinónimos (decisión del jefe 02-09; el AC se reescribió).
+- [x] H5 Regla de valor legado (RN + web): lo guardado fuera de catálogo se ofrece y queda marcado.
+- [x] H6 **Nuevo** `packages/workout-engine/muscle-catalog.test.ts` (sin duplicados, partición
       exacta, regiones intactas, equipo real).
-- [ ] H7 Opcional: agrupar por región el `Select` de web con `SelectGroup` + `SelectLabel`.
+- [x] H7 Opcional: agrupar por región el `Select` de web con `SelectGroup` + `SelectLabel`.
 - [ ] H8 QA en device: Android e iOS, claro y oscuro, «Nuevo» y «Editar», con teclado abierto y
       cerrado; editar un ejercicio de `Movilidad` y uno de `Rehabilitación`.
 
 ## I · Guard de salida del builder
 
-- [ ] I1 **Nuevo** `packages/plan-builder/exit-guard.ts` (decisión + copys + href) y export.
-- [ ] I2 RN: `requestExit()`, flecha ←, `BackHandler` dentro de `useFocusEffect`, gesto de swipe
+- [x] I1 **Nuevo** `packages/plan-builder/exit-guard.ts` (decisión + copys + href) y export.
+- [x] I2 RN: `requestExit()`, flecha ←, `BackHandler` dentro de `useFocusEffect`, gesto de swipe
       desactivado mientras haya cambios. No se toca `closeSavedOverlay` ni las salidas de error.
-- [ ] I3 Web: `beforeunload` + `AlertDialog` del DS en la flecha (cubre builder por alumno y builder
+- [x] I3 Web: `beforeunload` + `AlertDialog` del DS en la flecha (cubre builder por alumno y builder
       de plantillas: es el mismo componente). Limitación del «atrás» del navegador comentada.
-- [ ] I4 **Nuevo** `packages/plan-builder/exit-guard.test.ts` (un solo test cubre las dos
+- [x] I4 **Nuevo** `packages/plan-builder/exit-guard.test.ts` (un solo test cubre las dos
       plataformas).
 - [ ] I5 QA: Android (flecha, hardware back, gesto), iOS (flecha, swipe inerte con cambios), web
       (flecha, F5, cerrar pestaña) y, en todos, que después de guardar no pregunte nada.
 
 ## J · Guardián de deploy skew
 
-- [ ] J1 **Nuevo** `apps/web/src/lib/deploy-skew.ts` (`isDeploySkewError` con `E394`, `shouldReload`
+- [x] J1 **Nuevo** `apps/web/src/lib/deploy-skew.ts` (`isDeploySkewError` con `E394`, `shouldReload`
       que marca y decide en el mismo paso, ventana de 2 min, sin storage ⇒ no recarga).
-- [ ] J2 `instrumentation-client.ts` consolidado sobre el motor nuevo: un solo camino para `error`,
+- [x] J2 `instrumentation-client.ts` consolidado sobre el motor nuevo: un solo camino para `error`,
       `unhandledrejection` y `beforeSend`, con `return null` cuando ya recuperó.
-- [ ] J3 `apps/web/src/lib/deploy-skew.test.ts` (12 casos, incluido `E715` negativo).
+- [x] J3 `apps/web/src/lib/deploy-skew.test.ts` (12 casos, incluido `E715` negativo).
 - [ ] J4 Post-deploy: ver caer `EVA-NEXTJS-3` / `-19` y aparecer el issue `info`
       `deploy_skew_reload`.
 
-## Gates (por correr — ninguno declarado verde todavía)
+## Gates (corridos 02-09 05:0xZ sobre `0f545926`: vitest 8622/8622 · tsc web y mobile 0 · eslint 0 errores nuevos (1 `react/display-name` preexistente en program-builder) · docs:check · tokens · boundaries — todos verdes)
 
 | Gate | Estado |
 |---|---|
