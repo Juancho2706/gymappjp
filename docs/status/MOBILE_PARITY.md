@@ -16,6 +16,22 @@ source_of_truth: apps/web responsive + apps/mobile
 
 > **QA en device pendiente (acumulado, 18 ítems):** [`docs/testing/QA_DEVICE_PENDIENTE.md`](../testing/QA_DEVICE_PENDIENTE.md).
 
+> **2026-09-02 (tren «cierre de backlog» — EN PRODUCCIÓN, QA del owner pendiente en device)**: `master` = `rnmobiledenuevo` =
+> `794aee52`, deploy `dpl_E6Rt7ETYsZ5tpbW84DLLdCP4RMHk` READY, OTA 1.1.2 `production` android `01a063b0-6a6a-7d09-ad3c-bbdd04591b0d`
+> (run 33675885999) / ios `01a063b0-86f0-7c30-8079-9e61d9b6b356` (run 33675889223). Paridad nueva RN ≥ PWA (decisión del owner):
+> **solicitudes de alumnos** en la app (chip «Solicitudes (N)» en Alumnos, pantalla `/coach/leads` con WhatsApp/correo/contactado/
+> sumar con alta prellenada/descartar, push `lead_received`; API `GET/PATCH /api/mobile/coach/leads`, contrato `packages/schemas/
+> coach-leads.ts`); **reemplazos estructurados** del plan bajo cada ítem y **stepper de confirmación** en sustituciones (antes Alert);
+> **swipe-back del builder bloqueado en nativo** (`usePreventRemove`, un solo diálogo con back físico y botón); el bloque colocado toma
+> nombre/media al editar el ejercicio (E1, web y RN); tarjeta de Share sin velo; 6 CTAs de nutrition-v2 RN sin «no incluido en tu
+> plan»; «Cerrar sesión» solo en «Más»; login del alumno RN explica la cuenta de coach (VTA-3.12); tema con `success600`/
+> `destructive600`; lint del builder y `Sheet.tsx` en cero; `@react-navigation/native` como dependencia directa (7.2.4, JS puro).
+> Solo web: check-in offline con borrador, aviso de correo en persona, hora/día Santiago en notas y mediciones, gates de dominio en
+> movimiento/builder/ficha, purga a 30 días, instrumentación E394, ejercicios E2/E3/E5/E6, link `/join` en Invitar alumno. Brechas
+> declaradas: `converted` desde RN no copia la atribución al alumno (el alta móvil no devuelve `clientId`); la vista Plan del alumno
+> suma una lectura por versión hasta que `get_nutrition_plan_read_v2` transporte reemplazos; `hybrid_strategy` RN sigue nombrando
+> «Nutrición Pro» (4 sitios). QA en device: [`docs/testing/QA_DEVICE_PENDIENTE.md`](../testing/QA_DEVICE_PENDIENTE.md) + lo de este tren.
+>
 > **2026-09-02 (QA del owner del 02-09: ejecutor, Share Entreno y accesos — EN PRODUCCIÓN, QA pendiente)** (SDD
 > [qa-ejecutor-share-0209](../specs/qa-ejecutor-share-0209/SPEC.md), mockup `c4a77ab0` opción B): `master` = `rnmobiledenuevo` =
 > `0f545926`, deploy web `dpl_35ZT6w7oLzBrnMEAsXjmVQVdCy2R` READY, OTA 1.1.2 canal `production` android `bd2bc6e8` (run 33593759289) /
