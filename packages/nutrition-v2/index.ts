@@ -12,6 +12,9 @@ export * from './week-view'
 export * from './intake-normalize'
 export * from './intake-units'
 export * from './substitution-intake'
+// SUB-T10: como se leen los reemplazos autorizados del coach en la tarjeta del PLAN del alumno
+// (web + RN). Puro y sin equivalencias caloricas — el calculo vive en `substitution-intake`.
+export * from './plan-substitutions'
 export * from './swipe-hint'
 // Tab Alimentos del hub coach. Vivian en `apps/web/.../nutrition-v2/_lib` hasta T2.3 F6.0: son
 // puros y RN los necesita para la paridad del tab, y `apps/mobile` no puede importar de `apps/web`.

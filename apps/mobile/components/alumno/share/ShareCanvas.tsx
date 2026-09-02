@@ -191,28 +191,20 @@ export function ShareCanvas({
                 backgroundColor: bg === 'transparent' ? 'transparent' : INK_950,
             }}
         >
+            {/* SIN velo inferior (decisión F del owner, 02-09): la banda de datos ya se lee sobre
+                cualquier foto gracias al contorno blanco de los stickers, y el degradado oscuro
+                apagaba justo la parte de la foto que el alumno quiere mostrar. Si alguna vez hace
+                falta aire, va NEUTRO oscuro — nunca teñido de marca. */}
             {bg === 'photo' && photoUri ? (
-                <>
-                    {/* `transition={0}`: cualquier fade de entrada arriesga que view-shot congele un
-                        frame a medio camino y el PNG salga lavado. */}
-                    <Image
-                        source={{ uri: photoUri }}
-                        style={StyleSheet.absoluteFill}
-                        contentFit="cover"
-                        transition={0}
-                        alt="Foto del entreno"
-                    />
-                    {/* Velo inferior: la banda de datos vive abajo y sobre una foto clara (gimnasio
-                        con ventanales, ropa blanca) el texto blanco desaparecía. Sutil a propósito —
-                        oscurecer la foto entera mataría justo lo que el alumno quiere mostrar. */}
-                    <LinearGradient
-                        colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.55)']}
-                        start={{ x: 0.5, y: 0 }}
-                        end={{ x: 0.5, y: 1 }}
-                        style={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: height * 0.38 }}
-                        pointerEvents="none"
-                    />
-                </>
+                // `transition={0}`: cualquier fade de entrada arriesga que view-shot congele un
+                // frame a medio camino y el PNG salga lavado.
+                <Image
+                    source={{ uri: photoUri }}
+                    style={StyleSheet.absoluteFill}
+                    contentFit="cover"
+                    transition={0}
+                    alt="Foto del entreno"
+                />
             ) : null}
 
             {bg === 'brand' ? (
@@ -228,8 +220,8 @@ export function ShareCanvas({
                     {/* NO va halo de acento acá. La regla del owner es literal: el color del coach
                         vive SOLO en la silueta. En `heatmap`/`setlist` la cifra héroe cae en
                         y≈0,12 — o sea DENTRO de donde llegaba el halo—, así que era acento detrás
-                        de un dato. Si el fondo necesitara aire, el velo va NEUTRO oscuro (como el
-                        de la foto, arriba), nunca teñido de marca. */}
+                        de un dato. Si el fondo necesitara aire, el velo va NEUTRO oscuro, nunca
+                        teñido de marca (el de la foto se retiró en la decisión F del 02-09). */}
                 </>
             ) : null}
 

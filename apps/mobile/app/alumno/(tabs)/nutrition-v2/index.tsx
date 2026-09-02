@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { Alert, AppState, Pressable, RefreshControl, ScrollView, Share, Text, TextInput, View } from 'react-native'
+import { AppState, Pressable, RefreshControl, ScrollView, Share, Text, TextInput, View } from 'react-native'
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router'
 import * as Haptics from 'expo-haptics'
 import { FlashList } from '@shopify/flash-list'
@@ -67,6 +67,10 @@ import type {
 } from '../../../../lib/nutrition-v2-portions'
 import {
   NUTRITION_MOTION,
+  NUTRITION_ITEM_SUBSTITUTION_SELECT,
+  describeItemSubstitutions,
+  mapNutritionItemSubstitutionRow,
+  type PlanItemSubstitutionLike,
   type BulkMarkSlotState,
   type NutritionSlotExchangeTargetRead,
   NutritionHistoryPageReadModelSchema,
@@ -113,7 +117,7 @@ import { supabase } from '../../../../lib/supabase'
 import { humanizeStudentWriteError } from '../../../../lib/student-access-copy'
 import { formatNutritionShortDate } from '../../../../lib/date-utils'
 import { foodMediaThumbnailUrl } from '../../../../lib/nutrition-v2-food-media'
-import { describeItemGuidance } from '../../../../lib/nutrition-v2-plan'
+import { describeItemGuidance, resolveItemDisplayNote } from '../../../../lib/nutrition-v2-plan'
 import { useEntitlements } from '../../../../lib/entitlements'
 import { getNutritionHistoryV2, getNutritionPlanV2, getNutritionTodayV2 } from '../../../../lib/nutrition-v2.api'
 import {
@@ -191,6 +195,12 @@ const EMPTY_PORTION_MARKS: PendingPortionMark[] = []
 const EMPTY_PORTION_VOIDS: PendingPortionVoid[] = []
 // Idem para la semana: sin plan cargado, `?? []` inline recompondría las 7 celdas en cada render.
 const EMPTY_DAY_VARIANTS: PlanVariant[] = []
+// SUB-T10: reemplazos autorizados del coach por item prescrito, en el tab "Plan".
+const EMPTY_ITEM_SUBSTITUTIONS: PlanItemSubstitutionLike[] = []
+const EMPTY_PLAN_SUBSTITUTIONS: PlanSubstitutionsByItem = {}
+
+/** Mapa `prescriptionItemId → reemplazos` que consume la tarjeta del plan (SUB-T10). */
+type PlanSubstitutionsByItem = Readonly<Record<string, PlanItemSubstitutionLike[]>>
 
 /**
  * Tab "Hoy". Con la semana Lu-Do (SPEC nutrition-week-view) esta pantalla muestra UN día:
@@ -265,6 +275,17 @@ function TodayTab({
   const [exchange, setExchange] = useState<{
     itemEntry: SubstitutionOptionsItem
     consumedFoodId: string | null
+  } | null>(null)
+  /**
+   * SUBI-F5: opción elegida que EXIGE confirmar la cantidad antes de escribir (equivalencia
+   * `needs-confirmation` o `unavailable`). Hasta T2.5 esto era un `Alert.alert` nativo, que no
+   * dejaba corregir el número: solo aceptar el absurdo o cancelar. Ahora abre el mismo stepper
+   * que ya usa "Editar cantidad", igual que el `SubstitutionConfirmDialog` de la web.
+   */
+  const [substitutionConfirm, setSubstitutionConfirm] = useState<{
+    itemEntry: SubstitutionOptionsItem
+    option: SubstitutionAnyOption
+    equivalence: SubstitutionEquivalence
   } | null>(null)
   /**
    * Cuántos swipes lleva cada item, para que el siguiente ofrezca la siguiente opción. Ref y no
@@ -1126,19 +1147,28 @@ function TodayTab({
    * deshacer y volver a registrar genera una clave nueva en vez de chocar con el short-circuit.
    *
    * Los dos casos degradados de la equivalencia (cantidad implausible o sin datos) piden
-   * confirmación explícita antes de escribir. El stepper completo llega con el sheet de T2.5.
+   * confirmación explícita antes de escribir: `SubstitutionConfirmSheet` abre el stepper con la
+   * cantidad calculada y lo que el alumno deje ahí viaja en `quantity` (SUBI-F5, paridad con
+   * `handleSubstitute` de la web). `null` = "resolvela vos, servidor", el camino de un tap.
    */
   const submitSubstitution = useCallback(
     async (
       itemEntry: SubstitutionOptionsItem,
       option: SubstitutionAnyOption,
       equivalence: SubstitutionEquivalence,
+      quantity: number | null = null,
     ) => {
       if (!userId || !model) return
       // T2.5: la opción del grupo no tiene fila, así que viaja como `groupFoodId`. Los dos caminos
       // son excluyentes en el contrato y el servidor los valida por separado.
       const isGroupOption = option.substitutionId === null
       const key = option.substitutionId ?? `gf-${option.foodId}`
+      // Vista optimista con la cantidad CONFIRMADA: mismo factor que
+      // `buildOptimisticSubstitutionEntry` de la web, para que la fila en cola no muestre los
+      // macros de una cantidad que el alumno ya corrigió.
+      const previewQuantity = quantity ?? equivalence.quantity
+      const previewFactor =
+        equivalence.quantity > 0 ? previewQuantity / equivalence.quantity : 1
       setMutationError(null)
       setSubstitutingId(key)
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -1154,28 +1184,36 @@ function TodayTab({
             ? { groupFoodId: option.foodId as string }
             : { substitutionId: option.substitutionId as string }),
           attempt: substitutionAttemptFromToday(model, itemEntry.prescriptionItemId),
-          quantity: null,
+          quantity,
         },
         // Reparo heredado de T2.4: con esto la fila se pinta con "En cola" al encolar sin red.
         // Son datos LOCALES para la pantalla; el payload sigue siendo solo la intención.
         {
           name: option.food?.name ?? option.customName ?? equivalence.snapshot.name,
           brand: option.food?.brand ?? null,
-          quantity: equivalence.quantity,
+          quantity: previewQuantity,
           unit: equivalence.unit,
           mealSlot: itemEntry.mealSlotCode,
-          totals: equivalence.totals,
+          totals: {
+            calories: equivalence.totals.calories * previewFactor,
+            proteinG: equivalence.totals.proteinG * previewFactor,
+            carbsG: equivalence.totals.carbsG * previewFactor,
+            fatsG: equivalence.totals.fatsG * previewFactor,
+            fiberG: equivalence.totals.fiberG * previewFactor,
+          },
         },
       )
       if (!mountedRef.current) return
       if (outcome.status === 'recorded') {
         setExchange(null)
+        setSubstitutionConfirm(null)
         await load(true)
         if (!mountedRef.current) return
         setSubstitutingId(null)
       } else if (outcome.status === 'queued') {
         setSubstitutingId(null)
         setExchange(null)
+        setSubstitutionConfirm(null)
         void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)
         await refreshPending()
         await syncOverlayFromQueue()
@@ -1227,24 +1265,15 @@ function TodayTab({
       option: SubstitutionAnyOption,
       equivalence: SubstitutionEquivalence,
     ) => {
-      const name = option.food?.name ?? option.customName ?? option.frozen.name ?? 'el reemplazo'
+      // Camino normal: un tap registra. Los dos casos degradados de la equivalencia (cantidad
+      // implausible o sin datos con qué calcularla) abren el stepper — SUBI-F5: el `Alert.alert`
+      // nativo solo dejaba aceptar el número o cancelar, y justo ahí el número es el que hay que
+      // poder corregir. Mismo reparto que `TodayExperience` en la web.
       if (!equivalence.requiresConfirmation) {
         void submitSubstitution(itemEntry, option, equivalence)
         return
       }
-      Alert.alert(
-        'Confirma la cantidad',
-        equivalence.kind === 'unavailable'
-          ? `No pudimos calcular la equivalencia de ${name}. ¿Registrar ${equivalence.quantity} ${equivalence.unit}?`
-          : `La equivalencia da ${equivalence.quantity} ${equivalence.unit} de ${name}. ¿La registramos?`,
-        [
-          { text: 'Cancelar', style: 'cancel' },
-          {
-            text: `Registrar ${equivalence.quantity} ${equivalence.unit}`,
-            onPress: () => void submitSubstitution(itemEntry, option, equivalence),
-          },
-        ],
-      )
+      setSubstitutionConfirm({ itemEntry, option, equivalence })
     },
     [submitSubstitution],
   )
@@ -1958,7 +1987,7 @@ function TodayTab({
         onVoid={onVoidEntry}
       />
       {/* T2.5: sheet de intercambio. Se cierra solo al registrar; si la opción exige confirmar la
-          cantidad, el Alert se abre encima y cancelar devuelve a la lista. */}
+          cantidad, el stepper se abre encima y cancelar devuelve a la lista. */}
       <SubstitutionSheet
         open={exchange !== null}
         onClose={() => setExchange(null)}
@@ -1968,6 +1997,26 @@ function TodayTab({
         consumedFoodId={exchange?.consumedFoodId ?? null}
         pendingId={substitutingId}
         onPick={onPickSubstitution}
+      />
+      {/* SUBI-F5: confirmación de cantidad con stepper (reemplaza al `Alert.alert` de T2.4). Se
+          monta ENCIMA del sheet de intercambio: cancelar devuelve a la lista de opciones. */}
+      <SubstitutionConfirmSheet
+        confirm={substitutionConfirm}
+        pending={
+          substitutionConfirm !== null &&
+          substitutingId ===
+            (substitutionConfirm.option.substitutionId ?? `gf-${substitutionConfirm.option.foodId}`)
+        }
+        onClose={() => setSubstitutionConfirm(null)}
+        onConfirm={(quantity) => {
+          if (!substitutionConfirm) return
+          void submitSubstitution(
+            substitutionConfirm.itemEntry,
+            substitutionConfirm.option,
+            substitutionConfirm.equivalence,
+            quantity,
+          )
+        }}
       />
       <PortionEquivalencesSheet
         open={equivOpen}
@@ -2271,8 +2320,11 @@ const TodaySlotCard = memo(function TodaySlotCard({
             // `intake_source_v2`. Cuando pasa, la fila muestra el REEMPLAZO y aclara a quién
             // sustituyó — mismo vocabulario que la web y que el catálogo de pantallas.
             const isSubstituted = activeEntry?.source === 'substitution'
-            const rawNote = item.notes?.trim() || null
-            const displayNote = substitutionCount > 0 && rawNote?.startsWith('Alternativas:') ? null : rawNote
+            // NOTES-RN: la regla de qué nota ve el alumno es la MISMA función pura que usa el web
+            // (`resolveItemDisplayNote`), no una condición reescrita acá: con reemplazos
+            // estructurados el texto legado "Alternativas: …" se calla, cualquier otra nota se
+            // conserva. Tests en `tests/mobile/nutrition-v2-plan.test.ts`.
+            const displayNote = resolveItemDisplayNote(item.notes, substitutionCount > 0)
             return (
               <View key={item.id} className={index > 0 ? 'border-t border-subtle' : undefined}>
                 <SwipeToExchange
@@ -2768,6 +2820,152 @@ function EntryCorrectionSheet({
   )
 }
 
+/**
+ * Confirmación de cantidad de un reemplazo, para los dos casos degradados de la equivalencia
+ * (SUBI-F5 — port del `SubstitutionConfirmDialog` de la web):
+ *
+ *  - `needs-confirmation`: el cálculo dio una cantidad por encima del tope de plausibilidad
+ *    (100 g de pechuga → ~715 g de espinaca). El número es correcto y humanamente absurdo.
+ *  - `unavailable`: no hay con qué calcular. Se prellena con la porción DEL SUSTITUTO, nunca con
+ *    la cantidad del ítem: "300 g de café" o "1 un de leche" no significan nada.
+ *
+ * Hasta T2.5 esto era un `Alert.alert`: dos botones, sin forma de corregir el número — o se
+ * registraba el absurdo o no se registraba nada. El stepper es el MISMO de "Editar cantidad"
+ * (mismo paso híbrido: 10 en g/ml, 0,5 en unidades contadas), y lo que quede acá viaja en
+ * `quantity`; el servidor lo valida contra `canAdjustPrescribedQuantity`.
+ */
+function SubstitutionConfirmSheet({
+  confirm,
+  pending,
+  onClose,
+  onConfirm,
+}: {
+  confirm: {
+    itemEntry: SubstitutionOptionsItem
+    option: SubstitutionAnyOption
+    equivalence: SubstitutionEquivalence
+  } | null
+  pending: boolean
+  onClose: () => void
+  onConfirm: (quantity: number) => void
+}) {
+  const equivalence = confirm?.equivalence ?? null
+  const [quantity, setQuantity] = useState('')
+
+  useEffect(() => {
+    setQuantity(equivalence ? String(equivalence.quantity) : '')
+  }, [equivalence])
+
+  const parsed = Number(quantity.replace(',', '.'))
+  const validQuantity = Number.isFinite(parsed) && parsed > 0
+  const unit = equivalence?.unit ?? 'g'
+  const step = unit === 'g' || unit === 'ml' ? 10 : 0.5
+  const adjustQuantity = (delta: number) => {
+    const base = validQuantity ? parsed : equivalence?.quantity ?? 0
+    setQuantity(String(Math.max(step, Math.round((base + delta) * 10) / 10)))
+  }
+  const name =
+    confirm?.option.food?.name ??
+    confirm?.option.customName ??
+    confirm?.option.frozen.name ??
+    'el reemplazo'
+  const item = confirm?.itemEntry.item ?? null
+
+  const footer = confirm ? (
+    <View className="flex-row gap-2">
+      <View className="flex-1">
+        <NutritionMotionButton
+          accessibilityLabel="Cancelar el reemplazo"
+          disabled={pending}
+          tone="neutral"
+          onPress={onClose}
+        >
+          Cancelar
+        </NutritionMotionButton>
+      </View>
+      <View className="flex-1">
+        <NutritionMotionButton
+          accessibilityLabel={`Registrar ${quantity} ${unit} de ${name}`}
+          disabled={!validQuantity}
+          pending={pending}
+          tone="nutrition"
+          onPress={() => {
+            if (!validQuantity) return
+            onConfirm(parsed)
+          }}
+        >
+          Registrar
+        </NutritionMotionButton>
+      </View>
+    </View>
+  ) : undefined
+
+  return (
+    <ActionSheet
+      open={confirm != null}
+      onClose={onClose}
+      nativeModal
+      title="Confirma la cantidad"
+      description={
+        item ? `${name} en lugar de ${item.name ?? 'tu alimento'} (${item.quantity} ${item.unit})` : undefined
+      }
+      footer={footer}
+      showCloseButton={!pending}
+      // 85%, el mismo valor que "Editar cantidad": con el teclado decimal arriba, un sheet más
+      // bajo deja el campo y el footer detrás del teclado (QA device 06-08).
+      snapPoints={['85%']}
+      accessibilityLabel="Confirmar la cantidad del reemplazo"
+    >
+      {confirm && equivalence ? (
+        <View className="gap-4">
+          {/* Mismo copy que la web: se dice POR QUÉ hay que mirar el número, sin culpar al dato. */}
+          <View className="rounded-control border border-subtle bg-surface-sunken px-3 py-2.5">
+            <Text className="text-xs leading-5 text-muted">
+              {equivalence.kind === 'unavailable'
+                ? 'No pudimos calcular la equivalencia con los datos de este alimento. Revisa la cantidad antes de registrar.'
+                : 'La equivalencia en calorías da una cantidad alta. Revísala antes de registrar.'}
+            </Text>
+          </View>
+          <View>
+            <Text className="mb-1 text-xs font-semibold text-muted">Cantidad ({unit})</Text>
+            <View className="flex-row items-stretch gap-2">
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Restar ${step} ${unit}`}
+                disabled={pending}
+                onPress={() => adjustQuantity(-step)}
+                className="min-h-12 w-12 items-center justify-center rounded-control border border-default bg-surface-app"
+              >
+                <Text className="text-lg font-bold text-strong">−</Text>
+              </Pressable>
+              <TextInput
+                accessibilityLabel={`Cantidad en ${unit}`}
+                accessibilityHint="Ingresa un número mayor que cero"
+                className="min-h-12 flex-1 rounded-control border border-default bg-surface-app px-3 text-center text-base font-semibold text-strong"
+                editable={!pending}
+                inputMode="decimal"
+                keyboardType="decimal-pad"
+                onChangeText={(value) => setQuantity(value.replace(/[^0-9.,]/g, ''))}
+                selectTextOnFocus
+                value={quantity}
+              />
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Sumar ${step} ${unit}`}
+                disabled={pending}
+                onPress={() => adjustQuantity(step)}
+                className="min-h-12 w-12 items-center justify-center rounded-control border border-default bg-surface-app"
+              >
+                <Text className="text-lg font-bold text-strong">＋</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      ) : null}
+    </ActionSheet>
+  )
+}
+
 // ---------------------------------------------------------------------------
 // Tabs shell (Tanda 7): Hoy / Plan / Historial. `TodayTab` above keeps the full
 // registro experience verbatim; Plan and History are read-only tabs that mirror
@@ -3071,6 +3269,57 @@ function PlanTab({
     if (userId) void load()
   }, [load, userId])
 
+  // ── Reemplazos autorizados del coach (SUB-T10) ──────────────────────────────
+  // Lectura directa RLS-scoped de `nutrition_item_substitutions_v2` (policy `can_read_version`:
+  // el propio alumno sobre versiones `published`/`superseded`), filtrada por la versión vigente:
+  // UNA consulta para las 7 variantes, no una por franja.
+  //
+  // Por qué no viaja en el read-model: `get_nutrition_plan_read_v2` es de julio y la tabla nació
+  // después (migración `20260721150000`); sumarla al RPC es una migración aparte. Mientras tanto
+  // esto es lo que hace visible en el plan lo que el coach ya cargó en el builder.
+  //
+  // No-bloqueante y NO cacheado: sin red el plan sigue saliendo de la cache y esta capa degrada a
+  // vacío — la tarjeta queda exactamente como antes de SUB-T10, nunca en error.
+  const [planSubstitutions, setPlanSubstitutions] =
+    useState<PlanSubstitutionsByItem>(EMPTY_PLAN_SUBSTITUTIONS)
+  const planVersionId = plan?.plan?.versionId ?? null
+  useEffect(() => {
+    if (!planVersionId) {
+      setPlanSubstitutions(EMPTY_PLAN_SUBSTITUTIONS)
+      return
+    }
+    let active = true
+    void (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('nutrition_item_substitutions_v2')
+          .select(NUTRITION_ITEM_SUBSTITUTION_SELECT)
+          .eq('version_id', planVersionId)
+          .order('order_index', { ascending: true })
+        if (!active) return
+        if (error || !data) {
+          setPlanSubstitutions(EMPTY_PLAN_SUBSTITUTIONS)
+          return
+        }
+        const rows = data as unknown as Parameters<typeof mapNutritionItemSubstitutionRow>[0][]
+        const byItem: Record<string, PlanItemSubstitutionLike[]> = {}
+        for (const row of rows) {
+          const mapped = mapNutritionItemSubstitutionRow(row)
+          const bucket = byItem[mapped.prescriptionItemId]
+          const option = { name: mapped.name, quantity: mapped.quantity, unit: mapped.unit }
+          if (bucket) bucket.push(option)
+          else byItem[mapped.prescriptionItemId] = [option]
+        }
+        setPlanSubstitutions(byItem)
+      } catch {
+        if (active) setPlanSubstitutions(EMPTY_PLAN_SUBSTITUTIONS)
+      }
+    })()
+    return () => {
+      active = false
+    }
+  }, [planVersionId])
+
   // ── Semana Lu-Do del plan (SPEC nutrition-week-view) ────────────────────────
   // Las 7 variantes ya viajaron en `plan.dayVariants`; el historial de la semana entra solo para
   // que el punto de cada chip diga la verdad ("con registro" / "sin registro"). Reusa el MISMO
@@ -3230,6 +3479,7 @@ function PlanTab({
             showTargets={false}
             showWeekStrip={false}
             todayIso={date}
+            substitutionsByItem={planSubstitutions}
           />
         ) : (
           // Plan sin variante para ese día y sin día base: el snapshot tampoco prescribiría nada,
@@ -3321,12 +3571,15 @@ function PlanVariantCard({
   showTargets,
   showWeekStrip,
   todayIso,
+  substitutionsByItem = EMPTY_PLAN_SUBSTITUTIONS,
 }: {
   variant: PlanVariant
   variants: readonly PlanVariant[]
   showTargets: boolean
   showWeekStrip: boolean
   todayIso: string
+  /** Reemplazos autorizados por item (SUB-T10). Omitirlo ⇒ la card se pinta como antes. */
+  substitutionsByItem?: PlanSubstitutionsByItem
 }) {
   return (
     <NutritionCard>
@@ -3361,7 +3614,9 @@ function PlanVariantCard({
             Plan sin franjas fijas: sigue tus metas diarias y registra lo que comas.
           </Text>
         ) : (
-          variant.mealSlots.map((slot) => <PlanSlotBlock key={slot.id} slot={slot} />)
+          variant.mealSlots.map((slot) => (
+            <PlanSlotBlock key={slot.id} slot={slot} substitutionsByItem={substitutionsByItem} />
+          ))
         )}
       </View>
     </NutritionCard>
@@ -3369,7 +3624,13 @@ function PlanVariantCard({
 }
 
 /** Una franja del plan: encabezado (hora), indicaciones, alimentos prescritos y subtotal. */
-function PlanSlotBlock({ slot }: { slot: PlanVariant['mealSlots'][number] }) {
+function PlanSlotBlock({
+  slot,
+  substitutionsByItem = EMPTY_PLAN_SUBSTITUTIONS,
+}: {
+  slot: PlanVariant['mealSlots'][number]
+  substitutionsByItem?: PlanSubstitutionsByItem
+}) {
   const timeLabel = slot.startTime ? (slot.endTime ? `${slot.startTime}–${slot.endTime}` : slot.startTime) : null
   const subtotal = slot.prescriptionItems.reduce((sum, item) => sum + (item.macros.calories ?? 0), 0)
   const hasItems = slot.prescriptionItems.length > 0
@@ -3397,25 +3658,44 @@ function PlanSlotBlock({ slot }: { slot: PlanVariant['mealSlots'][number] }) {
       {slot.instructions ? <Text className="mt-1 text-xs leading-5 text-subtle">{slot.instructions}</Text> : null}
       {hasItems ? (
         <View className="mt-2">
-          {slot.prescriptionItems.map((item, index) => (
-            <View key={item.id} className={index > 0 ? 'border-t border-subtle' : undefined}>
-              <FoodRow
-                food={{
-                  id: item.id,
-                  name: item.name ?? 'Alimento prescrito',
-                  detail: item.brand,
-                  thumbnailUrl: foodMediaThumbnailUrl(item.media),
-                  quantityLabel: `${item.quantity} ${item.unit}${item.optional ? ' · opcional' : ''}`,
-                  calories: item.macros.calories,
-                  proteinG: item.macros.proteinG,
-                  carbsG: item.macros.carbsG,
-                  fatsG: item.macros.fatsG,
-                }}
-                fallbackCategory={item.category}
-                note={describeItemGuidance(item)}
-              />
-            </View>
-          ))}
+          {slot.prescriptionItems.map((item, index) => {
+            // SUB-T10: los reemplazos ESTRUCTURADOS que el coach cargó en el builder. Sin ellos
+            // (el caso de casi todo el catálogo vivo) la fila queda idéntica a antes: la guía
+            // sigue viviendo dentro de `FoodRow` y no se pinta nada más.
+            const substitutions = substitutionsByItem[item.id] ?? EMPTY_ITEM_SUBSTITUTIONS
+            const substitutionLine = describeItemSubstitutions({ substitutions })
+            const guidance = describeItemGuidance(item, substitutions.length > 0)
+            return (
+              <View key={item.id} className={index > 0 ? 'border-t border-subtle' : undefined}>
+                <FoodRow
+                  food={{
+                    id: item.id,
+                    name: item.name ?? 'Alimento prescrito',
+                    detail: item.brand,
+                    thumbnailUrl: foodMediaThumbnailUrl(item.media),
+                    quantityLabel: `${item.quantity} ${item.unit}${item.optional ? ' · opcional' : ''}`,
+                    calories: item.macros.calories,
+                    proteinG: item.macros.proteinG,
+                    carbsG: item.macros.carbsG,
+                    fatsG: item.macros.fatsG,
+                  }}
+                  fallbackCategory={item.category}
+                  note={substitutionLine ? null : guidance}
+                />
+                {/* 60 px = miniatura (48) + gap (12): el renglón cuelga de la columna de texto de
+                    la fila, igual que la afordancia ⇄ del "Hoy". El ⇄ es el MISMO símbolo con el
+                    que el alumno cambia un alimento ese día. */}
+                {substitutionLine ? (
+                  <View className="pb-3 pl-[60px]">
+                    <Text className="text-[11px] leading-4 text-body">{`⇄ ${substitutionLine}`}</Text>
+                    {guidance ? (
+                      <Text className="mt-1 text-[11px] leading-4 text-subtle">{guidance}</Text>
+                    ) : null}
+                  </View>
+                ) : null}
+              </View>
+            )
+          })}
         </View>
       ) : targetChips ? (
         <View className="mt-2">

@@ -1,9 +1,15 @@
 import {
+  NUTRITION_ITEM_SUBSTITUTION_SELECT,
+  describeItemSubstitutions,
   formatNutritionAmount,
   formatNutritionCalories,
+  mapNutritionItemSubstitutionRow,
+  resolveItemDisplayNote,
   type NutritionPlanReadModel,
+  type PlanItemSubstitutionLike,
 } from '@eva/nutrition-v2'
 import { MacroChipRow, NutritionCard, PrescribedPortionChips } from '@/components/nutrition-v2'
+import { createClient } from '@/lib/supabase/server'
 import { NutritionFoodRow } from './NutritionFoodRow'
 import { resolveFoodImageUrl } from './food-result-image'
 
@@ -18,6 +24,10 @@ import { resolveFoodImageUrl } from './food-result-image'
  * Ya NO pinta la tira Lu-Do por card (auditoría P1-10 / Q9): con 7 variantes eran 49 pastillas
  * diciendo fracciones de lo mismo. Esa información ahora la da UN solo selector arriba, que
  * además navega. Componente de servidor: cero estado, cero controles de registro.
+ *
+ * SUB-T10: es `async` porque lee los reemplazos autorizados del coach (una consulta indexada por
+ * card, degradable a vacío — ver `fetchPlanSubstitutionsByItem`). Sus dos llamadores
+ * (`page.tsx` y `FutureDayPreview`) son Server Components, así que la espera la resuelve React.
  */
 
 export type PlanVariant = NutritionPlanReadModel['dayVariants'][number]
@@ -27,7 +37,60 @@ export type PlanItem = PlanSlot['prescriptionItems'][number]
 /** Base pública de Storage para resolver la ilustración del producto (server-side, NEXT_PUBLIC). */
 const SUPABASE_BASE = process.env.NEXT_PUBLIC_SUPABASE_URL ?? null
 
-export function PlanVariantCard({
+/** Mapa `prescriptionItemId → reemplazos`. Vacío ⇒ la tarjeta queda idéntica a antes de SUB-T10. */
+export type PlanSubstitutionsByItem = Readonly<Record<string, PlanItemSubstitutionLike[]>>
+
+const NO_SUBSTITUTIONS: PlanItemSubstitutionLike[] = []
+
+/**
+ * Reemplazos autorizados del coach (F-02) para los items de UNA variante.
+ *
+ * Lectura directa RLS-scoped de `nutrition_item_substitutions_v2` (policy `can_read_version`: el
+ * propio alumno sobre versiones `published`/`superseded`). Se filtra por los ids de items que la
+ * tarjeta ya tiene en la mano y NO por `version_id`, que el read-model del plan no expone a nivel
+ * de variante; el índice `nis_prescription_item_id_idx (prescription_item_id, order_index)` cubre
+ * exactamente ese acceso, así que es UNA consulta indexada por card.
+ *
+ * Por qué no viene en el read-model: `get_nutrition_plan_read_v2` es de julio y la tabla de
+ * reemplazos nació después (migración `20260721150000`). Sumarla al RPC es una migración aparte;
+ * hasta entonces esta lectura es lo que hace visible en el plan lo que el coach ya cargó.
+ *
+ * No-bloqueante por diseño: cualquier fallo degrada a mapa vacío — la línea de reemplazos es
+ * informativa y jamás debe tumbar la vista del plan.
+ */
+async function fetchPlanSubstitutionsByItem(itemIds: string[]): Promise<PlanSubstitutionsByItem> {
+  if (itemIds.length === 0) return {}
+  try {
+    const client = await createClient()
+    const { data, error } = await client
+      .from('nutrition_item_substitutions_v2')
+      .select(NUTRITION_ITEM_SUBSTITUTION_SELECT)
+      .in('prescription_item_id', itemIds)
+      .order('order_index', { ascending: true })
+    if (error || !data) {
+      if (error) {
+        console.error('nutrition_v2_web_read', {
+          table: 'nutrition_item_substitutions_v2',
+          ok: false,
+          errorCode: error.code ?? 'READ_ERROR',
+        })
+      }
+      return {}
+    }
+    const rows = data as unknown as Parameters<typeof mapNutritionItemSubstitutionRow>[0][]
+    const byItem: Record<string, PlanItemSubstitutionLike[]> = {}
+    for (const row of rows) {
+      const mapped = mapNutritionItemSubstitutionRow(row)
+      const bucket = byItem[mapped.prescriptionItemId] ?? (byItem[mapped.prescriptionItemId] = [])
+      bucket.push({ name: mapped.name, quantity: mapped.quantity, unit: mapped.unit })
+    }
+    return byItem
+  } catch {
+    return {}
+  }
+}
+
+export async function PlanVariantCard({
   variant,
   showTargets = false,
 }: {
@@ -38,6 +101,10 @@ export function PlanVariantCard({
    */
   showTargets?: boolean
 }) {
+  // SUB-T10: una sola lectura por card para TODOS los items de la variante (no una por franja).
+  const substitutionsByItem = await fetchPlanSubstitutionsByItem(
+    variant.mealSlots.flatMap((slot) => slot.prescriptionItems.map((item) => item.id)),
+  )
   return (
     <NutritionCard>
       {/* Auditoría P2/P3: fuera el chip "Por defecto" (concepto interno del builder, el alumno no
@@ -61,7 +128,9 @@ export function PlanVariantCard({
             Plan sin franjas fijas: sigue tus metas diarias y registra lo que comas.
           </p>
         ) : (
-          variant.mealSlots.map((slot) => <PlanSlotBlock key={slot.id} slot={slot} />)
+          variant.mealSlots.map((slot) => (
+            <PlanSlotBlock key={slot.id} slot={slot} substitutionsByItem={substitutionsByItem} />
+          ))
         )}
       </div>
     </NutritionCard>
@@ -69,7 +138,14 @@ export function PlanVariantCard({
 }
 
 /** Una franja del plan: encabezado (hora), indicaciones, alimentos prescritos y subtotal. */
-export function PlanSlotBlock({ slot }: { slot: PlanSlot }) {
+export function PlanSlotBlock({
+  slot,
+  substitutionsByItem = {},
+}: {
+  slot: PlanSlot
+  /** Reemplazos autorizados por item (SUB-T10). Omitirlo ⇒ la franja se pinta como antes. */
+  substitutionsByItem?: PlanSubstitutionsByItem
+}) {
   const timeLabel = slot.startTime
     ? slot.endTime
       ? `${slot.startTime}–${slot.endTime}`
@@ -102,21 +178,43 @@ export function PlanSlotBlock({ slot }: { slot: PlanSlot }) {
       ) : null}
       {hasItems ? (
         <div className="mt-2 divide-y divide-border-subtle">
-          {slot.prescriptionItems.map((item) => (
-            <NutritionFoodRow
-              key={item.id}
-              name={item.name ?? 'Alimento prescrito'}
-              detail={item.brand}
-              quantityLabel={`${item.quantity} ${item.unit}${item.optional ? ' · opcional' : ''}`}
-              calories={item.macros.calories}
-              proteinG={item.macros.proteinG}
-              carbsG={item.macros.carbsG}
-              fatsG={item.macros.fatsG}
-              imageUrl={resolveFoodImageUrl(item.media ?? null, SUPABASE_BASE)}
-              category={item.category ?? undefined}
-              note={describeItemGuidance(item)}
-            />
-          ))}
+          {slot.prescriptionItems.map((item) => {
+            // SUB-T10: los reemplazos ESTRUCTURADOS que el coach cargó en el builder. Sin ellos
+            // (el caso de casi todo el catálogo vivo) la fila queda byte-idéntica a antes: la
+            // guía sigue viviendo dentro de `NutritionFoodRow` y no se pinta nada más.
+            const substitutions = substitutionsByItem[item.id] ?? NO_SUBSTITUTIONS
+            const substitutionLine = describeItemSubstitutions({ substitutions })
+            const guidance = describeItemGuidance(item, substitutions.length > 0)
+            return (
+              <div key={item.id}>
+                <NutritionFoodRow
+                  name={item.name ?? 'Alimento prescrito'}
+                  detail={item.brand}
+                  quantityLabel={`${item.quantity} ${item.unit}${item.optional ? ' · opcional' : ''}`}
+                  calories={item.macros.calories}
+                  proteinG={item.macros.proteinG}
+                  carbsG={item.macros.carbsG}
+                  fatsG={item.macros.fatsG}
+                  imageUrl={resolveFoodImageUrl(item.media ?? null, SUPABASE_BASE)}
+                  category={item.category ?? undefined}
+                  note={substitutionLine ? null : guidance}
+                />
+                {/* `pl-14` = miniatura (44 px) + gap (12 px): el renglón cuelga de la columna de
+                    texto de la fila, igual que la afordancia ⇄ del "Hoy". El ⇄ es el MISMO
+                    símbolo con el que el alumno cambia un alimento ese día, para que la opción
+                    del plan y el gesto que la ejecuta se lean como lo mismo. */}
+                {substitutionLine ? (
+                  <div className="pb-3 pl-14">
+                    <p className="text-[11px] leading-4 text-body">
+                      <span aria-hidden="true">⇄ </span>
+                      {substitutionLine}
+                    </p>
+                    {guidance ? <p className="mt-1 text-[11px] leading-4 text-subtle">{guidance}</p> : null}
+                  </div>
+                ) : null}
+              </div>
+            )
+          })}
         </div>
       ) : targetChips ? (
         <div className="mt-2">
@@ -142,8 +240,14 @@ export function PlanSlotBlock({ slot }: { slot: PlanSlot }) {
   )
 }
 
-/** Nota de guía de un item prescrito: rango de cantidad ajustable + indicaciones del coach. */
-export function describeItemGuidance(item: PlanItem): string | null {
+/**
+ * Nota de guía de un item prescrito: rango de cantidad ajustable + indicaciones del coach.
+ *
+ * `hasStructuredSubstitutions` (SUB-T10) calla el texto LEGADO "Alternativas: …" congelado en
+ * `notes` cuando el item ya tiene reemplazos estructurados — si no, el alumno lee la misma lista
+ * dos veces. Default `false` ⇒ comportamiento idéntico al de antes.
+ */
+export function describeItemGuidance(item: PlanItem, hasStructuredSubstitutions = false): string | null {
   const unit = item.unit
   const range =
     item.minimumQuantity != null && item.maximumQuantity != null
@@ -153,5 +257,6 @@ export function describeItemGuidance(item: PlanItem): string | null {
         : item.minimumQuantity != null
           ? `Desde ${formatNutritionAmount(item.minimumQuantity, unit)}`
           : null
-  return [range, item.notes].filter(Boolean).join(' · ') || null
+  const note = resolveItemDisplayNote(item.notes, hasStructuredSubstitutions)
+  return [range, note].filter(Boolean).join(' · ') || null
 }
