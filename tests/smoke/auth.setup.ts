@@ -28,11 +28,14 @@ setup('autenticar al coach QA una sola vez', async ({ page, context }) => {
     assertAllowedE2eEmail(email, 'qa:prod:suave')
 
     await page.goto('/login')
-    await expect(page.getByRole('heading', { name: 'Bienvenido de vuelta' })).toBeVisible()
+    // Copy vigente del login del coach (`(auth)/login/page.tsx` + `CoachLoginForm.tsx`). El primer
+    // dispatch real (2026-09-02, run 33668601464) murió acá buscando «Bienvenido de vuelta» /
+    // «Ingresar al Panel», textos de una versión anterior de la pantalla.
+    await expect(page.getByRole('heading', { name: 'Panel del coach' })).toBeVisible()
 
     await page.locator('#email').fill(email)
     await page.locator('#password').fill(password)
-    await page.getByRole('button', { name: /Ingresar al Panel/i }).click()
+    await page.getByRole('button', { name: /Entrar como coach/i }).click()
 
     // El panel decide a donde aterriza: `/coach/dashboard` manda a `/coach/guia` en la primera
     // entrada del coach. Cualquier ruta bajo `/coach/` significa sesion valida.
