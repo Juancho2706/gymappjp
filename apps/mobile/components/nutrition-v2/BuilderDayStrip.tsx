@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Alert, Pressable, Text, TextInput, View, type TextStyle } from 'react-native'
-import { Copy, Lock, MoreVertical, Pencil, Sliders, Trash2 } from 'lucide-react-native'
+import { Copy, MoreVertical, Pencil, Sliders, Trash2 } from 'lucide-react-native'
 import {
   NUTRITION_DAY_LABELS,
   NUTRITION_DAY_SHORT_LABELS,
@@ -55,8 +55,6 @@ export interface BuilderDayStripHandlers {
   onSelectDay: (dayOfWeek: number | null) => void
   /** "Personalizar el {día}": crea la variante de ese día copiando el Día base. */
   onPersonalize: (dayOfWeek: number) => void
-  /** Coach BASE tocando "Personalizar": upsell suave en vez de crear la variante. */
-  onPersonalizeLocked: () => void
   onRename: (variantKey: string, label: string) => void
   onSetTargetsMode: (variantKey: string, mode: 'inherit' | 'custom') => void
   onSetVariantTarget: (variantKey: string, field: keyof BuilderTargets, value: string) => void
@@ -64,8 +62,6 @@ export interface BuilderDayStripHandlers {
   onCopyDayTo: (sourceVariantKey: string, days: number[]) => void
   /** Eliminar el día: vuelve a heredar el Día base. */
   onRemove: (variantKey: string) => void
-  /** CTA del upsell (coach BASE): la pantalla navega a Módulos. */
-  onUpgrade: () => void
 }
 
 /**
@@ -328,7 +324,6 @@ function DayMenuSheet({
 }
 
 export function BuilderDayStrip({
-  ownDayCount,
   cells,
   selectedDayOfWeek,
   activeVariant,
@@ -336,12 +331,9 @@ export function BuilderDayStrip({
   activeKcal,
   baseTargets,
   activeTargetCalories,
-  personalizeLocked,
   errorDays,
   handlers,
 }: {
-  /** Días con contenido propio (para el aviso del coach BASE). */
-  ownDayCount: number
   /** Las 7 celdas ya resueltas (`builderDayCells`): la UI no vuelve a decidir qué día recibe qué. */
   cells: readonly BuilderDayCell[]
   /** Día seleccionado; `null` = el Día base explícito (los 7 días son propios). */
@@ -356,8 +348,6 @@ export function BuilderDayStrip({
   baseTargets: BuilderTargets
   /** Meta de energía EFECTIVA del día seleccionado, para la línea "X / Y". */
   activeTargetCalories: string
-  /** Coach sin Nutrición Pro: "Personalizar" con candado + upsell. */
-  personalizeLocked: boolean
   /**
    * Días cuya validación falló. El paso monta solo las franjas del día elegido, así que un item
    * incompleto de otro día bloqueaba "Publicar" sin señal: acá se marca su celda. Solo EXPONE lo
@@ -411,18 +401,10 @@ export function BuilderDayStrip({
             <>
               <Pressable
                 accessibilityRole="button"
-                // W6 (ronda de revisión): el lector no nombra un tier ajeno — dice el estado del
-                // plan PROPIO. Nombrar «Nutrición Pro» acá es exactamente el catálogo de venta que
-                // la app no puede pronunciar (guideline 3.1.1).
-                accessibilityLabel={`Personalizar el ${selectedLongLabel.toLocaleLowerCase()}${
-                  personalizeLocked ? ': no incluido en tu plan actual' : ''
-                }`}
-                onPress={() =>
-                  personalizeLocked ? handlers.onPersonalizeLocked() : handlers.onPersonalize(selectedDayOfWeek)
-                }
+                accessibilityLabel={`Personalizar el ${selectedLongLabel.toLocaleLowerCase()}`}
+                onPress={() => handlers.onPersonalize(selectedDayOfWeek)}
                 className="min-h-11 flex-row items-center justify-center gap-1.5 rounded-control border border-primary/40 bg-primary/10 px-3"
               >
-                {personalizeLocked ? <Lock color={theme.primary} size={14} /> : null}
                 <Text className="text-sm font-bold text-primary">
                   Personalizar el {selectedLongLabel.toLocaleLowerCase()}
                 </Text>
@@ -475,30 +457,6 @@ export function BuilderDayStrip({
           </Text>
           <Text className="text-xs font-semibold text-primary">Ver</Text>
         </Pressable>
-      ) : null}
-
-      {/* Coach BASE con un plan que YA tiene días propios (típicamente convertido de V1): el
-          servidor rechazará el publish con UPGRADE_REQUIRED. Se avisa acá, no al final. */}
-      {personalizeLocked && ownDayCount > 0 ? (
-        <View className="rounded-control border border-warning-500/30 bg-warning-500/10 px-3 py-2">
-          {/* Sin nombre de tier y sin «mejorar»: la app describe la capacidad que le falta a ESTE
-              plan, no vende el que la tiene. La acción real que queda dentro de la app es eliminar
-              los días propios; «revisar tu plan» es estado, y su destino no cambió. */}
-          <Text className="text-xs leading-5 text-warning-700">
-            Este plan tiene {ownDayCount} {ownDayCount === 1 ? 'día' : 'días'} con contenido propio y publicarlos
-            requiere la nutrición personalizada por alumno, que tu plan actual no incluye. Puedes eliminarlos desde
-            su menú o revisar tu plan.
-          </Text>
-          {/* Tono W6.6: estado del plan propio, no una oferta. El destino no cambia. */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Ver mi plan"
-            onPress={handlers.onUpgrade}
-            className="mt-1 min-h-11 justify-center"
-          >
-            <Text className="text-xs font-bold text-primary underline">Ver mi plan</Text>
-          </Pressable>
-        </View>
       ) : null}
 
       {/* Editor de metas propias del día seleccionado (se abre desde el menú ⋮). El Día base nunca

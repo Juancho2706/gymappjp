@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Alert, Platform, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native'
+import { Alert, StyleSheet, Text, TouchableOpacity, useWindowDimensions, View } from 'react-native'
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import Svg, { Path } from 'react-native-svg'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, { useAnimatedStyle, useSharedValue } from 'react-native-reanimated'
 import { useFocusEffect, useRouter } from 'expo-router'
-import { ArrowDown, ArrowRightLeft, ArrowUp, Images, Pencil, Ruler, Scale, Target, Trash2 } from 'lucide-react-native'
+import { ArrowDown, ArrowRightLeft, ArrowUp, Images, Pencil, Scale, Target, Trash2 } from 'lucide-react-native'
 import type { BiaMetrics } from '@eva/bodycomp'
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, Input, Sheet, SegmentedTabs } from '../../../components'
@@ -22,8 +22,7 @@ import {
 import { updateCoachClient, type CoachClientDetailData, type CheckInEntry } from '../../../lib/coach-client-detail'
 import { getSantiagoIsoYmdForUtcInstant, getTodayInSantiago, isoDateAddDays, parseDbDate } from '../../../lib/date-utils'
 import { FONT } from '../../../lib/typography'
-import { hexToRgba, resolveSportRamp } from '../../../lib/theme'
-import { EvaBlur } from '../../../components/EvaBlur'
+import { resolveSportRamp } from '../../../lib/theme'
 import {
   deleteScopedMeasurement,
   listScopedMeasurements,
@@ -698,9 +697,9 @@ function CheckInRow({ c, onOpenDetail }: { c: CheckInEntry; onOpenDetail: (photo
 }
 
 // ── Composición corporal ─────────────────────────────────────────────────────
-// Sección del módulo de pago `body_composition` dentro del tab Progreso, espejo del
-// CompositionSection web (ProgressBodyCompositionB6). Con módulo OFF muestra teaser y no consulta;
-// con módulo ON carga la medición real.
+// Sección `body_composition` dentro del tab Progreso, espejo del CompositionSection web
+// (ProgressBodyCompositionB6). Con el módulo OFF (kill-switch de operador o cuenta sin acceso
+// vigente) muestra el aviso de mantenimiento y no consulta; con módulo ON carga la medición real.
 // Lectura read-only por PostgREST (RLS bcm_select = techo: el coach solo ve a SUS alumnos); las
 // MUTACIONES viven en la pantalla /coach/bodycomp/[clientId] (endpoints /api/mobile/bodycomp/*).
 // Las series NUNCA se mezclan entre métodos (el % grasa BIA e ISAK no es comparable).
@@ -786,58 +785,19 @@ function CompositionSection({ clientId, hasModule, entitlementsReady, inlineAllo
   }
 
   if (!hasModule) {
+    // OB3 (regla D1 del owner, 2026-08-31: todo esta en todos los planes, solo se cobra el cupo de
+    // alumnos): aca vivia un PAYWALL — preview borroso de %grasa/masa muscular tapado por un velo,
+    // el copy «Parte del modulo Composicion corporal, no incluido en tu plan actual» y un CTA «Ver
+    // mi plan». Ese gate ya no existe: con acceso vigente los 4 modulos vienen incluidos
+    // (`deriveModulesForActiveAccess`), asi que `hasModule` en false solo significa kill-switch de
+    // operador o cuenta sin acceso vigente. El copy es el MISMO de `ModuleOffNotice` (W4.2):
+    // mantenimiento, sin nombrar planes y sin ningun camino a pagar (Apple 3.1.1 / Google).
     return (
       <StatCard>
         <SectionHeading title="Composición corporal" />
-        <View style={[styles.teaserStage, { borderRadius: theme.radius.md }]}>
-          <View pointerEvents="none" style={styles.teaserPreview}>
-            <View style={styles.progressGrid}>
-              <ProgressMetric value="18.4%" label="% Grasa" />
-              <ProgressMetric value="34.2 kg" label="Masa muscular" />
-            </View>
-            <AreaTrend
-              points={[
-                { i: 0, y: 30, label: '' },
-                { i: 1, y: 48, label: '' },
-                { i: 2, y: 42, label: '' },
-                { i: 3, y: 62, label: '' },
-                { i: 4, y: 56, label: '' },
-                { i: 5, y: 74, label: '' },
-              ]}
-              color={theme.primary}
-              suffix="%"
-              decimals={1}
-              height={70}
-              showArea={false}
-              curveType="linear"
-            />
-          </View>
-          {/* Esta capa NO es decoración: es el PAYWALL. Tapa el preview de %grasa / masa
-              muscular de un módulo que el coach no tiene contratado, así que si se ve a
-              través, el teaser regala el módulo. El teaser nunca puede depender de un velo
-              translúcido en Android: desde EVA-MOBILE-7 (ver `components/EvaBlur.tsx`) ahí
-              no hay difuminado, y con `intensity={14}` el fallback plano queda en ~10% de
-              alfa (`TintStyle.kt`: intensity x 0,69) — los números y el trazo se leían
-              perfectamente. Android va con superficie SÓLIDA
-              (`theme.card` @ 0,92 — opaca de verdad, pero deja asomar la silueta lo justo
-              para que se lea como preview y no como un bloque muerto). iOS conserva el blur
-              nativo, que sí difumina de verdad. */}
-          {Platform.OS === 'android' ? (
-            <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: hexToRgba(theme.card, 0.92) }]} />
-          ) : (
-            <EvaBlur pointerEvents="none" intensity={14} tint={theme.scheme === 'dark' ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
-          )}
-          <View style={styles.teaserBody}>
-            <View style={[styles.teaserIcon, { backgroundColor: theme.card, borderColor: theme.border, borderRadius: theme.radius.pill }]}>
-              <Ruler size={20} color={theme.mutedForeground} />
-            </View>
-            <Text style={[styles.teaserTitle, { color: theme.foreground, fontFamily: FONT.displayBold }]}>Composición corporal</Text>
-            <Text style={[styles.teaserCopy, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>%Grasa, masa muscular y antropometría (protocolo ISAK). Parte del módulo Composición corporal, no incluido en tu plan actual.</Text>
-            {/* Tono W6.6: la app no vende, muestra el estado del plan propio. W3.7: el destino es
-                «Funciones» (el catálogo de Módulos se demolió y su ruta es solo un redirect). */}
-            <Button label="Ver mi plan" variant="sport" onPress={() => router.push('/coach/settings/funciones')} style={{ marginTop: 2 }} />
-          </View>
-        </View>
+        <Text style={[cd.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>
+          La antropometría y la composición corporal (protocolo ISAK completo) no están disponibles en este momento.
+        </Text>
       </StatCard>
     )
   }
@@ -1241,12 +1201,6 @@ const styles = StyleSheet.create({
   detailUnit: { fontSize: 12 },
   detailEnergy: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   detailNotes: { fontSize: 13.5, lineHeight: 19 },
-  teaserStage: { minHeight: 230, overflow: 'hidden', position: 'relative' },
-  teaserPreview: { opacity: 0.55, gap: 8, padding: 4 },
-  teaserBody: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', gap: 7, paddingHorizontal: 14 },
-  teaserIcon: { width: 42, height: 42, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  teaserTitle: { fontSize: 14, letterSpacing: -0.2, textAlign: 'center' },
-  teaserCopy: { fontSize: 12, lineHeight: 16, textAlign: 'center', maxWidth: 320 },
   activeSeriesDelta: { fontSize: 12, textAlign: 'right', fontVariant: ['tabular-nums'] },
   bodycompSubcard: { padding: 12, gap: 12 },
   bodycompSubcardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },

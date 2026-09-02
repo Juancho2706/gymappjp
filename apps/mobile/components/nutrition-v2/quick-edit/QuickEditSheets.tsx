@@ -1,6 +1,5 @@
 import { Text, View } from 'react-native'
-import { useRouter } from 'expo-router'
-import { Lock, RefreshCw } from 'lucide-react-native'
+import { AlertTriangle, RefreshCw } from 'lucide-react-native'
 import { Sheet } from '../../Sheet'
 import { NutritionMotionButton } from '../NutritionV2Kit'
 import { useTheme } from '../../../context/ThemeContext'
@@ -9,7 +8,8 @@ import { EDITOR_COPY, QUICK_EDIT_COPY, publishConfirmBody } from './microcopy'
 /**
  * Sheets criticos del quick-edit — TODOS en Sheet nativeModal (gorhom vetado bajo
  * reanimated 4; regla del diseno §1.3): confirmacion de publicar, conflicto
- * STALE_BASE (recargar = unica salida segura en F1) y upsell Pro suave.
+ * STALE_BASE (recargar = unica salida segura en F1) y el rechazo de publicacion
+ * del servidor.
  */
 
 export function PublishConfirmSheet({
@@ -112,14 +112,23 @@ export function StaleBaseSheet({
   )
 }
 
-export function ProUpsellSheet({
+/**
+ * Publicación rechazada por el servidor con `UPGRADE_REQUIRED`.
+ *
+ * OB3 (regla D1 del owner, 2026-08-31: todo está en todos los planes, solo se cobra el cupo de
+ * alumnos): antes era `ProUpsellSheet` — candado, título «Nutrición Pro» y un CTA «Ver módulos».
+ * Ya no vende ni nombra un tier: es la superficie de un ERROR del servidor, con el mismo tono de
+ * mantenimiento que `ModuleOffNotice` (W4.2). Los módulos vienen incluidos con el acceso vigente
+ * (`deriveModulesForActiveAccess`), así que este rechazo solo aparece con la cuenta inactiva o con
+ * el kill-switch de operador — no hay nada que comprar y no se ofrece ningún camino a pagar.
+ */
+export function PublishBlockedSheet({
   message,
   onClose,
 }: {
   message: string | null
   onClose: () => void
 }) {
-  const router = useRouter()
   const { theme } = useTheme()
   return (
     <Sheet
@@ -127,31 +136,19 @@ export function ProUpsellSheet({
       onClose={onClose}
       nativeModal
       dynamicSizing
-      title="Nutrición Pro"
-      accessibilityLabel="Nutrición Pro"
+      title="No se pudo publicar"
+      accessibilityLabel="No se pudo publicar"
     >
       <View className="flex-row items-start gap-2">
-        <Lock color={theme.primary} size={18} />
+        <AlertTriangle color={theme.warning} size={18} />
         <Text className="min-w-0 flex-1 text-sm leading-5 text-body">
-          {message ?? 'Esta función requiere el complemento Nutrición Pro.'}
+          {message ?? 'Esta función no está disponible en este momento. Tus datos están a salvo.'}
         </Text>
       </View>
-      <View className="mt-2 flex-row gap-3">
-        <NutritionMotionButton accessibilityLabel="Cerrar" tone="neutral" onPress={onClose}>
-          Ahora no
+      <View className="mt-2">
+        <NutritionMotionButton accessibilityLabel="Entendido" tone="neutral" onPress={onClose}>
+          Entendido
         </NutritionMotionButton>
-        <View className="flex-1">
-          <NutritionMotionButton
-            accessibilityLabel="Ver módulos"
-            onPress={() => {
-              // W3.7: destino directo a Funciones (`/coach/modules` es solo un redirect).
-              onClose()
-              router.push('/coach/settings/funciones')
-            }}
-          >
-            Ver módulos
-          </NutritionMotionButton>
-        </View>
       </View>
     </Sheet>
   )

@@ -102,9 +102,9 @@ export const QUICK_EDIT_COPY = {
   copySlotHint:
     'Reemplaza la franja del mismo nombre en cada día elegido. Si ese día no la tiene, se agrega al final.',
   copySlotReplaces: 'Reemplaza',
-  /** Gate Pro `multi_variant`: el server rechaza igual; el candado evita el callejón. */
-  multiDayLocked:
-    'Armar días distintos (por ejemplo el fin de semana) es parte de Nutrición Pro, no incluido en tu plan actual.',
+  // OB3 (regla D1 del owner: todo está en todos los planes, solo se cobra el cupo de alumnos):
+  // `multiDayLocked` se retiró. Anunciaba «Nutrición Pro, no incluido en tu plan actual» antes de
+  // dejar agregar días distintos; hoy la hoja de alta de días se abre siempre.
   discardTitle: '¿Descartar los cambios?',
   editingEyebrow: 'Modo edición',
   editingHint: 'Toca una cantidad para ajustarla. Publica cuando termines.',

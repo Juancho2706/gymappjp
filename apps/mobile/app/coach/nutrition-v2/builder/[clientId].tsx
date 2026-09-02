@@ -885,10 +885,9 @@ export function CoachNutritionV2BuilderScreen() {
   // publicar en blanco los reduciria a uno. Con rehidratacion OK el wizard los edita todos.
   const multiDayBlocked = rehydrationFailed && (existingPlan?.dayVariantCount ?? 0) > 1
 
-  // Coach BASE: publicar un dia con contenido propio ya son DOS variantes, y eso exige Nutricion
-  // Pro (`multi_variant`). El candado del CTA "Personalizar" es anti-friccion; la barrera real la
-  // pone el servidor.
-  const personalizeLocked = !hasNutritionPro
+  // OB3 (regla D1 del owner): darle contenido propio a un dia esta incluido en todos los planes
+  // — el candado del CTA "Personalizar" se retiro. La barrera real la sigue poniendo el servidor
+  // (`multi_variant` -> UPGRADE_REQUIRED), que solo dispara con la cuenta sin acceso vigente.
 
   // kcal por dia para las celdas del strip (items fijos + porciones a eleccion del MISMO dia), y
   // el conteo de porciones prescritas del dia (vive fuera del reducer, en el mapa hermano).
@@ -1133,18 +1132,12 @@ export function CoachNutritionV2BuilderScreen() {
   const dayHandlers: BuilderDayStripHandlers = {
     onSelectDay: (dayOfWeek) => setSelectedDow(dayOfWeek),
     onPersonalize: (dayOfWeek) => handleDuplicateVariantToDays(baseVariant.key, [dayOfWeek]),
-    onPersonalizeLocked: () =>
-      setUpsell(
-        'Darle contenido propio a un día (el fin de semana, el día de entrenamiento) es parte de Nutrición Pro. Tu plan actual publica un solo día para toda la semana.',
-      ),
     onRename: (variantKey, label) => dispatch({ type: 'SET_VARIANT_LABEL', variantKey, value: label }),
     onSetTargetsMode: (variantKey, mode) => dispatch({ type: 'SET_VARIANT_TARGETS_MODE', variantKey, mode }),
     onSetVariantTarget: (variantKey, field, value) =>
       dispatch({ type: 'SET_VARIANT_TARGETS', variantKey, field, value }),
     onCopyDayTo: handleDuplicateVariantToDays,
     onRemove: handleRemoveVariant,
-    // W3.7: `/coach/modules` es redirect desde W3.4; se apunta directo para evitar el salto doble.
-    onUpgrade: () => router.push('/coach/settings/funciones'),
   }
 
   /**
@@ -1654,7 +1647,6 @@ export function CoachNutritionV2BuilderScreen() {
               inheritedDays={inheritedDays}
               activeKcal={kcalByVariantKey[activeVariant.key] ?? 0}
               errorDays={errorDays}
-              personalizeLocked={personalizeLocked}
               dayHandlers={dayHandlers}
               onSelectVariant={selectVariant}
               dispatch={dispatch}
@@ -3277,7 +3269,6 @@ function DaysStep({
   inheritedDays,
   activeKcal,
   errorDays,
-  personalizeLocked,
   dayHandlers,
   onSelectVariant,
   dispatch,
@@ -3306,7 +3297,6 @@ function DaysStep({
   inheritedDays: readonly number[]
   activeKcal: number
   errorDays: readonly number[]
-  personalizeLocked: boolean
   dayHandlers: BuilderDayStripHandlers
   /** "Revisa {día}": abre el día de una variante con error (traduce variante → día). */
   onSelectVariant: (variantKey: string) => void
@@ -3380,7 +3370,6 @@ function DaysStep({
     <View className="gap-3">
       {/* Selector de día: strip Lu-Do + barra de contexto + menú del día. */}
       <BuilderDayStrip
-        ownDayCount={state.variants.length - 1}
         cells={dayCells}
         selectedDayOfWeek={selectedDow}
         activeVariant={variant}
@@ -3388,7 +3377,6 @@ function DaysStep({
         activeKcal={activeKcal}
         baseTargets={state.targets}
         activeTargetCalories={variantEffectiveTargets(state, variant).calories}
-        personalizeLocked={personalizeLocked}
         errorDays={errorDays}
         handlers={dayHandlers}
       />

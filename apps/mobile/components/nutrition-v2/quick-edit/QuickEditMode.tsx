@@ -15,7 +15,6 @@ import {
 import { KeyboardDoneBar } from '../../KeyboardDoneBar'
 import NetInfo from '@react-native-community/netinfo'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
 import {
   AlertTriangle,
   ArrowDown,
@@ -30,7 +29,6 @@ import {
   History,
   Info,
   ListPlus,
-  Lock,
   MoreVertical,
   NotebookPen,
   Pencil,
@@ -139,7 +137,7 @@ import { EditorMetaCard } from './EditorMetaCard'
 import { TargetsEditorCard } from './TargetsEditorCard'
 import { FoodSearchSheet, type FoodSearchMode } from './FoodSearchSheet'
 import { PublishBar, UndoSnackbar, type PublishBarDayTotals } from './PublishBar'
-import { ProUpsellSheet, PublishConfirmSheet, StaleBaseSheet } from './QuickEditSheets'
+import { PublishBlockedSheet, PublishConfirmSheet, StaleBaseSheet } from './QuickEditSheets'
 import {
   EDITOR_COPY,
   QUICK_EDIT_COPY,
@@ -276,9 +274,10 @@ export function QuickEditMode({
   scope: NutritionV2CoachScope
   todayIso: string
   /**
-   * Entitlement Nutricion Pro del coach. Gobierna SOLO la afordancia de los dias
-   * especificos (candado + upsell en vez del selector). El gate real es server-side
-   * (`multi_variant` -> UPGRADE_REQUIRED en el endpoint de mutaciones). Default fail-closed.
+   * Entitlement Nutricion Pro del coach. OB3 (regla D1 del owner): ya NO gatea los dias
+   * especificos — agregar dias distintos esta incluido en todos los planes y la hoja de alta se
+   * abre siempre. Solo viaja al preflight de `publishDraftRN` (evita el round-trip cuando el
+   * servidor va a responder UPGRADE_REQUIRED igual) y a `EditorMetaCard`. Default fail-closed.
    */
   hasNutritionPro?: boolean
   /** Editor unico (T3.3b). Ausente = quick-edit clasico, bit-identico a como era. */
@@ -291,7 +290,6 @@ export function QuickEditMode({
   // Marca real del coach para la «Familia N» (ver nota en `EditableSlotCard`): el default del
   // componente es el primary de la WEB, y en el móvil el azul de sistema es otro.
   const brandColor = resolveEffectiveCoachBrandTheme(branding).brandColor
-  const router = useRouter()
   // QA2-B4: el modo edicion se monta como pantalla completa dentro de una ruta SIN
   // header nativo (root Stack con headerShown:false), asi que el inset superior es
   // responsabilidad de esta barra fija — sin el, el boton de salida choca con la
@@ -400,7 +398,7 @@ export function QuickEditMode({
   const [publishError, setPublishError] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [stale, setStale] = useState(false)
-  const [upsell, setUpsell] = useState<string | null>(null)
+  const [publishBlocked, setPublishBlocked] = useState<string | null>(null)
   const [searchTarget, setSearchTarget] = useState<SearchTarget | null>(null)
   const [undo, setUndo] = useState<UndoEntry | null>(null)
   // FD5 (multi-dia): sheets del alta de dias y del menu por dia (renombrar / cambiar dia).
@@ -1382,7 +1380,7 @@ export function QuickEditMode({
       return
     }
     if (res.code === 'UPGRADE_REQUIRED') {
-      setUpsell(res.error)
+      setPublishBlocked(res.error)
       return
     }
     if (res.code === 'EFFECTIVE_DATE' || res.code === 'NEEDS_VARIANT' || res.code === 'NEEDS_SLOT') {
@@ -1491,7 +1489,7 @@ export function QuickEditMode({
       return
     }
     if (res.code === 'UPGRADE_REQUIRED') {
-      setUpsell(res.message)
+      setPublishBlocked(res.message)
       return
     }
     setPublishError(res.message)
@@ -2039,8 +2037,8 @@ export function QuickEditMode({
                 // «Familia N» (T3.v Cabina): la pastilla de alta, no una barra de ancho completo.
                 // QA owner 17-08: las DOS altas van en UNA fila (apiladas ocupaban el doble de
                 // alto). «Agregar día» acompaña solo al ÚLTIMO día visible — es alta del plan, no
-                // del día — con su candado Pro intacto al lado. `flex-wrap` para pantallas
-                // angostas: si no entran juntas, envuelven sin desbordar.
+                // del día. `flex-wrap` para pantallas angostas: si no entran juntas, envuelven sin
+                // desbordar. OB3: el candado Pro que viajaba al lado se retiró con su gate.
                 <View className="flex-row flex-wrap items-center gap-1.5">
                   <AddActionButton
                     variant="neutral"
@@ -2052,54 +2050,40 @@ export function QuickEditMode({
                   />
                   {variantIndex === visibleVariants.length - 1 &&
                   takenDays.length < NUTRITION_WEEK_ORDER.length ? (
-                    <>
-                      <AddActionButton
-                        variant="dashed"
-                        icon="dia"
-                        label={QUICK_EDIT_COPY.addDay}
-                        brandColor={brandColor}
-                        disabled={publishing}
-                        onPress={openAddDay}
-                      />
-                      {hasNutritionPro ? null : (
-                        <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-                          <Lock color={theme.primary} size={16} />
-                        </View>
-                      )}
-                    </>
+                    <AddActionButton
+                      variant="dashed"
+                      icon="dia"
+                      label={QUICK_EDIT_COPY.addDay}
+                      brandColor={brandColor}
+                      disabled={publishing}
+                      onPress={openAddDay}
+                    />
                   ) : null}
                 </View>
               ) : null}
             </View>
           ))}
 
-          {/* FD5: "+ Agregar día" al final de la lista de días. Sin Nutrición Pro el CTA lleva
-              candado y el sheet muestra el upsell (el server rechaza igual: multi_variant).
+          {/* FD5: "+ Agregar día" al final de la lista de días.
 
               «Familia N» (T3.v Cabina): pastilla PUNTEADA — el día que todavía no existe es el
-              caso de «hueco por llenar» del que vive esa variante. El candado del gate Pro NO se
-              pierde: la pastilla no admite hijos (su forma es fija a propósito), así que viaja al
-              lado, como sello. Sigue siendo decorativo — quien anuncia el gate es el sheet.
+              caso de «hueco por llenar» del que vive esa variante.
+
+              OB3: el candado del gate Pro que viajaba al lado se retiró — agregar días distintos
+              está incluido en todos los planes (regla D1 del owner).
 
               QA owner 17-08: solo para días SIN fila de altas (estrategia flexible) — el caso
               estructurado/híbrido lo hospeda la fila del último día, arriba. */}
           {takenDays.length < NUTRITION_WEEK_ORDER.length &&
           !(usesSlots && strategyUsesSlots(strategy)) ? (
-            <View className="flex-row items-center gap-1.5">
-              <AddActionButton
-                variant="dashed"
-                icon="dia"
-                label={QUICK_EDIT_COPY.addDay}
-                brandColor={brandColor}
-                disabled={publishing}
-                onPress={openAddDay}
-              />
-              {hasNutritionPro ? null : (
-                <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-                  <Lock color={theme.primary} size={16} />
-                </View>
-              )}
-            </View>
+            <AddActionButton
+              variant="dashed"
+              icon="dia"
+              label={QUICK_EDIT_COPY.addDay}
+              brandColor={brandColor}
+              disabled={publishing}
+              onPress={openAddDay}
+            />
           ) : null}
 
           {/* Notas visibles EDITABLES (visible_notes, espejo web QuickEditPlanView); permisos
@@ -2278,7 +2262,7 @@ export function QuickEditMode({
           onStaleReload()
         }}
       />
-      <ProUpsellSheet message={upsell} onClose={() => setUpsell(null)} />
+      <PublishBlockedSheet message={publishBlocked} onClose={() => setPublishBlocked(null)} />
 
       {/* T3.v Cabina (V3.3): «Metas ▾» del header — hospeda el MISMO `TargetsEditorCard` y los
           MISMOS dispatches (`SET_TARGET`) que antes vivían en el lienzo; solo cambia el host.
@@ -2608,7 +2592,8 @@ export function QuickEditMode({
         </View>
       </Sheet>
 
-      {/* FD5 — alta de días: multi-select Lu-Do + origen del contenido. Sin Pro, upsell. */}
+      {/* FD5 — alta de días: multi-select Lu-Do + origen del contenido. OB3: sin gate de módulo
+          pago (regla D1 del owner — todo está en todos los planes, solo se cobra el cupo). */}
       <Sheet
         open={addDayOpen}
         onClose={() => setAddDayOpen(false)}
@@ -2617,97 +2602,76 @@ export function QuickEditMode({
         title={QUICK_EDIT_COPY.addDayTitle}
         accessibilityLabel={QUICK_EDIT_COPY.addDayTitle}
       >
-        {!hasNutritionPro ? (
-          <View className="gap-3">
-            <View className="flex-row items-start gap-2">
-              <Lock color={theme.primary} size={18} />
-              <Text className="min-w-0 flex-1 text-sm leading-5 text-body">
-                {QUICK_EDIT_COPY.multiDayLocked}
-              </Text>
-            </View>
-            <NutritionMotionButton
-              accessibilityLabel="Ver módulos"
-              onPress={() => {
-                // W3.7: destino directo a Funciones (`/coach/modules` es solo un redirect).
-                setAddDayOpen(false)
-                router.push('/coach/settings/funciones')
-              }}
-            >
-              Ver módulos
-            </NutritionMotionButton>
-          </View>
-        ) : (
-          <View className="gap-3">
-            <Text className="text-xs leading-5 text-muted">{QUICK_EDIT_COPY.addDayHint}</Text>
-            <DayPickerRow
-              selected={addDays}
-              taken={takenDays}
-              onToggle={(dayOfWeek) =>
-                setAddDays((current) =>
-                  current.includes(dayOfWeek)
-                    ? current.filter((day) => day !== dayOfWeek)
-                    : [...current, dayOfWeek],
-                )
-              }
-            />
-            <View className="gap-1.5">
-              <Text className="text-xs font-semibold uppercase tracking-wide text-muted">
-                {QUICK_EDIT_COPY.addDaySourceLabel}
-              </Text>
-              {(
-                [
-                  ['clone', QUICK_EDIT_COPY.addDaySourceClone],
-                  ['empty', QUICK_EDIT_COPY.addDaySourceEmpty],
-                ] as const
-              ).map(([value, label]) => (
-                <Pressable
-                  key={value}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected: addSource === value }}
-                  accessibilityLabel={label}
-                  onPress={() => setAddSource(value)}
+        <View className="gap-3">
+          <Text className="text-xs leading-5 text-muted">{QUICK_EDIT_COPY.addDayHint}</Text>
+          <DayPickerRow
+            selected={addDays}
+            taken={takenDays}
+            onToggle={(dayOfWeek) =>
+              setAddDays((current) =>
+                current.includes(dayOfWeek)
+                  ? current.filter((day) => day !== dayOfWeek)
+                  : [...current, dayOfWeek],
+              )
+            }
+          />
+          <View className="gap-1.5">
+            <Text className="text-xs font-semibold uppercase tracking-wide text-muted">
+              {QUICK_EDIT_COPY.addDaySourceLabel}
+            </Text>
+            {(
+              [
+                ['clone', QUICK_EDIT_COPY.addDaySourceClone],
+                ['empty', QUICK_EDIT_COPY.addDaySourceEmpty],
+              ] as const
+            ).map(([value, label]) => (
+              <Pressable
+                key={value}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: addSource === value }}
+                accessibilityLabel={label}
+                onPress={() => setAddSource(value)}
+                className={
+                  'min-h-12 flex-row items-center justify-center rounded-control border px-3 ' +
+                  (addSource === value
+                    ? 'border-primary bg-primary/10'
+                    : 'border-default bg-surface-card')
+                }
+              >
+                <Text
                   className={
-                    'min-h-12 flex-row items-center justify-center rounded-control border px-3 ' +
-                    (addSource === value
-                      ? 'border-primary bg-primary/10'
-                      : 'border-default bg-surface-card')
+                    'text-sm font-semibold ' + (addSource === value ? 'text-primary' : 'text-strong')
                   }
                 >
-                  <Text
-                    className={
-                      'text-sm font-semibold ' + (addSource === value ? 'text-primary' : 'text-strong')
-                    }
-                  >
-                    {label}
-                  </Text>
-                </Pressable>
-              ))}
-              {/* «Empezar vacío» crea un día que NO valida al publicar. Con el editor pintando un
-                  solo día ese error aparecía lejos de acá, así que la advertencia va en el mismo
-                  gesto que la decide. */}
-              {addSource === 'empty' && strategyUsesSlots(strategy) ? (
-                <View className="flex-row items-start gap-1.5 px-1 pt-0.5">
-                  <AlertTriangle color={theme.warning} size={14} style={{ marginTop: 2 }} />
-                  <Text className="min-w-0 flex-1 text-xs leading-5 text-warning-600">
-                    {QUICK_EDIT_COPY.addDayEmptyHint}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
-            <NutritionMotionButton
-              accessibilityLabel={addDayCta(addDays.length)}
-              disabled={addDays.length === 0}
-              onPress={handleAddDays}
-            >
-              {addDayCta(addDays.length)}
-            </NutritionMotionButton>
-            {addDays.length === 0 ? (
-              <Text className="text-xs leading-5 text-muted">
-                {QUICK_EDIT_COPY.addDayEmptySelection}
-              </Text>
+                  {label}
+                </Text>
+              </Pressable>
+            ))}
+            {/* «Empezar vacío» crea un día que NO valida al publicar. Con el editor pintando un
+                solo día ese error aparecía lejos de acá, así que la advertencia va en el mismo
+                gesto que la decide. */}
+            {addSource === 'empty' && strategyUsesSlots(strategy) ? (
+              <View className="flex-row items-start gap-1.5 px-1 pt-0.5">
+                <AlertTriangle color={theme.warning} size={14} style={{ marginTop: 2 }} />
+                <Text className="min-w-0 flex-1 text-xs leading-5 text-warning-600">
+                  {QUICK_EDIT_COPY.addDayEmptyHint}
+                </Text>
+              </View>
             ) : null}
           </View>
-        )}
+          <NutritionMotionButton
+            accessibilityLabel={addDayCta(addDays.length)}
+            disabled={addDays.length === 0}
+            onPress={handleAddDays}
+          >
+            {addDayCta(addDays.length)}
+          </NutritionMotionButton>
+          {addDays.length === 0 ? (
+            <Text className="text-xs leading-5 text-muted">
+              {QUICK_EDIT_COPY.addDayEmptySelection}
+            </Text>
+          ) : null}
+        </View>
       </Sheet>
 
       {/* FD5 — menú del día: cambiar día / renombrar / eliminar (el base solo se renombra). */}
