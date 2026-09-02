@@ -171,35 +171,59 @@ ni desplegado.
 
 | Gate | Estado |
 |---|---|
-| `pnpm exec vitest run` de los archivos de cada hallazgo | por hallazgo, ver [PLAN](PLAN.md) |
-| `pnpm test` (suite completa) | no corrida |
-| `pnpm lint` | no corrido |
-| `pnpm typecheck` (web) | no corrido |
-| `pnpm --filter @eva/mobile exec tsc --noEmit` | no corrido |
-| `pnpm check:tokens` | no corrido |
-| `pnpm docs:check` | verde en la escritura de esta SDD |
-| `pnpm build` | no corrido |
+| `pnpm exec vitest run` (suite completa) | verde 02-09 05:0xZ sobre `0f545926` (8622/8622) y 06:2xZ sobre `99f884f8` (8641/8641) |
+| `pnpm lint` (eslint de los archivos tocados, web + mobile + packages) | 0 errores nuevos (1 `react/display-name` preexistente en `program-builder.tsx`) |
+| `pnpm typecheck` (web) | verde (0) en ambas rondas |
+| `pnpm --filter @eva/mobile exec tsc --noEmit` | verde (0) en ambas rondas |
+| `pnpm check:tokens` · `pnpm check:nutrition-v2-boundaries` · `pnpm docs:check` | verdes |
+| `pnpm build` | no corrido local: el deploy de Vercel (`dpl_35ZT6w7oLzBrnMEAsXjmVQVdCy2R` y el de `99f884f8`) construyó en verde |
 
-Regla de la casa: **no se declara verde nada sin ejecución real**, y la suite completa se corre una
-sola vez antes del push.
+## QA del owner (02-09, contra `0f545926` desplegado + OTA `bd2bc6e8`/`025d158f`)
 
-## QA del owner (pendiente, contra algo desplegado)
+- [x] Q1 Web: miniatura de WhatsApp con URL nueva (`?v=3`) ⇒ salió; el owner pidió **solo el logo, sin el
+      color del coach** ⇒ ronda 2 (`0cc53f41`, fondo neutro).
+- [x] Q2 Web: Despegue con logo desde «Repetir hoy» / «Revisar y editar» (owner). Además reportó el
+      **loader naranja** al entrar al login del alumno ⇒ ronda 2 (`54c26ea4`): el login no muestra loader
+      de marca y manifest/splash/theme-color usan el color efectivo del preset.
+- [x] Q3 Device: fila de notificaciones en Ajustes del entreno («Activado» en el Xiaomi del owner).
+- [x] Q4 Device: cardio continuo e intervalos, termina solo / pausa (owner: «pasó»).
+- [x] Q5 Device: tarjeta de Share, Stories/WhatsApp/Guardar (owner: «pasó»); **pellizcar un sticker al
+      máximo lo hacía desaparecer** ⇒ ronda 2 (`99f884f8`, OTA android `fc78e1c8` / ios `c46d4eed`) — **re-verificar en device**.
+- [x] Q6 Device: hoja de ejercicio con el selector por región (owner: «pasó»).
+- [x] Q7 Device + web: salir del builder con y sin cambios (owner: «pasó»; en Android el gesto de volver
+      también pregunta — mismo evento que el botón).
 
-- [ ] Q1 Web: pegar un `/join/<código>` no aplica (es RN), pero sí compartir el link del alumno por
-      WhatsApp con una URL nueva y ver la miniatura.
-- [ ] Q2 Web: Despegue desde «Repetir hoy» y «Revisar y editar» con el logo del coach; control con un
-      coach sin logo (debe verse la inicial).
-- [ ] Q3 Web + device: fila de notificaciones en los ajustes del ejecutor, en sus cuatro estados.
-- [ ] Q4 Web + device: cardio continuo e intervalos, con las dos ramas (termina solo · pausa).
-- [ ] Q5 Device: tarjeta de Share con foto clara y oscura, 6 presets, y compartir de verdad a Stories,
-      WhatsApp y Guardar.
-- [ ] Q6 Device: hoja de ejercicio con el selector por región; editar un ejercicio de `Movilidad`.
-- [ ] Q7 Device + web: salir del builder con y sin cambios.
+### QA automatizado de las listas 5-7 (Playwright, 1 navegador, 02-09 06:0xZ)
+
+Informe y 122 capturas en `C:/Users/juanm/.claude/jobs/c69fb9b6/tmp/qa0209/r2-qa-web.md` y `pw/`. 22 pasos OK, 2
+fallas, 6 no cubiertos. Escrituras solo sobre un coach descartable `@evatest.cl` creado por
+`register-coach-free` y borrado por Danger Zone (verificado por SQL: sin coach, alumno ni check-in); `evademo` solo
+lectura. No cubierto: `/register` web (Turnstile fail-closed), workspace Team (no hay uno de prueba), «ESTO ESTÁ
+TARDANDO» (flaky), lista 7 con `evademo` (sin contraseña a mano). Hallazgos (backlog, ninguno de esta tanda):
+
+- B1 «apagar Nutrición en Funciones no le quita el tab al alumno» — **comportamiento esperado** desde la Ola de
+  orden W1.10 (D9: siempre-on para el alumno); los comentarios de `ClientNavGates.tsx:42-50` quedaron viejos (XS).
+- B2 Check-in web: al perder la red en el paso 3, la pantalla global «Sin conexión» reemplaza al asistente y al
+  volver se pierden peso/foto/notas; el estado «No pudimos enviar / Reintentar» de `CheckInForm.tsx:763-791` es
+  inalcanzable (M).
+- B3 En 390×844 la barra flotante tapa el CTA «Eliminar cuenta» de Danger Zone (`elementFromPoint` = nav): falta
+  padding inferior (XS).
+- B4 Copy «Límite de 1 alumnos alcanzado» (`AddStudentStepper.tsx:400`, `CreateClientModal.tsx:207`) (XS).
+- B5 Títulos «Alumnos | EVA | EVA», «Aprender | EVA | <marca>»: el `title` ya trae `| EVA` y el layout lo vuelve a
+  aplicar (XS).
+- B6 Switches de `DomainsCard.tsx:210-217` sin nombre accesible (label envolviendo un `button` de Radix) (XS).
+- B7 Al borrar la cuenta quedan los 4 correos del drip `scheduled` en Resend (el QA suprimió las direcciones) (S).
+- B8 `?status=archived` no filtra el directorio de alumnos (XS).
+- B9 El banner «Verifica tu correo» es inalcanzable con `persona = null` (el gate redirige antes) (S).
 
 ## Pendientes declarados
 
-- [ ] P1 Docs canónicos a tocar al cerrar: `docs/status/MOBILE_PARITY.md` (Despegue web ↔ RN, cardio,
-      ajustes del ejecutor, guard del builder) y el puntero de `docs/status/CURRENT.md`.
-- [ ] P2 Salida: commit, push, deploy de Vercel y OTA android + iOS por GitHub Actions desde una rama
-      con `master` mergeado. **Nada de eso se hace sin pedido explícito del owner.**
+- [x] P1 Docs canónicos: `MOBILE_PARITY.md`, `CURRENT.md`, `MOBILE_RELEASES_OTA.md` (02-09).
+- [x] P2 Salida: commits por ítem, push a `rnmobiledenuevo` + `master`, deploy de Vercel y OTA android + iOS
+      (`bd2bc6e8`/`025d158f` ronda 1, `fc78e1c8`/`c46d4eed` ronda 2).
 - [ ] P3 Responder las seis decisiones abiertas de la [SPEC](SPEC.md).
+- [ ] P4 Re-verificar en device el pellizco al máximo en Share (ronda 2) y, en web, que el login del alumno entre
+      sin loader ni naranja ⇒ marcar la SDD `done`.
+- [ ] P5 Superficies que aún leen `primary_color` crudo: `api/pwa-screenshot/[coach_slug]/route.tsx:74`,
+      `pr-card` (`:134-141`), `nutrition-pdf-brand.ts:141` — pasarlas por `resolveEffectiveBrandColor` (S).
+- [ ] P6 Backlog B2–B9 del QA automatizado (arriba).
