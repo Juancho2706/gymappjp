@@ -10,9 +10,10 @@ canonical: false
 > **Nota 2026-08-17:** en producción desde `654efd33`; el checklist de device queda pendiente de
 > acta — cerrable a criterio del owner.
 >
-> **Nota de cierre 02-09:** quedan 2 tickets abiertos — confirmacion RN con `Alert` en vez de
-> stepper (linea 113 de abajo, **en curso hoy**) y actualizar `docs/status/MOBILE_PARITY.md` si
-> cambia la paridad declarada (linea 210).
+> **Nota de cierre 02-09:** la confirmacion RN con `Alert` en vez de stepper salio en `bbfc5136`
+> (tren `794aee52`, OTA 1.1.2 `01a063b0`) con **QA del owner en device VERDE 02-09** (el item con
+> reemplazos muestra «⇄ o 120 g de …»; «requiere confirmacion» abre el stepper). Queda actualizar
+> `docs/status/MOBILE_PARITY.md` si cambia la paridad declarada (linea 210).
 
 Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes (se anota commit) · `[!]` bloqueado (se anota por que).
 
@@ -121,7 +122,7 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 - [x] La sustitucion encolada NO se pinta como fila optimista (su payload es la intencion, sin nombre ni macros: inventarlos seria mentir)
 - [x] Cero dependencias nativas nuevas
 - [x] Gates: `pnpm --filter @eva/mobile exec tsc --noEmit` ✓
-- [ ] **Deuda declarada:** los dos casos degradados en RN confirman con `Alert` (dos botones), no con stepper. El stepper llega con el sheet de T2.5; en web ya esta
+- [x] **Deuda declarada (SALDADA 02-09, `bbfc5136`):** los dos casos degradados en RN confirmaban con `Alert` (dos botones); ahora abren el stepper como en web. QA del owner en device VERDE 02-09.
 
 ## F6 — QA y cierre
 

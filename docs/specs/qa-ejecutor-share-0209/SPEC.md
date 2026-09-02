@@ -534,7 +534,8 @@ siempre por `onunhandledrejection`.
 
 1. **F · colores de sistema en la tarjeta** — **DECIDIDO: queda todo en blanco + contorno** (como está en
    producción). Sin trabajo.
-2. **F · velo inferior de la foto** (`ShareCanvas`) — **DECIDIDO: se saca.** Pendiente de código (RN, OTA).
+2. **F · velo inferior de la foto** (`ShareCanvas`) — **DECIDIDO: se saca.** En producción `bbfc5136`
+   (tren `794aee52`, OTA 1.1.2 `01a063b0`); **QA del owner en device VERDE 02-09**.
 3. **E · descanso entre rondas en cardio** — **DECIDIDO: se confirma** el comportamiento actual (completar ⇒
    auto-envío; pausar ⇒ solo rellena MIN). Sin trabajo.
 4. **E · MIN pisa lo tipeado** — **DECIDIDO: queda como está** (MIN solo al pausar, que es lo que el owner
@@ -542,7 +543,7 @@ siempre por `onunhandledrejection`.
 5. **C · orden del fallback del Despegue sin logo** — el owner pidió explicación en humano; hasta que decida,
    queda como está (inicial del coach antes que el ícono EVA, espejo de RN).
 6. **I · gesto de back en el builder con cambios sin guardar** — **DECIDIDO: debe preguntar SIEMPRE**, en iOS
-   (swipe-back) y Android (back físico), mientras se edita la rutina de un alumno. Pendiente de código (RN,
-   OTA): agregar `@react-navigation/native` al `package.json` de mobile (JS puro, sin build nativo; toca el
-   lockfile y hay que validar que pnpm dedupee `@react-navigation/core`) y usar `usePreventRemove` /
-   `beforeRemove`.
+   (swipe-back) y Android (back físico), mientras se edita la rutina de un alumno. En producción
+   `c57c7406` (`@react-navigation/native` como dependencia directa) + `ba074a92` (tren `794aee52`, OTA 1.1.2
+   `01a063b0`); **QA del owner en device VERDE 02-09** (pregunta una sola vez, la pantalla no se anima hacia
+   afuera; las hojas con `nativeModal` siguen cerrando con swipe-down).

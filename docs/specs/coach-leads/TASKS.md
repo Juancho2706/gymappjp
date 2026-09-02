@@ -14,7 +14,10 @@ Convención: `[ ]` pendiente · `[x]` hecho con evidencia real · `[~]` parcial 
 
 **Estado 02-09: W1 y W2 CERRADAS y verificadas** (migración `20260821030821`,
 `join-request.actions.ts`, `LeadRequestForm.tsx`, tests 191/191). **W3 (paridad RN) y W4.1 (link
-`/join`) + W4.2 (retención 90 d, decisión del owner 02-09) EN CURSO 02-09.**
+`/join`) EN PRODUCCIÓN 02-09 (`1069f86e`, tren `794aee52` + OTA 1.1.2 `01a063b0`); W4.2 (retención
+90 d, decisión del owner 02-09) en `42ca5b2d`. QA del owner en device VERDE 02-09** (chip
+«Solicitudes (N)», contactado, «Sumar» prellenado, descartar con confirmación, push, link y QR a
+`/join`, aviso de cuenta de coach en el login del alumno).
 
 ## W1 — DDL + `/join` solicitud + correo (en ejecución 21-08)
 
@@ -96,7 +99,7 @@ Convención: `[ ]` pendiente · `[x]` hecho con evidencia real · `[~]` parcial 
       - DoD: probado con la URL exacta del correo.
 - [x] W2.8 Gates puntuales de W2 (mismos comandos que W1.11) + revisión de diff del jefe.
 
-## W3 — RN (EJECUTADA 02-09, sin commit — falta QA en device)
+## W3 — RN (EN PRODUCCIÓN 02-09, `1069f86e`; QA del owner en device VERDE 02-09)
 
 > Notas de ejecución (02-09):
 > - Contrato en `packages/schemas/coach-leads.ts` (estados, DTO, query del GET, body del PATCH),

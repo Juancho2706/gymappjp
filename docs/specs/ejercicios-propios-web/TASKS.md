@@ -79,7 +79,7 @@ verde en web y device (02-09).**
 
 | # | Deuda | Dónde | Costo estimado |
 |---|---|---|---|
-| E1 | Un bloque YA colocado en el día conserva el nombre/media viejos tras editar el ejercicio hasta recargar el builder (web y RN): `exercise_name` se copia al agregar el bloque. Arreglo = reconciliar los días contra el catálogo al volver de `onSaved`. | `WeeklyPlanBuilder.tsx`, `program-builder.tsx` | 2–3 h |
+| E1 | Un bloque YA colocado en el día conserva el nombre/media viejos tras editar el ejercicio hasta recargar el builder (web y RN): `exercise_name` se copia al agregar el bloque. Arreglo = reconciliar los días contra el catálogo al volver de `onSaved`. | `WeeklyPlanBuilder.tsx`, `program-builder.tsx` | **HECHO 02-09**: `f469a780` (web) + `ba074a92` (RN), en prod con el tren `794aee52`; QA del owner en device VERDE 02-09 (nombre e imagen del bloque se actualizan sin marcar «sin guardar») |
 | E2 | `revalidatePath('/coach/builder')` no cubre la ruta dinámica `/coach/builder/[clientId]`; hoy lo tapa `router.refresh()` en la UI. Decidir `type: 'layout'` o dejar. | `exercises.actions.ts` | 30 min |
 | E3 | `template-builder.queries.ts` no scopea el catálogo por workspace (preexistente): un coach con team activo ve «Editar» en un ejercicio personal y recibe el error explícito de la action. Arreglo = mismo scope 3 vías que `getExerciseCatalog`. | `workout-programs/builder/_data/template-builder.queries.ts` | 1 h |
 | E4 | `usageByExercise` (web) y `countExerciseUsage` (RN) cuentan BLOQUES, no programas (el copy dice «bloques»). Si el owner prefiere «programas»: `distinct` por plan. | `_data/exercises.queries.ts`, `lib/exercises.ts` | 1 h |

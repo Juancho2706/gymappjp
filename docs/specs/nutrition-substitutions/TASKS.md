@@ -16,3 +16,5 @@
       `editor-state.ts:826-828` + `QuickEditMode` (cierre 2026-08-17).
 - [x] T12. Gates estáticos (tsc web+mobile, vitest, eslint, boundaries) + PR #159 integrado en `master`.
 - [ ] T13. QA device web/RN del flujo completo; seguimiento consolidado en `MOBILE_PARITY.md`.
+      **Parcial 02-09:** el lado alumno (item con reemplazos «⇄ o 120 g de …» en web y RN, `bbfc5136`)
+      quedó VERDE con el owner en device; falta el lado coach (editor de reemplazos) de punta a punta.

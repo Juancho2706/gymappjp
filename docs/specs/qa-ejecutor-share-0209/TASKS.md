@@ -154,8 +154,10 @@ ni desplegado.
       de plantillas: es el mismo componente). Limitación del «atrás» del navegador comentada.
 - [x] I4 **Nuevo** `packages/plan-builder/exit-guard.test.ts` (un solo test cubre las dos
       plataformas).
-- [ ] I5 QA: Android (flecha, hardware back, gesto), iOS (flecha, swipe inerte con cambios), web
-      (flecha, F5, cerrar pestaña) y, en todos, que después de guardar no pregunte nada.
+- [x] I5 QA: Android (flecha, hardware back, gesto), iOS (flecha, swipe inerte con cambios), web
+      (flecha, F5, cerrar pestaña) y, en todos, que después de guardar no pregunte nada. **QA del
+      owner en device VERDE 02-09** sobre `ba074a92` (swipe-back iOS y back físico Android preguntan
+      una sola vez; la pantalla no se anima hacia afuera).
 
 ## J · Guardián de deploy skew
 
@@ -241,8 +243,10 @@ TARDANDO» (flaky), lista 7 con `evademo` (sin contraseña a mano). Hallazgos (b
       (`Switch` de base-ui es `<button>`, el `<label>` envolvente no lo nombra: falta `aria-label`) · B7 S (ni
       `deleteCoachAccountAction` ni `api/mobile/account/delete` cancelan el drip; `cancelCoachEmails` existe y solo lo
       usa el cron de no verificados) · B8 XS (`?status=archived` no se lee en `clients/page.tsx`) · B9 S (el gate de
-      persona del `proxy.ts` redirige antes de que el dashboard pinte `VerifyEmailBanner`). Pendiente decidir cuáles
-      se hacen.
+      persona del `proxy.ts` redirige antes de que el dashboard pinte `VerifyEmailBanner`). **Tren «cierre de
+      backlog 02-09»:** B2 `619b881f` (check-in sobrevive al corte de red; **QA del owner en web móvil VERDE
+      02-09**, modo avión a mitad de camino), B9 `668dfd00`, B3–B8 `bb3cb196`. Queda QA en device de B3 y B6
+      (lista única en `docs/testing/QA_DEVICE_PENDIENTE.md`).
 
 ## Cierre — crónica movida desde `docs/status/CURRENT.md` (2026-09-02)
 

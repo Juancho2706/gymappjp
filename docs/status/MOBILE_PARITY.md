@@ -15,6 +15,8 @@ source_of_truth: apps/web responsive + apps/mobile
 ## Resumen ejecutivo
 
 > **QA en device pendiente (acumulado, 18 ítems):** [`docs/testing/QA_DEVICE_PENDIENTE.md`](../testing/QA_DEVICE_PENDIENTE.md).
+> Los 11 puntos nuevos del tren «cierre de backlog 02-09» quedaron **VERDES con el owner el 02-09**
+> (Android e iOS, claro y oscuro): sección «Verificado» del mismo archivo.
 
 > **2026-09-02 (tren «cierre de backlog» — EN PRODUCCIÓN, QA del owner pendiente en device)**: `master` = `rnmobiledenuevo` =
 > `794aee52`, deploy `dpl_E6Rt7ETYsZ5tpbW84DLLdCP4RMHk` READY, OTA 1.1.2 `production` android `01a063b0-6a6a-7d09-ad3c-bbdd04591b0d`
