@@ -397,7 +397,7 @@ export function AddStudentStepper({
                     id={`${uid}-wall`}
                     className="mt-5 font-display text-[20px] font-black text-strong outline-none"
                 >
-                    Límite de {state.currentLimit} alumnos alcanzado
+                    Límite de {state.currentLimit} {state.currentLimit === 1 ? 'alumno' : 'alumnos'} alcanzado
                 </h2>
                 <p className="mx-auto mt-2 max-w-[380px] text-[14px] text-muted">
                     Tus alumnos actuales no se ven afectados. Amplía tu plan para seguir sumando.

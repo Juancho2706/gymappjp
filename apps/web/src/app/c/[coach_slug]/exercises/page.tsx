@@ -7,7 +7,7 @@ import { getClientExerciseCatalogData } from "./_data/exercises.queries";
 import { getClientBasePath } from "@/lib/client/base-path";
 
 export const metadata: Metadata = {
-  title: "Aprender | EVA",
+  title: "Aprender",
 };
 
 interface Props {

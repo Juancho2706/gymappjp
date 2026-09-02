@@ -7,7 +7,7 @@ import { ModuleOffNotice } from '@/components/coach/ModuleOffNotice'
 import { DomainOffNotice } from '@/components/coach/DomainOffNotice'
 import { getCoachOnboardingEmptyContext } from '../_data/onboarding-empty.queries'
 
-export const metadata: Metadata = { title: 'Screening de Movimiento | EVA' }
+export const metadata: Metadata = { title: 'Screening de Movimiento' }
 
 /**
  * Hub del modulo movement_assessment (entrada NAV_MODULES). Gating server-side en el

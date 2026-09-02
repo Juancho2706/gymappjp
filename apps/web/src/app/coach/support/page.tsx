@@ -6,7 +6,7 @@ import { Card } from '@/components/ui/card'
 import { LifeBuoy, Mail, ChevronRight } from 'lucide-react'
 
 export const metadata: Metadata = {
-  title: 'Centro de Ayuda | EVA',
+  title: 'Centro de Ayuda',
 }
 
 const SUPPORT_EMAIL = 'contacto@eva-app.cl'

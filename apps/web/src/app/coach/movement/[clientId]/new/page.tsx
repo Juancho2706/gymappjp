@@ -3,7 +3,7 @@ import type { Metadata } from 'next'
 import { getMovementWizard } from '../../_data/movement.queries'
 import { MovementWizard } from '../../_components/MovementWizard'
 
-export const metadata: Metadata = { title: 'Evaluar movimiento | EVA' }
+export const metadata: Metadata = { title: 'Evaluar movimiento' }
 
 interface Props {
     params: Promise<{ clientId: string }>

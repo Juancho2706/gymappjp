@@ -12,7 +12,7 @@ import {
 } from '../../_data/onboarding-empty.queries'
 import { resolveClientZones } from '@eva/cardio'
 
-export const metadata: Metadata = { title: 'Perfil cardio | EVA' }
+export const metadata: Metadata = { title: 'Perfil cardio' }
 
 interface Props {
     params: Promise<{ clientId: string }>

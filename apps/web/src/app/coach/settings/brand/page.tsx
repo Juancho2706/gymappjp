@@ -7,7 +7,7 @@ import { BrandSettingsTourClient } from '../_components/BrandSettingsTourClient'
 import { getCoachSettingsForUser } from '../_data/settings.queries'
 
 export const metadata: Metadata = {
-    title: 'Mi Marca | EVA',
+    title: 'Mi Marca',
 }
 
 export default async function CoachBrandPage() {

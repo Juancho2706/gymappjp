@@ -204,7 +204,7 @@ export function CreateClientModal({ open, onClose, initialValues, onCreated }: C
                         </div>
                         <div>
                             <h2 className="text-lg font-extrabold text-foreground">
-                                Límite de {state.currentLimit} alumnos alcanzado
+                                Límite de {state.currentLimit} {state.currentLimit === 1 ? 'alumno' : 'alumnos'} alcanzado
                             </h2>
                             <p className="mt-2 text-sm text-muted-foreground">
                                 Haz upgrade para seguir creciendo. Tus alumnos actuales no se ven afectados.

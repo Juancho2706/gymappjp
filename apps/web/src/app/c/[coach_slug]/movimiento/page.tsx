@@ -4,7 +4,7 @@ import { getClientBasePath } from '@/lib/client/base-path'
 import { StudentMovementView } from '@/components/movement/StudentMovementView'
 import { getStudentMovement } from './_data/movimiento.queries'
 
-export const metadata: Metadata = { title: 'Screening de Movimiento | EVA' }
+export const metadata: Metadata = { title: 'Screening de Movimiento' }
 
 interface Props {
     params: Promise<{ coach_slug: string }>

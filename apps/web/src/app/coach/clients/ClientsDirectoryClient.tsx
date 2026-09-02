@@ -40,6 +40,12 @@ interface ClientsDirectoryClientProps {
     onRosterModeChange: (m: 'ficha' | 'tabla') => void
     /** «Alumno/Paciente/Atleta de ejemplo» según la persona del coach (onboarding v2 F3.7). */
     demoLabel?: string
+    /**
+     * Estado inicial del filtro por estado, sembrado en el server desde `?status=` — no hay
+     * `useSearchParams` acá porque la página ya recibe `searchParams`. Solo siembra: a partir del
+     * primer toque del coach manda el estado local (la URL no se reescribe).
+     */
+    initialStatusFilter?: StatusDirectoryFilter
 }
 
 function matchesRiskFilter(
@@ -117,6 +123,7 @@ export function ClientsDirectoryClient({
     rosterMode,
     onRosterModeChange,
     demoLabel = 'Alumno de ejemplo',
+    initialStatusFilter = 'any',
 }: ClientsDirectoryClientProps) {
     const router = useRouter()
     const [search, setSearch] = useState('')
@@ -125,7 +132,7 @@ export function ClientsDirectoryClient({
         defaultSortDir('attention_score')
     )
     const [view, setView] = useState<'cards' | 'table'>('cards')
-    const [statusFilter, setStatusFilter] = useState<StatusDirectoryFilter>('any')
+    const [statusFilter, setStatusFilter] = useState<StatusDirectoryFilter>(initialStatusFilter)
     const [programFilter, setProgramFilter] = useState<ProgramDirectoryFilter>('any')
     const [visibleCount, setVisibleCount] = useState(48)
     const [editingClient, setEditingClient] = useState<{ id: string; name: string } | null>(null)

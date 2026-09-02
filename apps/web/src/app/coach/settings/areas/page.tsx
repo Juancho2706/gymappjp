@@ -5,7 +5,7 @@ import type { Metadata } from 'next'
 import { getAreasContext } from './_data/areas.queries'
 import { AreasManager } from './_components/AreasManager'
 
-export const metadata: Metadata = { title: 'Áreas del builder | EVA' }
+export const metadata: Metadata = { title: 'Áreas del builder' }
 
 export default async function CoachAreasPage() {
     const { coachId, orgManaged, ctx } = await getAreasContext()

@@ -15,7 +15,20 @@ export type DirectorySortKey =
     | 'weight_delta'
     | 'plan_days'
 
-export type StatusDirectoryFilter = 'any' | 'active' | 'paused' | 'pending_sync' | 'archived'
+export const STATUS_DIRECTORY_FILTERS = ['any', 'active', 'paused', 'pending_sync', 'archived'] as const
+
+export type StatusDirectoryFilter = (typeof STATUS_DIRECTORY_FILTERS)[number]
+
+/**
+ * `?status=archived` (deep link a «Archivados», que es el único estado que las vistas por defecto
+ * esconden) siembra el filtro inicial del directorio. Cualquier otro valor —ausente, basura de un
+ * link viejo, un array de query repetida— cae a `'any'`: la URL no puede dejar la pantalla en un
+ * estado que la UI no sepa pintar.
+ */
+export function parseStatusDirectoryFilter(raw: string | string[] | undefined | null): StatusDirectoryFilter {
+    const values: readonly string[] = STATUS_DIRECTORY_FILTERS
+    return typeof raw === 'string' && values.includes(raw) ? (raw as StatusDirectoryFilter) : 'any'
+}
 
 export type ProgramDirectoryFilter = 'any' | 'with_program' | 'no_program' | 'expired'
 

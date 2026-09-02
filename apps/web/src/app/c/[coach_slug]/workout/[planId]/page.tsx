@@ -8,7 +8,7 @@ import { getClientBasePath } from '@/lib/client/base-path'
 import { getClientRootUser } from '@/app/c/[coach_slug]/_data/client-root.queries'
 import { getTodayInSantiago } from '@/lib/date-utils'
 
-export const metadata: Metadata = { title: 'Rutina | EVA' }
+export const metadata: Metadata = { title: 'Rutina' }
 
 interface Props {
     params: Promise<{ coach_slug: string; planId: string }>

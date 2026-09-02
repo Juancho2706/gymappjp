@@ -9,7 +9,7 @@ import {
     templatesForSurface,
 } from '../../_data/onboarding-empty.queries'
 
-export const metadata: Metadata = { title: 'Screening de Movimiento | EVA' }
+export const metadata: Metadata = { title: 'Screening de Movimiento' }
 
 interface Props {
     params: Promise<{ clientId: string }>

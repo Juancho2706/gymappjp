@@ -14,9 +14,10 @@ import { showsEvaBadge, type SubscriptionTier } from '@/lib/constants'
 import { BRAND_PRIMARY_COLOR } from '@/lib/brand-assets'
 import { countRealClients } from './_lib/add-student-invite'
 import type { AddStudentFlowConfig } from './_components/add-student-flow-context'
+import { parseStatusDirectoryFilter } from './directory-types'
 
 export const metadata: Metadata = {
-    title: 'Alumnos | EVA',
+    title: 'Alumnos',
 }
 
 export default async function CoachClientsPage({
@@ -25,7 +26,9 @@ export default async function CoachClientsPage({
     // `?solicitudes=1` — lo pone el CTA «Ver solicitudes» del correo que avisa una solicitud nueva.
     // `?invite=1` — destino del paso 4 de la guía (`@eva/onboarding`, WEB.invite): abre el alta
     // guiada de 3 pasos. `?alta=1` es su alias.
-    searchParams: Promise<{ solicitudes?: string; invite?: string; alta?: string }>
+    // `?status=archived` — deep link al directorio ya filtrado (los archivados NO salen en la
+    // vista por defecto, así que sin esto el link llegaba a una lista donde el alumno no está).
+    searchParams: Promise<{ solicitudes?: string; invite?: string; alta?: string; status?: string }>
 }) {
     const coachSession = await getCoach()
     if (!coachSession) redirect('/login')
@@ -113,6 +116,7 @@ export default async function CoachClientsPage({
                 pulse={pulse}
                 demoLabel={onboarding.demoLabel}
                 addStudentFlow={addStudentFlow}
+                initialStatusFilter={parseStatusDirectoryFilter(params.status)}
             />
         </div>
     )

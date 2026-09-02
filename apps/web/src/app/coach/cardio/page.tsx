@@ -8,7 +8,7 @@ import { ModuleOffNotice } from '@/components/coach/ModuleOffNotice'
 import { DomainOffNotice } from '@/components/coach/DomainOffNotice'
 import { getCoachOnboardingEmptyContext } from '../_data/onboarding-empty.queries'
 
-export const metadata: Metadata = { title: 'Cardio | EVA' }
+export const metadata: Metadata = { title: 'Cardio' }
 
 /**
  * Módulo cardio (key `cardio`, toggleable — specs/movida-entrenamiento F7).

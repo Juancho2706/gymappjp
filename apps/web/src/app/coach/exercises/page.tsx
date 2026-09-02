@@ -6,7 +6,7 @@ import { getPreferredWorkspaceForRender } from '@/services/auth/workspace-render
 import { getExerciseCatalog } from './_data/exercises.queries'
 import type { Metadata } from 'next'
 
-export const metadata: Metadata = { title: 'Ejercicios | EVA' }
+export const metadata: Metadata = { title: 'Ejercicios' }
 
 // Dashboard autenticado: lee cookies (sesion) ⇒ render dinamico. Explicito por claridad.
 export const dynamic = 'force-dynamic'

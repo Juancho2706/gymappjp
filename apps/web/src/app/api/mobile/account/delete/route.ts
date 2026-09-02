@@ -3,6 +3,7 @@ import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Json, TablesInsert } from '@/lib/database.types'
 import { getPaymentsProvider, getPaymentsProviderForCoach } from '@/lib/payments/provider'
 import { rateLimitAuth, jsonRateLimited } from '@/lib/rate-limit'
+import { cancelCoachEmails } from '@/services/email/coach-email-ledger.service'
 
 /**
  * Eliminacion de cuenta EN-APP (Guideline 5.1.1(v) de App Review — rechazo de la build iOS 1.1.0).
@@ -198,6 +199,31 @@ export async function POST(request: NextRequest) {
         } catch (err) {
             warnings.push('SUBSCRIPTION_CANCEL_FAILED')
             console.error('[mobile.account.delete] billing teardown threw', {
+                coachId: user.id,
+                message: err instanceof Error ? err.message : String(err),
+            })
+        }
+    }
+
+    if (coach) {
+        // Correos agendados: se cancelan ANTES del ban. La baja movil no borra filas (la purga es a
+        // 30 dias), pero el coach deja de poder entrar YA — dejarle llegando el drip de venta a una
+        // cuenta que la app declara eliminada es lo que la hoja de confirmacion promete que no pasa.
+        // `'*'` = todo lo del coach, no solo el drip. BEST-EFFORT, mismo criterio que el billing:
+        // `cancelCoachEmails` no lanza por contrato y el try/catch cubre lo inesperado — ni una
+        // excepcion de Resend puede impedir el ban (ahi esta el rechazo de Apple).
+        try {
+            const emails = await cancelCoachEmails(admin, user.id, '*')
+            if (emails.failed > 0) {
+                warnings.push('EMAIL_CANCEL_PARTIAL')
+                console.warn('[mobile.account.delete] quedaron correos agendados sin cancelar', {
+                    coachId: user.id,
+                    ...emails,
+                })
+            }
+        } catch (err) {
+            warnings.push('EMAIL_CANCEL_FAILED')
+            console.error('[mobile.account.delete] email cancel threw', {
                 coachId: user.id,
                 message: err instanceof Error ? err.message : String(err),
             })

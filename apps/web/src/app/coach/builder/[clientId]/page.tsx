@@ -5,7 +5,7 @@ import { getCoach } from '@/lib/coach/get-coach'
 import { getBuilderData } from './_data/builder.queries'
 import { getCoachOnboardingEmptyContext } from '../../_data/onboarding-empty.queries'
 
-export const metadata: Metadata = { title: 'Planificador Semanal | EVA' }
+export const metadata: Metadata = { title: 'Planificador Semanal' }
 
 export default async function BuilderPage(
     props: {

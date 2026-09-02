@@ -33,7 +33,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const brandName = coach?.brand_name ?? 'Mi Coach'
 
     return {
-        title: `Ingresar | ${brandName}`,
+        title: 'Ingresar',
         manifest: `/api/manifest/${coach_slug}`,
         appleWebApp: {
             capable: true,

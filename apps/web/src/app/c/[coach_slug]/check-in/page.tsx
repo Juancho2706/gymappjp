@@ -4,7 +4,7 @@ import { CheckInForm } from './CheckInForm'
 import { getCheckInPageData } from './_data/check-in.queries'
 import { getClientBasePath } from '@/lib/client/base-path'
 
-export const metadata: Metadata = { title: 'Check-in Mensual | EVA' }
+export const metadata: Metadata = { title: 'Check-in Mensual' }
 
 interface Props {
     params: Promise<{ coach_slug: string }>

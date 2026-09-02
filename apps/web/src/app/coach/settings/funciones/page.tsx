@@ -6,7 +6,7 @@ import { getFuncionesContext } from './_data/funciones.queries'
 import { MiPanelPane } from './_components/MiPanelPane'
 import { TeamFuncionesPane } from './_components/TeamFuncionesPane'
 
-export const metadata: Metadata = { title: 'Funciones | EVA' }
+export const metadata: Metadata = { title: 'Funciones' }
 
 /**
  * Settings › «Funciones» — la pantalla ÚNICA de la Ola de orden (W3.1, decisiones 5A y 6A). Acá

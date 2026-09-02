@@ -2,7 +2,7 @@ import { ImportContent } from './_components/ImportContent'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-    title: 'Importar Alumnos | EVA',
+    title: 'Importar Alumnos',
 }
 
 /**

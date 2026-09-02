@@ -4,7 +4,7 @@ import { getClientBasePath } from '@/lib/client/base-path'
 import { StudentBodyCompositionView } from '@/components/bodycomp/StudentBodyCompositionView'
 import { getStudentBodyComposition } from './_data/bodycomp.queries'
 
-export const metadata: Metadata = { title: 'Composición corporal | EVA' }
+export const metadata: Metadata = { title: 'Composición corporal' }
 
 interface Props {
     params: Promise<{ coach_slug: string }>

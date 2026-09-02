@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { CoachWarRoom, type DirectoryRiskFilter } from './CoachWarRoom'
 import { ClientsDirectoryClient } from './ClientsDirectoryClient'
+import type { StatusDirectoryFilter } from './directory-types'
 import type { DirectoryPulseRow } from '@/services/dashboard.service'
 import { getCoachPublicIdentifier, type CoachPublicIdentifierSource } from '@/lib/coach/public-identifier'
 import { useRosterView } from '@/components/coach/RosterViewContext'
@@ -23,6 +24,8 @@ interface CoachClientsShellProps {
      * el modo guiado; el directorio cae al modal de siempre.
      */
     addStudentFlow?: AddStudentFlowConfig | null
+    /** Filtro de estado sembrado por `?status=` (server). Sin query válida = `'any'`. */
+    initialStatusFilter?: StatusDirectoryFilter
 }
 
 export function CoachClientsShell({
@@ -32,6 +35,7 @@ export function CoachClientsShell({
     pulse,
     demoLabel = 'Alumno de ejemplo',
     addStudentFlow = null,
+    initialStatusFilter = 'any',
 }: CoachClientsShellProps) {
     const [riskFilter, setRiskFilter] = useState<DirectoryRiskFilter>('all')
     // Vista de nivel superior (solo desktop): ficha (master-detail) | tabla. El estado vive en
@@ -77,6 +81,7 @@ export function CoachClientsShell({
                 rosterMode={rosterMode}
                 onRosterModeChange={setRosterMode}
                 demoLabel={demoLabel}
+                initialStatusFilter={initialStatusFilter}
             />
         </AddStudentFlowProvider>
     )

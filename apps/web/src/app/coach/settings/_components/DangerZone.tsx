@@ -20,7 +20,11 @@ export function DangerZone() {
     }
 
     return (
-        <div className="space-y-3">
+        // `mb-6 md:mb-0`: en el panel de «Eliminar cuenta» esta tarjeta es lo último del scroll y la
+        // cápsula flotante del CoachSidebar (fixed, top ≈ safe-area + 93px) muerde los ~88px que
+        // reserva `CoachMainWrapper` con `pb-[var(--mobile-content-bottom-offset)]` — el CTA quedaba
+        // justo debajo. El margen extra es solo móvil; en desktop no hay cápsula.
+        <div className="space-y-3 mb-6 md:mb-0">
             <p className="px-1 text-[11px] font-extrabold uppercase tracking-[0.07em]" style={{ color: 'var(--danger-600)' }}>
                 Zona de peligro
             </p>

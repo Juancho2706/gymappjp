@@ -207,14 +207,18 @@ export function DomainsCard({
                                 </div>
 
                                 {editable && (
-                                    <label className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center">
-                                        <span className="sr-only">Mostrar {row.label}</span>
+                                    // `Switch` (base-ui) renderiza <button role="switch">, que NO es
+                                    // un elemento etiquetable: envolverlo en un <label> con sr-only
+                                    // no le daba nombre accesible. El nombre va por `aria-label`
+                                    // directo al control; el <div> queda SOLO como blanco táctil 44×44.
+                                    <div className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center">
                                         <Switch
+                                            aria-label={`Mostrar ${row.label}`}
                                             checked={enabled}
                                             disabled={isPending}
                                             onCheckedChange={(next) => toggle(row.domain, next)}
                                         />
-                                    </label>
+                                    </div>
                                 )}
                             </div>
 

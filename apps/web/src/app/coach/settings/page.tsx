@@ -22,7 +22,7 @@ import type { Metadata } from 'next'
 import { isBrandingAllowed, type SubscriptionTier as EvaSubscriptionTier } from '@eva/tiers'
 
 export const metadata: Metadata = {
-    title: 'Opciones | EVA',
+    title: 'Opciones',
 }
 
 const TIER_LABEL: Record<string, string> = {

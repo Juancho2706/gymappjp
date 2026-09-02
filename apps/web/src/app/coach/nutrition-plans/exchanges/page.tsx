@@ -7,7 +7,7 @@ import { NUTRITION_EXCHANGES_MODULE } from '@/services/nutrition-exchanges/nutri
 import { ModuleOffNotice } from '@/components/coach/ModuleOffNotice'
 import { shouldSwapCockpitToNutritionV2 } from '../_lib/nutrition-v2-swap'
 
-export const metadata: Metadata = { title: 'Nutrición Pro | EVA' }
+export const metadata: Metadata = { title: 'Nutrición Pro' }
 
 /**
  * Superficie directa del módulo `nutrition_exchanges` (plan 05 F5.7). El editor de

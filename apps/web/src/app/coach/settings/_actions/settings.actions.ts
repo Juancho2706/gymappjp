@@ -11,6 +11,7 @@ import { getPaymentsProviderForCoach } from '@/lib/payments/provider'
 import { isThemePresetKey } from '@/lib/brand-presets'
 import { isLoginLayoutKey, parseLoaderConfig } from '@/lib/brand-composer'
 import { deleteClientHard } from '@/services/client/client-deletion.service'
+import { cancelCoachEmails } from '@/services/email/coach-email-ledger.service'
 import { BRAND_CHECKBOX_KEEP } from '../_lib/brand-form-values'
 
 /**
@@ -456,7 +457,30 @@ export async function deleteCoachAccountAction(
         // Non-fatal
     }
 
-    // 5. Delete auth user — CASCADE will delete coaches row via FK
+    // 5. Cancelar en Resend TODO lo que le quedaba agendado (best-effort — non-fatal).
+    // POR QUE VA ACA y no despues: el paso 6 borra `auth.users` y la cascada se lleva puesto el
+    // `coach_email_ledger`, que es de donde salen los `provider_message_id` a cancelar. Un segundo
+    // mas tarde no queda de donde leerlos y el drip le sigue llegando a una cuenta que ya no existe
+    // — justo lo contrario de lo que promete la hoja de confirmacion («Serás desuscripto de todos
+    // los emails de EVA»). `'*'` y no las keys del drip: se va la cuenta entera.
+    // NUNCA bloquea el borrado: `cancelCoachEmails` no lanza por contrato, y el try/catch cubre
+    // igual lo inesperado (env sin API key, red caida) — Ley 21.719 manda que la baja se complete.
+    try {
+        const emails = await cancelCoachEmails(adminDb, coachId, '*')
+        if (emails.failed > 0) {
+            console.warn('[deleteAccount] quedaron correos agendados sin cancelar', {
+                coachId,
+                ...emails,
+            })
+        }
+    } catch (err) {
+        console.warn('[deleteAccount] no se pudieron cancelar los correos agendados', {
+            coachId,
+            message: err instanceof Error ? err.message : String(err),
+        })
+    }
+
+    // 6. Delete auth user — CASCADE will delete coaches row via FK
     const { error: authError } = await adminDb.auth.admin.deleteUser(coachId)
     if (authError) {
         console.error('[deleteAccount] failed to delete auth user:', authError)

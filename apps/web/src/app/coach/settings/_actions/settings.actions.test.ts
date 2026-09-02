@@ -1,10 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { createClientMock, createServiceRoleClientMock, revalidatePathMock } = vi.hoisted(() => ({
-    createClientMock: vi.fn(),
-    createServiceRoleClientMock: vi.fn(),
-    revalidatePathMock: vi.fn(),
-}))
+const { createClientMock, createServiceRoleClientMock, revalidatePathMock, cancelCoachEmailsMock } =
+    vi.hoisted(() => ({
+        createClientMock: vi.fn(),
+        createServiceRoleClientMock: vi.fn(),
+        revalidatePathMock: vi.fn(),
+        cancelCoachEmailsMock: vi.fn(),
+    }))
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: createClientMock }))
 vi.mock('@/lib/supabase/admin-client', () => ({ createServiceRoleClient: createServiceRoleClientMock }))
@@ -12,8 +14,9 @@ vi.mock('next/cache', () => ({ revalidatePath: revalidatePathMock }))
 vi.mock('next/navigation', () => ({ redirect: vi.fn() }))
 vi.mock('@/lib/payments/provider', () => ({ getPaymentsProviderForCoach: vi.fn() }))
 vi.mock('@/services/client/client-deletion.service', () => ({ deleteClientHard: vi.fn() }))
+vi.mock('@/services/email/coach-email-ledger.service', () => ({ cancelCoachEmails: cancelCoachEmailsMock }))
 
-import { updateBrandSettingsAction } from './settings.actions'
+import { deleteCoachAccountAction, updateBrandSettingsAction } from './settings.actions'
 import { BRAND_CHECKBOX_KEEP } from '../_lib/brand-form-values'
 
 const COACH_ID = '11111111-1111-4111-8111-111111111111'
@@ -107,5 +110,101 @@ describe('updateBrandSettingsAction — use_brand_colors_coach (W3.4)', () => {
         await updateBrandSettingsAction({}, brandFormData('absent'))
 
         expect(updatePayloads[0].use_brand_colors_coach).toBe(false)
+    })
+})
+
+/**
+ * B7 — el borrado de cuenta tiene que MATAR los correos que quedaron agendados en Resend.
+ *
+ * El bug: `deleteCoachAccountAction` borraba `auth.users` y la cascada se llevaba el
+ * `coach_email_ledger`, que es de donde salen los `provider_message_id` a cancelar. Resultado: el
+ * drip de venta seguía llegando a la casilla de alguien cuya cuenta ya no existe, mientras la hoja
+ * de confirmación promete «Serás desuscripto de todos los emails de EVA».
+ *
+ * Los dos invariantes que se pinnean acá son opuestos entre sí y por eso van juntos:
+ *  1. la cancelación corre ANTES del `deleteUser` (después ya no hay ledger que leer), y
+ *  2. si falla NO bloquea el borrado — Ley 21.719: la baja se completa igual.
+ */
+function deleteSetup(options: { cancelRejects?: boolean } = {}) {
+    const order: string[] = []
+
+    const deleteUser = vi.fn(async () => {
+        order.push('deleteUser')
+        return { error: null }
+    })
+
+    // `.eq()` sirve a los DOS accesos del flujo: `coaches…maybeSingle()` (fila del coach) y
+    // `clients…` awaiteado directo (lista de alumnos) — de ahí el thenable.
+    const eqResult = {
+        maybeSingle: async () => ({
+            data: {
+                subscription_mp_id: null,
+                subscription_status: 'canceled',
+                subscription_tier: 'free',
+                subscription_provider: null,
+                subscription_provider_external_id: null,
+            },
+            error: null,
+        }),
+        then: (resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) =>
+            Promise.resolve({ data: [], error: null }).then(resolve, reject),
+    }
+
+    const adminDb = {
+        auth: { admin: { deleteUser } },
+        from: vi.fn(() => ({ select: vi.fn(() => ({ eq: vi.fn(() => eqResult) })) })),
+    }
+
+    const supabase = {
+        auth: { getUser: vi.fn(async () => ({ data: { user: { id: COACH_ID } } })) },
+        storage: { from: vi.fn(() => ({ remove: vi.fn(async () => ({ error: null })) })) },
+    }
+
+    createClientMock.mockResolvedValue(supabase)
+    createServiceRoleClientMock.mockReturnValue(adminDb)
+    cancelCoachEmailsMock.mockImplementation(async () => {
+        order.push('cancelCoachEmails')
+        if (options.cancelRejects) throw new Error('resend 503')
+        return { cancelled: 3, alreadySent: 1, failed: 0 }
+    })
+
+    return { adminDb, deleteUser, order }
+}
+
+describe('deleteCoachAccountAction — correos agendados (B7)', () => {
+    beforeEach(() => {
+        vi.clearAllMocks()
+    })
+
+    it('cancela TODO lo agendado del coach ANTES de borrar el auth.user', async () => {
+        const { adminDb, order } = deleteSetup()
+
+        await deleteCoachAccountAction('ELIMINAR')
+
+        expect(cancelCoachEmailsMock).toHaveBeenCalledTimes(1)
+        // `'*'`, no las keys del drip: se va la cuenta entera.
+        expect(cancelCoachEmailsMock).toHaveBeenCalledWith(adminDb, COACH_ID, '*')
+        // El orden ES el arreglo: al revés la cascada ya borró el ledger.
+        expect(order).toEqual(['cancelCoachEmails', 'deleteUser'])
+    })
+
+    it('si la cancelación falla, la cuenta se borra igual', async () => {
+        const { deleteUser } = deleteSetup({ cancelRejects: true })
+
+        await deleteCoachAccountAction('ELIMINAR')
+
+        expect(cancelCoachEmailsMock).toHaveBeenCalledTimes(1)
+        expect(deleteUser).toHaveBeenCalledTimes(1)
+    })
+
+    it('confirmación incorrecta ⇒ no se cancela nada ni se borra nada', async () => {
+        const { deleteUser } = deleteSetup()
+
+        await expect(deleteCoachAccountAction('eliminar')).resolves.toEqual({
+            error: 'Confirmación incorrecta.',
+        })
+
+        expect(cancelCoachEmailsMock).not.toHaveBeenCalled()
+        expect(deleteUser).not.toHaveBeenCalled()
     })
 })
