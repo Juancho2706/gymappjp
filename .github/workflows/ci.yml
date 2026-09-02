@@ -178,23 +178,29 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile --ignore-scripts
       - run: npx playwright install --with-deps
-      - name: Enterprise RLS isolation
-        run: pnpm run test:e2e:enterprise-rls
+      # SOLO el project `prod-suave` (auditoria 2026-09-02). `npx playwright test` sin `--project`
+      # corria los cuatro projects, y el que de verdad se ejecutaba era `chromium`: specs que
+      # ESCRIBEN contra la Supabase de produccion (workout-flow finaliza un entrenamiento,
+      # checkin-flow sube dos fotos) sobre un coach real, con `retries: 2` — o sea 3 pasadas por
+      # spec rojo contra la Micro. Es el espiritu del incidente del 22-08 (6 navegadores contra
+      # prod dejaron la base abajo). `prod-suave` trae el freno de mano puesto desde
+      # playwright.config.ts: workers 1, fullyParallel off, retries 0, timeout 45 s, header
+      # `x-eva-qa: playwright` y el guardian de /api/health de tests/_fixtures/suave.ts. Tambien
+      # fija su propia baseURL (PROD_SUAVE_BASE_URL -> https://www.eva-app.cl), asi que aca NO se
+      # exporta PLAYWRIGHT_BASE_URL: hacerlo solo agregaria una forma de desviar la tanda.
+      # Sin E2E_QA_COACH_* el project `setup` se salta solo y la tanda queda skipped: el fallo
+      # correcto, nunca una credencial en el repo (tests/smoke/auth.setup.ts).
+      # El paso `test:e2e:enterprise-rls` se elimino: apps/enterprise esta CONGELADA
+      # (cuarentena 2026-08-06) y marcada para demolicion (B15); no hay retorno en gastar minutos
+      # y golpear la DB por una app muerta.
+      - run: npx playwright test --project=prod-suave
         env:
           CI: true
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      - run: npx playwright test
-        env:
-          CI: true
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          E2E_COACH_SLUG: ${{ secrets.E2E_COACH_SLUG }}
-          E2E_CLIENT_EMAIL: ${{ secrets.E2E_CLIENT_EMAIL }}
-          E2E_CLIENT_PASSWORD: ${{ secrets.E2E_CLIENT_PASSWORD }}
-          E2E_WORKOUT_PLAN_ID: ${{ secrets.E2E_WORKOUT_PLAN_ID }}
+          E2E_QA_COACH_EMAIL: ${{ secrets.E2E_QA_COACH_EMAIL }}
+          E2E_QA_COACH_PASSWORD: ${{ secrets.E2E_QA_COACH_PASSWORD }}
       - uses: actions/upload-artifact@v7
         if: always()
         with:

@@ -39,9 +39,14 @@ Motivo: usan Supabase real, secrets y datos preparados; todavía no son determin
 
 `e2e` ejecuta:
 
-- aislamiento RLS enterprise;
-- suite Playwright general;
+- suite Playwright **solo del project `prod-suave`** (`--project=prod-suave`, desde el 2026-09-02):
+  un navegador, sin paralelismo, `retries: 0`, header `x-eva-qa` y guardián de `/api/health`. Queda
+  pendiente cargar los secrets `E2E_QA_COACH_EMAIL` / `E2E_QA_COACH_PASSWORD` del coach QA
+  `evademo`: sin ellos el project `setup` se salta y la tanda queda skipped (ver QA-01 en
+  [MANUAL_TASKS.md](../operations/MANUAL_TASKS.md));
 - artefacto `playwright-report-e2e`.
+
+El paso de aislamiento RLS de `apps/enterprise` se eliminó (app congelada, cuarentena 2026-08-06).
 
 `nutrition-smoke` valida el entorno y ejecuta el smoke de alumno, solo si están presentes las credenciales E2E requeridas. Produce `playwright-report-nutrition-smoke`.
 
