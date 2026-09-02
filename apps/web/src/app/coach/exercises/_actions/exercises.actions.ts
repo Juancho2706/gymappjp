@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { CloneExerciseSchema } from '@eva/schemas'
-import { CARDIO_MODALITIES } from '@eva/workout-engine'
+import { CARDIO_MODALITIES, resolveExerciseCopyName } from '@eva/workout-engine'
 import { z } from 'zod'
 import { getTierCapabilities, type SubscriptionTier } from '@/lib/constants'
 import { getCoachOrgContext } from '@/lib/coach-context'
@@ -137,6 +137,9 @@ function resolveMediaFields(parsed: z.infer<typeof exerciseSchema>) {
  * 2. El dueño sale de `resolveExerciseOwner`, igual que create/update: en workspace team el clon
  *    nace en el catálogo del POOL (team_id) y no personal — si no, sería invisible para el resto
  *    del equipo y para los alumnos del pool (mismo bug AC6/AC11 que arregló el create).
+ * 3. El clon SE RENOMBRA: «{nombre} (copia)», «(copia 2)», … El nombre no tiene unique en DB —
+ *    la unicidad la impone la app con un `ilike` scopeado al owner — así que copiar el nombre tal
+ *    cual hacía que duplicar un ejercicio PROPIO chocara siempre con su original.
  */
 export async function cloneExerciseAction(formData: FormData) {
   try {
@@ -199,17 +202,30 @@ export async function cloneExerciseAction(formData: FormData) {
       return { error: 'No se pudo duplicar: el ejercicio no existe o no es visible.' }
     }
 
-    // Duplicado de nombre scopeado al owner, mismo criterio que create/update.
-    const { count: nameCount } = await applyExerciseOwnerScope(
-      supabase
-        .from('exercises')
-        .select('id', { count: 'exact', head: true })
-        .ilike('name', validated.name),
+    // Nombre del clon: «{nombre} (copia)», «(copia 2)», … El sufijo lo resuelve
+    // `resolveExerciseCopyName` (@eva/workout-engine, compartido con RN) contra los nombres YA
+    // ocupados en el catálogo del owner. UNA sola query, con el MISMO scope 3-vías que el
+    // dup-check de create/update, y SIN filtrar `deleted_at` (esos tampoco lo filtran: un nombre
+    // "libre" que chocara con un soft-deleted volvería a fallar).
+    //
+    // Antes se copiaba el nombre tal cual y se rechazaba el choque: duplicar un ejercicio PROPIO
+    // fallaba siempre contra su propio original («Ya existe un ejercicio con ese nombre.»).
+    //
+    // Bound conocido: PostgREST corta el listado en su `max-rows` (1000 en Supabase). Con más de
+    // 1000 ejercicios propios el sufijo podría repetir un nombre — no rompe (no hay unique en DB)
+    // y ningún catálogo real se acerca; si algún día pasa, hay que paginar acá.
+    const { data: ownedNames, error: namesError } = await applyExerciseOwnerScope(
+      supabase.from('exercises').select('name'),
       owner
     )
-    if ((nameCount ?? 0) > 0) {
-      return { error: 'Ya existe un ejercicio con ese nombre.' }
+    if (namesError) {
+      console.error('cloneExerciseAction no pudo leer el catálogo del owner:', namesError)
+      return { error: 'No se pudo duplicar: no se pudo leer tu catálogo.' }
     }
+    const cloneName = resolveExerciseCopyName(
+      validated.name,
+      (ownedNames ?? []).map((row) => row.name)
+    )
 
     const { error } = await supabase
       .from('exercises')
@@ -217,7 +233,7 @@ export async function cloneExerciseAction(formData: FormData) {
         coach_id: owner.coachId,
         org_id: owner.orgId,
         team_id: owner.teamId,
-        name: validated.name,
+        name: cloneName,
         muscle_group: validated.muscle_group,
         equipment: validated.equipment,
         difficulty: validated.difficulty,
@@ -243,7 +259,8 @@ export async function cloneExerciseAction(formData: FormData) {
     if (error) throw error
 
     revalidateExerciseCatalogSurfaces()
-    return { success: true }
+    // `name` viaja de vuelta para que la UI pueda nombrar la copia recién creada.
+    return { success: true, name: cloneName }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Error al clonar ejercicio'
     return { error: message }

@@ -4,6 +4,7 @@ import { supabase } from './supabase'
 import { selectWithFallback } from './db-compat'
 import { getCoachOrgContext } from './org'
 import type { ClientActionWorkspace } from './client-actions'
+import { resolveExerciseCopyName } from '@eva/workout-engine'
 import {
   builderExerciseWorkspaceFilter,
   exerciseMatchesBuilderWorkspace,
@@ -429,10 +430,31 @@ export async function uploadExerciseImage(uri: string): Promise<{ ok: boolean; u
   }
 }
 
-// E-F8: clonar un ejercicio (sistema o propio) a uno propio editable.
-export async function cloneExercise(row: ExerciseRow): Promise<{ ok: boolean; id?: string; error?: string }> {
-  return createExercise({
-    name: `${row.name} (copia)`,
+/**
+ * E-F8: clonar un ejercicio (sistema o propio) a uno propio editable.
+ *
+ * El nombre lo resuelve `resolveExerciseCopyName` (@eva/workout-engine, el MISMO helper que la
+ * Server Action de web): «{nombre} (copia)», «(copia 2)», … contra los nombres ya ocupados en el
+ * catálogo del coach. Antes se concatenaba « (copia)» a ciegas y `createExercise` rechazaba el
+ * clon con «Ya existe un ejercicio con ese nombre.» apenas el coach duplicaba dos veces (o
+ * duplicaba algo que ya se llamaba «… (copia)»).
+ *
+ * La lista de nombres NO filtra `deleted_at`: el dup-check de `createExercise` tampoco lo hace,
+ * así que un nombre "libre" que chocara con un soft-deleted volvería a fallar en el insert.
+ */
+export async function cloneExercise(row: ExerciseRow): Promise<{ ok: boolean; id?: string; name?: string; error?: string }> {
+  const coachId = await currentCoachId()
+  if (!coachId) return { ok: false, error: 'No autenticado.' }
+
+  const { data: owned, error: namesError } = await supabase
+    .from('exercises')
+    .select('name')
+    .eq('coach_id', coachId)
+  if (namesError) return { ok: false, error: 'No se pudo leer tu catálogo. Intenta nuevamente.' }
+
+  const name = resolveExerciseCopyName(row.name, ((owned as { name: string | null }[] | null) ?? []).map((r) => r.name))
+  const created = await createExercise({
+    name,
     muscle_group: row.muscle_group ?? '',
     exercise_type: row.exercise_type ?? 'strength',
     // La copia conserva la modalidad del original (si era cardio); en otro tipo el create la anula.
@@ -447,6 +469,7 @@ export async function cloneExercise(row: ExerciseRow): Promise<{ ok: boolean; id
     video_start_time: row.video_start_time ?? null,
     video_end_time: row.video_end_time ?? null,
   })
+  return created.ok ? { ...created, name } : created
 }
 
 /**

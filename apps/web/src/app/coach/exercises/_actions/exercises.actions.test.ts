@@ -58,18 +58,25 @@ type EqCall = [string, string]
  * `[]` = el scope del owner no matcheó (ejercicio ajeno/inexistente), el caso que PostgREST
  * devuelve como éxito silencioso.
  *
- * `sourceRow`/`nameCount` cubren las 3 queries encadenadas del CLON: lectura de la fila origen
- * (`maybeSingle`), conteo de nombre duplicado scopeado al owner (thenable) e insert.
+ * `sourceRow`/`ownedNames` cubren las 3 queries encadenadas del CLON: lectura de la fila origen
+ * (`maybeSingle`), listado de nombres ya ocupados en el catálogo del owner (thenable) e insert.
+ * `nameCount` sigue siendo el conteo del dup-check de create/update, que sí rechaza.
  */
 function makeExercisesTable(options: {
     updatedRows?: { id: string }[]
     /** Fila devuelta por `maybeSingle()`: origen del clon, o media vieja en el update. */
     sourceRow?: Record<string, unknown> | null
-    /** Duplicados de nombre en el catálogo del owner (>0 ⇒ la action rechaza). */
+    /** Duplicados de nombre en el catálogo del owner (>0 ⇒ create/update rechazan). */
     nameCount?: number
+    /** Nombres ya ocupados en el catálogo del owner: el clon los usa para elegir el sufijo. */
+    ownedNames?: string[]
+    /** Fuerza el error del SELECT de nombres (rama de fallo del clon). */
+    namesError?: { message: string } | null
 } = {}) {
     const updatedRows = options.updatedRows ?? [{ id: 'ex-1' }]
     const nameCount = options.nameCount ?? 0
+    const ownedNames = options.ownedNames ?? []
+    const namesError = options.namesError ?? null
     const eqCalls: EqCall[] = []
     const ilikeCalls: string[] = []
     const insertPayloads: Record<string, unknown>[] = []
@@ -108,8 +115,18 @@ function makeExercisesTable(options: {
         }),
         // El builder es thenable: el nameQuery resuelve el count de duplicados y, una vez que
         // hubo `.update()`, resuelve las filas devueltas por `.select('id')`.
-        then: (resolve: (value: { count?: number; data?: { id: string }[]; error: null }) => void) =>
-            resolve(updating ? { data: updatedRows, error: null } : { count: nameCount, error: null }),
+        then: (
+            resolve: (value: {
+                count?: number
+                data?: { id: string }[] | { name: string }[]
+                error: { message: string } | null
+            }) => void
+        ) =>
+            resolve(
+                updating
+                    ? { data: updatedRows, error: null }
+                    : { count: nameCount, data: ownedNames.map((name) => ({ name })), error: namesError }
+            ),
     })
     return { builder, eqCalls, ilikeCalls, insertPayloads, updatePayloads }
 }
@@ -420,13 +437,14 @@ const CLONE_SOURCE_ROW = {
 }
 
 /**
- * `cloneExerciseAction` encadena TRES queries sobre `exercises` (fila origen → conteo de nombre
- * duplicado scopeado al owner → insert) y hasta ahora no tenía red: un cambio en cualquiera de
+ * `cloneExerciseAction` encadena TRES queries sobre `exercises` (fila origen → nombres ocupados
+ * en el catálogo del owner → insert) y hasta ahora no tenía red: un cambio en cualquiera de
  * las tres se colaba a producción. La media y el tipo salen de la FILA ORIGEN leída en DB, no del
  * FormData (los ejercicios del sistema traen GIFs de un CDN externo que el schema rechazaría).
  *
- * OJO: el clon NO renombra («… (copia)»): copia el nombre tal cual y por eso duplicar un
- * ejercicio PROPIO choca con el dup-check. Es el comportamiento vigente de la UI (ExerciseCatalogClient).
+ * El clon SÍ renombra: «{nombre} (copia)», «(copia 2)», … (`resolveExerciseCopyName`, compartido
+ * con RN). Antes copiaba el nombre tal cual y duplicar un ejercicio PROPIO chocaba siempre con su
+ * original — el nombre no tiene unique en DB, la unicidad la impone el `ilike` de la app.
  */
 describe('cloneExerciseAction — 3 queries encadenadas, owner y media del origen', () => {
     beforeEach(() => {
@@ -440,15 +458,15 @@ describe('cloneExerciseAction — 3 queries encadenadas, owner y media del orige
 
         const result = await cloneExerciseAction(buildCloneForm())
 
-        expect(result).toEqual({ success: true })
+        expect(result).toEqual({ success: true, name: 'Press banca (copia)' })
         const payload = insertOf(exercises)
         expect(payload).toMatchObject({
             coach_id: 'coach-1',
             org_id: null,
             team_id: null,
             source: 'coach',
-            // Del FormData (contrato CloneExerciseSchema)
-            name: 'Press banca',
+            // Del FormData (contrato CloneExerciseSchema), con el sufijo del clon
+            name: 'Press banca (copia)',
             muscle_group: 'Pecho',
             equipment: 'Barra',
             difficulty: 'intermediate',
@@ -466,10 +484,11 @@ describe('cloneExerciseAction — 3 queries encadenadas, owner y media del orige
         })
         // E5: sin esto el clon caía al hotlink de YouTube mientras el original se veía bien.
         expect(payload.thumbnail_url).toBe(CLONE_SOURCE_ROW.thumbnail_url)
-        // La fila origen se lee por id y el dup-check se scopea al owner.
+        // La fila origen se lee por id y el listado de nombres se scopea al owner.
         expect(exercises.eqCalls).toContainEqual(['id', 'ex-origen'])
         expect(exercises.eqCalls).toContainEqual(['coach_id', 'coach-1'])
-        expect(exercises.ilikeCalls).toEqual(['Press banca'])
+        // Ya no hay `ilike`: el nombre libre se resuelve en memoria sobre los nombres del owner.
+        expect(exercises.ilikeCalls).toEqual([])
     })
 
     it('workspace team ⇒ el clon nace en el catálogo del POOL y el dup-check va por team_id', async () => {
@@ -479,7 +498,7 @@ describe('cloneExerciseAction — 3 queries encadenadas, owner y media del orige
 
         const result = await cloneExerciseAction(buildCloneForm())
 
-        expect(result).toEqual({ success: true })
+        expect(result).toEqual({ success: true, name: 'Press banca (copia)' })
         expect(insertOf(exercises)).toMatchObject({
             coach_id: null,
             org_id: null,
@@ -497,7 +516,7 @@ describe('cloneExerciseAction — 3 queries encadenadas, owner y media del orige
 
         const result = await cloneExerciseAction(buildCloneForm())
 
-        expect(result).toEqual({ success: true })
+        expect(result).toEqual({ success: true, name: 'Press banca (copia)' })
         expect(insertOf(exercises)).toMatchObject({ coach_id: null, org_id: 'org-1', team_id: null, source: 'org' })
     })
 
@@ -531,15 +550,44 @@ describe('cloneExerciseAction — 3 queries encadenadas, owner y media del orige
         expect(revalidatePathMock).not.toHaveBeenCalled()
     })
 
-    it('ya hay un ejercicio con ese nombre en el catálogo del owner ⇒ error, sin insert', async () => {
+    it('duplicar un ejercicio PROPIO ⇒ «(copia)», no el error de nombre duplicado', async () => {
         asStandalone()
-        const exercises = makeExercisesTable({ sourceRow: CLONE_SOURCE_ROW, nameCount: 1 })
+        const exercises = makeExercisesTable({ sourceRow: CLONE_SOURCE_ROW, ownedNames: ['Press banca'] })
         wireSupabase(exercises)
 
         const result = await cloneExerciseAction(buildCloneForm())
 
-        expect(result).toEqual({ error: 'Ya existe un ejercicio con ese nombre.' })
+        expect(result).toEqual({ success: true, name: 'Press banca (copia)' })
+        expect(insertOf(exercises)).toMatchObject({ name: 'Press banca (copia)' })
+    })
+
+    it('ya existe la copia ⇒ el sufijo avanza a «(copia 2)» (case-insensitive, como el ilike)', async () => {
+        asStandalone()
+        const exercises = makeExercisesTable({
+            sourceRow: CLONE_SOURCE_ROW,
+            ownedNames: ['Press banca', 'PRESS BANCA (COPIA)'],
+        })
+        wireSupabase(exercises)
+
+        const result = await cloneExerciseAction(buildCloneForm())
+
+        expect(result).toEqual({ success: true, name: 'Press banca (copia 2)' })
+        expect(insertOf(exercises)).toMatchObject({ name: 'Press banca (copia 2)' })
+    })
+
+    it('el SELECT de nombres falla ⇒ error explícito, sin insert (no se duplica a ciegas)', async () => {
+        asStandalone()
+        const exercises = makeExercisesTable({
+            sourceRow: CLONE_SOURCE_ROW,
+            namesError: { message: 'permission denied' },
+        })
+        wireSupabase(exercises)
+
+        const result = await cloneExerciseAction(buildCloneForm())
+
+        expect(result).toEqual({ error: 'No se pudo duplicar: no se pudo leer tu catálogo.' })
         expect(exercises.insertPayloads).toHaveLength(0)
+        expect(revalidatePathMock).not.toHaveBeenCalled()
     })
 
     it('datos inválidos (sin muscle_group) ⇒ mensaje legible, no el ZodError crudo', async () => {
