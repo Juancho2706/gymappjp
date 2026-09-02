@@ -142,10 +142,13 @@ Desde el 2026-09-02 el job `e2e` del dispatch corre **solo el project `prod-suav
 sobre un coach real— ya no se lanza desde CI, y el paso de RLS de `apps/enterprise` (app congelada,
 B15) se eliminó.
 
-- [ ] **Bloqueante hoy**: cargar en GitHub los secrets `E2E_QA_COACH_EMAIL` y
-  `E2E_QA_COACH_PASSWORD` con la cuenta del coach QA `evademo`. Mientras no existan, el project
-  `setup` se salta solo y la tanda entera queda skipped (comportamiento seguro, pero no valida
-  nada). Las credenciales no se anotan acá ni en ningún archivo del repo.
+- [x] **Secrets cargados (2026-09-02)**: `E2E_QA_COACH_EMAIL` y `E2E_QA_COACH_PASSWORD` apuntan al
+  coach QA propio **`qa-e2e-coach@evatest.cl`** (slug `qa-e2e-coach`, id `19fc07a3-…`), creado por la
+  API admin con clave aleatoria que solo vive en los secrets. Decisión del owner: la cuenta de App
+  Review (`evademo`) NO se usa para tests. Sin alumnos, persona `strength`, correo verificado; está en
+  la allowlist de `tests/e2e-accounts.ts`. Si hay que rotar la clave: `auth.admin.updateUserById` +
+  `gh secret set` por stdin, nunca por chat ni por argv. Ojo: el reporte de Playwright de un run
+  fallido guarda el snapshot de la página con la clave tipeada — borrar el artifact si se filtra.
 - [ ] Ejecutar manualmente el workflow **CI** con `workflow_dispatch` antes de cambios de auth, RLS, pagos, nutrición o releases de tienda.
 - [ ] Confirmar que los secrets E2E existen en el environment de GitHub.
 - [ ] Guardar el run y resultado consolidado en [TEST_STATUS.md](../testing/TEST_STATUS.md).

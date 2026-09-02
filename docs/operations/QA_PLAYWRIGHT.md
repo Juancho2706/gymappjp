@@ -48,7 +48,9 @@ dependen de quien lanza la tanda.
   para encontrar y purgar la cuenta después.
 - **Credenciales solo por env**: `E2E_QA_COACH_EMAIL` y `E2E_QA_COACH_PASSWORD`. Nunca en el repo,
   nunca en este documento. Sin esas variables la tanda entera queda *skipped* — que es el resultado
-  correcto, no un fallo a arreglar.
+  correcto, no un fallo a arreglar. En CI apuntan al coach QA permanente `qa-e2e-coach@evatest.cl`
+  (creado 2026-09-02 por la API admin; sin alumnos, correo verificado, persona elegida). No es la
+  cuenta de App Review: esa no se usa para tests.
 - **Purga por lista, no por barrido.** Al cerrar una campaña de QA se borran las cuentas **anotadas
   por id o por correo exacto**. Un `DELETE ... WHERE email LIKE '%evatest%'` contra la base de
   producción es exactamente el tipo de operación que no corremos.

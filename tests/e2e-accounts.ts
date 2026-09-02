@@ -18,6 +18,10 @@
 
 /** Slugs de shells E2E permitidos (coach standalone, org enterprise y team pool). */
 export const ALLOWED_E2E_SLUGS = new Set<string>([
+  // Coach QA de la tanda `prod-suave` en CI (creado 2026-09-02 por la API admin; clave solo en los
+  // secrets E2E_QA_COACH_* de GitHub). Sin alumnos, persona `strength`, correo verificado. Reemplaza
+  // a la cuenta de App Review, que no se usa para tests.
+  'qa-e2e-coach',
   'e2e-aurora-strength', // persona 1 — coach standalone (shell /c)
   'e2e-performance-lab', // persona 3/4 — org enterprise (shell /e + panel /org)
   'e2e-pool-vortex', //     persona 6/7 — team pool (shell /t)
@@ -33,6 +37,7 @@ export const ALLOWED_E2E_EMAIL_DOMAIN = '@evatest.cl'
 
 /** Correos E2E nominales (las 9 personas seeded + billing). El dominio ya cubre el resto. */
 export const ALLOWED_E2E_EMAILS = new Set<string>([
+  'qa-e2e-coach@evatest.cl', // coach QA de CI (ver ALLOWED_E2E_SLUGS)
   'e2e-solo-coach@evatest.cl',
   'e2e-solo-alumno@evatest.cl',
   'e2e-org-owner@evatest.cl',
