@@ -1,7 +1,9 @@
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { listAll } from '@/infrastructure/db/coach-addons.repository'
+import { resolveActiveDiscountFromRpc } from '@/services/billing/discount.service'
 import type { ModuleKey } from '@/services/entitlements.service'
+import type { ReactivateActiveDiscount } from '../_lib/reactivate-price'
 
 /** Ventana para pre-marcar ex-add-ons cancelados recientemente (plan 05 F5.6). */
 const RECENT_CANCELLED_WINDOW_DAYS = 60
@@ -11,9 +13,9 @@ export const getReactivatePageData = cache(async () => {
     // getClaims(): verificación local del JWT (ES256), sin /user. El proxy ya validó/refrescó la sesión.
     const { data: __cl } = await supabase.auth.getClaims()
     const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
-    if (!user) return { user: null, coach: null, activeClientCount: 0, activeClients: [] as { id: string; full_name: string }[], recentlyCancelledAddons: [] as ModuleKey[] }
+    if (!user) return { user: null, coach: null, activeClientCount: 0, activeClients: [] as { id: string; full_name: string }[], recentlyCancelledAddons: [] as ModuleKey[], activeDiscount: null as ReactivateActiveDiscount | null }
 
-    const [coachResult, clientCountResult, activeClientsResult, addonsResult] = await Promise.all([
+    const [coachResult, clientCountResult, activeClientsResult, addonsResult, discountResult] = await Promise.all([
         supabase
             .from('coaches')
             // Ancla de la gracia de ALUMNOS (politica CEO 2026-07-18) para el banner "Tus N
@@ -59,6 +61,13 @@ export const getReactivatePageData = cache(async () => {
         // SELECT propio (RLS) — el client user-scoped solo ve las filas del coach.
         // tolerante a fallos: si la lectura falla, la reactivación sigue sin pre-marcado.
         listAll(supabase, user.id).catch(() => []),
+        // Cupon vivo del coach via la RPC `resolve_active_discount` (SECURITY DEFINER, sin param ->
+        // auth.uid() interno, anti-IDOR): el cliente user-scoped NO puede joinear el catalogo de
+        // cupones bajo RLS. Es el MISMO resolver que usa /api/payments/subscription-status, y el
+        // spec que devuelve es el que `create-preference` re-resuelve para hornear el monto => el
+        // precio MOSTRADO en Reactivar == el COBRADO. Tolerante a fallos: si la RPC falla, null
+        // (la pantalla queda exactamente como antes, sin descuento y sin romperse).
+        resolveActiveDiscountFromRpc(supabase).catch(() => ({ spec: null, redemptionId: null, code: null })),
     ])
 
     // Ex-add-ons PAGOS cancelados en la ventana reciente → pre-marca (deseleccionable). El
@@ -83,11 +92,25 @@ export const getReactivatePageData = cache(async () => {
         )
     )
 
+    // Forma serializable (RSC -> client). `moduleKeys` no viaja: la pantalla precia el plan BASE,
+    // asi que un cupon target='module' no tiene linea que descontar (precio intacto, como hoy).
+    const spec = discountResult.spec
+    const activeDiscount: ReactivateActiveDiscount | null = spec
+        ? {
+              code: discountResult.code,
+              type: spec.type,
+              value: spec.value,
+              target: spec.target,
+              remainingCycles: spec.remainingCycles ?? null,
+          }
+        : null
+
     return {
         user,
         coach: coachResult.data,
         activeClientCount: clientCountResult.count ?? 0,
         activeClients: activeClientsResult.data ?? [],
         recentlyCancelledAddons,
+        activeDiscount,
     }
 })

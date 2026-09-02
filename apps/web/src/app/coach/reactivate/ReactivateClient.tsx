@@ -27,6 +27,11 @@ import { useCaptureCheckoutFailed, useCaptureCheckoutStarted } from '@/lib/posth
 import { effectiveTierLimit } from '../_lib/effective-limit'
 import { formatStudentAccessDate, resolveStudentGraceEndsAt } from '@/lib/student-access'
 import { ReactivateCouponCard } from './_components/ReactivateCouponCard'
+import {
+    computeReactivatePrice,
+    reactivateDiscountLabel,
+    type ReactivateActiveDiscount,
+} from './_lib/reactivate-price'
 import { ReactivateArchivePanel, type ReactivateArchiveClient } from './_components/ReactivateArchivePanel'
 
 // Solo se ofertan tiers a la venta (pricing v2: free/pro/elite — starter salió de la venta,
@@ -56,6 +61,14 @@ interface ReactivateClientProps {
     /** Flag de cupones (COUPON_REDEMPTION_ENABLED) leído server-side: muestra el canje de código. */
     couponsEnabled?: boolean
     /**
+     * Cupón YA VIVO del coach (no el que se tipea acá), resuelto server-side con la RPC
+     * `resolve_active_discount` — la MISMA redención que `create-preference` re-resuelve para
+     * hornear el monto del checkout. Con esto el precio se muestra descontado ANTES de ir a la
+     * pasarela (el coach bloqueado veía $29.990 y recién pagaba $14.995 en Flow). null = sin cupón
+     * ⇒ la pantalla queda exactamente como antes.
+     */
+    activeDiscount?: ReactivateActiveDiscount | null
+    /**
      * `coaches.created_at` — ancla de la escalera de grandfather (3 peldaños: pre-v2 3 · v2 2 ·
      * v3 1). Se usa SOLO para proyectar los tiers que el coach todavía no tiene: es lo que el
      * write-path grabará en `max_clients` si contrata ese plan. null ⇒ fail-safe generoso.
@@ -73,7 +86,7 @@ interface ReactivateClientProps {
     coachMaxClients?: number | null
 }
 
-export function ReactivateClient({ currentTier, activeClientCount, activeClients = [], subscriptionStatus, currentPeriodEnd = null, paidAccessEndedAt = null, couponsEnabled = false, coachCreatedAt = null, coachMaxClients = null }: ReactivateClientProps) {
+export function ReactivateClient({ currentTier, activeClientCount, activeClients = [], subscriptionStatus, currentPeriodEnd = null, paidAccessEndedAt = null, couponsEnabled = false, coachCreatedAt = null, coachMaxClients = null, activeDiscount = null }: ReactivateClientProps) {
     const searchParams = useSearchParams()
     // E1 (P8): checkout_started gated por consentimiento (no-op si el coach no acepto cookies).
     const captureCheckoutStarted = useCaptureCheckoutStarted()
@@ -147,6 +160,21 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
     const selectedTier = useMemo(() => TIER_CONFIG[tier], [tier])
     const selectedPrice = useMemo(() => getTierPriceClp(tier, billingCycle), [tier, billingCycle])
     const monthlyBase = useMemo(() => TIER_CONFIG[tier].monthlyPriceClp, [tier])
+    // Precio del tier/ciclo elegido CON el cupón vivo aplicado, por la MISMA fn pura
+    // (`computeDiscountedClp`) con la que `getCompositeAmountClp` hornea el monto que cobra
+    // `create-preference` ⇒ mostrado == cobrado, sin drift. Sin cupón: list == net (UI intacta).
+    const selectedPriceView = useMemo(
+        () => computeReactivatePrice(selectedPrice, activeDiscount),
+        [selectedPrice, activeDiscount]
+    )
+    const hasDiscount = selectedPriceView.discountClp > 0
+    // La radio-card pinta el número MENSUAL: un `fixed_clp` es un monto por COBRO, así que
+    // prorratearlo a "por mes" en un ciclo trimestral/anual mentiría. El % sí es proporcional.
+    // Fuera de ese caso la card muestra lista y el resumen de abajo lleva el neto real del ciclo.
+    const cardDiscount = useMemo(() => {
+        if (!activeDiscount) return null
+        return activeDiscount.type === 'percent' || billingCycle === 'monthly' ? activeDiscount : null
+    }, [activeDiscount, billingCycle])
     const allowedCycleOptions = useMemo(
         () => cycleOptions.filter(([key]) => getTierAllowedBillingCycles(tier).includes(key)),
         [tier]
@@ -451,6 +479,9 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
                     const coachLimit = limitFor(key)
                     const tooSmall = coachLimit < activeClientCount
                     const active = tier === key
+                    // Neto del cupón vivo SOLO en la card seleccionada (es el plan que se cobra).
+                    // Sin cupón, `netClp === option.monthlyPriceClp` y el render es el de siempre.
+                    const cardPrice = computeReactivatePrice(option.monthlyPriceClp, active ? cardDiscount : null)
                     return (
                         <button
                             key={key}
@@ -489,8 +520,13 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
                                 )}
                             </span>
                             <span className="shrink-0 text-right">
+                                {cardPrice.discountClp > 0 && (
+                                    <span className="block text-[12px] text-muted line-through">
+                                        ${cardPrice.listClp.toLocaleString('es-CL')}
+                                    </span>
+                                )}
                                 <span className="eva-metric block text-[18px] text-strong">
-                                    ${option.monthlyPriceClp.toLocaleString('es-CL')}
+                                    ${cardPrice.netClp.toLocaleString('es-CL')}
                                 </span>
                                 <span className="text-[11px] text-subtle">/mes</span>
                             </span>
@@ -543,11 +579,26 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
                     Plan seleccionado: <span className="font-semibold text-strong">{selectedTier.label}</span>
                 </p>
                 <p className="mt-1 text-sm text-muted">
-                    Precio: <span className="eva-metric text-strong">${selectedPrice.toLocaleString('es-CL')} CLP</span>
+                    Precio:{' '}
+                    {hasDiscount && (
+                        <>
+                            <span className="eva-metric text-muted line-through">
+                                ${selectedPriceView.listClp.toLocaleString('es-CL')}
+                            </span>{' '}
+                        </>
+                    )}
+                    <span className="eva-metric text-strong">${selectedPriceView.netClp.toLocaleString('es-CL')} CLP</span>
                     {billingCycle !== 'monthly' && (
                         <span className="ml-2 text-xs">(mensual base ${monthlyBase.toLocaleString('es-CL')} CLP)</span>
                     )}
                 </p>
+                {hasDiscount && activeDiscount && (
+                    <p className="mt-1.5">
+                        <span className="inline-flex items-center rounded-full bg-[var(--success-100)] px-2.5 py-0.5 text-[11.5px] font-bold text-[var(--success-700)]">
+                            {reactivateDiscountLabel(activeDiscount, selectedPriceView.discountClp)}
+                        </span>
+                    </p>
+                )}
                 <p className="mt-1 text-sm text-muted">
                     Módulos profesionales: <span className="font-semibold text-[var(--success-600)]">incluidos en tu plan</span>
                 </p>

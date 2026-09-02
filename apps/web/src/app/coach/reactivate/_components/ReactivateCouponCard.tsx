@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { BadgeCheck, Ticket } from 'lucide-react'
 import type { BillingCycle, SaleTier } from '@/lib/constants'
 
@@ -35,6 +36,7 @@ export function ReactivateCouponCard({
     billingCycle: BillingCycle
     couponsEnabled: boolean
 }) {
+    const router = useRouter()
     const [activeCode, setActiveCode] = useState<string | null>(null)
     const [code, setCode] = useState('')
     const [phase, setPhase] = useState<'idle' | 'checking' | 'preview' | 'applying' | 'done'>('idle')
@@ -113,6 +115,11 @@ export function ReactivateCouponCard({
         }
         setPhase('done')
         setActiveCode(data?.preview?.couponCode ?? code.trim())
+        // La redención ya vive en coaches.active_coupon_redemption_id: refrescamos el RSC para que
+        // el resumen de arriba pase a mostrar el precio YA descontado (mostrado == cobrado). Sin
+        // esto la pantalla seguiría diciendo el precio de lista hasta la próxima navegación. El
+        // estado de este componente sobrevive al refresh (no hay remount).
+        router.refresh()
     }
 
     if (!couponsEnabled || tier === 'free') return null
