@@ -12,7 +12,11 @@ import { haptics } from '../../../lib/haptics'
 import { STICKER_PAINT_ORDER } from './share-presets'
 import { withAlpha } from './stickers'
 import {
+    idleStickerTransform,
     liveDeltaFor,
+    maxScaleFor,
+    STICKER_SCALE_MAX,
+    STICKER_SCALE_MIN,
     type StickerId,
     type StickerLiveTransform,
     type StickerSize,
@@ -43,9 +47,12 @@ import {
 
 // ── Reglas del tablero ───────────────────────────────────────────────────────────────────────────
 
-/** Escala mínima/máxima de un sticker. Compartidas con el stepper del panel: una sola verdad. */
-export const STICKER_SCALE_MIN = 0.5
-export const STICKER_SCALE_MAX = 3
+/**
+ * Escala mínima/máxima de un sticker. Viven en `share-types` (son contrato y el tope fino,
+ * `maxScaleFor`, es aritmética pura testeable) y se re-exportan acá porque este archivo fue su casa
+ * y el barrel del módulo las publica desde él.
+ */
+export { STICKER_SCALE_MAX, STICKER_SCALE_MIN }
 
 /**
  * Cómo se llama cada sticker cuando hay que hablar de él suelto: la etiqueta del lector de pantalla
@@ -145,6 +152,28 @@ export function StickerGestureLayer({
     const hGuideOn = useSharedValue(false)
 
     /**
+     * ¿Hay MÁS DE UN dedo sobre el lienzo en este toque? Lo escribe el detector de la raíz y lo lee
+     * el «mantener apretado para quitar» de cada zona.
+     *
+     * ── POR QUÉ HACE FALTA CONTARLOS A MANO ──
+     * El segundo dedo de un pellizco casi nunca cae DENTRO de la zona del sticker (sin las pills del
+     * rediseño de F las cajas son chicas: la fecha mide ~40 px de alto). Y `react-native-gesture-
+     * handler` solo le entrega a un handler los eventos de los punteros que ese handler TRACKEA
+     * (`GestureHandler.wantsEvent` exige `isTrackingPointer(...)`): el `ACTION_POINTER_DOWN` del
+     * segundo dedo ni siquiera llega a la zona, así que su `LongPress` nunca ve dos dedos y su
+     * propio corte por cantidad de punteros (`currentPointers > numberOfPointersRequired ⇒ fail`)
+     * no se dispara. El temporizador de 500 ms sigue corriendo con el dedo ancla quieto y a los
+     * medio segundo QUITA el sticker: el alumno estaba agrandando y el elemento desaparece.
+     *
+     * Tampoco alcanza con que el pellizco lo cancele al activarse: `ScaleGestureDetector` de Android
+     * no arranca hasta que los dedos están a ~27 mm (`config_minScalingSpan`), y un pellizco para
+     * agrandar empieza JUNTANDO los dedos. Entre el toque y esa distancia pasan de sobra los 500 ms.
+     *
+     * El contador vive en la raíz porque su View cubre el lienzo entero: ahí sí caen los dos dedos.
+     */
+    const multiTouch = useSharedValue(false)
+
+    /**
      * Qué se puede agarrar: lo que el canvas está pintando DE VERDAD. Un sticker apagado no tiene
      * zona, y uno sin medida tampoco (o no llegó a montarse, o `hasContentFor` lo filtró, o midió
      * 0×0 porque su propio componente devolvió `null` — el caso de los chips sin músculos).
@@ -163,32 +192,56 @@ export function StickerGestureLayer({
 
     /**
      * Pellizco = escala del sticker SELECCIONADO, y va en la RAÍZ de la capa, no en cada zona: dos
-     * dedos dentro de la pastilla de fecha (~40 px de alto) no es un gesto real. Sin selección el
-     * gesto queda deshabilitado en vez de adivinar un objetivo.
+     * dedos dentro de la pastilla de fecha (~40 px de alto) no es un gesto real.
+     *
+     * SIEMPRE vivo, incluso sin selección: un handler `enabled(false)` no recibe punteros, y este es
+     * el único gesto que ve los dos dedos del pellizco (ver `multiTouch`). Deshabilitarlo dejaba el
+     * caso peor —pellizcar sin haber elegido nada— sin contador Y sin nadie que cancelara el
+     * «mantener apretado»: no escalaba nada y encima borraba el sticker. Sin objetivo, escala nada.
      */
     const pinch = useMemo(() => {
         const target = selectedId
         const state = target ? stickers[target] : null
-        if (!target || !state) return Gesture.Pinch().enabled(false)
+
+        const counted = Gesture.Pinch().onTouchesDown((e) => {
+            // El primer dedo REINICIA el latch (toque nuevo) y cualquier dedo extra lo enciende. Se
+            // apaga solo en el próximo toque de un dedo: un pellizco que suelta un dedo y sigue
+            // apretando con el otro sigue siendo un pellizco, no un "quitar".
+            if (e.numberOfTouches > 1) multiTouch.value = true
+            else if (e.numberOfTouches === 1) multiTouch.value = false
+        })
+        if (!target || !state) return counted
 
         const cx = state.x * width
         const cy = state.y * height
         const base = state.scale
+        // Tope FINO, contra la medida real del sticker: `STICKER_SCALE_MAX` a secas deja al héroe
+        // 1,5 lienzos de ancho y lo único que se ve es un "375…" recortado (ver `maxScaleFor`).
+        const cap = maxScaleFor(base, sizes[target], width, height, state.rotation)
 
-        return Gesture.Pinch()
+        return counted
             .onStart(() => {
                 live.value = { id: target, cx, cy, scale: base }
             })
             .onUpdate((e) => {
-                const next = clampTo(base * e.scale, STICKER_SCALE_MIN, STICKER_SCALE_MAX)
+                const next = clampTo(base * e.scale, STICKER_SCALE_MIN, cap)
                 live.value = { id: target, cx, cy, scale: next }
             })
             .onEnd(() => {
                 const l = live.value
                 if (l.id !== target) return
+                if (l.scale === base) {
+                    // Pellizco que no movió la escala (típico al quedarse pegado contra el tope): el
+                    // composer corta por igualdad y NO re-renderiza, así que el efecto que apaga el
+                    // destino vivo tampoco corre y quedaría un `cx`/`cy` viejo listo para descolocar
+                    // al sticker cuando el lienzo cambie de ancho al pasar de paso. Se apaga acá, y
+                    // a escala idéntica no se ve nada (el delta ya valía 0).
+                    live.value = idleStickerTransform()
+                    return
+                }
                 runOnJS(onCommitScale)(target, l.scale)
             })
-    }, [selectedId, stickers, width, height, live, onCommitScale])
+    }, [selectedId, stickers, sizes, width, height, live, multiTouch, onCommitScale])
 
     /**
      * Tocar el fondo deselecciona. Va en un View HERMANO (debajo de las zonas), no en un ancestro:
@@ -244,6 +297,7 @@ export function StickerGestureLayer({
                         hGuide={hGuide}
                         vGuideOn={vGuideOn}
                         hGuideOn={hGuideOn}
+                        multiTouch={multiTouch}
                         onSelect={onSelect}
                         onCommitPosition={onCommitPosition}
                         onRemove={onRemove}
@@ -269,6 +323,8 @@ interface StickerZoneProps {
     hGuide: SharedValue<number>
     vGuideOn: SharedValue<boolean>
     hGuideOn: SharedValue<boolean>
+    /** Latch de «hay más de un dedo en el lienzo» que escribe el detector de la raíz. */
+    multiTouch: SharedValue<boolean>
     onSelect: (id: StickerId) => void
     onCommitPosition: (id: StickerId, x: number, y: number) => void
     onRemove: (id: StickerId) => void
@@ -291,6 +347,7 @@ function StickerZone({
     hGuide,
     vGuideOn,
     hGuideOn,
+    multiTouch,
     onSelect,
     onCommitPosition,
     onRemove,
@@ -389,6 +446,11 @@ function StickerZone({
         const remove = Gesture.LongPress()
             .minDuration(REMOVE_HOLD_MS)
             .onStart(() => {
+                // «Quitar» es un gesto de UN dedo por definición. Con dos en el lienzo el alumno
+                // está pellizcando: RNGH no le entrega a esta zona el evento del segundo dedo (no lo
+                // trackea), así que el corte por cantidad de punteros del propio handler nunca se
+                // dispara y el temporizador de 500 ms borraba el sticker en mitad del pellizco.
+                if (multiTouch.value) return
                 runOnJS(removeHaptic)()
                 runOnJS(onRemove)(id)
             })
@@ -414,6 +476,7 @@ function StickerZone({
         hGuideOn,
         magnetX,
         magnetY,
+        multiTouch,
         onSelect,
         onCommitPosition,
         onRemove,

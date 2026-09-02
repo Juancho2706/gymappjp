@@ -59,16 +59,14 @@ import {
 import { captureShareCanvas, cleanupShareCapture } from './share-capture'
 import { pickSharePhoto, takeSharePhoto } from './share-photo'
 import { accentOf, withAlpha } from './stickers'
-import {
-    StickerGestureLayer,
-    STICKER_LABEL,
-    STICKER_SCALE_MAX,
-    STICKER_SCALE_MIN,
-} from './StickerGestureLayer'
+import { StickerGestureLayer, STICKER_LABEL } from './StickerGestureLayer'
 import {
     idleStickerTransform,
+    maxScaleFor,
     SHARE_CANVAS_H,
     SHARE_CANVAS_W,
+    STICKER_SCALE_MAX,
+    STICKER_SCALE_MIN,
     type MuscleView,
     type ShareBackground,
     type SharePreset,
@@ -386,18 +384,28 @@ export function WorkoutShareComposer({ visible, onClose, data, embedded = false 
         })
     }, [])
 
-    /** Stepper del panel: 0,1 por toque, redondeado para que el valor no acumule ruido flotante. */
-    const nudgeStickerScale = useCallback((id: StickerId, delta: number) => {
-        haptics.select()
-        setLayout((prev) => {
-            const cur = prev[id]
-            if (!cur) return prev
-            const raw = Math.round((cur.scale + delta) * 10) / 10
-            const next = Math.min(STICKER_SCALE_MAX, Math.max(STICKER_SCALE_MIN, raw))
-            if (next === cur.scale) return prev
-            return { ...prev, [id]: { ...cur, scale: next } }
-        })
-    }, [])
+    /**
+     * Stepper del panel: 0,1 por toque, redondeado para que el valor no acumule ruido flotante.
+     *
+     * El techo es el MISMO `maxScaleFor` que aplica el pellizco (medida real del sticker contra el
+     * lienzo): si el stepper pudiera pasarlo, el botón «+» dejaría al héroe recortado justo donde el
+     * pellizco se planta, y el alumno tendría dos topes distintos para la misma cosa.
+     */
+    const nudgeStickerScale = useCallback(
+        (id: StickerId, delta: number) => {
+            haptics.select()
+            setLayout((prev) => {
+                const cur = prev[id]
+                if (!cur) return prev
+                const raw = Math.round((cur.scale + delta) * 10) / 10
+                const cap = maxScaleFor(cur.scale, stickerSizes[id], canvasW, canvasH, cur.rotation)
+                const next = Math.min(cap, Math.max(STICKER_SCALE_MIN, raw))
+                if (next === cur.scale) return prev
+                return { ...prev, [id]: { ...cur, scale: next } }
+            })
+        },
+        [stickerSizes, canvasW, canvasH],
+    )
 
     /** Vuelve al lugar/tamaño de fábrica del preset VIGENTE (por ref: el callback queda estable). */
     const restoreStickerPlacement = useCallback((id: StickerId) => {
@@ -833,6 +841,13 @@ export function WorkoutShareComposer({ visible, onClose, data, embedded = false 
                             <StickerEditPanel
                                 id={selectedStickerId}
                                 state={layout[selectedStickerId]}
+                                maxScale={maxScaleFor(
+                                    layout[selectedStickerId].scale,
+                                    stickerSizes[selectedStickerId],
+                                    canvasW,
+                                    canvasH,
+                                    layout[selectedStickerId].rotation,
+                                )}
                                 accent={accent}
                                 muscleView={muscleView}
                                 onMuscleView={setMuscleView}
@@ -1434,6 +1449,7 @@ function MuscleViewSegmented({
 function StickerEditPanel({
     id,
     state,
+    maxScale,
     accent,
     muscleView,
     onMuscleView,
@@ -1442,6 +1458,8 @@ function StickerEditPanel({
 }: {
     id: StickerId
     state: StickerState
+    /** Tope REAL de este sticker (`maxScaleFor`): el catálogo acotado por lo que entra en el lienzo. */
+    maxScale: number
     accent: string
     muscleView: MuscleView
     onMuscleView: (next: MuscleView) => void
@@ -1511,7 +1529,10 @@ function StickerEditPanel({
                 <ScaleStep
                     icon={Plus}
                     label="Agrandar"
-                    disabled={state.scale >= STICKER_SCALE_MAX}
+                    // Contra el tope REAL y no contra `STICKER_SCALE_MAX`: un sticker que ya llena el
+                    // lienzo no crece más, y un «+» que sigue habilitado sin hacer nada se lee como
+                    // que el control está roto.
+                    disabled={state.scale >= maxScale}
                     onPress={() => onNudgeScale(id, 0.1)}
                 />
             </View>
