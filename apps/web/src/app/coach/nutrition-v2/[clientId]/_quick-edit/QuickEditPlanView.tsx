@@ -8,7 +8,7 @@
  * (F1 §1.2.B.4). Light/dark y white-label via tokens del DS.
  */
 
-import { useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
   CalendarDays,
@@ -65,6 +65,9 @@ import {
   buildDayVariantKey,
   defaultQeVariant,
   qeDaysMissingBasePortions,
+  qeErrorDayKeys,
+  qeFirstErrorDayKey,
+  qePublishBlockedBar,
   qeVariantTotalWithPortions,
   takenDayVariantDows,
   VARIANT_LABEL_MAX,
@@ -98,6 +101,7 @@ export function QuickEditPlanView() {
     permissions,
     errors,
     showErrors,
+    blockedAttempt,
     isPending,
     requestExit,
     pendingRestore,
@@ -168,6 +172,64 @@ export function QuickEditPlanView() {
       targetFatsG: Number.isFinite(targetFats) && targetFats > 0 ? targetFats : null,
     }
   }, [activeVariant, exchangeGroups, multiDay])
+
+  // ── Errores que viven en un día que NO está en pantalla (defecto del editor único).
+  //
+  // El lienzo pinta UN día (`visibleVariants`) pero la validación mira TODOS: con un día agregado
+  // "Empezar vacío", el error `variant.<key>.slots` quedaba en un día no activo y el coach veía la
+  // barra con el genérico "campos inválidos" sin una sola marca en pantalla. Las tres piezas de acá
+  // abajo (marcas en los chips, salto al día culpable, mensaje que NOMBRA los días) salen de los
+  // helpers puros del paquete: cero lógica de validación nueva en la vista.
+
+  // `showErrors` es el gate: antes del primer intento de publicar no se marca nada (un plan recién
+  // abierto no tiene por qué pintarse en ámbar por errores que el coach todavía no provocó).
+  const errorDayKeys = useMemo<ReadonlySet<string>>(
+    () => (showErrors ? qeErrorDayKeys(orderedVariants, errors) : new Set<string>()),
+    [showErrors, orderedVariants, errors],
+  )
+  // Lo que el rail y la cápsula marcan: el día vacío (misma regla del rail — en `flexible` un día
+  // sin franjas es su estado correcto) MÁS los días que la validación acaba de señalar.
+  const attentionKeys = useMemo(() => {
+    const keys = new Set(errorDayKeys)
+    if (usesSlots) {
+      for (const variant of orderedVariants) {
+        if (variant.slots.length === 0) keys.add(variant.key)
+      }
+    }
+    return keys
+  }, [errorDayKeys, orderedVariants, usesSlots])
+
+  // Saltar a un día = cambiarlo en edición y devolver el scroll al principio del lienzo: el error
+  // puede estar mucho más arriba de donde el coach tocó "Publicar".
+  const canvasRef = useRef<HTMLDivElement | null>(null)
+  const jumpToDay = useCallback((key: string) => {
+    setActiveDayKey(key)
+    canvasRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
+  }, [])
+
+  // Cada publish cortado por validación mueve al coach al primer día con error (salvo que el activo
+  // ya tenga los suyos: ahí las marcas están a la vista y saltar sería perderle el hilo).
+  // El ref guarda el intento YA atendido: así el efecto puede declarar todas sus dependencias —los
+  // errores cambian con cada tecla— sin volver a saltar mientras el coach arregla el día.
+  const handledAttemptRef = useRef(0)
+  useEffect(() => {
+    if (blockedAttempt === 0 || blockedAttempt === handledAttemptRef.current) return
+    handledAttemptRef.current = blockedAttempt
+    if (!isEditor) return
+    const jump = qeFirstErrorDayKey(orderedVariants, errors, activeVariant?.key ?? null)
+    if (jump) jumpToDay(jump)
+  }, [blockedAttempt, isEditor, orderedVariants, errors, activeVariant, jumpToDay])
+
+  // Mensaje de la barra cuando el publish se corta local. Fuera del editor la pila completa está a
+  // la vista y el genérico sigue siendo correcto; dentro, el helper nombra los días con error y
+  // ofrece ir al primero que no sea el activo (o devuelve el genérico si ya están todos en pantalla).
+  const validationBar = useMemo(() => {
+    if (!showErrors || Object.keys(errors).length === 0) return null
+    if (!isEditor) return { message: QE_COPY.invalidDraft, jumpToKey: null, jumpLabel: null }
+    return qePublishBlockedBar(orderedVariants, errors, activeVariant?.key ?? null, QE_COPY.invalidDraft)
+  }, [showErrors, errors, isEditor, orderedVariants, activeVariant])
+  const validationJumpKey = validationBar?.jumpToKey ?? null
+  const validationJumpLabel = validationBar?.jumpLabel ?? null
 
   // ── T3.v Cabina (V2.1/V2.2, breakpoint extendido en V2.5): en el editor ≥768 la CINTA reemplaza
   // al header compacto y hospeda las metas del día (compacta 768–1023, completa desde 1024 — ver
@@ -310,6 +372,7 @@ export function QuickEditPlanView() {
             variants={orderedVariants}
             activeKey={activeVariant.key}
             todayVariantKey={todayVariantKey}
+            attentionKeys={attentionKeys}
             onSelect={setActiveDayKey}
           />
         ) : null}
@@ -324,6 +387,7 @@ export function QuickEditPlanView() {
             los 880 del contrato. Con el ancho al 100 % del track, el tope de 55rem manda y los
             márgenes automáticos reparten el sobrante — que ahora es simétrico. */}
         <div
+          ref={canvasRef}
           data-testid="editor-canvas"
           className={'min-w-0 space-y-4 ' + (isEditor ? 'lg:space-y-3.5 2xl:mx-auto 2xl:w-full 2xl:max-w-[55rem]' : '')}
         >
@@ -379,12 +443,22 @@ export function QuickEditPlanView() {
               variants={orderedVariants}
               activeKey={activeVariant.key}
               todayVariantKey={todayVariantKey}
+              attentionKeys={attentionKeys}
               onSelect={setActiveDayKey}
             />
           </div>
         ) : null}
         {!isEditor && multiDay ? (
           <DayAnchorNav variants={orderedVariants} todayVariantKey={todayVariantKey} />
+        ) : null}
+
+        {/* Error del CONJUNTO de días (dos días asignados al mismo día de semana, o el plan sin día
+            base): no pertenece a ninguna card, así que hasta acá no se pintaba en ningún lado y la
+            barra solo podía decir el genérico. Va sobre la pila, que es donde se lee "el plan". */}
+        {showErrors && errors['plan.dayVariants'] ? (
+          <p role="alert" className="text-sm font-semibold leading-6 text-rose-700 dark:text-rose-300">
+            {errors['plan.dayVariants']}
+          </p>
         ) : null}
 
         {visibleVariants.map((variant, dayIndex) => (
@@ -417,12 +491,21 @@ export function QuickEditPlanView() {
                 {/* Día sin ninguna comida: el servidor lo rechaza y hasta ahora eso llegaba como
                     "No se pudo publicar" a secas. Se marca el día culpable tras el intento. */}
                 {showErrors && errors[`variant.${variant.key}.slots`] ? (
-                  <p
+                  <div
                     role="alert"
-                    className="rounded-control border border-rose-300 bg-rose-50 px-3 py-2.5 text-sm font-semibold leading-6 text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300"
+                    className="space-y-2.5 rounded-control border border-rose-300 bg-rose-50 px-3 py-3 dark:border-rose-800 dark:bg-rose-950/40"
                   >
-                    {errors[`variant.${variant.key}.slots`]}
-                  </p>
+                    <p className="text-sm font-semibold leading-6 text-rose-800 dark:text-rose-300">
+                      {errors[`variant.${variant.key}.slots`]}
+                    </p>
+                    {/* Las DOS salidas del callejón, acá mismo: el aviso decía "agrégale una franja
+                        o elimina el día" y dejaba al coach buscando dónde se hacía cada cosa (el
+                        alta vive al pie de la pila, la baja dentro del menú ⋮ del encabezado). */}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <AddSlotButton variantKey={variant.key} />
+                      {!variant.isDefault ? <RemoveDayButton variantKey={variant.key} /> : null}
+                    </div>
+                  </div>
                 ) : null}
                 {/* QA owner 17-08: las dos altas en UNA fila centrada — apiladas ocupaban el
                     doble de alto en móvil. «Agregar día» acompaña solo al ÚLTIMO día (es alta
@@ -543,6 +626,12 @@ export function QuickEditPlanView() {
       <PublishBar
         dayTotals={dayTotals}
         hideActions={desktopRibbon}
+        validationMessage={validationBar?.message ?? null}
+        validationAction={
+          validationJumpKey && validationJumpLabel
+            ? { label: validationJumpLabel, onClick: () => jumpToDay(validationJumpKey) }
+            : null
+        }
         leading={
           isEditor ? (
             <EditorTourHelpButton placement="docked" coachId={viewerCoachId} onOpen={tour.start} />
@@ -629,11 +718,18 @@ function EditorDayCapsule({
   variants,
   activeKey,
   todayVariantKey,
+  attentionKeys,
   onSelect,
 }: {
   variants: readonly QeVariant[]
   activeKey: string
   todayVariantKey: string | null
+  /**
+   * Días por revisar (día vacío o marcado por la validación). En <1024 la cápsula es la ÚNICA
+   * vista de los otros días: sin esta marca, un error que vive fuera del día activo no tiene
+   * dónde pintarse (el rail, que ya tenía su punto, solo existe desde 1024).
+   */
+  attentionKeys?: ReadonlySet<string>
   onSelect: (key: string) => void
 }) {
   return (
@@ -645,27 +741,43 @@ function EditorDayCapsule({
           const short = variant.isDefault
             ? QE_COPY.baseDayShort
             : formatNutritionDayOfWeek(variant.dayOfWeek, { short: true })
+          const needsAttention = attentionKeys?.has(variant.key) ?? false
           return (
             <li key={variant.key}>
               <button
                 type="button"
                 aria-pressed={isActive}
-                aria-label={variant.label + (isToday ? ` — ${QE_COPY.dayAppliesToday}` : '')}
+                /* El punto ámbar es decorativo: el sufijo es lo único que lleva la marca al
+                   árbol de accesibilidad (mismo criterio que el rail). */
+                aria-label={
+                  variant.label +
+                  (isToday ? ` — ${QE_COPY.dayAppliesToday}` : '') +
+                  (needsAttention ? ` — ${QE_COPY.dayNeedsAttention}` : '')
+                }
                 title={variant.label}
                 onClick={() => onSelect(variant.key)}
                 className={
                   'inline-flex min-h-11 max-w-[13rem] items-center gap-1.5 rounded-pill border px-3 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ' +
-                  (isActive
-                    ? 'border-primary/40 bg-primary/10 text-primary'
-                    : 'border-border-subtle bg-surface-card text-body hover:bg-surface-sunken hover:text-strong') +
+                  (needsAttention
+                    ? isActive
+                      ? 'border-warning-500 bg-warning-500/10 text-strong'
+                      : 'border-warning-500/60 bg-surface-card text-body hover:bg-surface-sunken hover:text-strong'
+                    : isActive
+                      ? 'border-primary/40 bg-primary/10 text-primary'
+                      : 'border-border-subtle bg-surface-card text-body hover:bg-surface-sunken hover:text-strong') +
                   (isToday && !isActive ? ' ring-1 ring-primary/60' : '')
                 }
               >
+                {/* Mismo punto de 7 px del rail: una sola gramática visual para "este día necesita
+                    una pasada", esté el coach en móvil (cápsula) o en escritorio (rail). */}
+                {needsAttention ? (
+                  <span aria-hidden="true" className="h-[7px] w-[7px] shrink-0 rounded-full bg-warning-500" />
+                ) : null}
                 {short ? (
                   <span
                     className={
                       'shrink-0 font-mono text-[10px] uppercase tracking-[0.12em] ' +
-                      (isActive ? 'text-primary' : 'text-primary')
+                      (needsAttention ? 'text-strong' : 'text-primary')
                     }
                   >
                     {short}
@@ -817,6 +929,48 @@ function MacroLegend() {
   )
 }
 
+/**
+ * Baja de un día con Deshacer. Vive como hook y no como copia porque desde el defecto del día
+ * vacío hay DOS afordancias que la disparan (el menú ⋮ del encabezado y el aviso del propio día):
+ * una sola verdad sobre qué se elimina y cómo se restaura (índice original + variante completa).
+ */
+function useRemoveDayVariant(): (variantKey: string) => void {
+  const { state, dispatch } = useQuickEdit()
+  return useCallback(
+    (variantKey: string) => {
+      const index = state.variants.findIndex((candidate) => candidate.key === variantKey)
+      if (index < 0) return
+      const removed = state.variants[index]
+      dispatch({ type: 'REMOVE_VARIANT', variantKey })
+      toast(QE_COPY.dayRemovedUndo, {
+        duration: 5000,
+        action: {
+          label: QE_COPY.undo,
+          onClick: () => dispatch({ type: 'RESTORE_VARIANT', index, variant: removed }),
+        },
+      })
+    },
+    [state.variants, dispatch],
+  )
+}
+
+/** "Eliminar día" dentro del aviso del día vacío: mismo flujo (y mismo Deshacer) que el menú ⋮. */
+function RemoveDayButton({ variantKey }: { variantKey: string }) {
+  const { isPending } = useQuickEdit()
+  const removeDayVariant = useRemoveDayVariant()
+  return (
+    <button
+      type="button"
+      disabled={isPending}
+      onClick={() => removeDayVariant(variantKey)}
+      className="inline-flex min-h-9 items-center gap-1.5 rounded-control border border-border-default bg-surface-card px-3 text-sm font-semibold text-strong transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 [@media(pointer:coarse)]:min-h-11"
+    >
+      <Trash2 aria-hidden="true" className="h-4 w-4 text-muted" />
+      {QE_COPY.removeDay}
+    </button>
+  )
+}
+
 function DayVariantHeader({ variant }: { variant: QeVariant }) {
   const { state, dispatch, isPending, errors, showErrors, today } = useQuickEdit()
   const [menuOpen, setMenuOpen] = useState(false)
@@ -825,6 +979,7 @@ function DayVariantHeader({ variant }: { variant: QeVariant }) {
   const [duplicateOpen, setDuplicateOpen] = useState(false)
   const [copyOpen, setCopyOpen] = useState(false)
   const [nameDraft, setNameDraft] = useState(variant.label)
+  const removeDayVariant = useRemoveDayVariant()
   const labelError = showErrors ? errors[`variant.${variant.key}.label`] : undefined
   const taken = takenDayVariantDows(state)
   const isEditor = state.meta !== undefined
@@ -866,18 +1021,8 @@ function DayVariantHeader({ variant }: { variant: QeVariant }) {
   }
 
   function handleRemove() {
-    const index = state.variants.findIndex((candidate) => candidate.key === variant.key)
-    if (index < 0) return
-    const removed = state.variants[index]
     setMenuOpen(false)
-    dispatch({ type: 'REMOVE_VARIANT', variantKey: variant.key })
-    toast(QE_COPY.dayRemovedUndo, {
-      duration: 5000,
-      action: {
-        label: QE_COPY.undo,
-        onClick: () => dispatch({ type: 'RESTORE_VARIANT', index, variant: removed }),
-      },
-    })
+    removeDayVariant(variant.key)
   }
 
   return (
@@ -1036,9 +1181,12 @@ function DayVariantHeader({ variant }: { variant: QeVariant }) {
  * servidor (`multi_variant` → UPGRADE_REQUIRED al publicar); esto solo evita el viaje.
  */
 function AddDayButton({ className }: { className?: string }) {
-  const { state, dispatch, hasNutritionPro } = useQuickEdit()
+  const { state, dispatch, hasNutritionPro, strategy } = useQuickEdit()
   const takenDays = useMemo(() => [...takenDayVariantDows(state)], [state])
   const base = useMemo(() => defaultQeVariant(state), [state])
+  // Mismo criterio que el rail y la validación: en `flexible` un día sin franjas es su estado
+  // correcto, así que ahí el aviso de "Empezar vacío" sería una alarma falsa.
+  const usesSlots = strategy === 'structured' || strategy === 'hybrid'
 
   return (
     <div className={'flex justify-center ' + (className ?? '')}>
@@ -1046,6 +1194,7 @@ function AddDayButton({ className }: { className?: string }) {
         takenDays={takenDays}
         canCopyBase={(base?.slots.length ?? 0) > 0}
         locked={!hasNutritionPro}
+        emptyHint={usesSlots ? QE_COPY.addDayEmptyHint : null}
         onCreate={(days, origin) =>
           dispatch({ type: 'ADD_VARIANT', days, source: origin === 'copy-base' ? 'clone' : 'empty' })
         }

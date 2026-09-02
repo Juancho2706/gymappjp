@@ -189,6 +189,17 @@ export const QE_COPY = {
     'Hay un día del plan sin ninguna comida. Tu alumno lo vería vacío: agrégale una franja o elimina el día.',
   /** Aviso en la card del día vacío (marcado tras un intento de publicar). */
   emptyDayVariant: 'Este día no tiene ninguna comida. Agrégale una franja o elimina el día.',
+  /**
+   * Sufijo del nombre accesible del día (chip de la cápsula, fila del rail) cuando ese día
+   * necesita una pasada del coach. El punto ámbar es decorativo: sin este sufijo, un lector de
+   * pantalla no tiene forma de saber cuál de los días está marcado.
+   */
+  dayNeedsAttention: 'Necesita atención',
+  /**
+   * "Empezar vacío" en el alta de día: el día nace SIN franjas y el publish lo corta después,
+   * cuando el coach ya se olvidó de haberlo elegido. Se avisa antes de crearlo, no después.
+   */
+  addDayEmptyHint: 'El día nace sin comidas. Agrégale al menos una franja antes de publicar.',
   /** Franja colapsada: acciones del chevron (una sola card, dos estados). */
   collapseSlot: (slotName: string) => `Contraer ${slotName}`,
   expandSlot: (slotName: string) => `Expandir ${slotName}`,

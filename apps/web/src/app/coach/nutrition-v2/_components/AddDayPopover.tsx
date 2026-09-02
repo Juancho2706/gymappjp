@@ -21,7 +21,7 @@
 import { useState, useSyncExternalStore, type HTMLAttributes, type Ref } from 'react'
 import Image from 'next/image'
 import Link from 'next/link'
-import { Plus } from 'lucide-react'
+import { AlertTriangle, Plus } from 'lucide-react'
 import {
   NUTRITION_DAY_LABELS,
   NUTRITION_DAY_SHORT_LABELS,
@@ -108,10 +108,12 @@ export function UpsellPanel() {
 function DaySelector({
   takenDays,
   canCopyBase,
+  emptyHint,
   onCreate,
 }: {
   takenDays: readonly number[]
   canCopyBase: boolean
+  emptyHint: string | null
   onCreate: (days: number[], origin: AddDayOrigin) => void
 }) {
   const [selected, setSelected] = useState<number[]>([])
@@ -187,6 +189,15 @@ function DaySelector({
             {label}
           </label>
         ))}
+        {/* Consecuencia de "Empezar vacío" ANTES de crear el día: el plan con franjas rechaza un día
+            sin comidas al publicar, y para entonces el coach ya no recuerda que lo eligió acá. La
+            superficie que lo monta decide si aplica (el plan flexible no tiene franjas). */}
+        {origin === 'empty' && emptyHint ? (
+          <p className="flex items-start gap-1.5 text-xs leading-5 text-warning-700 dark:text-warning-500">
+            <AlertTriangle aria-hidden="true" className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            {emptyHint}
+          </p>
+        ) : null}
       </fieldset>
 
       <button
@@ -206,6 +217,7 @@ export function AddDayPopover({
   takenDays,
   canCopyBase,
   locked,
+  emptyHint = null,
   onCreate,
 }: {
   /** Días de semana que ya tienen su propia variante (0=domingo … 6=sábado). */
@@ -214,6 +226,12 @@ export function AddDayPopover({
   canCopyBase: boolean
   /** Coach free (sin plan pago): candado + panel explicativo en vez del selector. */
   locked: boolean
+  /**
+   * Aviso bajo el origen "Empezar vacío" (el día nace sin comidas). OPCIONAL a propósito: este
+   * componente lo comparten el editor único y el builder, y solo el que sabe si la estrategia
+   * usa franjas puede decidir si el aviso corresponde. Ausente/null = como antes, sin aviso.
+   */
+  emptyHint?: string | null
   onCreate: (days: number[], origin: AddDayOrigin) => void
 }) {
   const [open, setOpen] = useState(false)
@@ -228,7 +246,12 @@ export function AddDayPopover({
   const body = locked ? (
     <UpsellPanel />
   ) : (
-    <DaySelector takenDays={takenDays} canCopyBase={canCopyBase} onCreate={handleCreate} />
+    <DaySelector
+      takenDays={takenDays}
+      canCopyBase={canCopyBase}
+      emptyHint={emptyHint}
+      onCreate={handleCreate}
+    />
   )
 
   const triggerLabel = locked

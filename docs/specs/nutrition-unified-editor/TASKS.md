@@ -377,6 +377,47 @@ arreglos salen de mirar esas capturas, no de una lista teorica:
   entonces se borran wizard/clasico (web y RN) segun el inventario de arriba. **EN EJECUCIÓN
   (workflow 17-08)** — nota de higiene documental 2026-08-17.
 
+## Fixes post-cierre
+
+### 2026-09-02 — Errores de días NO activos (reporte del coach jotap-coach / alumno Alan)
+
+Síntoma: «Revisa los campos marcados antes de publicar» sin nada marcado. Causa: el editor único
+pinta UN día (`visibleVariants = [activeVariant]`) pero `validateQuickEdit` revisa todos; con plan
+híbrido y días agregados «Empezar vacío», el error `variant.<key>.slots` vivía en un día que no
+estaba en pantalla. En RN ese error nunca se pintaba (solo el builder viejo lo hacía) y los chips
+no recibían errores; en web solo lo pintaba el día activo y la cápsula (<1024) no marcaba nada.
+
+Mockup aprobado por el owner (artifact `e42ae84b`): todo «reco» (ámbar en chips, botones inline
+en el aviso, aviso bajo «Empezar vacío», RN + web en el mismo tren).
+
+- [x] **Paquete** — `qeDayErrorSummaries` / `qeErrorDayKeys` / `qeFirstErrorDayKey` /
+  `qePublishBlockedBar` en `packages/nutrition-v2/editor-state.ts` (+ `editor-state.day-errors.test.ts`,
+  16 tests): mapean cada clave de error a su día en orden de lectura, deciden el salto y redactan el
+  mensaje de la barra («Martes y Miércoles no tienen ninguna comida.» + «Ir a Martes»). Mismas
+  respuestas en RN y web.
+- [x] **Fix 1 — chips/rail/cápsula con alarma + salto** — punto ámbar (`warning-500`) en los días
+  vacíos (estrategias con franjas, siempre) y en los días con error (desde el primer intento de
+  publicar); al cortar el publish, el editor salta al primer día con error salvo que el activo ya
+  los tenga. RN: `DayAnchorRow.attentionKeys`; web: `EditorDayCapsule`/`EditorDayRail.attentionKeys`
+  + `blockedAttempt` en el provider. Sufijo «Necesita atención» en el nombre accesible.
+- [x] **Fix 2 — el día vacío se pinta** — bloque de error en el lienzo del día con «Agregar franja»
+  (mismo `ADD_SLOT`) y «Eliminar día» (mismo flujo con Deshacer; oculto en el día base). RN lo
+  estrena; web extrae `useRemoveDayVariant` para no duplicar la baja del menú ⋮. `plan.dayVariants`
+  también se pinta ahora en ambas.
+- [x] **Fix 3 — la barra nombra el día** — mensaje derivado (`qePublishBlockedBar`) en vez del
+  genérico guardado en estado: se apaga solo al corregir. Botón «Ir a {día}» reemplaza a
+  «Reintentar» para errores de validación (RN `PublishBar.errorAction`; web
+  `PublishBar.validationMessage/validationAction`). Genérico solo cuando las marcas ya están a la vista.
+- [x] **Fix 4 — aviso bajo «Empezar vacío»** — «El día nace sin comidas. Agrégale al menos una
+  franja antes de publicar.» solo en estrategias con franjas (RN hoja de alta; web `AddDayPopover.emptyHint`,
+  prop opcional: el builder no cambia).
+- [ ] **QA** — device Android/iOS (light/dark, marca propia) + web móvil/desktop contra desplegado:
+  crear plan híbrido con un día «Empezar vacío», tocar Publicar → chip ámbar + salto + aviso con
+  botones + barra con nombre del día; corregir → la barra se apaga sola.
+
+Gates (02-09): vitest paquete 16/16 ✓ · vitest `_quick-edit` web 106/106 ✓ · eslint 0 ✓ ·
+tsc mobile ✓ · tsc web ✓ · tokens ✓ · boundaries ✓ · docs:check ✓.
+
 ## Registro de cierres
 
 | Fecha | Tanda | Commit | Gates | Notas |

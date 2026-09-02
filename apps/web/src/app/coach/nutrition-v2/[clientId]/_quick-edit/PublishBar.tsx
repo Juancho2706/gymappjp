@@ -9,7 +9,7 @@
 
 import type { ReactNode } from 'react'
 import Link from 'next/link'
-import { AlertTriangle, Loader2, LockKeyhole, RefreshCcw } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Loader2, LockKeyhole, RefreshCcw } from 'lucide-react'
 import { MacroSparkPopover } from '@/components/nutrition-v2'
 import { MACRO_META, macroPct, type MacroKey } from '@/components/nutrition/macro-tokens'
 import { useQuickEdit } from './QuickEditProvider'
@@ -57,8 +57,22 @@ export function PublishBar({
   dayTotals = null,
   hideActions = false,
   leading = null,
+  validationMessage = null,
+  validationAction = null,
 }: {
   dayTotals?: PublishBarDayTotals | null
+  /**
+   * Aviso de la validacion LOCAL que corto el publish, ya redactado por la superficie que sabe
+   * que dia se esta viendo (`qePublishBlockedBar`). La barra no lo deriva: en el editor unico el
+   * mensaje depende del dia activo, y eso vive en el lienzo. `null` = no hay nada que avisar.
+   */
+  validationMessage?: string | null
+  /**
+   * Salida del aviso: llevar al coach al dia donde vive el error. `null` cuando los errores ya
+   * estan a la vista (viven en el dia activo o fuera de los dias) — un boton que no mueve nada
+   * es peor que ninguno.
+   */
+  validationAction?: { label: string; onClick: () => void } | null
   /**
    * Ranura al principio de la fila de totales. Existe por UNA razón: el «?» de la Guía Viva, que en
    * <1024 la SPEC ubica «flotante sobre la PublishBar, lado IZQUIERDO» (D2).
@@ -105,7 +119,12 @@ export function PublishBar({
       ? QE_COPY.createPublish
       : QE_COPY.publish
 
-  const hasActions = changeCount > 0 || publishError !== null || upgradeRequired || substitutionsFailed
+  const hasActions =
+    changeCount > 0 ||
+    publishError !== null ||
+    upgradeRequired ||
+    substitutionsFailed ||
+    validationMessage != null
   // Contador + Descartar + Publicar: solo cuando la cinta NO los está mostrando (ver `hideActions`).
   const showActions = hasActions && !hideActions
   // En el editor (dayTotals presente) la barra vive SIEMPRE: totales fijos abajo (W3b).
@@ -158,6 +177,31 @@ export function PublishBar({
               <RefreshCcw aria-hidden="true" className="h-3.5 w-3.5" />
               {QE_COPY.substitutionsRetry}
             </button>
+          </div>
+        ) : null}
+        {/* Validacion LOCAL: el publish ni siquiera salio. No es un boton de reintento (reintentar
+            no arregla un dia sin comidas) sino un aviso con una salida: ir al dia culpable. Misma
+            caja rosa que el error de publicacion para que el coach lea "esto bloquea" igual. */}
+        {validationMessage ? (
+          <div
+            role="alert"
+            data-testid="qe-validation-error"
+            className="mb-2 flex w-full items-center justify-between gap-2 rounded-control border border-rose-300 bg-rose-50 px-3 py-2 text-left text-sm font-semibold text-rose-800 dark:border-rose-800 dark:bg-rose-950/40 dark:text-rose-300"
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <AlertTriangle aria-hidden="true" className="h-4 w-4 shrink-0" />
+              <span className="min-w-0">{validationMessage}</span>
+            </span>
+            {validationAction ? (
+              <button
+                type="button"
+                onClick={validationAction.onClick}
+                className="inline-flex shrink-0 items-center gap-1 font-semibold underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [@media(pointer:coarse)]:min-h-11"
+              >
+                {validationAction.label}
+                <ArrowRight aria-hidden="true" className="h-4 w-4" />
+              </button>
+            ) : null}
           </div>
         ) : null}
         {publishError ? (

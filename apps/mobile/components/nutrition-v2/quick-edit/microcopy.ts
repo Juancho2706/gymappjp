@@ -37,6 +37,12 @@ export const QUICK_EDIT_COPY = {
   publishError: 'No se pudo publicar.',
   retry: 'Reintentar',
   /**
+   * Barra cuando el publish se corta por validación y las marcas YA están a la vista (o el
+   * error no vive en ningún día). Cuando sí hay días con error fuera del que se está editando,
+   * la barra nombra esos días — `qePublishBlockedBar` — y esta cadena es solo el respaldo.
+   */
+  invalidDraft: 'Revisa los campos marcados antes de publicar.',
+  /**
    * NUT-008: el carry-over de reemplazos autorizados no esta resuelto. Publicar los borraria
    * (la publicacion reescribe el plan completo), asi que se bloquea hasta tenerlos.
    */
@@ -61,6 +67,12 @@ export const QUICK_EDIT_COPY = {
   addDaySourceLabel: 'Contenido del día nuevo',
   addDaySourceClone: 'Copiar el día base',
   addDaySourceEmpty: 'Empezar vacío',
+  /**
+   * Aviso ANTES de crear el día: un día vacío no valida al publicar («Este día no tiene
+   * ninguna comida…») y, con el editor pintando un solo día, ese error quedaba en un día que
+   * el coach no estaba mirando. Se avisa acá para que la elección sea informada.
+   */
+  addDayEmptyHint: 'El día nace sin comidas. Agrégale al menos una franja antes de publicar.',
   addDayEmptySelection: 'Elige al menos un día.',
   dayTaken: 'Ya tiene plan propio',
   dayMenuTitle: 'Opciones del día',
@@ -79,6 +91,8 @@ export const QUICK_EDIT_COPY = {
   dayIndexLabel: 'Ir a un día del plan',
   baseDayShort: 'Base',
   dayAppliesToday: 'Aplica hoy',
+  /** Sufijo accesible del chip en ámbar: el día tiene algo que corregir antes de publicar. */
+  dayNeedsAttention: 'Necesita atención',
   // ── Copiar una franja a otros días (P0-4). El destino se empareja por NOMBRE: si el día ya
   //    tiene una franja homónima la reemplaza (misma posición), y si no la agrega al final. ──
   slotMenuTitle: 'Opciones de la franja',

@@ -1,6 +1,6 @@
 import { Pressable, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { RotateCcw } from 'lucide-react-native'
+import { ArrowRight, RotateCcw } from 'lucide-react-native'
 import type { NutritionMacroKey } from '@eva/nutrition-v2'
 import { NutritionMotionButton } from '../NutritionV2Kit'
 import { useTheme } from '../../../context/ThemeContext'
@@ -53,6 +53,7 @@ export function PublishBar({
   count,
   publishing,
   errorMessage,
+  errorAction,
   dayTotals = null,
   template = false,
   creation = false,
@@ -63,6 +64,14 @@ export function PublishBar({
   count: number
   publishing: boolean
   errorMessage: string | null
+  /**
+   * Accion de la caja de error. `undefined` = "Reintentar" de siempre (fallo de red/servidor:
+   * lo unico que se puede hacer es volver a intentar). `null` = solo el texto, porque el error
+   * es de VALIDACION y sus marcas ya estan en pantalla — ofrecer "Reintentar" ahi manda a
+   * repetir un publish que se va a cortar igual. Objeto = boton propio (p. ej. "Ir a Martes",
+   * cuando lo que falta esta en un dia que el editor no esta pintando).
+   */
+  errorAction?: { label: string; onPress: () => void } | null
   /**
    * Editor unico (T3.3b/W3b): totales del dia activo. Presente ⇒ la barra vive SIEMPRE (los
    * botones siguen apareciendo solo con cambios). Ausente = quick-edit clasico, igual que antes.
@@ -94,16 +103,31 @@ export function PublishBar({
       {errorMessage ? (
         <View className="mb-2 flex-row items-center justify-between gap-2 rounded-control border border-danger-500/30 bg-danger-500/10 px-3 py-2">
           <Text className="min-w-0 flex-1 text-xs font-medium text-danger-600">{errorMessage}</Text>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={QUICK_EDIT_COPY.retry}
-            disabled={publishing}
-            onPress={onRetry}
-            className="min-h-11 flex-row items-center gap-1.5 rounded-control px-2"
-          >
-            <RotateCcw color={theme.destructive} size={14} />
-            <Text className="text-xs font-bold text-danger-600">{QUICK_EDIT_COPY.retry}</Text>
-          </Pressable>
+          {errorAction === null ? null : errorAction ? (
+            // El error vive en OTRO dia: el boton lleva ahi. Sin este salto el mensaje nombra un
+            // dia que el coach no tiene forma de encontrar (el editor pinta uno solo).
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={errorAction.label}
+              disabled={publishing}
+              onPress={errorAction.onPress}
+              className="min-h-11 flex-row items-center gap-1.5 rounded-control px-2"
+            >
+              <Text className="text-xs font-bold text-danger-600">{errorAction.label}</Text>
+              <ArrowRight color={theme.destructive} size={14} />
+            </Pressable>
+          ) : (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={QUICK_EDIT_COPY.retry}
+              disabled={publishing}
+              onPress={onRetry}
+              className="min-h-11 flex-row items-center gap-1.5 rounded-control px-2"
+            >
+              <RotateCcw color={theme.destructive} size={14} />
+              <Text className="text-xs font-bold text-danger-600">{QUICK_EDIT_COPY.retry}</Text>
+            </Pressable>
+          )}
         </View>
       ) : null}
 

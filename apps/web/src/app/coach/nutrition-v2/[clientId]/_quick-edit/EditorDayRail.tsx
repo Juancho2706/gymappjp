@@ -42,12 +42,19 @@ export function EditorDayRail({
   variants,
   activeKey,
   todayVariantKey,
+  attentionKeys,
   onSelect,
 }: {
   /** Días en orden de lectura (base primero, luego Lu→Do) — el mismo arreglo que pinta el lienzo. */
   variants: readonly QeVariant[]
   activeKey: string
   todayVariantKey: string | null
+  /**
+   * Días que el lienzo ya marcó como "por revisar" (validación local tras un intento de publicar
+   * cortado). Se SUMA al diagnóstico propio del rail (día vacío / porciones en el base): el rail
+   * no lee `errors`, la vista es la que sabe cuándo esas marcas se muestran (`showErrors`).
+   */
+  attentionKeys?: ReadonlySet<string>
   onSelect: (key: string) => void
 }) {
   const { state, dispatch, isPending, exchangeGroups, strategy, hasNutritionPro } = useQuickEdit()
@@ -114,13 +121,19 @@ export function EditorDayRail({
             : formatNutritionDayOfWeek(variant.dayOfWeek, { short: true })
           const gap = gapByVariant.get(variant.key)
           const isEmptyDay = usesSlots && variant.slots.length === 0
-          const needsAttention = gap !== undefined || isEmptyDay
+          const needsAttention = gap !== undefined || isEmptyDay || (attentionKeys?.has(variant.key) ?? false)
           return (
             <li key={variant.key}>
               <button
                 type="button"
                 aria-pressed={isActive}
-                aria-label={variant.label + (isToday ? ` — ${QE_COPY.dayAppliesToday}` : '')}
+                /* El punto ámbar es decorativo (`aria-hidden`): sin este sufijo, quien navega con
+                   lector de pantalla no tendría forma de saber qué día quedó marcado. */
+                aria-label={
+                  variant.label +
+                  (isToday ? ` — ${QE_COPY.dayAppliesToday}` : '') +
+                  (needsAttention ? ` — ${QE_COPY.dayNeedsAttention}` : '')
+                }
                 title={variant.label}
                 onClick={() => onSelect(variant.key)}
                 className={
@@ -183,6 +196,7 @@ export function EditorDayRail({
           takenDays={takenDays}
           canCopyBase={(base?.slots.length ?? 0) > 0}
           locked={!hasNutritionPro}
+          emptyHint={usesSlots ? QE_COPY.addDayEmptyHint : null}
           onCreate={(days, origin) =>
             dispatch({ type: 'ADD_VARIANT', days, source: origin === 'copy-base' ? 'clone' : 'empty' })
           }

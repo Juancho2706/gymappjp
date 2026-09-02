@@ -57,7 +57,10 @@ import {
   mergePortionGroupChoices,
   nextDaysFrom,
   planCopy,
+  qeErrorDayKeys,
   qeExchangeGroups,
+  qeFirstErrorDayKey,
+  qePublishBlockedBar,
   qeSlotCopyTargets,
   qeSubstitutionEquivalence,
   qeVariantTotalWithPortions,
@@ -960,6 +963,49 @@ export function QuickEditMode({
     )
   }, [editorMode, orderedVariants, activeDayKey, todayVariantKey])
   const visibleVariants = editorMode && activeVariant ? [activeVariant] : orderedVariants
+
+  /**
+   * Dias en AMBAR de los chips (solo editor). El editor pinta UN dia pero la validacion mira
+   * TODOS: sin esta marca, un dia agregado «Empezar vacio» bloqueaba el publish sin nada
+   * visible en pantalla. Union de dos cosas, espejo del rail web:
+   *  (a) dia sin franjas con una estrategia que las usa — SIEMPRE en ambar, aunque el coach
+   *      todavia no haya intentado publicar (es la unica pista de que ese dia esta vacio);
+   *  (b) dias con error de validacion, pero solo desde el primer intento (`showErrors`), para
+   *      no marcar en rojo un plan a medio armar.
+   */
+  const attentionKeys = useMemo<ReadonlySet<string>>(() => {
+    if (!editorMode) return new Set<string>()
+    const keys = new Set<string>()
+    if (strategyUsesSlots(strategy)) {
+      for (const variant of orderedVariants) {
+        if (variant.slots.length === 0) keys.add(variant.key)
+      }
+    }
+    if (showErrors) {
+      for (const key of qeErrorDayKeys(orderedVariants, validation.errors)) keys.add(key)
+    }
+    return keys
+  }, [editorMode, strategy, orderedVariants, showErrors, validation.errors])
+
+  /**
+   * Mensaje DERIVADO de la barra cuando el publish se corta por validacion: nombra los dias con
+   * problema y ofrece ir al primero que no sea el activo. Es derivado a proposito — el
+   * `publishError` de estado se quedaba pegado despues de corregir todo; esto desaparece solo en
+   * cuanto `validation.ok` vuelve a ser true.
+   */
+  const validationBar = useMemo(
+    () =>
+      editorMode && showErrors && !validation.ok
+        ? qePublishBlockedBar(
+            orderedVariants,
+            validation.errors,
+            activeVariant?.key ?? null,
+            QUICK_EDIT_COPY.invalidDraft,
+          )
+        : null,
+    [editorMode, showErrors, validation.ok, validation.errors, orderedVariants, activeVariant],
+  )
+
   // Diccionario del engine para que los subtotales SUMEN las porciones a eleccion.
   const exchangeGroups = useMemo(() => qeExchangeGroups(portionGroups), [portionGroups])
   // Totales EN VIVO del dia activo (items + porciones) para la barra fija de abajo (W3b).
@@ -1466,7 +1512,21 @@ export function QuickEditMode({
     }
     if (!validation.ok) {
       setShowErrors(true)
-      setPublishError('Revisa los campos marcados antes de publicar.')
+      if (editorMode) {
+        // El editor pinta UN dia: si lo que falta esta en otro, quedarse aca es pedirle al coach
+        // que corrija algo que no ve. Se salta al primer dia con error (el helper devuelve null
+        // cuando el activo ya los tiene: ahi sus marcas ya estan en pantalla).
+        const jump = qeFirstErrorDayKey(orderedVariants, validation.errors, activeVariant?.key ?? null)
+        if (jump) {
+          setActiveDayKey(jump)
+          scrollRef.current?.scrollTo({ y: 0, animated: true })
+        }
+        // El mensaje de la barra pasa a ser DERIVADO (`validationBar`): nombra los dias con
+        // problema y se apaga solo cuando el coach termina de corregir.
+        setPublishError(null)
+        return
+      }
+      setPublishError(QUICK_EDIT_COPY.invalidDraft)
       return
     }
     setShowErrors(false)
@@ -1474,7 +1534,18 @@ export function QuickEditMode({
     // Key FRESCA por intencion (abrir el confirm); los reintentos de esta intencion la reusan.
     intentKeyRef.current = buildQuickEditIdempotencyKey({ clientId, operationId: genKey('qe') })
     setConfirmOpen(true)
-  }, [count, publishing, validation.ok, clientId, subsStatus, template])
+  }, [
+    count,
+    publishing,
+    validation.ok,
+    validation.errors,
+    clientId,
+    subsStatus,
+    template,
+    editorMode,
+    orderedVariants,
+    activeVariant,
+  ])
 
   const handleRetry = useCallback(() => {
     // Con el carry-over sin resolver, "Reintentar" reintenta la LECTURA de reemplazos (es
@@ -1627,6 +1698,7 @@ export function QuickEditMode({
               variants={orderedVariants}
               todayVariantKey={todayVariantKey}
               activeVariantKey={activeVariant?.key ?? null}
+              attentionKeys={editorMode ? attentionKeys : undefined}
               onJump={(variantKey) => {
                 // Editor: los chips CAMBIAN el dia en edicion (capsula); el clasico scrollea
                 // hasta el bloque, que sigue apilado abajo.
@@ -1744,6 +1816,12 @@ export function QuickEditMode({
             </View>
           ) : null}
 
+          {/* Error del PLAN, no de un día (dos días en el mismo día de semana, o ningún día base):
+              no cuelga de ninguna variante, así que se pinta arriba de la pila. */}
+          {errors['plan.dayVariants'] ? (
+            <Text className="text-xs font-medium text-danger-600">{errors['plan.dayVariants']}</Text>
+          ) : null}
+
           {visibleVariants.map((variant, variantIndex) => (
             <View
               key={variant.key}
@@ -1792,6 +1870,52 @@ export function QuickEditMode({
                     variantKey={variant.key}
                     todayIso={todayIso}
                   />
+                </View>
+              ) : null}
+              {/* Día SIN comidas: hasta acá el error existía solo en el validador y el coach veía
+                  una barra que hablaba de «campos marcados» sin ningún campo marcado. El aviso se
+                  pinta en el lienzo del día, con las dos salidas reales: darle una franja o sacar
+                  el día del plan (el base no se saca: siempre tiene que existir). */}
+              {errors['variant.' + variant.key + '.slots'] ? (
+                <View
+                  accessibilityRole="alert"
+                  className="gap-2.5 rounded-control border border-danger-500/30 bg-danger-500/10 px-3 py-3"
+                >
+                  <Text className="text-sm font-semibold leading-5 text-danger-600">
+                    {errors['variant.' + variant.key + '.slots']}
+                  </Text>
+                  {/* Gotcha del proyecto: dos botones en fila SIEMPRE cada uno en su `flex-1`. */}
+                  <View className="flex-row items-center gap-2">
+                    <View className="flex-1">
+                      <NutritionMotionButton
+                        accessibilityLabel={QUICK_EDIT_COPY.addSlot}
+                        disabled={publishing}
+                        onPress={() =>
+                          dispatch({
+                            type: 'ADD_SLOT',
+                            variantKey: variant.key,
+                            key: genKey('slot'),
+                            name: '',
+                            startTime: '',
+                          })
+                        }
+                      >
+                        {QUICK_EDIT_COPY.addSlot}
+                      </NutritionMotionButton>
+                    </View>
+                    {variant.isDefault ? null : (
+                      <View className="flex-1">
+                        <NutritionMotionButton
+                          accessibilityLabel={QUICK_EDIT_COPY.removeDay}
+                          tone="neutral"
+                          disabled={publishing}
+                          onPress={() => handleRemoveDay(variant)}
+                        >
+                          {QUICK_EDIT_COPY.removeDay}
+                        </NutritionMotionButton>
+                      </View>
+                    )}
+                  </View>
                 </View>
               ) : null}
               {/* T3.v Cabina (V3.3): en el editor único la card de metas se mudó a la hoja
@@ -2074,7 +2198,23 @@ export function QuickEditMode({
           <PublishBar
             count={count}
             publishing={publishing}
-            errorMessage={publishError}
+            errorMessage={validationBar?.message ?? publishError}
+            // `undefined` = "Reintentar" de siempre (error de red/servidor). Con validacion
+            // cortada, `null` cuando las marcas ya estan a la vista y un boton que SALTA cuando
+            // el problema vive en un dia que no se esta pintando.
+            errorAction={
+              validationBar
+                ? validationBar.jumpToKey
+                  ? {
+                      label: validationBar.jumpLabel!,
+                      onPress: () => {
+                        setActiveDayKey(validationBar.jumpToKey!)
+                        scrollRef.current?.scrollTo({ y: 0, animated: true })
+                      },
+                    }
+                  : null
+                : undefined
+            }
             dayTotals={dayTotals}
             template={template !== null}
             creation={creation !== null}
@@ -2542,6 +2682,17 @@ export function QuickEditMode({
                   </Text>
                 </Pressable>
               ))}
+              {/* «Empezar vacío» crea un día que NO valida al publicar. Con el editor pintando un
+                  solo día ese error aparecía lejos de acá, así que la advertencia va en el mismo
+                  gesto que la decide. */}
+              {addSource === 'empty' && strategyUsesSlots(strategy) ? (
+                <View className="flex-row items-start gap-1.5 px-1 pt-0.5">
+                  <AlertTriangle color={theme.warning} size={14} style={{ marginTop: 2 }} />
+                  <Text className="min-w-0 flex-1 text-xs leading-5 text-warning-600">
+                    {QUICK_EDIT_COPY.addDayEmptyHint}
+                  </Text>
+                </View>
+              ) : null}
             </View>
             <NutritionMotionButton
               accessibilityLabel={addDayCta(addDays.length)}
@@ -2883,12 +3034,19 @@ function DayAnchorRow({
   variants,
   todayVariantKey,
   activeVariantKey = null,
+  attentionKeys,
   onJump,
 }: {
   variants: readonly QeVariant[]
   todayVariantKey: string | null
   /** Editor: dia en edicion (chip marcado). Ausente = indice de anclas del quick-edit clasico. */
   activeVariantKey?: string | null
+  /**
+   * Editor: dias con algo que corregir antes de publicar (vacios o con error de validacion).
+   * El chip es el UNICO lugar donde se ven los otros dias, asi que la alarma vive aca. Ausente
+   * = quick-edit clasico, que apila todos los dias y no necesita el aviso.
+   */
+  attentionKeys?: ReadonlySet<string>
   onJump: (variantKey: string) => void
 }) {
   return (
@@ -2911,27 +3069,50 @@ function DayAnchorRow({
         const short = variant.isDefault
           ? QUICK_EDIT_COPY.baseDayShort
           : formatNutritionDayOfWeek(variant.dayOfWeek, { short: true })
+        // Ambar = ese dia tiene algo que corregir. Manda sobre el borde de "marcado": el dia
+        // activo con problema sigue avisando (si no, entrar a arreglarlo apagaria la alarma).
+        const needsAttention = attentionKeys?.has(variant.key) ?? false
         return (
           <Pressable
             key={variant.key}
             accessibilityRole="button"
             accessibilityLabel={
-              dayIndexJump(variant.label) + (isToday ? ' — ' + QUICK_EDIT_COPY.dayAppliesToday : '')
+              dayIndexJump(variant.label) +
+              (isToday ? ' — ' + QUICK_EDIT_COPY.dayAppliesToday : '') +
+              (needsAttention ? ' — ' + QUICK_EDIT_COPY.dayNeedsAttention : '')
             }
             onPress={() => onJump(variant.key)}
             hitSlop={4}
             className={
               'min-h-11 flex-row items-center gap-1.5 rounded-pill border px-3 ' +
-              (isMarked ? 'border-primary bg-primary/10' : 'border-subtle bg-surface-card')
+              (needsAttention
+                ? isMarked
+                  ? 'border-warning-500 bg-warning-500/10'
+                  : 'border-warning-500/60 bg-surface-card'
+                : isMarked
+                  ? 'border-primary bg-primary/10'
+                  : 'border-subtle bg-surface-card')
             }
           >
+            {needsAttention ? (
+              // Punto y no icono: el chip ya vive apretado entre el rotulo mono y la etiqueta,
+              // y el aviso no necesita mas que un cambio de color a la vista.
+              <View
+                accessibilityElementsHidden
+                importantForAccessibility="no-hide-descendants"
+                className="h-[7px] w-[7px] rounded-full bg-warning-500"
+              />
+            ) : null}
             {short ? (
               <Text className="font-mono text-[10px] font-bold uppercase tracking-[0.12em] text-primary">
                 {short}
               </Text>
             ) : null}
             <Text
-              className={'text-sm font-semibold ' + (isMarked ? 'text-primary' : 'text-body')}
+              className={
+                'text-sm font-semibold ' +
+                (needsAttention && isMarked ? 'text-strong' : isMarked ? 'text-primary' : 'text-body')
+              }
               numberOfLines={1}
               style={{ maxWidth: 140 }}
             >

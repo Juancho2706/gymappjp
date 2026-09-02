@@ -2426,6 +2426,173 @@ export function validateQuickEdit(
 }
 
 // ---------------------------------------------------------------------------
+// Errores POR DIA (editor unico)
+// ---------------------------------------------------------------------------
+//
+// Por que existe: el editor unico pinta UN dia a la vez (`visibleVariants = [activeVariant]`),
+// pero `validateQuickEdit` revisa todos. Un error en un dia no activo quedaba invisible y la
+// barra decia "revisa los campos marcados" sin nada marcado (reporte JP/Alan 2026-09-02: plan
+// hibrido con dias agregados «vacios»). Estos helpers mapean cada clave de error a su dia para
+// que los chips lo marquen, el publish salte hasta el y la barra lo nombre. Son puros y viven
+// aca para que RN y web den exactamente la misma respuesta.
+
+export type QeDayErrorKind = 'empty' | 'quantity' | 'slotName' | 'fields'
+
+export interface QeDayErrorSummary {
+  key: string
+  /** Etiqueta para nombrar el dia dentro de una oracion («El día base», «Martes»). */
+  label: string
+  isDefault: boolean
+  kind: QeDayErrorKind
+  /** Cuantos errores del tipo `kind` tiene el dia (singular/plural del mensaje). */
+  count: number
+}
+
+function qeDayErrorLabel(variant: QeVariant): string {
+  if (variant.isDefault) return 'El día base'
+  const label = variant.label.trim()
+  return label.length > 0 ? label : 'Ese día'
+}
+
+/**
+ * Dias con al menos un error, en el MISMO orden en que llegan `variants` (el caller pasa el
+ * orden de lectura: base → Lu → Do). Un dia sin comidas es `empty` (sin franjas no hay mas
+ * errores posibles); un dia con un solo tipo de error entre cantidad/nombre de franja lo
+ * declara; cualquier mezcla u otro campo (metas, nombre del dia, porciones, notas) es `fields`.
+ * Los errores fuera de los dias (`plan.*`, `meta.*`) no entran: ya se pintan a la vista.
+ */
+export function qeDayErrorSummaries(
+  variants: readonly QeVariant[],
+  errors: Record<string, string>,
+): QeDayErrorSummary[] {
+  const keys = Object.keys(errors)
+  if (keys.length === 0) return []
+  const summaries: QeDayErrorSummary[] = []
+  for (const variant of variants) {
+    const emptyKey = `variant.${variant.key}.slots`
+    const variantPrefix = `variant.${variant.key}.`
+    const targetPrefix = `target.${variant.key}.`
+    let empty = 0
+    let quantity = 0
+    let slotName = 0
+    let other = 0
+    for (const key of keys) {
+      if (key === emptyKey) empty += 1
+      else if (key.startsWith(variantPrefix) || key.startsWith(targetPrefix)) other += 1
+    }
+    for (const slot of variant.slots) {
+      if (errors[`slot.${slot.key}.name`]) slotName += 1
+      if (errors[`slot.${slot.key}.instructions`]) other += 1
+      for (const item of slot.items) {
+        if (errors[`item.${item.key}.quantity`]) quantity += 1
+        if (errors[`item.${item.key}.name`]) other += 1
+      }
+      for (const target of slot.portionTargets) {
+        if (errors[`portion.${target.key}.portions`]) other += 1
+        if (errors[`portion.${target.key}.notes`]) other += 1
+      }
+    }
+    const total = empty + quantity + slotName + other
+    if (total === 0) continue
+    let kind: QeDayErrorKind
+    let count: number
+    if (empty > 0) {
+      kind = 'empty'
+      count = 1
+    } else if (quantity > 0 && slotName === 0 && other === 0) {
+      kind = 'quantity'
+      count = quantity
+    } else if (slotName > 0 && quantity === 0 && other === 0) {
+      kind = 'slotName'
+      count = slotName
+    } else {
+      kind = 'fields'
+      count = total
+    }
+    summaries.push({
+      key: variant.key,
+      label: qeDayErrorLabel(variant),
+      isDefault: variant.isDefault,
+      kind,
+      count,
+    })
+  }
+  return summaries
+}
+
+/** Claves de los dias con algun error (marca ambar de chips/rail). */
+export function qeErrorDayKeys(
+  variants: readonly QeVariant[],
+  errors: Record<string, string>,
+): ReadonlySet<string> {
+  return new Set(qeDayErrorSummaries(variants, errors).map((summary) => summary.key))
+}
+
+/**
+ * Dia al que SALTAR cuando el publish se corta por validacion: el primer dia con error en
+ * orden de lectura, salvo que el dia activo ya tenga errores (se queda: sus marcas estan a la
+ * vista). `null` = nada que saltar (sin errores por dia, o el activo ya los muestra).
+ */
+export function qeFirstErrorDayKey(
+  variants: readonly QeVariant[],
+  errors: Record<string, string>,
+  activeKey: string | null,
+): string | null {
+  const summaries = qeDayErrorSummaries(variants, errors)
+  if (summaries.length === 0) return null
+  if (activeKey != null && summaries.some((summary) => summary.key === activeKey)) return null
+  return summaries[0].key
+}
+
+export interface QePublishBlockedBar {
+  message: string
+  /** Dia al que lleva el boton de la barra; `null` = sin boton (los errores ya estan a la vista). */
+  jumpToKey: string | null
+  /** Rotulo del boton («Ir a Martes» / «Ir al día base»); `null` cuando no hay boton. */
+  jumpLabel: string | null
+}
+
+function joinDayLabels(labels: readonly string[]): string {
+  if (labels.length <= 1) return labels[0] ?? ''
+  return labels.slice(0, -1).join(', ') + ' y ' + labels[labels.length - 1]
+}
+
+/**
+ * Mensaje de la barra cuando el publish se corta por validacion. Devuelve `fallback` (el
+ * generico de cada superficie) si los errores viven solo en el dia activo o fuera de los dias:
+ * ahi las marcas ya estan en pantalla. Con errores en OTROS dias, nombra todos los dias con
+ * error (el activo incluido) y ofrece ir al primero que no sea el activo.
+ */
+export function qePublishBlockedBar(
+  variants: readonly QeVariant[],
+  errors: Record<string, string>,
+  activeKey: string | null,
+  fallback: string,
+): QePublishBlockedBar {
+  const summaries = qeDayErrorSummaries(variants, errors)
+  const others = summaries.filter((summary) => summary.key !== activeKey)
+  if (others.length === 0) return { message: fallback, jumpToKey: null, jumpLabel: null }
+  const jump = others[0]
+  const jumpLabel = jump.isDefault ? 'Ir al día base' : `Ir a ${jump.label}`
+  let message: string
+  if (summaries.length === 1) {
+    const only = summaries[0]
+    if (only.kind === 'empty') message = `${only.label} no tiene ninguna comida.`
+    else if (only.kind === 'quantity') {
+      message = `${only.label} tiene ${only.count === 1 ? 'un alimento sin cantidad' : 'alimentos sin cantidad'}.`
+    } else if (only.kind === 'slotName') {
+      message = `${only.label} tiene ${only.count === 1 ? 'una franja sin nombre' : 'franjas sin nombre'}.`
+    } else message = `${only.label} tiene campos por revisar.`
+  } else {
+    const list = joinDayLabels(summaries.map((summary) => summary.label))
+    message = summaries.every((summary) => summary.kind === 'empty')
+      ? `${list} no tienen ninguna comida.`
+      : `${list} tienen campos por revisar.`
+  }
+  return { message, jumpToKey: jump.key, jumpLabel }
+}
+
+// ---------------------------------------------------------------------------
 // Proyeccion al draft canonico
 // ---------------------------------------------------------------------------
 

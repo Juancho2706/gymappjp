@@ -181,6 +181,11 @@ interface QuickEditContextValue {
   /** Errores de validacion local; visibles solo tras un intento de publicar invalido. */
   errors: Record<string, string>
   showErrors: boolean
+  /**
+   * Contador de intentos de publicar cortados por validación local; el lienzo lo usa para
+   * saltar al primer día con error.
+   */
+  blockedAttempt: number
   isPending: boolean
   publishError: string | null
   upgradeRequired: boolean
@@ -321,6 +326,10 @@ export function QuickEditProvider({
 
   const [state, rawDispatch] = useReducer(quickEditReducer, initialState)
   const [showErrors, setShowErrors] = useState(false)
+  // Cada intento de publicar que la validacion local corta sube este contador. No es un booleano
+  // a proposito: dos intentos seguidos con el mismo error tienen que volver a mover el foco al
+  // dia culpable, y un `true` que ya estaba en `true` no dispararia el efecto del lienzo.
+  const [blockedAttempt, setBlockedAttempt] = useState(0)
   const [publishError, setPublishError] = useState<string | null>(null)
   const [upgradeRequired, setUpgradeRequired] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -532,8 +541,12 @@ export function QuickEditProvider({
       return
     }
     if (!validation.ok) {
+      // El mensaje ya NO se guarda acá: el generico ("hay campos invalidos") no decia DONDE, y en
+      // el editor —que pinta un dia a la vez— el error podia vivir en un dia que no estaba en
+      // pantalla. Lo deriva el lienzo, que sabe cual es el dia activo (`qePublishBlockedBar`).
       setShowErrors(true)
-      setPublishError(QE_COPY.invalidDraft)
+      setPublishError(null)
+      setBlockedAttempt((n) => n + 1)
       return
     }
     if (!idempotencyKeyRef.current) {
@@ -834,6 +847,7 @@ export function QuickEditProvider({
     changeCount,
     errors: validation.errors,
     showErrors,
+    blockedAttempt,
     isPending,
     publishError,
     upgradeRequired,
