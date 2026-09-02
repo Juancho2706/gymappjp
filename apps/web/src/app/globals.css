@@ -3655,6 +3655,15 @@ html[data-exec-v3-entered] [data-exec-v3] .exec-v3-splash {
   height: 100%;
   object-fit: contain;
 }
+/* Fallback sin logo ni inicial (coach sin marca): el eslabón EVA es blanco sobre transparente y el
+   círculo de atrás es un degradado del COLOR DE MARCA — con un coach de color claro quedaba casi
+   invisible. Baldosa oscura neutra (la misma para todos, no derivada de la marca: el contraste no
+   puede depender del color que eligió el coach). */
+.exec-dsp-logo-img--eva {
+  background: #14161a;
+  border-radius: 20px;
+  padding: 10px;
+}
 .exec-dsp-logo-initial {
   font-size: 44px;
   font-weight: 900;

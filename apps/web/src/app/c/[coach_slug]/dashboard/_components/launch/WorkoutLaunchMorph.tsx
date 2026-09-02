@@ -6,7 +6,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { motion } from 'framer-motion'
 import { useReducedMotion } from '@/lib/use-reduced-motion'
 import * as Sentry from '@sentry/nextjs'
-import { resolveLaunchBrand } from '@/lib/workout/exec-launch-brand'
+import { LAUNCH_BRAND_FALLBACK_LOGO, resolveLaunchBrand } from '@/lib/workout/exec-launch-brand'
 import { clearCeremonyDom, clearMorphFlag, markCeremonyDom, markMorphFlag } from '@/lib/workout/launch-ceremony'
 import { useCaptureStudentWorkoutLaunched } from '@/lib/posthog/events'
 
@@ -449,7 +449,12 @@ function DespegueOverlay({
                         ) : initial ? (
                             <span className="exec-dsp-logo-initial">{initial}</span>
                         ) : (
-                            <PlayIcon size={38} />
+                            // Sin logo ni inicial: ícono EVA (paridad RN), nunca un ▶ sin identidad.
+                            // El eslabón EVA es BLANCO sobre transparente y el círculo es un
+                            // degradado del color de marca: sobre un coach de color claro se perdía.
+                            // `--eva` le pone una baldosa oscura neutra detrás (misma para todos).
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img src={LAUNCH_BRAND_FALLBACK_LOGO} alt="" className="exec-dsp-logo-img exec-dsp-logo-img--eva" />
                         )}
                     </div>
                 </div>
