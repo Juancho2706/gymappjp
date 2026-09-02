@@ -59,9 +59,20 @@ RN + W3), 5 workers Opus por zona + juicio del jefe. Queda el QA del owner.
 - [ ] W3.4 QA device Android del owner: confirmación, «Deshacer» responde al toque (el pill vive
       dentro del `GestureDetector` del toast), edición desde el builder.
 
-## Gates (2026-09-02, ejecución real)
+## Gates y salida (2026-09-02, ejecución real)
 
-Se registran en el commit de salida y en [MOBILE_RELEASES_OTA](../../operations/MOBILE_RELEASES_OTA.md).
+| Gate | Resultado |
+|---|---|
+| `pnpm test` (vitest, suite completa) | verde — 635 archivos, 8378 tests |
+| `pnpm typecheck` (web) | verde |
+| `pnpm --filter @eva/mobile exec tsc --noEmit` | verde |
+| `pnpm lint` | 0 errores (522 warnings preexistentes) |
+| `pnpm check:tokens` · `check:nutrition-v2-boundaries` · `docs:check` | verde |
+| Tests del dominio `exercises.actions.test.ts` | 12 verdes (8 nuevos) |
+
+Salida: commit `322f2c39` en `rnmobiledenuevo` = `master`; deploy web `dpl_7TjwZBD2rk2mBuswTs5Vvh2MLRnb`
+READY (02-09 00:41Z); OTA 1.1.2 canal `production` android `547ba203` (run 33576258157) / ios
+`26ef40d2` (run 33576265663). Sin `expo export` local: el bundler corrió en el workflow.
 
 ## Deuda / decisiones abiertas
 
