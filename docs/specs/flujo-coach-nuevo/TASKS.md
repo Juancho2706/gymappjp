@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-08-23"
+last_verified: "2026-09-02"
 canonical: false
 ---
 
@@ -116,7 +116,7 @@ Ninguna wave marcada abajo arranca sin su gate. Las respuestas se escriben **en 
   QA. **Resultado:** _pendiente_.
 - [ ] **G-ASC** — Estado de App Privacy / privacy manifest en App Store Connect. **Se lee el martes
   **2026-08-25**, no antes: el owner decidió D7 = A (sí al rebuild) pero **diferido a ese día**, así que leer
-  hoy el estado de App Privacy no cambia nada y se releería igual. **Resultado:** _pendiente hasta el 25-08_.
+  hoy el estado de App Privacy no cambia nada y se releería igual. **Resultado:** _vencido el 25-08 sin lectura registrada; lo lee el owner cuando entre a App Store Connect (verificado 2026-09-02)_.
 - [x] **G-BASE** — **Resultado (26-08): CORRIDO contra LIVE (solo SELECT, Supabase MCP) y CONGELADO.**
   Ventana de la baseline = la del [SPEC §1.1](SPEC.md): coaches creados **2026-08-18 00:00 UTC →
   2026-08-23 16:12 UTC**, con el corte de datos en el mismo instante (así se reproduce la foto del 23-08,

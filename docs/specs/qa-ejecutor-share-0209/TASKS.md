@@ -222,8 +222,24 @@ TARDANDO» (flaky), lista 7 con `evademo` (sin contraseña a mano). Hallazgos (b
 - [x] P2 Salida: commits por ítem, push a `rnmobiledenuevo` + `master`, deploy de Vercel y OTA android + iOS
       (`bd2bc6e8`/`025d158f` ronda 1, `fc78e1c8`/`c46d4eed` ronda 2).
 - [ ] P3 Responder las seis decisiones abiertas de la [SPEC](SPEC.md).
-- [ ] P4 Re-verificar en device el pellizco al máximo en Share (ronda 2) y, en web, que el login del alumno entre
-      sin loader ni naranja ⇒ marcar la SDD `done`.
-- [ ] P5 Superficies que aún leen `primary_color` crudo: `api/pwa-screenshot/[coach_slug]/route.tsx:74`,
-      `pr-card` (`:134-141`), `nutrition-pdf-brand.ts:141` — pasarlas por `resolveEffectiveBrandColor` (S).
-- [ ] P6 Backlog B2–B9 del QA automatizado (arriba).
+- [x] P4 Re-verificar en device el pellizco al máximo en Share (ronda 2) y, en web, que el login del alumno entre
+      sin loader ni naranja ⇒ SDD `done` (owner, 02-09: «el QA ya está verde»).
+- [x] P5 Superficies que leían `primary_color` crudo — en código el 02-09, **gates pendientes** (vitest 57/57 de los
+      archivos tocados y tsc web verdes en el worker; la suite completa se corre antes del push):
+      `api/pwa-screenshot/[coach_slug]/route.tsx`, `api/pr-card/route.tsx` (el select no traía `theme_preset_key`),
+      `lib/nutrition-pdf-brand.ts` (lee `x-coach-theme-preset-key` + `x-workspace-brand-source` del proxy) y, fuera
+      de la lista original, `coach/nutrition-plans/_data/exchange.queries.ts` (`getCoachPdfBrand`, mismo bug lado
+      coach). Núcleo nuevo `resolveEffectiveBrandColorOrNull` en `lib/branding/public-branding.ts` (los tres callers
+      tienen fallback propio distinto del azul de sistema: `SPORT_500` en pr-card, emerald en los PDFs) y el helper de
+      headers del layout `/c` se mudó ahí (`effectiveBrandColorFromHeaders`) para no duplicarlo. Impacto medido en
+      LIVE: 36 coaches con preset, ~30 con `primary_color` legacy distinto al del preset.
+- [ ] P6 Backlog B2–B9 del QA automatizado — **auditado contra HEAD el 02-09, los ocho son reales** (ninguno falso):
+      B2 bug real M (`NetworkProvider` en `c/[coach_slug]/layout.tsx` REEMPLAZA el árbol por `OfflineScreen`, el
+      state local de `CheckInForm` se pierde y su «Reintentar» es inalcanzable) · B3 probable XS (sin
+      `scroll-margin` contra la cápsula `fixed`) · B4 XS (`AddStudentStepper.tsx` y `CreateClientModal.tsx`, copy sin
+      singular) · B5 XS sistemático (páginas con `| EVA` en su `title` + `template: '%s | EVA'` del layout) · B6 XS
+      (`Switch` de base-ui es `<button>`, el `<label>` envolvente no lo nombra: falta `aria-label`) · B7 S (ni
+      `deleteCoachAccountAction` ni `api/mobile/account/delete` cancelan el drip; `cancelCoachEmails` existe y solo lo
+      usa el cron de no verificados) · B8 XS (`?status=archived` no se lee en `clients/page.tsx`) · B9 S (el gate de
+      persona del `proxy.ts` redirige antes de que el dashboard pinte `VerifyEmailBanner`). Pendiente decidir cuáles
+      se hacen.

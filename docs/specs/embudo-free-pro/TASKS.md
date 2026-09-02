@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-08-21"
+last_verified: "2026-09-02"
 canonical: false
 ---
 
@@ -125,8 +125,8 @@ Gates (22-08, ejecutados): `pnpm exec vitest run tests/mobile/resend-confirmatio
 
 > **EJECUTADA 2026-08-22 (en árbol, sin commit).** Gates verdes: `vitest` de `packages/tiers`,
 > `email-brand`, `constants`, `hecho-con-eva`, `subscription`, `tests/**` (91 archivos, 1357 casos) ·
-> `tsc` web y mobile limpios · `check:tokens` · eslint de los tocados. Pendiente del owner:
-> **QA visual de `/hecho-con-eva`** (dark, 320/768/1180) y el OTA junto a W6.
+> `tsc` web y mobile limpios · `check:tokens` · eslint de los tocados.
+> **QA visual de `/hecho-con-eva` y `/register?tier=free` APROBADO por el owner (2026-08-22)**; el OTA salió junto a W6 (ver CURRENT).
 > ✅ Hallazgo 1 **CERRADO** (W5.6, 2026-08-22): `/register` mostraba precios en el paso 2 («Elige tu
 > plan», grid de tiers con `getTierPriceClp`, `$0 — Gratis`, «CLP / mensual»), también con
 > `?tier=free` — con el CTA de `/hecho-con-eva` apuntando ahí, la app iOS quedaba a **dos** toques de

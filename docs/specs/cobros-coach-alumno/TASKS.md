@@ -377,7 +377,8 @@ citas cruzadas de SPEC/PLAN.
       `coach/subscription/update-card/page.tsx:23`), KPIs del mes, tabla con filtros y búsqueda, panel
       «Cómo cobras», onboarding de 3 pasos. **CA**: la página responde 404 para un coach Free y para un
       Pro fuera de la allowlist; deep links `?alumno=<id>` y `?filtro=vencidos` funcionan.
-- [ ] W2.7 Tarjeta «Cobros» en `apps/web/src/app/coach/tools/_components/ToolsHub.tsx`, sección nueva
+- [ ] W2.7 Tarjeta «Cobros» en la pantalla «Funciones» de web (`apps/web/src/app/coach/settings/funciones/`;
+      el hub `coach/tools/ToolsHub.tsx` fue disuelto por la Ola de orden W4.3), sección nueva
       «Tu negocio». **R20 + DECISIONS-2 §SPEC**: `ToolDef.key` es un `ModuleKey` y «cobros» **no** lo es,
       así que se crea un array aparte **`BUSINESS_TOOLS: BusinessToolDef[]`** con su propio tipo
       (`key: 'cobros'`), y su `active` se calcula con **`resolveCobrosAccess`, nunca con los add-ons
@@ -569,7 +570,8 @@ W2 y W3 ya no comparten archivos: W3 solo **importa** `lib/cobros/flags.ts`, los
       cobrar» en `CoachDashboardSections.tsx` (junto a `MobileBillingBanners`, `:147`) + destino real
       para el «Ir a facturacion» huérfano (`:2146`). **CA**: la pantalla **no** tiene ajustes, ni
       «Conectar Mercado Pago», ni ningún link externo.
-- [ ] W4.5 Tarjeta «Cobros» en el hub RN `app/coach/tools.tsx` dentro de la sección **«Tu negocio»**, con
+- [ ] W4.5 Tarjeta «Cobros» en la pantalla «Funciones» de RN (equivalente de `settings/funciones` web;
+      el hub `app/coach/tools.tsx` fue disuelto por la Ola de orden W4.3) dentro de la sección **«Tu negocio»**, con
       el mismo **`BUSINESS_TOOLS`** y el mismo `active = resolveCobrosAccess` del web (**R20**; Pro; Free =
       «no incluido en tu plan»), y `<WebOnlyHint topic="cobros"/>` en
       `components/coach/directory/CreateClientModal.tsx`. **CA**: el `active` de la tarjeta **no** se

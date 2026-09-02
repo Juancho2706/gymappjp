@@ -51,7 +51,7 @@ completaba en loop (caso real el 01-09). Seguimiento operativo en
 
 | # | Pendiente | Dónde | Nota |
 |---|---|---|---|
-| B1 | Logout duplicado: «Más» y «Mi cuenta» (`/coach/perfil`) | RN `(tabs)/more.tsx`, web `CoachMoreSheet` + perfil | decidir si queda uno solo |
+| B1 | Logout duplicado: «Más» y «Mi cuenta» (RN `(tabs)/perfil.tsx`, no es una ruta web) | RN `(tabs)/more.tsx`, web `CoachMoreSheet` + perfil | decidir si queda uno solo |
 | B2 | Suscripción web: párrafo «vienen incluidos en cualquier plan pago…» y candado gris atados a `hasActivePaidPlan` | `subscription/_components/SubscriptionContent.tsx` | regla del owner: TODO en todos los planes, solo se cobra cupo |
 | B3 | 6 CTAs RN de plan («Ver módulos»/«Ver mi plan»/`onUpgrade`, `NUTRITION_PRO_UPGRADE_HREF`) gateadas por `nutrition_exchanges`/`body_composition` con copy «no incluido en tu plan actual» | nutrition-v2 builder, QuickEdit ×2, ProgresoTab | código muerto o mentiroso con D1 |
 | B4 | «Reach global» del buscador RN (hoy solo la lupa de Inicio) | overlay en `(tabs)/_layout.tsx` | anclaje B elegido en W4.6b |
@@ -781,7 +781,7 @@ Independiente de W2/W3 en lo funcional (comparte archivos con W1, correr despué
   pendiente); `apps/web/src/app/coach/tools/loading.tsx` borrado con el launcher.
 - ~~7C fase 2~~ → hecha (`852d5be2`); queda «reach global» del buscador RN (overlay en `(tabs)/_layout.tsx`; hoy solo en Inicio).
 - Tras «Ordenar mi panel según mi especialidad», la tarjeta web conserva el orden manual viejo hasta refrescar (cosmético).
-- Logout duplicado: «Más» y «Mi cuenta» (/coach/perfil) — decidir si queda uno solo.
+- Logout duplicado: «Más» y «Mi cuenta» (RN `(tabs)/perfil.tsx`, no es una ruta web) — decidir si queda uno solo.
 - Theme RN no expone `success-600`/`danger-600` (el hero usa el 500 vía `theme.success`/
   `theme.destructive`): escalones en `lib/theme.ts` si se quiere 1:1 con el web.
 - Adherencia: el denominador es el programa actual (mismo sesgo que el número principal).

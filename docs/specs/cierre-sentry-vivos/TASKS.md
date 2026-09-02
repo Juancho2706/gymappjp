@@ -160,6 +160,49 @@ Marcar solo con evidencia real. Prohibido dar un gate por verde sin haberlo corr
 > (Skia = build nativo 1.1.3, decisión del owner), P4 (QA de fluidez) y P5 (431 errores, tanda
 > propia). Siguiente frente del repo: **Ola de orden W1** (`docs/specs/ola-de-orden`).
 
+## O7 — Revisión 2026-09-02 (web): `EVA-NEXTJS-18` regresa en la franja 12:xx + señales nuevas de O6
+
+- [x] O7.1 **Causa (confirmada con el diff del replay)** — `EVA-NEXTJS-18` (Hydration Error) regresó a las 16:09:44Z
+      y 16:17:21Z en `/coach/dashboard?subscription=active`, iPhone iOS 18.7 / **Safari 26.5** (versión nueva), coach
+      `movens` recién pagado por Flow (`billing_snapshots` 16:09:41Z). Consola (PostHog `log_entries` de la sesión
+      `01a062d4…`): React `#418` con `args[]=text` ⇒ mismatch de un NODO DE TEXTO. El diff server↔client del replay
+      (owner, `server.txt`/`client.txt`, texto enmascarado por Sentry pero con el LARGO intacto) marca una sola
+      diferencia de texto: en «Actividad reciente» del `DesktopBento` (`hidden md:block`, se hidrata igual) el día
+      es `** ***` en el servidor («31 ago», 6) y `** ****` en Safari («31 ago.», 7). Es `dayLabel()` →
+      `toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })`: **Node 24 imprime la abreviatura sin punto y
+      el Safari nuevo con punto**. Misma familia que los PRs del alumno del 01-09 (`613f870a`, Safari 26.6), que se
+      había leído como «solo septiembre»; en realidad es cualquier mes en cualquier iPhone actualizado. La hipótesis
+      inicial (parseo de «12:xx PM» en los helpers de Santiago) quedó DESCARTADA por el diff: la fecha del header
+      móvil tiene el mismo largo en los dos lados.
+- [x] O7.2 **Fix en código** — `DesktopBento.dayLabel` → `formatShortDayMonthEs` (tabla fija). Barrido de todos los
+      `month: 'short'` / `weekday: 'short'` que se pintan en el render inicial de componentes del coach y del alumno
+      (helpers de tabla fija nuevos en `date-utils.ts`, con la misma salida que Node hoy para que el HTML no cambie a
+      nadie; detalle en el commit). Endurecimiento de paso, no causa: `santiagoWallClock()` (`Intl.formatToParts`,
+      `hourCycle: 'h23'`) alimenta a `getTodayInSantiago`, `timeGreetingSantiago`, `formatLongDateSantiago` (tablas
+      fijas: «miércoles, 2 de septiembre»), `getSantiagoIsoYmdForUtcInstant` (`''` con instante inválido) y
+      `getNutritionDayOfWeekFromIsoYmdInSantiago` (aritmética pura). Tests: `date-utils.test.ts` § «franja 12:xx»
+      (7 casos absolutos) + los de cada helper nuevo.
+- [x] O7.3 **Diff del replay leído** (owner lo bajó a `server.txt`/`client.txt`; ver O7.1). Regla que queda: en un
+      client component que se hidrata, NUNCA `toLocaleDateString`/`Intl.DateTimeFormat` con `month: 'short'` o
+      `weekday: 'short'` — tabla fija siempre (`formatShortDayMonthEs` y familia).
+- [ ] O7.4 **Señales nuevas de los fingerprints O6, mismo día** — `EVA-NEXTJS-1P` «exec-v3: fallback 4.6s ganó la
+      carrera — ejecutor sin señal» (`routeReady: true`, `execReady: false`, 4g, online) y `EVA-NEXTJS-1N`
+      `deploy_skew_reload`: 2 alumnos (iOS Safari 13:03Z; Samsung Internet/Android 10 13:08Z y 14:03Z) en
+      `/c/6SASQ/workout/…`, release `ad6886bf` en los DOS eventos ⇒ el bundle era el actual, **no hay skew de
+      deploy**: es el E394 «respuesta inesperada» sobre el release con el fix (el 200 de 2 bytes que anotó el
+      inventario del 02-09) y el guardián J lo convierte en una recarga única en vez de un tap muerto. Mitigado, causa
+      raíz sin cazar: instrumentar la respuesta del server action (status, bytes, `content-type`) en el `beforeSend`
+      del guardián para saber QUÉ devuelve el servidor.
+- [x] O7.5 **Rage clicks falsos** (`8dbd8426`): verificado en PostHog el 02-09 — `$rageclick` sobre el label oculto
+      114/día → 0, `$autocapture` basura 1.752/día → 0.
+- [ ] O7.6 **Misma familia, fuera del tren del 02-09** (hallazgos del barrido): (a) `components/nutrition/NotesThread.tsx`
+      pinta la HORA de cada nota con `toLocaleTimeString` en la TZ del runtime ⇒ Vercel (UTC) «07:00 a. m.» vs alumno
+      (Chile) «11:00 a. m.» en cada nota — mismatch propio, más grave que el mes; (b) `deviceLabel`
+      (`lib/bodycomp/view-helpers.ts`), `BiaTrendPanel`/`IsakTrendPanel`, `EvolutionCharts`, movimiento,
+      `ProfileOverviewB3:468` y `profileOverviewUtils` derivan el DÍA de un `timestamptz` con getters locales: para
+      mediciones entre las 20:00 y las 24:00 de Chile el día difiere entre servidor (UTC) y cliente. Fix: derivar el
+      día en Santiago (`getSantiagoIsoYmdForUtcInstant`) o formatear solo en cliente (`useEffect`).
+
 ## Cierre
 
 - [x] C1 `pnpm docs:check`.

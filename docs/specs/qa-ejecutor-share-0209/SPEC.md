@@ -1,5 +1,5 @@
 ---
-status: implemented-pending-qa
+status: done
 owner: product-engineering
 last_verified: "2026-09-02"
 canonical: false
@@ -7,6 +7,12 @@ canonical: false
 
 # SPEC — QA del owner 02-09: ejecutor, Share Entreno y accesos (A–J)
 
+> **CERRADA — 2026-09-02.** Las dos rondas están en producción (web `ad6886bf`, OTA 1.1.2 android
+> `fc78e1c8` / ios `c46d4eed`) y el owner dio el QA verde en device, incluida la re-verificación
+> del pellizco de stickers y del login del alumno sin loader (P4). Quedan el backlog B2–B9 del QA
+> automatizado (auditado contra HEAD el 02-09, ver TASKS) y las seis decisiones abiertas de abajo.
+> Lo que sigue es el texto original de la tanda.
+>
 > **EN CURSO — 2026-09-02.** Diez hallazgos del QA del owner sobre producción (`master` =
 > `rnmobiledenuevo`, HEAD del análisis `bd29a76d`), investigados en ocho briefs read-only y
 > ejecutados por nueve workers en paralelo sobre el mismo árbol. Nada está cerrado ni desplegado:
@@ -524,19 +530,19 @@ siempre por `onunhandledrejection`.
    `Movilidad` y `Rehabilitación`; «Equipo» en español, mapeando los valores en inglés de la DB.
 6. **I**: se pregunta al salir en las dos plataformas, con copy honesto sobre el autosave.
 
-## Decisiones abiertas para el owner
+## Decisiones abiertas para el owner — respondidas el 2026-09-02
 
-1. **F · colores de sistema en la tarjeta**: ★/🏆 ámbar del récord, texto ember de la racha y halo de
-   acento del fondo `brand`. Se implementa todo en blanco+contorno (y el halo se conserva); revertir
-   cualquiera es cambiar un color, no rediseñar.
-2. **F · velo inferior de la foto** (`ShareCanvas`): con el contorno ya no es imprescindible.
-   ¿Se queda?
-3. **E · descanso entre rondas**: con `rest_time` prescrito, el auto-envío abre el descanso sobre la
-   pantalla de cardio (comportamiento existente del commit). ¿Se confirma para cardio?
-4. **E · MIN pisa lo tipeado**: la caja MIN es del timer. La variante «solo si está vacío» es una
-   línea.
-5. **C · orden del fallback**: se conserva la inicial antes del ícono EVA para espejar RN. Si el
-   owner prefiere el ícono antes que la inicial, son dos líneas.
-6. **I · gesto de swipe-back en iOS**: hoy queda inerte con cambios sin guardar. Hacer que pregunte
-   exige agregar `@react-navigation/native` al `package.json` de mobile (JS puro, sin build nativo,
-   pero toca el lockfile y hay que validar que pnpm dedupee `@react-navigation/core`).
+1. **F · colores de sistema en la tarjeta** — **DECIDIDO: queda todo en blanco + contorno** (como está en
+   producción). Sin trabajo.
+2. **F · velo inferior de la foto** (`ShareCanvas`) — **DECIDIDO: se saca.** Pendiente de código (RN, OTA).
+3. **E · descanso entre rondas en cardio** — **DECIDIDO: se confirma** el comportamiento actual (completar ⇒
+   auto-envío; pausar ⇒ solo rellena MIN). Sin trabajo.
+4. **E · MIN pisa lo tipeado** — **DECIDIDO: queda como está** (MIN solo al pausar, que es lo que el owner
+   validó en device). Sin trabajo.
+5. **C · orden del fallback del Despegue sin logo** — el owner pidió explicación en humano; hasta que decida,
+   queda como está (inicial del coach antes que el ícono EVA, espejo de RN).
+6. **I · gesto de back en el builder con cambios sin guardar** — **DECIDIDO: debe preguntar SIEMPRE**, en iOS
+   (swipe-back) y Android (back físico), mientras se edita la rutina de un alumno. Pendiente de código (RN,
+   OTA): agregar `@react-navigation/native` al `package.json` de mobile (JS puro, sin build nativo; toca el
+   lockfile y hay que validar que pnpm dedupee `@react-navigation/core`) y usar `usePreventRemove` /
+   `beforeRemove`.
