@@ -34,15 +34,18 @@
 
 ## Pendiente (fuera de codigo / fase 2)
 
-- [ ] Setear `NEXT_PUBLIC_FB_PIXEL_ID=1586483219694806` en Vercel (preview + prod).
-- [ ] Generar el token CAPI desde un **System User** de Business Settings y cargarlo como
+- [x] Setear `NEXT_PUBLIC_FB_PIXEL_ID=1586483219694806` en Vercel (preview + prod).
+- [x] Generar el token CAPI desde un **System User** de Business Settings y cargarlo como
       `META_CAPI_TOKEN` (server-only, NUNCA `NEXT_PUBLIC_`). Sin el, CAPI no envia nada.
-- [ ] Activar **Automatic Advanced Matching** en Events Manager.
-- [ ] Verificar con **Test Events** + **Meta Pixel Helper** en produccion: `PageView` en cada
+- [ ] Activar **Automatic Advanced Matching** en Events Manager — owner, dashboard de Meta.
+- [x] Verificar con **Test Events** + **Meta Pixel Helper** en produccion: `PageView` en cada
       navegacion SPA, `ViewContent` en `/pricing`, y **UN solo** `CompleteRegistration` marcado
-      Browser + Server (deduplicado), no dos.
-- [ ] Confirmar **EMQ >= 6.0** en `CompleteRegistration`.
+      Browser + Server (deduplicado), no dos. (Pixel + CAPI verificados end-to-end 18-08.)
+- [ ] Confirmar **EMQ >= 6.0** en `CompleteRegistration` — owner, dashboard de Meta.
 - [ ] Fase 2: `Subscribe` por CAPI desde el webhook de MercadoPago/Flow (`@/lib/meta/capi` ya lo
-      soporta: `eventName: 'Subscribe'`, `customData: { value: 30000, currency: 'CLP' }`).
-- [ ] Fase 2: `InitiateCheckout` en el click de plan de `/pricing` y `StartTrial`.
+      soporta: `eventName: 'Subscribe'`, `customData: { value: 30000, currency: 'CLP' }`). Diferida
+      por decisión del owner 02-09 (no tocar Meta Ads).
+- [ ] Fase 2: `InitiateCheckout` en el click de plan de `/pricing` y `StartTrial`. Diferida por
+      decisión del owner 02-09 (no tocar Meta Ads).
 - [ ] Evaluar espejo browser de `CompleteRegistration` para el flujo de tier PAGO (hoy solo CAPI).
+      Diferida por decisión del owner 02-09 (no tocar Meta Ads).

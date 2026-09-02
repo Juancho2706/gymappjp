@@ -2,6 +2,9 @@
 
 Estado: BACKLOG (gate de negocio del SPEC sin cumplir a 2026-08-04).
 
+> **Gate de negocio:** medir % Android 16 QPR1+ en PostHog (jefe, 02-09); si no se cumple, fases
+> 1-4 se condensan en un ticket futuro.
+
 ## Fase 0 — Medicion
 - [ ] Query PostHog: % alumnos Android por `$os_version` (target: Android 16 QPR1+).
 - [ ] Registrar decision go/no-go en PLAN.md.

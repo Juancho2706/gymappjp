@@ -1,3 +1,10 @@
+---
+status: done
+owner: product-engineering
+last_verified: "2026-09-02"
+canonical: false
+---
+
 # TASKS — T2.3 Hub de Alimentos
 
 Estado: **Revision de Fable hecha el 2026-08-09: plan APROBADO con correcciones asentadas en SPEC y PLAN.** Orden de fases y corte de alcance validados. Correcciones: `FoodSearch.tsx` sobrevive a F5 (2 importadores V1), el gate de boundaries NO salta con la mudanza (verificado), mecanismo de F1 detallado (segundo data path por offset), y puerta previa a F5 (conteo LIVE + decision de paridad de navegacion). Rama de trabajo confirmada: `rnmobiledenuevo` — en `master` no existe el stack de overrides y el filtro naceria vacio.
@@ -64,7 +71,7 @@ Orden obligatorio: puerta previa → mudar → verificar → borrar. Al reves se
 - [x] Comentario de `api/mobile/nutrition/exchanges/group-foods/route.ts` re-apuntado a la ruta nueva de las actions
 - [x] **Claim del PLAN REFUTADO:** `FoodListCompact` NO quedo huerfano — lo siguen importando `nutrition-plans/_components/FoodLibrary.tsx:21` (V1 viva) y el barrel `components/molecules/index.ts:6`. No se anoto como candidato a borrar porque seria falso. `FoodBrowser` era su segundo consumidor, no el unico
 - [x] Los tres `revalidatePath('/coach/foods')` de V1 (`nutrition-coach.actions.ts:649,673,997`) quedan. **Desviacion declarada:** los `revalidatePath('/coach/foods')` que vivian DENTRO de las dos actions mudadas si se re-apuntaron a `/coach/nutrition-v2` — ya no son V1, y dejarlos apuntando a una ruta que solo redirige era basura muerta en codigo V2
-- [ ] Commit propio, separado de F1-F4: el rollback de esta fase es revert entero
+- [x] Commit propio, separado de F1-F4: el rollback de esta fase es revert entero (`1eaea68c`)
 - [x] Gate: boundaries 324/8 verde, tsc web verde, vitest 2857/2857 (253 archivos) verde, `docs:check` verde, eslint verde (exit 0). **Pendiente: QA de las dos entradas (onboarding y URL directa) — owner**
 
 ## Cierre

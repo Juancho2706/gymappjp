@@ -68,6 +68,11 @@ completaba en loop (caso real el 01-09). Seguimiento operativo en
 | B15 | **Demolición de Enterprise** (regla del owner 01-09: ELIMINADO, no tocar, quitar a futuro) | `apps/enterprise`, `/org/*`, `enterprise_coach` en coach-nav/workspace, RLS/policies de org, cron/e2e enterprise | ola propia, fuera de esta |
 | B16 | 7C: verificar la corrida automática del cron (04:30Z del 02-09 ⇒ 2.ª fila por coach) y el primer delta real el 08-09 | `coach_kpi_snapshots` | operación |
 
+**02-09:** B2, B3, B5, B6, B7, B8, B9, B10 EN CURSO; B1 decisión del owner = solo en «Más» (en
+curso); B4 = NO (alcanza la lupa en Inicio); B12 = dejar; B13 = decisión tomada; B14 bloqueado por
+Cobros; B15 = solo alias + rutas visibles (auditoría 02-09); B16 verificado (cron corrió 02-09
+04:30Z, 92 filas).
+
 ---
 
 ## W1 · Interruptores de verdad

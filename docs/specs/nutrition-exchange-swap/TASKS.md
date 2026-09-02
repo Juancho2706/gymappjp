@@ -1,3 +1,10 @@
+---
+status: done
+owner: product-engineering
+last_verified: "2026-09-02"
+canonical: false
+---
+
 # TASKS — T2.5 Intercambio: sheet de dos bloques + swipe
 
 Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes (se anota commit) · `[!]` bloqueado (se anota por que).
@@ -16,7 +23,7 @@ Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes 
 - [x] Los 8 bloqueantes re-verificados a mano contra LIVE (B1 con probe + rollback: `42725 function is not unique`)
 - [x] Correcciones incorporadas a SPEC y PLAN
 - [x] **D4 del owner: ocultar.** Retirada la pill "Puede sustituir" de quick-edit web y RN. El checkbox del builder **ya no existia** (poda de la ola 3, web y RN): la revision lo daba por vivo
-- [ ] Commit de la fase 0 con `pnpm docs:check` verde
+- [x] Commit de la fase 0 con `pnpm docs:check` verde (`f710e0ee` SPEC/PLAN/TASKS, `d82057b2` correcciones de la revision)
 
 ## F0 — Equivalencia del grupo + contrato
 

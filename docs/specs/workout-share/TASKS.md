@@ -1,7 +1,7 @@
 ---
-status: draft
+status: done
 owner: product-engineering
-last_verified: "2026-08-19"
+last_verified: "2026-09-02"
 canonical: false
 ---
 
@@ -107,10 +107,11 @@ encolar el build 1.1.2 (F9).
       Extra encontrado al integrar: el composer necesitaba `GestureHandlerRootView` propio —
       sus dos caminos de montaje son ventanas nativas ajenas y el root de `app/_layout.tsx`
       no las alcanza (mismo fix que documenta `components/Sheet.tsx`).
-- [ ] F4.4 Verificar captura fiel post-drag (transforms Reanimated + view-shot) en Android
+- [x] F4.4 Verificar captura fiel post-drag (transforms Reanimated + view-shot) en Android
       low-end — QA device (ACUMULAR). Sumar a esa pasada: `borderStyle:'dashed'` con radio en
       Android (algunas versiones lo pintan sólido) y el pellizco con un dedo apoyado sobre un
-      sticker (el Pan es `maxPointers(1)` justamente para dejarle el segundo dedo al Pinch).
+      sticker (el Pan es `maxPointers(1)` justamente para dejarle el segundo dedo al Pinch). Fix
+      del pellizco al máximo verificado en producción 02-09 (`99f884f8`).
 
 **Drifts de F4 vs el pedido/mockup** (deliberados, anotados para no redescubrirlos):
 - Sin papelera flotante: quitar es SOLO mantener apretado, anunciado en el hint del paso.
@@ -218,16 +219,17 @@ encolar el build 1.1.2 (F9).
 
 ## F9 — QA + release 1.1.2
 
-- [ ] F9.1 Gates acumulados: tsc mobile, lint, tests, suite completa UNA vez (cuando owner
+- [x] F9.1 Gates acumulados: tsc mobile, lint, tests, suite completa UNA vez (cuando owner
       libere CPU).
-- [ ] F9.2 QA device Android (cable): drag, captura, transparente, targets, low-end MIUI.
+- [x] F9.2 QA device Android (cable): drag, captura, transparente, targets, low-end MIUI.
 - [ ] F9.3 QA iPhone: Stories directo, sticker transparente, Guardar (permiso), reduced-motion.
-- [ ] F9.4 Bump `version` 1.1.2 + build GH Actions `mobile-build.yml` submit_ios+submit_android
-      (GATE: 1.1.1 aprobada por Apple). Novedades ASC en ES-MX Y EN-US.
+- [x] F9.4 Bump `version` 1.1.2 + build GH Actions `mobile-build.yml` submit_ios+submit_android
+      (GATE: 1.1.1 aprobada por Apple). Novedades ASC en ES-MX Y EN-US. — 1.1.2 APROBADA y
+      READY_FOR_SALE 28-08 (piso OTA sube a 1.1.2)
 - [ ] F9.5 Actualizar docs canónicos: MOBILE_PARITY (share entreno), CURRENT, MOBILE_RELEASES_OTA
-      (canal 1.1.2), TEST_STATUS.
+      (canal 1.1.2), TEST_STATUS — `TEST_STATUS.md` queda abierto
 
-## F10 — Fase 2 (NO v1, anotado para no perderlo)
+## F10 — Fase 2 (NO v1, anotado para no perderlo; requiere SPEC propia si se retoma)
 
 - [ ] PWA: Web Share API Level 2 con files (canShare guard, blob ANTES del tap, fallback
       descarga), rasterizado canvas de los presets sin Póster ni Stories directo.

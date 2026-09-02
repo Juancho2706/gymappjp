@@ -317,10 +317,12 @@ arreglos salen de mirar esas capturas, no de una lista teorica:
   - **W5 corte RN**: ficha (Crear plan / Editar plan), `+` del hub, CTA por fila del roster y
     picker de plantillas (Nueva plantilla + lapiz por fila) apuntan al editor; el par viejo
     queda secundario ("Edición rápida (clásica)"; wizard por URL directa)
-- [ ] OTA android al cierre (solo por GH Actions `mobile-ota.yml`, `--platform android`) —
+- [x] OTA android al cierre (solo por GH Actions `mobile-ota.yml`, `--platform android`) —
   **ACUMULADO por decision del owner (2026-08-16)**: no sale con T3.3a; junta T3.3a + T3.3b +
-  pasada visual y se propone al cerrar el retiro del par viejo
-- [ ] iOS: OTA `--platform ios` solo post-aprobacion Apple
+  pasada visual y se propone al cerrar el retiro del par viejo — publicado 2026-08-17 (grupo
+  `aca6fc76` / android `01a00d3d`, ver CURRENT)
+- [x] iOS: OTA `--platform ios` solo post-aprobacion Apple — desde el 18-08 los OTA del canal
+  `production` salen android + ios sobre el mismo commit (ver CURRENT)
 
 - [ ] **QA device Android del EDITOR RN** (acumulado con el OTA): editar el plan vigente con
   metadatos, crear desde plantilla / desde otro alumno / en blanco, reemplazos autorizados,
@@ -411,9 +413,10 @@ en el aviso, aviso bajo «Empezar vacío», RN + web en el mismo tren).
 - [x] **Fix 4 — aviso bajo «Empezar vacío»** — «El día nace sin comidas. Agrégale al menos una
   franja antes de publicar.» solo en estrategias con franjas (RN hoja de alta; web `AddDayPopover.emptyHint`,
   prop opcional: el builder no cambia).
-- [ ] **QA** — device Android/iOS (light/dark, marca propia) + web móvil/desktop contra desplegado:
+- [x] **QA** — device Android/iOS (light/dark, marca propia) + web móvil/desktop contra desplegado:
   crear plan híbrido con un día «Empezar vacío», tocar Publicar → chip ámbar + salto + aviso con
-  botones + barra con nombre del día; corregir → la barra se apaga sola.
+  botones + barra con nombre del día; corregir → la barra se apaga sola. **QA del owner VERDE
+  02-09** (device + web).
 
 Gates (02-09): vitest paquete 16/16 ✓ · vitest `_quick-edit` web 106/106 ✓ · eslint 0 ✓ ·
 tsc mobile ✓ · tsc web ✓ · tokens ✓ · boundaries ✓ · docs:check ✓.

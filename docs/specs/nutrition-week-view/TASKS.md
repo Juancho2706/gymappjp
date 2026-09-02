@@ -45,17 +45,17 @@ Estado: `[ ]` pendiente · `[x]` hecho · ejecución por workers Opus con juicio
       `PastDaySummary` web (`?view=plan&dow=N`) y tab Hoy de RN (`onOpenPlanDay` → `PlanTab`).
 - [x] T5.4 Tests del contrato en `week-view.test.ts` (futuro seleccionable, cero escritura) y en
       `week-nav.logic.test.ts` (la web acepta un `?date=` futuro de la semana).
-- [ ] T5.5 QA en device: tocar sábado/domingo desde Hoy y desde Plan, verificar cero 4xx en
-      consola y cero controles de registro.
-- [ ] Idea anotada (NO implementada): **lista de compras** de la semana.
+- Nota de producto (NO es tarea de esta spec): **lista de compras** de la semana — idea anotada, sin
+  implementar.
 
 ## QA (agregado el 2026-08-19)
 
 Esta spec cerró **sin una sola tarea de QA**: tener todo en `[x]` prueba código, no comportamiento.
 Ninguna de las rondas registradas del owner (15, 16, 17 y 18-08) menciona la semana completa.
 
-- [ ] QA visual web (alumno tab Plan y tab Hoy, coach ficha) y **QA en device del owner** de las 5
-      superficies — **pendiente de QA en device del owner (auditoría 17-08)**.
+- [ ] QA en device del owner de las 5 superficies: sábado/domingo desde Hoy y desde Plan (cero 4xx
+      en consola, cero controles de registro), y QA visual web (alumno tab Plan y tab Hoy, coach
+      ficha) — **pendiente (auditoría 17-08, fusiona T5.5 + la QA visual de abajo)**.
 - [ ] Caso de riesgo declarado en el PLAN y nunca evaluado: la semana que **cruza cambio de versión
       del plan**. La regla «snapshot gana» cubre el caso normal; la opción B
-      (`get_nutrition_week_v2`) quedó documentada por si el QA la exigía, y nadie miró el resto.
+      (`get_nutrition_week_v2`) quedó documentada por si el QA la exigía. **Investigar 02-09 (jefe).**

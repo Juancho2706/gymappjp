@@ -1,4 +1,13 @@
+---
+status: done
+owner: product-engineering
+last_verified: "2026-09-02"
+canonical: false
+---
+
 # TASKS — Rediseño de flujos de Nutricion V2
+
+> **PROGRAMA CERRADO 2026-08-17 (ver CURRENT).**
 
 Estado real por tanda. Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes (se anota commit) · `[!]` bloqueado (se anota por que).
 
@@ -45,7 +54,7 @@ Estado real por tanda. Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` 
     - Hallazgos menores NUEVOS — triage 2026-08-07 (device del owner, Metro+USB):
       - [x] (a) mini-anillo P sin denominador. **NO era dato**: la query read-only a LIVE confirmo `target_protein_g = 290` en los 5 snapshots desde el 03-08, y un log por CDP confirmo que al componente le llegaba `{consumed:42,target:290}`. Causa real = `miniTarget` con `lineHeight: 10` IGUAL al fontSize: con la fuente custom Android arma una caja de UNA linea y el wrap pierde la segunda ("/ 290" queda en "/"). Fix `lineHeight: 13` + `numberOfLines={1}` (**a6aac228**).
       - [x] (b) chip "No lo comi" truncado a "No lo" — MISMO patron de wrap + caja de una linea. Fix `shrink-0` en el chip + `numberOfLines={1}` en el texto; cubre tambien los chips de correccion (mismo componente) (**a6aac228**).
-      - [ ] (c) paleta de macros. El hallazgo estaba MAL anotado: web y RN de V2 comparten la MISMA paleta (`@eva/nutrition-v2/design.ts` → P ember / C sport / G aqua) y `MACRO_COLORS` RN son esos mismos hex; los `--color-macro-*` de `globals.css` (#5E9FD6 / #FFB74D / #81C784) son de nutricion **V1** (`MealCard`, `MealIngredientRow`, card V1 del dashboard). Tocar solo RN habria ROTO la paridad. **DECISION OWNER 2026-08-07: opcion 2** — llevar web + RN de V2 al trio fijo #5E9FD6 / #FFB74D / #81C784 (mata el teñido white-label de los carbos), **agendado al re-skin de cierre de O2** para que cara nueva y paleta entren en el mismo OTA con una sola re-QA.
+      - [x] (c) paleta de macros — EJECUTADA en T2.7 F1 (`packages/nutrition-v2/design.ts:9-11`): trio fijo P #5E9FD6 / C #FFB74D / G #81C784 en web y RN. El hallazgo estaba MAL anotado: web y RN de V2 comparten la MISMA paleta (`@eva/nutrition-v2/design.ts` → P ember / C sport / G aqua) y `MACRO_COLORS` RN son esos mismos hex; los `--color-macro-*` de `globals.css` (#5E9FD6 / #FFB74D / #81C784) son de nutricion **V1** (`MealCard`, `MealIngredientRow`, card V1 del dashboard). Tocar solo RN habria ROTO la paridad. **DECISION OWNER 2026-08-07: opcion 2** — llevar web + RN de V2 al trio fijo #5E9FD6 / #FFB74D / #81C784 (mata el teñido white-label de los carbos), **agendado al re-skin de cierre de O2** para que cara nueva y paleta entren en el mismo OTA con una sola re-QA.
       - [ ] (d) 3 errores `react-hooks/refs` preexistentes en Sheet.tsx (patron onCloseRef/PanResponder de 9fbe9bcd) — deuda lint.
     - Ajuste de UI pedido por el owner en la misma sesion (**a6aac228**): fila de CTAs en UNA sola linea con el primario al centro (Escanear · Registrar · Compartir); los neutros a ancho natural y solo el primario `fill`, para que ninguno trunque.
     - Gotcha operativo ronda 2: Metro crashea al primer arranque en Node 24 (watcher timeout → getSha1, gotcha conocido) — segundo intento paso; el fix llego al device por Fast Refresh con el sheet abierto.
@@ -61,7 +70,7 @@ Estado real por tanda. Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` 
   - [x] F5 repository → service → actions, sin service-role — `0502ef07`
   - [x] F4 merge en freeze y rehidratacion (4 superficies, un helper) + N+1 muerto + **auditoria de `foods.macros_basis`**: 50 filas mal etiquetadas volvieron a `per_100`, 10 son `per_serving` de verdad — `660e1ef4`
   - [ ] Regen COMPLETO de `database.types.ts` (deja 13 errores en 7 archivos V1) + retirar el cast `V2ReadClient` de T1.1 — tanda propia. **Este es el registro ÚNICO de esta deuda** (nota 2026-08-17: se retiró el duplicado en [`nutrition-food-overrides/TASKS.md`](../nutrition-food-overrides/TASKS.md), que apunta aquí)
-  - [ ] QA manual en preview (requiere push de la rama)
+  - [ ] ~~QA manual en preview (requiere push de la rama)~~ SUPERADO/MUERTO (02-09): el programa cerro 2026-08-17 y T2.3 (hub de alimentos, que consume overrides) tuvo su propio QA en preview verificado
 - [x] T2.2 Overrides UI — hecha 2026-08-07 en **web y RN**: sheet de edicion (5 macros + medida casera + aviso suave de Atwater), badge ✎ con el catalogo tachado, restaurar original, aviso de republicar. La base declarada NO se pregunta: se hereda del alimento y se enuncia. Pendiente: filtro "Editados por mi" (va con el hub de alimentos, T2.3) y la lista de alumnos afectados en el aviso
 - [x] T2.3 Hub Alimentos casa unica — CERRADA 2026-08-09 (detalle y evidencia en [`nutrition-food-hub/TASKS.md`](../nutrition-food-hub/TASKS.md); revision de Fable previa al codigo, aprobada con correcciones)
   - [x] Crear alimento (`940e3875`) + clasificar porciones + grupos en formulario UNICO (`34f8e0ec`, `ClassifyFoodFlow` + `planFoodClassification` con 29 tests) dentro del tab
@@ -72,7 +81,7 @@ Estado real por tanda. Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` 
   - [x] Auditoria contra HEAD y LIVE + decisiones del owner D1-D4 + SPEC/PLAN/TASKS + revision adversarial con las 5 correcciones aplicadas (2026-08-09)
   - **Re-alcance con evidencia:** `substitution_group_id` tiene 0 filas en LIVE ⇒ el "membership de grupo" del enunciado no existe como dato; el camino por grupos de intercambio se movio a T2.5, que es donde vive su UI
   - **El estado "sustituido" no toca `get_nutrition_today_v2`**: el read model ya emite `source` desde `intake_source_v2` y `'substitution'` ya es valor valido; la adherencia sale sola por `prescription_item_id`
-  - [ ] F0 contrato puro · F1 RPC de opciones · F2 guard SQL + fix del tope de cantidad en `correct_` · F3 boundary web+movil · F4 UI web · F5 paridad RN · F6 QA
+  - [ ] ~~F0 contrato puro · F1 RPC de opciones · F2 guard SQL + fix del tope de cantidad en `correct_` · F3 boundary web+movil · F4 UI web · F5 paridad RN · F6 QA~~ SUPERADO/MUERTO (02-09): duplicado — T2.4 ya esta cerrada arriba, detalle real en `nutrition-substitution-intake/TASKS.md`
 - [x] T2.5 Swipe ⇄ + sheet 2 bloques (autorizados / grupo) — **CERRADA 2026-08-10, en produccion** (detalle y actas en [`nutrition-exchange-swap/`](../nutrition-exchange-swap/TASKS.md)). Web en master `654efd33` + **OTA android `7a9b3877`** (runtime 1.1.0, solo android); 2 migraciones en LIVE (`20260810161604`, `20260810171529`); cierra el reparo offline de T2.4 (chip "En cola" verificado con modo avion en device fisico). Extra: fix de UI optimista del Hoy web (`5139b29e`)
   - [x] **F8 — decisiones abiertas del QA cerradas (2026-08-11)**: H1 arreglado por el lado del catalogo (migracion `20260811020826` en LIVE: `foods.name_search` pasa a la MISMA normalizacion que el query; asimetria 0/4.649; 4 `ilike` de la web alineados a `normalizeFoodSearchText`) y D5 implementada (micro-animacion one-shot del swipe, decision pura en `packages/nutrition-v2/swipe-hint.ts`, web + RN). Falta despliegue (web + OTA android)
 ### Hallazgo del coach JP (2026-08-11) — investigado a fondo: **NO es bug de carga de plantillas**
@@ -116,19 +125,19 @@ verificados en preview con la sesion de josefit:
 
 - [x] T2.6 Velocidad autoria: porcion pegajosa (ultima cantidad por coach+food y por alumno+food) + copy semana (quick-select prox 1/2/4 + toggle reemplazar) + gramatica destructiva unificada (undo en todo, muere el confirm del wizard-delete-slot) + campo notas visibles en wizard — CERRADA (registro en [`nutrition-authoring-speed/TASKS.md`](../nutrition-authoring-speed/TASKS.md), cierre 2026-08-17 segun CURRENT)
 - [x] T2.7 Re-skin del alumno (catalogo de pantallas, decision owner 06-08: va AL CIERRE de O2, antes del OTA unico) + **paleta de macros al trio fijo** (decision owner 07-08, opcion 2): `@eva/nutrition-v2/design.ts` pasa a P #5E9FD6 / C #FFB74D / G #81C784 en web Y RN, los carbos dejan de seguir la rampa sport white-label (`resolveNutritionMacroColors` deja de recibir brandColor), y las superficies V1 quedan alineadas con los mismos `--color-macro-*`. Toca anillos, chips y barras ya QA-eadas en O1 ⇒ exige re-QA visual completa en el mismo corte. — CERRADA (registro en [`nutrition-student-reskin/TASKS.md`](../nutrition-student-reskin/TASKS.md), cierre 2026-08-17 segun CURRENT)
-- [ ] Cierre O2: overrides W2 (ficha detalle web, RN builder/quick-edit) + regresion + push + **OTA android O1+O2** (runbook SPEC; proponer al owner)
+- [x] Cierre O2: overrides W2 (ficha detalle web, RN builder/quick-edit) + regresion + push + **OTA android O1+O2** (runbook SPEC; proponer al owner) — programa cerrado 2026-08-17
 
 ## Ola 3
 
 - [x] T3.1 SPEC editor unico (2026-08-15, Fable): [SPEC/PLAN/TASKS en `nutrition-unified-editor/`](../nutrition-unified-editor/SPEC.md). Auditoria contra HEAD: 4 reducers / 2 gramaticas (wizard web 32 acciones, wizard RN 29, quick-edit web 31, quick-edit RN subconjunto), publish ya convergido en `persistAndPublishDraft` → RPC. Decisiones owner: D1 un solo editor para crear+editar (wizard muere en el retiro, puerta `?from=` vive), D2 plantillas en tanda propia T3.2b post-corte (el retiro espera a plantillas). Plan: W1-W4 (UI sobre reducer quick-edit web extendido) → T3.2b plantillas → R1 extraccion a `packages/nutrition-v2` con golden tests → T3.3 RN
 - [x] T3.2 Editor unico web desktop + responsive/PWA (Fable) — CERRADA (registro en [`nutrition-unified-editor/TASKS.md`](../nutrition-unified-editor/TASKS.md), cierre segun CURRENT)
 - [x] T3.3 Editor RN Android — CERRADA (registro en [`nutrition-unified-editor/TASKS.md`](../nutrition-unified-editor/TASKS.md), cierre segun CURRENT)
-- [ ] T3.4 Plantillas auto-escaladas (SPEC + solver puro + golden tests + preview + pineados + piso kcal)
-- [ ] T3.5 Registro inteligente texto (SPEC + parser server + revision siempre + memoria por alumno)
-- [ ] T3.6 Presupuesto semanal + libres presupuestadas + franja flexible A/B/C (SPECs)
-- [ ] T3.7 Offline web
+- [ ] T3.4 Plantillas auto-escaladas (SPEC + solver puro + golden tests + preview + pineados + piso kcal) — roadmap, requiere SPEC propia
+- [ ] T3.5 Registro inteligente texto (SPEC + parser server + revision siempre + memoria por alumno) — roadmap, requiere SPEC propia
+- [ ] T3.6 Presupuesto semanal + libres presupuestadas + franja flexible A/B/C (SPECs) — roadmap, requiere SPEC propia
+- [ ] T3.7 Offline web — roadmap, requiere SPEC propia
 - [ ] Retiro del par wizard/quick-edit tras 2 semanas estable (verificar importadores)
-- [ ] Cierre O3: regresion completa + push + OTA android + propuesta merge a master
+- [x] Cierre O3: regresion completa + push + OTA android + propuesta merge a master — programa cerrado 2026-08-17
 
 ## Registro de cierres
 

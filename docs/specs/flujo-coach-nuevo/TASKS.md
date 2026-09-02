@@ -7,7 +7,7 @@ canonical: false
 
 # TASKS — Flujo del coach nuevo
 
-Contrato: [SPEC](SPEC.md) · Plan: [PLAN](PLAN.md). Estado: **nada empezado; cero código.**
+Contrato: [SPEC](SPEC.md) · Plan: [PLAN](PLAN.md). Estado: **W0–W4 en producción 26-08; W5 condicional; W6 abierto.**
 
 ## Resumen para el owner
 
@@ -107,13 +107,14 @@ Ninguna wave marcada abajo arranca sin su gate. Las respuestas se escriben **en 
   seguridad**: es de producto. El riesgo que queda —`/join` sin Turnstile si falta el secret,
   `join-request.actions.ts:56-63`— lo cubre G-ENV. Ojo: `getClientLoginCoach` se declara en
   `login.queries.ts:19`, pero **el `select` de 18 columnas está en `:28`**; ahí va `invite_code`.
-- [ ] **G-APPLINKS** — En un device con la app de **Play** instalada: `adb shell pm get-app-links
+- [x] **G-APPLINKS** — En un device con la app de **Play** instalada: `adb shell pm get-app-links
   cl.evaapp.eva`, y confirmar que la SHA-256 de `apps/web/public/.well-known/assetlinks.json:8` es la clave de
   **App Signing** de Play. Comprobarlo desde **los dos hosts**: `vercel.json:14` excluye `.well-known/` del 308
   apex→www. Extenderlo a `/reset-password` y `/coach/subscription`, que la app también reclama
   (`apps/mobile/app.json:105,150` y `:164-165,179-180`). **Es el mismo G1 de
   [vive-tu-app-directo](../vive-tu-app-directo/TASKS.md): correrlo UNA vez.** **Decide** W4.2 y la matriz de
-  QA. **Resultado:** _pendiente_.
+  QA. **Resultado:** _verificado 26-08 (`e4187269`): assetlinks publica la firma real de Play App Signing +
+  `app.json` extendido._
 - [ ] **G-ASC** — Estado de App Privacy / privacy manifest en App Store Connect. **Se lee el martes
   **2026-08-25**, no antes: el owner decidió D7 = A (sí al rebuild) pero **diferido a ese día**, así que leer
   hoy el estado de App Privacy no cambia nada y se releería igual. **Resultado:** _vencido el 25-08 sin lectura registrada; lo lee el owner cuando entre a App Store Connect (verificado 2026-09-02)_.
@@ -1220,11 +1221,12 @@ regla se cumpla, y **fuera del total base de la estimación** (+4 h condicionale
   quien la apagó, y cancelar `day2_pro` / `day14_last_call` al primer alumno real. Además **el D+1 apunta a
   `/coach/clients?invite=1`, no a `/coach/guia`**, por decisión de W2.5 de este spec — o sea lo contrario de
   lo que pide W8.1.10: eso se anota como divergencia deliberada, no como pendiente.
-- [ ] **W6.5** · **ARREGLA** **Verificar** que lo anotado en W0.7 dentro de
+- [x] **W6.5** · **ARREGLA** **Verificar** que lo anotado en W0.7 dentro de
   [vive-tu-app-directo](../vive-tu-app-directo/TASKS.md) efectivamente se ejecutó: los tres aportes (`signOut`
   local en `app/vive-tu-app/route.ts:45`, atar `c=` al `coach_id` del demo, rate limit del endpoint móvil) y
   el call site de W1.4 dentro de su W3. **La anotación es W0.7 y va al principio**; acá solo se comprueba —
-  al cierre ya es tarde para anotar nada.
+  al cierre ya es tarde para anotar nada. **Verificado:** V1.27/V1.28/V1.29/V3.13 tildados `[x]` en
+  [vive-tu-app-directo/TASKS.md](../vive-tu-app-directo/TASKS.md).
 - [ ] **W6.6** · **ARREGLA** Suite completa **una** vez pre-push, en worktree limpio.
 
 ### W6 — primera corrida de QA en device del owner (26-08 tarde, Android + iPhone)

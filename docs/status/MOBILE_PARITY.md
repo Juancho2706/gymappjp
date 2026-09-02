@@ -14,6 +14,8 @@ source_of_truth: apps/web responsive + apps/mobile
 
 ## Resumen ejecutivo
 
+> **QA en device pendiente (acumulado, 18 ítems):** [`docs/testing/QA_DEVICE_PENDIENTE.md`](../testing/QA_DEVICE_PENDIENTE.md).
+
 > **2026-09-02 (QA del owner del 02-09: ejecutor, Share Entreno y accesos — EN PRODUCCIÓN, QA pendiente)** (SDD
 > [qa-ejecutor-share-0209](../specs/qa-ejecutor-share-0209/SPEC.md), mockup `c4a77ab0` opción B): `master` = `rnmobiledenuevo` =
 > `0f545926`, deploy web `dpl_35ZT6w7oLzBrnMEAsXjmVQVdCy2R` READY, OTA 1.1.2 canal `production` android `bd2bc6e8` (run 33593759289) /

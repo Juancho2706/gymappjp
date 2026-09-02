@@ -1,7 +1,18 @@
+---
+status: done
+owner: product-engineering
+last_verified: "2026-09-02"
+canonical: false
+---
+
 # TASKS — T2.4 Sustituciones FULL
 
 > **Nota 2026-08-17:** en producción desde `654efd33`; el checklist de device queda pendiente de
 > acta — cerrable a criterio del owner.
+>
+> **Nota de cierre 02-09:** quedan 2 tickets abiertos — confirmacion RN con `Alert` en vez de
+> stepper (linea 113 de abajo, **en curso hoy**) y actualizar `docs/status/MOBILE_PARITY.md` si
+> cambia la paridad declarada (linea 210).
 
 Convenciones: `[ ]` pendiente · `[~]` en curso · `[x]` hecho con gates verdes (se anota commit) · `[!]` bloqueado (se anota por que).
 

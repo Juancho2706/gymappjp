@@ -298,7 +298,7 @@ del owner D9–D13 están al final; sin ellas no arranca lo que las cita.
   [w6-w7-05]
 - [ ] W8.4.2 **D12** reloj: cron horario (`vercel.json` solo tiene diarios/semanales ⇒ «+2 h» = «hasta +26 h»)
   + trigger de DB para el aha (hoy solo se calcula cuando el coach abre la guía). [w6-w7-08/10]
-- [ ] W8.4.3 Señal de login del alumno (`clients` no tiene ninguna; solo `auth.users.last_sign_in_at`):
+- [x] W8.4.3 (ejecutado en flujo-coach-nuevo W1, verificado 02-09: W1.1-W1.4 `[x]` 26-08) Señal de login del alumno (`clients` no tiene ninguna; solo `auth.users.last_sign_in_at`):
   columna aditiva `clients.last_login_at` escrita por el login del alumno, o lectura con service_role en el
   barrido. Sin esto no existe «+48 h el alumno no entró». [w6-w7-09]
   **Nota 26-08 ([flujo-coach-nuevo W0.6](../flujo-coach-nuevo/TASKS.md)): la señal CAMBIA DE NOMBRE — es
