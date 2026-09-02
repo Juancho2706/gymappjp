@@ -2,7 +2,7 @@ import { ImageResponse } from 'next/og'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
-import { fetchPublicCoachBranding } from '@/lib/branding/public-branding'
+import { fetchPublicCoachBranding, resolveEffectiveBrandColor } from '@/lib/branding/public-branding'
 import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 import { BRAND_APP_ICON, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 
@@ -41,7 +41,14 @@ export async function GET(request: NextRequest, { params }: Params) {
     let logoUrl = brandingAllowed && coach?.logo_url
         ? coach.logo_url
         : new URL(BRAND_APP_ICON, request.url).toString()
-    let bg = safeColor(brandingAllowed ? coach?.primary_color : SYSTEM_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR)
+    // W1a — fondo con el color EFECTIVO: con tema preset elegido, `primary_color` es la columna
+    // libre LEGACY y el splash quedaba de otro color que la app. `resolveEffectiveBrandColor` ya
+    // aplica el gate de tier; `safeColor` sigue filtrando un hex inválido guardado en la fila.
+    let bg = safeColor(resolveEffectiveBrandColor({
+        primaryColor: coach?.primary_color,
+        themePresetKey: coach?.theme_preset_key,
+        subscriptionTier: coach?.subscription_tier,
+    }), SYSTEM_PRIMARY_COLOR)
 
     // Alumno de pool (team_id set, org_id NULL): marca del TEAM (name/logo_url/primary_color +
     // splash_bg_color para el fondo). teams no tiene SELECT anon → service-role.

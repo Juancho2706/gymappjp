@@ -1,4 +1,7 @@
 import type { PostgrestError, SupabaseClient } from '@supabase/supabase-js'
+import { resolvePresetBranding } from '@eva/brand-kit'
+import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
+import { SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 import type { Database, Tables } from '@/lib/database.types'
 
 type Coach = Tables<'coaches'>
@@ -74,4 +77,46 @@ export async function fetchPublicCoachBranding(
     const { data, error } = await supabase.rpc('get_coach_public_branding', { p_identifier: identifier })
     if (error) return { data: null, error }
     return { data: mapPublicCoachBranding(data), error: null }
+}
+
+/**
+ * Color de marca EFECTIVO de una superficie pública (white-label W1a).
+ *
+ * `coaches.primary_color` es el color LIBRE legacy: desde que existe el catálogo curado
+ * (`theme_preset_key`), la columna cruda queda como GRANDFATHER y ya no es lo que ve el alumno —
+ * `resolvePresetBranding` la pisa con el color del preset. El layout `/c` y el login ya lo
+ * resolvían así; las superficies que leían la columna/el header CRUDO (loader de ruta, manifest,
+ * splash, theme-color del viewport) pintaban el color viejo del coach y quedaban fuera de tono
+ * con la app — bug del owner 2026-09-02: `josefit` (preset `sport-blue` = #2563EB) mostraba un
+ * loader NARANJA porque su `primary_color` legacy sigue siendo #F97316.
+ *
+ * Reglas (espejo exacto del layout `/c` y de `resolveEffectiveCoachBrandTheme` en RN):
+ * - Tier inválido/stale (`isBrandingAllowed` fail-closed) ⇒ azul de sistema.
+ * - `managed` (marca de org/team, `x-workspace-brand-source` = organization|orphan) ⇒ el preset
+ *   NO aplica: es PERSONAL del coach y la marca gestionada debe ganar.
+ * - Sin preset (o key desconocida) ⇒ passthrough del color libre legacy.
+ */
+export type EffectiveBrandColorInput = {
+    /** `coaches.primary_color` crudo (columna legacy) o el header `x-coach-primary-color`. */
+    primaryColor?: string | null
+    /** `coaches.theme_preset_key` o el header `x-coach-theme-preset-key`. */
+    themePresetKey?: string | null
+    /** `coaches.subscription_tier` o el header `x-coach-subscription-tier`. */
+    subscriptionTier?: string | null
+    /** Marca gestionada por org/team: el preset personal del coach no aplica. */
+    managed?: boolean
+}
+
+export function resolveEffectiveBrandColor(
+    input: EffectiveBrandColorInput | null | undefined,
+): string {
+    if (!input) return SYSTEM_PRIMARY_COLOR
+    if (!isBrandingAllowed((input.subscriptionTier ?? 'free') as SubscriptionTier)) {
+        return SYSTEM_PRIMARY_COLOR
+    }
+    const resolved = resolvePresetBranding({
+        theme_preset_key: input.managed ? null : (input.themePresetKey ?? null),
+        primary_color: input.primaryColor ?? null,
+    })
+    return resolved.primary_color?.trim() || SYSTEM_PRIMARY_COLOR
 }

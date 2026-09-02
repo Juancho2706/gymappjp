@@ -1,6 +1,7 @@
 import { headers } from 'next/headers'
 import { ClientLoadingShell } from '@/components/ui/EvaRouteLoader'
 import { decodeBrandHeaderValue } from '@/lib/brand-header-codec'
+import { resolveEffectiveBrandColor } from '@/lib/branding/public-branding'
 
 export async function BrandClientLoadingShell({
     children,
@@ -21,7 +22,16 @@ export async function BrandClientLoadingShell({
     const iconMode = (iconModeRaw === 'coach' || iconModeRaw === 'none') ? iconModeRaw : 'eva' as const
     const coachLogoUrl = h.get('x-coach-logo-url') || undefined
     const coachLogoDarkUrl = h.get('x-coach-logo-url-dark') || undefined
-    const primaryColor = h.get('x-coach-primary-color') || undefined
+    // W1a — el loader de ruta pinta el color EFECTIVO (preset curado > `primary_color` crudo),
+    // igual que el layout `/c`. Leyendo el header crudo, un coach con preset veía el loader en su
+    // color libre legacy mientras el resto de la app ya estaba en el color del tema (bug del owner
+    // 2026-09-02: `josefit`, preset `sport-blue`, loader NARANJA por su #F97316 viejo).
+    const primaryColor = resolveEffectiveBrandColor({
+        primaryColor: h.get('x-coach-primary-color'),
+        themePresetKey: h.get('x-coach-theme-preset-key'),
+        subscriptionTier: h.get('x-coach-subscription-tier'),
+        managed: isManagedBrand,
+    })
 
     return (
         <ClientLoadingShell

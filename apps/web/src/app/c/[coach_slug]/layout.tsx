@@ -30,6 +30,7 @@ import { parseVtaMode, VTA_CLIENT_IS_DEMO_HEADER, VTA_MODE_HEADER } from '@/lib/
 import { DemoViewerBanner } from './_components/DemoViewerBanner'
 import { IdentifyStudentOnMount } from '@/components/analytics/IdentifyStudentOnMount'
 import { getClientRootUser } from './_data/client-root.queries'
+import { resolveEffectiveBrandColor } from '@/lib/branding/public-branding'
 
 interface Props {
     children: React.ReactNode
@@ -73,7 +74,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const brandName = decodeBrandHeaderValue(headersList.get('x-coach-brand-name')) ?? 'Mi Coach'
     const logoUrl = headersList.get('x-coach-logo-url') || null
     const logoUrlDark = headersList.get('x-coach-logo-url-dark') || null
-    const primaryColor = headersList.get('x-coach-primary-color') || null
+    // El `primary_color` NO se lee acá a propósito: desde el 02-09 la imagen no dibuja el color del
+    // coach, así que tampoco puede invalidar su caché (ver `coachOgImageVersion`).
     // El tier entra en la versión del og: es la única entrada del arte que no viaja en los headers
     // de marca (`isBrandingAllowed` fail-closed ⇒ preview de EVA en vez de la del coach).
     const subscriptionTier = headersList.get('x-coach-subscription-tier') || null
@@ -81,13 +83,14 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     const metadataBase = resolveMetadataBase()
     // OG por coach (22-08, pedido del owner): la preview de WhatsApp del link de acceso mostraba
     // el logo de EVA para cualquier coach. `api/og/[coach_slug]` dibuja SOLO el logo del coach
-    // sobre su color de marca (owner 02-09). 1200×630 = el tamaño que WhatsApp/Meta recortan
-    // menos; la imagen estática 1920×1080 queda como fallback del resto del sitio.
+    // sobre el neutro oscuro de EVA — nunca sobre su color de marca (owner 02-09). 1200×630 = el
+    // tamaño que WhatsApp/Meta recortan menos; la imagen estática 1920×1080 queda como fallback
+    // del resto del sitio.
     //
     // El `?v=` es la ÚNICA forma de invalidar la miniatura: WhatsApp cachea la preview por URL, en
     // el teléfono del que comparte, 72 h o más, y no existe herramienta oficial para limpiarla. La
-    // versión sale de las MISMAS entradas que el route dibuja (logo, logo dark, color, nombre) más
-    // el tier, así que cambia justo cuando cambia el arte y no antes. El route ignora el query.
+    // versión sale de las MISMAS entradas que el route dibuja (logo, logo dark, nombre) más el
+    // tier, así que cambia justo cuando cambia el arte y no antes. El route ignora el query.
     //
     // LÍMITE DECLARADO (hallazgo B-8): acá las partes salen de los HEADERS del proxy y el route las
     // lee del RPC `get_coach_public_branding`. Casi siempre coinciden, pero no son la misma fuente:
@@ -96,7 +99,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     // moviera ningún header dejaría la miniatura vieja pegada 72 h. Cerrarlo pide consultar el mismo
     // RPC desde `generateMetadata` (query extra por request en la ruta más caliente del portal): no
     // se paga hoy; el impacto es cosmético y acotado a esa ventana.
-    const openGraphImageVersion = coachOgImageVersion(logoUrl, logoUrlDark, primaryColor, brandName, subscriptionTier)
+    const openGraphImageVersion = coachOgImageVersion(logoUrl, logoUrlDark, brandName, subscriptionTier)
     const openGraphImageAbsoluteUrl = new URL(`/api/og/${coach_slug}?v=${openGraphImageVersion}`, metadataBase).href
     const coachPath = `/c/${coach_slug}`
     const pageUrl = new URL(coachPath, metadataBase).href
@@ -159,13 +162,31 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     }
 }
 
+/**
+ * Color de marca EFECTIVO desde los headers del proxy (white-label W1a): el preset curado manda
+ * sobre el `primary_color` crudo, salvo marca gestionada por org/team (esa gana). Mismo criterio
+ * que el cuerpo del layout — leyendo el header crudo, un coach con preset publicaba su color
+ * libre legacy en superficies que el alumno ve antes que la app (bug del owner 2026-09-02).
+ */
+function effectiveBrandColorFromHeaders(h: Headers): string {
+    const brandSource = h.get('x-workspace-brand-source')
+    return resolveEffectiveBrandColor({
+        primaryColor: h.get('x-coach-primary-color'),
+        themePresetKey: h.get('x-coach-theme-preset-key'),
+        subscriptionTier: h.get('x-coach-subscription-tier'),
+        managed: brandSource === 'organization' || brandSource === 'orphan',
+    })
+}
+
 export async function generateViewport({ params }: Props): Promise<Viewport> {
     const { coach_slug } = await params
     const headersList = await headers()
-    
-    // Use the same logic as the main layout to get the primary color
-    const primaryColor = headersList.get('x-coach-primary-color') ?? BRAND_PRIMARY_COLOR
-    
+
+    // Use the same logic as the main layout to get the primary color: el EFECTIVO (preset curado
+    // > `primary_color` crudo). El theme-color de la barra del navegador debe coincidir con lo
+    // que pinta la app, no con el color libre legacy que el coach ya no usa.
+    const primaryColor = effectiveBrandColorFromHeaders(headersList)
+
     return {
         themeColor: primaryColor,
     }

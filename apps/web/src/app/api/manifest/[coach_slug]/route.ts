@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { createServiceRoleClient } from '@/lib/supabase/admin-client';
-import { fetchPublicCoachBranding } from '@/lib/branding/public-branding';
+import { fetchPublicCoachBranding, resolveEffectiveBrandColor } from '@/lib/branding/public-branding';
 import { BRAND_APP_ICON_512, BRAND_APP_ICON_MASKABLE } from '@/lib/brand-assets';
 import { resolveBrandTheme } from '@eva/brand-kit';
 import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers';
@@ -39,7 +39,15 @@ export async function GET(
         id: coachRow.id,
         brand_name: coachRow.brand_name,
         logo_url: coachRow.logo_url,
-        primary_color: coachRow.primary_color,
+        // W1a — color EFECTIVO: si el coach eligió un tema preset, ese es el color que ve el
+        // alumno; `primary_color` es la columna libre LEGACY (grandfather) y publicarla acá
+        // dejaba el theme_color/background del PWA fuera de tono con la app. El helper además
+        // aplica el gate de tier (fail-closed ⇒ azul de sistema).
+        primary_color: resolveEffectiveBrandColor({
+          primaryColor: coachRow.primary_color,
+          themePresetKey: coachRow.theme_preset_key,
+          subscriptionTier: coachRow.subscription_tier,
+        }),
         subscription_tier: coachRow.subscription_tier,
       }
     : null
@@ -51,8 +59,8 @@ export async function GET(
     ? {
         ...coach,
         // El storage conserva los assets; el manifest solo expone la presentación efectiva.
+        // (El color ya salió gateado de `resolveEffectiveBrandColor` más arriba.)
         logo_url: brandingAllowed ? coach.logo_url : null,
-        primary_color: brandingAllowed ? coach.primary_color : SYSTEM_PRIMARY_COLOR,
       }
     : null
   const brand = coachPresentation ? await resolveManifestBrand(supabase, coachPresentation) : null
