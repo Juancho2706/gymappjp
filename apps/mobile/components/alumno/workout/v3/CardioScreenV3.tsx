@@ -5,10 +5,21 @@ import { HeartPulse, Pause, Play, Repeat, RotateCcw, Ruler, SkipForward, Timer, 
 import {
   INTERVAL_PHASE_LABEL,
   buildIntervalSequence,
+  buildTypedPayload,
   computeCardioProgress,
+  createCardioElapsed,
+  decideCardioAutolog,
   formatTypedObjective,
+  intervalPhaseClosesRound,
   intervalPhaseTargetLabel,
+  intervalRoundPrescribedSec,
   isManualPhase,
+  mergeCardioCaptureValues,
+  pauseCardioElapsed,
+  readCardioElapsed,
+  resetCardioElapsed,
+  startCardioElapsed,
+  type CardioSegmentReason,
   type IntervalConfig,
   type OptimisticLogPayload,
   type ReconciledSessionLog,
@@ -78,6 +89,22 @@ import type { ExecTheme } from './exec-theme'
  * háptico al salirse de zona ≥10 s sostenidos. Al cerrar la serie el resumen + la curva downsampleada
  * viajan como `metadata.hr` por el MISMO `buildTypedPayload` → `logSet` (motor intocable).
  */
+/**
+ * Fin de un TRAMO de cardio que el hero (countdown / intervalos / cronómetro) le avisa a la pantalla.
+ * `closesRound` = el tramo completa la fila de captura activa (en continuo siempre; en intervalos,
+ * sólo la última fase de la ronda). `prescribedSec` es el TOPE del reloj de pared: sin él, volver de
+ * background con el timer ya vencido registraría el tiempo real (45 min de un bloque de 20); `null` ⇒
+ * tramo sin duración prescrita (distancia / cronómetro), ahí el reloj de pared es la verdad.
+ * `keepsRunning` = el timer sigue corriendo tras el corte (boundary de ronda de intervalos).
+ * La decisión la toma el motor puro `decideCardioAutolog`.
+ */
+export interface CardioSegmentEvent {
+  reason: CardioSegmentReason
+  closesRound: boolean
+  prescribedSec?: number | null
+  keepsRunning?: boolean
+}
+
 /** Cue corto por zona (es-neutro) — respaldo del chip cuando no viaja el perfil FC (sin rango bpm). */
 const ZONE_CUE: Record<number, string> = {
   1: 'Suave',
@@ -189,8 +216,16 @@ export function CardioScreenV3({
   // El timer vive DENTRO de cada hero (countdown/intervalos/cronómetro); el HUD solo necesita saber si
   // corre para NO vibrar en pausa. Ref (no estado): no repinta nada al pausar.
   const timerRunningRef = useRef(true)
+  // Reloj de PARED del tramo de cardio en curso (hallazgo E): lo que termina en la caja MIN. Vive en
+  // el motor puro `cardio-autolog` (compartido con la web) y se arranca/pausa con el MISMO aviso que
+  // ya publicaban los heroes, así el botón "Pausar" de la notificación también queda cubierto.
+  const elapsedRef = useRef(createCardioElapsed())
   const handleTimerRunning = useCallback((running: boolean) => {
     timerRunningRef.current = running
+    const now = Date.now()
+    elapsedRef.current = running
+      ? startCardioElapsed(elapsedRef.current, now)
+      : pauseCardioElapsed(elapsedRef.current, now)
   }, [])
 
   useEffect(() => {
@@ -265,17 +300,109 @@ export function CardioScreenV3({
   // se conserva: sigue siendo la ficha del ejercicio). Queda el historial de lo YA registrado.
   const activeSet = skipped ? null : firstUnlogged
 
-  // Semilla del keypad tipado: draft restaurado + (si aplica) el promedio del sensor en `actual_avg_hr`.
-  // Solo se inyecta la FC del sensor si el campo aún está vacío — JAMÁS pisa lo que el alumno escribió.
-  const captureSeed = useMemo(() => {
-    const base =
+  // ── Auto-registro del cardio cronometrado (hallazgo E) ──────────────────────────────────────────
+  // Regla del owner: el timer/intervalo que TERMINA SOLO rellena los minutos, ENVÍA la serie y deja
+  // que el auto-avance de `ExecutorV3` mueva a la ronda/ejercicio siguiente; si el alumno PAUSA o
+  // SALTA antes, los minutos caen en la caja y NADA más (decide él). La decisión y la aritmética son
+  // del motor puro `cardio-autolog`, el MISMO que usa la web: acá sólo se despacha.
+  const sentSetsRef = useRef<Set<number>>(new Set())
+  // Espejo de lo último que el alumno tipeó en la fila: sembrar la caja MIN la remonta, así que sin
+  // esto se perderían METROS/FC a medio escribir (y el commit automático iría sin ellos).
+  const draftValuesRef = useRef<Record<string, string>>({})
+  const [minSeed, setMinSeed] = useState<{ values: Record<string, string>; nonce: number } | null>(null)
+
+  // Ronda nueva ⇒ acumulador limpio y sin semilla heredada. Si el reloj del tramo sigue CORRIENDO no
+  // se toca: es el boundary de una ronda de intervalos (la secuencia ya no se remonta) y `handleSegment`
+  // reinició el tramo en el instante exacto del corte — pisarlo acá dejaría la ronda siguiente en 0.
+  useEffect(() => {
+    if (elapsedRef.current.startedAtMs == null) elapsedRef.current = resetCardioElapsed()
+    draftValuesRef.current = {}
+    setMinSeed(null)
+  }, [activeSet])
+
+  // Envío FALLIDO (la fila vuelve a estar sin registrar): se purga del anti-doble-envío para que el
+  // auto-registro pueda reintentarla en el próximo fin natural de tramo.
+  useEffect(() => {
+    if (!syncErrors) return
+    for (const setNumber of Array.from(sentSetsRef.current)) {
+      if (syncErrors[`${block.id}:${setNumber}`]) sentSetsRef.current.delete(setNumber)
+    }
+  }, [syncErrors, block.id])
+
+  // Draft restaurado de la fila ACTIVA (resiliencia): base de la semilla Y del payload del auto-envío.
+  const restoredDraftValues = useMemo(
+    () =>
       restoredDraft && restoredDraft.blockId === block.id && restoredDraft.setNumber === activeSet
         ? restoredDraft.values
-        : null
-    if (seededAvg == null) return base
-    if (base?.actual_avg_hr && base.actual_avg_hr.trim() !== '') return base
-    return { ...(base ?? {}), actual_avg_hr: String(seededAvg) }
-  }, [restoredDraft, block.id, activeSet, seededAvg])
+        : null,
+    [restoredDraft, block.id, activeSet],
+  )
+
+  const handleSegment = useCallback(
+    ({ reason, closesRound, prescribedSec, keepsRunning }: CardioSegmentEvent) => {
+      const now = Date.now()
+      // Sólo la PAUSA detiene el reloj: saltar o avanzar de fase deja la secuencia corriendo, y el
+      // vencimiento se lee en vivo (reloj de pared ⇒ correcto aunque la app haya estado en background).
+      const stopped = reason === 'paused' ? pauseCardioElapsed(elapsedRef.current, now) : elapsedRef.current
+      const elapsedSec = readCardioElapsed(stopped, now)
+      const decision = decideCardioAutolog({ reason, elapsedSec, closesRound, prescribedSec })
+      // Cierre de ronda con la secuencia AÚN corriendo: el tramo siguiente arranca a contar en el mismo
+      // instante del corte (antes ese reinicio lo daba el remonte del hero, que rompía la secuencia).
+      const cleared = decision.resetElapsed ? resetCardioElapsed() : stopped
+      elapsedRef.current = decision.resetElapsed && keepsRunning ? startCardioElapsed(cleared, now) : cleared
+      if (decision.fillSeconds == null || activeSet == null) return
+      // MISMA mezcla que la semilla de la fila (`captureSeed`): draft restaurado ∪ lo tipeado ∪ FC del
+      // sensor ∪ los minutos del timer. Armar el payload sólo con `draftValuesRef` perdía los metros del
+      // draft restaurado (y la FC sembrada) cuando el alumno no había vuelto a escribir en esa ronda.
+      const values = mergeCardioCaptureValues({
+        restored: restoredDraftValues,
+        typed: draftValuesRef.current,
+        minSec: decision.fillSeconds,
+        seededAvgHr: seededAvg,
+      })
+      // Anti-doble-envío: una fila se auto-registra UNA vez (el alumno siempre puede corregirla).
+      if (!decision.submit || sentSetsRef.current.has(activeSet)) {
+        setMinSeed({ values, nonce: now })
+        return
+      }
+      sentSetsRef.current.add(activeSet)
+      const hrMetadata = hrMetadataForCommit()
+      const payload = buildTypedPayload('cardio', values, block.id, activeSet, {
+        distanceUnit: block.distance_unit ?? null,
+        cardioModality: exercise.cardio_modality ?? null,
+        ...(hrMetadata ? { hrMetadata } : {}),
+      })
+      // MISMO camino del botón ✓: resetea el acumulador de zona FC y delega en `onCommitSet`.
+      handleCommitSet(payload)
+    },
+    [
+      activeSet,
+      block.id,
+      block.distance_unit,
+      exercise.cardio_modality,
+      hrMetadataForCommit,
+      handleCommitSet,
+      restoredDraftValues,
+      seededAvg,
+    ],
+  )
+
+  // Semilla del keypad tipado al MONTAR la fila: draft restaurado + (si aplica) el promedio del sensor
+  // en `actual_avg_hr` (sólo si está vacío: JAMÁS pisa lo que el alumno escribió). La mezcla la hace el
+  // motor (`mergeCardioCaptureValues`), la misma que arma el payload del auto-envío: una sola regla de
+  // precedencia para los dos caminos. Los minutos del timer NO entran acá — llegan por `typedSeedPatch`
+  // (sin remontar la fila, así el keypad abierto no se cierra a mitad de escritura).
+  const captureSeed = useMemo(
+    () =>
+      mergeCardioCaptureValues({
+        restored: restoredDraftValues,
+        // Snapshot de la última siembra (ya trae lo tipeado + los minutos): si la fila se remonta por
+        // otra razón — la FC del sensor cambia la key — no se pierde lo que el timer había volcado.
+        typed: minSeed?.values ?? null,
+        seededAvgHr: seededAvg,
+      }),
+    [restoredDraftValues, seededAvg, minSeed],
+  )
 
   const loggedRows = Array.from({ length: block.sets }).map((_, i) => {
     const setNumber = i + 1
@@ -340,10 +467,19 @@ export function CardioScreenV3({
       )}
 
       {/* HERO por modo */}
+      {/* `key` por RONDA en countdown y cronómetro: al cerrarse una fila el hero se remonta ⇒ la ronda
+          siguiente arranca en su valor prescrito y DETENIDA (regla "nada corre solo", QA4 h8a). Es el
+          equivalente al `resetKey` del countdown web.
+          INTERVALOS NO: `buildIntervalSequence` es la secuencia de TODAS las rondas (warmup una vez,
+          repeats × sets works, cooldown al final), así que remontarla en cada cierre de fila la devolvía
+          a la fase 0 — calentamiento repetido por ronda, cooldown inalcanzable y minutos inflados. La
+          fila se cierra en el boundary (`resetElapsed` del motor deja el acumulador limpio) y la
+          secuencia sigue de corrido. */}
       {mode === 'interval' ? (
-        <IntervalHero block={block} zoneColor={zoneColor} reducedMotion={reducedMotion} exec={exec} onRunningChange={handleTimerRunning} largeIconUrl={coachLogoUrl} />
+        <IntervalHero block={block} zoneColor={zoneColor} reducedMotion={reducedMotion} exec={exec} onRunningChange={handleTimerRunning} onSegment={handleSegment} largeIconUrl={coachLogoUrl} />
       ) : mode === 'countdown' ? (
         <CountdownHero
+          key={`hero-${activeSet ?? 'x'}`}
           durationSec={block.duration_sec as number}
           block={block}
           exerciseName={exercise.name}
@@ -351,10 +487,11 @@ export function CardioScreenV3({
           reducedMotion={reducedMotion}
           exec={exec}
           onRunningChange={handleTimerRunning}
+          onSegment={handleSegment}
           largeIconUrl={coachLogoUrl}
         />
       ) : (
-        <StopwatchHero distanceObjective={distanceObjective} zoneColor={zoneColor} reducedMotion={reducedMotion} exec={exec} onRunningChange={handleTimerRunning} largeIconUrl={coachLogoUrl} />
+        <StopwatchHero key={`hero-${activeSet ?? 'x'}`} distanceObjective={distanceObjective} zoneColor={zoneColor} reducedMotion={reducedMotion} exec={exec} onRunningChange={handleTimerRunning} onSegment={handleSegment} largeIconUrl={coachLogoUrl} />
       )}
 
       {/* Zona objetivo SIEMPRE visible + sub-chip honesto */}
@@ -469,6 +606,9 @@ export function CardioScreenV3({
             </View>
           ) : null}
           <ActiveSetRow
+            // La semilla de MIN ya NO viaja en la `key` (remontar cerraba el keypad a mitad de escritura
+            // cuando llegaba un "Pausar" desde la notificación): entra por `typedSeedPatch`, que escribe
+            // el valor por el mismo camino que una edición del alumno.
             key={`${block.id}-${activeSet}-${seededAvg != null ? 'hr' : 'x'}`}
             blockId={block.id}
             setNumber={activeSet}
@@ -481,12 +621,18 @@ export function CardioScreenV3({
             cardioModality={exercise.cardio_modality ?? null}
             suggestedWeight={null}
             seedValues={captureSeed}
+            // Minutos medidos por el timer (hallazgo E): se setean SIN desmontar la fila.
+            typedSeedPatch={minSeed}
             header={{ exerciseName: exercise.name, objectiveLine }}
             // FC del bloque (specs/cardio-conectado F1): la fila pide el resumen al confirmar y lo pasa
             // como `ctx.hrMetadata` a `buildTypedPayload` → `workout_logs.metadata.hr`. Sin stream (o sin
             // una sola muestra) devuelve null y el payload queda byte-idéntico al de siempre.
             getHrMetadata={hrMetadataForCommit}
-            onDraftChange={(values, fieldIndex) => onDraftChange(block.id, activeSet as number, values, fieldIndex)}
+            onDraftChange={(values, fieldIndex) => {
+              // Espejo para el auto-registro (hallazgo E): lo tipeado viaja en la semilla y en el commit.
+              draftValuesRef.current = values
+              onDraftChange(block.id, activeSet as number, values, fieldIndex)
+            }}
             onCommit={handleCommitSet}
           />
         </View>
@@ -660,6 +806,7 @@ function CountdownHero({
   reducedMotion,
   exec,
   onRunningChange,
+  onSegment,
   largeIconUrl,
 }: {
   durationSec: number
@@ -671,15 +818,39 @@ function CountdownHero({
   exec: ExecTheme
   /** Avisa al HUD si el conteo corre (el aviso háptico de fuera-de-zona jamás suena en pausa). */
   onRunningChange?: (running: boolean) => void
+  /**
+   * Fin de un TRAMO de cardio (hallazgo E): `expired` ⇒ la pantalla rellena MIN, envía la serie y deja
+   * avanzar al ejecutor; `paused`/`skipped` ⇒ sólo rellena. La decisión la toma el motor puro.
+   */
+  onSegment?: (e: CardioSegmentEvent) => void
   /** Logo del coach para el ícono grande de la notificación (unificado con el descanso). */
   largeIconUrl?: string
 }) {
   const s = exec.surface
   // QA4 h8a: NO auto-arranca (paridad web: `useExecCountdown(durationSec, { autoStart: false })`).
-  const countdown = useCountdown(durationSec, () => timerHaptics.holdDone(), false)
+  // `onSegment` por ref: el `onDone` de `useCountdown` se congela en el primer render del hero.
+  const onSegmentRef = useRef(onSegment)
+  useEffect(() => { onSegmentRef.current = onSegment })
+  const countdown = useCountdown(
+    durationSec,
+    () => {
+      timerHaptics.holdDone()
+      // Fin natural del bloque continuo: cierra la ronda ⇒ auto-registro (hallazgo E). `prescribedSec`
+      // es el TOPE: volver de background con el timer ya vencido registra los minutos PRESCRITOS, no
+      // los 45 de reloj de pared que estuvo el teléfono bloqueado.
+      onSegmentRef.current?.({ reason: 'expired', closesRound: true, prescribedSec: durationSec })
+    },
+    false,
+  )
   useEffect(() => {
     onRunningChange?.(countdown.running)
   }, [countdown.running, onRunningChange])
+
+  /** Pausa (botón de pantalla o de la notificación): vuelca los minutos SIN enviar ni avanzar. */
+  const handleToggle = () => {
+    if (countdown.running) onSegment?.({ reason: 'paused', closesRound: false, prescribedSec: durationSec })
+    countdown.toggle()
+  }
   const progress = computeCardioProgress(cardioObjective(block), { elapsed_sec: durationSec - countdown.remaining })
   const fill = progress ? 1 - progress.pct : countdown.remaining / (durationSec || 1)
 
@@ -692,6 +863,8 @@ function CountdownHero({
   // Función simple (sin useCallback): el React Compiler infiere `countdown` completo como dep y
   // rechaza la memo manual por [countdown.restart]; la identidad da igual (RingRestart es trivial).
   const handleRestart = () => {
+    // "Reiniciar" limpia el acumulador y NO reescribe la caja; `restart` deja el reloj corriendo.
+    onSegment?.({ reason: 'restart', closesRound: false })
     setRestartTick((t) => t + 1)
     countdown.restart(durationSec)
   }
@@ -735,8 +908,10 @@ function CountdownHero({
   // funcional, por lo que el orden se respeta. Ver la cabecera de `use-cardio-live-timer`.
   const liveControls: CardioLiveControls = {
     running: countdown.running,
-    toggle: countdown.toggle,
+    // El "Pausar" de la notificación entra por el MISMO camino que el botón de pantalla (caso (b)).
+    toggle: handleToggle,
     adoptExact: (seconds, running) => {
+      if (!running && countdown.running) onSegment?.({ reason: 'paused', closesRound: false, prescribedSec: durationSec })
       countdown.restart(seconds)
       if (!running) countdown.toggle()
     },
@@ -762,7 +937,7 @@ function CountdownHero({
         </ProgressRing>
         <RingRestart onPress={handleRestart} />
       </View>
-      <PauseButton running={countdown.running} started={countdown.started} onToggle={countdown.toggle} exec={exec} reducedMotion={reducedMotion} />
+      <PauseButton running={countdown.running} started={countdown.started} onToggle={handleToggle} exec={exec} reducedMotion={reducedMotion} />
       {/* Chips de métricas: SOLO objetivos derivables de la prescripción (nada inventado). */}
       <CardioChipsRow>
         <MetricChipRN icon={<Timer size={16} color={hexToRgba(exec.accent, 0.85)} />} value={formatClock(durationSec)} label="Objetivo" wide={distObj == null} />
@@ -779,6 +954,7 @@ function IntervalHero({
   reducedMotion,
   exec,
   onRunningChange,
+  onSegment,
   largeIconUrl,
 }: {
   block: SessionBlock
@@ -787,6 +963,11 @@ function IntervalHero({
   exec: ExecTheme
   /** Avisa al HUD si el runner corre (el aviso háptico de fuera-de-zona jamás suena en pausa). */
   onRunningChange?: (running: boolean) => void
+  /**
+   * Fin de un TRAMO de cardio (hallazgo E): `expired`/`manual-next` que CIERRA la ronda ⇒ la pantalla
+   * rellena MIN, envía la serie y deja avanzar al ejecutor; `paused`/`skipped` ⇒ sólo rellena.
+   */
+  onSegment?: (e: CardioSegmentEvent) => void
   /** Logo del coach para el ícono grande de la notificación (unificado con el descanso). */
   largeIconUrl?: string
 }) {
@@ -798,13 +979,48 @@ function IntervalHero({
     [block.interval_config, block.sets],
   )
   const [flash, setFlash] = useState(0)
+  // Fases `work` por ronda de captura: `buildIntervalSequence` numera 1..(repeats × sets) y las filas
+  // son `block.sets`, así que la ronda de una fase es `ceil(repeat / repeats)` (motor `cardio-autolog`).
+  const repeatsPerRound = ((block.interval_config ?? null) as IntervalConfig | null)?.repeats ?? 1
+  const totalRounds = block.sets || 1
   const runner = useIntervalRunner(phases, {
     onPhaseChange: () => { setFlash((f) => f + 1); timerHaptics.intervalPhase() },
     onFinish: () => { setFlash((f) => f + 1); timerHaptics.intervalFinish() },
+    // Sólo la fase que CIERRA la ronda registra la fila; las intermedias no ensucian la caja.
+    // `prescribedSec` = suma de las fases de ESA ronda (tope del reloj de pared); `keepsRunning` =
+    // quedan fases por delante, así que el tramo siguiente arranca a contar en el instante del corte.
+    onSegmentEnd: ({ reason, phaseIndex }) =>
+      onSegment?.({
+        reason,
+        closesRound: intervalPhaseClosesRound(phases, phaseIndex, repeatsPerRound, totalRounds),
+        prescribedSec: intervalRoundPrescribedSec(phases, phaseIndex, repeatsPerRound, totalRounds),
+        keepsRunning: phaseIndex < phases.length - 1,
+      }),
   })
   useEffect(() => {
     onRunningChange?.(runner.running)
   }, [runner.running, onRunningChange])
+
+  /** Tope de la ronda EN CURSO (para las pausas): la del índice activo. */
+  const roundPrescribedSec = intervalRoundPrescribedSec(phases, runner.phaseIndex, repeatsPerRound, totalRounds)
+
+  /** Pausa (botón de pantalla o de la notificación): vuelca los minutos SIN enviar ni avanzar. */
+  const handleToggle = () => {
+    if (runner.running) onSegment?.({ reason: 'paused', closesRound: false, prescribedSec: roundPrescribedSec })
+    runner.toggle()
+  }
+
+  /**
+   * CTA "Fase siguiente" (fase por DISTANCIA): el reloj de pared del tramo arranca con este PRIMER
+   * GESTO — se avisa ANTES de avanzar porque el runner emite el fin del tramo en la misma llamada (los
+   * `setState` de `next()` recién se ven en el render siguiente). Consecuencia deliberada ("nada corre
+   * solo al montar", QA4 h8a): en una secuencia que EMPIEZA por distancia la ronda 1 cierra con 0 s ⇒
+   * el motor no la registra y el alumno la captura a mano. Misma regla en la web.
+   */
+  const handleNext = () => {
+    onRunningChange?.(true)
+    runner.next()
+  }
 
   const phase = runner.phase
   const phaseColor = phase ? PHASE_COLORS[phase.kind] : zoneColor
@@ -825,6 +1041,8 @@ function IntervalHero({
   // Función simple (sin useCallback): mismo criterio que CountdownHero — el Compiler infiere
   // `runner` completo y rechaza la memo manual por [runner.restart].
   const handleRestart = () => {
+    // "Reiniciar" limpia el acumulador y NO reescribe la caja; `restart` deja la secuencia corriendo.
+    onSegment?.({ reason: 'restart', closesRound: false })
     setRestartTick((t) => t + 1)
     runner.restart()
   }
@@ -869,8 +1087,13 @@ function IntervalHero({
   // Objeto sin memoizar: el hook lo guarda en un ref que refresca en cada render (ver CountdownHero).
   const liveControls: CardioLiveControls = {
     running: runner.running,
-    toggle: runner.toggle,
-    adoptExact: runner.adoptRemaining,
+    // Pausar desde la notificación entra por el MISMO camino que el botón de pantalla (caso (b));
+    // "Fase siguiente" ya viaja por `skip`, que emite `skipped` desde el corredor.
+    toggle: handleToggle,
+    adoptExact: (seconds, running) => {
+      if (!running && runner.running) onSegment?.({ reason: 'paused', closesRound: false, prescribedSec: roundPrescribedSec })
+      runner.adoptRemaining(seconds, running)
+    },
     skipPhase: runner.skip,
   }
   useCardioLiveTimer(liveSpec, liveControls)
@@ -1011,7 +1234,7 @@ function IntervalHero({
             testID="btn-cardio-nextphase-v3"
             label="Fase siguiente"
             icon={<SkipForward size={18} color={exec.accentText} fill={exec.accentText} />}
-            onPress={runner.next}
+            onPress={handleNext}
             exec={exec}
             height={56}
             reducedMotion={reducedMotion}
@@ -1019,7 +1242,7 @@ function IntervalHero({
           />
         </View>
       ) : (
-        <PauseButton running={runner.running} started={runner.started} onToggle={runner.toggle} exec={exec} reducedMotion={reducedMotion} />
+        <PauseButton running={runner.running} started={runner.started} onToggle={handleToggle} exec={exec} reducedMotion={reducedMotion} />
       ))}
     </View>
   )
@@ -1032,6 +1255,7 @@ function StopwatchHero({
   reducedMotion,
   exec,
   onRunningChange,
+  onSegment,
   largeIconUrl,
 }: {
   distanceObjective: string | null
@@ -1040,6 +1264,11 @@ function StopwatchHero({
   exec: ExecTheme
   /** Avisa al HUD si el cronómetro corre (el aviso háptico de fuera-de-zona jamás suena en pausa). */
   onRunningChange?: (running: boolean) => void
+  /**
+   * Fin de un TRAMO de cardio (hallazgo E). Un bloque por distancia NUNCA vence solo (no hay 0 al que
+   * llegar): acá sólo existe la pausa, que rellena los minutos sin enviar nada.
+   */
+  onSegment?: (e: CardioSegmentEvent) => void
   /** Logo del coach para el ícono grande de la notificación (unificado con el descanso). */
   largeIconUrl?: string
 }) {
@@ -1049,6 +1278,12 @@ function StopwatchHero({
   useEffect(() => {
     onRunningChange?.(stopwatch.running)
   }, [stopwatch.running, onRunningChange])
+
+  /** Pausa (botón de pantalla o de la notificación): vuelca los minutos SIN enviar ni avanzar. */
+  const handleToggle = () => {
+    if (stopwatch.running) onSegment?.({ reason: 'paused', closesRound: false })
+    stopwatch.toggle()
+  }
 
   // ── Espejo en bandeja/lockscreen ──────────────────────────────────────────────────────────────
   // Cronómetro ASCENDENTE: el instante de inicio absoluto es "ahora menos lo transcurrido", así el
@@ -1075,8 +1310,11 @@ function StopwatchHero({
   // Objeto sin memoizar: el hook lo guarda en un ref que refresca en cada render (ver CountdownHero).
   const liveControls: CardioLiveControls = {
     running: stopwatch.running,
-    toggle: stopwatch.toggle,
-    adoptExact: stopwatch.adopt,
+    toggle: handleToggle,
+    adoptExact: (seconds, running) => {
+      if (!running && stopwatch.running) onSegment?.({ reason: 'paused', closesRound: false })
+      stopwatch.adopt(seconds, running)
+    },
   }
   useCardioLiveTimer(liveSpec, liveControls)
 
@@ -1101,7 +1339,7 @@ function StopwatchHero({
           Objetivo: <Text style={{ color: s.text }}>{distanceObjective}</Text>
         </Text>
       ) : null}
-      <PauseButton running={stopwatch.running} started={stopwatch.started} onToggle={stopwatch.toggle} exec={exec} reducedMotion={reducedMotion} />
+      <PauseButton running={stopwatch.running} started={stopwatch.started} onToggle={handleToggle} exec={exec} reducedMotion={reducedMotion} />
     </View>
   )
 }

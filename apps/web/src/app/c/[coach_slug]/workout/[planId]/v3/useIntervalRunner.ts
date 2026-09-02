@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { playTimerSound } from '@/lib/audioUtils'
 import { triggerHaptic } from '@/lib/client/haptics'
 import { readRestTimerSound, readRestTimerVolume } from '../rest-timer-preferences'
-import { isManualPhase, type IntervalPhase } from '@eva/workout-engine'
+import { isManualPhase, type CardioSegmentReason, type IntervalPhase } from '@eva/workout-engine'
 
 /**
  * Ejecutor V3 (E3.4) — corredor de FASES de intervalo EN LA PANTALLA, con la MISMA disciplina que el
@@ -22,6 +22,12 @@ export interface IntervalRunner {
     phaseIndex: number
     timeLeft: number
     isActive: boolean
+    /**
+     * ¿El alumno YA lo puso en marcha alguna vez? (paridad con `timing.ts` de RN). Distingue "sin
+     * iniciar" de "pausado": es lo que deja arrancar el reloj de pared del tramo con el PRIMER GESTO
+     * en una fase por DISTANCIA, en vez de al montar la pantalla ("nada corre solo", QA4 h8a).
+     */
+    started: boolean
     finished: boolean
     /** ¿La fase actual espera avance manual (prescrita por distancia)? */
     isManual: boolean
@@ -34,13 +40,24 @@ export interface IntervalRunner {
     restart: () => void
 }
 
-export function useIntervalRunner(phases: IntervalPhase[]): IntervalRunner {
+/** Razones de fin de TRAMO que puede emitir el runner (el resto las decide el consumidor). */
+export type IntervalSegmentReason = Extract<CardioSegmentReason, 'expired' | 'manual-next' | 'skipped'>
+
+export function useIntervalRunner(
+    phases: IntervalPhase[],
+    opts: { onSegmentEnd?: (e: { reason: IntervalSegmentReason; phaseIndex: number }) => void } = {},
+): IntervalRunner {
     const [phaseIndex, setPhaseIndex] = useState(0)
     const [timeLeft, setTimeLeft] = useState(phases[0]?.durationSec ?? 0)
     const [isActive, setIsActive] = useState(false)
+    const [started, setStarted] = useState(false)
     const [finished, setFinished] = useState(false)
     const endTimeRef = useRef<number | null>(null)
     const phaseIndexRef = useRef(0)
+    // Por ref (patrón `onDoneRef` de `useExecCountdown`) para no re-armar el intervalo cuando el
+    // consumidor pasa un closure nuevo en cada render.
+    const onSegmentEndRef = useRef(opts.onSegmentEnd)
+    onSegmentEndRef.current = opts.onSegmentEnd
 
     const phase = phases[phaseIndex] ?? null
 
@@ -51,7 +68,14 @@ export function useIntervalRunner(phases: IntervalPhase[]): IntervalRunner {
 
     const isManual = isManualPhase(phase)
 
-    const advance = useCallback(() => {
+    /**
+     * Cierra la fase en curso y pasa a la siguiente. `reason` viaja hacia afuera ANTES de mover el
+     * índice (hallazgo E · auto-registro de cardio): el consumidor necesita saber QUÉ fase terminó y
+     * por qué para decidir si ese tramo cierra la ronda de captura. Se emite UNA sola vez por avance,
+     * también en la rama de fin de secuencia.
+     */
+    const advance = useCallback((reason: IntervalSegmentReason) => {
+        onSegmentEndRef.current?.({ reason, phaseIndex: phaseIndexRef.current })
         const next = phaseIndexRef.current + 1
         if (next >= phases.length) {
             beep(true)
@@ -76,7 +100,7 @@ export function useIntervalRunner(phases: IntervalPhase[]): IntervalRunner {
                 if (!endTimeRef.current) return
                 const next = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000))
                 setTimeLeft(next)
-                if (next === 0) advance()
+                if (next === 0) advance('expired')
             }, 250)
         } else if (!isActive) {
             endTimeRef.current = null
@@ -87,13 +111,15 @@ export function useIntervalRunner(phases: IntervalPhase[]): IntervalRunner {
 
     const toggle = useCallback(() => {
         if (finished) return
+        setStarted(true)
         setIsActive((v) => !v)
     }, [finished])
 
     const skip = useCallback(() => {
         if (finished) return
+        setStarted(true)
         endTimeRef.current = null
-        advance()
+        advance('skipped')
     }, [finished, advance])
 
     /**
@@ -104,8 +130,11 @@ export function useIntervalRunner(phases: IntervalPhase[]): IntervalRunner {
         if (finished) return
         const isLast = phaseIndexRef.current + 1 >= phases.length
         endTimeRef.current = null
-        advance()
+        // `started`/`isActive` ANTES de emitir el fin del tramo: el consumidor arranca su reloj de
+        // pared con este primer gesto, y si el aviso llegara antes cerraría la ronda con 0 s.
+        setStarted(true)
         if (!isLast) setIsActive(true)
+        advance('manual-next')
     }, [finished, advance, phases.length])
 
     const restart = useCallback(() => {
@@ -114,11 +143,12 @@ export function useIntervalRunner(phases: IntervalPhase[]): IntervalRunner {
         setPhaseIndex(0)
         setTimeLeft(phases[0]?.durationSec ?? 0)
         setFinished(false)
+        setStarted(true)
         setIsActive(true)
     }, [phases])
 
     // Fase manual ⇒ anillo LLENO y estático (no hay cuenta que drenar); por tiempo ⇒ restante.
     const frac = isManual ? 1 : phase && phase.durationSec > 0 ? Math.max(0, Math.min(1, timeLeft / phase.durationSec)) : 0
 
-    return { phase, phaseIndex, timeLeft, isActive, finished, isManual, frac, toggle, skip, next, restart }
+    return { phase, phaseIndex, timeLeft, isActive, started, finished, isManual, frac, toggle, skip, next, restart }
 }

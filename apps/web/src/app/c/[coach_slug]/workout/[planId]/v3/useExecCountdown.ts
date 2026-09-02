@@ -83,6 +83,21 @@ export function useExecCountdown(
         return () => clearInterval(interval)
     }, [isActive, timeLeft, triggerDone])
 
+    // Pestaña OCULTA: Chrome congela el `setInterval` del tick, así que al volver hay que releer el fin
+    // absoluto (que sí es real) en vez de esperar el próximo tick. Espejo exacto del re-sync por
+    // `AppState 'active'` de RN (`timing.ts`): si ya venció, `triggerDone` dispara acá — de disparo
+    // único, así que el sonido/haptic siguen sonando una sola vez.
+    useEffect(() => {
+        const onVisible = () => {
+            if (document.visibilityState !== 'visible' || !endTimeRef.current) return
+            const next = Math.max(0, Math.ceil((endTimeRef.current - Date.now()) / 1000))
+            setTimeLeft(next)
+            if (next === 0) triggerDone()
+        }
+        document.addEventListener('visibilitychange', onVisible)
+        return () => document.removeEventListener('visibilitychange', onVisible)
+    }, [triggerDone])
+
     const toggle = useCallback(() => {
         if (done) return
         setIsActive((v) => !v)

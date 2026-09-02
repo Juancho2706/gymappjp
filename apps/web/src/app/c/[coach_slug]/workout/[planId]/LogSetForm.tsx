@@ -18,7 +18,13 @@ import {
 } from '@/lib/workout-offline-queue'
 import { triggerHaptic } from '@/lib/client/haptics'
 import { useCoarsePointer } from '@/lib/client/useCoarsePointer'
-import { formatWeightEsCl, type PrKind, type RepeatSeedEntry } from '@eva/workout-engine'
+import {
+    cardioMinSeedValue,
+    cardioMinutesFromSeconds,
+    formatWeightEsCl,
+    type PrKind,
+    type RepeatSeedEntry,
+} from '@eva/workout-engine'
 import { readDraft, saveDraft, clearDraft, type DraftFields } from './workout-draft-store'
 import { useWorkoutKeypad } from './WorkoutKeypadProvider'
 import { ScaleDots, EffortHelp, RPE_HELP, RIR_HELP } from './EffortScale'
@@ -245,6 +251,14 @@ interface Props {
      * `holdSec`. Sólo el flujo movilidad V3 lo pasa; sin él la fila no cambia.
      */
     holdPrefill?: { holdSec?: number | null; leftSec?: number | null; rightSec?: number | null; nonce: number }
+    /**
+     * Auto-registro del CARDIO cronometrado (hallazgo E): al cambiar `nonce`, escribe los minutos medidos
+     * en el input `cardio_min` de la fila ACTIVA y —si `submit`— dispara el submit real (`requestSubmit`),
+     * que pasa por el MISMO pipeline de siempre (cola offline, descanso, `onLogged`, auto-avance).
+     * `submit:false` = el alumno pausó/saltó: solo se pre-llena y él decide. Metros y FC no se tocan.
+     * Uncontrolled (mutación de ref) igual que `holdPrefill`; sólo el flujo cardio V3 la pasa.
+     */
+    cardioAutolog?: { minutesSec: number; submit: boolean; nonce: number }
 }
 
 /** Estado de sincronización de una serie de cara al usuario (contrato a). */
@@ -1501,6 +1515,7 @@ function TypedLogSetRow({
     typedPrefill,
     suggestedAvgHr,
     holdPrefill,
+    cardioAutolog,
     v3 = false,
     onLogged,
     onResult,
@@ -1635,6 +1650,26 @@ function TypedLogSetRow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [holdPrefillNonce])
 
+    // Auto-registro del CARDIO cronometrado (hallazgo E): `CardioStepV3` vuelca los minutos medidos en la
+    // caja MIN al cambiar `nonce` y, cuando el timer terminó SOLO, dispara el submit real por
+    // `requestSubmit()` — el mismo camino del botón ✓ (cola offline, descanso, `onLogged`, auto-avance).
+    // Pausar/saltar sólo pre-llena (`submit:false`): ahí decide el alumno. La caja MIN es del timer, así
+    // que se pisa; metros/FC/conteo jamás se tocan. Uncontrolled = sin re-render, patrón del hold de arriba.
+    const cardioAutologNonce = cardioAutolog?.nonce
+    useEffect(() => {
+        if (cardioAutologNonce == null || mode !== 'cardio' || isLogged) return
+        const secs = cardioAutolog?.minutesSec ?? 0
+        if (!Number.isFinite(secs) || secs <= 0) return
+        const el = cardioMinRef.current
+        // Formato de la caja desde el MOTOR (`cardioMinSeedValue`, el mismo que usa RN): es-CL con coma
+        // en modo keypad y punto en el input nativo. La caja acepta `step="any"`, así que un 20,6 no
+        // choca con la validación de restricciones del navegador (antes el submit ni ocurría).
+        if (el) el.value = cardioMinSeedValue(secs, { decimalComma: useKeypad })
+        syncEmptyCapture()
+        if (cardioAutolog?.submit) formRef.current?.requestSubmit()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [cardioAutologNonce])
+
     // Abre el teclado custom en el campo tocado (solo pointer coarse). El objetivo tipado viaja en el
     // header (DB-5); "Listo" solo CIERRA el teclado (decisión CEO 2026-07-25) — la serie se concluye
     // con el CTA de la fila. Reglas decimales por campo vienen de typedKeypadFields.
@@ -1660,9 +1695,13 @@ function TypedLogSetRow({
 
     /** Default del input: es-CL (coma) en modo teclado; número crudo en desktop. */
     const inputDefault = (n: number | null): string | number => (n == null ? '' : useKeypad ? formatWeightEsCl(n) : n)
-    /** Segundos → minutos con 1 decimal (el input de cardio captura minutos; la columna guarda segundos). */
+    /**
+     * Segundos → minutos con 1 decimal (el input de cardio captura minutos; la columna guarda segundos).
+     * La aritmética es del motor (`cardioMinutesFromSeconds`), compartida con RN: acá sólo se conserva
+     * el `null` de "sin dato" para que la caja quede vacía en vez de mostrar un 0.
+     */
     const minutesFromSeconds = (sec: number | null): number | null =>
-        sec == null ? null : Math.round((sec / 60) * 10) / 10
+        sec == null ? null : cardioMinutesFromSeconds(sec)
     /** Props del `<input>` según pointer: keypad (readonly text) o nativo (number + reglas). */
     const fieldProps = (key: string, nativeInputMode: 'decimal' | 'numeric', nativeExtra: Record<string, string>) =>
         useKeypad
@@ -1981,7 +2020,11 @@ function TypedLogSetRow({
                             <input
                                 ref={cardioMinRef}
                                 name="cardio_min"
-                                {...fieldProps('cardio_min', 'decimal', { step: '0.5', min: '0' })}
+                                // `step="any"`: el autollenado del timer escribe cualquier decimal (20,6) y con
+                                // `step="0.5"` el navegador lo marcaba `stepMismatch` y BLOQUEABA el submit —
+                                // la serie no se registraba sola en escritorio. Misma trampa ya documentada
+                                // en la caja de kilómetros.
+                                {...fieldProps('cardio_min', 'decimal', { step: 'any', min: '0' })}
                                 defaultValue={inputDefault(minutesFromSeconds(existingLog?.actual_duration_sec ?? seedValues?.actualDurationSec ?? null))}
                                 placeholder="-"
                                 aria-label="Minutos"

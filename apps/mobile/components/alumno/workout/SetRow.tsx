@@ -678,6 +678,7 @@ export function ActiveSetRow({
   suggestedWeight,
   seedValues,
   autofill,
+  typedSeedPatch,
   header,
   isActive = true,
   isEditing = false,
@@ -764,6 +765,13 @@ export function ActiveSetRow({
   seedValues?: Record<string, string> | null
   /** Autollenado "= usar ultima vez" (nonce dispara la re-siembra de KG/REPS). */
   autofill?: { weight: number | null; reps: number | null; nonce: number } | null
+  /**
+   * Siembra de campos TIPADOS al cambiar el nonce (hallazgo E · auto-registro de cardio: el timer
+   * vuelca los minutos en la caja MIN). Entra por el MISMO `patch` que una edición del alumno, así que
+   * viaja al draft y NO remonta la fila: el keypad abierto sigue abierto y lo tipeado a medias no se
+   * pierde. Los campos que no vengan en `values` quedan intactos.
+   */
+  typedSeedPatch?: { values: Record<string, string>; nonce: number } | null
   onDraftChange: (values: Record<string, string>, fieldIndex: number) => void
   onCommit: (payload: OptimisticLogPayload) => void
   /**
@@ -863,6 +871,16 @@ export function ActiveSetRow({
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autofill?.nonce])
+
+  // Siembra tipada (minutos del timer de cardio): mismo mecanismo por nonce que el autollenado de
+  // arriba. `patch` escribe sobre lo que ya hay, sin desmontar nada.
+  const lastTypedSeed = useRef<number | null>(null)
+  useEffect(() => {
+    if (!typedSeedPatch || typedSeedPatch.nonce === lastTypedSeed.current) return
+    lastTypedSeed.current = typedSeedPatch.nonce
+    patch({ ...typedSeedPatch.values })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [typedSeedPatch?.nonce])
 
   // Serie VACÍA = ningún EJE capturado (peso/reps en fuerza; hold/min/distancia/pasadas en tipadas). El
   // esfuerzo y la nota NO cuentan: no registran trabajo. Con la fila "Anterior" (1 tap), el peso sugerido o

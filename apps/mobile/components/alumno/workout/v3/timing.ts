@@ -9,7 +9,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState } from 'react-native'
-import { isManualPhase, type IntervalPhase } from '@eva/workout-engine'
+import { isManualPhase, type CardioSegmentReason, type IntervalPhase } from '@eva/workout-engine'
 
 // ─── Cuenta regresiva (hold de movilidad · countdown de cardio) ──────────────────────────────────
 export interface CountdownApi {
@@ -239,9 +239,23 @@ export interface IntervalRunnerApi {
  * hasta que el alumno confirma con "Fase siguiente". Las fases por tiempo de la misma secuencia
  * (warmup, recuperaciones, cooldown) cuentan como siempre.
  */
+/** Razones de fin de TRAMO que puede emitir el corredor (el resto las decide el consumidor). */
+export type IntervalSegmentReason = Extract<CardioSegmentReason, 'expired' | 'manual-next' | 'skipped'>
+
 export function useIntervalRunner(
   phases: IntervalPhase[],
-  opts?: { onPhaseChange?: () => void; onFinish?: () => void; autoStart?: boolean },
+  opts?: {
+    onPhaseChange?: () => void
+    onFinish?: () => void
+    autoStart?: boolean
+    /**
+     * Fin de TRAMO (hallazgo E · auto-registro de cardio): avisa QUÉ fase terminó y POR QUÉ, ANTES de
+     * mover el índice, para que la pantalla decida si ese tramo cierra la ronda de captura. Se emite
+     * una sola vez por avance, también en la rama de fin de secuencia. No reemplaza a
+     * `onPhaseChange`/`onFinish` (que siguen alimentando flash y hápticos).
+     */
+    onSegmentEnd?: (e: { reason: IntervalSegmentReason; phaseIndex: number }) => void
+  },
 ): IntervalRunnerApi {
   // QA4 h8a: default `false` = paridad con el web (`useIntervalRunner.ts`, `isActive` inicial false).
   // El alumno arranca la secuencia con un toque; nada corre solo al abrir la pantalla.
@@ -255,14 +269,17 @@ export function useIntervalRunner(
   const phaseIndexRef = useRef(0)
   const onPhaseChangeRef = useRef(opts?.onPhaseChange)
   const onFinishRef = useRef(opts?.onFinish)
+  const onSegmentEndRef = useRef(opts?.onSegmentEnd)
   useEffect(() => {
     onPhaseChangeRef.current = opts?.onPhaseChange
     onFinishRef.current = opts?.onFinish
+    onSegmentEndRef.current = opts?.onSegmentEnd
   })
 
   const isManual = isManualPhase(phases[phaseIndex] ?? null)
 
-  const advance = useCallback(() => {
+  const advance = useCallback((reason: IntervalSegmentReason) => {
+    onSegmentEndRef.current?.({ reason, phaseIndex: phaseIndexRef.current })
     const next = phaseIndexRef.current + 1
     if (next >= phases.length) {
       setFinished(true)
@@ -287,7 +304,7 @@ export function useIntervalRunner(
         if (!endRef.current) return
         const next = Math.max(0, Math.ceil((endRef.current - Date.now()) / 1000))
         setRemaining(next)
-        if (next === 0) advance()
+        if (next === 0) advance('expired')
       }, 250)
     } else if (!running) {
       endRef.current = null
@@ -300,7 +317,7 @@ export function useIntervalRunner(
       if (next !== 'active' || !endRef.current || finished) return
       const rem = Math.max(0, Math.ceil((endRef.current - Date.now()) / 1000))
       setRemaining(rem)
-      if (rem === 0) advance()
+      if (rem === 0) advance('expired')
     })
     return () => sub.remove()
   }, [advance, finished])
@@ -309,15 +326,19 @@ export function useIntervalRunner(
     setStarted(true)
     setRunning((v) => !v)
   }, [])
-  const skip = useCallback(() => advance(), [advance])
+  const skip = useCallback(() => advance('skipped'), [advance])
   /** CTA "Fase siguiente" de las fases por distancia: avanza y deja corriendo la fase siguiente. */
   const next = useCallback(() => {
     if (finished) return
     const isLast = phaseIndexRef.current + 1 >= phases.length
     endRef.current = null
+    // `started`/`running` ANTES de emitir el fin del tramo: el consumidor arranca su reloj de pared
+    // con este primer gesto (paridad con el runner web), y si el aviso llegara antes la ronda se
+    // cerraría con 0 s. La pantalla además avisa `onRunningChange(true)` imperativamente, porque
+    // estos `setState` recién se ven en el render siguiente.
     setStarted(true)
-    advance()
     if (!isLast) setRunning(true)
+    advance('manual-next')
   }, [finished, advance, phases.length])
   const restart = useCallback(() => {
     phaseIndexRef.current = 0

@@ -8,10 +8,16 @@ import { Button } from '@/components/ui/button'
 
 interface StopwatchProps {
     onClose: () => void
+    /**
+     * PAUSAR vuelca lo transcurrido hacia afuera (hallazgo E · paridad con el `StopwatchHero` de RN):
+     * el bloque por distancia rellena así su caja MIN. Recibe los segundos ya congelados. Opcional: sin
+     * la prop el cronómetro es el de siempre.
+     */
+    onPause?: (elapsedSec: number) => void
 }
 
 /** Cronómetro count-up con vueltas (AC5) — cardio continuo / por distancia. */
-export function Stopwatch({ onClose }: StopwatchProps) {
+export function Stopwatch({ onClose, onPause }: StopwatchProps) {
     const [elapsed, setElapsed] = useState(0)
     const [isActive, setIsActive] = useState(true)
     const [laps, setLaps] = useState<number[]>([])
@@ -35,6 +41,9 @@ export function Stopwatch({ onClose }: StopwatchProps) {
     const togglePause = () => {
         if (isActive) {
             accumulatedRef.current += Math.floor((Date.now() - startRef.current) / 1000)
+            setElapsed(accumulatedRef.current)
+            // Se avisa con el valor YA congelado (el estado `elapsed` recién se ve en el próximo render).
+            onPause?.(accumulatedRef.current)
         }
         setIsActive((v) => !v)
     }

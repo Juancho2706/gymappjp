@@ -20,11 +20,20 @@ interface RestOptions {
     warmup?: boolean
 }
 
+/**
+ * Opciones del cronómetro (hallazgo E · paridad con el `StopwatchHero` de RN): `onPause` recibe los
+ * segundos CONGELADOS al pausar, para que el bloque por distancia vuelque sus minutos en la fila de
+ * captura activa. Sin la opción el cronómetro se comporta exactamente como siempre.
+ */
+interface StopwatchOptions {
+    onPause?: (elapsedSec: number) => void
+}
+
 interface WorkoutContextType {
     startRest: (timeStr: string | null, opts?: RestOptions) => void
     startHold: (seconds: number, label?: string) => void
     startInterval: (config: IntervalConfig, sets?: number) => void
-    startStopwatch: () => void
+    startStopwatch: (opts?: StopwatchOptions) => void
     /** Auto-skip (M2): cortar el descanso en curso (p.ej. al registrar la siguiente serie). */
     cancelRest: () => void
 }
@@ -33,7 +42,7 @@ type ActiveTimer =
     | { kind: 'rest'; seconds: number; label?: string; warmup?: boolean }
     | { kind: 'hold'; seconds: number; label?: string }
     | { kind: 'interval'; phases: IntervalPhase[] }
-    | { kind: 'stopwatch' }
+    | { kind: 'stopwatch'; onPause?: (elapsedSec: number) => void }
 
 const WorkoutContext = createContext<WorkoutContextType | null>(null)
 
@@ -126,8 +135,8 @@ export function WorkoutTimerProvider({
         replaceWith({ kind: 'interval', phases })
     }, [replaceWith])
 
-    const startStopwatch = useCallback(() => {
-        replaceWith({ kind: 'stopwatch' })
+    const startStopwatch = useCallback((opts?: StopwatchOptions) => {
+        replaceWith({ kind: 'stopwatch', onPause: opts?.onPause })
     }, [replaceWith])
 
     const close = useCallback(() => setActive(null), [])
@@ -154,7 +163,7 @@ export function WorkoutTimerProvider({
             {active?.kind === 'interval' && (
                 <IntervalTimer phases={active.phases} onClose={close} />
             )}
-            {active?.kind === 'stopwatch' && <Stopwatch onClose={close} />}
+            {active?.kind === 'stopwatch' && <Stopwatch onClose={close} onPause={active.onPause} />}
         </WorkoutContext.Provider>
     )
 }

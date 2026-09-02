@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Bluetooth, HeartPulse, Pause, Play, Repeat, RotateCcw, Ruler, SkipForward, Timer, Zap } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
@@ -13,6 +13,15 @@ import {
     INTERVAL_PHASE_LABEL,
     compactDistance,
     sessionLogKey,
+    createCardioElapsed,
+    startCardioElapsed,
+    pauseCardioElapsed,
+    readCardioElapsed,
+    resetCardioElapsed,
+    decideCardioAutolog,
+    intervalPhaseClosesRound,
+    intervalRoundPrescribedSec,
+    type CardioSegmentReason,
     type IntervalPhase,
 } from '@eva/workout-engine'
 import { LogSetForm, type SetSyncResult } from '../LogSetForm'
@@ -73,6 +82,34 @@ function phaseColor(kind: IntervalPhase['kind']): string {
 const DASH = 2 * Math.PI * 92
 
 /**
+ * Fin de un TRAMO de cardio que la cara del timer (continua o de intervalos) le avisa a la pantalla.
+ * `closesRound` = el tramo que terminó completa la fila de captura activa (en continuo siempre; en
+ * intervalos, sólo la última fase de la ronda). La decisión la toma el motor puro `decideCardioAutolog`.
+ */
+interface CardioSegmentEvent {
+    reason: CardioSegmentReason
+    closesRound: boolean
+    /**
+     * Segundos PRESCRITOS del tramo/ronda: tope del reloj de pared. Sin él, volver de una pestaña
+     * oculta con el timer ya vencido registraría el tiempo REAL (45 min para un bloque de 20).
+     * `null` ⇒ tramo sin duración prescrita (distancia/cronómetro): ahí el reloj de pared es la verdad.
+     */
+    prescribedSec?: number | null
+    /** Segundos medidos por un reloj EXTERNO (cronómetro global): reemplazan al acumulador de pared. */
+    measuredSec?: number | null
+    /** El timer sigue corriendo después de este tramo (boundary de ronda de intervalos). */
+    keepsRunning?: boolean
+}
+
+/** Estado del auto-registro que viaja a la fila ACTIVA de captura (`LogSetForm.cardioAutolog`). */
+interface CardioAutologSignal {
+    setNumber: number
+    minutesSec: number
+    submit: boolean
+    nonce: number
+}
+
+/**
  * Ejecutor V3 (E3.4) — pantalla de CARDIO con IDENTIDAD. Traducción de los mockups
  * `concepto-a-v31-cardio-wheel` (cardio continuo) y `concepto-a-v32-momentos` (intervalo en fase):
  * nombre + media del catálogo (la escaladora no es correr), countdown en el color de la ZONA objetivo
@@ -81,6 +118,12 @@ const DASH = 2 * Math.PI * 92
  * con su rango bpm concreto cuando el perfil FC del alumno viaja al ejecutor (chip "Z2 · 128-142 bpm");
  * si el módulo cardio está OFF o el perfil no permite derivar bpm, cae a "Z2" (el BPM en vivo por BLE es
  * una capa opcional de Ola 6, jamás requisito). La FC se captura MANUAL en las filas tipadas reusadas.
+ *
+ * Auto-registro (hallazgo E): el tiempo que llega a la caja MIN sale del reloj de PARED del tramo
+ * TOPEADO por lo prescrito (`decideCardioAutolog`), así volver de una pestaña oculta no registra las
+ * horas que estuvo escondida. Los tres modos vuelcan minutos al pausar — incluido el bloque por
+ * DISTANCIA, cuyo cronómetro es el overlay global (`WorkoutTimerProvider` → `Stopwatch`), que avisa su
+ * pausa por `onPause` (paridad con el `StopwatchHero` de RN).
  */
 export function CardioStepV3(props: CardioStepV3Props) {
     const { block, exercise, cardio, openTechnique, canSubstitute, onOpenSubstitute, onSkip } = props
@@ -104,6 +147,72 @@ export function CardioStepV3(props: CardioStepV3Props) {
     const liveZones = cardio?.enabled ? cardio.zones : null
     const liveBpm = hr.status === 'connected' ? hr.bpm : null
     const liveZone = liveBpm != null ? zoneFromRanges(liveBpm, liveZones) : null
+
+    // ── Auto-registro del cardio cronometrado (hallazgo E) ──────────────────────────────────────────
+    // Regla del owner: si el timer TERMINA SOLO ⇒ los minutos caen en la caja, la serie se ENVÍA y el
+    // auto-avance de siempre mueve a la ronda/ejercicio siguiente; si el alumno PAUSA o SALTA ⇒ los
+    // minutos caen en la caja y NADA más (él decide). La aritmética y la decisión viven en el motor
+    // puro `cardio-autolog` (compartido con RN): acá sólo se acumula el reloj de pared y se despacha.
+    const activeSet = props.firstUnlogged
+    // Secuencia COMPLETA de intervalos (todas las rondas). Memoizada: ahora la cara NO se remonta por
+    // ronda, así que un array nuevo en cada render re-armaría el tick del corredor sin necesidad.
+    const intervalPhases = useMemo(
+        () => (intervalConfig ? buildIntervalSequence(intervalConfig, block.sets) : []),
+        [intervalConfig, block.sets],
+    )
+    const [autolog, setAutolog] = useState<CardioAutologSignal | null>(null)
+    const elapsedRef = useRef(createCardioElapsed())
+    const sentSetsRef = useRef<Set<number>>(new Set())
+
+    // Cada fila de captura arranca con su propio acumulador (y sin señal heredada de la ronda anterior).
+    // Si el reloj del tramo sigue CORRIENDO no se toca: es el boundary de una ronda de intervalos, donde
+    // la secuencia no se detiene y `handleSegment` ya reinició el tramo en el instante exacto del corte
+    // (pisarlo acá lo dejaría en 0 y DETENIDO, y la ronda siguiente registraría 0 minutos).
+    useEffect(() => {
+        if (elapsedRef.current.startedAtMs != null) return
+        elapsedRef.current = resetCardioElapsed()
+        setAutolog(null)
+    }, [activeSet])
+
+    /** Arranque/pausa del reloj de pared del tramo (el conteo visible lo sigue llevando cada hook). */
+    const handleRunningChange = useCallback((running: boolean) => {
+        const now = Date.now()
+        elapsedRef.current = running
+            ? startCardioElapsed(elapsedRef.current, now)
+            : pauseCardioElapsed(elapsedRef.current, now)
+    }, [])
+
+    const handleSegment = useCallback(({ reason, closesRound, prescribedSec, measuredSec, keepsRunning }: CardioSegmentEvent) => {
+        const now = Date.now()
+        // Sólo la PAUSA detiene el reloj: saltar o avanzar de fase deja la secuencia corriendo, y el
+        // vencimiento se lee en vivo (el acumulador es reloj de pared, no depende de que corran ticks).
+        const stopped = reason === 'paused' ? pauseCardioElapsed(elapsedRef.current, now) : elapsedRef.current
+        const elapsedSec = measuredSec != null ? measuredSec : readCardioElapsed(stopped, now)
+        const decision = decideCardioAutolog({ reason, elapsedSec, closesRound, prescribedSec })
+        // Cierre de ronda con la secuencia AÚN corriendo (intervalos): el tramo siguiente arranca a
+        // contar en el mismo instante del corte, sin esperar un gesto que ya no existe (antes lo daba
+        // el remonte de la cara, que rompía la secuencia — ver `IntervalFace`).
+        const cleared = decision.resetElapsed ? resetCardioElapsed() : stopped
+        elapsedRef.current = decision.resetElapsed && keepsRunning ? startCardioElapsed(cleared, now) : cleared
+        if (decision.fillSeconds == null) return
+        const setNumber = activeSet
+        if (setNumber == null) return
+        // Anti-doble-envío: una fila sólo se auto-registra una vez (el alumno siempre puede corregirla).
+        const submit = decision.submit && !sentSetsRef.current.has(setNumber)
+        if (submit) sentSetsRef.current.add(setNumber)
+        setAutolog({ setNumber, minutesSec: decision.fillSeconds, submit, nonce: Date.now() })
+    }, [activeSet])
+
+    /**
+     * Resultado del envío de una fila. Si la sincronización FALLA, la serie vuelve a estar sin
+     * registrar: se purga del anti-doble-envío para que el auto-registro pueda reintentarla en el
+     * próximo fin natural de tramo (si no, la fila queda sólo pre-llenada y a mano).
+     */
+    const handleResultWithRetry = useCallback((blockId: string, setNumber: number, result: SetSyncResult) => {
+        if (result === 'error') sentSetsRef.current.delete(setNumber)
+        props.handleResult(blockId, setNumber, result)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [props.handleResult])
 
     return (
         <div className="exec-v3-step space-y-3">
@@ -134,9 +243,29 @@ export function CardioStepV3(props: CardioStepV3Props) {
             />
 
             {isInterval && intervalConfig ? (
-                <IntervalFace phases={buildIntervalSequence(intervalConfig, block.sets)} zone={zone} zoneRange={zoneRange} />
+                // SIN `key` por ronda: `buildIntervalSequence` es la secuencia de TODAS las rondas
+                // (warmup una vez, repeats × sets works, cooldown al final), así que remontarla en cada
+                // cierre de fila la devolvía a la fase 0 — calentamiento repetido por ronda, cooldown
+                // inalcanzable y minutos inflados. La fila se cierra en el boundary (`resetElapsed` del
+                // motor deja el acumulador limpio) y la secuencia sigue de corrido.
+                <IntervalFace
+                    phases={intervalPhases}
+                    zone={zone}
+                    zoneRange={zoneRange}
+                    repeatsPerRound={intervalConfig.repeats ?? 1}
+                    totalRounds={block.sets || 1}
+                    onSegment={handleSegment}
+                    onRunningChange={handleRunningChange}
+                />
             ) : (
-                <ContinuousFace block={block} zone={zone} zoneRange={zoneRange} />
+                <ContinuousFace
+                    block={block}
+                    zone={zone}
+                    zoneRange={zoneRange}
+                    activeSet={activeSet}
+                    onSegment={handleSegment}
+                    onRunningChange={handleRunningChange}
+                />
             )}
 
             {/* Fuente FC honesta. Con sensor BLE conectado la FC llega EN VIVO y auto-rellena la fila
@@ -175,7 +304,12 @@ export function CardioStepV3(props: CardioStepV3Props) {
 
             {/* Registro tipado REUSADO — captura min / metros / FC de siempre. El promedio del stream BLE
                 auto-rellena `actual_avg_hr` de la fila activa (editable) por el flujo tipado existente. */}
-            <CaptureRows {...props} suggestedAvgHr={liveBpm != null ? hr.avgBpm : null} />
+            <CaptureRows
+                {...props}
+                handleResult={handleResultWithRetry}
+                suggestedAvgHr={liveBpm != null ? hr.avgBpm : null}
+                autolog={autolog}
+            />
 
             {/* Sheet "Conectar sensor" — solo se renderiza si hay soporte (sin promesas falsas en iOS/desktop). */}
             {hr.supported && (
@@ -287,15 +421,51 @@ function ContinuousFace({
     block,
     zone,
     zoneRange,
+    activeSet,
+    onSegment,
+    onRunningChange,
 }: {
     block: BlockType
     zone: number | null
     zoneRange: { minBpm: number; maxBpm: number } | null
+    /** Fila de captura en curso: al cambiar, el countdown vuelve a su valor prescrito y DETENIDO. */
+    activeSet: number | null
+    onSegment: (e: CardioSegmentEvent) => void
+    onRunningChange: (running: boolean) => void
 }) {
     const { startStopwatch } = useWorkoutTimer()
     const durationSec = block.duration_sec ?? 0
-    const countdown = useExecCountdown(durationSec, { autoStart: false })
+    // El cronómetro global vive fuera de este árbol: su "Pausar" avisa por un closure creado UNA vez,
+    // así que el despacho viaja por ref (si no, quedaría clavado en la ronda en la que se abrió).
+    const segRef = useRef(onSegment)
+    useEffect(() => {
+        segRef.current = onSegment
+    })
+    const countdown = useExecCountdown(durationSec, {
+        autoStart: false,
+        // Ronda nueva ⇒ countdown limpio y detenido (antes la ronda 2 heredaba el "¡Listo!" de la 1).
+        resetKey: activeSet ?? 0,
+        // Fin natural del tramo: rellena MIN, envía la serie y deja avanzar al ejecutor (hallazgo E).
+        // `prescribedSec` es el tope: al volver de la pestaña oculta el vencimiento vale lo PRESCRITO,
+        // nunca el reloj de pared (que puede traer 45 min de un bloque de 20).
+        onDone: () => onSegment({ reason: 'expired', closesRound: true, prescribedSec: durationSec }),
+    })
     const ringColor = zone != null ? `var(--zone-z${zone})` : 'var(--exec-brand)'
+
+    /** Único punto de entrada de play/pausa: la pausa es la que vuelca los minutos SIN enviar. */
+    const handleToggle = () => {
+        if (countdown.done) return
+        if (countdown.isActive) onSegment({ reason: 'paused', closesRound: false, prescribedSec: durationSec })
+        else onRunningChange(true)
+        countdown.toggle()
+    }
+
+    /** "Reiniciar": el acumulador vuelve a 0 y el hook deja el countdown corriendo de nuevo. */
+    const handleRestart = () => {
+        onSegment({ reason: 'restart', closesRound: false })
+        countdown.restart()
+        onRunningChange(true)
+    }
 
     if (durationSec <= 0) {
         return (
@@ -310,7 +480,20 @@ function ContinuousFace({
                     )}
                 </div>
                 <ZoneChip zone={zone} zoneRange={zoneRange} />
-                <button type="button" onClick={() => startStopwatch()} className="exec-v3-timerchip">
+                <button
+                    type="button"
+                    // Paridad con el `StopwatchHero` de RN: PAUSAR el cronómetro vuelca los minutos en la
+                    // caja MIN de la fila activa (sin enviar — un bloque por distancia no vence solo, así
+                    // que lo cierra el alumno). El tiempo lo mide el overlay, no el acumulador de pared:
+                    // viaja como `measuredSec` y no tiene tope prescrito (acá no hay duración).
+                    onClick={() =>
+                        startStopwatch({
+                            onPause: (elapsedSec) =>
+                                segRef.current({ reason: 'paused', closesRound: false, measuredSec: elapsedSec }),
+                        })
+                    }
+                    className="exec-v3-timerchip"
+                >
                     <Timer className="h-4 w-4" aria-hidden /> Cronómetro
                 </button>
             </div>
@@ -331,7 +514,7 @@ function ContinuousFace({
             <div className="exec-v3-ringrow">
             <button
                 type="button"
-                onClick={countdown.done ? countdown.restart : countdown.toggle}
+                onClick={countdown.done ? handleRestart : handleToggle}
                 className="exec-v3-holdwrap"
                 style={{ '--ring-c': ringColor, width: 196, height: 196 } as React.CSSProperties}
                 aria-label={countdown.done ? 'Reiniciar' : countdown.isActive ? 'Pausar' : 'Iniciar'}
@@ -365,7 +548,7 @@ function ContinuousFace({
                 {/* QA5 h3: reinicia el countdown a su duración prescrita (mecanismo `restart` del hook). */}
                 <button
                     type="button"
-                    onClick={countdown.restart}
+                    onClick={handleRestart}
                     className="exec-v3-restart"
                     aria-label="Reiniciar el contador"
                 >
@@ -373,7 +556,7 @@ function ContinuousFace({
                 </button>
             </div>
             <ZoneChip zone={zone} zoneRange={zoneRange} />
-            {!countdown.done && <CardioPauseButton active={countdown.isActive} onToggle={countdown.toggle} />}
+            {!countdown.done && <CardioPauseButton active={countdown.isActive} onToggle={handleToggle} />}
             {/* Chips de métricas: SOLO objetivos derivables de la prescripción (nada inventado). */}
             <div className="exec-v3-cchips">
                 <MetricChip
@@ -406,13 +589,69 @@ function IntervalFace({
     phases,
     zone,
     zoneRange,
+    repeatsPerRound,
+    totalRounds,
+    onSegment,
+    onRunningChange,
 }: {
     phases: IntervalPhase[]
     zone: number | null
     zoneRange: { minBpm: number; maxBpm: number } | null
+    /** Fases `work` por ronda de captura (`interval_config.repeats`) y rondas totales (`block.sets`). */
+    repeatsPerRound: number
+    totalRounds: number
+    onSegment: (e: CardioSegmentEvent) => void
+    onRunningChange: (running: boolean) => void
 }) {
-    const runner = useIntervalRunner(phases)
+    const runner = useIntervalRunner(phases, {
+        // Cada fase que TERMINA avisa por qué; sólo la que cierra la ronda de captura registra la fila.
+        // `prescribedSec` = suma de las fases de ESA ronda (tope del reloj de pared); `keepsRunning` =
+        // quedan fases por delante, así que el tramo siguiente arranca a contar en el mismo instante.
+        onSegmentEnd: ({ reason, phaseIndex }) =>
+            onSegment({
+                reason,
+                closesRound: intervalPhaseClosesRound(phases, phaseIndex, repeatsPerRound, totalRounds),
+                prescribedSec: intervalRoundPrescribedSec(phases, phaseIndex, repeatsPerRound, totalRounds),
+                keepsRunning: phaseIndex < phases.length - 1,
+            }),
+    })
     const { phase, timeLeft, finished, frac, isActive } = runner
+    /** Tope de la ronda EN CURSO (para pausas): la del índice activo. */
+    const roundPrescribedSec = intervalRoundPrescribedSec(phases, runner.phaseIndex, repeatsPerRound, totalRounds)
+
+    /** Play/pausa único (anillo y botón): la pausa vuelca los minutos del tramo SIN enviar. */
+    const handleToggle = () => {
+        if (finished) return
+        if (isActive) onSegment({ reason: 'paused', closesRound: false, prescribedSec: roundPrescribedSec })
+        else onRunningChange(true)
+        runner.toggle()
+    }
+
+    /**
+     * CTA "Fase siguiente" (fase por DISTANCIA): el reloj de pared del tramo arranca con este PRIMER
+     * GESTO — se avisa ANTES de avanzar porque el runner emite el fin del tramo en la misma llamada.
+     * Consecuencia deliberada ("nada corre solo al montar", QA4 h8a): en una secuencia que EMPIEZA por
+     * distancia, la ronda 1 cierra con 0 s ⇒ el motor no la registra y el alumno la captura a mano.
+     */
+    const handleNext = () => {
+        onRunningChange(true)
+        runner.next()
+    }
+
+    /** "Reiniciar": acumulador a 0; el runner vuelve a la primera fase y queda corriendo. */
+    const handleRestart = () => {
+        onSegment({ reason: 'restart', closesRound: false })
+        runner.restart()
+        onRunningChange(true)
+    }
+
+    // Una fase por DISTANCIA no se cronometra (no hay play que tocar), pero el tramo SÍ corre mientras
+    // el alumno hace sus 400 m: se arranca acá el reloj de pared o esos minutos no llegarían a la caja.
+    // Condicionado a `started`: mirando la pantalla antes de empezar NADA corre (antes el efecto
+    // arrancaba al montar y esos minutos de espera entraban en MIN — QA4 h8a).
+    useEffect(() => {
+        if (runner.started && runner.isManual && !finished) onRunningChange(true)
+    }, [runner.started, runner.isManual, runner.phaseIndex, finished, onRunningChange])
     const color = phase ? phaseColor(phase.kind) : 'var(--exec-brand)'
     const dashoffset = DASH * (1 - frac)
     // Fase D: la fase actual se prescribió por DISTANCIA ⇒ el anillo queda lleno y estático, y el
@@ -479,7 +718,7 @@ function IntervalFace({
             ) : (
             <button
                 type="button"
-                onClick={finished ? runner.restart : runner.toggle}
+                onClick={finished ? handleRestart : handleToggle}
                 className="exec-v3-holdwrap"
                 style={{ width: 224, height: 224 } as React.CSSProperties}
                 aria-label={finished ? 'Reiniciar intervalos' : isActive ? 'Pausar' : 'Iniciar intervalos'}
@@ -490,7 +729,7 @@ function IntervalFace({
                 {/* QA5 h3: reinicia los intervalos desde la primera fase (mecanismo `restart` del runner). */}
                 <button
                     type="button"
-                    onClick={runner.restart}
+                    onClick={handleRestart}
                     className="exec-v3-restart"
                     aria-label="Reiniciar el contador"
                 >
@@ -557,8 +796,8 @@ function IntervalFace({
                 )}
             </div>
             {!finished && (manual
-                ? <IntervalNextButton onNext={runner.next} phase={phase} />
-                : <CardioPauseButton active={isActive} onToggle={runner.toggle} />)}
+                ? <IntervalNextButton onNext={handleNext} phase={phase} />
+                : <CardioPauseButton active={isActive} onToggle={handleToggle} />)}
         </div>
     )
 }
@@ -580,7 +819,8 @@ function CaptureRows({
     handleLogged,
     handleResult,
     suggestedAvgHr,
-}: CardioStepV3Props & { suggestedAvgHr?: number | null }) {
+    autolog,
+}: CardioStepV3Props & { suggestedAvgHr?: number | null; autolog?: CardioAutologSignal | null }) {
     return (
         <div className="exec-v3-setlist space-y-1.5">
             {Array.from({ length: block.sets }).map((_, i) => {
@@ -620,6 +860,14 @@ function CaptureRows({
                         // promedio); LogSetForm solo lo escribe si el campo FC está vacío (no pisa ediciones).
                         suggestedAvgHr={
                             isActive && suggestedAvgHr != null ? { bpm: suggestedAvgHr, nonce: suggestedAvgHr } : undefined
+                        }
+                        // Auto-registro del timer (hallazgo E) SOLO en la fila a la que corresponde el
+                        // tramo: la señal lleva su `setNumber`, así la ronda siguiente jamás hereda un
+                        // envío que ya se hizo (aunque se monte con la misma señal en el aire).
+                        cardioAutolog={
+                            isActive && autolog?.setNumber === setNumber
+                                ? { minutesSec: autolog.minutesSec, submit: autolog.submit, nonce: autolog.nonce }
+                                : undefined
                         }
                         onLogged={handleLogged}
                         onResult={handleResult}
