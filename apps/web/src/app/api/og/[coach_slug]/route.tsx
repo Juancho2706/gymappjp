@@ -11,6 +11,7 @@ import {
     coachOgMinimalPng,
     resolveCoachOgArtwork,
     type CoachOgArtwork,
+    COACH_OG_BACKGROUND,
     COACH_OG_IMAGE_HEIGHT,
     COACH_OG_IMAGE_WIDTH,
     COACH_OG_PADDING,
@@ -21,11 +22,14 @@ import {
  * WhatsApp muestra como preview cuando el coach manda el link de acceso; hasta el 22-08 era siempre
  * el logo de EVA (pedido del owner: «debería mostrar el logo del coach»).
  *
- * Decisión del owner (02-09, reemplaza la del 22-08): SOLO el logo del coach, centrado sobre su
- * color de marca. Sin nombre, sin tagline y sin sello EVA dentro de la imagen — la tarjeta de
- * WhatsApp ya trae título y descripción, así que repetirlos ahí adentro era ruido. Sin logo va el
- * nombre de la marca; sin nada, la figura EVA sobre azul EVA. La composición vive en
- * `resolveCoachOgArtwork` (pura y testeada); acá solo se dibuja.
+ * Decisión del owner (02-09, reemplaza la del 22-08): SOLO el logo del coach, centrado y con
+ * margen sobre el neutro oscuro de EVA (`COACH_OG_BACKGROUND`) — NUNCA sobre su color de marca.
+ * La preview de `/c/josefit/login` salía con el logo sobre naranja (su `primary_color`) y el owner
+ * la rechazó: «solo el logo, no el color del coach». Sin nombre, sin tagline y sin sello EVA
+ * dentro de la imagen — la tarjeta de WhatsApp ya trae título y descripción, así que repetirlos
+ * ahí adentro era ruido. Sin logo va el nombre de la marca en blanco sobre el mismo neutro; sin
+ * nada, la figura EVA. La composición vive en `resolveCoachOgArtwork` (pura y testeada); acá solo
+ * se dibuja.
  *
  * Sin sesión ni usuario: en Android la preview la baja el TELÉFONO del que comparte, no un servidor
  * de Meta.
@@ -46,7 +50,6 @@ export async function GET(request: NextRequest, { params }: Params) {
 
     const tier = (coach?.subscription_tier ?? 'free') as SubscriptionTier
     const artwork = resolveCoachOgArtwork({
-        primaryColor: coach?.primary_color,
         logoUrl: coach?.logo_url,
         logoUrlDark: coach?.logo_url_dark,
         brandName: coach?.brand_name,
@@ -66,7 +69,8 @@ export async function GET(request: NextRequest, { params }: Params) {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        background: art.background,
+                        // Neutro FIJO del DS: el color del coach no entra a esta imagen.
+                        background: COACH_OG_BACKGROUND,
                         padding: COACH_OG_PADDING,
                         fontFamily: 'sans-serif',
                     }}
@@ -74,7 +78,7 @@ export async function GET(request: NextRequest, { params }: Params) {
                     {art.kind === 'brandName' ? (
                         // El estilo vive en `coachOgBrandNameStyle` (wrap + maxWidth + tamaño que
                         // garantiza que la palabra más larga entre): así el no-desborde se testea.
-                        <div style={coachOgBrandNameStyle(art.brandName, art.color)}>{art.brandName}</div>
+                        <div style={coachOgBrandNameStyle(art.brandName)}>{art.brandName}</div>
                     ) : (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img

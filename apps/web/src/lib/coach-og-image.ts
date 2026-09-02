@@ -1,5 +1,3 @@
-import { BRAND_PRIMARY_COLOR } from '@/lib/brand-assets'
-
 /**
  * Medidas de la imagen Open Graph por coach (`api/og/[coach_slug]`). 1200×630 es la proporción
  * 1.91:1 que WhatsApp, Meta y X muestran sin recortar; la estática de EVA (1920×1080) sigue siendo
@@ -21,55 +19,40 @@ export const COACH_OG_CONTENT_WIDTH = COACH_OG_IMAGE_WIDTH - 2 * COACH_OG_PADDIN
  */
 export const COACH_OG_CACHE_CONTROL = 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400'
 
-/** Hex de 6 dígitos o el fallback. Los colores del coach son texto libre en DB. */
-export function safeHexColor(color: string | null | undefined, fallback: string): string {
-    return color && /^#[0-9A-Fa-f]{6}$/.test(color) ? color : fallback
-}
-
-function toLinearChannel(c: number): number {
-    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4)
-}
-
-/** Luminancia relativa WCAG del hex (0 = negro, 1 = blanco). */
-function relativeLuminance(hex: string): number {
-    const clean = hex.replace('#', '')
-    const r = toLinearChannel(parseInt(clean.substring(0, 2), 16) / 255)
-    const g = toLinearChannel(parseInt(clean.substring(2, 4), 16) / 255)
-    const b = toLinearChannel(parseInt(clean.substring(4, 6), 16) / 255)
-    return 0.2126 * r + 0.7152 * g + 0.0722 * b
-}
-
 /**
- * ¿El fondo es oscuro? Se decide por contraste WCAG: oscuro = el blanco contrasta más que el negro
- * sobre él. Es el mismo criterio con el que el producto elige la variante `logo_url_dark` (el logo
- * que el coach subió PARA fondos oscuros).
- */
-export function isDarkBackground(hex: string): boolean {
-    const lum = relativeLuminance(hex)
-    const vsWhite = 1.05 / (lum + 0.05)
-    const vsBlack = (lum + 0.05) / 0.05
-    return vsWhite >= vsBlack
-}
-
-/**
- * Composición de la preview (owner 02-09): SOLO el logo del coach, centrado sobre su color de
- * marca. Sin nombre, sin tagline, sin sello EVA — la tarjeta de WhatsApp ya trae título y
- * descripción, repetirlos dentro de la imagen era ruido.
+ * Fondo ÚNICO de la preview: el ink oscuro del DS web (`--surface-app` del bloque `.dark` de
+ * `apps/web/src/app/globals.css`, #0A0D12). Es un neutro FIJO, nunca el color del coach.
  *
- * - `logo`: el logo del coach sobre `primary_color`. Con fondo oscuro gana `logo_url_dark` (es
- *   justamente la variante que el coach subió para fondos oscuros); con fondo claro, el normal.
- *   Si solo existe una de las dos, esa se usa: un logo con contraste imperfecto se ve; ninguno, no.
- * - `brandName`: sin logo, el nombre de la marca sobre el mismo fondo.
- * - `eva`: sin logo y sin nombre, la figura EVA sobre azul EVA.
+ * Decisión del owner (02-09): «solo el logo, no el color del coach». La preview de WhatsApp de
+ * `/c/josefit/login` salía con el logo sobre NARANJA (el `primary_color` del coach) y el owner lo
+ * rechazó: el color de marca pintando media pantalla del chat compite con el logo y se ve como un
+ * error de render. El neutro deja el logo como único protagonista y hace que TODAS las previews
+ * de EVA se lean igual.
+ */
+export const COACH_OG_BACKGROUND = '#0A0D12'
+
+/** Texto sobre el neutro: blanco. El fondo es fijo y oscuro, así que el contraste también lo es. */
+export const COACH_OG_BRAND_NAME_COLOR = '#FFFFFF'
+
+/**
+ * Composición de la preview (owner 02-09): SOLO el logo del coach, centrado y con margen sobre el
+ * neutro de EVA. Sin color de marca, sin nombre, sin tagline y sin sello — la tarjeta de WhatsApp
+ * ya trae título y descripción, repetirlos dentro de la imagen era ruido.
+ *
+ * - `logo`: el logo del coach. Se prefiere `logo_url_dark` porque el fondo SIEMPRE es oscuro (es
+ *   justamente la variante que el coach subió para fondos oscuros); si solo existe la normal, esa
+ *   se usa: un logo con contraste imperfecto se ve; ninguno, no.
+ * - `brandName`: sin logo, el nombre de la marca en blanco sobre el mismo neutro.
+ * - `eva`: sin logo y sin nombre, la figura EVA sobre el mismo neutro.
+ *
+ * Ninguna variante lleva color del coach: por eso el tipo ya no transporta `background`.
  */
 export type CoachOgArtwork =
-    | { kind: 'logo'; background: string; logoUrl: string }
-    | { kind: 'brandName'; background: string; brandName: string; color: string }
-    | { kind: 'eva'; background: string }
+    | { kind: 'logo'; logoUrl: string }
+    | { kind: 'brandName'; brandName: string }
+    | { kind: 'eva' }
 
 export interface CoachOgArtworkInput {
-    /** `primary_color` del coach (texto libre en DB: se valida acá). */
-    primaryColor: string | null | undefined
     logoUrl: string | null | undefined
     logoUrlDark: string | null | undefined
     brandName: string | null | undefined
@@ -82,21 +65,16 @@ export interface CoachOgArtworkInput {
 }
 
 export function resolveCoachOgArtwork(input: CoachOgArtworkInput): CoachOgArtwork {
-    if (!input.brandingAllowed) return { kind: 'eva', background: BRAND_PRIMARY_COLOR }
+    if (!input.brandingAllowed) return { kind: 'eva' }
 
-    const background = safeHexColor(input.primaryColor, BRAND_PRIMARY_COLOR)
-    const light = input.logoUrl?.trim() || null
-    const dark = input.logoUrlDark?.trim() || null
-    const logoUrl = isDarkBackground(background) ? (dark ?? light) : (light ?? dark)
-    if (logoUrl) return { kind: 'logo', background, logoUrl }
+    // Fondo oscuro fijo ⇒ la variante dark del logo gana siempre que exista.
+    const logoUrl = input.logoUrlDark?.trim() || input.logoUrl?.trim() || null
+    if (logoUrl) return { kind: 'logo', logoUrl }
 
     const brandName = input.brandName?.trim() || ''
-    if (!brandName) return { kind: 'eva', background: BRAND_PRIMARY_COLOR }
+    if (!brandName) return { kind: 'eva' }
 
-    // El owner lo pidió en blanco; el negro solo entra cuando el blanco directamente no se lee
-    // sobre el color del coach (amarillos, pasteles) — una preview ilegible es peor que el matiz.
-    const color = isDarkBackground(background) ? '#FFFFFF' : '#0B0B0C'
-    return { kind: 'brandName', background, brandName, color }
+    return { kind: 'brandName', brandName }
 }
 
 /**
@@ -107,7 +85,6 @@ export function resolveCoachOgArtwork(input: CoachOgArtworkInput): CoachOgArtwor
 export function coachOgFallbackArtwork(artwork: CoachOgArtwork, brandName: string | null | undefined): CoachOgArtwork {
     if (artwork.kind !== 'logo') return artwork
     return resolveCoachOgArtwork({
-        primaryColor: artwork.background,
         logoUrl: null,
         logoUrlDark: null,
         brandName,
@@ -172,7 +149,7 @@ export interface CoachOgBrandNameStyle {
  * Antes el bloque era un flex con `overflow: hidden` y sin ninguna de las tres cosas: el nombre
  * largo se cortaba en seco.
  */
-export function coachOgBrandNameStyle(brandName: string, color: string): CoachOgBrandNameStyle {
+export function coachOgBrandNameStyle(brandName: string): CoachOgBrandNameStyle {
     return {
         display: 'flex',
         flexWrap: 'wrap',
@@ -183,16 +160,22 @@ export function coachOgBrandNameStyle(brandName: string, color: string): CoachOg
         fontSize: coachOgBrandNameFontSize(brandName),
         fontWeight: 700,
         lineHeight: 1.05,
-        color,
+        // Constante a propósito: el fondo es el neutro fijo de EVA, así que el color del texto no
+        // depende (ni puede volver a depender) del hex del coach.
+        color: COACH_OG_BRAND_NAME_COLOR,
     }
 }
 
 /**
- * Versión del `og:image` derivada de lo que la imagen dibuja (logo, logo dark, color, nombre, tier).
+ * Versión del `og:image` derivada de lo que la imagen dibuja (logo, logo dark, nombre, tier).
  *
  * WhatsApp cachea la preview POR URL, en el teléfono, 72 h o más, y no hay forma oficial de
  * limpiarla: sin esto, un coach que cambia su logo sigue viendo la miniatura vieja para siempre.
  * El route IGNORA el query — solo existe para que la URL cambie cuando cambia el arte.
+ *
+ * El `primary_color` NO entra (owner 02-09): la imagen ya no lo dibuja, y dejarlo adentro tiraría
+ * la miniatura cacheada del teléfono cada vez que el coach juega con su color de marca sin que la
+ * preview cambie ni un píxel.
  *
  * Hash djb2 en base36 (determinista, sin `crypto`, sirve igual en Node y en el edge). No es
  * criptográfico y no hace falta que lo sea: acá solo importa que cambie cuando cambian las partes.
@@ -204,7 +187,7 @@ export function coachOgBrandNameStyle(brandName: string, color: string): CoachOg
  * cambiara sin que cambie ningún header, la miniatura vieja quedaría pegada 72 h en el teléfono.
  * Cerrarlo del todo exige que el layout consulte el mismo RPC (una query extra por request en la
  * ruta más caliente del portal) — hoy no se paga; el `tier` va incluido para cubrir el único
- * cambio de arte que no toca logo/color/nombre (el fail-closed de `isBrandingAllowed`).
+ * cambio de arte que no toca logo ni nombre (el fail-closed de `isBrandingAllowed`).
  */
 export function coachOgImageVersion(...parts: (string | null | undefined)[]): string {
     const source = parts.map((p) => p?.trim() || '').join('|')

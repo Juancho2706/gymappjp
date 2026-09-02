@@ -7,24 +7,25 @@ import {
     coachOgImageVersion,
     coachOgMinimalPng,
     estimateCoachOgTextWidth,
+    COACH_OG_BACKGROUND,
+    COACH_OG_BRAND_NAME_COLOR,
     COACH_OG_BRAND_NAME_MIN_FONT_SIZE,
     COACH_OG_CONTENT_WIDTH,
     COACH_OG_IMAGE_HEIGHT,
     COACH_OG_IMAGE_WIDTH,
     COACH_OG_PADDING,
-    isDarkBackground,
     resolveCoachOgArtwork,
-    safeHexColor,
 } from './coach-og-image'
-import { BRAND_PRIMARY_COLOR } from './brand-assets'
 
 const base = {
-    primaryColor: '#111827',
     logoUrl: null,
     logoUrlDark: null,
     brandName: 'Jose Fit',
     brandingAllowed: true,
 }
+
+/** El color naranja del coach que disparó el pedido del owner (preview de `/c/josefit/login`). */
+const COLOR_DEL_COACH = '#FF6B00'
 
 describe('buildCoachOgPngResponse', () => {
     // El header que arregla la preview de WhatsApp: sin Content-Length el cliente Android descarta
@@ -48,76 +49,54 @@ describe('buildCoachOgPngResponse', () => {
 })
 
 describe('resolveCoachOgArtwork', () => {
-    it('logo del coach centrado sobre su color de marca', () => {
-        expect(resolveCoachOgArtwork({ ...base, primaryColor: '#FF6B00', logoUrl: 'https://cdn/logo.png' })).toEqual({
-            kind: 'logo',
-            background: '#FF6B00',
-            logoUrl: 'https://cdn/logo.png',
-        })
+    it('NUNCA usa el color del coach: solo el logo sobre el neutro de EVA', () => {
+        // El bug que reportó el owner: la preview de WhatsApp salía con el logo sobre el NARANJA
+        // del coach. El arte ya no transporta fondo — el route pinta `COACH_OG_BACKGROUND` fijo.
+        const art = resolveCoachOgArtwork({ ...base, logoUrl: 'https://cdn/logo.png' })
+        expect(art).toEqual({ kind: 'logo', logoUrl: 'https://cdn/logo.png' })
+        expect(JSON.stringify(art)).not.toContain(COLOR_DEL_COACH)
+        expect(COACH_OG_BACKGROUND).toBe('#0A0D12')
     })
 
-    it('fondo oscuro ⇒ gana la variante logo_url_dark; fondo claro ⇒ el logo normal', () => {
-        const logos = { logoUrl: 'https://cdn/light.png', logoUrlDark: 'https://cdn/dark.png' }
-        expect(resolveCoachOgArtwork({ ...base, primaryColor: '#0B0B0C', ...logos })).toMatchObject({
-            logoUrl: 'https://cdn/dark.png',
-        })
-        expect(resolveCoachOgArtwork({ ...base, primaryColor: '#FFE066', ...logos })).toMatchObject({
-            logoUrl: 'https://cdn/light.png',
-        })
+    it('el fondo es siempre oscuro ⇒ gana la variante logo_url_dark', () => {
+        expect(
+            resolveCoachOgArtwork({ ...base, logoUrl: 'https://cdn/light.png', logoUrlDark: 'https://cdn/dark.png' }),
+        ).toEqual({ kind: 'logo', logoUrl: 'https://cdn/dark.png' })
     })
 
     it('con una sola variante usa esa (un logo con contraste imperfecto se ve; ninguno, no)', () => {
-        expect(resolveCoachOgArtwork({ ...base, primaryColor: '#FFE066', logoUrlDark: 'https://cdn/dark.png' })).toMatchObject({
+        expect(resolveCoachOgArtwork({ ...base, logoUrlDark: 'https://cdn/dark.png' })).toMatchObject({
             logoUrl: 'https://cdn/dark.png',
         })
-        expect(resolveCoachOgArtwork({ ...base, primaryColor: '#0B0B0C', logoUrl: 'https://cdn/light.png' })).toMatchObject({
+        expect(resolveCoachOgArtwork({ ...base, logoUrl: 'https://cdn/light.png' })).toMatchObject({
             logoUrl: 'https://cdn/light.png',
         })
     })
 
-    it('sin logo ⇒ el nombre de la marca sobre el mismo fondo', () => {
-        expect(resolveCoachOgArtwork({ ...base, primaryColor: '#1462DC' })).toEqual({
-            kind: 'brandName',
-            background: '#1462DC',
-            brandName: 'Jose Fit',
-            color: '#FFFFFF',
-        })
+    it('sin logo ⇒ el nombre de la marca sobre el mismo neutro', () => {
+        expect(resolveCoachOgArtwork(base)).toEqual({ kind: 'brandName', brandName: 'Jose Fit' })
     })
 
-    it('sin logo y sin nombre ⇒ figura EVA sobre azul EVA', () => {
-        expect(resolveCoachOgArtwork({ ...base, primaryColor: '#1462DC', brandName: '   ' })).toEqual({
-            kind: 'eva',
-            background: BRAND_PRIMARY_COLOR,
-        })
-    })
-
-    it('color inválido ⇒ azul EVA de fondo (los colores del coach son texto libre en DB)', () => {
-        expect(resolveCoachOgArtwork({ ...base, primaryColor: 'rojo', logoUrl: 'https://cdn/logo.png' })).toMatchObject({
-            background: BRAND_PRIMARY_COLOR,
-        })
+    it('sin logo y sin nombre ⇒ figura EVA sobre el mismo neutro', () => {
+        expect(resolveCoachOgArtwork({ ...base, brandName: '   ' })).toEqual({ kind: 'eva' })
     })
 
     it('tier inválido (fail-closed) ⇒ preview de EVA aunque tenga logo', () => {
         expect(
             resolveCoachOgArtwork({ ...base, logoUrl: 'https://cdn/logo.png', brandingAllowed: false }),
-        ).toEqual({ kind: 'eva', background: BRAND_PRIMARY_COLOR })
+        ).toEqual({ kind: 'eva' })
     })
 })
 
 describe('coachOgFallbackArtwork', () => {
-    it('logo que satori no pudo dibujar ⇒ nombre de la marca, mismo fondo', () => {
-        const art = resolveCoachOgArtwork({ ...base, primaryColor: '#0B0B0C', logoUrl: 'https://cdn/roto.tiff' })
-        expect(coachOgFallbackArtwork(art, 'Jose Fit')).toEqual({
-            kind: 'brandName',
-            background: '#0B0B0C',
-            brandName: 'Jose Fit',
-            color: '#FFFFFF',
-        })
+    it('logo que satori no pudo dibujar ⇒ nombre de la marca (mismo neutro)', () => {
+        const art = resolveCoachOgArtwork({ ...base, logoUrl: 'https://cdn/roto.tiff' })
+        expect(coachOgFallbackArtwork(art, 'Jose Fit')).toEqual({ kind: 'brandName', brandName: 'Jose Fit' })
     })
 
     it('sin nombre cae a EVA, y lo que no es logo pasa intacto', () => {
         const art = resolveCoachOgArtwork({ ...base, logoUrl: 'https://cdn/roto.tiff' })
-        expect(coachOgFallbackArtwork(art, null)).toEqual({ kind: 'eva', background: BRAND_PRIMARY_COLOR })
+        expect(coachOgFallbackArtwork(art, null)).toEqual({ kind: 'eva' })
 
         const evaArt = resolveCoachOgArtwork({ ...base, brandName: null })
         expect(coachOgFallbackArtwork(evaArt, null)).toBe(evaArt)
@@ -126,39 +105,27 @@ describe('coachOgFallbackArtwork', () => {
 
 describe('coachOgImageVersion', () => {
     it('es estable para las mismas partes y cambia cuando el coach cambia el logo', () => {
-        const before = coachOgImageVersion('https://cdn/v1.png', null, '#1462DC', 'Jose Fit')
-        expect(coachOgImageVersion('https://cdn/v1.png', null, '#1462DC', 'Jose Fit')).toBe(before)
-        expect(coachOgImageVersion('https://cdn/v2.png', null, '#1462DC', 'Jose Fit')).not.toBe(before)
-        expect(coachOgImageVersion('https://cdn/v1.png', 'https://cdn/dark.png', '#1462DC', 'Jose Fit')).not.toBe(before)
-        expect(coachOgImageVersion('https://cdn/v1.png', null, '#FF6B00', 'Jose Fit')).not.toBe(before)
+        const before = coachOgImageVersion('https://cdn/v1.png', null, 'Jose Fit')
+        expect(coachOgImageVersion('https://cdn/v1.png', null, 'Jose Fit')).toBe(before)
+        expect(coachOgImageVersion('https://cdn/v2.png', null, 'Jose Fit')).not.toBe(before)
+        expect(coachOgImageVersion('https://cdn/v1.png', 'https://cdn/dark.png', 'Jose Fit')).not.toBe(before)
+        expect(coachOgImageVersion('https://cdn/v1.png', null, 'Jose Fit Studio')).not.toBe(before)
     })
 
-    it('cambia con el tier: el fail-closed de branding cambia el ARTE sin tocar logo ni color', () => {
-        const pro = coachOgImageVersion('https://cdn/v1.png', null, '#1462DC', 'Jose Fit', 'pro')
-        expect(coachOgImageVersion('https://cdn/v1.png', null, '#1462DC', 'Jose Fit', 'free')).not.toBe(pro)
-        expect(coachOgImageVersion('https://cdn/v1.png', null, '#1462DC', 'Jose Fit', 'pro')).toBe(pro)
+    it('cambia con el tier: el fail-closed de branding cambia el ARTE sin tocar logo ni nombre', () => {
+        const pro = coachOgImageVersion('https://cdn/v1.png', null, 'Jose Fit', 'pro')
+        expect(coachOgImageVersion('https://cdn/v1.png', null, 'Jose Fit', 'free')).not.toBe(pro)
+        expect(coachOgImageVersion('https://cdn/v1.png', null, 'Jose Fit', 'pro')).toBe(pro)
     })
 
     it('sirve como query string tal cual (sin escapar) y tolera ausencias', () => {
-        const v = coachOgImageVersion(null, undefined, '', 'Mi Coach')
+        const v = coachOgImageVersion(null, undefined, 'Mi Coach')
         expect(v).toMatch(/^[0-9a-z]+$/)
         expect(encodeURIComponent(v)).toBe(v)
     })
 })
 
 describe('helpers de composición', () => {
-    it('isDarkBackground distingue el negro del amarillo pastel', () => {
-        expect(isDarkBackground('#0B0B0C')).toBe(true)
-        expect(isDarkBackground('#1462DC')).toBe(true)
-        expect(isDarkBackground('#FFE066')).toBe(false)
-    })
-
-    it('safeHexColor solo acepta hex de 6 dígitos', () => {
-        expect(safeHexColor('#AbC123', '#000000')).toBe('#AbC123')
-        expect(safeHexColor('#ABC', '#000000')).toBe('#000000')
-        expect(safeHexColor(null, '#000000')).toBe('#000000')
-    })
-
     it('el nombre largo baja de tamaño para no desbordar los 1200×630', () => {
         expect(COACH_OG_IMAGE_WIDTH).toBe(1200)
         expect(COACH_OG_IMAGE_HEIGHT).toBe(630)
@@ -166,6 +133,11 @@ describe('helpers de composición', () => {
         expect(coachOgBrandNameFontSize('Jose Fit Studio')).toBeGreaterThan(
             coachOgBrandNameFontSize('Centro de Alto Rendimiento Norte'),
         )
+    })
+
+    it('el nombre va SIEMPRE en blanco: el color del coach no entra al estilo', () => {
+        expect(coachOgBrandNameStyle('Jose Fit').color).toBe(COACH_OG_BRAND_NAME_COLOR)
+        expect(COACH_OG_BRAND_NAME_COLOR).toBe('#FFFFFF')
     })
 })
 
@@ -199,7 +171,7 @@ describe('nombre de marca: no-desborde real (hallazgo B-7)', () => {
             if (fontSize > COACH_OG_BRAND_NAME_MIN_FONT_SIZE) {
                 expect(ancho).toBeLessThanOrEqual(COACH_OG_CONTENT_WIDTH)
             } else {
-                expect(coachOgBrandNameStyle(nombre, '#FFFFFF').wordBreak).toBe('break-word')
+                expect(coachOgBrandNameStyle(nombre).wordBreak).toBe('break-word')
             }
         }
     })
@@ -225,7 +197,7 @@ describe('nombre de marca: no-desborde real (hallazgo B-7)', () => {
     })
 
     it('el estilo deja envolver: wrap + maxWidth + corte de palabra + centrado', () => {
-        const style = coachOgBrandNameStyle('Centro de Alto Rendimiento Norte', '#FFFFFF')
+        const style = coachOgBrandNameStyle('Centro de Alto Rendimiento Norte')
         expect(style).toMatchObject({
             flexWrap: 'wrap',
             maxWidth: '100%',
