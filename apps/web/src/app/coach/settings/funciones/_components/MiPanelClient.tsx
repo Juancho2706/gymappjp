@@ -1,6 +1,7 @@
 'use client'
 
 import { useRef, useState, useTransition, type ReactNode } from 'react'
+import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
 import { Apple, Dumbbell, HeartPulse, PersonStanding, Sparkles, Trash2, UserPlus } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
@@ -94,6 +95,7 @@ function PersonaCard({ persona, alsoOther }: { persona: Persona | null; alsoOthe
     const [also, setAlso] = useState(alsoOther)
     const [reorder, setReorder] = useState(false)
     const [isPending, startTransition] = useTransition()
+    const router = useRouter()
     const tileRefs = useRef<Array<HTMLButtonElement | null>>([])
 
     const selectedIndex = selected ? PERSONA_TILE_ORDER.indexOf(selected) : -1
@@ -132,6 +134,11 @@ function PersonaCard({ persona, alsoOther }: { persona: Persona | null; alsoOthe
             }
             setReorder(false)
             toast.success(result.message)
+            // OB5: la action revalida `/coach/settings` y el layout del panel, pero NO esta ruta
+            // (`/coach/settings/funciones`), asi que sin esto la tarjeta de areas de abajo seguia
+            // con el orden y los switches viejos hasta que el coach recargaba. Con «Ordenar mi
+            // panel segun mi especialidad» eso es justo lo que acaba de pedir ver cambiado.
+            router.refresh()
         })
     }
 

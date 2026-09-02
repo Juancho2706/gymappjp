@@ -180,6 +180,41 @@ describe('DomainsCard — orden de la barra', () => {
         })
     })
 
+    // QA del owner 02-09 (OB5): «Ordenar mi panel según mi especialidad» guardaba bien pero la
+    // lista de abajo seguía en el orden viejo hasta recargar — el `useState` inicializaba una vez
+    // y después ignoraba las props. El padre ahora refresca; la tarjeta tiene que obedecer.
+    it('un orden NUEVO del servidor repinta la lista sin recargar', () => {
+        const { rerender } = render(
+            <DomainsCard
+                domains={rows('training', 'nutrition', 'cardio', 'movement', 'bodycomp')}
+                bodycompClients={[]}
+                navOrder={['training', 'nutrition', 'cardio', 'movement', 'bodycomp']}
+            />,
+        )
+        expect(paintedOrder()).toEqual(['training', 'nutrition', 'cardio', 'movement', 'bodycomp'])
+
+        rerender(
+            <DomainsCard
+                domains={rows('training', 'nutrition', 'cardio', 'movement', 'bodycomp')}
+                bodycompClients={[]}
+                navOrder={['cardio', 'bodycomp', 'training', 'nutrition', 'movement']}
+            />,
+        )
+        expect(paintedOrder()).toEqual(['cardio', 'bodycomp', 'training', 'nutrition', 'movement'])
+    })
+
+    // El mismo checkbox también prende y apaga áreas (`writePersonaDomainPrefs`): los switches
+    // tenían el mismo estado congelado que el orden.
+    it('unas áreas NUEVAS del servidor repintan los switches sin recargar', () => {
+        const { rerender } = render(
+            <DomainsCard domains={[row('cardio', true)]} bodycompClients={[]} />,
+        )
+        expect(screen.getByRole('switch')).toBeChecked()
+
+        rerender(<DomainsCard domains={[row('cardio', false)]} bodycompClients={[]} />)
+        expect(screen.getByRole('switch')).not.toBeChecked()
+    })
+
     it('el ▲▼ también está en team: la barra es del coach, no del pool', () => {
         render(
             <DomainsCard

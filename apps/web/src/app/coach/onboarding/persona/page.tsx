@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { getPersonaScreenContext } from './_data/persona.queries'
 import { PersonaPicker } from './_components/PersonaPicker'
+import { VerifyEmailBanner } from '../../dashboard/_components/banners/VerifyEmailBanner'
 
 export const metadata: Metadata = { title: 'Primer ingreso' }
 
@@ -39,7 +40,20 @@ export default async function CoachPersonaPage() {
             className="fixed inset-0 z-[150] overflow-y-auto bg-[var(--surface-app)]"
         >
             <div className="flex min-h-full w-full items-center justify-center px-5 py-10 pb-[max(2.5rem,env(safe-area-inset-bottom))] pt-[max(2.5rem,env(safe-area-inset-top))] sm:px-8">
-                <PersonaPicker />
+                <div className="mx-auto w-full max-w-3xl">
+                    {/* B9 — el aviso de correo sin verificar TAMBIÉN acá. El gate manda al coach
+                        nuevo a esta pantalla ANTES del panel, y esta pantalla es un takeover sin
+                        salida: si el banner viviera solo en el dashboard, quien tipeó mal su
+                        dominio no se enteraría nunca (y sin correo no hay reset de clave). Mismo
+                        componente que el panel: no bloquea nada y no tiene CTA de pago (regla de
+                        tiendas iOS). */}
+                    {!ctx.emailVerified && (
+                        <div className="mb-5">
+                            <VerifyEmailBanner />
+                        </div>
+                    )}
+                    <PersonaPicker />
+                </div>
             </div>
         </div>
     )

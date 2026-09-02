@@ -734,8 +734,11 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
             </div>
 
             {/* ── Módulos incluidos — informativo, ya NO es superficie de venta (CEO 2026-07-17):
-                los 4 módulos vienen incluidos con cualquier plan pago; no se compran ni se dan de
-                baja por separado. El ancla #addons se conserva para deep-links antiguos. ── */}
+                los 4 módulos vienen incluidos en TODOS los planes; no se compran ni se dan de
+                baja por separado. El ancla #addons se conserva para deep-links antiguos.
+                QA del owner 02-09 (OB2): el candado gris y el «en cualquier plan pago» ataban esto
+                a `hasActivePaidPlan` y contradecían la regla vigente (D1) — lo único que cambia
+                entre planes es el CUPO de alumnos, no las funciones. ── */}
             {coach ? (
                 <section id="addons" className="mb-5">
                     <p className="mb-2 px-1 text-[13px] font-bold uppercase tracking-wide text-muted">Módulos incluidos</p>
@@ -743,19 +746,18 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                         {ADDON_MODULE_KEYS.map((key, i) => {
                             const cfg = ADDON_CONFIG[key]
                             const Icon = ADDON_ICON[key]
-                            const included = hasActivePaidPlan
                             return (
                                 <div key={key}>
                                     {i > 0 && <div className="mx-3.5 h-px bg-[var(--border-subtle)]" />}
                                     <div className="flex items-center gap-3 px-3.5 py-3">
-                                        <span className={`flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-control ${included ? 'bg-sport-100 text-sport-600' : 'bg-surface-sunken text-subtle'}`}>
+                                        <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-control bg-sport-100 text-sport-600">
                                             <Icon className="h-[18px] w-[18px]" />
                                         </span>
                                         <div className="min-w-0 flex-1">
                                             <p className="text-sm font-bold text-strong">{cfg.label}</p>
-                                            <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold ${included ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-surface-sunken text-muted'}`}>
-                                                {included ? <Check className="h-3 w-3" /> : <LockKeyhole className="h-3 w-3" />}
-                                                {included ? 'Incluido en tu plan' : 'Incluido'}
+                                            <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-emerald-500/15 px-2 py-0.5 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
+                                                <Check className="h-3 w-3" />
+                                                Incluido en tu plan
                                             </span>
                                         </div>
                                     </div>
@@ -764,15 +766,10 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                         })}
                     </div>
 
-                    {hasActivePaidPlan ? (
-                        <p className="mt-2 px-1 text-[11px] text-subtle">
-                            Vienen incluidos en tu plan, sin costo extra. Úsalos desde Alumnos › Herramientas.
-                        </p>
-                    ) : (
-                        <p className="mt-3 rounded-control border border-subtle bg-surface-sunken px-3 py-2 text-xs text-muted">
-                            Estos módulos vienen incluidos en cualquier plan pago. Elige un plan abajo para activarlos.
-                        </p>
-                    )}
+                    <p className="mt-2 px-1 text-[11px] text-subtle">
+                        Vienen incluidos en todos los planes, sin costo extra. Úsalos desde Alumnos ›
+                        Herramientas.
+                    </p>
                 </section>
             ) : null}
 

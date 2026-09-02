@@ -118,6 +118,29 @@ export function DomainsCard({
     const [pickerOpen, setPickerOpen] = useState(false)
     const [isPending, startTransition] = useTransition()
 
+    // ── Resincronizacion con el servidor (QA del owner 02-09, OB5) ───────────────────────────
+    // Los dos `useState` de arriba son INICIALIZADORES: corren una vez y despues ignoran las props.
+    // Con «Ordenar mi panel segun mi especialidad» el servidor manda un orden Y unos switches
+    // nuevos, y la tarjeta seguia pintando los viejos hasta recargar a mano.
+    //
+    // El guard es la FIRMA de las props, no un `useEffect` a secas: se resincroniza SOLO cuando el
+    // servidor de verdad mando otra cosa, asi un ▲▼ o un switch optimista en curso no se pisa con
+    // el valor viejo en el re-render siguiente. Es el patron de React para estado derivado (ajuste
+    // durante el render): sin efecto y sin un frame con la lista vieja.
+    const enabledSignature = domains.map((d) => `${d.domain}:${d.enabled}`).join('|')
+    const [syncedEnabled, setSyncedEnabled] = useState(enabledSignature)
+    if (syncedEnabled !== enabledSignature) {
+        setSyncedEnabled(enabledSignature)
+        setState(Object.fromEntries(domains.map((d) => [d.domain, d.enabled])))
+    }
+
+    const orderSignature = `${(navOrder ?? []).join('|')}::${persona ?? ''}`
+    const [syncedOrder, setSyncedOrder] = useState(orderSignature)
+    if (syncedOrder !== orderSignature) {
+        setSyncedOrder(orderSignature)
+        setOrder(resolveNavOrder(navOrder, persona))
+    }
+
     // El switch existe en standalone siempre; en team solo para el gestor del pool.
     const editable = scope === 'coach' ? true : canManage === true
 
