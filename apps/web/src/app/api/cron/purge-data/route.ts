@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Json } from '@/lib/database.types'
 import { deleteClientHard } from '@/services/client/client-deletion.service'
+import { purgeCoachOwnedRows } from '@/services/coach/account-deletion.service'
 
 export const maxDuration = 60
 
@@ -70,14 +71,19 @@ function readDeletionRequestedAt(user: AuthUserLike): Date | null {
  * Coach: primero sus alumnos UNO A UNO con `deleteClientHard` (el `deleteUser` del coach cascadea las
  * filas `clients` por `clients_coach_id_fkey`, pero los `auth.users` de esos alumnos SOBREVIVEN →
  * logins zombie; mismo bug que arregló `deleteCoachAccountAction`). Después se vacían las tres tablas
- * cuyo FK a `coaches(id)` es NO ACTION (`foods`, `nutrition_plans`, `saved_meals`, baseline
- * 2239/2339/2379): sin eso Postgres rechaza el `deleteUser` con violación de FK.
+ * cuyo FK a `coaches(id)` es NO ACTION (`nutrition_plans`, `saved_meals`, `foods`, baseline
+ * 2339/2379/2239): sin eso Postgres rechaza el `deleteUser` con violación de FK. Ese pre-borrado
+ * ahora vive en `services/coach/account-deletion.service.ts`, compartido con la server action del
+ * coach y el borrado del admin — y con el ORDEN correcto (planes antes que alimentos, porque
+ * `food_items_food_id_fkey` también es NO ACTION; el orden viejo se rompía con un coach que usó
+ * sus alimentos propios en las comidas de sus planes).
  *
- * OTRAS FKs SIN CASCADA que pueden bloquear (a propósito NO se tocan acá): `organization_members`,
- * `organization_coach_assignments` y `workout_programs.created_by_coach_id` (equipos/Enterprise, hoy
- * congelado), y del lado `auth.users` toda la familia `enterprise_*` + `news_items.created_by`. Si
- * alguna dispara, el borrado queda `failed` con el nombre de la constraint en el log y se resuelve a
- * mano — antes que borrar en silencio una fila de auditoría o el registro de otro coach.
+ * OTRAS FKs SIN CASCADA que pueden bloquear (a propósito NO se tocan: ver el servicio) —
+ * `organization_members`, `organization_coach_assignments` y `workout_programs.created_by_coach_id`
+ * (equipos/Enterprise, hoy congelado), y del lado `auth.users` toda la familia `enterprise_*` +
+ * `news_items.created_by`. Si alguna dispara, el borrado queda `failed` con el nombre de la
+ * constraint en el log y se resuelve a mano — antes que borrar en silencio una fila de auditoría o
+ * el registro de otro coach.
  */
 async function hardDeleteAccount(admin: AdminClient, userId: string): Promise<void> {
     const { data: coach, error: coachError } = await admin
@@ -107,10 +113,8 @@ async function hardDeleteAccount(admin: AdminClient, userId: string): Promise<vo
         if (error) throw new Error(`alumno ${client.id}: ${error}`)
     }
 
-    for (const table of ['saved_meals', 'foods', 'nutrition_plans'] as const) {
-        const { error } = await admin.from(table).delete().eq('coach_id', userId)
-        if (error) throw new Error(`${table}: ${error.message}`)
-    }
+    const purge = await purgeCoachOwnedRows(admin, userId)
+    if (purge.error) throw new Error(`${purge.table}: ${purge.error}`)
 
     const { error: authError } = await admin.auth.admin.deleteUser(userId)
     if (authError) {

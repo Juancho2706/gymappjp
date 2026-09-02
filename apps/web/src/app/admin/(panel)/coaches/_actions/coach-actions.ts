@@ -19,6 +19,7 @@ import { buildFreePlanV3NoticeEmail } from '@/lib/email/pricing-v3-notice-templa
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { buildCoachUpdateData, readModules } from '../../_actions/module-form'
 import { syncAdminGrants } from '@/services/billing/addons.service'
+import { purgeCoachOwnedRows } from '@/services/coach/account-deletion.service'
 
 function revalidateAdmin() {
     revalidatePath('/admin/coaches', 'page')
@@ -168,14 +169,18 @@ export async function updateCoachAction(_prev: unknown, formData: FormData) {
 export async function deleteCoachAction(coachId: string) {
     const { adminClient } = await assertAdmin()
 
-    // Delete in dependency order — CASCADE tables handled automatically,
-    // but foods/nutrition_plans/saved_meals use NO ACTION and must be deleted first
-    const deletions: Array<{ table: string; error: unknown }> = []
-    for (const table of ['saved_meals', 'foods', 'nutrition_plans', 'clients'] as const) {
-        const { error } = await adminClient.from(table).delete().eq('coach_id', coachId)
-        if (error) deletions.push({ table, error })
-    }
-    if (deletions.length) console.error('[admin] deleteCoach: partial pre-delete failures', deletions)
+    // Pre-borrado de las tablas cuyo FK a `coaches(id)` es NO ACTION (`nutrition_plans`,
+    // `saved_meals`, `foods`): sin esto el `deleteUser` de abajo muere con violación de FK.
+    // Ahora sale del servicio compartido con la server action del coach y la purga del cron
+    // (`services/coach/account-deletion.service.ts`), que además fija el ORDEN correcto: el que
+    // había acá borraba `foods` ANTES que `nutrition_plans` y se rompía igual cuando el coach usó
+    // sus alimentos propios en alguna comida (`food_items_food_id_fkey` también es NO ACTION).
+    const purge = await purgeCoachOwnedRows(adminClient, coachId)
+    if (purge.error) console.error('[admin] deleteCoach: pre-delete failed', { coachId, ...purge })
+
+    // `clients` cascadea desde `coaches`, pero se borra explícito para no depender de eso.
+    const { error: clientsError } = await adminClient.from('clients').delete().eq('coach_id', coachId)
+    if (clientsError) console.error('[admin] deleteCoach: clients delete failed', { coachId, clientsError })
 
     const { error: authError } = await adminClient.auth.admin.deleteUser(coachId)
     if (authError) console.error('[admin] failed to delete auth user:', authError)

@@ -219,10 +219,17 @@ describe('GET /api/cron/purge-data — purga de cuentas a 30 días', () => {
 
         expect(deleteClientHard.mock.calls.map((c) => c[1])).toEqual(['al-1', 'al-2'])
         // Las tres tablas cuyo FK a coaches(id) es NO ACTION: sin vaciarlas el deleteUser explota.
-        for (const table of ['saved_meals', 'foods', 'nutrition_plans']) {
+        for (const table of ['nutrition_plans', 'saved_meals', 'foods']) {
             expect(callsFor(table, 'delete')).toHaveLength(1)
             expect(callsFor(table, 'eq')[0].args).toEqual(['coach_id', 'coach-1'])
         }
+        // Y en ESE orden (`purgeCoachOwnedRows`): `nutrition_plans` cascadea `nutrition_meals` →
+        // `food_items`, cuyo FK a `foods` también es NO ACTION. Al revés se rompe con cualquier
+        // coach que haya usado su alimento propio en una comida.
+        const purgeOrder = calls
+            .filter((c) => c.op === 'delete' && ['nutrition_plans', 'saved_meals', 'foods'].includes(c.table))
+            .map((c) => c.table)
+        expect(purgeOrder).toEqual(['nutrition_plans', 'saved_meals', 'foods'])
         expect(deleteUser).toHaveBeenCalledWith('coach-1')
         expect(json.accounts).toMatchObject({ deleted: 1, failed: 0 })
     })

@@ -11,6 +11,7 @@ import { getPaymentsProviderForCoach } from '@/lib/payments/provider'
 import { isThemePresetKey } from '@/lib/brand-presets'
 import { isLoginLayoutKey, parseLoaderConfig } from '@/lib/brand-composer'
 import { deleteClientHard } from '@/services/client/client-deletion.service'
+import { purgeCoachOwnedRows } from '@/services/coach/account-deletion.service'
 import { cancelCoachEmails } from '@/services/email/coach-email-ledger.service'
 import { BRAND_CHECKBOX_KEEP } from '../_lib/brand-form-values'
 
@@ -450,15 +451,28 @@ export async function deleteCoachAccountAction(
         return { error: 'Error al eliminar la cuenta. Contacta soporte en privacidad@eva-app.cl' }
     }
 
-    // 4. Delete logo from storage (best-effort)
+    // 4. Vaciar las tablas del coach cuyo FK a `coaches(id)` es NO ACTION (`nutrition_plans`,
+    // `saved_meals`, `foods`). Bug que esto corrige: un coach con alimentos propios, planes o
+    // comidas guardadas NO podía borrar su cuenta — el `deleteUser` del paso 7 moría con violación
+    // de FK y el usuario solo veía «Error al eliminar la cuenta». El admin ya pre-borraba estas
+    // tablas (por eso no fallaba) pero en un orden que también se rompe; el orden correcto y el
+    // porqué de cada tabla viven en `services/coach/account-deletion.service.ts`.
+    // ABORTA si falla: igual que con los alumnos, mejor reintentable que a medias.
+    const purge = await purgeCoachOwnedRows(adminDb, coachId)
+    if (purge.error) {
+        console.error('[deleteAccount] failed to purge coach-owned rows:', purge)
+        return { error: 'Error al eliminar la cuenta. Contacta soporte en privacidad@eva-app.cl' }
+    }
+
+    // 5. Delete logo from storage (best-effort)
     try {
         await supabase.storage.from('logos').remove([`${coachId}/logo.jpg`, `${coachId}/logo.png`])
     } catch {
         // Non-fatal
     }
 
-    // 5. Cancelar en Resend TODO lo que le quedaba agendado (best-effort — non-fatal).
-    // POR QUE VA ACA y no despues: el paso 6 borra `auth.users` y la cascada se lleva puesto el
+    // 6. Cancelar en Resend TODO lo que le quedaba agendado (best-effort — non-fatal).
+    // POR QUE VA ACA y no despues: el paso 7 borra `auth.users` y la cascada se lleva puesto el
     // `coach_email_ledger`, que es de donde salen los `provider_message_id` a cancelar. Un segundo
     // mas tarde no queda de donde leerlos y el drip le sigue llegando a una cuenta que ya no existe
     // — justo lo contrario de lo que promete la hoja de confirmacion («Serás desuscripto de todos
@@ -480,7 +494,7 @@ export async function deleteCoachAccountAction(
         })
     }
 
-    // 6. Delete auth user — CASCADE will delete coaches row via FK
+    // 7. Delete auth user — CASCADE will delete coaches row via FK
     const { error: authError } = await adminDb.auth.admin.deleteUser(coachId)
     if (authError) {
         console.error('[deleteAccount] failed to delete auth user:', authError)

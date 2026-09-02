@@ -1,12 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { createClientMock, createServiceRoleClientMock, revalidatePathMock, cancelCoachEmailsMock } =
-    vi.hoisted(() => ({
-        createClientMock: vi.fn(),
-        createServiceRoleClientMock: vi.fn(),
-        revalidatePathMock: vi.fn(),
-        cancelCoachEmailsMock: vi.fn(),
-    }))
+const {
+    createClientMock,
+    createServiceRoleClientMock,
+    revalidatePathMock,
+    cancelCoachEmailsMock,
+    purgeCoachOwnedRowsMock,
+} = vi.hoisted(() => ({
+    createClientMock: vi.fn(),
+    createServiceRoleClientMock: vi.fn(),
+    revalidatePathMock: vi.fn(),
+    cancelCoachEmailsMock: vi.fn(),
+    purgeCoachOwnedRowsMock: vi.fn(),
+}))
 
 vi.mock('@/lib/supabase/server', () => ({ createClient: createClientMock }))
 vi.mock('@/lib/supabase/admin-client', () => ({ createServiceRoleClient: createServiceRoleClientMock }))
@@ -14,6 +20,9 @@ vi.mock('next/cache', () => ({ revalidatePath: revalidatePathMock }))
 vi.mock('next/navigation', () => ({ redirect: vi.fn() }))
 vi.mock('@/lib/payments/provider', () => ({ getPaymentsProviderForCoach: vi.fn() }))
 vi.mock('@/services/client/client-deletion.service', () => ({ deleteClientHard: vi.fn() }))
+vi.mock('@/services/coach/account-deletion.service', () => ({
+    purgeCoachOwnedRows: purgeCoachOwnedRowsMock,
+}))
 vi.mock('@/services/email/coach-email-ledger.service', () => ({ cancelCoachEmails: cancelCoachEmailsMock }))
 
 import { deleteCoachAccountAction, updateBrandSettingsAction } from './settings.actions'
@@ -125,7 +134,7 @@ describe('updateBrandSettingsAction — use_brand_colors_coach (W3.4)', () => {
  *  1. la cancelación corre ANTES del `deleteUser` (después ya no hay ledger que leer), y
  *  2. si falla NO bloquea el borrado — Ley 21.719: la baja se completa igual.
  */
-function deleteSetup(options: { cancelRejects?: boolean } = {}) {
+function deleteSetup(options: { cancelRejects?: boolean; purgeError?: string } = {}) {
     const order: string[] = []
 
     const deleteUser = vi.fn(async () => {
@@ -167,6 +176,10 @@ function deleteSetup(options: { cancelRejects?: boolean } = {}) {
         if (options.cancelRejects) throw new Error('resend 503')
         return { cancelled: 3, alreadySent: 1, failed: 0 }
     })
+    purgeCoachOwnedRowsMock.mockImplementation(async () => {
+        order.push('purgeCoachOwnedRows')
+        return options.purgeError ? { error: options.purgeError, table: 'foods' } : {}
+    })
 
     return { adminDb, deleteUser, order }
 }
@@ -185,7 +198,7 @@ describe('deleteCoachAccountAction — correos agendados (B7)', () => {
         // `'*'`, no las keys del drip: se va la cuenta entera.
         expect(cancelCoachEmailsMock).toHaveBeenCalledWith(adminDb, COACH_ID, '*')
         // El orden ES el arreglo: al revés la cascada ya borró el ledger.
-        expect(order).toEqual(['cancelCoachEmails', 'deleteUser'])
+        expect(order).toEqual(['purgeCoachOwnedRows', 'cancelCoachEmails', 'deleteUser'])
     })
 
     it('si la cancelación falla, la cuenta se borra igual', async () => {
@@ -205,6 +218,43 @@ describe('deleteCoachAccountAction — correos agendados (B7)', () => {
         })
 
         expect(cancelCoachEmailsMock).not.toHaveBeenCalled()
+        expect(purgeCoachOwnedRowsMock).not.toHaveBeenCalled()
         expect(deleteUser).not.toHaveBeenCalled()
+    })
+})
+
+/**
+ * Bug reportado: «borrar la cuenta desde la web no funciona» cuando el coach tiene alimentos
+ * propios, planes o comidas guardadas. `foods`/`nutrition_plans`/`saved_meals` tienen FK NO ACTION
+ * a `coaches(id)` (baseline 2239/2339/2379) → el `deleteUser` moría con violación de FK y el coach
+ * solo veía «Error al eliminar la cuenta». El admin no fallaba porque pre-borraba esas tablas; ese
+ * pre-borrado es ahora `purgeCoachOwnedRows` y lo usan los tres caminos (web, admin y cron).
+ */
+describe('deleteCoachAccountAction — filas con FK NO ACTION', () => {
+    beforeEach(() => {
+        vi.clearAllMocks()
+    })
+
+    it('vacía las tablas NO ACTION del coach ANTES del deleteUser', async () => {
+        const { adminDb, order } = deleteSetup()
+
+        await deleteCoachAccountAction('ELIMINAR')
+
+        expect(purgeCoachOwnedRowsMock).toHaveBeenCalledTimes(1)
+        // Con el cliente ADMIN (service role), nunca con el del navegador.
+        expect(purgeCoachOwnedRowsMock).toHaveBeenCalledWith(adminDb, COACH_ID)
+        expect(order.indexOf('purgeCoachOwnedRows')).toBeLessThan(order.indexOf('deleteUser'))
+    })
+
+    it('si el pre-borrado falla se ABORTA: no se borra el auth.user (estado reintentable)', async () => {
+        const { deleteUser } = deleteSetup({ purgeError: 'permission denied for table foods' })
+
+        await expect(deleteCoachAccountAction('ELIMINAR')).resolves.toEqual({
+            error: 'Error al eliminar la cuenta. Contacta soporte en privacidad@eva-app.cl',
+        })
+
+        expect(deleteUser).not.toHaveBeenCalled()
+        // Tampoco se le matan los correos agendados de una cuenta que sigue viva.
+        expect(cancelCoachEmailsMock).not.toHaveBeenCalled()
     })
 })
