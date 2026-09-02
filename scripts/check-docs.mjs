@@ -114,6 +114,21 @@ function validateCanonicalMetadata(file) {
   }
 }
 
+const MINIMAL_VIEW_FILES = [{ file: 'docs/status/CURRENT.md', maxBytes: 16 * 1024 }]
+
+function validateMinimalViewSize({ file, maxBytes }) {
+  const fullPath = path.join(repoRoot, file)
+  if (!fs.existsSync(fullPath)) return
+
+  const size = fs.statSync(fullPath).size
+  if (size > maxBytes) {
+    fail(
+      file,
+      `CURRENT.md es la vista mínima: mové la historia a la spec (${(size / 1024).toFixed(1)} KB > ${maxBytes / 1024} KB)`,
+    )
+  }
+}
+
 function stripFencedCode(content) {
   const lines = content.split(/\r?\n/)
   let fence = null
@@ -244,6 +259,8 @@ const activeMarkdown = markdownFiles.filter((file) => !file.startsWith('docs/arc
 
 for (const file of canonicalFiles) validateCanonicalMetadata(file)
 
+for (const target of MINIMAL_VIEW_FILES) validateMinimalViewSize(target)
+
 for (const file of activeMarkdown) {
   const lowered = file.toLowerCase()
   if (lowered.split('/').some((part) => part === 'handoff' || part === 'handoffs') || /handoff/i.test(path.basename(file))) {
@@ -269,5 +286,5 @@ if (errors.length > 0) {
 }
 
 process.stdout.write(
-  `docs:check OK — ${canonicalFiles.length} canónicos, ${activeMarkdown.length} Markdown activos, sin handoffs ni credenciales literales\n`,
+  `docs:check OK — ${canonicalFiles.length} canónicos, ${activeMarkdown.length} Markdown activos, CURRENT.md ${(fs.statSync(path.join(repoRoot, 'docs/status/CURRENT.md')).size / 1024).toFixed(1)} KB (tope 16 KB), sin handoffs ni credenciales literales\n`,
 )

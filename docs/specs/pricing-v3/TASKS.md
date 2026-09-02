@@ -76,3 +76,12 @@ Decisiones cerradas el 2026-08-21: **1A 2A 3A 4A 5A 6A**. Listas para workers (m
 - [x] F6.3 OTA android + ios a los 3 runtimes por GH Actions (`mobile-ota.yml`, canal `production`): 1.1.2 desde `rnmobiledenuevo` (`ota/1.1.2-20260821` = `2edea500`; grupos `7c91756f` / `d7237681`), 1.1.0 desde `ota/1.1.0-20260821` = `c5501cc3` (`4b12bb78` / `c095d5e1`), 1.1.1 desde `ota/1.1.1-20260821` = `fce4ceb8` (`c301b034` / `0c7e5407`). En 1.1.0/1.1.1 se omitió la captura `upgrade_gate_hit` de RN (sin `lib/analytics`).
 - [x] F6.4 Correo «Tu plan Free ahora incluye tu marca» ENVIADO por el owner desde admin › Coaches › «Aviso Pricing v3» el 2026-08-21 21:31Z: **34 enviados, 0 fallidos, 0 saltados, 0 errores de auditoría** (`admin_audit_logs`: 34 × `coach.pricing_v3_notice` + 1 × `coach.pricing_v3_notice_batch`). Dedupe activo: repetir el botón no reenvía.
 - [x] F6.5 Insights PostHog `I5QSlFSq` (paywall por gate) y `9cVq1F6v` (altas por pricing_version/tier); artifact «Free con marca» `8853ed20` y memoria actualizados el 21-08.
+
+## Cierre — crónica movida desde `docs/status/CURRENT.md` (2026-09-02)
+
+Texto trasladado literal el 2026-09-02 al reducir `CURRENT.md` a vista mínima. No es
+instrucción vigente: es el registro de lo que ya pasó, con sus hashes, deploys y OTAs.
+
+### Pricing v3 en producción (2026-08-21)
+
+**Pricing v3 EN PRODUCCIÓN (2026-08-21, [spec](../pricing-v3/SPEC.md), commit `2edea500` = `master` = `rnmobiledenuevo`).** Free = 1 alumno + white-label completo + sello «Hecho con EVA» en las superficies del alumno; Pro 25 sin sello; `tierMaxClientsFor` con tercer peldaño (pre-v2 3 · v2 2 · v3 1). Backfill por uso aplicado en LIVE (`20260821153527`: 31 Free con ≤1 alumno → 1, respaldo `_bak_pricing_v3_free_limits_20260821`; los 5 con ≥2 conservan su fila; `robin-coach` sigue 3/5 por decisión del owner). Verificado en prod (`/pricing`, `#precios`, login Free con marca + sello, login Pro sin sello). OTA a los tres runtimes (tags `ota/*-20260821`). Insights PostHog `I5QSlFSq` / `9cVq1F6v`. Correo «Tu plan Free ahora incluye tu marca» enviado desde el panel admin el 21-08 21:31Z (34/34). **Queda solo el QA visual del owner en device (sello en login/perfil del alumno, Mi Marca abierta en Free) y archivar la spec cuando se dé por cerrada.**

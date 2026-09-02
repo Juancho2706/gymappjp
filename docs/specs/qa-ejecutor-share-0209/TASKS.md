@@ -1,5 +1,5 @@
 ---
-status: implemented-pending-qa
+status: done
 owner: product-engineering
 last_verified: "2026-09-02"
 canonical: false
@@ -243,3 +243,12 @@ TARDANDO» (flaky), lista 7 con `evademo` (sin contraseña a mano). Hallazgos (b
       usa el cron de no verificados) · B8 XS (`?status=archived` no se lee en `clients/page.tsx`) · B9 S (el gate de
       persona del `proxy.ts` redirige antes de que el dashboard pinte `VerifyEmailBanner`). Pendiente decidir cuáles
       se hacen.
+
+## Cierre — crónica movida desde `docs/status/CURRENT.md` (2026-09-02)
+
+Texto trasladado literal el 2026-09-02 al reducir `CURRENT.md` a vista mínima. No es
+instrucción vigente: es el registro de lo que ya pasó, con sus hashes, deploys y OTAs.
+
+### Tanda «QA del owner 02-09»
+
+**Tanda «QA del owner 02-09» — EN PRODUCCIÓN 02-09 05:2xZ, QA pendiente** (`master` = `rnmobiledenuevo` = `0f545926`, deploy `dpl_35ZT6w7oLzBrnMEAsXjmVQVdCy2R` READY, OTA android `bd2bc6e8` / ios `025d158f`; SDD [qa-ejecutor-share-0209](../qa-ejecutor-share-0209/SPEC.md) `implemented-pending-qa`): 10 commits con los hallazgos A–J del QA del owner: link `/join/<código>` en la pantalla de código (A), vista previa de WhatsApp = solo el logo del coach sobre su color + `Content-Length` + `?v=` (B), logo del coach en el Despegue desde las hojas portaleadas (C), permiso de notificaciones del timer desde Ajustes del entreno — la causa real en el Xiaomi del owner era el permiso negado (D), cardio cronometrado que se registra solo al vencer y solo rellena al pausar, web + RN (E), tarjeta de Share sin fondos y color solo en la silueta + Stories/WhatsApp/Guardar con aviso (F/G), selector de grupo muscular por región opción B + catálogo unificado (H), confirmación al salir del builder (I), guardián E394 consolidado (J). Revisión adversarial previa al push: 3 bloqueantes en cardio (step del campo, tiempo real vs prescrito al volver de background, remonte del runner de intervalos) y 1 en el builder (back con hoja abierta) corregidos. Gates: vitest 8622/8622, tsc web/mobile, eslint, docs, tokens, boundaries. **QA del owner VERDE en device (Q3–Q7)**; sus dos pedidos extra y el hallazgo del pellizco salieron en la **ronda 2** (`54c26ea4` login del alumno sin loader de marca + color efectivo del preset en manifest/splash/theme-color, `0cc53f41` og solo logo sobre fondo neutro, `99f884f8` pellizco de stickers; OTA android `fc78e1c8` / ios `c46d4eed`). QA automatizado de las listas 5-7 (Playwright, coach descartable borrado): 22 OK / 2 fallas / 6 no cubiertos, backlog B2–B9 en la TASKS de la SDD. **P4 verificado por el owner el 02-09 (pellizco y login OK) ⇒ SDD `done`.** P5 en código el 02-09 (gates pendientes): `pwa-screenshot`, `pr-card`, el PDF de nutrición del alumno y `getCoachPdfBrand` dejan el `primary_color` crudo y pasan por `resolveEffectiveBrandColorOrNull` (36 coaches con preset, ~30 con color legacy distinto). Backlog B2–B9 auditado contra HEAD el 02-09: los ocho son reales (B2 pierde el check-in al cortarse la red, B7 el drip no se cancela al borrar la cuenta, B9 el aviso de correo es inalcanzable con `persona = null`), detalle y tamaños en la TASKS.
