@@ -1722,7 +1722,7 @@ export function MobilePulseHero({
   onRiesgoPress: () => void
   onAdherencePress: () => void
 }) {
-  const { theme, resolvedScheme } = useTheme()
+  const { theme } = useTheme()
 
   // Serie suave terminando en el valor real (1:1 con sparkSeries de PulseHero.tsx web:
   // mismo wiggle → misma curva). La pipeline no expone histórico agregado (placeholder).
@@ -1823,8 +1823,10 @@ export function MobilePulseHero({
               duration={820}
               format={(value) => `${Math.round(value)}${s.key === 'adherencia' ? '%' : ''}`}
               // Número "En riesgo" = danger-600 scheme-aware (web PulseHero.tsx:106-108
-              // usa var(--danger-600): light #BE183C / dark #FF7C97), NO danger-500.
-              style={{ fontFamily: FONT.displayBold, fontSize: 27, lineHeight: 27, letterSpacing: -0.27, color: s.danger ? (resolvedScheme === 'dark' ? '#FF7C97' : '#BE183C') : theme.foreground, fontVariant: ['tabular-nums'] }}
+              // usa var(--danger-600): light #BE183C / dark #FF7C97), NO danger-500. El flip
+              // light/dark ya lo resuelve `theme.destructive600` (lib/theme.ts), así que acá no
+              // queda ningún hex suelto que se pueda desincronizar del DS.
+              style={{ fontFamily: FONT.displayBold, fontSize: 27, lineHeight: 27, letterSpacing: -0.27, color: s.danger ? theme.destructive600 : theme.foreground, fontVariant: ['tabular-nums'] }}
             />
             {s.spark ? (
               /* `flexWrap`: con la frase completa del delta ya no entran lado a lado en un stat

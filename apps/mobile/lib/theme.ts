@@ -56,6 +56,14 @@ export interface Theme {
   aqua700: string
   destructive: string
   success: string
+  /**
+   * --danger-600 / --success-600: color imperativo scheme-aware para numeros e iconos de estado
+   * (lucide/SVG/`AnimatedNumber` no toman className dark-aware). NO son el 500: el 500 es relleno
+   * de chip, el 600 es el foreground legible sobre superficie. Flipean light/dark igual que
+   * `aqua700`.
+   */
+  destructive600: string
+  success600: string
   /** --warning-500; imperative status color for native/SVG props. */
   warning: string
   // Extended (new - matches web design system)
@@ -114,6 +122,14 @@ const DS = {
   sport500: '#2680FF', // brand (applyCoachBranding overrides at runtime)
   danger500: '#F4365A',
   success500: '#1FB877',
+  // --danger-600 / --success-600: FLIPEAN en dark (a diferencia de los 500). Foreground de
+  // numeros/iconos de estado sobre superficie, no relleno. Espejo web globals.css:
+  // danger-600 light :434 #BE183C / dark :697 #FF7C97; success-600 light :426 #0F7D50 /
+  // dark :693 #4FD9A0.
+  danger600Light: '#BE183C',
+  danger600Dark: '#FF7C97',
+  success600Light: '#0F7D50',
+  success600Dark: '#4FD9A0',
   warning500: '#F5A524',
   ember500: '#FF6A3D',
   ember100: '#FFEDE6',
@@ -183,6 +199,8 @@ export const lightTheme: Theme = freezeTheme({
   aqua700: DS.aqua700Light,
   destructive: DS.danger500,
   success: DS.success500,
+  destructive600: DS.danger600Light,
+  success600: DS.success600Light,
   warning: DS.warning500,
   // Extended
   primaryForeground: DS.white, // text-on-sport
@@ -218,6 +236,8 @@ export const darkTheme: Theme = freezeTheme({
   aqua700: DS.aqua700Dark,
   destructive: DS.danger500,
   success: DS.success500,
+  destructive600: DS.danger600Dark,
+  success600: DS.success600Dark,
   warning: DS.warning500,
   // Extended
   primaryForeground: DS.white,

@@ -6,6 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Directions, Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
+import { usePreventRemove } from '@react-navigation/native'
 import BottomSheet, { BottomSheetModal, useBottomSheetModal } from '@gorhom/bottom-sheet'
 import { ArrowLeft, Check, CircleHelp, Copy, Dumbbell, Eye, History, Layers, Link2, Moon, MoreVertical, Pencil, Plus, Printer, Redo2, Scale, SlidersHorizontal, Sun, Undo2, Users } from 'lucide-react-native'
 import { NestableScrollContainer, NestableDraggableFlatList } from 'react-native-draggable-flatlist'
@@ -47,6 +48,7 @@ import {
 } from '@eva/plan-builder'
 import { usePlanBuilder } from '../../lib/plan-builder/reducer'
 import { buildDaySkeleton } from '../../lib/plan-builder/skeleton'
+import { catalogFactsById, reconcileDaysWithCatalog } from '../../lib/plan-builder/catalog-reconcile'
 import { serializeBlockInsert } from '../../lib/plan-builder/serialize'
 import type { BuilderBlock, BuilderSection, DayState, DurationType, ProgramStructureType } from '../../lib/plan-builder/types'
 import { listBuilderAreas } from '../../lib/workout-areas'
@@ -806,6 +808,16 @@ export default function ProgramBuilderScreen() {
   // la relectura para que la fila no siga mostrando el dato viejo.
   const [catalogReloadKey, setCatalogReloadKey] = useState(0)
   const catalogRequestRef = useRef(0)
+  // E1: relanzar el catálogo NO alcanzaba. El bloque ya colocado en el día se quedaba con el
+  // nombre/media/tipo que se le copiaron al agregarlo, así que renombrar un ejercicio propio desde
+  // el preview dejaba la fila del día mintiendo hasta recargar el builder entero. Este ref marca
+  // que la próxima lectura del catálogo tiene que reconciliar los días; la reconciliación en sí es
+  // pura y vive en `lib/plan-builder/catalog-reconcile.ts`.
+  const pendingCatalogReconcileRef = useRef(false)
+  // La reconciliación refresca el ESPEJO del catálogo (campos que `serialize.ts` ni siquiera
+  // escribe), no el programa: este ref le dice al tracking de «sin guardar» que ignore ese cambio
+  // de firma. Ver el efecto de dirty más abajo.
+  const cosmeticDaysUpdateRef = useRef(false)
   const catById = useMemo(() => new Map(catalog.map((e) => [e.id, e])), [catalog])
   // E5-03: areas del builder (workout_section_templates) — mismo scope que web. Solo el
   // DATO + tipos disponibles para el reducer (superserie/orden por area); la UI de areas
@@ -939,6 +951,26 @@ export default function ProgramBuilderScreen() {
     })
     return () => { active = false }
   }, [routeWorkspace, catalogReloadKey])
+
+  // E1: el catálogo volvió DESPUÉS de que el coach editó (o eliminó y deshizo) un ejercicio propio
+  // ⇒ los bloques que ya estaban puestos se ponen al día. Solo corre con el ref armado: en la carga
+  // inicial los bloques ya vienen del mismo embed `exercises ( … )`, no hay nada que reconciliar.
+  //
+  // Un catálogo vacío es una relectura que falló: no se toca nada (mejor el nombre viejo que
+  // ninguno). Las dos variantes (A y B) comparten el mismo índice.
+  useEffect(() => {
+    if (!pendingCatalogReconcileRef.current || catalog.length === 0) return
+    pendingCatalogReconcileRef.current = false
+    const facts = catalogFactsById(catalog)
+    const nextDays = reconcileDaysWithCatalog(liveDays.current, facts)
+    const nextOther = reconcileDaysWithCatalog(otherDays, facts)
+    if (nextDays === liveDays.current && nextOther === otherDays) return
+    cosmeticDaysUpdateRef.current = true
+    // `setDays` del reducer NO empuja al historial: deshacer un refresco de nombre no significa
+    // nada, y además dejaría al bloque otra vez con el dato viejo.
+    if (nextDays !== liveDays.current) setDays(nextDays)
+    if (nextOther !== otherDays) setOtherDays(nextOther)
+  }, [catalog, otherDays, setDays])
 
   // E5-03: precarga de areas del builder segun el workspace del coach (standalone ⇒ system
   // + propias; enterprise ⇒ solo system). Mismo query que web. Resiliente: [] ante error.
@@ -1217,6 +1249,12 @@ export default function ProgramBuilderScreen() {
     if (!hydratedRef.current || !dirtyTrackingReadyRef.current) return
     if (observedDraftSignatureRef.current === draftSignature) return
     observedDraftSignatureRef.current = draftSignature
+    // E1: la reconciliación contra el catálogo cambia la firma pero NO es una edición del
+    // programa. Nombre, grupo muscular, media y tipo del ejercicio no son columnas de
+    // `workout_blocks` (ver `serialize.ts`): viajan en el embed y se rehidratan en cada lectura.
+    // Marcar «sin guardar» —y con eso disparar la confirmación de salida— por algo que guardar no
+    // cambia sería mentirle al coach.
+    if (cosmeticDaysUpdateRef.current) { cosmeticDaysUpdateRef.current = false; return }
     editGenerationRef.current += 1
     setDirty(true)
   }, [draftSignature])
@@ -1762,11 +1800,12 @@ export default function ProgramBuilderScreen() {
     setHydrationReloadKey((current) => current + 1)
   }
 
-  // Salida ya confirmada (o que no necesita confirmación): marca el ref ANTES de navegar para
-  // que el listener de `beforeRemove` deje pasar esta navegación y no vuelva a preguntar.
-  const allowExitRef = useRef(false)
+  // Salir del builder. NO confirma nada por su cuenta: el guard es UNO SOLO y vive en
+  // `usePreventRemove` más abajo, que intercepta esta misma navegación (y el swipe-back, y el back
+  // del header) y pregunta si hace falta. Antes había dos mitades —un ref que dejaba pasar la
+  // salida ya confirmada y un listener que preguntaba— y cada camino nuevo tenía que acordarse de
+  // usar la primera para no preguntar dos veces.
   const leaveBuilder = useCallback(() => {
-    allowExitRef.current = true
     router.back()
   }, [router])
 
@@ -1788,10 +1827,11 @@ export default function ProgramBuilderScreen() {
     ])
   }, [])
 
+  // Pedir la salida. Siempre navega: si hay que preguntar, `usePreventRemove` cancela ESTA
+  // navegación y muestra la confirmación; si no, sale derecho.
   const requestExit = useCallback(() => {
-    if (!shouldConfirmExit({ dirty, saving })) { leaveBuilder(); return }
-    confirmExit(leaveBuilder)
-  }, [dirty, saving, leaveBuilder, confirmExit])
+    leaveBuilder()
+  }, [leaveBuilder])
 
   // Hojas/overlays montados encima del builder. El back de hardware tiene que cerrarlos a
   // ELLOS antes de preguntar por la salida: @gorhom/bottom-sheet 5.2.14 NO registra ningún
@@ -1833,6 +1873,12 @@ export default function ProgramBuilderScreen() {
   // Back de hardware / gesto de Android. Va por `useFocusEffect` y no por `useEffect`: los
   // listeners de BackHandler son GLOBALES y en LIFO, así que uno vivo sin foco se comería el
   // back de la pantalla que esté encima (mismo criterio que app/index.tsx).
+  //
+  // Acá SOLO se decide si el back cierra una hoja abierta. La confirmación de salida NO se pregunta
+  // desde este listener: `requestExit` navega y el guard único (`usePreventRemove`, abajo) es el que
+  // pregunta — así el back físico y el swipe-back de iOS muestran exactamente el mismo diálogo, una
+  // sola vez. `resolveBuilderBack` sigue distinguiendo `confirm-exit` de `exit` para el espejo con
+  // web; acá los dos terminan en lo mismo.
   useFocusEffect(
     useCallback(() => {
       const sub = BackHandler.addEventListener('hardwareBackPress', () => {
@@ -1845,27 +1891,35 @@ export default function ProgramBuilderScreen() {
     }, [countOpenOverlays, closeTopOverlay, dirty, saving, requestExit]),
   )
 
-  // Gesto de swipe-back de iOS (y cualquier salida que no pase por `requestExit`: back del
-  // header nativo, deep link). `beforeRemove` es la MISMA mitad que usa `usePreventRemove` de
-  // @react-navigation/core —que expo-router no re-exporta— y no toca el lockfile: el
-  // `StackActions.pop` que dispara el dismiss nativo pasa por acá y se cancela.
-  //
-  // El gesto NO se deshabilita: dejarlo inerte con cambios sin guardar era peor (el gesto más
-  // usado de iOS sin respuesta ni explicación). Salvedad honesta para el QA de device:
-  // native-stack solo bloquea el dismiss NATIVO cuando `usePreventRemove` alimenta
-  // `preventNativeDismiss`, así que en iOS la pantalla puede llegar a animarse hacia afuera
-  // antes de volver con la confirmación encima.
-  useEffect(() => {
-    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
-      if (allowExitRef.current || !shouldConfirmExit({ dirty, saving })) return
-      e.preventDefault()
-      confirmExit(() => {
-        allowExitRef.current = true
-        navigation.dispatch(e.data.action)
-      })
-    })
-    return unsubscribe
-  }, [navigation, dirty, saving, confirmExit])
+  /**
+   * Guard de salida ÚNICO (D6). Cubre TODA forma de irse del builder: el botón «volver» de la top
+   * bar, el back físico de Android, el swipe-back de iOS, el back del header nativo y un deep link
+   * que reemplace la pantalla.
+   *
+   * Antes esto era un `navigation.addListener('beforeRemove')` a mano. `usePreventRemove` registra
+   * además la ruta en el `PreventRemoveContext`, y ESO es lo que le falta al listener crudo: con la
+   * ruta marcada, native-stack le pasa `preventNativeDismiss: true` a la pantalla en iOS
+   * (`NativeStackView.native.js`), así que el gesto ya NO alcanza a animar la pantalla hacia afuera
+   * para volver después con la confirmación encima — se bloquea en nativo y react-native-screens
+   * devuelve un `StackActions.pop` por `onNativeDismissCancelled`, que cae otra vez acá.
+   *
+   * `@react-navigation/native` pasó a ser dependencia DIRECTA de `apps/mobile` por este hook (con
+   * `pnpm` estricto no se puede importar una transitiva). Va pineado a la MISMA versión que ya
+   * resolvía por `expo-router` (7.2.4) para que siga habiendo UNA sola copia de
+   * `@react-navigation/core`: dos copias serían dos `PreventRemoveContext` distintos y native-stack
+   * leería el que nadie alimenta. Es JS puro, sin nada nativo: viaja por OTA.
+   *
+   * El gesto NO se deshabilita cuando no hay nada que guardar: `preventRemove` sigue la misma regla
+   * de siempre (`shouldConfirmExit`, compartida con web), así que sin cambios sin guardar —o
+   * mientras se está guardando— se sale derecho.
+   *
+   * Salir se dispatchea con `data.action` a propósito: esa acción viene marcada con las rutas que
+   * ya preguntaron (`VISITED_ROUTE_KEYS` de `useOnPreventRemove`), así que la segunda vuelta pasa
+   * de largo en vez de volver a preguntar en loop.
+   */
+  usePreventRemove(shouldConfirmExit({ dirty, saving }), ({ data }) => {
+    confirmExit(() => navigation.dispatch(data.action))
+  })
 
   async function handleSave(force = false) {
     if (!name.trim()) { Alert.alert('Nombre requerido', 'Ingresa un nombre para el programa.'); return }
@@ -2177,7 +2231,10 @@ export default function ProgramBuilderScreen() {
         dayBlockCount={currentDay?.blocks.length ?? 0}
         dayName={currentDay?.name ?? ''}
         onIndexChange={(i) => { setCatalogExpanded(i >= 1); markSheet('catalog', i >= 0) }}
-        onCatalogChanged={() => setCatalogReloadKey((k) => k + 1)}
+        onCatalogChanged={() => {
+          pendingCatalogReconcileRef.current = true
+          setCatalogReloadKey((k) => k + 1)
+        }}
         onSelect={(block) => { addExercise(activeDayId, { ...block, dayId: activeDayId, section: sectionForArea(pendingAreaId), section_template_id: pendingAreaId }); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}) }}
       />
       <BlockEditorSheet ref={editorRef} block={editingBlock} onChange={updateBlock} onRemove={(uid) => { removeBlock(activeDayId, uid); editorRef.current?.dismiss() }}

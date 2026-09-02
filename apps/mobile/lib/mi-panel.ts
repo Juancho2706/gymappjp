@@ -15,7 +15,12 @@ import { saveFeaturePrefs } from './feature-prefs.queries'
 import { supabase } from './supabase'
 
 /**
- * «Opciones › Mi panel» en la app (SPEC coach-onboarding-v2 §2 y §4; TASKS W8.2.2).
+ * «Opciones › Funciones» en la app (SPEC coach-onboarding-v2 §2 y §4; TASKS W8.2.2).
+ *
+ * La pantalla se llamaba «Mi panel» hasta que la Ola de orden W3.3/W3.4 la fusionó con
+ * «Funciones de nutrición», el catálogo de Módulos y el launcher Herramientas. Los identificadores
+ * exportados dicen `FUNCIONES_*` por eso; el nombre del ARCHIVO se conserva para no mover los
+ * imports de media app por un rename cosmético.
  *
  * Cierra el hallazgo `spec-rn-08`: la guía de RN dice «Cambiar en Opciones» y la pantalla de
  * persona promete «Opciones › Mi panel», pero en la app no existía ninguna entrada para cambiar
@@ -45,7 +50,7 @@ import { supabase } from './supabase'
 export const FUNCIONES_ROUTE = '/coach/settings/funciones'
 
 /** Destino de «Ver mi guía de inicio». Mismo literal que `COACH_GUIA_ROUTE` de `coach-persona`. */
-export const MI_PANEL_GUIA_ROUTE = '/coach/guia'
+export const FUNCIONES_GUIA_ROUTE = '/coach/guia'
 
 /**
  * Estado abierto/cerrado de la píldora flotante, por coach.
@@ -63,7 +68,7 @@ export const GUIDE_PILL_EXPANDED = 'expanded'
 
 // ── Dominios del panel ───────────────────────────────────────────────────────────────────────
 
-export interface MiPanelDomainMeta {
+export interface FuncionesDomainMeta {
   domain: FeatureDomain
   label: string
   description: string
@@ -79,7 +84,7 @@ export interface MiPanelDomainMeta {
  * propósito (solo Nutrición): es el que decide qué áreas muestra el editor fino de secciones, y
  * sumarle los otros 4 haría aparecer cuatro editores de secciones vacíos en «Funciones».
  */
-export const MI_PANEL_DOMAINS: readonly MiPanelDomainMeta[] = [
+export const FUNCIONES_DOMAINS: readonly FuncionesDomainMeta[] = [
   {
     domain: 'nutrition',
     label: 'Nutrición',
@@ -108,7 +113,7 @@ export const MI_PANEL_DOMAINS: readonly MiPanelDomainMeta[] = [
 ]
 
 /** Estado de UN dominio en la pantalla: su copy + lo CRUDO que hay que preservar al escribir. */
-export interface MiPanelDomainRow extends MiPanelDomainMeta {
+export interface FuncionesDomainRow extends FuncionesDomainMeta {
   /** `_enabled` de `coach_feature_prefs.sections`. Ausente ⇒ prendido (fail-open, igual que web). */
   enabled: boolean
   /** El preset guardado. Se conserva tal cual: el master switch no lo decide. */
@@ -135,8 +140,8 @@ export interface RawDomainPrefsRow {
  * lector del server cuando la clave no está, y es lo que ve un coach que nunca contestó la
  * pregunta de persona.
  */
-export function buildDomainRows(rows: readonly RawDomainPrefsRow[]): MiPanelDomainRow[] {
-  return MI_PANEL_DOMAINS.map((meta) => {
+export function buildDomainRows(rows: readonly RawDomainPrefsRow[]): FuncionesDomainRow[] {
+  return FUNCIONES_DOMAINS.map((meta) => {
     const row = rows.find((candidate) => candidate.domain === meta.domain)
     const sections = asSections(row?.sections)
     return {
@@ -158,7 +163,7 @@ export function buildDomainRows(rows: readonly RawDomainPrefsRow[]): MiPanelDoma
  *
  * Degrada a «todo prendido» ante cualquier error: un panel completo es el estado seguro.
  */
-export async function loadMiPanelDomains(coachId: string | null): Promise<MiPanelDomainRow[]> {
+export async function loadFuncionesDomains(coachId: string | null): Promise<FuncionesDomainRow[]> {
   if (!coachId) return buildDomainRows([])
   try {
     const { data } = await supabase
@@ -180,7 +185,7 @@ export async function loadMiPanelDomains(coachId: string | null): Promise<MiPane
  * el write del POOL (`writeTeamDomainEnabled`) arme el mismo payload desde la fila cruda del team.
  */
 export function buildDomainSwitchPayload(
-  row: Pick<MiPanelDomainRow, 'domain' | 'preset' | 'sections'>,
+  row: Pick<FuncionesDomainRow, 'domain' | 'preset' | 'sections'>,
   enabled: boolean,
 ): { domain: FeatureDomain; preset: Preset; sections: Record<string, boolean> } {
   return {
@@ -191,13 +196,13 @@ export function buildDomainSwitchPayload(
 }
 
 /**
- * Lee las 5 filas de `team_feature_prefs` del POOL. Mismo cruce que `loadMiPanelDomains`, otra
+ * Lee las 5 filas de `team_feature_prefs` del POOL. Mismo cruce que `loadFuncionesDomains`, otra
  * tabla: el master switch de un coach de equipo lo define el pool (RLS: escriben solo los gestores).
  *
  * No se usa `loadFeaturePrefs` de `lib/feature-prefs.queries.ts` por la misma razón que en el caso
  * coach: ese lector itera SOLO los dominios de su `DOMAIN_LABELS` parcial (hoy Nutrición).
  */
-export async function loadTeamPanelDomains(teamId: string | null): Promise<MiPanelDomainRow[]> {
+export async function loadTeamPanelDomains(teamId: string | null): Promise<FuncionesDomainRow[]> {
   if (!teamId) return buildDomainRows([])
   try {
     const { data } = await supabase
@@ -332,14 +337,14 @@ export async function clearNavOrder(coachId: string | null): Promise<PrefsWriteR
 
 // ── Especialidad ─────────────────────────────────────────────────────────────────────────────
 
-export interface MiPanelPersonaInput {
+export interface FuncionesPersonaInput {
   persona: Persona
   alsoOther?: boolean
   /** `true` = re-sembrar los 5 dominios con la matriz de la persona (el coach lo pidió). */
   reorderPanel?: boolean
 }
 
-export interface MiPanelPersonaPayload {
+export interface FuncionesPersonaPayload {
   persona: Persona
   alsoOther: boolean
   reorderPanel: boolean
@@ -356,7 +361,7 @@ export interface MiPanelPersonaPayload {
  * `reorderPanel` viaja SIEMPRE (aunque sea `false`): su presencia es lo que le dice al endpoint
  * que la llamada viene de «Mi panel» y no del primer ingreso.
  */
-export function buildPersonaPayload(input: MiPanelPersonaInput): MiPanelPersonaPayload {
+export function buildPersonaPayload(input: FuncionesPersonaInput): FuncionesPersonaPayload {
   const hasSecondQuestion = PERSONA_COPY[input.persona].secondQuestion != null
   return {
     persona: input.persona,
@@ -367,7 +372,7 @@ export function buildPersonaPayload(input: MiPanelPersonaInput): MiPanelPersonaP
 
 /** ¿Hay algo que guardar? Evita un request que no cambia nada (y un toast mentiroso). */
 export function isPersonaDirty(
-  draft: MiPanelPersonaInput,
+  draft: FuncionesPersonaInput,
   saved: { persona: Persona | null; alsoOther: boolean },
 ): boolean {
   const payload = buildPersonaPayload(draft)
@@ -375,7 +380,7 @@ export function isPersonaDirty(
   return payload.persona !== saved.persona || payload.alsoOther !== saved.alsoOther
 }
 
-export type MiPanelResult = { ok: true; message: string } | { ok: false; error: string }
+export type FuncionesResult = { ok: true; message: string } | { ok: false; error: string }
 
 const SAVE_FALLBACK = 'No pudimos guardar tu elección. Revisa tu conexión e inténtalo de nuevo.'
 
@@ -384,7 +389,7 @@ const SAVE_FALLBACK = 'No pudimos guardar tu elección. Revisa tu conexión e in
  * organización…»), uno genérico cuando es un 5xx o un fallo de red (que trae
  * `TypeError: Network request failed`, y eso no se le pone delante a nadie).
  */
-export function humanizeMiPanelError(error: unknown, fallback: string): string {
+export function humanizeFuncionesError(error: unknown, fallback: string): string {
   if (error == null || typeof error !== 'object') return fallback
   const status = (error as { status?: unknown }).status
   const message = (error as { message?: unknown }).message
@@ -398,7 +403,7 @@ export function humanizeMiPanelError(error: unknown, fallback: string): string {
  * este camino del primer ingreso (ahí el endpoint siembra la matriz completa y el alumno de
  * ejemplo; acá no toca nada más que lo que el coach pidió).
  */
-export async function saveMiPanelPersona(input: MiPanelPersonaInput): Promise<MiPanelResult> {
+export async function saveFuncionesPersona(input: FuncionesPersonaInput): Promise<FuncionesResult> {
   const payload = buildPersonaPayload(input)
   try {
     const response = await apiFetch<{ ok?: boolean; reordered?: boolean }>(
@@ -411,7 +416,7 @@ export async function saveMiPanelPersona(input: MiPanelPersonaInput): Promise<Mi
       message: payload.reorderPanel ? 'Especialidad guardada y panel reordenado.' : 'Especialidad guardada.',
     }
   } catch (error) {
-    return { ok: false, error: humanizeMiPanelError(error, SAVE_FALLBACK) }
+    return { ok: false, error: humanizeFuncionesError(error, SAVE_FALLBACK) }
   }
 }
 
@@ -445,14 +450,14 @@ export async function reseedDemoStudent(): Promise<ReseedDemoResult> {
   } catch (error) {
     return {
       ok: false,
-      error: humanizeMiPanelError(error, 'No pudimos crear el alumno de ejemplo. Inténtalo de nuevo.'),
+      error: humanizeFuncionesError(error, 'No pudimos crear el alumno de ejemplo. Inténtalo de nuevo.'),
     }
   }
 }
 
 // ── Qué muestra la pantalla ──────────────────────────────────────────────────────────────────
 
-export interface MiPanelVisibilityInput {
+export interface FuncionesVisibilityInput {
   persona: Persona | null
   /** `onboardingV2.demoClientId` de la foto del dashboard. */
   demoClientId: string | null
@@ -460,7 +465,7 @@ export interface MiPanelVisibilityInput {
   guide: { dismissed: boolean; hidden: boolean }
 }
 
-export interface MiPanelVisibility {
+export interface FuncionesVisibility {
   /** Hay demo sembrado ⇒ se puede borrar. */
   canDeleteDemo: boolean
   /** No hay demo y la persona SÍ trae uno ⇒ se puede volver a sembrar. */
@@ -478,7 +483,7 @@ export interface MiPanelVisibility {
  * es la regla que evita ofrecer «Borrar» sin demo, «Sembrar» a una persona sin demo, o
  * «Volver a mostrar la guía» a quien la tiene visible.
  */
-export function resolveMiPanelVisibility(input: MiPanelVisibilityInput): MiPanelVisibility {
+export function resolveFuncionesVisibility(input: FuncionesVisibilityInput): FuncionesVisibility {
   const demoName = input.persona ? PERSONA_COPY[input.persona].demoName : null
   const hasDemo = input.demoClientId != null && input.demoClientId.trim() !== ''
   return {

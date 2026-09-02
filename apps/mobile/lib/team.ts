@@ -30,7 +30,6 @@ export interface TeamOverview {
   primaryColor: string | null
   logoUrl: string | null
   enabledModules: Record<string, boolean>
-  activeModuleCount: number
   members: TeamMemberView[]
   activeMemberCount: number
   seatsFull: boolean
@@ -107,7 +106,6 @@ export async function getTeamOverview(teamId: string): Promise<TeamOverview | nu
     primaryColor: team.primary_color ?? null,
     logoUrl: team.logo_url ?? null,
     enabledModules,
-    activeModuleCount: Object.values(enabledModules).filter(Boolean).length,
     members,
     activeMemberCount,
     seatsFull: seatLimit > 0 && activeMemberCount >= seatLimit,

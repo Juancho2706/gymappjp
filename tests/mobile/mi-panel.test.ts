@@ -70,11 +70,11 @@ beforeEach(() => {
     apiFetchImpl = async () => ({ ok: true })
 })
 
-describe('resolveMiPanelVisibility', () => {
+describe('resolveFuncionesVisibility', () => {
     it('con demo sembrado: se puede borrar, no re-sembrar', async () => {
-        const { resolveMiPanelVisibility } = await loadModule()
+        const { resolveFuncionesVisibility } = await loadModule()
         expect(
-            resolveMiPanelVisibility({
+            resolveFuncionesVisibility({
                 persona: 'strength',
                 demoClientId: 'demo-1',
                 guide: { dismissed: false, hidden: false },
@@ -89,8 +89,8 @@ describe('resolveMiPanelVisibility', () => {
     })
 
     it('sin demo y con persona que trae uno: se ofrece volver a sembrarlo', async () => {
-        const { resolveMiPanelVisibility } = await loadModule()
-        const v = resolveMiPanelVisibility({
+        const { resolveFuncionesVisibility } = await loadModule()
+        const v = resolveFuncionesVisibility({
             persona: 'nutrition',
             demoClientId: null,
             guide: { dismissed: false, hidden: false },
@@ -101,8 +101,8 @@ describe('resolveMiPanelVisibility', () => {
     })
 
     it('persona `other`: no hay alumno de ejemplo que sembrar', async () => {
-        const { resolveMiPanelVisibility } = await loadModule()
-        const v = resolveMiPanelVisibility({
+        const { resolveFuncionesVisibility } = await loadModule()
+        const v = resolveFuncionesVisibility({
             persona: 'other',
             demoClientId: null,
             guide: { dismissed: false, hidden: false },
@@ -113,8 +113,8 @@ describe('resolveMiPanelVisibility', () => {
     })
 
     it('un demoClientId en blanco NO cuenta como demo', async () => {
-        const { resolveMiPanelVisibility } = await loadModule()
-        const v = resolveMiPanelVisibility({
+        const { resolveFuncionesVisibility } = await loadModule()
+        const v = resolveFuncionesVisibility({
             persona: 'strength',
             demoClientId: '   ',
             guide: { dismissed: false, hidden: false },
@@ -124,8 +124,8 @@ describe('resolveMiPanelVisibility', () => {
     })
 
     it('coach sin persona: ni sembrar ni copy de demo', async () => {
-        const { resolveMiPanelVisibility } = await loadModule()
-        const v = resolveMiPanelVisibility({
+        const { resolveFuncionesVisibility } = await loadModule()
+        const v = resolveFuncionesVisibility({
             persona: null,
             demoClientId: null,
             guide: { dismissed: false, hidden: false },
@@ -135,16 +135,16 @@ describe('resolveMiPanelVisibility', () => {
     })
 
     it('la guía descartada u oculta ofrece volver a mostrarla', async () => {
-        const { resolveMiPanelVisibility } = await loadModule()
+        const { resolveFuncionesVisibility } = await loadModule()
         const base = { persona: 'strength' as const, demoClientId: null }
         expect(
-            resolveMiPanelVisibility({ ...base, guide: { dismissed: true, hidden: false } }).canRestoreGuide,
+            resolveFuncionesVisibility({ ...base, guide: { dismissed: true, hidden: false } }).canRestoreGuide,
         ).toBe(true)
         expect(
-            resolveMiPanelVisibility({ ...base, guide: { dismissed: false, hidden: true } }).canRestoreGuide,
+            resolveFuncionesVisibility({ ...base, guide: { dismissed: false, hidden: true } }).canRestoreGuide,
         ).toBe(true)
         expect(
-            resolveMiPanelVisibility({ ...base, guide: { dismissed: false, hidden: false } }).canRestoreGuide,
+            resolveFuncionesVisibility({ ...base, guide: { dismissed: false, hidden: false } }).canRestoreGuide,
         ).toBe(false)
     })
 })
@@ -209,9 +209,9 @@ describe('isPersonaDirty', () => {
 
 describe('buildDomainRows', () => {
     it('un dominio sin fila arranca PRENDIDO (fail-open)', async () => {
-        const { buildDomainRows, MI_PANEL_DOMAINS } = await loadModule()
+        const { buildDomainRows, FUNCIONES_DOMAINS } = await loadModule()
         const rows = buildDomainRows([])
-        expect(rows).toHaveLength(MI_PANEL_DOMAINS.length)
+        expect(rows).toHaveLength(FUNCIONES_DOMAINS.length)
         expect(rows.every((row: { enabled: boolean }) => row.enabled)).toBe(true)
         expect(rows.map((row: { domain: string }) => row.domain)).toEqual([
             'nutrition',
@@ -257,18 +257,18 @@ describe('buildDomainSwitchPayload', () => {
     })
 })
 
-describe('loadMiPanelDomains', () => {
+describe('loadFuncionesDomains', () => {
     it('sin coachId no consulta y devuelve todo prendido', async () => {
-        const { loadMiPanelDomains } = await loadModule()
-        const rows = await loadMiPanelDomains(null)
+        const { loadFuncionesDomains } = await loadModule()
+        const rows = await loadFuncionesDomains(null)
         expect(lastSelect.coachId).toBeNull()
         expect(rows.every((row: { enabled: boolean }) => row.enabled)).toBe(true)
     })
 
     it('consulta los 5 dominios del coach y cruza lo guardado', async () => {
-        const { loadMiPanelDomains } = await loadModule()
+        const { loadFuncionesDomains } = await loadModule()
         selectRows = [{ domain: 'movement', preset: 'basico', sections: { _enabled: false } }]
-        const rows = await loadMiPanelDomains('coach-1')
+        const rows = await loadFuncionesDomains('coach-1')
         expect(lastSelect.coachId).toBe('coach-1')
         expect(lastSelect.domains).toEqual(['nutrition', 'training', 'cardio', 'movement', 'bodycomp'])
         expect(rows.find((row: { domain: string }) => row.domain === 'movement').enabled).toBe(false)
@@ -276,17 +276,17 @@ describe('loadMiPanelDomains', () => {
     })
 
     it('un fallo de RLS/red degrada a panel completo, no a pantalla rota', async () => {
-        const { loadMiPanelDomains } = await loadModule()
+        const { loadFuncionesDomains } = await loadModule()
         selectThrows = true
-        const rows = await loadMiPanelDomains('coach-1')
+        const rows = await loadFuncionesDomains('coach-1')
         expect(rows.every((row: { enabled: boolean }) => row.enabled)).toBe(true)
     })
 })
 
-describe('saveMiPanelPersona', () => {
+describe('saveFuncionesPersona', () => {
     it('postea al endpoint de persona con reorderPanel explícito', async () => {
-        const { saveMiPanelPersona } = await loadModule()
-        const result = await saveMiPanelPersona({ persona: 'endurance', alsoOther: true, reorderPanel: true })
+        const { saveFuncionesPersona } = await loadModule()
+        const result = await saveFuncionesPersona({ persona: 'endurance', alsoOther: true, reorderPanel: true })
         expect(result).toEqual({ ok: true, message: 'Especialidad guardada y panel reordenado.' })
         expect(calls).toHaveLength(1)
         expect(calls[0].path).toBe('/api/mobile/coach/persona')
@@ -300,44 +300,44 @@ describe('saveMiPanelPersona', () => {
     })
 
     it('sin reorden el mensaje no promete un reordenamiento que no pasó', async () => {
-        const { saveMiPanelPersona } = await loadModule()
-        const result = await saveMiPanelPersona({ persona: 'strength' })
+        const { saveFuncionesPersona } = await loadModule()
+        const result = await saveFuncionesPersona({ persona: 'strength' })
         expect(result).toEqual({ ok: true, message: 'Especialidad guardada.' })
         expect(calls[0].options.body).toEqual({ persona: 'strength', alsoOther: false, reorderPanel: false })
     })
 
     it('el mensaje accionable del servidor (4xx) se muestra tal cual', async () => {
-        const { saveMiPanelPersona } = await loadModule()
+        const { saveFuncionesPersona } = await loadModule()
         apiFetchImpl = async () => {
             throw Object.assign(new Error('Tu panel lo administra tu organización o tu equipo.'), { status: 403 })
         }
-        const result = await saveMiPanelPersona({ persona: 'strength' })
+        const result = await saveFuncionesPersona({ persona: 'strength' })
         expect(result).toEqual({ ok: false, error: 'Tu panel lo administra tu organización o tu equipo.' })
     })
 
     it('un fallo de red NO le pone «Network request failed» delante a nadie', async () => {
-        const { saveMiPanelPersona } = await loadModule()
+        const { saveFuncionesPersona } = await loadModule()
         apiFetchImpl = async () => {
             throw new TypeError('Network request failed')
         }
-        const result = await saveMiPanelPersona({ persona: 'strength' })
+        const result = await saveFuncionesPersona({ persona: 'strength' })
         expect(result.ok).toBe(false)
         expect(result.error).toBe('No pudimos guardar tu elección. Revisa tu conexión e inténtalo de nuevo.')
     })
 
     it('un 5xx tampoco filtra el mensaje interno', async () => {
-        const { saveMiPanelPersona } = await loadModule()
+        const { saveFuncionesPersona } = await loadModule()
         apiFetchImpl = async () => {
             throw Object.assign(new Error('column persona does not exist'), { status: 500 })
         }
-        const result = await saveMiPanelPersona({ persona: 'strength' })
+        const result = await saveFuncionesPersona({ persona: 'strength' })
         expect(result.error).toBe('No pudimos guardar tu elección. Revisa tu conexión e inténtalo de nuevo.')
     })
 
     it('una respuesta sin `ok` no se celebra', async () => {
-        const { saveMiPanelPersona } = await loadModule()
+        const { saveFuncionesPersona } = await loadModule()
         apiFetchImpl = async () => ({})
-        const result = await saveMiPanelPersona({ persona: 'strength' })
+        const result = await saveFuncionesPersona({ persona: 'strength' })
         expect(result.ok).toBe(false)
     })
 })
@@ -383,8 +383,8 @@ describe('claves y rutas', () => {
     it('las rutas apuntan a las pantallas reales del árbol', async () => {
         // W3.3/W3.4: «Mi panel» se fusionó en `settings/funciones.tsx`; la ruta vieja quedó como
         // redirect y los enlaces internos apuntan directo a la nueva.
-        const { FUNCIONES_ROUTE, MI_PANEL_GUIA_ROUTE } = await loadModule()
+        const { FUNCIONES_ROUTE, FUNCIONES_GUIA_ROUTE } = await loadModule()
         expect(FUNCIONES_ROUTE).toBe('/coach/settings/funciones')
-        expect(MI_PANEL_GUIA_ROUTE).toBe('/coach/guia')
+        expect(FUNCIONES_GUIA_ROUTE).toBe('/coach/guia')
     })
 })

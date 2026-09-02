@@ -52,6 +52,16 @@ const IconPlus = themedIcon(Plus)
 const IconSort = themedIcon(ArrowDownUp)
 const IconList = themedIcon(List)
 const IconGrid = themedIcon(LayoutGrid)
+// Iconos del empty state contextual. Se envuelven ACA, a nivel de modulo, y no dentro de
+// `LibraryEmptyState`: `themedIcon` devuelve un COMPONENTE, y crear componentes en render
+// remonta el subarbol en cada pasada (pierde estado y anima de cero). `themedIcon` cachea por
+// icono, asi que el wrapper es el mismo objeto igual — lo que cambiaba era el ORDEN de creacion,
+// no el resultado; hoisting lo vuelve explicito y calla `react-hooks/static-components`.
+const IconSearchX = themedIcon(SearchX)
+const IconSearch = themedIcon(Search)
+const IconCalendarClock = themedIcon(CalendarClock)
+const IconLayoutTemplate = themedIcon(LayoutTemplate)
+const IconDumbbell = themedIcon(Dumbbell)
 
 type SortKey = 'recent' | 'name'
 
@@ -672,14 +682,14 @@ function LibraryEmptyState({
   const trimmed = search.trim()
   const cfg =
     hasPrograms && trimmed
-      ? { icon: SearchX, title: 'Sin resultados', sub: `No encontramos programas para «${trimmed}». Prueba otro término o quita el filtro.`, cta: 'Limpiar búsqueda', ctaIcon: Search, act: onClearSearch }
+      ? { icon: IconSearchX, title: 'Sin resultados', sub: `No encontramos programas para «${trimmed}». Prueba otro término o quita el filtro.`, cta: 'Limpiar búsqueda', ctaIcon: IconSearch, act: onClearSearch }
       : hasPrograms && filterType === 'assigned'
-        ? { icon: CalendarClock, title: 'Nada en curso', sub: 'Cuando asignes una plantilla a un alumno, su programa activo aparece aquí.', cta: 'Ver plantillas', ctaIcon: LayoutTemplate, act: onShowTemplates }
+        ? { icon: IconCalendarClock, title: 'Nada en curso', sub: 'Cuando asignes una plantilla a un alumno, su programa activo aparece aquí.', cta: 'Ver plantillas', ctaIcon: IconLayoutTemplate, act: onShowTemplates }
         : hasPrograms && filterType === 'templates'
-          ? { icon: LayoutTemplate, title: 'Sin plantillas todavía', sub: 'Crea una plantilla reutilizable y asígnala a tus alumnos en segundos.', cta: 'Crear plantilla', ctaIcon: Plus, act: onNewTemplate }
-          : { icon: Dumbbell, title: 'Tu biblioteca está vacía', sub: 'Crea tu primera plantilla de entrenamiento para empezar a asignar.', cta: 'Crear plantilla', ctaIcon: Plus, act: onNewTemplate }
-  const EmptyIcon = themedIcon(cfg.icon)
-  const CtaIcon = themedIcon(cfg.ctaIcon)
+          ? { icon: IconLayoutTemplate, title: 'Sin plantillas todavía', sub: 'Crea una plantilla reutilizable y asígnala a tus alumnos en segundos.', cta: 'Crear plantilla', ctaIcon: IconPlus, act: onNewTemplate }
+          : { icon: IconDumbbell, title: 'Tu biblioteca está vacía', sub: 'Crea tu primera plantilla de entrenamiento para empezar a asignar.', cta: 'Crear plantilla', ctaIcon: IconPlus, act: onNewTemplate }
+  const EmptyIcon = cfg.icon
+  const CtaIcon = cfg.ctaIcon
   return (
     <View className="items-center px-space-4 pt-space-6">
       <View className="mb-space-4 h-[60px] w-[60px] items-center justify-center rounded-card bg-sport-100 dark:bg-sport-100/20">

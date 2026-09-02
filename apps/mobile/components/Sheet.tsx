@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import {
   KeyboardAvoidingView,
@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
   useWindowDimensions,
+  type GestureResponderHandlers,
 } from 'react-native'
 import {
   BottomSheetModal,
@@ -197,18 +198,39 @@ export function Sheet({
 
   // Latest onClose for the imperative swipe handler (avoids stale closures without re-creating the
   // responder). Used only by the native-modal path.
+  //
+  // El sync va en un efecto y NO en el cuerpo del render: `react-hooks/refs` prohíbe escribir un
+  // ref durante el render. El handler solo corre en respuesta a un toque —siempre después del
+  // commit— así que ve exactamente el mismo `onClose` que antes.
   const onCloseRef = useRef(onClose)
-  onCloseRef.current = onClose
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
+
   // Swipe-down on the handle dismisses in the native-modal path (parity with @gorhom
   // `enablePanDownToClose`). No live follow — a downward release past the threshold closes.
-  const swipeResponder = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_e, g) => g.dy > 6 && g.dy > Math.abs(g.dx),
-      onPanResponderRelease: (_e, g) => {
-        if (g.dy > 48) onCloseRef.current()
-      },
-    }),
-  ).current
+  //
+  // El responder se crea UNA sola vez y DENTRO de un efecto. Antes nacía en el render
+  // (`useRef(PanResponder.create(...)).current`), que es justo lo que `react-hooks/refs` marca:
+  // el `onPanResponderRelease` captura `onCloseRef`, así que el ref viajaba a una función llamada
+  // durante el render. Mover la creación al efecto es la única forma de sacarlo de ahí SIN cambiar
+  // el comportamiento: recrearlo con cada `onClose` nuevo (deps `[onClose]`) estrenaría un
+  // `gestureState` en blanco a mitad de un arrastre y el swipe dejaría de cerrar.
+  //
+  // Los handlers quedan en estado (no en un ref) para poder leerlos en el render. El único desfase
+  // es el primer commit, donde el grabber va sin handlers: nadie alcanza a arrastrar el sheet en
+  // el mismo frame en que aparece.
+  const [swipePanHandlers, setSwipePanHandlers] = useState<GestureResponderHandlers | null>(null)
+  useEffect(() => {
+    setSwipePanHandlers(
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_e, g) => g.dy > 6 && g.dy > Math.abs(g.dx),
+        onPanResponderRelease: (_e, g) => {
+          if (g.dy > 48) onCloseRef.current()
+        },
+      }).panHandlers,
+    )
+  }, [])
 
   // Cap for content-hugging (dynamic) sizing = the largest snap-point fraction of
   // the screen (e.g. '85%' → 0.85·height), so short content hugs and tall content
@@ -385,7 +407,7 @@ export function Sheet({
                 style={[shadow('lg', forceDark ? 'dark' : resolvedScheme), { maxHeight: maxDynamicContentSize, flexShrink: 1 }]}
               >
                 {/* Swipe-down on the handle zone dismisses (parity with enablePanDownToClose). */}
-                <View {...swipeResponder.panHandlers}>{handleEl}</View>
+                <View {...(swipePanHandlers ?? {})}>{handleEl}</View>
 
                 {header}
 

@@ -3,10 +3,9 @@ import { ScrollView, StyleSheet, Switch, Text, TouchableOpacity, View } from 're
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import Constants from 'expo-constants'
-import { Apple, Bell, ChevronRight, CreditCard, ExternalLink, LogOut } from 'lucide-react-native'
+import { Apple, Bell, ChevronRight, CreditCard, ExternalLink } from 'lucide-react-native'
 import { MotiView } from 'moti'
 import { supabase } from '../../../lib/supabase'
-import { signOutAndRedirectHome } from '../../../lib/auth-actions'
 import { getCoachProfile, CoachProfile } from '../../../lib/coach'
 import { getCoachOrgContext, CoachOrgContext, orgRoleLabel } from '../../../lib/org'
 // El espejo local no tenía `free`: un coach del plan gratuito veía «free» crudo en «Plan».
@@ -15,7 +14,7 @@ import { getCoachOrgContext, CoachOrgContext, orgRoleLabel } from '../../../lib/
 import { TIER_LABELS } from '../../../lib/coach-subscription'
 import type { SubscriptionTier } from '../../../lib/coach-tiers'
 import { useTheme } from '../../../context/ThemeContext'
-import { Button, InfoRow, Section } from '../../../components'
+import { InfoRow, Section } from '../../../components'
 import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import * as Notifications from 'expo-notifications'
@@ -99,10 +98,6 @@ export default function CoachPerfilScreen() {
       setActiveClientCount(count ?? 0)
     }
     setLoading(false)
-  }
-
-  async function handleLogout() {
-    await signOutAndRedirectHome()
   }
 
   if (loading) {
@@ -253,14 +248,9 @@ export default function CoachPerfilScreen() {
           </TouchableOpacity>
         </Section>
 
-        <Button
-          label="Cerrar sesion"
-          variant="destructive"
-          leftIcon={LogOut}
-          onPress={handleLogout}
-          full
-          style={{ marginTop: 8 }}
-        />
+        {/* Cerrar sesión NO vive acá (decisión del owner, QA 02-09): había dos salidas para la
+            misma acción —esta pantalla y «Más»— y la duplicada era la de más difícil de encontrar.
+            La única queda en `(tabs)/more.tsx` («Cerrar sesión», al final de la lista). */}
 
         {/* Versión del binario + bundle en ejecución. La segunda línea es la que dice si un OTA
             recién publicado YA está corriendo en este teléfono ("OTA <id> · dd-MM HH:mm") o si

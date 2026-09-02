@@ -504,7 +504,7 @@ export default function CoachSettingsHubScreen() {
                 testID="hub-account"
                 leading={<IconTile Icon={UserCog} />}
                 title="Mi cuenta"
-                subtitle="Tema, contraseña y cierre de sesión"
+                subtitle="Tema, contraseña y datos de tu cuenta"
                 showChevron
                 onPress={() => router.push('/coach/perfil')}
               />

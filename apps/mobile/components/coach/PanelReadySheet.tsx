@@ -17,7 +17,7 @@ import { useTheme } from '../../context/ThemeContext'
 import { getCoachProfile } from '../../lib/coach'
 import { refreshEntitlements } from '../../lib/entitlements'
 import { saveFeaturePrefs, type FeaturePrefsScope } from '../../lib/feature-prefs.queries'
-import { MI_PANEL_DOMAINS, buildDomainSwitchPayload, loadMiPanelDomains, type MiPanelDomainRow } from '../../lib/mi-panel'
+import { FUNCIONES_DOMAINS, buildDomainSwitchPayload, loadFuncionesDomains, type FuncionesDomainRow } from '../../lib/mi-panel'
 
 /**
  * «Tu panel quedó listo 💪» — el cierre de «¿A qué te dedicas?» en la APP, INTERACTIVO. Gemelo de
@@ -58,7 +58,7 @@ for (const Icon of [Apple, Dumbbell, HeartPulse, PersonStanding, Ruler]) {
 
 /** Etiqueta humana por dominio — la MISMA que pinta Opciones › Mi panel. */
 const DOMAIN_LABEL: Record<FeatureDomain, string> = Object.fromEntries(
-  MI_PANEL_DOMAINS.map((meta) => [meta.domain, meta.label]),
+  FUNCIONES_DOMAINS.map((meta) => [meta.domain, meta.label]),
 ) as Record<FeatureDomain, string>
 
 /** Ícono por dominio — el MISMO mapeo que `mi-panel.tsx` y que la web. */
@@ -97,7 +97,7 @@ export function PanelReadySheet({
 
   const [state, setState] = useState<Record<FeatureDomain, boolean>>(seeded)
   const [coachId, setCoachId] = useState<string | null>(null)
-  const [rows, setRows] = useState<MiPanelDomainRow[] | null>(null)
+  const [rows, setRows] = useState<FuncionesDomainRow[] | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -110,7 +110,7 @@ export function PanelReadySheet({
       const profile = await getCoachProfile().catch(() => null)
       if (!alive) return
       setCoachId(profile?.id ?? null)
-      const loaded = await loadMiPanelDomains(profile?.id ?? null)
+      const loaded = await loadFuncionesDomains(profile?.id ?? null)
       if (alive) setRows(loaded)
     })()
     return () => {
@@ -123,11 +123,11 @@ export function PanelReadySheet({
   )
 
   /** Filas crudas al día. Si la precarga no alcanzó a terminar, se espera acá. */
-  async function ensureRows(): Promise<{ id: string | null; rows: MiPanelDomainRow[] }> {
+  async function ensureRows(): Promise<{ id: string | null; rows: FuncionesDomainRow[] }> {
     if (rows != null) return { id: coachId, rows }
     const profile = await getCoachProfile().catch(() => null)
     const id = profile?.id ?? coachId
-    const loaded = await loadMiPanelDomains(id)
+    const loaded = await loadFuncionesDomains(id)
     setCoachId(id)
     setRows(loaded)
     return { id, rows: loaded }
@@ -166,7 +166,7 @@ export function PanelReadySheet({
       // recién prendido no vuelve hasta el próximo foreground.
       await refreshEntitlements().catch(() => {})
       // Reintentar tiene que partir de las secciones ya guardadas, no de la foto vieja.
-      setRows(await loadMiPanelDomains(current.id))
+      setRows(await loadFuncionesDomains(current.id))
     }
 
     setSaving(false)

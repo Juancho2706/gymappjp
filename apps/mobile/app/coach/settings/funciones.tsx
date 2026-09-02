@@ -63,20 +63,20 @@ import {
 import { deleteDemoStudent } from '../../../lib/vive-tu-app'
 import {
   GUIDE_PILL_EXPANDED,
-  MI_PANEL_GUIA_ROUTE,
+  FUNCIONES_GUIA_ROUTE,
   buildDomainSwitchPayload,
   clearNavOrder,
   guidePillStorageKey,
   isPersonaDirty,
-  loadMiPanelDomains,
+  loadFuncionesDomains,
   loadTeamPanelDomains,
   readNavOrder,
   reseedDemoStudent,
-  resolveMiPanelVisibility,
-  saveMiPanelPersona,
+  resolveFuncionesVisibility,
+  saveFuncionesPersona,
   writeNavOrder,
   writeTeamDomainEnabled,
-  type MiPanelDomainRow,
+  type FuncionesDomainRow,
 } from '../../../lib/mi-panel'
 
 /**
@@ -270,7 +270,7 @@ export default function CoachFuncionesScreen() {
   const [coachId, setCoachId] = useState<string | null>(null)
   const [data, setData] = useState<MobileDashboardData | null>(null)
   const [loading, setLoading] = useState(true)
-  const [domains, setDomains] = useState<MiPanelDomainRow[] | null>(null)
+  const [domains, setDomains] = useState<FuncionesDomainRow[] | null>(null)
 
   // Borrador de la especialidad (lo confirma «Guardar»).
   const [persona, setPersona] = useState<Persona | null>(null)
@@ -348,7 +348,7 @@ export default function CoachFuncionesScreen() {
 
   /** Las 5 filas del bloque 2: las del POOL en team, las del propio coach en standalone. */
   const loadPanelRows = useCallback(
-    () => (isTeam ? loadTeamPanelDomains(ws.teamId) : loadMiPanelDomains(coachId)),
+    () => (isTeam ? loadTeamPanelDomains(ws.teamId) : loadFuncionesDomains(coachId)),
     [isTeam, ws.teamId, coachId],
   )
 
@@ -396,7 +396,7 @@ export default function CoachFuncionesScreen() {
   const v2 = data?.onboardingV2 ?? null
   const visibility = useMemo(
     () =>
-      resolveMiPanelVisibility({
+      resolveFuncionesVisibility({
         persona: v2?.persona ?? null,
         demoClientId: v2?.demoClientId ?? null,
         guide: { dismissed: v2?.guide.dismissed === true, hidden: v2?.guide.hidden === true },
@@ -424,7 +424,7 @@ export default function CoachFuncionesScreen() {
     const byDomain = new Map((domains ?? []).map((row) => [row.domain, row]))
     return orderedDomains
       .map((domain) => byDomain.get(domain))
-      .filter((row): row is MiPanelDomainRow => row != null)
+      .filter((row): row is FuncionesDomainRow => row != null)
   }, [domains, orderedDomains])
 
   const secondQuestion = persona ? PERSONA_COPY[persona].secondQuestion : null
@@ -444,7 +444,7 @@ export default function CoachFuncionesScreen() {
   async function onSavePersona() {
     if (persona == null || savingPersona || !personaDirty) return
     setSavingPersona(true)
-    const result = await saveMiPanelPersona({ persona, alsoOther, reorderPanel: reorder })
+    const result = await saveFuncionesPersona({ persona, alsoOther, reorderPanel: reorder })
     if (!result.ok) {
       setSavingPersona(false)
       toast.error(result.error)
@@ -471,7 +471,7 @@ export default function CoachFuncionesScreen() {
     toast.success(result.message)
   }
 
-  async function onToggleDomain(row: MiPanelDomainRow, next: boolean) {
+  async function onToggleDomain(row: FuncionesDomainRow, next: boolean) {
     if (busyDomain != null) return
     setBusyDomain(row.domain)
     // Optimista: el switch responde al dedo y se revierte si la base no lo aceptó.
@@ -973,7 +973,7 @@ export default function CoachFuncionesScreen() {
                   title="Ver mi guía de inicio"
                   subtitle="Tus primeros pasos, siempre disponibles. Aunque ya la hayas terminado o cerrado."
                   showChevron
-                  onPress={() => router.push(MI_PANEL_GUIA_ROUTE)}
+                  onPress={() => router.push(FUNCIONES_GUIA_ROUTE)}
                 />
               </Card>
               {visibility.canRestoreGuide ? (

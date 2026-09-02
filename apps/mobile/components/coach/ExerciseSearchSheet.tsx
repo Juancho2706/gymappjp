@@ -211,9 +211,10 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
      * EDICIÓN (y eliminación): el sheet devuelve `null` en ambos casos, así que no hay campos que
      * copiar; la lista del catálogo es un prop, se le pide al llamador que la relea. Las recientes
      * se resuelven contra ese catálogo (`recentsView`), así que se arreglan solas.
-     * Deuda conocida: si el ejercicio YA estaba agregado como bloque del día, el bloque conserva
-     * el nombre viejo — `exercise_name` se copió al agregarlo — hasta recargar el builder.
-     * Arreglarlo exige reconciliar todos los días contra el catálogo, fuera del alcance del sheet.
+     * Los bloques que YA estaban puestos en el día también se ponen al día (E1): el builder
+     * reconcilia sus días contra el catálogo recién releído
+     * (`lib/plan-builder/catalog-reconcile.ts`). Antes conservaban el nombre viejo —
+     * `exercise_name` se copió al agregarlos — hasta recargar el builder entero.
      *
      * ALTA: el ejercicio recién creado entra DIRECTO al día en curso (misma ruta que elegirlo del
      * catálogo) y el buscador se limpia: el ejercicio nuevo todavía no está en `exercises` (el
