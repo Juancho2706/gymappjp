@@ -6,7 +6,7 @@ import {
     parseISO,
     subDays,
 } from 'date-fns'
-import { formatShortDayMonthYearEs } from '@/lib/date-utils'
+import { formatShortDayMonthYearEs, getSantiagoIsoYmdForUtcInstant } from '@/lib/date-utils'
 
 /**
  * Regularidad de check-in alineada con `getClientProfileData`:
@@ -64,8 +64,11 @@ export function formatRelativeLastActivity(iso: string | null): string {
     if (days === 1) return 'Ayer'
     if (days < 7) return `Hace ${days} días`
     if (days < 30) return `Hace ${Math.floor(days / 7)} sem.`
-    // "31 ago 2026" por tabla fija: lo pinta el hero de la ficha en el SSR (EVA-NEXTJS-18).
-    return formatShortDayMonthYearEs(d, { day: '2-digit' })
+    // "31 ago 2026" por tabla fija: lo pinta el hero de la ficha en el SSR (EVA-NEXTJS-18). El día
+    // sale de Santiago porque `iso` es un instante UTC (última actividad = max de timestamptz):
+    // con los getters locales de `new Date(iso)` una actividad de las 22:00 chilenas se imprimía un
+    // día más adelante en Vercel (UTC) que en el navegador del coach.
+    return formatShortDayMonthYearEs(getSantiagoIsoYmdForUtcInstant(iso), { day: '2-digit' })
 }
 
 export function buildProfileActivityCalendarData(

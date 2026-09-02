@@ -8,7 +8,7 @@ import { Card } from '@/components/ui/card'
 import { AssessmentReportCard } from '@/components/movement/AssessmentReportCard'
 import { EvolutionCharts } from '@/components/movement/EvolutionCharts'
 import { PriorityBadge } from '@/components/movement/PriorityBadge'
-import { formatShortDayMonthYearEs } from '@/lib/date-utils'
+import { formatSantiagoShortDayMonthYear, type ShortDateLocale } from '@/lib/date-utils'
 import { DeleteAssessmentButton } from './DeleteAssessmentButton'
 
 /** Color del punto del semáforo por banda (alta = danger ... baja = success). */
@@ -30,7 +30,7 @@ export function ClientMovementReport({
     detail: MovementClientDetail
 }) {
     const { t, language } = useTranslation()
-    const locale = language === 'es' ? 'es-CL' : 'en-US'
+    const locale: ShortDateLocale = language === 'es' ? 'es-CL' : 'en-US'
 
     const finals = detail.finals
     const latest = finals.length > 0 ? finals[finals.length - 1] : null
@@ -95,19 +95,9 @@ export function ClientMovementReport({
                                             )}
                                             <p className="font-mono text-xs tabular-nums text-muted">
                                                 {a.composite_score}/21 ·{' '}
-                                                {/* es: tabla fija (el Safari nuevo abrevia
-                                                    "ago." y rompe la hidratación del SSR,
-                                                    EVA-NEXTJS-18). en: el inglés no lleva punto
-                                                    y además solo se activa post-hidratación. */}
-                                                {locale === 'es-CL'
-                                                    ? formatShortDayMonthYearEs(new Date(a.assessed_at), {
-                                                          day: '2-digit',
-                                                      })
-                                                    : new Date(a.assessed_at).toLocaleDateString(locale, {
-                                                          day: '2-digit',
-                                                          month: 'short',
-                                                          year: 'numeric',
-                                                      })}
+                                                {/* Día calendario de Santiago + mes de tabla
+                                                    fija — ver `formatSantiagoShortDayMonthYear`. */}
+                                                {formatSantiagoShortDayMonthYear(a.assessed_at, locale)}
                                             </p>
                                         </div>
                                         <DeleteAssessmentButton clientId={clientId} assessmentId={a.id} />

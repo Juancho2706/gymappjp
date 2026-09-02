@@ -6,7 +6,7 @@ import { useTranslation } from '@/lib/i18n/LanguageContext'
 import { Reveal } from '@/components/motion/Reveal'
 import { Card } from '@/components/ui/card'
 import type { MovementAssessmentWithItems } from '@/domain/assessment/types'
-import { formatShortDayDashMonthEs } from '@/lib/date-utils'
+import { formatSantiagoShortDayMonth, type ShortDateLocale } from '@/lib/date-utils'
 
 /** Color de la banda de prioridad segun el compuesto (mismos cortes que el reporte). */
 function bandColor(composite: number | null): string {
@@ -29,14 +29,10 @@ export function EvolutionCharts({ finals }: { finals: MovementAssessmentWithItem
     const { t, language } = useTranslation()
     if (finals.length < 2) return null
 
-    const locale = language === 'es' ? 'es-CL' : 'en-US'
-    // es-CL con `day: '2-digit'` y sin año imprime "05-ago" (guion): lo replica la tabla fija, que
-    // además no depende de la ICU del navegador — el Safari nuevo agrega punto y rompía la
-    // hidratación del SSR (EVA-NEXTJS-18). El inglés no lleva punto y solo corre post-hidratación.
-    const fmtDate = (iso: string) =>
-        locale === 'es-CL'
-            ? formatShortDayDashMonthEs(new Date(iso))
-            : new Date(iso).toLocaleDateString(locale, { day: '2-digit', month: 'short' })
+    const locale: ShortDateLocale = language === 'es' ? 'es-CL' : 'en-US'
+    // "05-ago" con el día calendario de Santiago (`assessed_at` es timestamptz) y el mes de tabla
+    // fija — las dos mitades del hydration mismatch EVA-NEXTJS-18; ver `formatSantiagoShortDayMonth`.
+    const fmtDate = (iso: string) => formatSantiagoShortDayMonth(iso, locale)
 
     const first = finals[0]
     const last = finals[finals.length - 1]

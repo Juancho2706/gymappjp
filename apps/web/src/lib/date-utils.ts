@@ -471,3 +471,80 @@ export function formatSantiagoDdMmHhMm(isoUtc: string): string {
     const hour = String(Number(parts.hour) % 24).padStart(2, '0')
     return `${parts.day}/${parts.month} ${hour}:${parts.minute}`
 }
+
+/**
+ * Marcador de mediodía es-CL tal como lo imprime el CLDR: «a.» + NBSP (U+00A0) + «m.».
+ * Es tabla fija a propósito: distintas ICU escriben "a.m.", "AM" o usan NNBSP (U+202F) en su lugar.
+ */
+const DAY_PERIOD_ES_CL = ['a.\u00A0m.', 'p.\u00A0m.'] as const
+
+/**
+ * Instante UTC (`timestamptz`) → `"11:00 a. m."` (12 h es-CL, NBSP interno) en **America/Santiago**.
+ *
+ * Existe por hidratación (Sentry EVA-NEXTJS-18, O7.6a): `new Date(iso).toLocaleTimeString('es-CL', …)`
+ * SIN `timeZone` imprime la hora del RUNTIME, así que la misma nota salía «07:00 a. m.» en el HTML de
+ * Vercel (UTC) y «11:00 a. m.» tras hidratar en Chile ⇒ mismatch de TEXTO en cada burbuja del hilo.
+ * Acá los NÚMEROS salen de `Intl` con zona fija por componentes (`formatToParts` + `h23`, nunca un
+ * string localizado re-parseado) y el TEXTO del marcador sale de tabla fija, de modo que ninguna ICU
+ * puede cambiarlo. Calca byte a byte lo que imprimía Node para `es-CL` con
+ * `{ hour: '2-digit', minute: '2-digit' }` (hora de 2 dígitos, 12 a medianoche y mediodía).
+ * Instante inválido → cadena vacía (defensivo).
+ */
+export function formatSantiagoHmEs(isoUtc: string): string {
+    const parts = getSantiagoDateTimeParts(isoUtc, {
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+    })
+    if (!parts) return ''
+    // Alguna ICU vieja devuelve «24» en el borde del día aun con h23; el % es cinturón.
+    const h23 = Number(parts.hour) % 24
+    const h12 = h23 % 12 === 0 ? 12 : h23 % 12
+    return `${String(h12).padStart(2, '0')}:${parts.minute} ${DAY_PERIOD_ES_CL[h23 < 12 ? 0 : 1]}`
+}
+
+/** Los dos locales que sirven las superficies bilingües (módulos movement y bodycomp). */
+export type ShortDateLocale = 'es-CL' | 'en-US'
+
+/** Formatea un día calendario YA resuelto, anclado al mediodía UTC para que la zona no lo mueva. */
+function formatYmdInUtc(
+    ymd: string,
+    locale: ShortDateLocale,
+    options: Intl.DateTimeFormatOptions
+): string {
+    return new Date(`${ymd}T12:00:00Z`).toLocaleDateString(locale, { ...options, timeZone: 'UTC' })
+}
+
+/**
+ * Instante UTC (`timestamptz`) → `"05-ago"` / `"Aug 05"`: fecha corta SIN año del día calendario en
+ * **America/Santiago**, para ejes de gráfico y etiquetas compactas de las superficies bilingües.
+ *
+ * Dos endurecimientos por hidratación (Sentry EVA-NEXTJS-18), los dos necesarios:
+ * 1. El DÍA se deriva en Santiago. Con `new Date(iso).getDate()` una medición de las 22:00 en Chile
+ *    ya es el día siguiente para el runtime UTC de Vercel: el HTML del servidor decía "03-sep" y el
+ *    navegador "02-sep".
+ * 2. El texto en español sale de tabla fija, nunca de `Intl`: el Safari nuevo abrevia los meses con
+ *    punto ("ago.") y ese solo carácter rompe la hidratación.
+ * El inglés sigue por `Intl` (no lleva punto y en la práctica solo corre post-hidratación) pero
+ * formatea el MISMO día ya resuelto, en UTC, para no volver a correrlo por zona.
+ * Instante inválido → cadena vacía (defensivo; antes imprimía "Invalid Date").
+ */
+export function formatSantiagoShortDayMonth(isoUtc: string, locale: ShortDateLocale): string {
+    const ymd = getSantiagoIsoYmdForUtcInstant(isoUtc)
+    if (!ymd) return ''
+    return locale === 'es-CL'
+        ? formatShortDayDashMonthEs(ymd)
+        : formatYmdInUtc(ymd, locale, { day: '2-digit', month: 'short' })
+}
+
+/**
+ * Instante UTC (`timestamptz`) → `"05 ago 2026"` / `"Aug 05, 2026"`: igual que
+ * `formatSantiagoShortDayMonth` pero CON año (listas e historiales). Mismas dos garantías.
+ */
+export function formatSantiagoShortDayMonthYear(isoUtc: string, locale: ShortDateLocale): string {
+    const ymd = getSantiagoIsoYmdForUtcInstant(isoUtc)
+    if (!ymd) return ''
+    return locale === 'es-CL'
+        ? formatShortDayMonthYearEs(ymd, { day: '2-digit' })
+        : formatYmdInUtc(ymd, locale, { day: '2-digit', month: 'short', year: 'numeric' })
+}

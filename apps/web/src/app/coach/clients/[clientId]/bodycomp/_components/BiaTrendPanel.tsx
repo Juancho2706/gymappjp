@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils'
 import { Trash2 } from 'lucide-react'
 import type { BodyCompositionRow } from '@/infrastructure/db/body-composition.repository'
 import { deltaVsPrev, deviceLabel, formatKg, formatPct, readBiaMetrics } from '@/lib/bodycomp/view-helpers'
-import { formatShortDayDashMonthEs } from '@/lib/date-utils'
+import { formatShortDayDashMonthEs, getSantiagoIsoYmdForUtcInstant } from '@/lib/date-utils'
 import { StudentBiaSummary } from '@/components/bodycomp/StudentBiaSummary'
 import { deleteBodyCompositionAction } from '../_actions/body-composition.actions'
 
@@ -58,7 +58,9 @@ export function BiaTrendPanel({
                 .map((r) => ({
                     // Tabla fija, no `Intl`: este panel se pinta en el SSR de /coach/clients/[id]/bodycomp
                     // y el Safari nuevo abrevia con punto ("ago.") ⇒ hydration mismatch (EVA-NEXTJS-18).
-                    date: formatShortDayDashMonthEs(new Date(r.measured_at)),
+                    // El día se deriva en Santiago: `measured_at` es timestamptz y los getters
+                    // locales de `new Date(...)` lo corrían un día en el runtime UTC de Vercel.
+                    date: formatShortDayDashMonthEs(getSantiagoIsoYmdForUtcInstant(r.measured_at)),
                     value: pick(r),
                 }))
                 .filter((d) => d.value != null),

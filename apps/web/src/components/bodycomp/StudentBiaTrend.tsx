@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import type { BodyCompositionRow } from '@/infrastructure/db/body-composition.repository'
 import { readBiaMetrics } from '@/lib/bodycomp/view-helpers'
+import { formatSantiagoShortDayMonth, type ShortDateLocale } from '@/lib/date-utils'
 
 /** recharts diferido: sale del First Load de `/c/bodycomp`, se carga on-view dentro del `h-56`. */
 const BodyCompTrendChart = dynamic(
@@ -37,7 +38,7 @@ export function StudentBiaTrend({ rows }: { rows: BodyCompositionRow[] }) {
     const { t, language } = useTranslation()
     const reduce = useReducedMotion()
     const [active, setActive] = useState<SeriesKey>('bodyFatPercent')
-    const locale = language === 'es' ? 'es-CL' : 'en-US'
+    const locale: ShortDateLocale = language === 'es' ? 'es-CL' : 'en-US'
 
     const series = SERIES.find((s) => s.key === active)!
 
@@ -48,10 +49,10 @@ export function StudentBiaTrend({ rows }: { rows: BodyCompositionRow[] }) {
                 .map((r) => {
                     const v = readBiaMetrics(r)[active]
                     return {
-                        date: new Date(r.measured_at).toLocaleDateString(locale, {
-                            day: '2-digit',
-                            month: 'short',
-                        }),
+                        // `measured_at` es timestamptz: el día del eje se resuelve en Santiago (no
+                        // con los getters locales), para que el alumno y su coach lean la MISMA
+                        // fecha de la misma medición, y el mes en es sale de tabla fija.
+                        date: formatSantiagoShortDayMonth(r.measured_at, locale),
                         value: typeof v === 'number' ? v : null,
                     }
                 })

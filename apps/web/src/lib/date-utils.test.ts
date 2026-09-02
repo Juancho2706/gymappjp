@@ -9,6 +9,9 @@ import {
   formatLongDateSantiago,
   formatSantiagoDdMmHhMm,
   formatSantiagoDdMmYy,
+  formatSantiagoHmEs,
+  formatSantiagoShortDayMonth,
+  formatSantiagoShortDayMonthYear,
   formatDateDdMmYyyySantiago,
   formatSantiagoMonthLabel,
   formatShortDayMonthEs,
@@ -396,5 +399,77 @@ describe('date-utils — franja 12:xx en Santiago, sin re-parseo de strings (reg
   it('el día de semana de un YYYY-MM-DD es aritmética pura (miércoles 2 de septiembre = 3)', () => {
     expect(getNutritionDayOfWeekFromIsoYmdInSantiago('2026-09-02')).toBe(3)
     expect(getNutritionDayOfWeekFromIsoYmdInSantiago('2026-09-06')).toBe(7)
+  })
+})
+
+/**
+ * O7.6 de la tanda EVA-NEXTJS-18 (02-09): la HORA y el DÍA de un `timestamptz` salían de la zona
+ * del runtime (Vercel = UTC, alumno = Chile) ⇒ el mismo dato se imprimía distinto en el HTML del
+ * servidor y tras hidratar. `AM`/`PM` se escriben con `\u00A0` a propósito: el CLDR es-CL usa un
+ * espacio duro dentro del marcador, y ese byte es exactamente lo que hay que preservar para que el
+ * texto no cambie en Chrome.
+ */
+describe('date-utils — formatSantiagoHmEs (hora del hilo de notas, EVA-NEXTJS-18 O7.6a)', () => {
+  const AM = 'a.\u00A0m.'
+  const PM = 'p.\u00A0m.'
+
+  it('invierno (UTC-4): 15:00Z son las 11:00 a. m. en Chile, no las 03:00 p. m. del runtime UTC', () => {
+    expect(formatSantiagoHmEs('2026-09-02T15:00:00Z')).toBe(`11:00 ${AM}`)
+  })
+
+  it('mediodía y medianoche imprimen 12, nunca 00 ni 24', () => {
+    expect(formatSantiagoHmEs('2026-09-02T16:00:00Z')).toBe(`12:00 ${PM}`) // 12:00 en Chile
+    expect(formatSantiagoHmEs('2026-09-02T04:00:00Z')).toBe(`12:00 ${AM}`) // 00:00 en Chile
+    expect(formatSantiagoHmEs('2026-09-02T04:30:00Z')).toBe(`12:30 ${AM}`)
+  })
+
+  it('la hora va con cero a la izquierda, igual que imprimía Node con hour: 2-digit', () => {
+    expect(formatSantiagoHmEs('2026-09-02T13:05:00Z')).toBe(`09:05 ${AM}`)
+    expect(formatSantiagoHmEs('2026-09-02T22:07:00Z')).toBe(`06:07 ${PM}`)
+  })
+
+  it('verano (UTC-3): el mismo instante corre una hora respecto de invierno', () => {
+    expect(formatSantiagoHmEs('2026-01-15T15:00:00Z')).toBe(`12:00 ${PM}`)
+  })
+
+  it('el marcador lleva NBSP interno (U+00A0), no un espacio normal', () => {
+    const out = formatSantiagoHmEs('2026-09-02T15:00:00Z')
+    expect(out.includes('a.\u00A0m.')).toBe(true)
+    expect(out.includes('a. m.')).toBe(false)
+  })
+
+  it('el resultado NO depende de la TZ del proceso ni del formato del instante', () => {
+    expect(formatSantiagoHmEs('2026-09-02T15:00:00Z')).toBe(
+      formatSantiagoHmEs('2026-09-02T11:00:00-04:00')
+    )
+  })
+
+  it('instante inválido → cadena vacía (defensivo, nunca "Invalid Date")', () => {
+    expect(formatSantiagoHmEs('basura')).toBe('')
+  })
+})
+
+describe('date-utils — fechas cortas de timestamptz en Santiago (EVA-NEXTJS-18 O7.6b)', () => {
+  // 2026-09-03T01:30:00Z = 21:30 del 02-sep en Chile (UTC-4): con getters locales el runtime UTC
+  // imprimía el día 3 y el navegador chileno el día 2.
+  const nocheChilena = '2026-09-03T01:30:00Z'
+
+  it('sin año: usa el día calendario de Santiago y el mes de tabla fija', () => {
+    expect(formatSantiagoShortDayMonth(nocheChilena, 'es-CL')).toBe('02-sept')
+    expect(formatSantiagoShortDayMonth('2026-09-03T04:30:00Z', 'es-CL')).toBe('03-sept')
+  })
+
+  it('con año: "02 sept 2026" (mismo día calendario, formato de lista)', () => {
+    expect(formatSantiagoShortDayMonthYear(nocheChilena, 'es-CL')).toBe('02 sept 2026')
+  })
+
+  it('el inglés formatea el MISMO día ya resuelto en Santiago, sin volver a correrlo por zona', () => {
+    expect(formatSantiagoShortDayMonth(nocheChilena, 'en-US')).toBe('Sep 02')
+    expect(formatSantiagoShortDayMonthYear(nocheChilena, 'en-US')).toBe('Sep 02, 2026')
+  })
+
+  it('instante inválido → cadena vacía en ambos locales', () => {
+    expect(formatSantiagoShortDayMonth('basura', 'es-CL')).toBe('')
+    expect(formatSantiagoShortDayMonthYear('basura', 'en-US')).toBe('')
   })
 })

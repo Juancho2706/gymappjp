@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { useTranslation } from '@/lib/i18n/LanguageContext'
 import type { BodyCompositionRow } from '@/infrastructure/db/body-composition.repository'
 import { readIsakMetrics, type IsakMetricsView } from '@/lib/bodycomp/view-helpers'
+import { formatSantiagoShortDayMonth, type ShortDateLocale } from '@/lib/date-utils'
 
 /** recharts diferido: sale del First Load de `/c/bodycomp`, se carga on-view dentro del `h-56`. */
 const BodyCompTrendChart = dynamic(
@@ -42,7 +43,7 @@ export function StudentIsakTrend({ rows }: { rows: BodyCompositionRow[] }) {
     const { t, language } = useTranslation()
     const reduce = useReducedMotion()
     const [active, setActive] = useState<SeriesKey>('bodyFat')
-    const locale = language === 'es' ? 'es-CL' : 'en-US'
+    const locale: ShortDateLocale = language === 'es' ? 'es-CL' : 'en-US'
 
     const series = SERIES.find((s) => s.key === active)!
 
@@ -53,10 +54,9 @@ export function StudentIsakTrend({ rows }: { rows: BodyCompositionRow[] }) {
                 .map((r) => {
                     const v = readIsakMetrics(r)
                     return {
-                        date: new Date(r.measured_at).toLocaleDateString(locale, {
-                            day: '2-digit',
-                            month: 'short',
-                        }),
+                        // Mismo criterio que StudentBiaTrend: día calendario de Santiago para el
+                        // `timestamptz` + mes de tabla fija en español.
+                        date: formatSantiagoShortDayMonth(r.measured_at, locale),
                         value: v ? series.read(v) : null,
                     }
                 })

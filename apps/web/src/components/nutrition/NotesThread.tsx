@@ -5,7 +5,11 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { Send } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { formatShortDayDashMonthEs } from '@/lib/date-utils'
+import {
+  formatSantiagoHmEs,
+  formatShortDayDashMonthEs,
+  getSantiagoIsoYmdForUtcInstant,
+} from '@/lib/date-utils'
 
 /** A single note in the bidirectional nutrition feedback thread. */
 export interface NotesThreadComment {
@@ -32,17 +36,18 @@ const ROLE_LABEL: Record<'client' | 'coach', string> = {
 }
 
 /**
- * "31-ago, 11:00 a. m." — misma salida que imprimía `toLocaleString('es-CL', …)` en Node, pero con
- * el MES sacado de la tabla fija: el hilo se pinta en el SSR de la pantalla de nutrición y el Safari
- * nuevo abrevia con punto ("ago.") ⇒ hydration mismatch de texto (EVA-NEXTJS-18). La hora sigue
- * saliendo de `Intl` en la zona del runtime, igual que antes (cambiarla es otra deuda: es la TZ del
- * proceso, así que servidor y cliente ya podían discrepar en la hora).
+ * "31-ago, 11:00 a. m." — misma salida que imprimía `toLocaleString('es-CL', …)` en Node, pero ya
+ * determinista: el hilo se pinta en el SSR de la pantalla de nutrición, así que TODO lo que cambie
+ * entre runtimes es un hydration mismatch de texto (EVA-NEXTJS-18). Se cerraron las dos puertas:
+ * el MES viene de tabla fija (el Safari nuevo abrevia "ago.") y la HORA + el DÍA se derivan en
+ * America/Santiago (`created_at` es `timestamptz`), no en la zona del runtime — antes Vercel (UTC)
+ * pintaba «07:00 a. m.» y el navegador del alumno «11:00 a. m.» para la misma nota, y una nota de
+ * las 22:00 chilenas caía en el día siguiente del lado del servidor.
  */
 function formatTime(iso: string): string {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return ''
-  const time = d.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
-  return `${formatShortDayDashMonthEs(d)}, ${time}`
+  const day = getSantiagoIsoYmdForUtcInstant(iso)
+  if (!day) return ''
+  return `${formatShortDayDashMonthEs(day)}, ${formatSantiagoHmEs(iso)}`
 }
 
 /** Stable-ish id for optimistic bubbles before the server assigns the real one. */
