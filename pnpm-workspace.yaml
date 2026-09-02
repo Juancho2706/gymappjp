@@ -44,8 +44,16 @@ overrides:
   # @expo/plist@0.0.18 (via @bacons/apple-targets > @bacons/xcode) pide ~0.7.0 => 0.7.13 vulnerable.
   # ACOTADO A ESA RUTA a proposito: 0.9.x exige mimeType en parseFromString y las 4 copias de
   # @expo/plist del arbol lo llaman sin el (build/parse.js:69) => un override global rompe el
-  # prebuild de iOS con TypeError (reproducido). 0.8.13 ya vive en el arbol por otra ruta.
-  '@expo/plist@0.0.18>@xmldom/xmldom': 0.8.13
+  # prebuild de iOS con TypeError (reproducido). 0.8.x ya vive en el arbol por otra ruta.
+  '@expo/plist@0.0.18>@xmldom/xmldom': 0.8.15
+  # Dependabot #103 (@xmldom/xmldom moderado, transitiva pura). En el arbol habia DOS copias, las dos
+  # marcadas `deprecated: critical issues` por el propio paquete: 0.8.13 (los tres @expo/plist) y
+  # 0.9.10 (plist@3.1.1, via @expo/config-plugins). Se sube CADA LINEA A SU PROPIO FIX en vez de
+  # unificar en 0.9.12 justamente por el TypeError del prebuild de arriba: 0.8.15 es el tag `lts` del
+  # paquete y 0.9.12 el `latest`. Ambos rangos declarados por los consumidores ya los admiten
+  # (@expo/plist pide ^0.8.8, plist pide ^0.9.10): el override solo fuerza el piso seguro.
+  '@xmldom/xmldom@0.8': '>=0.8.15 <0.9'
+  '@xmldom/xmldom@0.9': '>=0.9.12 <1'
 
 # Allowlist for packages that need legitimate postinstall scripts (native binaries, CLIs).
 # New packages are blocked by default â€” supply chain defense (pnpm v10+ behavior).
