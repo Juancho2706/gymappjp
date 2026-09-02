@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils'
 import { Trash2 } from 'lucide-react'
 import type { BodyCompositionRow } from '@/infrastructure/db/body-composition.repository'
 import { deltaVsPrev, deviceLabel, formatKg, formatPct, readBiaMetrics } from '@/lib/bodycomp/view-helpers'
+import { formatShortDayDashMonthEs } from '@/lib/date-utils'
 import { StudentBiaSummary } from '@/components/bodycomp/StudentBiaSummary'
 import { deleteBodyCompositionAction } from '../_actions/body-composition.actions'
 
@@ -55,10 +56,9 @@ export function BiaTrendPanel({
             [...rows]
                 .reverse()
                 .map((r) => ({
-                    date: new Date(r.measured_at).toLocaleDateString('es-CL', {
-                        day: '2-digit',
-                        month: 'short',
-                    }),
+                    // Tabla fija, no `Intl`: este panel se pinta en el SSR de /coach/clients/[id]/bodycomp
+                    // y el Safari nuevo abrevia con punto ("ago.") ⇒ hydration mismatch (EVA-NEXTJS-18).
+                    date: formatShortDayDashMonthEs(new Date(r.measured_at)),
                     value: pick(r),
                 }))
                 .filter((d) => d.value != null),

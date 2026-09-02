@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { PriorityBadge } from '@/components/movement/PriorityBadge'
 import { MovementDisclaimer } from '@/components/movement/MovementDisclaimer'
+import { formatShortDayMonthYearEs } from '@/lib/date-utils'
 
 /** Hub del modulo: alumnos del workspace ACTIVO con su ultimo semaforo y CTA evaluar. */
 export function MovementHubList({
@@ -92,11 +93,17 @@ export function MovementHubList({
                                                 <PriorityBadge band={c.latest_final.risk_band} />
                                                 <span className="text-xs tabular-nums text-muted">
                                                     {c.latest_final.composite_score}/21 ·{' '}
-                                                    {new Date(c.latest_final.assessed_at).toLocaleDateString(locale, {
-                                                        day: '2-digit',
-                                                        month: 'short',
-                                                        year: 'numeric',
-                                                    })}
+                                                    {/* Ver ClientMovementReport: es por tabla fija
+                                                        (hidratación), en por `Intl`. */}
+                                                    {locale === 'es-CL'
+                                                        ? formatShortDayMonthYearEs(
+                                                              new Date(c.latest_final.assessed_at),
+                                                              { day: '2-digit' }
+                                                          )
+                                                        : new Date(c.latest_final.assessed_at).toLocaleDateString(
+                                                              locale,
+                                                              { day: '2-digit', month: 'short', year: 'numeric' }
+                                                          )}
                                                 </span>
                                             </>
                                         ) : (

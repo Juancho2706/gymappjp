@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card'
 import { AssessmentReportCard } from '@/components/movement/AssessmentReportCard'
 import { EvolutionCharts } from '@/components/movement/EvolutionCharts'
 import { PriorityBadge } from '@/components/movement/PriorityBadge'
+import { formatShortDayMonthYearEs } from '@/lib/date-utils'
 import { DeleteAssessmentButton } from './DeleteAssessmentButton'
 
 /** Color del punto del semáforo por banda (alta = danger ... baja = success). */
@@ -94,11 +95,19 @@ export function ClientMovementReport({
                                             )}
                                             <p className="font-mono text-xs tabular-nums text-muted">
                                                 {a.composite_score}/21 ·{' '}
-                                                {new Date(a.assessed_at).toLocaleDateString(locale, {
-                                                    day: '2-digit',
-                                                    month: 'short',
-                                                    year: 'numeric',
-                                                })}
+                                                {/* es: tabla fija (el Safari nuevo abrevia
+                                                    "ago." y rompe la hidratación del SSR,
+                                                    EVA-NEXTJS-18). en: el inglés no lleva punto
+                                                    y además solo se activa post-hidratación. */}
+                                                {locale === 'es-CL'
+                                                    ? formatShortDayMonthYearEs(new Date(a.assessed_at), {
+                                                          day: '2-digit',
+                                                      })
+                                                    : new Date(a.assessed_at).toLocaleDateString(locale, {
+                                                          day: '2-digit',
+                                                          month: 'short',
+                                                          year: 'numeric',
+                                                      })}
                                             </p>
                                         </div>
                                         <DeleteAssessmentButton clientId={clientId} assessmentId={a.id} />

@@ -6,7 +6,7 @@ import { AnimatePresence, motion, type PanInfo } from 'framer-motion'
 import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { cn } from '@/lib/utils'
 import { easings } from '@/lib/animation-presets'
-import { getTodayInSantiago } from '@/lib/date-utils'
+import { formatLongWeekdayShortDayMonthEs, getTodayInSantiago } from '@/lib/date-utils'
 
 interface Props {
   selectedDate: string
@@ -50,8 +50,9 @@ export function DayNavigator({ selectedDate, onDateChange, adherenceDates, isLoa
     if (dateStr === today) return 'Hoy'
     const yesterdayIso = format(addDays(noon(today), -1), 'yyyy-MM-dd')
     if (dateStr === yesterdayIso) return 'Ayer'
-    const d = noon(dateStr)
-    return d.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'short' })
+    // "lunes, 31 ago" por tabla fija: el navegador de días es de lo primero que pinta el SSR de la
+    // pantalla de nutrición y el Safari nuevo abrevia el mes con punto ⇒ mismatch (EVA-NEXTJS-18).
+    return formatLongWeekdayShortDayMonthEs(dateStr)
   }
 
   const hasDot = adherenceDates.has(selectedDate)

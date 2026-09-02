@@ -23,6 +23,7 @@ import { InviteCodePill } from './invite/InviteCodePill'
 import { todayLabel, flagLabel } from '../_lib/dashboard-design'
 import {
     daysSinceSantiagoInstant,
+    formatShortDayMonthEs,
     getSantiagoIsoYmdForUtcInstant,
     getTodayInSantiago,
     timeGreetingSantiago,
@@ -82,13 +83,18 @@ function greeting(): string {
     return timeGreetingSantiago()
 }
 
-/** Etiqueta de día relativa (Hoy / Ayer / "5 jun") para la actividad reciente. */
+/**
+ * Etiqueta de día relativa (Hoy / Ayer / "5 jun") para la actividad reciente. La abreviatura sale
+ * de la tabla fija de `formatShortDayMonthEs`, nunca de `toLocaleDateString(…, { month: 'short' })`:
+ * esa abreviatura depende de la ICU del runtime («sept» en Node, otra forma en Safari iOS) y este
+ * bloque, aunque `hidden` en móvil, se hidrata igual (EVA-NEXTJS-18, misma familia que los PRs
+ * del alumno el 01-09).
+ */
 function dayLabel(iso: string): string {
     const diff = daysSinceSantiagoInstant(iso)
     if (diff <= 0) return 'Hoy'
     if (diff === 1) return 'Ayer'
-    const [y, m, d] = getSantiagoIsoYmdForUtcInstant(iso).split('-').map(Number)
-    return new Date(y, m - 1, d).toLocaleDateString('es-CL', { day: 'numeric', month: 'short' })
+    return formatShortDayMonthEs(getSantiagoIsoYmdForUtcInstant(iso))
 }
 
 /**

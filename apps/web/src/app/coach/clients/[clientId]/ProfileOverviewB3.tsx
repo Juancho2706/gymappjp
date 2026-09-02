@@ -38,6 +38,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { MetricInfo, type MetricTerm } from '@/components/ui/metric-info'
+import { formatShortDayMonthEs } from '@/lib/date-utils'
 import { cn } from '@/lib/utils'
 import { updateClientBiometrics } from './_actions/client-detail.actions'
 import {
@@ -463,9 +464,10 @@ export function ProfileOverviewB3({
                                     />
                                     <div className="absolute inset-0 flex items-end bg-gradient-to-t from-black/80 via-transparent to-transparent p-2 opacity-0 transition-opacity group-hover:opacity-100">
                                         <span className="text-[10px] font-black uppercase tracking-widest text-white">
-                                            {new Date(c.created_at).toLocaleDateString('es-ES', {
+                                            {/* Tabla fija, no `Intl`: se pinta en el SSR de la
+                                                pestaña Resumen (EVA-NEXTJS-18). */}
+                                            {formatShortDayMonthEs(new Date(c.created_at), {
                                                 day: '2-digit',
-                                                month: 'short',
                                             })}
                                         </span>
                                     </div>

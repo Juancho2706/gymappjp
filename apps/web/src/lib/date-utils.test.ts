@@ -12,6 +12,12 @@ import {
   formatDateDdMmYyyySantiago,
   formatSantiagoMonthLabel,
   formatShortDayMonthEs,
+  formatShortDayDashMonthEs,
+  formatShortDayMonthYearEs,
+  formatShortMonthYearEs,
+  formatShortMonthEs,
+  formatShortWeekdayDayMonthEs,
+  formatLongWeekdayShortDayMonthEs,
   getTodayInSantiago,
   nutritionMealAppliesOnIsoYmdInSantiago,
   timeGreetingSantiago,
@@ -262,5 +268,133 @@ describe('date-utils — formatShortDayMonthEs (tabla fija, sin Intl — regresi
   it('ymd fuera de patrón o inválido → se devuelve tal cual (defensivo)', () => {
     expect(formatShortDayMonthEs('no-es-fecha')).toBe('no-es-fecha')
     expect(formatShortDayMonthEs('2026-13-01')).toBe('2026-13-01')
+  })
+
+  it('acepta un Date ya resuelto al día calendario y lo lee con los getters LOCALES', () => {
+    expect(formatShortDayMonthEs(new Date(2026, 8, 2, 23, 30))).toBe('2 sept')
+    expect(formatShortDayMonthEs(new Date(NaN))).toBe('')
+  })
+
+  it('day: "2-digit" pone el cero a la izquierda, igual que es-ES', () => {
+    expect(formatShortDayMonthEs('2026-08-05', { day: '2-digit' })).toBe('05 ago')
+    expect(formatShortDayMonthEs('2026-09-02', { day: '2-digit' })).toBe('02 sept')
+  })
+})
+
+/**
+ * Familia de tablas fijas agregada el 2026-09-02 por el MISMO issue (Safari 26.5 en iOS 18.7 agrega
+ * punto: «ago.», «sept.», «mié.»). Cada `expect` calca, carácter por carácter, lo que imprime hoy el
+ * Node 24 de Vercel para el `toLocaleDateString` que reemplaza — cero cambio de texto en Chrome.
+ */
+describe('date-utils — familia de fechas cortas con tabla fija (EVA-NEXTJS-18, 02-09)', () => {
+  it('formatShortDayDashMonthEs calca el guion de es-CL con day 2-digit y sin año', () => {
+    expect(formatShortDayDashMonthEs('2026-08-31')).toBe('31-ago')
+    expect(formatShortDayDashMonthEs('2026-08-05')).toBe('05-ago')
+    expect(formatShortDayDashMonthEs('2026-09-02')).toBe('02-sept')
+    expect(formatShortDayDashMonthEs('basura')).toBe('basura')
+  })
+
+  it('formatShortDayMonthYearEs → "31 ago 2026" (y "02 sept 2026" con day 2-digit)', () => {
+    expect(formatShortDayMonthYearEs('2026-08-31')).toBe('31 ago 2026')
+    expect(formatShortDayMonthYearEs('2026-09-02')).toBe('2 sept 2026')
+    expect(formatShortDayMonthYearEs('2026-09-02', { day: '2-digit' })).toBe('02 sept 2026')
+    expect(formatShortDayMonthYearEs('2026-08-05', { day: '2-digit' })).toBe('05 ago 2026')
+    expect(formatShortDayMonthYearEs('basura')).toBe('basura')
+  })
+
+  it('formatShortMonthYearEs → "ago 2026" / "sept 2026"', () => {
+    expect(formatShortMonthYearEs('2026-08-31')).toBe('ago 2026')
+    expect(formatShortMonthYearEs('2026-09-02')).toBe('sept 2026')
+    expect(formatShortMonthYearEs(new Date(2026, 8, 2))).toBe('sept 2026')
+    expect(formatShortMonthYearEs('basura')).toBe('basura')
+  })
+
+  it('formatShortMonthEs devuelve la abreviatura sola, SIN el punto de es-CL', () => {
+    expect(formatShortMonthEs('2026-08-31')).toBe('ago')
+    expect(formatShortMonthEs('2026-09-02')).toBe('sept')
+    expect(formatShortMonthEs('2026-07-21')).toBe('jul')
+    expect(formatShortMonthEs('basura')).toBe('basura')
+  })
+
+  it('formatShortWeekdayDayMonthEs → "lun, 31 ago" (día de semana por aritmética UTC, sin punto)', () => {
+    expect(formatShortWeekdayDayMonthEs('2026-08-31')).toBe('lun, 31 ago')
+    expect(formatShortWeekdayDayMonthEs('2026-09-02')).toBe('mié, 2 sept')
+    expect(formatShortWeekdayDayMonthEs('2026-09-02', { day: '2-digit' })).toBe('mié, 02 sept')
+    expect(formatShortWeekdayDayMonthEs('2026-09-05')).toBe('sáb, 5 sept')
+    expect(formatShortWeekdayDayMonthEs('basura')).toBe('basura')
+  })
+
+  it('formatLongWeekdayShortDayMonthEs → "lunes, 31 ago" / "miércoles, 2 sept"', () => {
+    expect(formatLongWeekdayShortDayMonthEs('2026-08-31')).toBe('lunes, 31 ago')
+    expect(formatLongWeekdayShortDayMonthEs('2026-09-02')).toBe('miércoles, 2 sept')
+    expect(formatLongWeekdayShortDayMonthEs('2026-09-06')).toBe('domingo, 6 sept')
+    expect(formatLongWeekdayShortDayMonthEs('basura')).toBe('basura')
+  })
+
+  it('un Date inválido cae a cadena vacía en toda la familia (nunca "NaN")', () => {
+    const invalido = new Date(NaN)
+    expect(formatShortDayDashMonthEs(invalido)).toBe('')
+    expect(formatShortDayMonthYearEs(invalido)).toBe('')
+    expect(formatShortMonthYearEs(invalido)).toBe('')
+    expect(formatShortMonthEs(invalido)).toBe('')
+    expect(formatShortWeekdayDayMonthEs(invalido)).toBe('')
+    expect(formatLongWeekdayShortDayMonthEs(invalido)).toBe('')
+  })
+})
+
+/**
+ * EVA-NEXTJS-18 — regresó el 2026-09-02 a las 12:09 y 12:17 hora Chile en /coach/dashboard (iPhone,
+ * Safari 26.5): el mismo coach había cargado a las 11:xx sin error. Los helpers de Santiago volvían a
+ * PARSEAR `now.toLocaleString('en-US', { timeZone })` con `new Date(...)`, y ese parseo no coincide
+ * entre V8 (servidor) y JSC (Safari) en la franja «12:xx PM» ⇒ el saludo/fecha del HTML no era el del
+ * cliente. Ahora todo sale de `Intl.formatToParts` (componentes, `h23`) y de tablas fijas. Estos casos
+ * son ABSOLUTOS (instantes UTC) y cubren las dos estaciones (UTC-4 hasta el 2026-09-05; UTC-3 desde el
+ * primer domingo de septiembre).
+ */
+describe('date-utils — franja 12:xx en Santiago, sin re-parseo de strings (regresión EVA-NEXTJS-18, 02-09)', () => {
+  const mediodiaInvierno = new Date('2026-09-02T16:09:44.000Z') // 12:09:44 en Santiago (UTC-4)
+  const mediodiaVerano = new Date('2026-09-07T15:00:00.000Z') // 12:00:00 en Santiago (UTC-3)
+  const madrugada = new Date('2026-09-03T04:30:00.000Z') // 00:30 en Santiago (UTC-4)
+
+  it('12:09 en Santiago saluda de tarde y el reloj de pared marca 12, no 0 ni 24', () => {
+    expect(timeGreetingSantiago(mediodiaInvierno)).toBe('Buenas tardes')
+    const hoy = getTodayInSantiago(mediodiaInvierno)
+    expect(hoy.iso).toBe('2026-09-02')
+    expect(hoy.date.getHours()).toBe(12)
+    expect(hoy.date.getMinutes()).toBe(9)
+    expect(hoy.dayOfWeek).toBe(3)
+  })
+
+  it('12:00 en horario de verano (UTC-3) también es tarde y el mismo día', () => {
+    expect(timeGreetingSantiago(mediodiaVerano)).toBe('Buenas tardes')
+    expect(getTodayInSantiago(mediodiaVerano).iso).toBe('2026-09-07')
+  })
+
+  it('00:30 en Santiago es noche y NO se corre al día siguiente ni al mediodía', () => {
+    expect(timeGreetingSantiago(madrugada)).toBe('Buenas noches')
+    const hoy = getTodayInSantiago(madrugada)
+    expect(hoy.iso).toBe('2026-09-03')
+    expect(hoy.date.getHours()).toBe(0)
+  })
+
+  it('la fecha larga sale de tablas fijas con el mismo texto que imprimía Node', () => {
+    expect(formatLongDateSantiago(mediodiaInvierno)).toBe('miércoles, 2 de septiembre')
+    expect(formatLongDateSantiago(madrugada)).toBe('jueves, 3 de septiembre')
+    expect(formatLongDateSantiago(new Date('2026-01-01T15:00:00.000Z'))).toBe('jueves, 1 de enero')
+  })
+
+  it('el día calendario de un instante UTC no depende del parseo de strings', () => {
+    expect(getSantiagoIsoYmdForUtcInstant('2026-09-02T16:09:44.000Z')).toBe('2026-09-02')
+    expect(getSantiagoIsoYmdForUtcInstant('2026-09-03T02:30:00.000Z')).toBe('2026-09-02') // 22:30 Chile
+    expect(getSantiagoIsoYmdForUtcInstant('2026-09-03T04:30:00.000Z')).toBe('2026-09-03') // 00:30 Chile
+  })
+
+  it('instante inválido ⇒ cadena vacía (antes: "NaN-NaN-NaN")', () => {
+    expect(getSantiagoIsoYmdForUtcInstant('basura')).toBe('')
+  })
+
+  it('el día de semana de un YYYY-MM-DD es aritmética pura (miércoles 2 de septiembre = 3)', () => {
+    expect(getNutritionDayOfWeekFromIsoYmdInSantiago('2026-09-02')).toBe(3)
+    expect(getNutritionDayOfWeekFromIsoYmdInSantiago('2026-09-06')).toBe(7)
   })
 })

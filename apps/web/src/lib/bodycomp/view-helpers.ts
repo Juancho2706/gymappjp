@@ -1,5 +1,6 @@
 import type { BodyCompositionRow } from '@/infrastructure/db/body-composition.repository'
 import type { BiaMetrics } from '@eva/bodycomp'
+import { formatShortDayDashMonthEs } from '@/lib/date-utils'
 
 /**
  * Helpers PUROS de lectura/formato del jsonb `metrics` persistido (sin React, sin IO) —
@@ -75,16 +76,17 @@ export function readBiaMetrics(row: BodyCompositionRow): BiaMetrics {
     return (row.metrics as BiaMetrics) ?? {}
 }
 
-/** Etiqueta visible "InBody 570 · 05 jun" (dispositivo + fecha). */
+/**
+ * Etiqueta visible "InBody 570 · 05-jun" (dispositivo + fecha; el guion es el separador que imprime
+ * es-CL con `day: '2-digit'` sin anio). Tabla fija en vez de `Intl`: la pintan en SSR tanto los
+ * paneles del coach como la card del alumno, y el Safari nuevo abrevia con punto (EVA-NEXTJS-18).
+ */
 export function deviceLabel(row: BodyCompositionRow): string {
     const parts: string[] = []
     if (row.device_brand) parts.push(row.device_brand)
     if (row.device_model) parts.push(row.device_model)
     const device = parts.join(' ')
-    const date = new Date(row.measured_at).toLocaleDateString('es-CL', {
-        day: '2-digit',
-        month: 'short',
-    })
+    const date = formatShortDayDashMonthEs(new Date(row.measured_at))
     return device ? `${device} · ${date}` : date
 }
 

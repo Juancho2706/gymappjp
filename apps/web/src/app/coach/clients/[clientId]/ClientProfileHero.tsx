@@ -32,6 +32,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 import { formatTrainingAgeLabel, formatRelativeLastActivity } from './profileOverviewUtils'
+import { formatShortMonthYearEs } from '@/lib/date-utils'
 import {
     deriveClientStatus,
     type ClientStatus,
@@ -137,9 +138,9 @@ export function ClientProfileHero({
         client.created_at
     )
     const clientSince = parseIsoSafe(client.subscription_start_date || client.created_at)
-    const clientSinceLabel = clientSince
-        ? clientSince.toLocaleDateString('es-ES', { month: 'short', year: 'numeric' })
-        : '—'
+    // "ago 2026" por tabla fija: el hero es lo primero que pinta el SSR de la ficha y el Safari
+    // nuevo abrevia con punto ("ago.") ⇒ hydration mismatch de texto (EVA-NEXTJS-18).
+    const clientSinceLabel = clientSince ? formatShortMonthYearEs(clientSince) : '—'
 
     const workoutsThisWeek = compliance.workoutsThisWeek ?? 0
     const workoutsTarget = Math.max(1, compliance.workoutsTarget ?? 1)

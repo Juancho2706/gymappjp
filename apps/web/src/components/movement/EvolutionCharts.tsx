@@ -6,6 +6,7 @@ import { useTranslation } from '@/lib/i18n/LanguageContext'
 import { Reveal } from '@/components/motion/Reveal'
 import { Card } from '@/components/ui/card'
 import type { MovementAssessmentWithItems } from '@/domain/assessment/types'
+import { formatShortDayDashMonthEs } from '@/lib/date-utils'
 
 /** Color de la banda de prioridad segun el compuesto (mismos cortes que el reporte). */
 function bandColor(composite: number | null): string {
@@ -29,8 +30,13 @@ export function EvolutionCharts({ finals }: { finals: MovementAssessmentWithItem
     if (finals.length < 2) return null
 
     const locale = language === 'es' ? 'es-CL' : 'en-US'
+    // es-CL con `day: '2-digit'` y sin año imprime "05-ago" (guion): lo replica la tabla fija, que
+    // además no depende de la ICU del navegador — el Safari nuevo agrega punto y rompía la
+    // hidratación del SSR (EVA-NEXTJS-18). El inglés no lleva punto y solo corre post-hidratación.
     const fmtDate = (iso: string) =>
-        new Date(iso).toLocaleDateString(locale, { day: '2-digit', month: 'short' })
+        locale === 'es-CL'
+            ? formatShortDayDashMonthEs(new Date(iso))
+            : new Date(iso).toLocaleDateString(locale, { day: '2-digit', month: 'short' })
 
     const first = finals[0]
     const last = finals[finals.length - 1]

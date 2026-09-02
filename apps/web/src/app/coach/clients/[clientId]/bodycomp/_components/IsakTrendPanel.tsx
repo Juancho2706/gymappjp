@@ -24,6 +24,7 @@ import {
     readIsakMetrics,
     type IsakMetricsView,
 } from '@/lib/bodycomp/view-helpers'
+import { formatShortDayDashMonthEs } from '@/lib/date-utils'
 import { deleteBodyCompositionAction } from '../_actions/body-composition.actions'
 
 type IsakSeriesKey = 'bodyFat' | 'muscle' | 'adipose'
@@ -65,10 +66,8 @@ export function IsakTrendPanel({
             [...rows]
                 .reverse()
                 .map((r) => ({
-                    date: new Date(r.measured_at).toLocaleDateString('es-CL', {
-                        day: '2-digit',
-                        month: 'short',
-                    }),
+                    // Tabla fija, no `Intl` (mismo motivo que BiaTrendPanel: SSR + Safari con punto).
+                    date: formatShortDayDashMonthEs(new Date(r.measured_at)),
                     value: pick(r),
                 }))
                 .filter((d) => d.value != null),

@@ -28,6 +28,7 @@ import {
   type NutritionPlanReadModel,
   type NutritionWeekCell,
 } from '@eva/nutrition-v2'
+import { formatShortMonthEs } from '@/lib/date-utils'
 
 /** La celda de semana del alumno web, con la variante y el día de historial ya tipados. */
 export type StudentNutritionWeekCell = NutritionWeekCell<
@@ -280,11 +281,12 @@ export function trimHistoryWeeksPage(input: {
 export function formatHistoryWeekRangeLabel(weekStartIso: string, weekEndIso: string): string {
   const start = new Date(`${weekStartIso}T00:00:00Z`)
   const end = new Date(`${weekEndIso}T00:00:00Z`)
-  const monthFmt = new Intl.DateTimeFormat('es-CL', { month: 'short', timeZone: 'UTC' })
-  // `Intl` deja un punto tras la abreviatura ("jul.") en es-CL; se pela igual que
-  // `formatNutritionShortDate` (mismo criterio de copy en toda la superficie).
-  const monthLabel = (date: Date) => monthFmt.format(date).replace(/\.$/, '')
+  // Abreviatura por tabla fija (misma salida sin punto que ya se pelaba a mano). `Intl` depende de
+  // la ICU del runtime — el Safari nuevo imprime "jul." — y esta etiqueta se pinta en el primer
+  // render de `HistoryWeeksList`, que hidrata el HTML del servidor (EVA-NEXTJS-18).
   const sameMonth = start.getUTCMonth() === end.getUTCMonth() && start.getUTCFullYear() === end.getUTCFullYear()
-  const startLabel = sameMonth ? `${start.getUTCDate()}` : `${start.getUTCDate()} ${monthLabel(start)}`
-  return `${startLabel}-${end.getUTCDate()} ${monthLabel(end)}`
+  const startLabel = sameMonth
+    ? `${start.getUTCDate()}`
+    : `${start.getUTCDate()} ${formatShortMonthEs(weekStartIso)}`
+  return `${startLabel}-${end.getUTCDate()} ${formatShortMonthEs(weekEndIso)}`
 }

@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { Send } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { formatShortDayDashMonthEs } from '@/lib/date-utils'
 
 /** A single note in the bidirectional nutrition feedback thread. */
 export interface NotesThreadComment {
@@ -30,16 +31,18 @@ const ROLE_LABEL: Record<'client' | 'coach', string> = {
   coach: 'Coach',
 }
 
-/** Short, locale-stable time — tabular so timestamps align in the column. */
+/**
+ * "31-ago, 11:00 a. m." — misma salida que imprimía `toLocaleString('es-CL', …)` en Node, pero con
+ * el MES sacado de la tabla fija: el hilo se pinta en el SSR de la pantalla de nutrición y el Safari
+ * nuevo abrevia con punto ("ago.") ⇒ hydration mismatch de texto (EVA-NEXTJS-18). La hora sigue
+ * saliendo de `Intl` en la zona del runtime, igual que antes (cambiarla es otra deuda: es la TZ del
+ * proceso, así que servidor y cliente ya podían discrepar en la hora).
+ */
 function formatTime(iso: string): string {
   const d = new Date(iso)
   if (Number.isNaN(d.getTime())) return ''
-  return d.toLocaleString('es-CL', {
-    day: '2-digit',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
+  const time = d.toLocaleTimeString('es-CL', { hour: '2-digit', minute: '2-digit' })
+  return `${formatShortDayDashMonthEs(d)}, ${time}`
 }
 
 /** Stable-ish id for optimistic bubbles before the server assigns the real one. */

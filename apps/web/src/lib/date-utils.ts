@@ -3,29 +3,82 @@ import { es } from 'date-fns/locale'
 
 const SANTIAGO_TZ = 'America/Santiago'
 
+/**
+ * Reloj de pared de Santiago para un instante, por COMPONENTES (`Intl.formatToParts`, `h23`).
+ *
+ * Endurecimiento por hidratación (Sentry EVA-NEXTJS-18, 2026-09-02): el patrón viejo
+ * `new Date(now.toLocaleString('en-US', { timeZone }))` vuelve a PARSEAR un string localizado, y ese
+ * parseo depende del motor (V8 en Vercel, JSC en Safari) y de la ICU que imprime el string. Todo lo
+ * que sale de acá se pinta en client components que se hidratan (saludo, fecha del header, día
+ * calendario), así que cualquier discrepancia es un mismatch de TEXTO. Los componentes numéricos de
+ * `formatToParts` no pasan por ningún parser: son idénticos en todo runtime. (La regresión real de
+ * ese día fue la abreviatura del mes con punto en Safari 26 — ver `formatShortDayMonthEs`; este
+ * helper cierra la otra puerta de la misma familia.)
+ * Instante inválido ⇒ `null` (el llamador decide el fallback; `formatToParts` tiraría RangeError).
+ */
+function santiagoWallClock(instant: Date): {
+    year: number
+    month: number
+    day: number
+    hour: number
+    minute: number
+    second: number
+} | null {
+    if (Number.isNaN(instant.getTime())) return null
+    const parts = Object.fromEntries(
+        new Intl.DateTimeFormat('en-CA', {
+            timeZone: SANTIAGO_TZ,
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hourCycle: 'h23',
+        })
+            .formatToParts(instant)
+            .map((p) => [p.type, p.value])
+    )
+    return {
+        year: Number(parts.year),
+        month: Number(parts.month),
+        day: Number(parts.day),
+        // Alguna ICU vieja imprime «24» a medianoche con hour12:false; con h23 no pasa, el % es cinturón.
+        hour: Number(parts.hour) % 24,
+        minute: Number(parts.minute),
+        second: Number(parts.second),
+    }
+}
+
+/** Día de semana JS (0=Dom … 6=Sáb) de un día calendario, sin zona horaria de por medio. */
+function weekdayOfYmd(year: number, month: number, day: number): number {
+    return new Date(Date.UTC(year, month - 1, day)).getUTCDay()
+}
+
 /** Hoy en zona Santiago: fecha local, ISO `YYYY-MM-DD`, día semana 1=Lun … 7=Dom (convención DB). */
 export function getTodayInSantiago(now = new Date()): {
     date: Date
     iso: string
     dayOfWeek: number
 } {
-    const tzStr = now.toLocaleString('en-US', { timeZone: SANTIAGO_TZ })
-    const date = new Date(tzStr)
-    const iso = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-    const dowJs = date.getDay()
+    const wall = santiagoWallClock(now) ?? santiagoWallClock(new Date())!
+    // `date` conserva el contrato histórico: un Date cuyos getters LOCALES (getDate/getDay/getHours)
+    // leen el reloj de pared de Santiago, sin importar la TZ del host.
+    const date = new Date(wall.year, wall.month - 1, wall.day, wall.hour, wall.minute, wall.second)
+    const iso = `${wall.year}-${String(wall.month).padStart(2, '0')}-${String(wall.day).padStart(2, '0')}`
+    const dowJs = weekdayOfYmd(wall.year, wall.month, wall.day)
     const dayOfWeek = dowJs === 0 ? 7 : dowJs
     return { date, iso, dayOfWeek }
 }
 
 /**
- * Convierte `YYYY-MM-DD` al día de semana 1=Lun … 7=Dom en **America/Santiago**
- * (misma convención que `getTodayInSantiago`).
+ * Convierte `YYYY-MM-DD` al día de semana 1=Lun … 7=Dom (misma convención que `getTodayInSantiago`).
+ * El día de semana de un día calendario no depende de ninguna zona: se calcula en UTC puro, sin
+ * re-parsear strings localizados (ver `santiagoWallClock`).
  */
 export function getNutritionDayOfWeekFromIsoYmdInSantiago(isoYmd: string): number {
     const ref = parseISO(`${isoYmd}T12:00:00`)
-    const tzStr = ref.toLocaleString('en-US', { timeZone: SANTIAGO_TZ })
-    const d = new Date(tzStr)
-    const dowJs = d.getDay()
+    const dowJs = weekdayOfYmd(ref.getFullYear(), ref.getMonth() + 1, ref.getDate())
     return dowJs === 0 ? 7 : dowJs
 }
 
@@ -91,35 +144,160 @@ export function formatNutritionShortDate(
     return withYear ? `${base} ${part('year')}` : base
 }
 
+const LONG_WEEKDAYS_ES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']
+const LONG_MONTHS_ES = [
+    'enero',
+    'febrero',
+    'marzo',
+    'abril',
+    'mayo',
+    'junio',
+    'julio',
+    'agosto',
+    'septiembre',
+    'octubre',
+    'noviembre',
+    'diciembre',
+]
+
 const SHORT_MONTHS_ES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sept', 'oct', 'nov', 'dic']
 
+/** Abreviaturas de día de semana es (índice JS 0=Dom … 6=Sáb), sin punto — igual que las imprime Node. */
+const SHORT_WEEKDAYS_ES = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb']
+
 /**
- * Fecha `YYYY-MM-DD` → `"1 sept"` (día sin cero a la izquierda + abreviatura fija, sin punto).
- *
- * Existe por hidratación (Sentry EVA-NEXTJS-18, regresó 2026-09-01): `new Date(...).toLocaleDateString('es-CL',
- * { month: 'short' })` depende de la ICU/CLDR del runtime — Node 24 en Vercel imprime "1 sept" pero la ICU de
- * Safari iOS puede imprimir otra abreviatura ("sept.", "sep"), y el mismatch de texto SSR↔cliente dispara
- * hydration error. Justo se hizo visible al empezar septiembre (primer PR con fecha de septiembre). La tabla
- * es fija y determinista — nunca vía `Intl`/`toLocaleDateString` — así el HTML es idéntico en cualquier
- * runtime/ICU. Regla: en un client component que se hidrata (SSR), nunca formatear fechas con `Intl` sin
- * tabla fija (misma familia que los helpers `formatSantiago*` de más abajo, agregados por el mismo issue).
- * `ymd` fuera de patrón o inválido → se devuelve tal cual (defensivo).
+ * Entrada de los helpers de fecha corta: un `YYYY-MM-DD` o un `Date` YA resuelto al día calendario
+ * que se quiere imprimir. Un `Date` se lee con los getters LOCALES (`getFullYear/getMonth/getDate`),
+ * que es exactamente la zona que usaba `toLocaleDateString(...)` sin `timeZone`; quien formatea en
+ * UTC debe derivar el `YYYY-MM-DD` con `getUTC*` y pasar el string.
  */
-export function formatShortDayMonthEs(ymd: string): string {
-    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd)
-    if (!match) return ymd
+type ShortDateInput = string | Date
+
+/** Componentes de calendario de la entrada, o `null` si no se puede interpretar (defensivo). */
+function resolveYmdParts(input: ShortDateInput): { year: number; month: number; day: number } | null {
+    if (input instanceof Date) {
+        if (Number.isNaN(input.getTime())) return null
+        return { year: input.getFullYear(), month: input.getMonth() + 1, day: input.getDate() }
+    }
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(input)
+    if (!match) return null
+    const year = Number(match[1])
     const month = Number(match[2])
     const day = Number(match[3])
-    if (!Number.isInteger(month) || month < 1 || month > 12 || !Number.isInteger(day) || day < 1 || day > 31) {
-        return ymd
-    }
-    return `${day} ${SHORT_MONTHS_ES[month - 1]}`
+    if (month < 1 || month > 12 || day < 1 || day > 31) return null
+    return { year, month, day }
+}
+
+/** Fallback compartido: string fuera de patrón vuelve tal cual; `Date` inválido ⇒ cadena vacía. */
+function shortDateFallback(input: ShortDateInput): string {
+    return typeof input === 'string' ? input : ''
+}
+
+/** Día con o sin cero a la izquierda, según lo que imprimía `day: 'numeric' | '2-digit'`. */
+function shortDay(day: number, mode: 'numeric' | '2-digit'): string {
+    return mode === '2-digit' ? String(day).padStart(2, '0') : String(day)
+}
+
+/**
+ * Fecha → `"1 sept"` / `"01 sept"` (día + abreviatura fija de mes, separados por espacio, sin punto).
+ *
+ * Existe por hidratación (Sentry EVA-NEXTJS-18, regresó 2026-09-01 y de nuevo 2026-09-02 con el Safari
+ * 26.5 de iOS 18.7): `new Date(...).toLocaleDateString('es-CL', { month: 'short' })` depende de la
+ * ICU/CLDR del runtime — Node 24 en Vercel imprime "31 ago" pero el Safari nuevo imprime "31 ago." (y
+ * "sept.", "mié."), y ese mismatch de TEXTO SSR↔cliente dispara React #418. La tabla es fija y
+ * determinista — nunca vía `Intl`/`toLocaleDateString` — así el HTML es idéntico en cualquier
+ * runtime/ICU. Regla: en un client component que se hidrata (SSR), nunca formatear fechas con `Intl`
+ * sin tabla fija (misma familia que los helpers `formatSantiago*` de más abajo, mismo issue).
+ * Calca la salida de Node para `es-ES`/`es-CL` con `{ day, month: 'short' }` (+ año ausente).
+ */
+export function formatShortDayMonthEs(
+    input: ShortDateInput,
+    options: { day?: 'numeric' | '2-digit' } = {}
+): string {
+    const parts = resolveYmdParts(input)
+    if (!parts) return shortDateFallback(input)
+    return `${shortDay(parts.day, options.day ?? 'numeric')} ${SHORT_MONTHS_ES[parts.month - 1]}`
+}
+
+/**
+ * Fecha → `"31-ago"` / `"02-sept"` (día de 2 dígitos + guion + mes corto).
+ *
+ * Calca exactamente lo que imprime Node para `es-CL` con `{ day: '2-digit', month: 'short' }` **sin
+ * año**: en ese patrón el CLDR chileno usa GUION, no espacio (con año vuelve el espacio: "31 ago 2026").
+ * Se separa de `formatShortDayMonthEs` justamente para no cambiarle el texto a nadie en Chrome.
+ */
+export function formatShortDayDashMonthEs(input: ShortDateInput): string {
+    const parts = resolveYmdParts(input)
+    if (!parts) return shortDateFallback(input)
+    return `${shortDay(parts.day, '2-digit')}-${SHORT_MONTHS_ES[parts.month - 1]}`
+}
+
+/**
+ * Fecha → `"31 ago 2026"` / `"05 ago 2026"` (día + mes corto + año, separados por espacio).
+ * Calca la salida de Node para `es-ES`/`es-CL` con `{ day, month: 'short', year: 'numeric' }`.
+ */
+export function formatShortDayMonthYearEs(
+    input: ShortDateInput,
+    options: { day?: 'numeric' | '2-digit' } = {}
+): string {
+    const parts = resolveYmdParts(input)
+    if (!parts) return shortDateFallback(input)
+    return `${formatShortDayMonthEs(input, options)} ${parts.year}`
+}
+
+/**
+ * Fecha → `"ago 2026"` / `"sept 2026"` (mes corto + año).
+ * Calca la salida de Node para `es-ES`/`es-CL` con `{ month: 'short', year: 'numeric' }`.
+ */
+export function formatShortMonthYearEs(input: ShortDateInput): string {
+    const parts = resolveYmdParts(input)
+    if (!parts) return shortDateFallback(input)
+    return `${SHORT_MONTHS_ES[parts.month - 1]} ${parts.year}`
+}
+
+/**
+ * Fecha → `"ago"` / `"sept"` (solo la abreviatura del mes, sin punto).
+ * Es la abreviatura que imprime Node en `es-ES`; en `es-CL` el `Intl` deja un punto ("ago.") que las
+ * superficies del repo ya pelaban a mano — acá directamente no existe.
+ */
+export function formatShortMonthEs(input: ShortDateInput): string {
+    const parts = resolveYmdParts(input)
+    if (!parts) return shortDateFallback(input)
+    return SHORT_MONTHS_ES[parts.month - 1]
+}
+
+/**
+ * Fecha → `"lun, 31 ago"` / `"mié, 02 sept"` (día de semana corto + coma + día + mes corto).
+ * Calca la salida de Node para `es-CL`/`es-AR` con `{ weekday: 'short', day, month: 'short' }`. El día
+ * de semana sale de aritmética UTC pura sobre el día calendario, no de la zona del proceso.
+ */
+export function formatShortWeekdayDayMonthEs(
+    input: ShortDateInput,
+    options: { day?: 'numeric' | '2-digit' } = {}
+): string {
+    const parts = resolveYmdParts(input)
+    if (!parts) return shortDateFallback(input)
+    const weekday = SHORT_WEEKDAYS_ES[weekdayOfYmd(parts.year, parts.month, parts.day)]
+    return `${weekday}, ${formatShortDayMonthEs(input, options)}`
+}
+
+/**
+ * Fecha → `"lunes, 31 ago"` / `"miércoles, 2 sept"` (día de semana LARGO + día + mes corto).
+ * Calca la salida de Node para `es-CL` con `{ weekday: 'long', day: 'numeric', month: 'short' }`.
+ * El nombre largo no lleva punto en ningún ICU; lo que se fija acá es la abreviatura del mes.
+ */
+export function formatLongWeekdayShortDayMonthEs(
+    input: ShortDateInput,
+    options: { day?: 'numeric' | '2-digit' } = {}
+): string {
+    const parts = resolveYmdParts(input)
+    if (!parts) return shortDateFallback(input)
+    const weekday = LONG_WEEKDAYS_ES[weekdayOfYmd(parts.year, parts.month, parts.day)]
+    return `${weekday}, ${formatShortDayMonthEs(input, options)}`
 }
 
 export function timeGreetingSantiago(now = new Date()): 'Buenos días' | 'Buenas tardes' | 'Buenas noches' {
-    const tzStr = now.toLocaleString('en-US', { timeZone: SANTIAGO_TZ })
-    const d = new Date(tzStr)
-    const h = d.getHours()
+    const h = (santiagoWallClock(now) ?? santiagoWallClock(new Date())!).hour
     if (h >= 5 && h < 12) return 'Buenos días'
     if (h >= 12 && h < 19) return 'Buenas tardes'
     return 'Buenas noches'
@@ -160,10 +338,9 @@ export function getSantiagoUtcBoundsForDay(isoDate: string): { startIso: string;
  * Use this instead of `logged_at.startsWith('yyyy-mm-dd')` (UTC prefix can disagree with local day).
  */
 export function getSantiagoIsoYmdForUtcInstant(isoUtc: string): string {
-    const d = new Date(isoUtc)
-    const tzStr = d.toLocaleString('en-US', { timeZone: SANTIAGO_TZ })
-    const local = new Date(tzStr)
-    return `${local.getFullYear()}-${String(local.getMonth() + 1).padStart(2, '0')}-${String(local.getDate()).padStart(2, '0')}`
+    const wall = santiagoWallClock(new Date(isoUtc))
+    if (!wall) return ''
+    return `${wall.year}-${String(wall.month).padStart(2, '0')}-${String(wall.day).padStart(2, '0')}`
 }
 
 /**
@@ -180,10 +357,17 @@ export function daysSinceSantiagoInstant(utcInstant: string, todayIso?: string):
     return differenceInCalendarDays(parseISO(`${today}T12:00:00`), parseISO(`${lastDay}T12:00:00`))
 }
 
+/**
+ * «miércoles, 2 de septiembre» — el día de HOY en Santiago, con tablas fijas (sin `Intl` para los
+ * nombres ni re-parseo de strings, ver `santiagoWallClock`). La salida calca exactamente lo que
+ * imprimía `toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })` en Node,
+ * así el HTML no cambia para nadie; la diferencia es que ahora Safari/Chrome/Node producen el mismo
+ * texto en cualquier hora del día (hidratación del header del dashboard, EVA-NEXTJS-18).
+ */
 export function formatLongDateSantiago(now = new Date()): string {
-    const tzStr = now.toLocaleString('en-US', { timeZone: SANTIAGO_TZ })
-    const d = new Date(tzStr)
-    return d.toLocaleDateString('es-CL', { weekday: 'long', day: 'numeric', month: 'long' })
+    const wall = santiagoWallClock(now) ?? santiagoWallClock(new Date())!
+    const weekday = LONG_WEEKDAYS_ES[weekdayOfYmd(wall.year, wall.month, wall.day)]
+    return `${weekday}, ${wall.day} de ${LONG_MONTHS_ES[wall.month - 1]}`
 }
 
 /**

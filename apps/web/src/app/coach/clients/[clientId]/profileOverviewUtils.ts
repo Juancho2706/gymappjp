@@ -6,6 +6,7 @@ import {
     parseISO,
     subDays,
 } from 'date-fns'
+import { formatShortDayMonthYearEs } from '@/lib/date-utils'
 
 /**
  * Regularidad de check-in alineada con `getClientProfileData`:
@@ -63,7 +64,8 @@ export function formatRelativeLastActivity(iso: string | null): string {
     if (days === 1) return 'Ayer'
     if (days < 7) return `Hace ${days} días`
     if (days < 30) return `Hace ${Math.floor(days / 7)} sem.`
-    return d.toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
+    // "31 ago 2026" por tabla fija: lo pinta el hero de la ficha en el SSR (EVA-NEXTJS-18).
+    return formatShortDayMonthYearEs(d, { day: '2-digit' })
 }
 
 export function buildProfileActivityCalendarData(
