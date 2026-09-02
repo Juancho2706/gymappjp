@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
@@ -38,15 +36,8 @@ describe('OpenInAppCard — puente web→app tras el pago', () => {
     })
 })
 
-describe('SubscriptionContent solo la muestra tras un pago confirmado', () => {
-    const SOURCE = readFileSync(join(__dirname, 'SubscriptionContent.tsx'), 'utf-8')
-
-    it('se monta con el flag que enciende el retorno `?upgrade=success`', () => {
-        expect(SOURCE).toContain('{justChangedPlan ? <OpenInAppCard /> : null}')
-        expect(SOURCE).toContain('setJustChangedPlan(true)')
-    })
-
-    it('el flag nace apagado (abrir la pantalla sin venir del checkout no lo enciende)', () => {
-        expect(SOURCE).toContain('const [justChangedPlan, setJustChangedPlan] = useState(false)')
-    })
-})
+// Que `SubscriptionContent` la monte SOLO tras un pago confirmado (gate
+// `justChangedPlan`, flag que nace apagado y lo enciende `?upgrade=success`) ya no
+// se afirma leyendo el fuente como texto: vive en la regla eslint
+// `local/subscription-open-in-app-gate` (tools/eslint-rules/), que corre en
+// `pnpm lint` sobre `SubscriptionContent.tsx`.

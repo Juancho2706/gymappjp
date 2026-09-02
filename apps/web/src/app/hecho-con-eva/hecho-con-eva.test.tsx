@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -101,9 +99,7 @@ describe('el sello del paquete y la ruta de la app no se despegan', () => {
         expect(new URL(getEvaBadgeUrl('student_app')).pathname).toBe('/hecho-con-eva')
     })
 
-    it('la page es indexable y declara su canónica', () => {
-        const src = readFileSync(join(__dirname, 'page.tsx'), 'utf-8')
-        expect(src).toContain("canonical: '/hecho-con-eva'")
-        expect(src).toContain('index: true')
-    })
+    // Que la page sea indexable y declare su canónica ya no se afirma leyendo el fuente
+    // como texto: vive en la regla eslint `local/hecho-con-eva-metadata`
+    // (tools/eslint-rules/), que corre en `pnpm lint` sobre `page.tsx`.
 })

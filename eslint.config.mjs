@@ -1,6 +1,7 @@
 import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
+import local from "./tools/eslint-rules/index.mjs";
 
 const eslintConfig = defineConfig([
   ...nextVitals,
@@ -33,6 +34,37 @@ const eslintConfig = defineConfig([
         }]
       }]
     }
+  },
+  // ── Reglas locales de contrato de archivo ────────────────────────────────────
+  // Cada bloque acota una regla al archivo que su test viejo cubria (ver
+  // tools/eslint-rules/index.mjs). Las reglas de `apps/mobile/**` NO viven aca:
+  // esta config arrastra el preset de Next (que sobre RN emite ~190 falsos
+  // positivos), asi que el arbol movil se lintea con `eslint.mobile.config.mjs`.
+  {
+    // `[coach_slug]` es una clase de caracteres en glob: se escribe con `*`.
+    files: ["apps/web/src/app/c/*/login/loading.tsx"],
+    plugins: { local },
+    rules: { "local/student-login-loading-unbranded": "error" },
+  },
+  {
+    files: ["apps/web/src/app/coach/subscription/_components/SubscriptionContent.tsx"],
+    plugins: { local },
+    rules: {
+      "local/subscription-modules-included": "error",
+      "local/subscription-price-suffix": "error",
+      "local/subscription-open-in-app-gate": "error",
+    },
+  },
+  {
+    // Los parentesis de `(auth)` son sintaxis extglob: se evita el segmento.
+    files: ["apps/web/src/app/**/register/page.tsx"],
+    plugins: { local },
+    rules: { "local/register-free-tier-contract": "error" },
+  },
+  {
+    files: ["apps/web/src/app/hecho-con-eva/page.tsx"],
+    plugins: { local },
+    rules: { "local/hecho-con-eva-metadata": "error" },
   },
   // Override default ignores of eslint-config-next.
   globalIgnores([

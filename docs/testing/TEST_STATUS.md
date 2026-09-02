@@ -42,6 +42,33 @@ El job `quality` no los ejecuta, pero las reglas del repo y las specs vigentes l
 3. `node scripts/cabina-visual-check.mjs` — gate visual Playwright del editor único (T3.v Cabina + Guía Viva + Sello v2): asserts BLOQUEANTES de geometría, contraste y recorrido de los tours sobre el harness `dev-harness/nutrition-editor` (308 declarados en el corte del Sello v2, 2026-08-17). Levanta el dev server de `apps/web` en el puerto 3123 salvo que reciba `BASE_URL`.
 4. `pnpm --filter @eva/mobile exec tsc --noEmit` — TypeScript móvil; el `typecheck` raíz solo cubre web.
 
+## Reglas eslint locales (`tools/eslint-rules/`)
+
+Desde el 2026-09-02 `pnpm lint` corre en dos pasadas y ambas bloquean:
+
+```bash
+eslint apps/web/src tests scripts tools
+eslint --config eslint.mobile.config.mjs apps/mobile   # también como pnpm lint:mobile
+```
+
+La segunda pasada existe porque `eslint.config.mjs` arrastra el preset de Next: sobre React Native emite ~190 problemas irrelevantes y tarda ~70 s. `eslint.mobile.config.mjs` carga solo el parser de TypeScript (reutilizado de `eslint-config-next/typescript`; cero dependencias nuevas) y las tres reglas locales de móvil (~12 s sobre 677 archivos).
+
+`tools/eslint-rules/` es un plugin local (objeto plano inyectado en la flat config, sin paquete publicado). Reemplaza a los guards de Vitest que leían el **fuente como texto** (`readFileSync` + `toContain`) para afirmar reglas sobre el código: eso es trabajo de linter — corre sobre el archivo que se edita, marca la línea culpable y no paga el arranque del runner. Los guards que verifican **configuración** (`vercel.json`, `app.json`, AASA, assets, geometría del splash, keys i18n huérfanas) siguen siendo tests: ahí no hay AST que mirar.
+
+| Regla | Alcance (`files:`) | Qué caza | Test que reemplazó |
+|---|---|---|---|
+| `local/no-prices-in-mobile` | `apps/mobile/**/*.{ts,tsx}` | `monthlyPriceClp`, `yearlyPriceClp`, `TIER_CONFIG`, `$29.990`, `29990`, `/mes` | `tests/mobile-no-prices.test.ts` (borrado) |
+| `local/store-plan-caption` | `apps/mobile/**/*.{ts,tsx}` | copy de tienda duplicado; exige la declaración canónica en `lib/client-cap.ts` | `tests/mobile/store-copy.test.ts` (borrado) |
+| `local/no-nativewind-vars-copy` | `apps/mobile/**/*.{ts,tsx}` | `...vars()`, `Object.assign(…, vars())`, `flatten(vars())` | `tests/mobile/brand-vars-identity.test.ts` (1er describe) |
+| `local/student-login-loading-unbranded` | `app/c/*/login/loading.tsx` | shells de marca antes del login del alumno | `login/loading.test.tsx` (2º it) |
+| `local/subscription-modules-included` | `coach/subscription/_components/SubscriptionContent.tsx` | copy que ata los módulos a un plan pago; `included = hasActivePaidPlan` | `subscription-modules-included.test.ts` (borrado) |
+| `local/subscription-price-suffix` | ídem | sufijo `/mes` hardcodeado; precio que no sale de `priceCycle` | `subscription-price-suffix.test.ts` (2 its) |
+| `local/subscription-open-in-app-gate` | ídem | `OpenInAppCard` sin gate `justChangedPlan` | `OpenInAppCard.test.tsx` (2º describe) |
+| `local/register-free-tier-contract` | `app/**/register/page.tsx` | hidden inputs del tier/ciclo; `setFreeOnly(rawTier === 'free')` | `register-sin-precios.test.tsx` (3er describe) |
+| `local/hecho-con-eva-metadata` | `app/hecho-con-eva/page.tsx` | canónica `/hecho-con-eva` + `index: true` | `hecho-con-eva.test.tsx` (último it) |
+
+Cada regla tiene su caso válido e inválido en `tests/eslint-rules/local-rules.test.ts` (`RuleTester` de eslint). Regla nueva ⇒ caso nuevo ahí, y el bloque `files:` acotado al archivo o al árbol que cubre: nada de reglas globales.
+
 ## Gates manuales de CI
 
 `e2e` solo corre mediante `workflow_dispatch`. `nutrition-smoke` sí se dispara en push/PR/dispatch, pero con `continue-on-error: true` a nivel de job y cada paso condicionado a la presencia de los secrets E2E: sin credenciales no-opea en verde y en ningún caso bloquea un PR.

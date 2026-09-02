@@ -1,7 +1,5 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
-import path from 'node:path'
 
 import LoginLoading from './loading'
 
@@ -22,8 +20,8 @@ describe('loading del login del alumno', () => {
         expect(container.querySelector('.sr-only')?.textContent).toBe('Cargando…')
     })
 
-    it('no monta el shell de marca (`BrandClientLoadingShell`) — regresión del bug', () => {
-        const source = readFileSync(path.join(__dirname, 'loading.tsx'), 'utf-8')
-        expect(source).not.toMatch(/<\s*(BrandClientLoadingShell|ClientLoadingShell|EvaRouteLoader)/)
-    })
+    // La prohibicion de montar `BrandClientLoadingShell` / `ClientLoadingShell` /
+    // `EvaRouteLoader` en este archivo ya no se afirma leyendo el fuente como texto:
+    // vive en la regla eslint `local/student-login-loading-unbranded`
+    // (tools/eslint-rules/), que corre en `pnpm lint` sobre `loading.tsx`.
 })

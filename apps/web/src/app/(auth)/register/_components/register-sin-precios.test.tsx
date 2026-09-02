@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
 
@@ -106,15 +104,7 @@ describe('el alta normal (sin ?tier=free) no cambia', () => {
     })
 })
 
-describe('el contrato del submit no se movió', () => {
-    const src = readFileSync(join(__dirname, '..', 'page.tsx'), 'utf-8')
-
-    it('el form sigue mandando el tier elegido en `subscription_tier`', () => {
-        expect(src).toContain('<input type="hidden" name="subscription_tier" value={tier} />')
-        expect(src).toContain('<input type="hidden" name="billing_cycle" value={billingCycle} />')
-    })
-
-    it('el modo sin precios se enciende SOLO con `?tier=free` explícito', () => {
-        expect(src).toContain("setFreeOnly(rawTier === 'free')")
-    })
-})
+// El contrato del SUBMIT (los `<input type="hidden">` del tier/ciclo y el
+// `setFreeOnly(rawTier === 'free')` de `page.tsx`) ya no se afirma leyendo el
+// fuente como texto: vive en la regla eslint `local/register-free-tier-contract`
+// (tools/eslint-rules/), que corre en `pnpm lint` sobre ese archivo.

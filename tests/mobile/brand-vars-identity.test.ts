@@ -21,28 +21,11 @@ import { brandVars, DARK_SCHEME_VARS, LIGHT_SCHEME_VARS } from '../../apps/mobil
  */
 const MOBILE_DIR = path.resolve(__dirname, '..', '..', 'apps', 'mobile')
 
-function walkSources(dir: string, out: string[] = []): string[] {
-  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-    if (entry.name === 'node_modules' || entry.name.startsWith('.')) continue
-    const full = path.join(dir, entry.name)
-    if (entry.isDirectory()) walkSources(full, out)
-    else if (/\.(ts|tsx)$/.test(entry.name)) out.push(full)
-  }
-  return out
-}
-
-describe('vars() de NativeWind — identidad del objeto', () => {
-  it('ningún archivo de apps/mobile copia el resultado de vars()', () => {
-    // `...vars(`, `Object.assign(..., vars(`, `flatten(vars(` — las tres formas de perder la clave.
-    const COPY = /(\.\.\.\s*vars\s*\(|Object\.assign\s*\([^)]*\bvars\s*\(|flatten\s*\(\s*vars\s*\()/
-    // Los comentarios se sacan ANTES: este mismo repo documenta el anti-patrón citándolo textual.
-    const stripComments = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
-    const offenders = walkSources(MOBILE_DIR)
-      .filter((file) => COPY.test(stripComments(fs.readFileSync(file, 'utf8'))))
-      .map((file) => path.relative(MOBILE_DIR, file).split(path.sep).join('/'))
-    expect(offenders).toEqual([])
-  })
-})
+// El barrido de `apps/mobile` en busca de copias de `vars()` (`{ ...vars(x) }`,
+// `Object.assign({}, vars(x))`, `flatten(vars(x))`) ya no se hace leyendo el árbol
+// como texto: vive en la regla eslint `local/no-nativewind-vars-copy`
+// (tools/eslint-rules/), que corre en `pnpm lint` sobre todo `apps/mobile`. Lo que
+// sigue acá son las afirmaciones sobre VALORES, que sí son trabajo de un test.
 
 /**
  * Guardia de la regla "sin marca propia NO se emite override" (`brandThemeVars` en

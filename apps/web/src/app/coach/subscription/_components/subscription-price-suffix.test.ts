@@ -1,5 +1,3 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -17,24 +15,13 @@ import {
  * Anual seleccionado, la card de Pro leía «$287.904 /mes»: el total del año presentado como
  * mensualidad. Un coach que decide con ese número decide con un precio falso.
  *
- * Este test ata las dos mitades: la aritmética (qué devuelve el helper) y el markup (qué sufijo
- * pinta la card). Renderizar `SubscriptionContent` entero exigiría montar coach + suscripción +
- * add-ons + MercadoPago; el guard de archivo cubre la regresión exacta a costo cero.
+ * Este test cubre la mitad ARITMÉTICA (qué devuelve el helper). La otra mitad —qué sufijo pinta
+ * la card, y que salga del MISMO ciclo con el que se calculó el precio— dejó de afirmarse leyendo
+ * el fuente como texto: vive en la regla eslint `local/subscription-price-suffix`
+ * (tools/eslint-rules/), que corre en `pnpm lint` sobre `SubscriptionContent.tsx`.
  */
-const SUBSCRIPTION_CONTENT = readFileSync(join(__dirname, 'SubscriptionContent.tsx'), 'utf-8')
 
 describe('card de «Cambiar plan» — el sufijo del precio sigue al ciclo', () => {
-    it('el sufijo ya no está hardcodeado en el markup', () => {
-        expect(SUBSCRIPTION_CONTENT).not.toContain('text-muted"> /mes<')
-        expect(SUBSCRIPTION_CONTENT).toContain('BILLING_CYCLE_PRICE_SUFFIX[priceCycle]')
-    })
-
-    it('el sufijo se deriva del MISMO ciclo con el que se calculó el precio', () => {
-        // Si el markup volviera a usar `selectedCycle` en vez de `priceCycle`, un tier sin ese ciclo
-        // (free) mostraría un sufijo que no corresponde al número de al lado.
-        expect(SUBSCRIPTION_CONTENT).toContain('const price = getTierPriceClp(tier, priceCycle)')
-    })
-
     it('con Anual, Pro muestra el total del año con «/año» (no «/mes»)', () => {
         const tier: SaleTier = 'pro'
         const selectedCycle: BillingCycle = 'annual'
