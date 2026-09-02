@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import { getMovementWizard } from '../../_data/movement.queries'
 import { MovementWizard } from '../../_components/MovementWizard'
@@ -21,8 +21,11 @@ interface Props {
 export default async function MovementWizardPage({ params, searchParams }: Props) {
     const { clientId } = await params
     const query = await searchParams
-    const data = await getMovementWizard(clientId)
-    if (!data) notFound()
+    const result = await getMovementWizard(clientId)
+    // Dominio apagado por el coach (W1.4b / OB9): al hub con el aviso, nunca un 404 seco.
+    if (result.status === 'domain_off') redirect('/coach/movement')
+    if (result.status === 'not_found') notFound()
+    const data = result.data
 
     const editedByOther =
         data.draft?.last_edited_by != null && data.draft.last_edited_by !== data.currentUserId

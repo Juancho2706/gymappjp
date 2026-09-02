@@ -104,11 +104,22 @@ export function ClientProfileDashboard({
     const checkInsWithPhotos = (checkIns || []).filter((c: any) => c.front_photo_url || c.side_photo_url || c.back_photo_url).slice(0, 3);
 
     const compliance = data.compliance || {};
+    /**
+     * Señal de Nutrición ya filtrada por el DOMINIO (Ola de orden / OB9). Con «Nutrición» apagada
+     * en Funciones la pestaña ya desaparecía (`visibleProfileTabs`), pero el % semanal del Resumen
+     * y el badge de la barra seguían pintándose: media puerta cerrada. Todo lo que hable de
+     * nutrición en esta ficha sale de acá, así que apagar el dominio los apaga a todos de una.
+     *
+     * Fail-OPEN, igual que el resto de W1: solo el `false` explícito oculta (dominio ausente o
+     * lectura que falló ⇒ se muestra). Es VISIBILIDAD, nunca autorización — los datos y los
+     * permisos del alumno quedan intactos.
+     */
+    const nutritionView = domainsEnabled.nutrition === false ? null : (nutritionV2 ?? null);
     // Riesgo de nutrición: SIEMPRE de la señal V2 (`resolveNutritionTabV2`, la misma que pinta el
     // tab). `null` = sin plan V2 vigente o lectura fallida ⇒ pill y badge se OMITEN. Antes se
     // derivaba de `compliance.nutritionCompliancePercent` (V1) ⇒ "en riesgo" permanente + badge "!"
     // para todo alumno que registra en V2, con la semana verde en el tab de al lado.
-    const isNutritionAtRisk: boolean | null = nutritionV2?.isAtRisk ?? null;
+    const isNutritionAtRisk: boolean | null = nutritionView?.isAtRisk ?? null;
 
     const lastCheckIn = checkIns && checkIns.length > 0 
         ? checkIns.sort((a:any,b:any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0] 
@@ -174,8 +185,8 @@ export function ClientProfileDashboard({
         nutrition:
             isNutritionAtRisk === true
                 ? '!'
-                : isNutritionAtRisk === false && (nutritionV2?.weeklyInRangeDays ?? 0) > 0
-                  ? nutritionV2!.weeklyInRangeDays
+                : isNutritionAtRisk === false && (nutritionView?.weeklyInRangeDays ?? 0) > 0
+                  ? nutritionView!.weeklyInRangeDays
                   : undefined,
     }
 
@@ -258,12 +269,12 @@ export function ClientProfileDashboard({
                             clientId={client.id}
                             activeProgram={data.activeProgram}
                             isNutritionAtRisk={isNutritionAtRisk}
-                            nutritionWeeklyPct={nutritionV2?.weeklyInRangePct ?? null}
+                            nutritionWeeklyPct={nutritionView?.weeklyInRangePct ?? null}
                             nutritionWeeklyDays={
-                                nutritionV2 != null
+                                nutritionView != null
                                     ? {
-                                          inRange: nutritionV2.weeklyInRangeDays,
-                                          tracked: nutritionV2.weeklyTrackedDays,
+                                          inRange: nutritionView.weeklyInRangeDays,
+                                          tracked: nutritionView.weeklyTrackedDays,
                                       }
                                     : null
                             }
@@ -476,8 +487,12 @@ export function ClientProfileDashboard({
                         className="relative z-10 grid min-w-0 grid-cols-1 gap-6 md:grid-cols-12"
                     >
                     <div className="min-w-0 space-y-6 animate-in fade-in duration-500 md:col-span-12">
-                        {nutritionV2 ? (
-                            <NutritionTabV2 view={nutritionV2} />
+                        {/* `nutritionView` (no `nutritionV2`) por consistencia: este panel es
+                            inalcanzable con el dominio apagado —`shownTab` cae a Resumen— así que
+                            el valor es el mismo, pero deja de haber una vía por la que el número
+                            se cuele si mañana cambia el ruteo de pestañas. */}
+                        {nutritionView ? (
+                            <NutritionTabV2 view={nutritionView} />
                         ) : (
                             <NutritionTabV2Unavailable clientId={client.id} />
                         )}

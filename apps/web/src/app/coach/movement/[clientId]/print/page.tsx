@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { getMovementPrint } from '../../_data/movement.queries'
 import { MovementPrintReport } from '../../_components/MovementPrintReport'
 
@@ -16,8 +16,12 @@ export default async function MovementPrintPage({ params, searchParams }: Props)
     const [{ clientId }, { assessment: assessmentId }] = await Promise.all([params, searchParams])
     if (!assessmentId) notFound()
 
-    const data = await getMovementPrint(clientId, assessmentId)
-    if (!data) notFound()
+    const result = await getMovementPrint(clientId, assessmentId)
+    // Dominio apagado por el coach (W1.4b / OB9): al hub con el aviso. La página de impresión no
+    // tiene chasis propio donde pintarlo, así que redirige como el resto de las subrutas.
+    if (result.status === 'domain_off') redirect('/coach/movement')
+    if (result.status === 'not_found') notFound()
+    const data = result.data
 
     return (
         <div className="min-h-dvh bg-white">

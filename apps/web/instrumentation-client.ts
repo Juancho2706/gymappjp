@@ -1,5 +1,19 @@
 import * as Sentry from '@sentry/nextjs'
-import { isDeploySkewError, shouldDropEvent, shouldReload } from '@/lib/deploy-skew'
+import {
+    DEPLOY_SKEW_RELOAD_MESSAGE,
+    applyMeasuredBytes,
+    buildServerResponseRecord,
+    isDeploySkewError,
+    isServerActionRequest,
+    parseContentLength,
+    pushServerResponse,
+    readHeaderInit,
+    shouldAttachServerResponses,
+    shouldDropEvent,
+    shouldMeasureBody,
+    shouldReload,
+    type ServerResponseRecord,
+} from '@/lib/deploy-skew'
 
 // ── Recuperación del skew de deploy en Server Actions (FCN W3.12 + QA 02-09) ─────────────────────
 //
@@ -60,7 +74,7 @@ function recoverFromDeploySkew(raw: unknown): boolean {
     window.setTimeout(() => {
         // Mensaje propio (nivel info, fingerprint fijo) para CONTAR las recargas sin ensuciar la
         // tasa de errores: todas caen en un único issue.
-        Sentry.captureMessage('deploy_skew_reload', { level: 'info', fingerprint: ['deploy-skew-reload'] })
+        Sentry.captureMessage(DEPLOY_SKEW_RELOAD_MESSAGE, { level: 'info', fingerprint: ['deploy-skew-reload'] })
         // Recargar recién cuando el mensaje salió (o venció el tope): la recarga mata el transport.
         void Sentry.flush(SKEW_RELOAD_FLUSH_MS).finally(() => window.location.reload())
     }, 0)
@@ -77,6 +91,120 @@ if (typeof window !== 'undefined') {
         if (recoverFromDeploySkew(event.reason)) event.preventDefault()
     })
 }
+
+// ── Instrumentación E394: ¿qué contestó el servidor? ────────────────────────────────────────────
+//
+// El guard de arriba ya recupera el desfase, pero el 02-09 cayeron 2 eventos sobre el release VIVO
+// (sin deploy nuevo ⇒ NO era skew) y sin status/bytes/content-type no hay causa raíz. Esto envuelve
+// `window.fetch` UNA sola vez para recordar las últimas respuestas de los requests de Next
+// (`Next-Action` / `RSC`) y adjuntarlas al evento de Sentry SOLO cuando habla del desfase.
+//
+// Presupuesto de rendimiento: para un fetch cualquiera (Supabase, imágenes) el costo es leer dos
+// headers del `init` y devolver la promesa original SIN encadenar nada. El body no se toca salvo el
+// criterio de `shouldMeasureBody` (lógica pura, documentada allá), y cuando se toca es
+// fire-and-forget: nunca se espera en el camino del request. SIN PII: ni bodies, ni query strings.
+
+/** Ring de las últimas respuestas (por pestaña y por carga, como la recarga). */
+let serverResponses: ServerResponseRecord[] = []
+
+/** Marca en `window` para que un segundo import (HMR, doble evaluación) no anide wrappers. */
+type ProbeFlaggedWindow = Window & { __evaServerResponseProbe?: boolean }
+
+const monotonicNow = () =>
+    typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : Date.now()
+
+function requestUrl(input: RequestInfo | URL): string {
+    if (typeof input === 'string') return input
+    if (typeof URL !== 'undefined' && input instanceof URL) return input.href
+    return (input as Request).url ?? ''
+}
+
+function requestMethod(input: RequestInfo | URL, init?: RequestInit): string {
+    if (init?.method) return init.method
+    if (typeof input === 'object' && input !== null && 'method' in input) {
+        return (input as Request).method || 'GET'
+    }
+    return 'GET'
+}
+
+/** Lookup de headers que mira primero el `init` y después el `Request` (las dos formas de fetch). */
+function headerLookup(input: RequestInfo | URL, init?: RequestInit) {
+    return (name: string): string | null => {
+        const fromInit = readHeaderInit(init?.headers, name)
+        if (fromInit != null) return fromInit
+        if (typeof input === 'object' && input !== null && 'headers' in input) {
+            return readHeaderInit((input as Request).headers, name)
+        }
+        return null
+    }
+}
+
+function rememberServerResponse(response: Response, input: RequestInfo | URL, init: RequestInit | undefined, durationMs: number) {
+    const contentType = response.headers.get('content-type')
+    const contentLength = parseContentLength(response.headers.get('content-length'))
+    const record = buildServerResponseRecord({
+        method: requestMethod(input, init),
+        url: requestUrl(input),
+        status: response.status,
+        contentType,
+        contentLength,
+        durationMs,
+    })
+    serverResponses = pushServerResponse(serverResponses, record)
+
+    if (!shouldMeasureBody(response.status, contentType, contentLength)) return
+    if (response.bodyUsed || response.body == null) return
+    // Fire-and-forget sobre un CLON: el original queda intacto para Next y nadie espera esto. Si
+    // falla, el registro se queda con `bytes: null` — nunca rompe el fetch de la app.
+    try {
+        void response
+            .clone()
+            .arrayBuffer()
+            .then(
+                (buffer) => applyMeasuredBytes(record, buffer.byteLength),
+                () => {},
+            )
+    } catch {
+        /* clone() tira si el body ya se consumió: sin tamaño, y listo. */
+    }
+}
+
+function installServerResponseProbe() {
+    if (typeof window === 'undefined') return
+    const flagged = window as ProbeFlaggedWindow
+    if (flagged.__evaServerResponseProbe) return
+    const nativeFetch = window.fetch
+    if (typeof nativeFetch !== 'function') return
+    flagged.__evaServerResponseProbe = true
+    // `bind(window)`: llamar al fetch nativo con `this` suelto tira «Illegal invocation».
+    const originalFetch = nativeFetch.bind(window)
+
+    window.fetch = function instrumentedFetch(input: RequestInfo | URL, init?: RequestInit) {
+        let startedAt: number | null = null
+        try {
+            if (isServerActionRequest(headerLookup(input, init))) startedAt = monotonicNow()
+        } catch {
+            startedAt = null
+        }
+        const response = originalFetch(input, init)
+        // Camino caliente: un fetch que no es de Next se devuelve TAL CUAL, sin `.then` de más.
+        if (startedAt == null) return response
+        // A un `const`: TS no conserva el estrechamiento de un `let` capturado en el callback.
+        const started = startedAt
+        return response.then((resolved) => {
+            try {
+                rememberServerResponse(resolved, input, init, monotonicNow() - started)
+            } catch {
+                /* la instrumentación jamás puede romper un request del producto */
+            }
+            return resolved
+        })
+    }
+}
+
+installServerResponseProbe()
 
 Sentry.init({
     dsn: process.env.NEXT_PUBLIC_SENTRY_DSN,
@@ -130,6 +258,16 @@ Sentry.init({
                 : undefined
         if (typeof code === 'string') {
             event.tags = { ...event.tags, next_error_code: code }
+        }
+        // Instrumentación E394: al evento del desfase (el mensaje que cuenta la recarga, o el E394
+        // que NO se pudo recuperar) se le adjunta QUÉ contestó el servidor en los últimos requests
+        // de Next. Es el dato que faltaba para separar «deploy skew de verdad» de «el server action
+        // devolvió 200 con 2 bytes». Solo a esos dos eventos: al resto no se le agrega nada.
+        if (
+            serverResponses.length > 0 &&
+            shouldAttachServerResponses(raw, typeof event.message === 'string' ? event.message : null)
+        ) {
+            event.extra = { ...event.extra, lastServerResponses: serverResponses }
         }
         return event
     },

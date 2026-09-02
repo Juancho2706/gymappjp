@@ -28,8 +28,13 @@ interface Props {
 export default async function MovementClientPage({ params, searchParams }: Props) {
     const { clientId } = await params
     const query = await searchParams
-    const detail = await getMovementClientReport(clientId)
-    if (!detail) notFound()
+    const result = await getMovementClientReport(clientId)
+    // Dominio apagado por el propio coach (Ola de orden W1.4b / OB9): al hub, que ahí vive el aviso
+    // con el CTA a Mi panel. Mismo criterio que `cardio/[clientId]`: no se duplica el aviso en la
+    // subruta del alumno, y sobre todo NO se muestra un 404 — apagar una función no borra al alumno.
+    if (result.status === 'domain_off') redirect('/coach/movement')
+    if (result.status === 'not_found') notFound()
+    const detail = result.data
 
     const entry = resolvePrimerScreeningEntry({
         primera: query.primera === '1',

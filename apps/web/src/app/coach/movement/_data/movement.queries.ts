@@ -8,7 +8,10 @@ import {
     getMovementHubData,
     getMovementPrintData,
     getMovementWizardData,
+    type MovementClientDetail,
     type MovementHubData,
+    type MovementPrintData,
+    type MovementWizardData,
 } from '@/services/assessment/movement-assessment.service'
 
 // _data del modulo movement_assessment: SIEMPRE via service -> repository (jamas
@@ -73,42 +76,97 @@ export const getMovementHub = cache(async (): Promise<MovementHubResult> => {
     }
 })
 
-export const getMovementClientReport = cache(async (clientId: string) => {
-    const supabase = await createClient()
-    // getClaims(): verificación local del JWT (ES256), sin /user. El proxy ya validó/refrescó la sesión.
-    const { data: __cl } = await supabase.auth.getClaims()
-    const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
-    if (!user) return null
-    try {
-        return await getClientMovementDetail(supabase, user.id, clientId)
-    } catch {
-        return null
-    }
-})
+/**
+ * Resultado de las SUBRUTAS por alumno (reporte, wizard, print). Antes devolvían `data | null` y
+ * las pages hacían `notFound()`: con el dominio apagado el coach se topaba con un 404 seco en vez
+ * del aviso «prendé Movimiento» — la puerta quedaba cerrada sin decir quién la cerró (OB9).
+ *
+ * `not_found` conserva EXACTAMENTE la semántica del `null` anterior (sin sesión, sin acceso, sin
+ * módulo, enterprise, alumno inexistente): esto es visibilidad, nunca autorización.
+ */
+export type MovementClientResult<T> =
+    | { status: 'domain_off' }
+    | { status: 'not_found' }
+    | { status: 'ok'; data: T }
 
-export const getMovementWizard = cache(async (clientId: string) => {
-    const supabase = await createClient()
-    // getClaims(): verificación local del JWT (ES256), sin /user. El proxy ya validó/refrescó la sesión.
-    const { data: __cl } = await supabase.auth.getClaims()
-    const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
-    if (!user) return null
-    try {
-        const data = await getMovementWizardData(supabase, user.id, clientId)
-        return { ...data, currentUserId: user.id }
-    } catch {
-        return null
-    }
-})
+/**
+ * ¿El coach apagó el dominio `movement` en Opciones › Mi panel? Mismo orden y mismo contexto que
+ * el hub (`clientOrgId: null`; el resolver es fail-OPEN: solo un `false` explícito apaga).
+ *
+ * Enterprise v1 sale ANTES sin leer preferencias: el módulo directamente no se ofrece ahí y el
+ * service lo rechaza igual, así que el resultado correcto sigue siendo `not_found`, no `domain_off`.
+ *
+ * El ctx es el del WORKSPACE ACTIVO, no el del alumno (espejo de `cardio/[clientId]`): la
+ * preferencia que se está evaluando es la del panel del coach, y el override por-alumno NO apaga
+ * superficies — es la puerta para volver a prenderlas.
+ */
+async function isMovementDomainOff(
+    supabase: Awaited<ReturnType<typeof createClient>>,
+    userId: string,
+): Promise<boolean> {
+    const workspace = await resolvePreferredWorkspace(supabase, userId)
+    if (workspace?.type === 'enterprise_coach') return false
+    const activeTeamId = workspace?.type === 'coach_team' ? workspace.teamId : null
+    return !(await resolveMovementDomainEnabled({
+        coachId: userId,
+        clientTeamId: activeTeamId,
+        clientOrgId: null,
+    }))
+}
 
-export const getMovementPrint = cache(async (clientId: string, assessmentId: string) => {
-    const supabase = await createClient()
-    // getClaims(): verificación local del JWT (ES256), sin /user. El proxy ya validó/refrescó la sesión.
-    const { data: __cl } = await supabase.auth.getClaims()
-    const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
-    if (!user) return null
-    try {
-        return await getMovementPrintData(supabase, user.id, clientId, assessmentId)
-    } catch {
-        return null
-    }
-})
+export const getMovementClientReport = cache(
+    async (clientId: string): Promise<MovementClientResult<MovementClientDetail>> => {
+        const supabase = await createClient()
+        // getClaims(): verificación local del JWT (ES256), sin /user. El proxy ya validó/refrescó la sesión.
+        const { data: __cl } = await supabase.auth.getClaims()
+        const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
+        if (!user) return { status: 'not_found' }
+
+        // Preferencia del coach ANTES de tocar los datos del alumno (mismo orden que el hub).
+        if (await isMovementDomainOff(supabase, user.id)) return { status: 'domain_off' }
+
+        try {
+            return { status: 'ok', data: await getClientMovementDetail(supabase, user.id, clientId) }
+        } catch {
+            return { status: 'not_found' }
+        }
+    },
+)
+
+export const getMovementWizard = cache(
+    async (clientId: string): Promise<MovementClientResult<MovementWizardData & { currentUserId: string }>> => {
+        const supabase = await createClient()
+        // getClaims(): verificación local del JWT (ES256), sin /user. El proxy ya validó/refrescó la sesión.
+        const { data: __cl } = await supabase.auth.getClaims()
+        const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
+        if (!user) return { status: 'not_found' }
+
+        if (await isMovementDomainOff(supabase, user.id)) return { status: 'domain_off' }
+
+        try {
+            const data = await getMovementWizardData(supabase, user.id, clientId)
+            return { status: 'ok', data: { ...data, currentUserId: user.id } }
+        } catch {
+            return { status: 'not_found' }
+        }
+    },
+)
+
+export const getMovementPrint = cache(
+    async (clientId: string, assessmentId: string): Promise<MovementClientResult<MovementPrintData>> => {
+        const supabase = await createClient()
+        // getClaims(): verificación local del JWT (ES256), sin /user. El proxy ya validó/refrescó la sesión.
+        const { data: __cl } = await supabase.auth.getClaims()
+        const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
+        if (!user) return { status: 'not_found' }
+
+        if (await isMovementDomainOff(supabase, user.id)) return { status: 'domain_off' }
+
+        try {
+            const data = await getMovementPrintData(supabase, user.id, clientId, assessmentId)
+            return { status: 'ok', data }
+        } catch {
+            return { status: 'not_found' }
+        }
+    },
+)
