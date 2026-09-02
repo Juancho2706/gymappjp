@@ -4,8 +4,16 @@ import * as MediaLibrary from 'expo-media-library'
 import * as Sharing from 'expo-sharing'
 import Constants from 'expo-constants'
 import RNShare, { Social } from 'react-native-share'
-import { toast } from '../../Toast'
 import { mixToBlack } from '../workout/v3/JuicyButton'
+import {
+    galleryPermissionNotice,
+    LINK_COPIED_NOTICE,
+    SAVE_FAILED_NOTICE,
+    SAVED_NOTICE,
+    targetFallbackNotice,
+    type ShareAppName,
+    type ShareNotice,
+} from './share-notices'
 import type { SharePresetId } from './share-types'
 
 /**
@@ -18,9 +26,14 @@ import type { SharePresetId } from './share-types'
  * (`Sharing.shareAsync` devuelve `Promise<void>`), así que preguntarle al sistema es imposible.
  *
  * ── CONTRATO ──
- * Ninguna de estas funciones LANZA. Todas devuelven `{ target, outcome }` y la UI decide qué
- * mostrar. Un throw acá aparecería después de que el usuario ya vio abrirse (o no) la app destino,
- * y encima obligaría a cada call site a repetir el mismo try/catch.
+ * Ninguna de estas funciones LANZA. Todas devuelven `{ target, outcome, notice? }` y la UI decide
+ * qué mostrar. Un throw acá aparecería después de que el usuario ya vio abrirse (o no) la app
+ * destino, y encima obligaría a cada call site a repetir el mismo try/catch.
+ *
+ * Ninguna PINTA tampoco: hasta el 02-09 tres de ellas llamaban al singleton `toast`, que se
+ * renderiza en el árbol raíz — detrás de la ventana nativa donde vive el composer. El alumno no veía
+ * ni «Guardada en tu galería» ni el link copiado (ver `share-notices.ts`). Ahora el aviso viaja en
+ * `notice` y lo pinta el composer, en su propia ventana.
  *
  * ── NOMBRES ──
  * `RNShare` es `react-native-share` (la librería nueva) y `NativeShare` es el `Share` de React
@@ -38,7 +51,7 @@ export type ShareTarget = 'ig_stories' | 'fb_stories' | 'whatsapp' | 'save' | 's
  *  - `ok`       el destino pedido se abrió (o el archivo se guardó).
  *  - `fallback` el destino no estaba disponible y se abrió la hoja nativa en su lugar.
  *  - `denied`   el usuario negó un permiso (hoy solo Guardar).
- *  - `error`    falló de verdad; el composer avisa con un toast.
+ *  - `error`    falló de verdad; el composer lo pinta en su banner.
  *
  * OJO con `ok`: significa "se abrió el destino", NO "el usuario publicó". Ninguna de las dos
  * plataformas informa si terminó publicando (mismo límite que documenta F0.2). Lo que se instrumenta
@@ -49,6 +62,12 @@ export type ShareTargetOutcome = 'ok' | 'fallback' | 'denied' | 'error'
 export interface ShareTargetResult {
     target: ShareTarget
     outcome: ShareTargetOutcome
+    /**
+     * Qué decirle al alumno, si hay algo que decirle. Lo pinta el composer dentro de SU ventana: un
+     * toast global acá es invisible (ver la cabecera del archivo). `undefined` = la acción salió
+     * como se esperaba y no necesita cartel.
+     */
+    notice?: ShareNotice
 }
 
 export interface ShareTargetInput {
@@ -103,30 +122,32 @@ function storyColors(accent: string): { backgroundTopColor: string; backgroundBo
 // ── Helpers ──────────────────────────────────────────────────────────────────────────────────────
 
 /**
- * ¿Está la app destino instalada?
+ * El destino directo no salió: se abre la hoja del sistema y se explica el cambio.
  *
- * Dos caminos porque las dos plataformas responden distinto:
- *  - Android: `isPackageInstalled` (PackageManager). Necesita que el paquete esté declarado en
- *    `<queries>` del manifest — eso lo genera el config plugin de `react-native-share` desde
- *    `app.json`; NO se puede escribir `<queries>` a mano en `app.json`.
- *  - iOS: `canOpenURL` sobre el scheme. Necesita `LSApplicationQueriesSchemes`, que sale del MISMO
- *    plugin. `isPackageInstalled` no existe en iOS (la librería lanza "Not implemented").
+ * ── POR QUÉ YA NO HAY PRE-GATE ──
+ * Hasta el 02-09 los tres destinos preguntaban primero «¿está instalada?» (`canOpenURL` en iOS,
+ * `RNShare.isPackageInstalled` en Android) y, si la respuesta era no, caían a la hoja SIN decir
+ * nada. Las dos consultas mienten: en iOS `canOpenURL` devuelve false para cualquier scheme fuera de
+ * `LSApplicationQueriesSchemes` aunque la app esté ahí (y `openURL` sí la abre), y en Android 11+ la
+ * package visibility hace que `getPackageInfo` lance `NameNotFoundException` para un paquete que no
+ * esté en `<queries>`. Con la consulta mintiendo, el alumno tocaba «Stories» y le aparecía una hoja
+ * genérica sin ninguna explicación: exactamente el «no hace nada» del reporte.
  *
- * Sin este chequeo la librería hace algo peor que fallar: en Android manda al usuario a la ficha de
- * Play Store de la app que no tiene, y en iOS Stories "resuelve OK" sin haber abierto nada.
+ * Ahora se INTENTA siempre y la única decisión la toma el resultado del intento.
+ *
+ * ⚠️ Límite conocido en Android: `shareSingle` no siempre lanza cuando la app no está. Su propio
+ * `SingleShareIntent.open` (node_modules/react-native-share/android/.../SingleShareIntent.java:31-61)
+ * repite el chequeo de PackageManager y, si dice que no, reemplaza el intent por el
+ * `market://details?id=…` de la ficha de Play Store y resuelve `success: true`. O sea: si el binario
+ * saliera SIN los `<queries>` de `app.json`, el alumno terminaría en la ficha de Play Store en vez de
+ * en la hoja del sistema, y acá lo veríamos como `ok`. `app.json` los declara (los inyecta el config
+ * plugin de la librería), pero hay que verificarlo en el APK instalado —
+ * `adb shell dumpsys package cl.evaapp.eva | grep -i queries`— porque `/android` está en .gitignore y
+ * el manifest del repo es un artefacto viejo que no prueba nada.
  */
-async function isTargetInstalled(iosScheme: string, androidPackage: string): Promise<boolean> {
-    try {
-        if (Platform.OS === 'android') {
-            const res = await RNShare.isPackageInstalled(androidPackage)
-            return res.isInstalled
-        }
-        return await Linking.canOpenURL(iosScheme)
-    } catch {
-        // Un scheme no declarado en el plist hace que `canOpenURL` devuelva false, pero un error
-        // inesperado no puede leerse como "sí está instalada": ante la duda, fallback.
-        return false
-    }
+async function fallbackToSheet(input: ShareTargetInput, target: ShareTarget, app: ShareAppName): Promise<ShareTargetResult> {
+    const result = await shareToSheet(input, target)
+    return { ...result, notice: targetFallbackNotice(app, result.outcome !== 'error') }
 }
 
 /**
@@ -209,16 +230,13 @@ export async function shareToSheet(
  */
 export async function shareToInstagramStories(input: ShareTargetInput): Promise<ShareTargetResult> {
     const target: ShareTarget = 'ig_stories'
-    if (!FACEBOOK_APP_ID) return shareToSheet(input, target)
-    if (!(await isTargetInstalled('instagram-stories://share', 'com.instagram.android'))) {
-        return shareToSheet(input, target)
-    }
+    if (!FACEBOOK_APP_ID) return fallbackToSheet(input, target, 'Instagram')
 
-    // Antes de abrir, no después: una vez que Instagram toma el foco la app queda en background y
-    // el toast no se vería. Además el usuario necesita el link YA para pegarlo en el sticker.
-    if (await copyInviteLink(input.inviteUrl, input.presetId)) {
-        toast.success('Link copiado — pégalo en el sticker Link de tu historia')
-    }
+    // La copia va ANTES de abrir, no después: una vez que Instagram toma el foco la app queda en
+    // background y el usuario necesita el link YA para pegarlo en el sticker. El AVISO en cambio
+    // viaja en el resultado y se pinta al volver — mostrarlo ahora sería un cartel de 4 s que nadie
+    // llega a leer porque la pantalla ya cambió de app.
+    const copied = await copyInviteLink(input.inviteUrl, input.presetId)
 
     try {
         await RNShare.shareSingle({
@@ -227,9 +245,11 @@ export async function shareToInstagramStories(input: ShareTargetInput): Promise<
             ...(input.transparent ? { stickerImage: input.fileUri } : { backgroundImage: input.fileUri }),
             ...storyColors(input.accent),
         })
-        return { target, outcome: 'ok' }
+        return { target, outcome: 'ok', notice: copied ? LINK_COPIED_NOTICE : undefined }
     } catch {
-        return shareToSheet(input, target)
+        // El aviso del fallback le gana al del link copiado: el link sigue en el portapapeles, pero
+        // lo que el alumno necesita entender es por qué se abrió otra pantalla.
+        return fallbackToSheet(input, target, 'Instagram')
     }
 }
 
@@ -243,15 +263,10 @@ export async function shareToInstagramStories(input: ShareTargetInput): Promise<
  */
 export async function shareToFacebookStories(input: ShareTargetInput): Promise<ShareTargetResult> {
     const target: ShareTarget = 'fb_stories'
-    if (!FACEBOOK_APP_ID) return shareToSheet(input, target)
-    if (!(await isTargetInstalled('facebook-stories://share', 'com.facebook.katana'))) {
-        return shareToSheet(input, target)
-    }
+    if (!FACEBOOK_APP_ID) return fallbackToSheet(input, target, 'Facebook')
 
     // Facebook tiene la misma limitación de links que Instagram: el sticker lo pone el usuario.
-    if (await copyInviteLink(input.inviteUrl, input.presetId)) {
-        toast.success('Link copiado — pégalo en el sticker Link de tu historia')
-    }
+    const copied = await copyInviteLink(input.inviteUrl, input.presetId)
 
     try {
         await RNShare.shareSingle({
@@ -260,9 +275,9 @@ export async function shareToFacebookStories(input: ShareTargetInput): Promise<S
             ...(input.transparent ? { stickerImage: input.fileUri } : { backgroundImage: input.fileUri }),
             ...storyColors(input.accent),
         })
-        return { target, outcome: 'ok' }
+        return { target, outcome: 'ok', notice: copied ? LINK_COPIED_NOTICE : undefined }
     } catch {
-        return shareToSheet(input, target)
+        return fallbackToSheet(input, target, 'Facebook')
     }
 }
 
@@ -275,9 +290,6 @@ export async function shareToFacebookStories(input: ShareTargetInput): Promise<S
  */
 export async function shareToWhatsApp(input: ShareTargetInput): Promise<ShareTargetResult> {
     const target: ShareTarget = 'whatsapp'
-    if (!(await isTargetInstalled('whatsapp://app', 'com.whatsapp'))) {
-        return shareToSheet(input, target)
-    }
     try {
         await RNShare.shareSingle({
             social: Social.Whatsapp,
@@ -286,7 +298,7 @@ export async function shareToWhatsApp(input: ShareTargetInput): Promise<ShareTar
         })
         return { target, outcome: 'ok' }
     } catch {
-        return shareToSheet(input, target)
+        return fallbackToSheet(input, target, 'WhatsApp')
     }
 }
 
@@ -306,20 +318,49 @@ export async function shareToWhatsApp(input: ShareTargetInput): Promise<ShareTar
  * Sin pantalla pre-permiso a propósito: la regla de App Review 5.1.1(iv) apunta a permisos que
  * abren datos del usuario (cámara, fotos, ubicación). Acá el usuario acaba de tocar un botón que
  * dice «Guardar» y el permiso es de escritura — la intención ya está declarada por el propio tap.
+ *
+ * ── EL BUG QUE REPORTÓ EL OWNER ──
+ * «Guardar no avisa». El `toast.success` de acá se pintaba en el árbol raíz, detrás de la ventana
+ * del composer: la imagen se guardaba y no había forma de saberlo. El aviso ahora viaja en `notice`.
+ * Lo único que el owner SÍ veía era el `Alert` del permiso, porque un diálogo nativo no depende del
+ * árbol React — y por eso se conserva además del `notice`.
  */
 export async function saveToGallery(input: ShareTargetInput): Promise<ShareTargetResult> {
     const target: ShareTarget = 'save'
     try {
         const permission = await MediaLibrary.requestPermissionsAsync(true)
         if (!permission.granted) {
-            Alert.alert('Permiso requerido', 'Necesitamos permiso para guardar la imagen en tu galería.')
-            return { target, outcome: 'denied' }
+            const notice = galleryPermissionNotice(permission.canAskAgain)
+            // El banner del composer ya avisa. El `Alert` nativo se reserva para `canAskAgain: false`:
+            // el diálogo del sistema ya no vuelve, el único camino son los Ajustes y un banner no
+            // puede abrirlos — sin el botón sería un callejón sin salida. Con `canAskAgain: true` el
+            // alumno acaba de ver (y negar) el diálogo del sistema: repetirlo encima sería doble aviso.
+            if (!permission.canAskAgain) {
+                Alert.alert('Permiso requerido', notice.text, [
+                    { text: 'Ahora no', style: 'cancel' },
+                    { text: 'Abrir Ajustes', onPress: () => void Linking.openSettings() },
+                ])
+            }
+            return { target, outcome: 'denied', notice }
         }
-        await MediaLibrary.saveToLibraryAsync(input.fileUri)
-        toast.success('Guardada en tu galería')
-        return { target, outcome: 'ok' }
+        try {
+            await MediaLibrary.saveToLibraryAsync(input.fileUri)
+        } catch (err) {
+            // Segundo intento por el camino largo: `saveToLibraryAsync` no devuelve el asset y en
+            // algunos OEM Android falla contra rutas de caché que `createAssetAsync` sí acepta.
+            //
+            // SOLO en Android, y no por prolijidad: `createAssetAsync` crea el asset y DESPUÉS lo
+            // busca para devolver el `Asset`. Con el permiso add-only de iOS (que es justamente el
+            // que pedimos, `requestPermissionsAsync(true)`) esa lectura vuelve vacía y la promesa
+            // rechaza — o sea que en iOS el reintento diría «No pudimos guardar» sobre una imagen
+            // que YA quedó en el carrete, y el alumno la guardaría dos veces. Si el reintento (o el
+            // rethrow de iOS) también lanza, cae al catch de afuera y el alumno se entera.
+            if (Platform.OS !== 'android') throw err
+            await MediaLibrary.createAssetAsync(input.fileUri)
+        }
+        return { target, outcome: 'ok', notice: SAVED_NOTICE }
     } catch {
-        return { target, outcome: 'error' }
+        return { target, outcome: 'error', notice: SAVE_FAILED_NOTICE }
     }
 }
 

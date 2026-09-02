@@ -1,7 +1,8 @@
-import { Text, View } from 'react-native'
+import { View } from 'react-native'
 import QRCode from 'react-native-qrcode-svg'
 import { FONT } from '../../../../lib/typography'
-import { sizer, W72, type StickerProps } from './sticker-kit'
+import { StrokedText } from './StrokedText'
+import { sizer, strokeSizer, type StickerProps } from './sticker-kit'
 
 /**
  * QR con el link de invitación del coach.
@@ -11,10 +12,13 @@ import { sizer, W72, type StickerProps } from './sticker-kit'
  * del gimnasio, en persona.
  *
  * Fondo blanco EXPLÍCITO con padding: sobre el canvas oscuro ninguna cámara lee el código (mismo
- * gotcha que ya documenta `InviteStudent.tsx:261`).
+ * gotcha que ya documenta `InviteStudent.tsx:261`). Es la ÚNICA superficie que sobrevivió al "cero
+ * fondos detrás de los datos": sin ella el sticker no cumple su función. El caption sí perdió el
+ * gris y va en blanco con contorno, como el resto del card.
  */
 export function QrSticker({ data, k, stickerScale }: StickerProps) {
     const s = sizer(k, stickerScale)
+    const sw = strokeSizer(k, stickerScale)
     if (!data.inviteUrl) return null
 
     const qrSize = s(220)
@@ -24,18 +28,18 @@ export function QrSticker({ data, k, stickerScale }: StickerProps) {
             <View style={{ backgroundColor: '#FFFFFF', padding: s(18), borderRadius: s(24) }}>
                 <QRCode value={data.inviteUrl} size={qrSize} backgroundColor="#FFFFFF" color="#0F172A" />
             </View>
-            <Text
+            <StrokedText
+                sw={sw}
                 style={{
                     fontFamily: FONT.uiSemibold,
                     fontSize: s(24),
                     lineHeight: s(30),
                     letterSpacing: s(1),
-                    color: W72,
                 }}
                 numberOfLines={1}
             >
                 Entrena conmigo
-            </Text>
+            </StrokedText>
         </View>
     )
 }

@@ -1,17 +1,16 @@
 import { useMemo } from 'react'
-import { Text, View } from 'react-native'
+import { View } from 'react-native'
 import { muscleGroupsToRegionIntensity } from '@eva/workout-engine'
 import { FONT } from '../../../../lib/typography'
 import { MuscleBodySvg } from '../MuscleBodySvg'
 import type { MuscleView } from '../share-types'
+import { StrokedText } from './StrokedText'
 import {
     accentOf,
-    accentTint,
     capitalize,
     sizer,
+    strokeSizer,
     TABULAR,
-    W72,
-    withAlpha,
     type StickerProps,
 } from './sticker-kit'
 
@@ -19,12 +18,18 @@ import {
  * Trabajo muscular del día. Dos idiomas según el preset:
  *
  *  - silueta (`front` | `back` | `both`) — la anatomía real, misma que el resumen post-entreno.
- *  - `chips` — pills con los 3 grupos más trabajados y su % RELATIVO al grupo top (idéntico al
+ *  - `chips` — los 3 grupos más trabajados y su % RELATIVO al grupo top (idéntico al
  *    `muscleGroupVolume` del overlay, WorkoutSummaryOverlay.tsx:270-274). Existe para los presets
  *    con columna angosta (sello, set-list), donde una silueta legible no cabe.
  *
  * El % es relativo, NO porcentaje del volumen total: "100%" significa "el grupo que más trabajaste",
  * no "todo tu entreno fue esto".
+ *
+ * ── ACENTO ──
+ * La silueta es el ÚNICO lugar del card donde vive el color del coach (regla del owner). Los chips
+ * eran su uso más visible —pill teñida + el % en la marca— y salieron: ahora son texto blanco con
+ * contorno, sin pill. Por eso también sube el gap vertical de 12 a 16: sin fondo, tres líneas a 12
+ * px de diseño se pegan y dejan de leerse como tres datos distintos.
  */
 export interface MuscleFigureStickerProps extends StickerProps {
     view: MuscleView
@@ -35,6 +40,7 @@ const FIGURE_DESIGN_HEIGHT = 520
 
 export function MuscleFigureSticker({ data, k, stickerScale, tokens, view }: MuscleFigureStickerProps) {
     const s = sizer(k, stickerScale)
+    const sw = strokeSizer(k, stickerScale)
     const accent = accentOf(tokens)
 
     const intensity = useMemo(() => muscleGroupsToRegionIntensity(data.muscles), [data.muscles])
@@ -52,7 +58,7 @@ export function MuscleFigureSticker({ data, k, stickerScale, tokens, view }: Mus
     if (view === 'chips') {
         if (topChips.length === 0) return null
         return (
-            <View style={{ gap: s(12) }}>
+            <View style={{ gap: s(16) }}>
                 {topChips.map((chip) => (
                     <View
                         key={chip.group}
@@ -61,31 +67,26 @@ export function MuscleFigureSticker({ data, k, stickerScale, tokens, view }: Mus
                             alignItems: 'center',
                             alignSelf: 'flex-start',
                             gap: s(14),
-                            backgroundColor: accentTint(tokens),
-                            borderRadius: 9999,
-                            borderWidth: Math.max(1, s(2)),
-                            borderColor: withAlpha(accent, 0.28),
-                            paddingHorizontal: s(26),
-                            paddingVertical: s(12),
                         }}
                     >
-                        <Text
-                            style={{ fontFamily: FONT.uiBold, fontSize: s(30), lineHeight: s(38), color: W72 }}
+                        <StrokedText
+                            sw={sw}
+                            style={{ fontFamily: FONT.uiBold, fontSize: s(30), lineHeight: s(38) }}
                             numberOfLines={1}
                         >
                             {chip.group}
-                        </Text>
-                        <Text
+                        </StrokedText>
+                        <StrokedText
+                            sw={sw}
                             style={{
                                 fontFamily: FONT.displayBlack,
                                 fontSize: s(30),
                                 lineHeight: s(38),
-                                color: accent,
                                 ...TABULAR,
                             }}
                         >
                             {chip.pct}%
-                        </Text>
+                        </StrokedText>
                     </View>
                 ))}
             </View>

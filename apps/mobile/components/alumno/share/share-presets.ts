@@ -9,6 +9,15 @@
  * Las coordenadas son el CENTRO del sticker en 0..1 sobre el canvas 1080×1920. Están razonadas para
  * que cada preset se vea bien DE FÁBRICA (sin tocar nada): los comentarios anotan las tres o cuatro
  * colisiones que obligaron a mover algo respecto del mockup.
+ *
+ * ── REAJUSTE DEL REDISEÑO F (datos sin fondo) ──
+ * El canvas ancla cada sticker por su CENTRO medido, así que al sacarle a los chips su pill (52 px
+ * de diseño de padding horizontal, 24 de vertical) su caja se angostó y el centro dejó de dar el
+ * mismo margen contra el borde de la story. Los stickers que se apoyan en un borde —`fecha` y
+ * `racha`— corrigieron su x para CONSERVAR EL BORDE que tenían, no el número: el desplazamiento es
+ * exactamente la mitad del padding perdido. Los que viven al centro o en columna (`volumen`,
+ * `stats`, `records`, `setlist`, `marca`, `musculos`, `qr`) no se movieron: encogen alrededor de su
+ * propio centro, que es donde el canvas los ancla.
  */
 
 import type { SharePreset, SharePresetId, StickerId, StickerState } from './share-types'
@@ -27,10 +36,12 @@ const PLACA: SharePreset = {
     background: 'photo',
     muscleView: 'front',
     stickers: {
-        fecha: on(0.16, 0.05, 0.9),
-        // 0.80 y no 0.84: el chip de racha es el más ancho de los dos (copy "N de M esta semana")
-        // y centrado en 0.84 se salía por el borde derecho.
-        racha: on(0.8, 0.05, 0.9),
+        // 0.14 (era 0.16): sin la pill, la fecha se angostó ~47 px de diseño y su borde izquierdo se
+        // metía hacia adentro. Corrida media caja, el margen contra el borde es el mismo de antes.
+        fecha: on(0.14, 0.05, 0.9),
+        // 0.82 (era 0.80): la racha es la más ancha de las dos (copy "N de M esta semana") y por eso
+        // no podía ir en 0.84 con pill. Sin pill entra, con el mismo aire contra el borde derecho.
+        racha: on(0.82, 0.05, 0.9),
         records: on(0.5, 0.64),
         volumen: on(0.32, 0.76),
         stats: on(0.32, 0.85),
@@ -53,15 +64,17 @@ const HEATMAP: SharePreset = {
     background: 'brand',
     muscleView: 'both',
     stickers: {
-        fecha: on(0.16, 0.04),
+        fecha: on(0.14, 0.04),
         // Volumen a 0.12 y stats a 0.20 (no 0.10/0.18): el héroe mide ~0.09 de alto y su borde
-        // superior tocaba el chip de fecha.
+        // superior tocaba la fecha. Stats NO baja más por el rediseño F: los stickers se anclan por
+        // el CENTRO (`ShareCanvas`), así que perder los 44 px de diseño del panel ya subió su borde
+        // superior 22 px — el hueco contra la cifra CRECIÓ, no se cerró.
         volumen: on(0.5, 0.12),
         stats: on(0.5, 0.2, 0.9),
         musculos: on(0.5, 0.47, 1.5),
         records: on(0.5, 0.82),
         marca: on(0.5, 0.93),
-        racha: off(0.8, 0.04, 0.9),
+        racha: off(0.82, 0.04, 0.9),
         setlist: off(0.5, 0.5),
         qr: off(0.5, 0.72, 0.8),
     },
@@ -105,11 +118,12 @@ const MARCADOR: SharePreset = {
     stickers: {
         volumen: on(0.35, 0.08),
         stats: on(0.35, 0.16, 0.9),
-        // Riel lateral derecho: los chips giran +90° (leen de arriba hacia abajo, pegados al borde).
-        // Rotados, su caja ocupa ~0.07 de ANCHO por larga que sea la copy, así que x=0.93 entra sin
-        // sangrar — que era justo lo que impedía tenerlos ahí en horizontal.
-        fecha: on(0.93, 0.35, 0.85, 90),
-        racha: on(0.93, 0.5, 0.85, 90),
+        // Riel lateral derecho: fecha y racha giran +90° (leen de arriba hacia abajo, pegados al
+        // borde). Rotados, su caja ocupa de ANCHO lo que miden de ALTO por larga que sea la copy —
+        // que era justo lo que impedía tenerlos ahí en horizontal. Con el rediseño F ese alto bajó
+        // de ~64 a ~36 px de diseño, así que x pasa de 0.93 a 0.94 para conservar el mismo riel.
+        fecha: on(0.94, 0.35, 0.85, 90),
+        racha: on(0.94, 0.5, 0.85, 90),
         // Récords sube a 0.70 y la silueta baja a 0.84: en 0.75/0.85 la banda y la cabeza de la
         // figura se solapaban.
         records: on(0.5, 0.7),
@@ -136,15 +150,16 @@ const POSTER: SharePreset = {
     stickers: {
         volumen: on(0.5, 0.45, 2.4),
         // Riel vertical del borde izquierdo, -90° (lee de abajo hacia arriba, como el lomo de un
-        // afiche). A media altura queda al costado del héroe gigante, no debajo: rotado ocupa ~0.07
-        // de ancho, así que convive con la cifra sin pisarla.
-        fecha: on(0.07, 0.45, 1, -90),
+        // afiche). A media altura queda al costado del héroe gigante, no debajo: rotado ocupa lo que
+        // mide de alto, así que convive con la cifra sin pisarla. 0.06 y no 0.07 desde el rediseño
+        // F: sin la pill mide la mitad de ancho y se despegaba del lomo.
+        fecha: on(0.06, 0.45, 1, -90),
         stats: on(0.5, 0.83, 0.85),
         marca: on(0.5, 0.92),
         records: off(0.5, 0.68),
         musculos: off(0.82, 0.7, 0.8),
         setlist: off(0.5, 0.5),
-        racha: off(0.8, 0.05, 0.9),
+        racha: off(0.82, 0.05, 0.9),
         qr: off(0.82, 0.7, 0.8),
     },
 }
@@ -160,14 +175,14 @@ const SETLIST: SharePreset = {
     background: 'brand',
     muscleView: 'chips',
     stickers: {
-        fecha: on(0.16, 0.05),
+        fecha: on(0.14, 0.05),
         volumen: on(0.5, 0.13, 0.8),
         setlist: on(0.5, 0.5),
         stats: on(0.5, 0.82, 0.9),
         marca: on(0.5, 0.93),
         records: off(0.5, 0.72),
         musculos: off(0.82, 0.72, 0.8),
-        racha: off(0.8, 0.05, 0.9),
+        racha: off(0.82, 0.05, 0.9),
         qr: off(0.82, 0.72, 0.8),
     },
 }

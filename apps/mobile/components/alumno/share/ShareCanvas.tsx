@@ -18,7 +18,6 @@ import {
     type WorkoutShareData,
 } from './share-types'
 import {
-    accentOf,
     BrandFooterSticker,
     DateChipSticker,
     INK_900,
@@ -30,7 +29,6 @@ import {
     StatsRowSticker,
     StreakChipSticker,
     VolumenHeroSticker,
-    withAlpha,
 } from './stickers'
 
 /**
@@ -125,7 +123,6 @@ export function ShareCanvas({
     // aspecto acá se traduce en un estiramiento del PNG.
     const height = (width * SHARE_CANVAS_H) / SHARE_CANVAS_W
     const k = width / SHARE_CANVAS_W
-    const accent = accentOf(tokens)
 
     // Foto pedida pero no elegida (o revocada) ⇒ marca. Sin esto el canvas quedaba negro y el alumno
     // no entendía por qué su card estaba "vacía".
@@ -228,16 +225,11 @@ export function ShareCanvas({
                         end={{ x: 1, y: 1 }}
                         style={StyleSheet.absoluteFill}
                     />
-                    {/* Halo de marca arriba-centro (espejo del mockup y de ShareCard:427-432). RN no
-                        tiene gradiente radial: un lineal pesado hacia arriba lee como la misma
-                        "energía" detrás del héroe. Va ENCIMA de la tinta, no debajo, o el tinte se
-                        pierde bajo el gradiente base. */}
-                    <LinearGradient
-                        colors={[withAlpha(accent, 0.18), withAlpha(accent, 0)]}
-                        start={{ x: 0.5, y: 0 }}
-                        end={{ x: 0.5, y: 0.55 }}
-                        style={StyleSheet.absoluteFill}
-                    />
+                    {/* NO va halo de acento acá. La regla del owner es literal: el color del coach
+                        vive SOLO en la silueta. En `heatmap`/`setlist` la cifra héroe cae en
+                        y≈0,12 — o sea DENTRO de donde llegaba el halo—, así que era acento detrás
+                        de un dato. Si el fondo necesitara aire, el velo va NEUTRO oscuro (como el
+                        de la foto, arriba), nunca teñido de marca. */}
                 </>
             ) : null}
 

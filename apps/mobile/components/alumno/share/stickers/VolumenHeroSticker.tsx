@@ -1,6 +1,7 @@
-import { Text, View } from 'react-native'
+import { View } from 'react-native'
 import { FONT } from '../../../../lib/typography'
-import { accentOf, sizer, TABULAR, W50, type StickerProps } from './sticker-kit'
+import { StrokedText } from './StrokedText'
+import { sizer, STROKE, strokeSizer, TABULAR, type StickerProps } from './sticker-kit'
 
 /**
  * Héroe del card: la cifra que se lee a un metro de distancia en una story.
@@ -9,6 +10,9 @@ import { accentOf, sizer, TABULAR, W50, type StickerProps } from './sticker-kit'
  * completadas — mismo criterio que el `heroSecondary` del resumen post-entreno
  * (WorkoutSummaryOverlay.tsx:292-296). Un "0 kg" gigante sería la peor tarjeta posible justo cuando
  * el alumno sí entrenó.
+ *
+ * Sin fondo propio (nunca lo tuvo) y TODO en blanco con contorno: el eyebrow era el acento del coach
+ * y salió — la marca vive solo en la silueta.
  */
 export interface VolumenHeroStickerProps extends StickerProps {
     /**
@@ -18,9 +22,9 @@ export interface VolumenHeroStickerProps extends StickerProps {
     ghost?: boolean
 }
 
-export function VolumenHeroSticker({ data, k, stickerScale, tokens, ghost = false }: VolumenHeroStickerProps) {
+export function VolumenHeroSticker({ data, k, stickerScale, ghost = false }: VolumenHeroStickerProps) {
     const s = sizer(k, stickerScale)
-    const accent = accentOf(tokens)
+    const sw = strokeSizer(k, stickerScale)
     const hasVolume = data.totalVolumeKg > 0
 
     const value = hasVolume ? String(Math.round(data.totalVolumeKg)) : String(data.completedSets)
@@ -32,45 +36,51 @@ export function VolumenHeroSticker({ data, k, stickerScale, tokens, ghost = fals
           : 'SERIES COMPLETADAS'
 
     return (
+        // En modo póster el `opacity` del wrapper apaga el bloque entero (cifra Y contorno a la vez):
+        // bajarle el alfa solo al texto dejaría el contorno negro flotando sobre el sujeto.
         <View style={{ alignItems: 'flex-start', opacity: ghost ? 0.34 : 1 }}>
-            <Text
+            <StrokedText
+                sw={sw}
                 style={{
                     fontFamily: FONT.displayBold,
                     fontSize: s(30),
                     lineHeight: s(34),
                     letterSpacing: s(5),
-                    color: ghost ? 'rgba(255,255,255,0.55)' : accent,
                 }}
                 numberOfLines={1}
             >
                 {eyebrow}
-            </Text>
+            </StrokedText>
             <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: s(12) }}>
-                <Text
+                <StrokedText
+                    sw={sw}
+                    stroke={STROKE.lg}
                     style={{
                         fontFamily: FONT.displayBlack,
                         fontSize: s(200),
                         lineHeight: s(206),
                         letterSpacing: -s(6),
-                        color: '#FFFFFF',
                         ...TABULAR,
                     }}
                     numberOfLines={1}
                 >
                     {value}
-                </Text>
+                </StrokedText>
                 {unit ? (
-                    <Text
+                    <StrokedText
+                        sw={sw}
+                        stroke={STROKE.md}
+                        // El margen vive en el WRAPPER: es layout del padre, no del texto (y las
+                        // copias del contorno se posicionan contra ese wrapper).
+                        containerStyle={{ marginBottom: s(24) }}
                         style={{
                             fontFamily: FONT.displayBold,
                             fontSize: s(62),
                             lineHeight: s(70),
-                            color: W50,
-                            marginBottom: s(24),
                         }}
                     >
                         {unit}
-                    </Text>
+                    </StrokedText>
                 ) : null}
             </View>
         </View>

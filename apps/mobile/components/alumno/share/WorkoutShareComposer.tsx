@@ -1,8 +1,11 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import {
+    AccessibilityInfo,
     ActivityIndicator,
+    AppState,
     BackHandler,
     Modal,
+    Platform,
     Pressable,
     ScrollView,
     StyleSheet,
@@ -19,14 +22,17 @@ import { SafeAreaProvider, SafeAreaView, useSafeAreaInsets } from 'react-native-
 import {
     ArrowLeft,
     Camera,
+    CircleCheck,
     Download,
     ImageOff,
     Images,
     Minus,
     Move,
+    OctagonX,
     Plus,
     RotateCcw,
     Share2,
+    TriangleAlert,
     X,
     type LucideIcon,
 } from 'lucide-react-native'
@@ -35,9 +41,14 @@ import { EXEC_SURFACE } from '../workout/v3/exec-theme'
 import { FONT } from '../../../lib/typography'
 import { haptics } from '../../../lib/haptics'
 import { captureAppEvent } from '../../../lib/analytics'
-import { toast } from '../../Toast'
 import { ShareCanvas } from './ShareCanvas'
 import { FacebookGlyph, InstagramGlyph, WhatsappGlyph } from './brand-glyphs'
+import {
+    CAMERA_DENIED_NOTICE,
+    CAPTURE_FAILED_NOTICE,
+    SHARE_FAILED_NOTICE,
+    type ShareNotice,
+} from './share-notices'
 import { hasFacebookAppId, runShareTarget, type ShareTarget } from './share-targets'
 import {
     cloneStickerLayout,
@@ -137,6 +148,15 @@ const STEP_TITLE: Record<Step, string> = {
 const STAGE_FRACTION: Record<Step, number> = { editor: 0.52, acomodar: 0.62, compartir: 0.72 }
 
 /**
+ * Vida del aviso in-composer. Los mismos 4 s del `<Toaster />` de la app: es el reemplazo del toast
+ * en esta ventana, no un componente nuevo con su propia idea del tiempo.
+ *
+ * Se cuentan SOLO con la app en primer plano (ver el efecto del `notice`): la mitad de los avisos
+ * nacen justo cuando la pantalla se va a Instagram o WhatsApp.
+ */
+const NOTICE_MS = 4000
+
+/**
  * Alto que se le RESERVA a la barra inferior antes de repartir el resto. `editor` y `acomodar`
  * llevan un botón «Continuar» (52 px + paddings ⇒ 76, con holgura a 92); `compartir` lleva la fila
  * de destinos (64) + el secundario de Facebook (36) + paddings ⇒ ~132. Sin esta distinción el paso
@@ -232,6 +252,69 @@ export function WorkoutShareComposer({ visible, onClose, data, embedded = false 
     const [cameraPrimer, setCameraPrimer] = useState(false)
     const [cameraPermission, requestCameraPermission] = ImagePicker.useCameraPermissions()
 
+    /**
+     * Aviso VISIBLE del composer (G).
+     *
+     * No se usa `toast` acá: el composer vive dentro de una ventana nativa ajena (el Modal del
+     * resumen, o el suyo) y el `<Toaster />` está montado una sola vez en el árbol raíz, así que
+     * cada toast se pintaba DETRÁS y el alumno no veía nada — ese era el «Guardar no avisa» del
+     * reporte. Este banner se monta dentro del composer, o sea en la misma ventana.
+     *
+     * Lleva un `id` incremental y no solo el aviso: las copias son constantes de módulo, así que
+     * guardar dos veces seguidas mostraría el MISMO objeto, `setState` cortaría por igualdad y el
+     * banner no reiniciaría su cuenta de 4 s — se apagaría a mitad del segundo guardado.
+     */
+    const [notice, setNotice] = useState<{ id: number; value: ShareNotice } | null>(null)
+    const noticeSeq = useRef(0)
+
+    const showNotice = useCallback((value: ShareNotice | null | undefined) => {
+        if (!value) return
+        noticeSeq.current += 1
+        setNotice({ id: noticeSeq.current, value })
+    }, [])
+
+    /**
+     * Los 4 s corren SOLO con la app activa.
+     *
+     * El caso que lo motiva es el de Stories: `RNShare.shareSingle` resuelve en el instante en que
+     * se lanza el intent —no cuando el alumno vuelve—, así que «Link copiado — pégalo en el sticker
+     * Link» aparecía con la app ya en background. En Android los timers vencidos se disparan apenas
+     * el foco vuelve, o sea que el banner se limpiaba en el primer frame del regreso y el alumno
+     * nunca leía la única instrucción que hace funcionar el link. Igual pasa con «Guardada en tu
+     * galería» si el alumno se va a mirar el carrete.
+     *
+     * Por eso el timer se desarma al salir y se REARMA entero al volver: el aviso se lee al
+     * regresar, que es cuando hay alguien mirando.
+     *
+     * `announceForAccessibility` es para iOS: `accessibilityLiveRegion` (abajo, en el banner) es
+     * solo Android, así que sin esto VoiceOver no anuncia nada. Va acá y no en el banner para que
+     * salga una sola vez por aviso.
+     */
+    useEffect(() => {
+        if (!notice) return
+        if (Platform.OS === 'ios') AccessibilityInfo.announceForAccessibility(notice.value.text)
+
+        let timer: ReturnType<typeof setTimeout> | null = null
+        const disarm = () => {
+            if (timer) clearTimeout(timer)
+            timer = null
+        }
+        const arm = () => {
+            disarm()
+            timer = setTimeout(() => setNotice(null), NOTICE_MS)
+        }
+
+        if (AppState.currentState === 'active') arm()
+        const sub = AppState.addEventListener('change', (next) => {
+            if (next === 'active') arm()
+            else disarm()
+        })
+        return () => {
+            disarm()
+            sub.remove()
+        }
+    }, [notice])
+
     // ── Paso Acomodar (F4) ──────────────────────────────────────────────────────────────────────
     // Medidas reales de los stickers montados: las reporta el lienzo (es el único que las conoce) y
     // las consume la capa de gestos para calcar cada zona de arrastre sobre su sticker.
@@ -248,7 +331,10 @@ export function WorkoutShareComposer({ visible, onClose, data, embedded = false 
     // para caer otra vez en el botón de compartir es desorientador. El RESTO del estado se conserva
     // a propósito (preset, foto, toggles) — si el alumno cerró sin querer, no le borramos la edición.
     useEffect(() => {
-        if (visible) setStep('editor')
+        if (!visible) return
+        setStep('editor')
+        // Un aviso de la sesión anterior no tiene por qué recibir al alumno al reabrir el composer.
+        setNotice(null)
     }, [visible])
 
     // ── Geometría del lienzo ────────────────────────────────────────────────────────────────────
@@ -405,11 +491,11 @@ export function WorkoutShareComposer({ visible, onClose, data, embedded = false 
         // resuelve solo, sin segundo diálogo.
         const res = await requestCameraPermission()
         if (!res.granted) {
-            toast.error('Sin permiso de cámara no podemos tomar la foto.')
+            showNotice(CAMERA_DENIED_NOTICE)
             return
         }
         await openCamera()
-    }, [requestCameraPermission, openCamera])
+    }, [requestCameraPermission, openCamera, showNotice])
 
     const openGallery = useCallback(async () => {
         const uri = await pickSharePhoto()
@@ -449,15 +535,17 @@ export function WorkoutShareComposer({ visible, onClose, data, embedded = false 
      * («toqué Stories»), que es lo único honesto — ninguna plataforma informa si terminó publicando
      * (mismo límite que documenta F0.2), y si la captura falla igual queremos saber que lo intentó.
      *
-     * Toda la lógica por destino vive en `share-targets.ts` y ninguna de esas funciones lanza:
-     * devuelven el `outcome` y ACÁ se decide la UI. `fallback` no es un error — el alumno pidió
-     * Stories, no tenía Instagram y se le abrió la hoja nativa; avisar de eso con un toast rojo
-     * sería mentirle sobre algo que funcionó.
+     * Toda la lógica por destino vive en `share-targets.ts` y ninguna de esas funciones lanza ni
+     * pinta: devuelven `outcome` + `notice` y ACÁ se muestra. `fallback` no es un error —el alumno
+     * pidió Stories, no tenía Instagram y se le abrió la hoja nativa— pero tampoco puede ser mudo,
+     * que era el bug: la pantalla cambiaba sin explicación y se leía como «no hizo nada». Va como
+     * aviso ámbar, no rojo.
      */
     const runTarget = useCallback(
         async (target: ShareTarget) => {
             if (busy) return
             setBusyTarget(target)
+            setNotice(null)
             captureAppEvent('student_share_target_selected', { target })
             let uri: string | null = null
             try {
@@ -467,7 +555,7 @@ export function WorkoutShareComposer({ visible, onClose, data, embedded = false 
                         transparent: background === 'transparent',
                     })
                 } catch {
-                    toast.error('No pudimos generar la imagen. Intenta de nuevo.')
+                    showNotice(CAPTURE_FAILED_NOTICE)
                     return
                 }
                 haptics.tap()
@@ -479,9 +567,9 @@ export function WorkoutShareComposer({ visible, onClose, data, embedded = false 
                     inviteUrl: data.inviteUrl,
                     presetId,
                 })
-                if (result.outcome === 'error') {
-                    toast.error('No pudimos compartir la imagen. Intenta de nuevo.')
-                }
+                // El destino ya redactó su aviso (sabe si guardó, si cayó a la hoja o si el permiso
+                // estaba negado). El genérico es solo la red: un `error` que llegó sin copy propio.
+                showNotice(result.notice ?? (result.outcome === 'error' ? SHARE_FAILED_NOTICE : null))
             } finally {
                 // Privacidad (PLAN §Privacidad): el PNG puede llevar una foto personal del alumno y
                 // no tiene por qué sobrevivir en caché. Se borra recién acá porque las dos
@@ -490,7 +578,7 @@ export function WorkoutShareComposer({ visible, onClose, data, embedded = false 
                 setBusyTarget(null)
             }
         },
-        [busy, data.dateISO, data.inviteUrl, background, accent, presetId],
+        [busy, data.dateISO, data.inviteUrl, background, accent, presetId, showNotice],
     )
 
     // Sin Modal propio no hay `onRequestClose`, así que el back físico de Android hay que atajarlo
@@ -785,6 +873,12 @@ export function WorkoutShareComposer({ visible, onClose, data, embedded = false 
                         ) : null}
                     </View>
                 ) : null}
+
+                {/* El aviso vive en el ÚLTIMO tramo flexible, anclado abajo y en absoluto: así queda
+                    siempre pegado encima de la barra de destinos sin empujarla —un banner que
+                    desplaza los botones 44 px justo cuando el alumno vuelve a tocar es un mis-tap
+                    garantizado— y sin depender del alto de la barra, que cambia por paso. */}
+                {notice ? <ComposerNotice notice={notice.value} /> : null}
             </View>
 
             <View
@@ -857,6 +951,61 @@ export function WorkoutShareComposer({ visible, onClose, data, embedded = false 
 }
 
 // ── Piezas del chrome ────────────────────────────────────────────────────────────────────────────
+
+/**
+ * El aviso del composer: el toast que el alumno SÍ puede ver.
+ *
+ * No se reusa `components/Toast.tsx` porque su `<Toaster />` es un singleton montado en el árbol
+ * raíz de la app, y este composer siempre vive dentro de una ventana nativa ajena — el Modal del
+ * resumen post-entreno cuando va `embedded`, o el suyo propio. Cada `toast.*()` disparado desde acá
+ * se pintaba detrás de esa ventana: invisible. Montar un segundo `<Toaster />` no sirve (los dos
+ * comparten la misma cola global y el aviso saldría igual en la raíz), así que el banner es propio.
+ *
+ * Tres tonos con el mismo peso visual: el ícono lleva el color, la superficie no. Un fallback («no
+ * pudimos abrir Instagram, te abrimos las opciones») pintado de rojo entero le diría al alumno que
+ * algo se rompió cuando en realidad puede seguir compartiendo.
+ */
+function ComposerNotice({ notice }: { notice: ShareNotice }) {
+    const s = EXEC_SURFACE
+    const { Icon, color } =
+        notice.kind === 'ok'
+            ? { Icon: CircleCheck, color: '#1FB877' } // DS success-500
+            : notice.kind === 'warn'
+              ? { Icon: TriangleAlert, color: '#F5A524' } // DS warning-500
+              : { Icon: OctagonX, color: '#F4365A' } // DS danger-500
+
+    return (
+        <MotiView
+            from={{ opacity: 0, translateY: 8 }}
+            animate={{ opacity: 1, translateY: 0 }}
+            transition={{ type: 'timing', duration: 160 }}
+            // `polite` y no `assertive`: es confirmación de algo que el alumno acaba de pedir, no
+            // una interrupción. Es una prop SOLO de Android; en iOS el anuncio lo hace el efecto del
+            // `notice` con `AccessibilityInfo.announceForAccessibility`.
+            accessibilityLiveRegion="polite"
+            style={{
+                position: 'absolute',
+                left: 20,
+                right: 20,
+                bottom: 10,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                borderRadius: 14,
+                backgroundColor: s.surfaceRaised,
+                borderWidth: 1,
+                borderColor: s.borderStrong,
+            }}
+        >
+            <Icon size={18} color={color} />
+            <Text style={{ flex: 1, fontFamily: FONT.uiSemibold, fontSize: 13, lineHeight: 18, color: s.text }}>
+                {notice.text}
+            </Text>
+        </MotiView>
+    )
+}
 
 interface ToggleSpec {
     id: StickerId

@@ -16,6 +16,8 @@ export { DateChipSticker } from './DateChipSticker'
 export { StreakChipSticker } from './StreakChipSticker'
 export { QrSticker } from './QrSticker'
 
-// Vocabulario compartido (paleta del canvas oscuro, escalador, contrato de props) — lo consume el
-// canvas para pintar fondos/velos con los MISMOS literales que los stickers.
+// Vocabulario compartido (escaladores, contorno/sombra, contrato de props). El canvas toma de acá
+// los dos literales de tinta (`INK_950`/`INK_900`) del fondo de marca y el composer usa `withAlpha`
+// para sus velos: los MISMOS que los stickers, para que un cambio de tono no haya que cazarlo en
+// nueve archivos.
 export * from './sticker-kit'
