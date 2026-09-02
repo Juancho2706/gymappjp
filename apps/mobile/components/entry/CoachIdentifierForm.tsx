@@ -36,6 +36,7 @@ import {
   COACH_IDENTIFIER_HELPER,
   canSubmitCoachIdentifier,
   coachIdentifierErrorCopy,
+  resolveClipboardIdentifier,
   type CoachIdentifierErrorKind,
 } from '../../lib/coach-identifier-form'
 import { EASE } from '../../lib/motion'
@@ -185,23 +186,35 @@ export function CoachIdentifierForm({
     inputRef.current?.focus()
   }, [focusWhenReady])
 
-  /** Chip `Pegar`: el codigo casi siempre llega copiado de WhatsApp. */
+  /**
+   * Chip `Pegar`: el codigo casi siempre llega copiado de WhatsApp. Si el clip es un enlace
+   * reconocible se escribe el identificador YA extraido (`CRDZ9`, no la URL entera); si no,
+   * entra crudo — el usuario puede estar pegando un codigo a medio escribir y no corresponde
+   * castigarlo con un error mientras tipea.
+   */
   const pasteIntoField = useCallback(async () => {
     const clip = (await Clipboard.getStringAsync().catch(() => '')).trim()
     if (!clip) return
-    setValue(clip)
+    const resolved = resolveClipboardIdentifier(clip)
+    setValue(resolved.ok ? resolved.value : clip)
     setErrorKind(null)
   }, [])
 
-  /** Boton fantasma: pegar el ENLACE de invitacion y resolverlo de una. */
+  /**
+   * Boton fantasma: tomar el ENLACE del portapapeles, extraer el identificador y resolverlo.
+   * No abre nada — pega. El campo muestra el codigo, no la URL: es mono 19 pt con tracking
+   * .13em y una URL larga solo deja ver su cola.
+   */
   const openInvitationLink = useCallback(async () => {
-    const clip = (await Clipboard.getStringAsync().catch(() => '')).trim()
-    if (!clip) {
-      fail('format')
+    const clip = await Clipboard.getStringAsync().catch(() => '')
+    const resolved = resolveClipboardIdentifier(clip)
+    if (!resolved.ok) {
+      fail('clipboard')
       return
     }
-    setValue(clip)
-    void submit(clip)
+    setValue(resolved.value)
+    setErrorKind(null)
+    void submit(resolved.value)
   }, [fail, submit])
 
   const errorMessage = coachIdentifierErrorCopy(errorKind)
@@ -295,7 +308,7 @@ export function CoachIdentifierForm({
       <Pressable
         testID="code-open-link"
         accessibilityRole="button"
-        accessibilityLabel="Abrir mi enlace de invitación"
+        accessibilityLabel="Pegar mi enlace de invitación"
         accessibilityHint="Pega el enlace que te compartió tu coach"
         onPress={() => void openInvitationLink()}
         disabled={loading}
@@ -309,7 +322,7 @@ export function CoachIdentifierForm({
         />
         <View pointerEvents="none" style={styles.ghostInset} />
         <Link size={17} color="#CDD3DB" strokeWidth={2} />
-        <Text style={styles.ghostLabel}>Abrir mi enlace de invitación</Text>
+        <Text style={styles.ghostLabel}>Pegar mi enlace de invitación</Text>
       </Pressable>
 
       <Text style={styles.foot}>

@@ -50,6 +50,21 @@ describe('parseCoachIdentifier', () => {
         ['eva-app.cl/invite/AB2Z9#hero', { type: 'code', value: 'AB2Z9' }],
         ['eva://c/coach-jp?utm_source=app', { type: 'slug', value: 'coach-jp' }],
         ['/c/coach%2Djp', { type: 'slug', value: 'coach-jp' }],
+        // `/join/<código>` es el enlace que EVA reparte de verdad (QR, póster, TeamShareLink y la
+        // tarjeta de Share Entreno con `?ref&src&k`). Antes caía en `invalid`.
+        [
+            'https://www.eva-app.cl/join/CRDZ9?ref=ba265b0b-1111-4111-8111-111111111111&src=share_card&k=placa',
+            { type: 'code', value: 'CRDZ9' },
+        ],
+        ['https://www.eva-app.cl/join/crdz9', { type: 'code', value: 'CRDZ9' }],
+        ['www.eva-app.cl/join/CRDZ9?src=share_card', { type: 'code', value: 'CRDZ9' }],
+        ['/join/CRDZ9', { type: 'code', value: 'CRDZ9' }],
+        ['eva://join/CRDZ9?ref=x', { type: 'code', value: 'CRDZ9' }],
+        ['https://www.eva-app.cl/join/coach-jp', { type: 'slug', value: 'coach-jp' }],
+        ['/join/coach%2Djp', { type: 'slug', value: 'coach-jp' }],
+        // Deep link propio de la app: el identificador viaja en el query, no en la ruta.
+        ['https://www.eva-app.cl/alumno/codigo?identifier=CRDZ9&auto=1', { type: 'code', value: 'CRDZ9' }],
+        ['https://www.eva-app.cl/c/AB2Z9/login#hero', { type: 'code', value: 'AB2Z9' }],
     ])('clasifica %s', (input, expected) => {
         expect(parseCoachIdentifier(input)).toEqual(expected)
     })
@@ -68,9 +83,48 @@ describe('parseCoachIdentifier', () => {
         'coach_jp',
         'ab',
         'x'.repeat(2_049),
+        // Guardas de que la allowlist no se abrió de más.
+        '/join',
+        'https://www.eva-app.cl/join/',
+        'https://www.eva-app.cl/t/mi-equipo',
+        'https://www.eva-app.cl/org/acme',
+        'https://www.eva-app.cl/join/ab',
+        'https://www.eva-app.cl/coach/clients',
+        'https://www.eva-app.cl/pricing?code=nope!',
     ])('devuelve invalid sin lanzar para %s', input => {
         expect(() => parseCoachIdentifier(input)).not.toThrow()
         expect(parseCoachIdentifier(input)).toEqual({ type: 'invalid' })
+    })
+
+    describe('?code= no se traga los callbacks de auth de Supabase', () => {
+        it.each([
+            // El caso real: `app/auth/callback` y `app/register-callback` reciben `?code=<uuid>`.
+            // El uuid pasaba el CoachSlugSchema y se clasificaba como slug, así que un código de
+            // un solo uso terminaba viajando al RPC de branding.
+            'https://eva-app.cl/auth/callback?code=11111111-1111-4111-8111-111111111111',
+            'https://eva-app.cl/register-callback?code=11111111-1111-4111-8111-111111111111',
+            'https://eva-app.cl/auth/callback?code=abcdef',
+            'https://eva-app.cl/auth/callback?code=abcd',
+        ])('ignora %s', input => {
+            expect(parseCoachIdentifier(input)).toEqual({ type: 'invalid' })
+        })
+
+        it('sigue aceptando ?code= cuando tiene forma de código público EVA', () => {
+            expect(parseCoachIdentifier('https://eva-app.cl/alumno/codigo?code=CRDZ9'))
+                .toEqual({ type: 'code', value: 'CRDZ9' })
+            expect(parseCoachIdentifier('https://eva-app.cl/alumno/codigo?code=crdz9'))
+                .toEqual({ type: 'code', value: 'CRDZ9' })
+        })
+
+        it('un ?code= descartado no tapa al ?identifier= que sí sirve', () => {
+            expect(parseCoachIdentifier('https://eva-app.cl/alumno/codigo?code=11111111-1111-4111-8111-111111111111&identifier=coach-jp'))
+                .toEqual({ type: 'slug', value: 'coach-jp' })
+        })
+
+        it('la ruta pública sigue mandando sobre el query', () => {
+            expect(parseCoachIdentifier('https://eva-app.cl/join/CRDZ9?code=11111111-1111-4111-8111-111111111111'))
+                .toEqual({ type: 'code', value: 'CRDZ9' })
+        })
     })
 })
 
