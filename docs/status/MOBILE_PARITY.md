@@ -14,6 +14,17 @@ source_of_truth: apps/web responsive + apps/mobile
 
 ## Resumen ejecutivo
 
+> **2026-09-01 (Ola de orden CERRADA — QA del owner verde en celular; supersede las dos entradas siguientes del mismo día)** (SDD
+> [ola-de-orden](../specs/ola-de-orden/TASKS.md) § «Cierre de la ola»): todo lo descrito abajo como «EN CÓDIGO sin OTA» está en el
+> canal `production` de OTA 1.1.2 — tren 1 (`f9cf8ae9`) android `6cd2d29d` / ios `8548c0c0` y tren 2 (`935cd4c8`) android `27e920aa` /
+> ios `1677cf76` — con QA del owner VERDE (ronda 2 + QA final). El tren 2 sumó lo pedido en el QA: **orden de la barra editable** desde
+> Funciones (▲▼, fila `_nav` de `coach_feature_prefs` vía `featurePrefs.navOrder` del config, `resolveNavOrder` en `coach-nav-state`),
+> «Cerrar sesión» al final de «Más» (fuera del hub Opciones), Alumnos sin tarjeta «Herramientas», bloque «Qué se ve en tu panel» también
+> para team (switch del pool si gestiona), fila «Funciones» oculta al coach org-managed, hero con deltas de fase 2 (`coach_kpi_snapshots`).
+> Brechas que quedan (backlog B1–B16 en TASKS): reach global del buscador (hoy solo Inicio), 6 CTAs de plan en nutrition-v2 RN, logout
+> duplicado Más/Mi cuenta, `activeModuleCount`/`MI_PANEL_*` sin renombrar, theme sin `success-600`/`danger-600`, test de
+> `ModuleOffNotice` RN, editores sin gate `training`.
+>
 > **2026-09-01 (Ola de orden W2→W4 en RN — navegación, «Más», Funciones única, todo-incluido; EN CÓDIGO sin OTA)** (SDD
 > [ola-de-orden](../specs/ola-de-orden/TASKS.md), mockup `bff90120`): la barra del coach deja de ser un `.slice(0,5)` de una
 > lista fija — `buildMobileBar` (@eva/coach-nav) arma «Inicio · Alumnos · 2 dominios prendidos según `PERSONA_DOMAIN_ORDER`

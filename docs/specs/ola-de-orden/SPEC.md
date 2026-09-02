@@ -1,11 +1,13 @@
 ---
-status: draft
+status: done
 owner: product-engineering
-last_verified: "2026-08-31"
+last_verified: "2026-09-01"
 canonical: false
 ---
 
 # SPEC — Ola de orden («La casa ordenada»): interruptores reales, nav sin piezas perdidas, Funciones todo-en-una
+
+> **Estado: DONE (2026-09-01).** En producción web + OTA 1.1.2 con QA del owner verde; ejecución, decisiones del jefe y backlog heredado en [TASKS](TASKS.md) § «Cierre de la ola».
 
 > **PLAN, no código.** Repo `D:\Proyectos\Antigravity\gymappjp` se leyó en modo SOLO LECTURA para
 > escribir este documento — cero commits, cero archivos de producto tocados. Toda ruta/símbolo

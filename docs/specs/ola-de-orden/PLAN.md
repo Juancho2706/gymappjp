@@ -1,11 +1,13 @@
 ---
-status: draft
+status: done
 owner: product-engineering
-last_verified: "2026-08-31"
+last_verified: "2026-09-01"
 canonical: false
 ---
 
 # PLAN — Ola de orden («La casa ordenada»)
+
+> **Estado: DONE (2026-09-01).** Ejecutado W1→W4 + ronda 2 del QA; cierre y backlog heredado en [TASKS](TASKS.md) § «Cierre de la ola».
 
 Slug SDD: `docs/specs/ola-de-orden/`. Repo `D:\Proyectos\Antigravity\gymappjp` en SOLO LECTURA para
 este writer — toda ruta citada está verificada con Read/Grep en esta sesión (31-08-2026). Todo

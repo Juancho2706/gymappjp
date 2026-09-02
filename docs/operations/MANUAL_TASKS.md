@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-owner
-last_verified: "2026-08-21"
+last_verified: "2026-09-01"
 canonical: true
 ---
 
@@ -15,6 +15,35 @@ Reglas:
 - Una acción terminada se elimina; Git conserva el historial.
 - No guardar secretos, datos personales ni credenciales en este archivo.
 - Los pasos automáticos, ideas comerciales y features futuras no son tareas manuales.
+
+## P0 — Billing
+
+### BILL-01 — Confirmar la reactivación por Flow del coach `movida-la2yw4` y proteger su cupón del cron
+
+El 01-09 el owner reactivó por SQL el canje `06070508-33d6-4839-8c81-9a723a43e65f` (50 % forever ⇒ Pro mensual
+14.995; `coupon_codes.JHNG3C48AE` sigue inactivo a propósito) y el coach intentó reactivar por Flow 3 veces sin
+completar: el gate del proxy no eximía `/coach/subscription/flow-processing` y `confirm-enrollment` nunca corrió
+(bug prod, fix `850d85a9`, en producción desde `9991d42b` el 01-09 ~23:52Z). Al cierre de este doc el coach seguía
+`pending_payment` con la tarjeta enrolada (`provider_customer_id` presente, `subscription_provider_external_id` null)
+y **no había reintentado después del deploy** (último intento 23:39Z).
+
+- [ ] Verificar en `coaches` (slug `movida-la2yw4`): `subscription_status='active'`, `subscription_provider='flow'`,
+      `provider_plan_id='eva_pro_monthly_14995'`, `subscription_provider_external_id` no nulo, `current_period_end`
+      futuro; y en `billing_snapshots` la fila con total 14.995 y `coupon_code='JHNG3C48AE'`.
+- [ ] Si a las **10:00 UTC del 02-09** (06:00 Chile) sigue `pending_payment`: el barrido «abandoned signup coupons»
+      del cron `mp-reconcile` (`apps/web/src/app/api/cron/mp-reconcile/route.ts:421-466`, `vercel.json` `0 10 * * *`)
+      revierte el canje en silencio (`subscription_status='pending_payment' AND subscription_mp_id IS NULL AND
+      created_at < now()-48h`). Re-flip por SQL **antes de que pague** (Flow hornea el monto en el plan al crear la
+      sub): `update coupon_redemptions set status='active' where id='06070508-…' and status='reverted'` + fila en
+      `admin_audit_logs` (`coupon.reactivate_redemption`). Evidencia del cron: `admin_audit_logs`
+      `coach.coupon_signup_abandoned`.
+- [ ] Decidir el fix del barrido (bug general, no solo este coach): en Flow `subscription_mp_id` es SIEMPRE null,
+      así que toda alta/reactivación Flow con cupón que no cobra en 48 h desde `coaches.created_at` pierde el cupón.
+      Opciones: excluir `payment_provider='flow' AND provider_customer_id IS NOT NULL`, o medir la edad del canje
+      (`coupon_redemptions.created_at`) en vez de la del coach. Con test.
+- Cómo completa el coach: con sesión iniciada, `https://www.eva-app.cl/coach/subscription/flow-processing?tier=pro&cycle=monthly`
+  (poll de `confirm-enrollment`: verifica la tarjeta en Flow y crea la sub al toque) o rehacer el checkout Flow desde
+  `/coach/reactivate`. Alternativa sin Flow: Mercado Pago (su vuelta `/coach/subscription/processing` siempre estuvo exenta).
 
 ## P1 — Cierre del build y QA móvil
 
@@ -51,14 +80,6 @@ Aviso «Tu plan Free ahora incluye tu marca» ([spec](../specs/pricing-v3/SPEC.m
 - [ ] Enviar la prueba a la casilla del owner desde el propio diálogo y leer el correo entero antes de confirmar.
 - [ ] Confirmar el envío real y anotar `sent / failed / skipped`; el botón deduplica contra `admin_audit_logs` (`coach.pricing_v3_notice`), así que un reintento tras un corte no reescribe a quien ya recibió.
 - [ ] Revisar los `failed` en Auditoría y decidir uno por uno (rebote, casilla inexistente) antes de reintentar.
-
-### DATA-02 — Sembrar el primer snapshot de KPI del coach tras el deploy
-
-El cron `/api/cron/coach-kpi-snapshot` (`30 4 * * *`) escribe la foto diaria de `coach_kpi_snapshots`; el delta de «En riesgo» y el saldo neto de «Alumnos» leen la fila de **hace 7 días**. Sin sembrar, el primer delta aparece recién una semana después de la primera corrida automática. Es opcional y sin riesgo: el upsert va por `(coach_id, day)`, así que correrlo a mano el mismo día no duplica nada.
-
-- [ ] Tras el deploy, correr una vez desde un entorno seguro: `curl -H "Authorization: Bearer $CRON_SECRET" https://www.eva-app.cl/api/cron/coach-kpi-snapshot` (no pegar el valor del secreto en el comando ni en un ticket).
-- [ ] Verificar en la respuesta `snapshotted` (≈ total de coaches) y `errors` vacío; si hay parciales, la respuesta lista los `coach <id>` afectados.
-- [ ] Si se saltea: no hay que hacer nada, el delta simplemente aparece 7 días después de la primera corrida automática.
 
 ### OPS-RESEND-01 — Crear el webhook de Resend y pegar el secreto en Vercel
 

@@ -1,5 +1,5 @@
 ---
-status: active
+status: done
 owner: product-engineering
 last_verified: "2026-09-01"
 canonical: false
@@ -19,6 +19,54 @@ Dependencias entre waves: **W2 depende de W1** (la barra RN y el sidebar necesit
 `disabledDomains`/`domainsEnabled` ya lleguen reales desde W1). **W3 y W4 son independientes entre
 sí** y de W2 en lo funcional, pero como comparten archivos con W1/W2 (settings hub, nav) conviene
 correrlas después para no pisarse.
+
+---
+
+## Cierre de la ola (2026-09-01) — DONE
+
+**Estado final:** todo en producción. `master` = `rnmobiledenuevo` = `9991d42b` (deploy web
+`dpl_A656yxZEoc6NWB9WMtq55fN9htbC` READY; el anterior de la ola, `dpl_6rRPbnuJtxKYUJVFxgsNAtmkBqMV`,
+llevaba `935cd4c8`). OTA 1.1.2 canal `production`: tren 1 (`f9cf8ae9`) android `6cd2d29d` / ios
+`8548c0c0`; tren 2 (`935cd4c8`) android `27e920aa` / ios `1677cf76`. Migración aditiva en LIVE:
+`20260901230436_coach_kpi_snapshots` (RLS select propio; escribe `service_role`), cron
+`api/cron/coach-kpi-snapshot` 04:30Z, 91 filas sembradas el 01-09 ⇒ primer delta de «En riesgo» y
+saldo neto de «Alumnos» el **2026-09-08**.
+
+**QA del owner (todo verde):** ronda 1 web contra el preview (2 hallazgos → `f9cf8ae9`); ronda 2 en
+celular sobre el tren 1 (3 pedidos + 2 decisiones → `284fcbf3`, `a6f3fad8`, `852d5be2`, `bac46edc`,
+tabla § W4 «QA del owner ronda 2»); **QA final en celular sobre el tren 2 VERDE el 01-09** (▲▼ y barra
+rearmada, «Más» con «Cerrar sesión», Alumnos sin Herramientas, switch del pool para gestores de team,
+hero con deltas). Con ese verde la SDD pasa a `status: done`.
+
+**Suite completa al cierre (01-09):** lint 0 errores · typecheck web · vitest 8366/8366 (2 timeouts por
+carga de CPU que pasan aislados) · `tsc` mobile · `check:tokens` · `check:nutrition-v2-boundaries` ·
+`docs:check` · `expo export android`.
+
+**Hotfix ajeno a la ola que viajó en el mismo tren:** `850d85a9` — `coach-subscription-gate.ts` exime
+`/coach/subscription/flow-processing`; sin eso toda reactivación por Flow de un coach bloqueado
+completaba en loop (caso real el 01-09). Seguimiento operativo en
+[MANUAL_TASKS § BILL-01](../../operations/MANUAL_TASKS.md).
+
+### Backlog heredado (lista canónica; ninguno bloquea; las secciones «Pendientes declarados» de abajo son historia)
+
+| # | Pendiente | Dónde | Nota |
+|---|---|---|---|
+| B1 | Logout duplicado: «Más» y «Mi cuenta» (`/coach/perfil`) | RN `(tabs)/more.tsx`, web `CoachMoreSheet` + perfil | decidir si queda uno solo |
+| B2 | Suscripción web: párrafo «vienen incluidos en cualquier plan pago…» y candado gris atados a `hasActivePaidPlan` | `subscription/_components/SubscriptionContent.tsx` | regla del owner: TODO en todos los planes, solo se cobra cupo |
+| B3 | 6 CTAs RN de plan («Ver módulos»/«Ver mi plan»/`onUpgrade`, `NUTRITION_PRO_UPGRADE_HREF`) gateadas por `nutrition_exchanges`/`body_composition` con copy «no incluido en tu plan actual» | nutrition-v2 builder, QuickEdit ×2, ProgresoTab | código muerto o mentiroso con D1 |
+| B4 | «Reach global» del buscador RN (hoy solo la lupa de Inicio) | overlay en `(tabs)/_layout.tsx` | anclaje B elegido en W4.6b |
+| B5 | Tras «Ordenar mi panel según mi especialidad» la tarjeta web conserva el orden manual viejo hasta refrescar | `settings/funciones/_components/DomainsCard.tsx` | cosmético |
+| B6 | `activeModuleCount` de `apps/mobile/lib/team.ts` sin consumidor; `lib/mi-panel.ts` conserva nombres `MI_PANEL_*` | RN | limpieza + renombre integral |
+| B7 | Theme RN sin `success-600`/`danger-600` (el hero usa el 500) | `apps/mobile/lib/theme.ts` | escalones si se quiere 1:1 con web |
+| B8 | Sin test de `ModuleOffNotice` RN (el web sí) | `components/coach/ModuleOffNotice.tsx` | — |
+| B9 | Gates que W1 dejó fuera: subrutas web de Movimiento por alumno (`movement/[clientId]`, `/new`, `/print`: `null ⇒ notFound()`, sin `status`), editores `program-builder` RN y `/coach/builder/[id]` web sin gate `training`, Resumen de la ficha pinta widgets de Nutrición apagada | web + RN | visibilidad, no permisos |
+| B10 | `builder.tsx` RN arrastra 3 errores previos de `react-hooks` fuera del lint raíz | `apps/mobile/app/coach/(tabs)/builder.tsx` | preexistente |
+| B11 | Sin test del ctx exacto de `resolveDomainsEnabled` en `clients/[clientId]/page.tsx` ni de `ficha-panel.data.ts` | web | verificado por lectura |
+| B12 | Cardio/Movimiento desde la barra RN entran como push de stack (`tab: null`) | `CoachMobileChrome.tsx` | si molesta: tabs re-exportadas sin ← en sus headers |
+| B13 | Adherencia del dashboard: el denominador es el programa actual (mismo sesgo que el número principal) | `dashboard/_lib/kpi-deltas.ts` | — |
+| B14 | W4.6c Facturación RN | — | espera Cobros ([SDD](../cobros-coach-alumno/SPEC.md), P1–P8 del owner) |
+| B15 | **Demolición de Enterprise** (regla del owner 01-09: ELIMINADO, no tocar, quitar a futuro) | `apps/enterprise`, `/org/*`, `enterprise_coach` en coach-nav/workspace, RLS/policies de org, cron/e2e enterprise | ola propia, fuera de esta |
+| B16 | 7C: verificar la corrida automática del cron (04:30Z del 02-09 ⇒ 2.ª fila por coach) y el primer delta real el 08-09 | `coach_kpi_snapshots` | operación |
 
 ---
 
@@ -102,7 +150,7 @@ android): ver CURRENT.md — se corre UNA vez al cierre. QA en device/navegador 
     acaba de hacer y se va solo; la × limpia la query con `history.replaceState` (sin
     `router.replace`, que refetchearía el RSC del dashboard entero).
 
-### Pendientes declarados de W1 (no bloquean el cierre; entran a QA o a W2/W4)
+### Pendientes declarados de W1 (histórico — la lista canónica es § Cierre › «Backlog heredado»)
 
 - Subrutas web de Movimiento por alumno (`movement/[clientId]`, `/new`, `/print`) NO gatean por
   dominio: sus `_data` devuelven `null ⇒ notFound()`, sin patrón `status`. El hub y el nav sí
@@ -716,8 +764,9 @@ Independiente de W2/W3 en lo funcional (comparte archivos con W1, correr despué
 | Detalle 9: badge de módulos en Suscripción «Incluido» | ✅ | `bac46edc` |
 | Detalles 5 y 6: fila «Funciones» oculta a org-managed sin team; tile de Equipo sin `activeModuleCount` | ✅ | `284fcbf3` |
 | Regla nueva del owner: **ENTERPRISE está eliminado** — no diseñar/testear ese caso; a futuro demolerlo | anotada | — |
+| **QA final del owner sobre el tren 2 (celular, 01-09): ▲▼ + barra rearmada, «Más» con «Cerrar sesión», Alumnos sin Herramientas, team gestor con switch del pool, hero con deltas** | ✅ verde | — (SDD → `done`) |
 
-### Pendientes declarados de W2–W4 (no bloquean; entran a QA o a la siguiente ola)
+### Pendientes declarados de W2–W4 (histórico — la lista canónica es § Cierre › «Backlog heredado»)
 - ~~Cápsula móvil WEB con `.slice(0,5)`~~ → cerrado en `f9cf8ae9` (buildMobileBar + CoachMoreSheet).
 - Cardio/Movimiento desde la barra RN: push de stack (la cápsula queda debajo). Si en QA molesta,
   registrarlas como tabs re-exportadas exige quitar el ← de sus headers.
