@@ -34,14 +34,25 @@ export async function getCoachLeads(status?: CoachLeadStatus): Promise<CoachLead
  * Mueve una solicitud de estado. La pertenencia la valida el SERVIDOR (RLS + `where` por
  * `coach_id`): esta llamada no autoriza nada, solo pide. Devuelve el item ya releído para que la
  * lista no tenga que inventar el estado nuevo ni recargar entera.
+ *
+ * `clientId` solo viaja con `converted`: es el alumno que el alta acaba de crear (lo devuelve
+ * `POST /api/mobile/coach/clients`). Con él, el servidor cierra el loop de la tarjeta compartida
+ * —copia la atribución a `clients` y emite `coach_client_referred`—, el mismo cierre que hace el
+ * panel web. Sin él la solicitud igual se cierra: el campo es opcional en el contrato para no
+ * romper una app vieja, así que tampoco se manda la clave cuando no hay alumno.
  */
 export async function setCoachLeadStatus(
   leadId: string,
   status: CoachLeadUpdatableStatus,
+  clientId?: string | null,
 ): Promise<CoachLead> {
   const res = await apiFetch<{ ok: true; lead: CoachLead }>(
     `/api/mobile/coach/leads/${encodeURIComponent(leadId)}`,
-    { method: 'PATCH', authenticated: true, body: { status } },
+    {
+      method: 'PATCH',
+      authenticated: true,
+      body: clientId ? { status, clientId } : { status },
+    },
   )
   return res.lead
 }

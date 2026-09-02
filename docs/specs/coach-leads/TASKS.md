@@ -108,11 +108,11 @@ Convención: `[ ]` pendiente · `[x]` hecho con evidencia real · `[~]` parcial 
 >   **DEUDA:** `coach/clients/_data/leads.queries.ts` conserva su copia de la consulta — ese archivo
 >   pertenecía a otra zona en esta tanda y NO se tocó. Unificar = reemplazar su cuerpo por
 >   `listCoachLeads(await createClient(), coachId)`.
-> - **Limitación conocida del `converted` móvil:** el PATCH mueve el estado pero NO copia la
->   atribución (`referred_by_client_id`/`referral_source`/`referral_card_kind`) a `clients` ni emite
->   `coach_client_referred`. Las dos cosas necesitan el `clients.id` recién creado y
->   `POST /api/mobile/coach/clients` todavía no lo devuelve. Ese cierre sigue siendo del panel web
->   (`markLeadConvertedAction`). Backlog: devolver `clientId` en el alta móvil.
+> - ~~**Limitación conocida del `converted` móvil**~~ **CERRADA (02-09, W3.5, sin desplegar
+>   todavía):** `POST /api/mobile/coach/clients` devuelve `clientId` y el PATCH lo acepta como campo
+>   opcional, así que la app cierra la solicitud con la MISMA lógica del panel web. Ojo con
+>   `docs/status/MOBILE_PARITY.md`: su «brecha declarada» sigue siendo verdad para producción hasta
+>   que este cambio salga en un tren.
 > - Gates: `tsc --noEmit` @eva/web y @eva/mobile exit 0; `vitest run` de los 6 archivos tocados
 >   verde; `eslint` sobre los archivos tocados sin errores. Suite completa y `build` NO corridos.
 
@@ -139,6 +139,25 @@ Convención: `[ ]` pendiente · `[x]` hecho con evidencia real · `[~]` parcial 
       - Test: caso nuevo en `join-request.actions.test.ts` (se dispara al crear, NO en el dedup).
 - [ ] W3.4 Decidir si entra por OTA o exige binario, y anotarlo en `MOBILE_RELEASES_OTA`.
       - Nota del ejecutor: sin dependencias nativas nuevas ⇒ **candidato a OTA**; lo confirma el jefe.
+- [x] W3.5 `converted` desde la app cierra la atribución igual que el panel web (deuda de W3.1).
+      - Contrato: `POST /api/mobile/coach/clients` devuelve `clientId` (shape compartido
+        `MobileCreateClientResponse` en `packages/schemas/client.ts`, consumido por los DOS altas RN);
+        el body del PATCH suma `clientId` OPCIONAL (`z.guid()`, rechazado si el estado no es
+        `converted`). Opcional a propósito: una app vieja manda `converted` a secas y ese camino
+        tiene que seguir cerrando la solicitud (compatibilidad OTA).
+      - Lógica ÚNICA en `services/coach/leads.service.ts` (`convertCoachLead` / `convertOwnedLead`):
+        verifica que el alumno sea del coach con el cliente del usuario (RLS), copia la atribución
+        con service_role solo si el alumno no traía referente propio, escribe `converted_client_id`
+        y emite `coach_client_referred` + `coach_lead_converted` (prop `surface`). El server action
+        `markLeadConvertedAction` quedó como envoltorio (sesión + `revalidatePath`) y el route móvil
+        ya no emite eventos por su cuenta.
+      - RN: el alta avisa QUIÉN se creó (`onCreated({ clientId })`) y la solicitud se marca
+        convertida solo con alta real — antes, «Archivar para liberar cupo» disparaba el mismo
+        callback y cerraba la solicitud sin alumno.
+      - Tests: `api/mobile/coach/clients/route.test.ts` (nuevo), `leads/[id]/route.test.ts`,
+        `services/coach/leads.service.test.ts`, `tests/mobile/coach-leads.test.ts` — 6 archivos /
+        53 casos verdes; `tsc --noEmit` @eva/web y @eva/mobile exit 0; `eslint` de los tocados sin
+        errores (solo warnings preexistentes en RN).
 
 ## W4 — Invitar alumno → `/join`
 

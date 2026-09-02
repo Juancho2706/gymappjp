@@ -46,7 +46,7 @@ import { CartesianChart, Area, Line, Bar, useChartPressState } from 'victory-nat
 import { useFont, Circle, Text as SkiaText } from '@shopify/react-native-skia'
 import { useDerivedValue, type SharedValue } from 'react-native-reanimated'
 import { deriveSportTokens } from '@eva/brand-kit'
-import type { Persona } from '@eva/schemas'
+import type { MobileCreateClientResponse, Persona } from '@eva/schemas'
 import { EvaBlur } from '../EvaBlur'
 import { EvaFigure } from '../entry/EvaFigure'
 import { useTheme } from '../../context/ThemeContext'
@@ -325,7 +325,11 @@ function MobileTeamsBridgeBanner({ capClients, maxClients }: { capClients: numbe
         styles.tierBanner,
         {
           borderColor: hexToRgba(theme.success, 0.3),
-          backgroundColor: resolvedScheme === 'dark' ? 'rgba(31,184,119,0.18)' : '#DBF5EA',
+          // success-100 por token (theme.success100): en dark el token ES success-500 y se pinta
+          // con alpha (global.css:228), en light es el pastel solido. Mismos pixeles que los hex
+          // que vivian aca, pero dark-aware y fuera del alcance del re-tinte de marca (es estado,
+          // no marca: el puente a Teams se lee "positivo", no "brand").
+          backgroundColor: resolvedScheme === 'dark' ? hexToRgba(theme.success100, 0.18) : theme.success100,
           borderRadius: theme.radius.xl,
         },
       ]}
@@ -340,7 +344,9 @@ function MobileTeamsBridgeBanner({ capClients, maxClients }: { capClients: numbe
           ¿Más de {max} alumnos o trabajas con otros profesionales? Conoce EVA Teams
         </Text>
       </View>
-      <Text style={[styles.tierAction, { color: resolvedScheme === 'dark' ? '#4FD9A0' : '#0F7D50', fontFamily: FONT.uiBold }]}>
+      {/* success-600 (theme.success600) ya flipea light/dark solo: es el foreground legible de
+          estado sobre el tinte 100, no el 500 de relleno. */}
+      <Text style={[styles.tierAction, { color: theme.success600, fontFamily: FONT.uiBold }]}>
         Conversemos →
       </Text>
     </TouchableOpacity>
@@ -838,12 +844,12 @@ export function MobileQuickActionsFab({
  * `coaches.onboarding_guide` — la MISMA fila que lee el panel.
  */
 
-type CreateClientResponse = {
-  ok: true
-  clientName: string
-  loginUrl: string
-  newClientPhone: string | null
-}
+/**
+ * Respuesta del alta corta. Shape compartido con el alta completa y con el servidor
+ * (`@eva/schemas`): tener DOS copias del contrato hacía que agregarle un campo —el `clientId` que
+ * cierra las solicitudes— solo llegara al consumidor que uno se acordara de tocar.
+ */
+type CreateClientResponse = MobileCreateClientResponse
 
 /**
  * Lo que el alta corta creó, con la credencial CONGELADA en ese instante: el correo normalizado que
@@ -2647,7 +2653,7 @@ export function MobileNovedades({
                   </Text>
                   {isCheckin ? (
                     reviewed ? (
-                      <CheckCircle2 size={16} color={resolvedScheme === 'dark' ? '#4FD9A0' : '#0F7D50'} />
+                      <CheckCircle2 size={16} color={theme.success600} />
                     ) : (
                       <View className="h-2 w-2 rounded-pill bg-ember-500" />
                     )

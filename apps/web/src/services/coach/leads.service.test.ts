@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { listCoachLeads, updateCoachLeadStatus } from './leads.service'
+
+const { captureMock } = vi.hoisted(() => ({ captureMock: vi.fn().mockResolvedValue(undefined) }))
+vi.mock('@/lib/posthog/server-capture', () => ({ capturePostHogServerEvent: captureMock }))
+
+import { convertCoachLead, listCoachLeads, updateCoachLeadStatus } from './leads.service'
 
 /**
  * Mock encadenable de PostgREST. Cada método devuelve el mismo objeto y el objeto es «thenable»:
@@ -186,7 +190,7 @@ describe('updateCoachLeadStatus', () => {
             { userDb: user.db, admin: admin.db },
             'coach-1',
             'lead-1',
-            'converted',
+            'dismissed',
         )
 
         expect(result).toEqual({
@@ -194,5 +198,198 @@ describe('updateCoachLeadStatus', () => {
             code: 'UPDATE_FAILED',
             error: 'No pudimos actualizar la solicitud.',
         })
+    })
+
+    it('si el write de la conversión falla, el copy es el de convertir', async () => {
+        const user = chain({ single: { data: { id: 'lead-1', status: 'new' }, error: null } })
+        const admin = chain({ write: { error: { message: 'boom' } } })
+
+        const result = await updateCoachLeadStatus(
+            { userDb: user.db, admin: admin.db },
+            'coach-1',
+            'lead-1',
+            'converted',
+        )
+
+        expect(result).toEqual({
+            ok: false,
+            code: 'UPDATE_FAILED',
+            error: 'No pudimos marcar la solicitud como convertida.',
+        })
+        // Un write fallido no puede dejar el embudo contando una conversión que no ocurrió.
+        expect(captureMock).not.toHaveBeenCalled()
+    })
+})
+
+/**
+ * Cierre de la conversión — la MISMA implementación que corre el panel web
+ * (`markLeadConvertedAction`) y el PATCH móvil con `clientId`. Acá se prueba una sola vez.
+ */
+function convertBuilder(result: unknown = { data: null, error: null }) {
+    const obj: Record<string, unknown> = {}
+    Object.assign(obj, {
+        select: vi.fn(() => obj),
+        update: vi.fn(() => obj),
+        eq: vi.fn(() => obj),
+        maybeSingle: vi.fn(async () => result),
+        then: (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) =>
+            Promise.resolve(result).then(res, rej),
+    })
+    return obj as Record<string, ReturnType<typeof vi.fn>> & { then: unknown }
+}
+
+const OWNED_LEAD = {
+    id: 'lead-1',
+    status: 'new',
+    referred_by_client_id: 'client-referente',
+    referral_source: 'share_card',
+    referral_card_kind: 'placa',
+}
+
+function convertSetup(options?: {
+    lead?: Record<string, unknown> | null
+    client?: Record<string, unknown> | null
+    writeError?: { message: string } | null
+}) {
+    const lead = options?.lead === undefined ? OWNED_LEAD : options.lead
+    const leadRead = convertBuilder()
+    // 1er `maybeSingle` = verificación de pertenencia; 2º = read-back del item para la app.
+    leadRead.maybeSingle = vi
+        .fn()
+        .mockResolvedValueOnce({ data: lead, error: null })
+        .mockResolvedValueOnce({ data: { ...ROW, status: 'converted' }, error: null })
+    const clientRead = convertBuilder({
+        data: options?.client === undefined ? { id: 'client-nuevo', referred_by_client_id: null } : options.client,
+        error: null,
+    })
+    const userFrom = vi.fn((table: string) => (table === 'coach_leads' ? leadRead : clientRead))
+
+    const leadWrite = convertBuilder({ error: options?.writeError ?? null })
+    const clientWrite = convertBuilder({ error: null })
+    const adminFrom = vi.fn((table: string) => (table === 'coach_leads' ? leadWrite : clientWrite))
+
+    return {
+        clients: { userDb: { from: userFrom } as never, admin: { from: adminFrom } as never },
+        leadRead,
+        clientRead,
+        leadWrite,
+        clientWrite,
+        adminFrom,
+    }
+}
+
+describe('convertCoachLead (web) y `converted` con clientId (móvil)', () => {
+    beforeEach(() => {
+        vi.clearAllMocks()
+        captureMock.mockResolvedValue(undefined)
+    })
+
+    it('copia las tres columnas de atribución al alumno, cierra el lead y emite los dos eventos', async () => {
+        const t = convertSetup()
+
+        const result = await convertCoachLead(t.clients, 'coach-1', 'lead-1', 'client-nuevo')
+
+        expect(result).toEqual({ ok: true, referred: true })
+        expect(t.clientWrite.update).toHaveBeenCalledWith({
+            referred_by_client_id: 'client-referente',
+            referral_source: 'share_card',
+            referral_card_kind: 'placa',
+        })
+        expect(t.leadWrite.update).toHaveBeenCalledWith({
+            status: 'converted',
+            converted_client_id: 'client-nuevo',
+        })
+        // Verificar y escribir son dos viajes: el write repite el `coach_id`.
+        expect(t.leadWrite.eq).toHaveBeenCalledWith('coach_id', 'coach-1')
+        expect(t.clientWrite.eq).toHaveBeenCalledWith('coach_id', 'coach-1')
+
+        expect(captureMock.mock.calls.map((call) => call[0].event)).toEqual([
+            'coach_client_referred',
+            'coach_lead_converted',
+        ])
+        expect(captureMock.mock.calls[0][0]).toMatchObject({
+            distinctId: 'coach-1',
+            properties: { referred_by_client_id: 'client-referente', card_kind: 'placa', surface: 'web' },
+        })
+        expect(captureMock.mock.calls[1][0].properties).toEqual({ referred: true, surface: 'web' })
+    })
+
+    it('sin atribución no toca `clients` ni emite coach_client_referred', async () => {
+        const t = convertSetup({
+            lead: { ...OWNED_LEAD, referred_by_client_id: null, referral_source: null, referral_card_kind: null },
+        })
+
+        const result = await convertCoachLead(t.clients, 'coach-1', 'lead-1', 'client-nuevo')
+
+        expect(result).toEqual({ ok: true, referred: false })
+        expect(t.clientWrite.update).not.toHaveBeenCalled()
+        expect(captureMock.mock.calls.map((call) => call[0].event)).toEqual(['coach_lead_converted'])
+    })
+
+    it('no pisa la atribución de un alumno que ya tenía referente', async () => {
+        const t = convertSetup({ client: { id: 'client-nuevo', referred_by_client_id: 'otro-referente' } })
+
+        await convertCoachLead(t.clients, 'coach-1', 'lead-1', 'client-nuevo')
+
+        expect(t.clientWrite.update).not.toHaveBeenCalled()
+        expect(t.leadWrite.update).toHaveBeenCalled()
+    })
+
+    it('alumno ajeno (o inexistente) → CLIENT_NOT_FOUND y CERO escrituras', async () => {
+        const t = convertSetup({ client: null })
+
+        const result = await convertCoachLead(t.clients, 'coach-1', 'lead-1', 'client-ajeno')
+
+        expect(result).toEqual({ ok: false, code: 'CLIENT_NOT_FOUND', error: 'Alumno no encontrado.' })
+        expect(t.adminFrom).not.toHaveBeenCalled()
+        expect(captureMock).not.toHaveBeenCalled()
+    })
+
+    it('lead ajeno → NOT_FOUND antes de mirar al alumno', async () => {
+        const t = convertSetup({ lead: null })
+
+        const result = await convertCoachLead(t.clients, 'coach-1', 'lead-de-otro', 'client-nuevo')
+
+        expect(result).toEqual({ ok: false, code: 'NOT_FOUND', error: 'Solicitud no encontrada.' })
+        expect(t.adminFrom).not.toHaveBeenCalled()
+    })
+
+    it('el camino móvil con `clientId` corre el MISMO cierre y devuelve el item releído', async () => {
+        const t = convertSetup()
+
+        const result = await updateCoachLeadStatus(t.clients, 'coach-1', 'lead-1', 'converted', {
+            clientId: 'client-nuevo',
+            surface: 'mobile',
+        })
+
+        expect(result).toMatchObject({ ok: true, lead: { id: 'lead-1', status: 'converted' } })
+        expect(t.clientWrite.update).toHaveBeenCalledWith({
+            referred_by_client_id: 'client-referente',
+            referral_source: 'share_card',
+            referral_card_kind: 'placa',
+        })
+        expect(t.leadWrite.update).toHaveBeenCalledWith({
+            status: 'converted',
+            converted_client_id: 'client-nuevo',
+        })
+        expect(captureMock.mock.calls.map((call) => call[0].event)).toEqual([
+            'coach_client_referred',
+            'coach_lead_converted',
+        ])
+        expect(captureMock.mock.calls[1][0].properties).toEqual({ referred: true, surface: 'mobile' })
+    })
+
+    it('compatibilidad OTA: sin `clientId` mueve el estado sin `converted_client_id` ni atribución', async () => {
+        const t = convertSetup()
+
+        const result = await updateCoachLeadStatus(t.clients, 'coach-1', 'lead-1', 'converted')
+
+        expect(result).toMatchObject({ ok: true })
+        expect(t.clientRead.select).not.toHaveBeenCalled()
+        expect(t.clientWrite.update).not.toHaveBeenCalled()
+        expect(t.leadWrite.update).toHaveBeenCalledWith({ status: 'converted' })
+        // Sin alumno no hay a quién atribuir: declarar `coach_client_referred` sería mentir.
+        expect(captureMock.mock.calls.map((call) => call[0].event)).toEqual(['coach_lead_converted'])
+        expect(captureMock.mock.calls[0][0].properties).toEqual({ referred: true, surface: 'mobile' })
     })
 })

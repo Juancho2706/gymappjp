@@ -67,12 +67,32 @@ export const CoachLeadsResponseSchema = z.object({
 
 export type CoachLeadsResponse = z.infer<typeof CoachLeadsResponseSchema>
 
-/** Body del PATCH. `strict` a propósito: la app no puede mandar columnas de contrabando. */
+/**
+ * Body del PATCH. `strict` a propósito: la app no puede mandar columnas de contrabando.
+ *
+ * `clientId` es OPCIONAL y solo tiene sentido con `converted`: es el alumno que el coach acaba de
+ * dar de alta desde la solicitud (lo devuelve `POST /api/mobile/coach/clients`). Con él, el
+ * servidor copia la atribución de la tarjeta compartida a `clients` y emite `coach_client_referred`
+ * — el mismo cierre que hace el panel web.
+ *
+ * NO puede volverse obligatorio: un binario ya publicado (o una OTA vieja) manda `converted` a
+ * secas y ese camino tiene que seguir moviendo el estado. Sin `clientId` la solicitud se cierra
+ * igual, solo que sin la copia de atribución.
+ *
+ * `z.guid()` y no `z.uuid()`: en Zod 4 `.uuid()` exige RFC 9562 y rechaza los uuid de filas seed
+ * (memoria «UUIDs no-RFC»). La autorización NO depende de este formato — el servidor verifica
+ * igual que el alumno sea del coach antes de tocar nada.
+ */
 export const CoachLeadUpdateRequestSchema = z
     .object({
         status: CoachLeadUpdatableStatusSchema,
+        clientId: z.guid().optional(),
     })
     .strict()
+    .refine((body) => !body.clientId || body.status === 'converted', {
+        message: 'clientId solo aplica a converted.',
+        path: ['clientId'],
+    })
 
 export type CoachLeadUpdateRequest = z.infer<typeof CoachLeadUpdateRequestSchema>
 

@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
-import { capturePostHogServerEvent } from '@/lib/posthog/server-capture'
+import { convertCoachLead } from '@/services/coach/leads.service'
 
 /**
  * Acciones del inbox «Solicitudes» (`coach_leads`) — panel del coach en /coach/clients.
@@ -26,15 +26,16 @@ const NOT_AUTHED = 'No autenticado.'
 type OwnedLead = {
     id: string
     status: string
-    referred_by_client_id: string | null
-    referral_source: string | null
-    referral_card_kind: string | null
 }
 
 /**
- * Boundary de autorización compartido: devuelve el lead SOLO si pertenece al coach de la sesión.
- * Un uuid mal formado hace que PostgREST devuelva error (22P02) ⇒ `data` null ⇒ mismo
- * «no encontrada» que un lead ajeno. Nunca se distingue "no existe" de "no es tuyo".
+ * Boundary de autorización de las acciones que NO convierten (contactar/descartar): devuelve el
+ * lead SOLO si pertenece al coach de la sesión. Un uuid mal formado hace que PostgREST devuelva
+ * error (22P02) ⇒ `data` null ⇒ mismo «no encontrada» que un lead ajeno. Nunca se distingue
+ * "no existe" de "no es tuyo".
+ *
+ * La conversión NO pasa por acá: su verificación (lead + alumno destino) vive en el servicio, que
+ * es el mismo código que corre el bridge móvil.
  */
 async function resolveOwnedLead(
     leadId: string
@@ -47,7 +48,7 @@ async function resolveOwnedLead(
 
     const { data } = await supabase
         .from('coach_leads')
-        .select('id, status, referred_by_client_id, referral_source, referral_card_kind')
+        .select('id, status')
         .eq('id', leadId)
         .eq('coach_id', user.id)
         .maybeSingle()
@@ -96,81 +97,30 @@ export async function dismissLeadAction(leadId: string): Promise<LeadActionResul
 /**
  * Cierre del loop de growth: el coach creó el alumno desde la solicitud.
  *
- * Copia la atribución de la tarjeta compartida (`referred_by_client_id` / `referral_source` /
- * `referral_card_kind`) del lead a la fila `clients`. POR QUÉ acá y no en el alta: cuando el
- * desconocido dejó la solicitud todavía NO existía un alumno al que atribuir, y esas tres
- * columnas de `clients` no tienen grant de usuario (migración 20260819223729) ⇒ service_role.
- *
- * La copia NO es fatal: si falla, el alumno ya existe y el lead igual queda convertido. Perder
- * el crédito del referente es malo; dejar el inbox mintiendo es peor.
+ * La lógica (copia de atribución a `clients`, `converted_client_id`, `coach_client_referred` y
+ * `coach_lead_converted`) vive en `services/coach/leads.service.ts` — el MISMO camino que corre el
+ * bridge móvil cuando la app manda `clientId` en el PATCH. Acá solo queda lo que es de Next:
+ * resolver la sesión y revalidar la ruta.
  */
 export async function markLeadConvertedAction(
     leadId: string,
     clientId: string
 ): Promise<LeadActionResult> {
-    const owned = await resolveOwnedLead(leadId)
-    if ('error' in owned) return owned
-    const { coachId, lead } = owned
-
     const supabase = await createClient()
-    // El alumno destino tiene que ser del MISMO coach: el uuid viene del navegador (respuesta de
-    // `createClientAction`) y no se confía. Lectura user-scoped ⇒ la RLS de `clients` es el techo.
-    const { data: client } = await supabase
-        .from('clients')
-        .select('id, referred_by_client_id')
-        .eq('id', clientId)
-        .eq('coach_id', coachId)
-        .maybeSingle()
+    const {
+        data: { user },
+    } = await supabase.auth.getUser()
+    if (!user) return { error: NOT_AUTHED }
 
-    if (!client) return { error: 'Alumno no encontrado.' }
+    const result = await convertCoachLead(
+        { userDb: supabase, admin: createServiceRoleClient() },
+        user.id,
+        leadId,
+        clientId,
+        { surface: 'web' },
+    )
 
-    const admin = createServiceRoleClient()
-    const hasAttribution = Boolean(lead.referred_by_client_id)
-
-    // Solo si el alumno no traía atribución propia: convertir un lead sobre una ficha que ya
-    // tiene referente le robaría el crédito al primero.
-    if (hasAttribution && !client.referred_by_client_id) {
-        const { error: copyError } = await admin
-            .from('clients')
-            .update({
-                referred_by_client_id: lead.referred_by_client_id,
-                referral_source: lead.referral_source,
-                referral_card_kind: lead.referral_card_kind,
-            })
-            .eq('id', clientId)
-            .eq('coach_id', coachId)
-
-        if (copyError) console.error('[coach-leads] copia de atribución falló:', copyError.message)
-    }
-
-    const { error } = await admin
-        .from('coach_leads')
-        .update({ status: 'converted', converted_client_id: clientId })
-        .eq('id', leadId)
-        .eq('coach_id', coachId)
-
-    if (error) return { error: 'No pudimos marcar la solicitud como convertida.' }
-
-    // Mismo evento que emitía el alta directa standalone antes de la reversión (F6.3 de
-    // docs/specs/workout-share): el embudo de la tarjeta compartida se sigue midiendo end-to-end,
-    // ahora con el coach como intermediario. Props del COACH y de la tarjeta, nada del alumno.
-    if (hasAttribution) {
-        await capturePostHogServerEvent({
-            event: 'coach_client_referred',
-            distinctId: coachId,
-            properties: {
-                referred_by_client_id: lead.referred_by_client_id,
-                card_kind: lead.referral_card_kind,
-                source: lead.referral_source,
-            },
-        })
-    }
-
-    await capturePostHogServerEvent({
-        event: 'coach_lead_converted',
-        distinctId: coachId,
-        properties: { referred: hasAttribution },
-    })
+    if (!result.ok) return { error: result.error }
 
     revalidatePath('/coach/clients')
     return { ok: true }

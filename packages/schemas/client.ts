@@ -25,6 +25,27 @@ export const CreateClientSchema = z.object({
 })
 export type CreateClientInput = z.infer<typeof CreateClientSchema>
 
+/**
+ * Respuesta del alta de alumno desde la app (`POST /api/mobile/coach/clients`).
+ *
+ * POR QUÉ vive acá y no en cada pantalla RN: el `clientId` que devuelve el alta es lo que le
+ * permite al PATCH de `coach_leads` cerrar el loop de atribución (copiar
+ * `referred_by_client_id`/`referral_source`/`referral_card_kind` a `clients` y emitir
+ * `coach_client_referred`). Si el shape estuviera duplicado en los dos consumidores RN
+ * (`CreateClientModal` y `CoachDashboardSections`), agregar un campo obligaría a tocarlo en dos
+ * lugares y el que se olvidara quedaría mudo en runtime.
+ *
+ * `clientId` es el uuid de la fila `clients` recién creada (== el id del usuario de auth).
+ */
+export const MobileCreateClientResponseSchema = z.object({
+    ok: z.literal(true),
+    clientId: z.string(),
+    clientName: z.string(),
+    newClientPhone: z.string().nullable(),
+    loginUrl: z.string(),
+})
+export type MobileCreateClientResponse = z.infer<typeof MobileCreateClientResponseSchema>
+
 export const UpdateClientDataSchema = z.object({
     client_id: z.string().uuid(),
     full_name: z.string().min(2, 'Nombre muy corto').max(100),

@@ -1,6 +1,6 @@
 import { publicAppUrl } from '@/lib/site-url'
 import { NextRequest, NextResponse } from 'next/server'
-import { CreateClientSchema } from '@eva/schemas'
+import { CreateClientSchema, type MobileCreateClientResponse } from '@eva/schemas'
 import { z } from 'zod'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Tables } from '@/lib/database.types'
@@ -374,10 +374,16 @@ export async function POST(request: NextRequest) {
         console.error('Welcome email delivery error:', emailResult.error)
     }
 
+    // `clientId` (coach-leads W3, cierre de la deuda declarada): sin el uuid de la fila recién
+    // creada, el PATCH `converted` del inbox móvil no tiene a quién copiarle la atribución de la
+    // tarjeta compartida ni sobre quién emitir `coach_client_referred`. Es el MISMO id del usuario
+    // de auth, ya público para el coach (es su alumno) — no expone nada que la cartera no muestre.
+    // El shape completo vive en `@eva/schemas` (`MobileCreateClientResponse`).
     return NextResponse.json({
         ok: true,
+        clientId: newAuthUser.user.id,
         clientName: parsed.data.full_name,
         newClientPhone: parsed.data.phone || null,
         loginUrl,
-    })
+    } satisfies MobileCreateClientResponse)
 }

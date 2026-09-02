@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { CoachLeadUpdateRequestSchema } from '@eva/schemas'
 import { updateCoachLeadStatus } from '@/services/coach/leads.service'
-import { capturePostHogServerEvent } from '@/lib/posthog/server-capture'
 import { resolveMobileLeadsContext } from '../_auth'
 
 /**
@@ -10,6 +9,12 @@ import { resolveMobileLeadsContext } from '../_auth'
  * Estados aceptados: `contacted`, `converted`, `dismissed` (el CHECK de la tabla también admite
  * `new`, pero ese es el estado inicial que escribe `/join` y volver a él reabriría una solicitud
  * ya trabajada).
+ *
+ * `converted` acepta un `clientId` OPCIONAL —el alumno que el alta móvil acaba de crear— y con él
+ * corre el MISMO cierre que el panel web: copia de atribución de la tarjeta compartida a `clients`,
+ * `converted_client_id` y `coach_client_referred` (todo en `services/coach/leads.service.ts`, una
+ * sola implementación). Opcional y no obligatorio a propósito: un binario ya publicado manda
+ * `converted` a secas y ese camino tiene que seguir cerrando la solicitud.
  *
  * La UI NUNCA autoriza: la pertenencia la verifica el servicio con el cliente del usuario (RLS de
  * `coach_leads`) ANTES de que service_role escriba, y el `where` del write repite `coach_id`. Un
@@ -32,33 +37,23 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
         ctx.userId,
         id,
         parsed.data.status,
+        { clientId: parsed.data.clientId ?? null, surface: 'mobile' },
     )
 
     if (!result.ok) {
+        // `CLIENT_NOT_FOUND` es 404 igual que el lead ajeno: el alumno que mandó la app no es de
+        // este coach (o no existe). No se distingue de "no existe" y NO se escribe nada — cerrar
+        // la solicitud igual dejaría el inbox diciendo que hay un alumno atribuido que no está.
+        const notFound = result.code === 'NOT_FOUND' || result.code === 'CLIENT_NOT_FOUND'
         return NextResponse.json(
             { error: result.error, code: result.code },
-            { status: result.code === 'NOT_FOUND' ? 404 : 500 },
+            { status: notFound ? 404 : 500 },
         )
     }
 
-    // Mismo evento que emite el panel web al convertir. Props del COACH, nada del solicitante
-    // (Ley 21.719). `referred` es lo único que interesa del embudo de la tarjeta compartida.
-    //
-    // OJO: acá NO viaja `coach_client_referred` ni la copia de atribución a `clients` — las dos
-    // necesitan el `clients.id` recién creado, que el alta móvil todavía no devuelve. Ese cierre
-    // sigue siendo del panel web (`markLeadConvertedAction`).
-    if (parsed.data.status === 'converted') {
-        await capturePostHogServerEvent({
-            event: 'coach_lead_converted',
-            distinctId: ctx.userId,
-            properties: {
-                // El nombre del referente puede venir null aunque haya atribución (el embed pasa
-                // por la RLS de `clients`), así que `referral_source` es la señal más fiel.
-                referred: Boolean(result.lead.referralSource || result.lead.referrerName),
-                surface: 'mobile',
-            },
-        })
-    }
-
+    // Los eventos (`coach_lead_converted` y, con `clientId`, `coach_client_referred`) los emite el
+    // servicio: es el único lugar que sabe si el lead traía atribución mirando la COLUMNA
+    // (`referred_by_client_id`) y no el embed del referente, que puede venir null por la RLS de
+    // `clients` aunque la atribución exista.
     return NextResponse.json({ ok: true, lead: result.lead })
 }

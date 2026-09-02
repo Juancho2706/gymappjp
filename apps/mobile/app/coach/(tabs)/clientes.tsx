@@ -458,13 +458,18 @@ export default function ClientesScreen() {
    * El alta se completó viniendo de una solicitud ⇒ la solicitud queda `converted` y sale de la
    * bandeja. Best-effort a propósito: el alumno YA existe, y perder la marca del inbox es mucho
    * menos grave que mostrarle al coach un error por algo que ya salió bien.
+   *
+   * El `clientId` del alumno recién creado viaja al servidor: con él, el PATCH copia la atribución
+   * de la tarjeta compartida a la ficha del alumno y emite `coach_client_referred` — el mismo
+   * cierre que hace el panel web. Sin alta real no se llama: el muro de cupo también avisa
+   * «cartera cambiada» cuando el coach archiva a alguien, y eso NO es una conversión.
    */
-  function markPrefilledLeadConverted() {
+  function markPrefilledLeadConverted(clientId: string) {
     const pending = leadPrefill
     if (!pending) return
     setLeadPrefill(null)
     setLeads((prev) => prev.filter((lead) => lead.id !== pending.leadId))
-    void setCoachLeadStatus(pending.leadId, 'converted').catch(() => {})
+    void setCoachLeadStatus(pending.leadId, 'converted', clientId).catch(() => {})
   }
 
   const lastActionsClientRef = useRef<DirectoryClient | null>(null)
@@ -1103,7 +1108,12 @@ export default function ClientesScreen() {
         visible={showCreate}
         guided={guidedCreate}
         onClose={() => { setShowCreate(false); setGuidedCreate(false); setLeadPrefill(null) }}
-        onCreated={() => { markPrefilledLeadConverted(); fetchDirectoryData().catch(() => {}) }}
+        onCreated={(created) => {
+          // Sin `created` no hubo alta (el coach solo liberó cupo archivando): se refresca la
+          // cartera y nada más.
+          if (created) markPrefilledLeadConverted(created.clientId)
+          fetchDirectoryData().catch(() => {})
+        }}
         initialValues={
           leadPrefill
             ? { fullName: leadPrefill.fullName, email: leadPrefill.email, phone: leadPrefill.phone }

@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
 import { Archive, CheckCircle2, ChevronDown, ChevronRight, Eye, EyeOff, Lock, MessageCircle, UserPlus, X } from 'lucide-react-native'
 import type { LucideIcon } from 'lucide-react-native'
-import { CreateClientSchema, personaNoun, type Persona } from '@eva/schemas'
+import { CreateClientSchema, personaNoun, type MobileCreateClientResponse, type Persona } from '@eva/schemas'
 import { type SubscriptionTier } from '@eva/tiers'
 import { Button, Input } from '../../../components'
 import { toast } from '../../Toast'
@@ -80,7 +80,12 @@ type CreateWorkspace = {
   orgId: string | null
 }
 
-type CreateClientResponse = { ok: true; clientName: string; newClientPhone: string | null; loginUrl: string | null }
+/**
+ * Respuesta del alta. El shape vive en `@eva/schemas` (`MobileCreateClientResponse`) porque el
+ * `clientId` que devuelve lo consume el cierre de solicitudes (`coach_leads`), no solo esta
+ * pantalla: duplicar el tipo acá dejaría al otro consumidor mudo cuando el contrato cambie.
+ */
+type CreateClientResponse = MobileCreateClientResponse
 
 /**
  * Los 3 pasos del alta guiada mapeados a las fases del sheet: el orden lo decide `nextGuidedStep`
@@ -192,7 +197,13 @@ export function CreateClientModal({
 }: {
   visible: boolean
   onClose: () => void
-  onCreated: () => void
+  /**
+   * El alta terminó OK ⇒ llega con el alumno recién creado (`clientId`, del contrato del endpoint).
+   * También se llama SIN argumento cuando lo que cambió es la cartera y no hubo alta (el coach
+   * archivó a alguien para liberar cupo desde el muro): el caller distingue los dos casos por la
+   * presencia del argumento, y así «convertir una solicitud» no se dispara por un archivado.
+   */
+  onCreated: (created?: { clientId: string }) => void
   theme: any
   /**
    * Alta GUIADA — el paso 4 de la guía del onboarding v2 («Invita a tu primer {alumno}»), que en
@@ -463,8 +474,9 @@ export function CreateClientModal({
           workspace,
         },
       })
-      // Alumno creado: refrescar la cartera por debajo.
-      onCreated()
+      // Alumno creado: refrescar la cartera por debajo y avisar QUIÉN se creó (el caller lo usa
+      // para cerrar la solicitud de la que salió el alta, con su atribución).
+      onCreated({ clientId: res.clientId })
       // La credencial que el mensaje puede llevar: el correo normalizado que se mandó al servidor y
       // la clave temporal que ese alta acaba de fijar (generada en guiado, tipeada en el clásico).
       const credential = { email: parsed.data.email.toLowerCase(), tempPassword: parsed.data.temp_password }

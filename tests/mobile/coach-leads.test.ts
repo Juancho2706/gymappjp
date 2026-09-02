@@ -77,6 +77,31 @@ describe('red', () => {
             body: { status: 'contacted' },
         })
     })
+
+    it('convertir con el alumno recién creado manda `clientId` (cierre de la atribución)', async () => {
+        const updated = { ...LEAD, status: 'converted' as const }
+        const { setCoachLeadStatus, apiFetch } = await setup({ ok: true, lead: updated })
+
+        await setCoachLeadStatus('lead-1', 'converted', 'client-nuevo')
+
+        expect(apiFetch).toHaveBeenCalledWith('/api/mobile/coach/leads/lead-1', {
+            method: 'PATCH',
+            authenticated: true,
+            body: { status: 'converted', clientId: 'client-nuevo' },
+        })
+    })
+
+    it('sin alumno la clave NO viaja: el server la valida `strict` y un null rebotaría el PATCH', async () => {
+        const updated = { ...LEAD, status: 'converted' as const }
+        const { setCoachLeadStatus, apiFetch } = await setup({ ok: true, lead: updated })
+
+        await setCoachLeadStatus('lead-1', 'converted')
+        await setCoachLeadStatus('lead-1', 'converted', null)
+
+        for (const call of apiFetch.mock.calls) {
+            expect((call as unknown as [string, { body: unknown }])[1].body).toEqual({ status: 'converted' })
+        }
+    })
 })
 
 describe('formatLeadDate (tabla fija, sin locale)', () => {

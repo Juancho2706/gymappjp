@@ -13,6 +13,11 @@ vi.mock('@/services/coach/leads.service', () => ({
     updateCoachLeadStatus: (...args: unknown[]) => updateCoachLeadStatus(...args),
 }))
 
+/**
+ * Los eventos del cierre (`coach_lead_converted` / `coach_client_referred`) los emite el SERVICIO,
+ * no este route: acá se mockea solo para probar que el handler no volvió a emitirlos por su cuenta
+ * (dos emisiones por conversión inflarían el embudo).
+ */
 vi.mock('@/lib/posthog/server-capture', () => ({
     capturePostHogServerEvent: (...args: unknown[]) => capture(...args),
 }))
@@ -60,8 +65,9 @@ describe('PATCH /api/mobile/coach/leads/[id]', () => {
             'coach-1',
             'lead-1',
             'contacted',
+            { clientId: null, surface: 'mobile' },
         )
-        // Solo `converted` emite evento: contactar o descartar no son conversiones del embudo.
+        // El route NO emite eventos: los emite el servicio, que es el que sabe si hubo atribución.
         expect(capture).not.toHaveBeenCalled()
     })
 
@@ -71,18 +77,71 @@ describe('PATCH /api/mobile/coach/leads/[id]', () => {
         expect(resolveCtx).toHaveBeenCalledWith(expect.anything(), 'mutation')
     })
 
-    it('`converted` emite coach_lead_converted con props del coach y sin PII', async () => {
+    it('`converted` con `clientId` baja el alumno al servicio (ahí se copia la atribución)', async () => {
         updateCoachLeadStatus.mockResolvedValue({
             ok: true,
             lead: { ...LEAD, status: 'converted', referralSource: 'share_card' },
         })
 
-        await PATCH(req({ status: 'converted' }), params)
+        const res = await PATCH(
+            req({ status: 'converted', clientId: '2f1c4e3a-9d5b-4a7c-8e21-6b0d3f5a1c94' }),
+            params,
+        )
 
-        expect(capture).toHaveBeenCalledWith({
-            event: 'coach_lead_converted',
-            distinctId: 'coach-1',
-            properties: { referred: true, surface: 'mobile' },
+        expect(res.status).toBe(200)
+        expect(updateCoachLeadStatus).toHaveBeenCalledWith(
+            { userDb: { user: true }, admin: { admin: true } },
+            'coach-1',
+            'lead-1',
+            'converted',
+            { clientId: '2f1c4e3a-9d5b-4a7c-8e21-6b0d3f5a1c94', surface: 'mobile' },
+        )
+        // Una sola emisión por conversión: la del servicio. El route ya no duplica el evento.
+        expect(capture).not.toHaveBeenCalled()
+    })
+
+    it('compatibilidad OTA: `converted` sin `clientId` sigue moviendo el estado', async () => {
+        updateCoachLeadStatus.mockResolvedValue({ ok: true, lead: { ...LEAD, status: 'converted' } })
+
+        const res = await PATCH(req({ status: 'converted' }), params)
+
+        expect(res.status).toBe(200)
+        expect(updateCoachLeadStatus).toHaveBeenCalledWith(
+            expect.anything(),
+            'coach-1',
+            'lead-1',
+            'converted',
+            { clientId: null, surface: 'mobile' },
+        )
+    })
+
+    it('`clientId` que no es un uuid, o pegado a un estado que no convierte, es 400 sin tocar la DB', async () => {
+        for (const body of [
+            { status: 'converted', clientId: 'no-es-uuid' },
+            { status: 'dismissed', clientId: '2f1c4e3a-9d5b-4a7c-8e21-6b0d3f5a1c94' },
+        ]) {
+            const res = await PATCH(req(body), params)
+            expect(res.status).toBe(400)
+        }
+        expect(updateCoachLeadStatus).not.toHaveBeenCalled()
+    })
+
+    it('el alumno no es del coach → 404 y la solicitud NO se cierra', async () => {
+        updateCoachLeadStatus.mockResolvedValue({
+            ok: false,
+            code: 'CLIENT_NOT_FOUND',
+            error: 'Alumno no encontrado.',
+        })
+
+        const res = await PATCH(
+            req({ status: 'converted', clientId: '2f1c4e3a-9d5b-4a7c-8e21-6b0d3f5a1c94' }),
+            params,
+        )
+
+        expect(res.status).toBe(404)
+        await expect(res.json()).resolves.toEqual({
+            error: 'Alumno no encontrado.',
+            code: 'CLIENT_NOT_FOUND',
         })
     })
 
