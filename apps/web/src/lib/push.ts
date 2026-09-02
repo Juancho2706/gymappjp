@@ -14,7 +14,13 @@ import { createServiceRoleClient } from './supabase/admin-client'
  *   si `screen` falta se cae a `url` (comportamiento previo).
  */
 
-export type PushEventKey = 'meal_reminder' | 'program_assigned' | 'checkin_received' | 'checkin_due'
+export type PushEventKey =
+    | 'meal_reminder'
+    | 'program_assigned'
+    | 'checkin_received'
+    | 'checkin_due'
+    /** Solicitud nueva en `/join/<código>` (coach-leads W3.3). Destinatario: el COACH. */
+    | 'lead_received'
 
 export type PushPayload = {
     /** Evento del catálogo — gobierna el kill-switch y la telemetría. */

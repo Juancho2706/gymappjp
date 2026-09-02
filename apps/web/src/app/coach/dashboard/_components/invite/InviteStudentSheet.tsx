@@ -5,7 +5,7 @@ import { Check, Copy, Link2, Share2 } from 'lucide-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { toast } from 'sonner'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet'
-import { buildStudentAppUrl, buildStudentLoginUrl } from '@/lib/coach/invite-code'
+import { studentAppOrigin } from '@/lib/coach/invite-code'
 import { cn } from '@/lib/utils'
 
 interface Props {
@@ -83,26 +83,39 @@ export function useCopiedFlag() {
     return [copied, setCopied] as const
 }
 
+/**
+ * El ÚNICO link que el coach reparte (coach-leads W4.1): `/join/{código}`.
+ *
+ * Antes esta hoja emitía dos: `/c/{código}/login` (copiar + QR) y `/c/{código}` (WhatsApp), los dos
+ * del árbol de la app del alumno. Desde que `/join` standalone dejó de dar de alta y pasó a ser una
+ * SOLICITUD (decisión del owner 21-08), ese es el destino correcto para un desconocido: el coach
+ * filtra a quién acepta. Un alumno que YA tiene cuenta entra por el link «¿Ya tienes cuenta?
+ * Entrar» que la propia página `/join` le ofrece, así que no queda nadie afuera.
+ */
+export function buildJoinRequestUrl(inviteCode: string): string {
+    return `${studentAppOrigin()}/join/${inviteCode}`
+}
+
 export function InviteStudentSheet({ open, onOpenChange, inviteCode }: Props) {
     const isDesktop = useIsDesktopMd()
     // Los dos copiados son independientes: copiar el link no debe apagar el "Código copiado".
     const [codeCopied, setCodeCopied] = useCopiedFlag()
     const [linkCopied, setLinkCopied] = useCopiedFlag()
 
-    const loginUrl = buildStudentLoginUrl(inviteCode)
+    const joinUrl = buildJoinRequestUrl(inviteCode)
 
     const copyCode = async () => {
         if (await copyToClipboard(inviteCode)) setCodeCopied(true)
     }
 
     const copyLink = async () => {
-        if (await copyToClipboard(loginUrl)) setLinkCopied(true)
+        if (await copyToClipboard(joinUrl)) setLinkCopied(true)
     }
 
     const shareWhatsApp = () => {
         // El código va en SU PROPIA LÍNEA: pegado al final de la URL, WhatsApp se comía el punto
         // dentro del enlace y al alumno le llegaba un link roto (reportado 2026-08-12).
-        const message = `Entrena conmigo: ${buildStudentAppUrl(inviteCode)}\nTu código: ${inviteCode}`
+        const message = `Entrena conmigo: ${joinUrl}\nTu código: ${inviteCode}`
         window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, '_blank', 'noopener,noreferrer')
     }
 
@@ -221,7 +234,7 @@ export function InviteStudentSheet({ open, onOpenChange, inviteCode }: Props) {
                             className="shrink-0 rounded-[12px] border border-black/10 p-[7px]"
                             style={{ background: '#FFFFFF' }}
                         >
-                            <QRCodeSVG value={loginUrl} size={76} level="M" />
+                            <QRCodeSVG value={joinUrl} size={76} level="M" />
                         </div>
                         <div className="min-w-0">
                             <div className="text-[13.5px] font-bold text-strong">O que lo escanee</div>

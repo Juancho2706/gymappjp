@@ -9,6 +9,7 @@ import { resolveJoinReferral } from '../_lib/join-referral'
 import { buildLeadContactFilter, leadDedupSince } from '../_lib/lead-dedup'
 import { capturePostHogServerEvent } from '@/lib/posthog/server-capture'
 import { notifyCoachOfLead } from '@/lib/email/coach-lead-notification'
+import { notifyCoachOfLeadPush } from '@/lib/push-events'
 
 /**
  * `/join/[código]` con invitación STANDALONE ya no da de alta a nadie: deja una SOLICITUD.
@@ -154,6 +155,15 @@ export async function requestJoinAction(
         email: parsed.data.email ?? null,
         message: parsed.data.message ?? null,
         referrerName,
+    })
+
+    // Push nativa al coach (W3.3). Va DESPUÉS del correo y con `await` por lo mismo: Vercel congela
+    // la invocación al responder y un fire-and-forget moriría ahí. Best-effort — el helper nunca
+    // lanza, y si el coach no tiene la app instalada simplemente no hay token al que enviar.
+    // Solo el nombre viaja en el cuerpo: el teléfono y el correo quedan en el mail y en el panel.
+    await notifyCoachOfLeadPush({
+        coachId: invite.coachId,
+        fullName: parsed.data.full_name,
     })
 
     // Métrica del embudo del coach. Props mínimas a propósito (Ley 21.719): NADA del solicitante

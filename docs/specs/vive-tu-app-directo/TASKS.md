@@ -336,10 +336,21 @@ pinnea. **W1+W2 = un solo deploy web; OTA de RN antes.**
   intermedios de otros workers) y salió **VERDE** en las corridas posteriores del mismo día, con el árbol
   quieto. **Pendiente:** la corrida consolidada de la suite completa post-merge, que registra el jefe en
   [TEST_STATUS](../../testing/TEST_STATUS.md).
-- [ ] V3.12 (opcional, deuda declarada) Espejo RN: `validate-student-workspace/route.ts:61` responde 403
-  `COACH_ACCOUNT` cuando el bearer es un coach, y `app/alumno/codigo` muestra el mismo mensaje con CTA a la
-  pantalla de coach. **NO hecha en esta ola** (era opcional desde el día 1): el coach que entra con su cuenta
-  al código de alumno en RN sigue viendo el mensaje genérico. Deuda viva.
+- [x] V3.12 **Hecha 02-09 (espejo RN), sin commit.** El coach que entra con SU cuenta por el código de sus
+  alumnos ya no ve «Esta cuenta no pertenece a la plataforma de este coach»: ve el mismo mensaje que la web.
+  - **Corrección al enunciado original:** `validate-student-workspace/route.ts` NUNCA emitió un 403
+    `COACH_ACCOUNT` — responde `ACCESS_DENIED`. El copy `coach_account` vive solo en el login WEB
+    (`c/[coach_slug]/login/_actions/login.actions.ts` + `lib/auth/student-login-messages.ts`). El espejo se
+    resolvió por eso en el CLIENTE, sin tocar el route (que además está fuera de la zona de esta tanda).
+  - `apps/mobile/lib/student-login-notice.ts` (puro): `coachAccountLoginMessage(persona)` = primera oración
+    VERBATIM de `coachAccountMessage` web + una salida propia de la app (`COACH_ACCOUNT_LOGIN_EXIT`, «Vuelve
+    al inicio y entra por “Soy coach”»; el botón «Elegir otro rol» del login solo existe con `?switch=1`, así
+    que nombrarlo mentiría la mitad de las veces).
+  - `apps/mobile/app/(auth)/login.tsx`: ante `ACCESS_DENIED` y **con la sesión todavía viva** se consulta
+    `coaches` con la sesión del propio usuario (policy self, jamás service role); si hay fila, ese es el
+    mensaje. Fail-soft: cualquier error ⇒ copy genérico de siempre. El login feliz no paga consultas extra.
+  - Test de paridad: `tests/mobile/student-login-notice.test.ts` compara el mensaje RN contra
+    `coachAccountMessage` de la web para las 5 personas + null.
 - [x] V3.13 — **Hecha 26-08 por la hermana (FCN W1.4) en el commit `12619143`, post-merge de VTA W3, con GO
   del jefe: un solo escritor, regla cumplida.** El worker de VTA W3 (`web-login`) **no** agregó el call site
   por orden explícita y dejó marcado en el `it` del camino feliz de V3.6 dónde iba el assert; la línea y su
@@ -427,7 +438,7 @@ pinnea. **W1+W2 = un solo deploy web; OTA de RN antes.**
   (sub-viñeta 0 corregida + `last_verified`) y `MOBILE_PARITY.md` (blockquote de la ola + `last_verified
   "2026-08-26 @ e7ed1de9"`).** **`TEST_STATUS.md` también hecho el 26-08** (sección «Última corrida
   completa: 2026-08-26», 589 archivos / 7.747 tests, commit `79537147`).
-- [ ] V5.4 Insight PostHog «Paso 2: pidió → entró → volvió» por `device` y `mode` + `student_login_coach_account`
+- [ ] V5.4 (se arma en PostHog, owner) Insight PostHog «Paso 2: pidió → entró → volvió» por `device` y `mode` + `student_login_coach_account`
   + `add_student_self_blocked`. Deuda que se cobra de paso si hay margen: W8.5.2 (espejo a PostHog desde
   `recordOnboardingEvent`). **La deuda W8.5.2 ya estaba cerrada** (el espejo vive en `recordOnboardingEvent`)
   y el 26-08 se completó: los dos **insert directos** que quedaban fuera del espejo

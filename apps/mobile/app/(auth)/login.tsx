@@ -24,6 +24,7 @@ import { supabase } from '../../lib/supabase'
 import { ApiError, validateStudentWorkspace } from '../../lib/api'
 import { translateAuthError } from '../../lib/auth-errors'
 import { getStudentAccountStatus } from '../../lib/student-account-status'
+import { coachAccountLoginMessage } from '../../lib/student-login-notice'
 import {
   GoogleSignInError,
   isGoogleSignInAvailable,
@@ -248,6 +249,13 @@ export default function LoginScreen() {
           router.replace('/alumno/suspended')
           return
         }
+        // VTA-3.12 (espejo RN del `coach_account` web): un ACCESS_DENIED puede ser un extraño…
+        // o el propio COACH entrando con SU cuenta por el código de sus alumnos. Se resuelve ACÁ,
+        // con la sesión todavía viva (después de `undoSignIn` ya no hay a quién preguntarle) y
+        // solo en el camino de error: el login feliz no paga ninguna consulta extra.
+        const coachAccountNotice =
+          apiError?.code === 'ACCESS_DENIED' ? await resolveCoachAccountNotice() : null
+
         // Un scope denegado o un token confirmado como inválido no debe dejar sesión viva —
         // pero equivocarse de login (credenciales de coach en la puerta del alumno) tampoco
         // puede revocarle el refresh token en TODOS sus dispositivos: scope local (W4.1).
@@ -262,7 +270,7 @@ export default function LoginScreen() {
           // fallido tampoco puede quedarse con su lugar.
           await undoSignIn()
         }
-        setError(studentWorkspaceErrorCopy(apiError))
+        setError(coachAccountNotice ?? studentWorkspaceErrorCopy(apiError))
         setLoading(false)
         return
       }
@@ -805,6 +813,31 @@ export default function LoginScreen() {
       ) : null}
     </View>
   )
+}
+
+/**
+ * VTA-3.12 — ¿la sesión recién abierta es la de un COACH? La fila `coaches` se lee con la sesión
+ * del propio usuario (`coaches` tiene policy self), nunca con service role, y solo se pregunta en
+ * el camino de error del login de alumno.
+ *
+ * Devuelve `null` ante cualquier duda (sin sesión, sin fila, error de red): un fallo acá jamás
+ * puede empeorar el mensaje — se cae al copy genérico de siempre.
+ */
+async function resolveCoachAccountNotice(): Promise<string | null> {
+  try {
+    const { data } = await supabase.auth.getSession()
+    const userId = data.session?.user?.id
+    if (!userId) return null
+    const { data: coach } = await supabase
+      .from('coaches')
+      .select('persona')
+      .eq('id', userId)
+      .maybeSingle()
+    if (!coach) return null
+    return coachAccountLoginMessage((coach as { persona?: string | null }).persona ?? null)
+  } catch {
+    return null
+  }
 }
 
 function studentWorkspaceErrorCopy(error: ApiError | null): string {

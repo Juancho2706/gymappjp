@@ -10,6 +10,7 @@ import {
   ChevronDown,
   ChevronUp,
   FileUp,
+  Inbox,
   LayoutGrid,
   Link as LinkIcon,
   MoreVertical,
@@ -45,6 +46,14 @@ import {
   statusMeta as clientStatusMeta,
 } from '../../../components/coach/directory/directory-shared'
 import { countCapClients } from '../../../lib/client-cap'
+import {
+  consumePendingLeadConversion,
+  countNewLeads,
+  getCoachLeads,
+  setCoachLeadStatus,
+  type CoachLead,
+  type PendingLeadConversion,
+} from '../../../lib/leads'
 import {
   buildStats,
   filterClients,
@@ -365,6 +374,18 @@ export default function ClientesScreen() {
   const [actionsClient, setActionsClient] = useState<DirectoryClient | null>(null)
   const [unarchiveCapacity, setUnarchiveCapacity] = useState<ClientUnarchiveCapacity | null>(null)
   /**
+   * Bandeja «Solicitudes» (coach-leads W3.2). Vive ACÁ y no en su pantalla porque el chip con el
+   * contador es la única pista de que existe: sin él, un coach que nunca abre el correo no se
+   * entera de que alguien le escribió. Carga BEST-EFFORT — un fallo del inbox jamás puede tapar
+   * la cartera (por eso `catch` silencioso y lista vacía).
+   */
+  const [leads, setLeads] = useState<CoachLead[]>([])
+  /**
+   * Solicitud que el coach mandó a convertir desde `/coach/leads`: prellena el alta y, si el alta
+   * se completa, la marca `converted`. Se consume UNA vez (el handoff se vacía al leerlo).
+   */
+  const [leadPrefill, setLeadPrefill] = useState<PendingLeadConversion | null>(null)
+  /**
    * Paso 4 de la guía del onboarding v2 («Invita a tu primer {alumno}») — QA del owner 22-08,
    * hallazgo 5: el paso aterrizaba en el directorio y ahí terminaba el acompañamiento.
    *
@@ -386,7 +407,7 @@ export default function ClientesScreen() {
    * entrada guiada ESPERA a que la cartera y el perfil estén cargados; el «+» de siempre no tiene
    * el problema (se toca después de la carga).
    */
-  const { invite: inviteParam, primera: primeraParam } = useLocalSearchParams<{ invite?: string; primera?: string }>()
+  const { invite: inviteParam, primera: primeraParam, lead: leadParam } = useLocalSearchParams<{ invite?: string; primera?: string; lead?: string }>()
   const guidedEntry = inviteParam === '1' || primeraParam === '1'
   const inviteConsumedRef = useRef(false)
   useEffect(() => {
@@ -405,6 +426,46 @@ export default function ClientesScreen() {
     // deja el destino re-entrable (el efecto rearma el ref en la próxima corrida).
     router.setParams({ invite: '', primera: '' })
   }, [guidedEntry, loading, profileReady, router])
+
+  /**
+   * Entrada desde «Sumar a X» de `/coach/leads` (coach-leads W3.2). El `?lead=1` es solo la señal:
+   * los datos del solicitante viajan por el handoff en memoria (`lib/leads`), NO por la URL — son
+   * datos de un tercero y no tienen por qué quedar en el historial del router.
+   *
+   * Espera los mismos insumos que la entrada guiada (cartera + perfil): sin ellos el pre-check de
+   * cupo de `CreateClientModal` no puede decidir y el coach en el tope vería el formulario en vez
+   * del muro.
+   */
+  const leadEntry = leadParam === '1'
+  const leadConsumedRef = useRef(false)
+  useEffect(() => {
+    if (!leadEntry) {
+      leadConsumedRef.current = false
+      return
+    }
+    if (leadConsumedRef.current) return
+    if (loading || !profileReady) return
+    leadConsumedRef.current = true
+    const pending = consumePendingLeadConversion()
+    router.setParams({ lead: '' })
+    if (!pending) return
+    setLeadPrefill(pending)
+    setGuidedCreate(false)
+    setShowCreate(true)
+  }, [leadEntry, loading, profileReady, router])
+
+  /**
+   * El alta se completó viniendo de una solicitud ⇒ la solicitud queda `converted` y sale de la
+   * bandeja. Best-effort a propósito: el alumno YA existe, y perder la marca del inbox es mucho
+   * menos grave que mostrarle al coach un error por algo que ya salió bien.
+   */
+  function markPrefilledLeadConverted() {
+    const pending = leadPrefill
+    if (!pending) return
+    setLeadPrefill(null)
+    setLeads((prev) => prev.filter((lead) => lead.id !== pending.leadId))
+    void setCoachLeadStatus(pending.leadId, 'converted').catch(() => {})
+  }
 
   const lastActionsClientRef = useRef<DirectoryClient | null>(null)
   if (actionsClient) lastActionsClientRef.current = actionsClient
@@ -438,6 +499,24 @@ export default function ClientesScreen() {
       return () => { active = false }
     }, [workspace.ready, workspace.kind, workspace.teamId, workspace.orgId]),
   )
+  /**
+   * Solicitudes del coach. Se relee en CADA foco (volver de `/coach/leads` tiene que dejar el
+   * contador al día) y es best-effort: sin red, el chip simplemente no aparece.
+   *
+   * Sin scope de workspace a propósito, igual que la web: `coach_leads` pertenece al coach como
+   * persona (solo el `/join` standalone las genera), y filtrarlas por el equipo activo le
+   * escondería solicitudes propias a un coach que además está en un pool.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      let active = true
+      void getCoachLeads()
+        .then((rows) => { if (active) setLeads(rows) })
+        .catch(() => { if (active) setLeads([]) })
+      return () => { active = false }
+    }, []),
+  )
+
   useFocusEffect(
     useCallback(() => {
       if (!workspace.teamId) { setTeamSlug(''); return }
@@ -569,6 +648,8 @@ export default function ClientesScreen() {
    * Lo usan el alta (pre-check del muro en `CreateClientModal`) y la importación.
    */
   const activeCount = useMemo(() => countCapClients(clients), [clients])
+  /** Badge del chip: solo las solicitudes que el coach todavía no tocó. */
+  const newLeadCount = useMemo(() => countNewLeads(leads), [leads])
   const archiveDisabledReason = !unarchiveCapacity
     ? 'Validando cupo…'
     : unarchiveCapacity.available
@@ -737,6 +818,36 @@ export default function ClientesScreen() {
   const headerNode = (
     <>
       <DirectoryScreenHeader theme={theme} trailing={headerActions} />
+
+      {/* Solicitudes (coach-leads W3.2) — el mismo lugar donde la web abre `?solicitudes=1`.
+          Oculto si no hay ninguna: un cero permanente sería ruido en la pantalla más usada. */}
+      {leads.length > 0 ? (
+        <TouchableOpacity
+          testID="directory-leads-chip"
+          accessibilityRole="button"
+          accessibilityLabel={`Solicitudes: ${leads.length}`}
+          activeOpacity={0.85}
+          onPress={() => router.push('/coach/leads')}
+          style={[
+            styles.leadsChip,
+            {
+              backgroundColor: hexToRgba(theme.primary, 0.12),
+              borderColor: hexToRgba(theme.primary, 0.28),
+              borderRadius: theme.radius.control,
+            },
+          ]}
+        >
+          <Inbox size={16} color={theme.primary} />
+          <Text style={[styles.leadsChipText, { color: theme.foreground }]} numberOfLines={1}>
+            Solicitudes ({leads.length})
+          </Text>
+          {newLeadCount > 0 ? (
+            <View style={[styles.leadsChipBadge, { backgroundColor: theme.primary }]}>
+              <Text style={[styles.leadsChipBadgeText, { color: theme.primaryForeground }]}>{newLeadCount}</Text>
+            </View>
+          ) : null}
+        </TouchableOpacity>
+      ) : null}
 
       {/* La entrada a Funciones vive en «Más» / el hub Opciones; el directorio de alumnos ya no la
           repite (QA owner 01-09). */}
@@ -991,8 +1102,13 @@ export default function ClientesScreen() {
       <CreateClientModal
         visible={showCreate}
         guided={guidedCreate}
-        onClose={() => { setShowCreate(false); setGuidedCreate(false) }}
-        onCreated={() => { fetchDirectoryData().catch(() => {}) }}
+        onClose={() => { setShowCreate(false); setGuidedCreate(false); setLeadPrefill(null) }}
+        onCreated={() => { markPrefilledLeadConverted(); fetchDirectoryData().catch(() => {}) }}
+        initialValues={
+          leadPrefill
+            ? { fullName: leadPrefill.fullName, email: leadPrefill.email, phone: leadPrefill.phone }
+            : undefined
+        }
         theme={theme}
         maxClients={maxClients}
         currentTier={subscriptionTier}
@@ -1153,6 +1269,21 @@ function BarButton({
 }
 
 const styles = StyleSheet.create({
+  leadsChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 8,
+    borderWidth: 1,
+    marginHorizontal: 20,
+    marginBottom: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    minHeight: 44,
+  },
+  leadsChipText: { fontSize: 13.5, fontFamily: FONT.uiBold, flexShrink: 1 },
+  leadsChipBadge: { minWidth: 20, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 999, alignItems: 'center' },
+  leadsChipBadgeText: { fontSize: 11, fontFamily: FONT.uiBold },
   container: { flex: 1 },
   screenHeader: {
     flexDirection: 'row',

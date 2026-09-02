@@ -5,6 +5,8 @@ export * from './brand'
 export * from './auth'
 // Identificador público de coach y contrato del gate de acceso mobile.
 export * from './coach-identifier'
+// Inbox «Solicitudes» del coach (`coach_leads`): contrato del bridge móvil web ↔ RN.
+export * from './coach-leads'
 // passwordRejectionMessage: traducción de errores GoTrue al cambiar contraseña (HIBP/weak/same)
 export * from './auth-errors'
 // CheckInSchema, QuickWeightSchema, UpsertHabitsSchema

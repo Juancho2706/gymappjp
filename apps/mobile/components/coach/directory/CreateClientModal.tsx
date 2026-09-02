@@ -188,6 +188,7 @@ export function CreateClientModal({
   workspace,
   openAtCapWall = false,
   guided = false,
+  initialValues,
 }: {
   visible: boolean
   onClose: () => void
@@ -204,6 +205,15 @@ export function CreateClientModal({
    * `realClients` que ya computa el backend.
    */
   guided?: boolean
+  /**
+   * Prellenado opcional del formulario (coach-leads W3.2: convertir una SOLICITUD en alumno).
+   * Espejo del `initialValues` que la web ya le pasa a su `CreateClientModal`.
+   *
+   * Se aplica UNA vez por apertura (`visible` false→true) y solo sobre los campos de identidad:
+   * la clave temporal, la fecha de inicio y el consentimiento de edad los sigue decidiendo el
+   * coach. Sin la prop, el alta se comporta EXACTAMENTE igual que siempre.
+   */
+  initialValues?: { fullName?: string | null; email?: string | null; phone?: string | null }
   /**
    * El caller YA decidió que el alta arranca en el muro de cupo (el alta corta del home rebotó con
    * 402, o su pre-check vio el cupo lleno) y YA emitió su `upgrade_gate_hit`: acá no se re-evalúa
@@ -324,6 +334,16 @@ export function CreateClientModal({
    */
   useEffect(() => {
     if (!visible) return
+    // Prellenado (solicitud → alumno). Va acá y no en el `useState` inicial porque el modal NO se
+    // desmonta entre aperturas: sembrar en el estado inicial solo funcionaría la primera vez.
+    if (initialValues) {
+      setForm((f) => ({
+        ...f,
+        fullName: initialValues.fullName?.trim() || f.fullName,
+        email: initialValues.email?.trim() || f.email,
+        phone: initialValues.phone?.trim() || f.phone,
+      }))
+    }
     // Clave nueva por apertura: dos altas seguidas no pueden compartir la misma contraseña.
     if (guided) setGuidedPassword(generateGuidedTempPassword())
     // Cada alta cuenta sus propios canales elegidos.

@@ -69,3 +69,39 @@ export async function notifyProgramAssigned(input: {
         ...(input.logoUrl ? { iconUrl: input.logoUrl } : {}),
     })
 }
+
+/**
+ * `lead_received` — push NATIVA al coach cuando alguien deja una solicitud en `/join/<código>`
+ * (coach-leads W3.3).
+ *
+ * POR QUÉ existe: hasta acá el único aviso era el correo, y el riesgo #1 del SPEC es justamente
+ * «el coach no revisa el correo y la solicitud muere». El push llega al mismo teléfono donde el
+ * coach trabaja y aterriza directo en la bandeja.
+ *
+ * PII: viaja SOLO el nombre que la persona escribió (es lo que el coach necesita para reconocerla).
+ * Ni teléfono, ni correo, ni el mensaje — el cuerpo de la notificación se muestra en la pantalla
+ * bloqueada del teléfono y no es lugar para el contacto de un tercero (Ley 21.719, datos mínimos).
+ *
+ * Navegación dual: `url` es el path web que abre el service worker de la PWA; `screen` es la ruta
+ * expo-router del tap nativo (`apps/mobile/app/_layout.tsx` hace `router.push(data.screen)`).
+ *
+ * Best-effort de punta a punta: `sendPushToClient` jamás lanza, y el try/catch de acá cubre
+ * cualquier sorpresa. Una notificación fallida NUNCA puede tumbar la solicitud ya escrita.
+ */
+export async function notifyCoachOfLeadPush(input: {
+    coachId: string
+    fullName: string
+}): Promise<void> {
+    try {
+        const firstName = input.fullName.trim().split(/\s+/)[0] || 'Alguien'
+        await sendPushToClient(input.coachId, {
+            event: 'lead_received',
+            title: 'Nueva solicitud de alumno',
+            body: `${firstName} quiere entrenar contigo. Tócalo para responderle`,
+            url: '/coach/clients?solicitudes=1',
+            screen: '/coach/leads',
+        })
+    } catch (err) {
+        console.error('[push-events] lead_received failed:', err)
+    }
+}

@@ -6,12 +6,14 @@ const {
     rateLimitMock,
     captureServerEventMock,
     notifyCoachOfLeadMock,
+    notifyCoachOfLeadPushMock,
 } = vi.hoisted(() => ({
     createServiceRoleClientMock: vi.fn(),
     resolveInviteMock: vi.fn(),
     rateLimitMock: vi.fn(),
     captureServerEventMock: vi.fn(),
     notifyCoachOfLeadMock: vi.fn(),
+    notifyCoachOfLeadPushMock: vi.fn(),
 }))
 
 vi.mock('next/headers', () => ({
@@ -34,6 +36,12 @@ vi.mock('../_lib/resolve-invite', () => ({
 // pegarle a Resend en tests).
 vi.mock('@/lib/email/coach-lead-notification', () => ({
     notifyCoachOfLead: notifyCoachOfLeadMock,
+}))
+
+// W3.3: el push al coach es best-effort y vive en el catálogo de eventos, no acá. Se mockea para
+// medir CUÁNDO se dispara (y con qué), nunca para pegarle a Expo desde un test.
+vi.mock('@/lib/push-events', () => ({
+    notifyCoachOfLeadPush: notifyCoachOfLeadPushMock,
 }))
 
 vi.mock('@/lib/posthog/server-capture', () => ({
@@ -195,6 +203,12 @@ describe('requestJoinAction', () => {
                 referrerName: 'Alumna Referente',
             })
         )
+
+        // Push nativa al coach (W3.3): SOLO el nombre viaja, nunca el contacto del solicitante.
+        expect(notifyCoachOfLeadPushMock).toHaveBeenCalledWith({
+            coachId: 'coach-1',
+            fullName: 'Alumna Test',
+        })
 
         // Evento del coach: ni nombre, ni teléfono, ni correo del solicitante (Ley 21.719).
         expect(captureServerEventMock).toHaveBeenCalledWith({
