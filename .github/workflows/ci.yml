@@ -213,11 +213,14 @@ jobs:
     # En push SOLO corre en master. Al habilitar push en `rnmobiledenuevo` (2026-08-25) este job
     # habria corrido Playwright contra Supabase DE PRODUCCION en cada push de la rama de trabajo
     # (instancia Micro que ya se colgo el 22-08 con QA en paralelo) + ~10-20 min de minutos por
-    # push. PRs y workflow_dispatch conservan el comportamiento que ya tenian.
-    if: ${{ github.event_name != 'push' || github.ref == 'refs/heads/master' }}
+    # push. Los PRs conservan el comportamiento que ya tenian.
+    # Fuera de `workflow_dispatch` (decisión del owner 2026-09-02): a mano el job siempre falla
+    # porque las variables de Supabase no existen en GH y NO se van a poner las de producción —
+    # necesita su propio proyecto Supabase de QA antes de volver a ser lanzable a mano.
+    if: ${{ github.event_name != 'workflow_dispatch' && (github.event_name != 'push' || github.ref == 'refs/heads/master') }}
     # Antes era manual-only (`if: workflow_dispatch`) por la misma razón que `e2e`: la suite estaba
     # sin mantención y colgaba contra Supabase real. El motivo real de fondo es que DEPENDE DE
-    # SECRETS: sin ellos no hay nada que correr. Ahora corre automático (push / PR / dispatch) con
+    # SECRETS: sin ellos no hay nada que correr. Ahora corre automático (push a master / PR) con
     # el patrón estándar de CI: cada paso está condicionado a la PRESENCIA de los secrets, así que
     # en un fork o sin credenciales el job no-opea en verde en vez de fallar.
     #

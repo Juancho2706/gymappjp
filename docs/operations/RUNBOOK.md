@@ -86,7 +86,7 @@ Usar [FOOD_CATALOG_CL_IMPORT.md](FOOD_CATALOG_CL_IMPORT.md). Detener applies y c
 | `/api/cron/nutrition-reminder` | `0 0 * * *` | recordatorios de nutrición |
 | `/api/cron/checkin-reminder` | `0 14 * * *` | recordatorio de check-in vencido (push día 8 y 15) |
 | `/api/cron/trial-expiry` | `0 12 * * *` | expiración de trials |
-| `/api/cron/purge-data` | `0 3 * * 0` | purga semanal |
+| `/api/cron/purge-data` | `0 3 * * 0` | purga semanal (retención: ver abajo) |
 | `/api/cron/audit-checksum` | `0 2 * * 0` | integridad semanal de auditoría |
 | `/api/cron/mp-reconcile` | `0 10 * * *` | reconciliación MercadoPago y expiración de add-ons |
 | `/api/cron/flow-reconcile` | `0 11 * * *` | reconciliación Flow y sincronización acotada de monto |
@@ -101,6 +101,38 @@ Handlers sin schedule automático:
 - `/api/cron/weekly-report-email`;
 - `/api/cron/org-health-alert`;
 - `/api/cron/payment-reminder`.
+
+### Retención de datos — `purge-data`
+
+Un único handler concentra toda la retención automática. Corre los domingos 03:00 UTC y es
+best-effort en cada paso: un paso caído no aborta los demás y todos los conteos quedan en
+`admin_audit_logs` bajo la acción `cron.purge_data_ran`.
+
+| Qué borra | Corte | Nota |
+|---|---|---|
+| `org_audit_logs` | 90 días | vía RPC `purge_old_audit_logs` |
+| `organization_members` soft-deleted | 30 días desde `deleted_at` | |
+| `coach_client_assignments` soft-deleted | 30 días desde `deleted_at` | |
+| `coach_leads` con `status` `new` o `dismissed` | 90 días desde `created_at` | `converted` y `contacted` se **conservan** |
+| Cuentas dadas de baja en-app | 30 días desde `app_metadata.deletion_requested_at` | Apple 5.1.1(v) + Ley 21.719 |
+
+La purga de cuentas cierra el circuito que abre `/api/mobile/account/delete`: esa ruta **banea** la
+cuenta y fecha el pedido, y este cron la borra de verdad a los 30 días (coach ⇒ sus alumnos primero,
+uno a uno, para no dejar `auth.users` zombie; después las tablas con FK `NO ACTION` contra
+`coaches(id)`; recién ahí el `deleteUser`).
+
+Lo que hay que mirar en la respuesta (`accounts`):
+
+- `protectedSkipped > 0`: alguien pidió la baja con una cuenta de **App Review**
+  (`appreview-coach@evatest.cl`, `appreview-alumno@evatest.cl`). Nunca se borran — el guard es duro.
+  Limpiar el flag volviendo a correr `scripts/seed-appreview-demo.mjs`.
+- `failed > 0`: revisar el log de la corrida; el mensaje trae la constraint. Los bloqueos conocidos
+  son FKs sin cascada de equipos/Enterprise (`organization_members`, `organization_coach_assignments`,
+  `workout_programs.created_by_coach_id`, familia `enterprise_*`, `news_items.created_by`): se
+  resuelven a mano, el cron no borra filas de auditoría por su cuenta.
+- `truncated: true`: quedó cola (techo de 25 borrados por corrida, por el límite de 60 s). Relanzar
+  el handler a mano hasta que baje a `false`; no esperar al domingo siguiente si el corte de 30 días
+  está en juego.
 
 Para ejecutar un handler manual, usar un entorno seguro y el Bearer `CRON_SECRET`. No incluir el valor en el comando pegado a documentación o tickets.
 
