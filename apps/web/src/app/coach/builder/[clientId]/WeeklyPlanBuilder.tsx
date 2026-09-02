@@ -9,9 +9,12 @@ import {
 } from '@dnd-kit/core'
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import { Save, ArrowLeft, Loader2, Settings, Plus, LayoutTemplate, Eye, Users, Undo2, Redo2, BarChart3, Printer, Search, MoreVertical, ChevronLeft, ChevronRight, CircleHelp, Pencil, Moon, SlidersHorizontal, History, X, Check, type LucideIcon } from 'lucide-react'
-import Link from 'next/link'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
+import {
+    AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+    AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
 import { EditedByBadge } from '@/components/coach/EditedByBadge'
@@ -57,6 +60,10 @@ import type { BuilderBlock, BuilderCardioContext, DayState, ProgramPhase } from 
 import type { WorkoutArea } from '@/domain/workout/types'
 import { effectiveExerciseType, legacyRepsSummaryFor } from '@/lib/workout-exercise-type'
 import { effectiveAreaKey, orderedAreaIds, sanitizeSupersets } from '@eva/workout-engine'
+import {
+    EXIT_GUARD_BODY, EXIT_GUARD_LEAVE, EXIT_GUARD_STAY, EXIT_GUARD_TITLE, builderBackHref,
+    shouldConfirmExit,
+} from '@eva/plan-builder'
 import { buildAreaVMs } from './area-ui'
 import { parseProgramPhases, mapDbBlockToBuilderBlock, enrichDaysWithExerciseMedia, createDefaultBlock } from './program-read-mappers'
 
@@ -404,6 +411,36 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
         return () => clearTimeout(timer)
     }, [days, builderB.days, programName, weeksToRepeat, durationType, durationDays, startDateFlexible, startDate, programNotes, isABMode, programPhases, sourceTemplateId, programStructureType, cycleLength, hasUnsavedChanges, initialProgram])
 
+    // Guard de salida — cerrar pestaña / recargar. Espeja el beforeunload del builder de
+    // nutrición (PlanBuilderClient). El texto propio ya no se muestra en navegadores modernos
+    // (sale el diálogo genérico): `returnValue` va igual porque sigue siendo lo que dispara el
+    // aviso en los que lo piden.
+    // LIMITACIÓN ACEPTADA: el botón «atrás» del NAVEGADOR no se intercepta. App Router no expone
+    // un guard de navegación y el truco de pushState + popstate deja la barra de direcciones
+    // inconsistente. Los builders de nutrición tienen el mismo hueco. El respaldo real es el
+    // autosave de arriba: el borrador sobrevive.
+    useEffect(() => {
+        if (!shouldConfirmExit({ dirty: hasUnsavedChanges, saving: isPending })) return
+        const handler = (event: BeforeUnloadEvent) => {
+            event.preventDefault()
+            event.returnValue = EXIT_GUARD_BODY
+        }
+        window.addEventListener('beforeunload', handler)
+        return () => window.removeEventListener('beforeunload', handler)
+    }, [hasUnsavedChanges, isPending])
+
+    // Salida por la flecha ← de la cabecera. Antes era un <Link> pelado: un click y el trabajo
+    // del día se iba sin preguntar. Ahora pasa por el AlertDialog del DS (nunca window.confirm:
+    // el confirm nativo rompe el look en la PWA).
+    const backHref = builderBackHref(client?.id ?? null)
+    const [exitDialogOpen, setExitDialogOpen] = useState(false)
+    const requestExit = useCallback(() => {
+        if (!shouldConfirmExit({ dirty: hasUnsavedChanges, saving: isPending })) {
+            router.push(backHref)
+            return
+        }
+        setExitDialogOpen(true)
+    }, [hasUnsavedChanges, isPending, router, backHref])
 
     // Keyboard shortcuts: Ctrl+Z undo, Ctrl+Shift+Z / Ctrl+Y redo
     useEffect(() => {
@@ -1036,11 +1073,32 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
             <header className="z-20 flex-shrink-0 border-b border-subtle bg-surface-app/50 pt-safe pl-safe pr-safe backdrop-blur-xl">
                 <div className="mx-auto flex h-16 max-w-[2000px] items-center justify-between gap-3 px-4 md:gap-4 md:px-6">
                     <div className="flex min-w-0 items-center gap-3 md:gap-4">
-                        <Link href={client ? `/coach/clients/${client.id}` : '/coach/templates'}>
-                            <Button variant="ghost" size="icon" className="shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-                                <ArrowLeft className="w-5 h-5 text-muted" />
-                            </Button>
-                        </Link>
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={requestExit}
+                            aria-label="Volver"
+                            className="shrink-0 rounded-full hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                        >
+                            <ArrowLeft className="w-5 h-5 text-muted" />
+                        </Button>
+                        <AlertDialog open={exitDialogOpen} onOpenChange={setExitDialogOpen}>
+                            <AlertDialogContent>
+                                <AlertDialogHeader>
+                                    <AlertDialogTitle>{EXIT_GUARD_TITLE}</AlertDialogTitle>
+                                    <AlertDialogDescription>{EXIT_GUARD_BODY}</AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter className="gap-3">
+                                    <AlertDialogCancel>{EXIT_GUARD_STAY}</AlertDialogCancel>
+                                    <AlertDialogAction
+                                        variant="danger"
+                                        onClick={() => { setExitDialogOpen(false); router.push(backHref) }}
+                                    >
+                                        {EXIT_GUARD_LEAVE}
+                                    </AlertDialogAction>
+                                </AlertDialogFooter>
+                            </AlertDialogContent>
+                        </AlertDialog>
                         <div className="min-w-0 flex-1">
                             {/* Desktop title */}
                             <div className="hidden md:block">

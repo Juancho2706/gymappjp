@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
-  ActivityIndicator, Alert, Dimensions, InteractionManager, KeyboardAvoidingView, Modal, Platform, Pressable,
+  ActivityIndicator, Alert, BackHandler, Dimensions, InteractionManager, KeyboardAvoidingView, Modal, Platform, Pressable,
   ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View,
 } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
 import { Directions, Gesture, GestureDetector } from 'react-native-gesture-handler'
-import { useLocalSearchParams, useRouter } from 'expo-router'
-import BottomSheet, { BottomSheetModal } from '@gorhom/bottom-sheet'
+import { useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from 'expo-router'
+import BottomSheet, { BottomSheetModal, useBottomSheetModal } from '@gorhom/bottom-sheet'
 import { ArrowLeft, Check, CircleHelp, Copy, Dumbbell, Eye, History, Layers, Link2, Moon, MoreVertical, Pencil, Plus, Printer, Redo2, Scale, SlidersHorizontal, Sun, Undo2, Users } from 'lucide-react-native'
 import { NestableScrollContainer, NestableDraggableFlatList } from 'react-native-draggable-flatlist'
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
@@ -41,6 +41,10 @@ import { getMuscleColor } from '../../lib/muscle-colors'
 import { listBuilderExercisesForWorkspace, type ExerciseRow } from '../../lib/exercises'
 import { exportProgramPdf } from '../../lib/program-pdf'
 import { EvaLoaderScreen } from '../../components/EvaLoader'
+import {
+  EXIT_GUARD_BODY, EXIT_GUARD_LEAVE, EXIT_GUARD_STAY, EXIT_GUARD_TITLE,
+  resolveBuilderBack, shouldConfirmExit,
+} from '@eva/plan-builder'
 import { usePlanBuilder } from '../../lib/plan-builder/reducer'
 import { buildDaySkeleton } from '../../lib/plan-builder/skeleton'
 import { serializeBlockInsert } from '../../lib/plan-builder/serialize'
@@ -755,6 +759,10 @@ export default function ProgramBuilderScreen() {
   const isTemplate = mode === 'template' || !!templateId
   const { theme, resolvedScheme } = useTheme()
   const router = useRouter()
+  const navigation = useNavigation() // guard de salida: intercepta el swipe-back de iOS
+  // Cierra la hoja modal de más arriba de la cola del provider de @gorhom y devuelve `false`
+  // si no había ninguna: es la única forma de saber si hay algo encima sin parchear las 5 hojas.
+  const { dismiss: dismissTopSheet } = useBottomSheetModal()
   const searchRef = useRef<BottomSheet>(null)
   const editorRef = useRef<BottomSheetModal>(null)
   const balanceRef = useRef<BottomSheetModal>(null)
@@ -1281,7 +1289,7 @@ export default function ProgramBuilderScreen() {
   const dayMuscles = Array.from(new Set((currentDay?.blocks ?? []).map((b) => b.muscle_group).filter(Boolean))) as string[]
   const editingBlock = useMemo(() => (currentDay?.blocks ?? []).find((b) => b.uid === editingUid) ?? null, [currentDay, editingUid])
 
-  function openEditor(uid: string) { setEditingUid(uid); editorRef.current?.present() }
+  function openEditor(uid: string) { setEditingUid(uid); markSheet('editor', true); editorRef.current?.present() }
 
   // El sheet colapsado (12%) + el pill Guardar flotan sobre la lista ⇒ reserva al pie.
   const scrollContentStyle = useMemo(() => [styles.scroll, { paddingBottom: 150 }], [])
@@ -1754,11 +1762,110 @@ export default function ProgramBuilderScreen() {
     setHydrationReloadKey((current) => current + 1)
   }
 
-  // Cierre de la celebración: navega EXACTAMENTE como navegaba el guardado antes.
-  const closeSavedOverlay = useCallback(() => {
-    setSavedOverlay(null)
+  // Salida ya confirmada (o que no necesita confirmación): marca el ref ANTES de navegar para
+  // que el listener de `beforeRemove` deje pasar esta navegación y no vuelva a preguntar.
+  const allowExitRef = useRef(false)
+  const leaveBuilder = useCallback(() => {
+    allowExitRef.current = true
     router.back()
   }, [router])
+
+  // Cierre de la celebración: navega EXACTAMENTE como navegaba el guardado antes.
+  // NO pasa por el guard de salida: acá `dirty` ya es false (handleSave lo limpió) y preguntar
+  // justo después de guardar sería absurdo.
+  const closeSavedOverlay = useCallback(() => {
+    setSavedOverlay(null)
+    leaveBuilder()
+  }, [leaveBuilder])
+
+  // Guard de salida — antes se salía del builder sin preguntar y el trabajo del día quedaba
+  // solo en el borrador local. El copy vive en @eva/plan-builder junto a la regla, compartido
+  // con web.
+  const confirmExit = useCallback((onLeave: () => void) => {
+    Alert.alert(EXIT_GUARD_TITLE, EXIT_GUARD_BODY, [
+      { text: EXIT_GUARD_STAY, style: 'cancel' },
+      { text: EXIT_GUARD_LEAVE, style: 'destructive', onPress: onLeave },
+    ])
+  }, [])
+
+  const requestExit = useCallback(() => {
+    if (!shouldConfirmExit({ dirty, saving })) { leaveBuilder(); return }
+    confirmExit(leaveBuilder)
+  }, [dirty, saving, leaveBuilder, confirmExit])
+
+  // Hojas/overlays montados encima del builder. El back de hardware tiene que cerrarlos a
+  // ELLOS antes de preguntar por la salida: @gorhom/bottom-sheet 5.2.14 NO registra ningún
+  // listener de `hardwareBackPress` (cero coincidencias de `BackHandler` en su fuente), así que
+  // nadie lo hacía: el back mostraba «¿Salir del builder?» encima de la hoja abierta y aceptar
+  // dejaba la pantalla con la hoja montada.
+  //
+  // El catálogo de ejercicios es un `BottomSheet` común (no entra a la cola de modales del
+  // provider) y se sigue por su `onChange`; el editor de bloque, la vista previa y el balance
+  // se marcan al presentarlos; configuración y «copiar día» ya tienen su propio estado acá.
+  //
+  // NO se cuentan los que se pintan en una ventana nativa propia —el menú «Más» (`Modal` de RN)
+  // y las hojas `nativeModal` de plantillas y asignar—: RN les da el back a su `onRequestClose`
+  // y este listener ni se entera.
+  const openSheetsRef = useRef<Set<'catalog' | 'editor' | 'preview' | 'balance'>>(new Set())
+  const markSheet = useCallback((id: 'catalog' | 'editor' | 'preview' | 'balance', open: boolean) => {
+    if (open) openSheetsRef.current.add(id)
+    else openSheetsRef.current.delete(id)
+  }, [])
+
+  const countOpenOverlays = useCallback(
+    () => openSheetsRef.current.size + (configOpen ? 1 : 0) + (copyOpen ? 1 : 0),
+    [configOpen, copyOpen],
+  )
+
+  /** Cierra lo de más arriba. `false` = no había nada (contador desfasado, ya curado). */
+  const closeTopOverlay = useCallback(() => {
+    // Los modales van primero: se portalan por encima de todo. El `dismiss()` del provider
+    // cierra el tope de su cola y devuelve `false` si está vacía — eso es lo que cura un
+    // contador desfasado (la vista previa y el balance no exponen callback de cierre, así que
+    // cerrarlos con el gesto no nos avisa).
+    if (dismissTopSheet()) { markSheet('preview', false); markSheet('balance', false); return true }
+    if (openSheetsRef.current.has('catalog')) { searchRef.current?.close(); markSheet('catalog', false); return true }
+    if (copyOpen) { setCopyOpen(false); return true }
+    openSheetsRef.current.clear()
+    return false
+  }, [dismissTopSheet, markSheet, copyOpen])
+
+  // Back de hardware / gesto de Android. Va por `useFocusEffect` y no por `useEffect`: los
+  // listeners de BackHandler son GLOBALES y en LIFO, así que uno vivo sin foco se comería el
+  // back de la pantalla que esté encima (mismo criterio que app/index.tsx).
+  useFocusEffect(
+    useCallback(() => {
+      const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+        const action = resolveBuilderBack({ openOverlays: countOpenOverlays(), dirty, saving })
+        if (action === 'close-overlay' && closeTopOverlay()) return true
+        requestExit()
+        return true
+      })
+      return () => sub.remove()
+    }, [countOpenOverlays, closeTopOverlay, dirty, saving, requestExit]),
+  )
+
+  // Gesto de swipe-back de iOS (y cualquier salida que no pase por `requestExit`: back del
+  // header nativo, deep link). `beforeRemove` es la MISMA mitad que usa `usePreventRemove` de
+  // @react-navigation/core —que expo-router no re-exporta— y no toca el lockfile: el
+  // `StackActions.pop` que dispara el dismiss nativo pasa por acá y se cancela.
+  //
+  // El gesto NO se deshabilita: dejarlo inerte con cambios sin guardar era peor (el gesto más
+  // usado de iOS sin respuesta ni explicación). Salvedad honesta para el QA de device:
+  // native-stack solo bloquea el dismiss NATIVO cuando `usePreventRemove` alimenta
+  // `preventNativeDismiss`, así que en iOS la pantalla puede llegar a animarse hacia afuera
+  // antes de volver con la confirmación encima.
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', (e) => {
+      if (allowExitRef.current || !shouldConfirmExit({ dirty, saving })) return
+      e.preventDefault()
+      confirmExit(() => {
+        allowExitRef.current = true
+        navigation.dispatch(e.data.action)
+      })
+    })
+    return unsubscribe
+  }, [navigation, dirty, saving, confirmExit])
 
   async function handleSave(force = false) {
     if (!name.trim()) { Alert.alert('Nombre requerido', 'Ingresa un nombre para el programa.'); return }
@@ -1844,7 +1951,7 @@ export default function ProgramBuilderScreen() {
     <SafeAreaView edges={['top', 'bottom']} style={[styles.root, { backgroundColor: theme.background }]}>
       {/* Top bar 1:1 web: ← / nombre+estado / ⋮ ? ⚙(ping) 💾 */}
       <View style={[styles.topBar, { borderBottomColor: theme.border }]}>
-        <TouchableOpacity onPress={() => router.back()} hitSlop={8} style={styles.backBtn}>
+        <TouchableOpacity onPress={requestExit} hitSlop={8} style={styles.backBtn}>
           <ArrowLeft size={22} color={theme.foreground} />
         </TouchableOpacity>
 
@@ -2069,13 +2176,13 @@ export default function ProgramBuilderScreen() {
         exercises={catalog}
         dayBlockCount={currentDay?.blocks.length ?? 0}
         dayName={currentDay?.name ?? ''}
-        onIndexChange={(i) => setCatalogExpanded(i >= 1)}
+        onIndexChange={(i) => { setCatalogExpanded(i >= 1); markSheet('catalog', i >= 0) }}
         onCatalogChanged={() => setCatalogReloadKey((k) => k + 1)}
         onSelect={(block) => { addExercise(activeDayId, { ...block, dayId: activeDayId, section: sectionForArea(pendingAreaId), section_template_id: pendingAreaId }); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}) }}
       />
       <BlockEditorSheet ref={editorRef} block={editingBlock} onChange={updateBlock} onRemove={(uid) => { removeBlock(activeDayId, uid); editorRef.current?.dismiss() }}
         areaVMs={areaVMs} onSetArea={(uid, areaId) => setBlockArea(activeDayId, uid, areaId)} cardioEnabled={cardioEnabled}
-        onToggleOverride={toggleBlockOverride} onToggleSuperset={(uid) => toggleSuperset(activeDayId, uid)} onClose={() => setEditingUid(null)}
+        onToggleOverride={toggleBlockOverride} onToggleSuperset={(uid) => toggleSuperset(activeDayId, uid)} onClose={() => { setEditingUid(null); markSheet('editor', false) }}
         days={days.map((d) => ({ id: d.id, name: d.name }))} currentDayId={activeDayId} clientId={isTemplate ? undefined : clientId}
         onMoveToDay={(uid, target) => { transferBlock(uid, activeDayId, target); setActiveDayId(target); editorRef.current?.dismiss(); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium).catch(() => {}) }} />
 
@@ -2138,11 +2245,11 @@ export default function ProgramBuilderScreen() {
           <View style={[styles.menuCard, SHADOWS[resolvedScheme].lg, { backgroundColor: theme.card, borderColor: theme.border }]}>
             {[
               { icon: Layers, label: 'Plantillas', on: () => { void openTemplatePicker() }, dim: false },
-              { icon: Eye, label: 'Vista previa', on: () => { setMenuOpen(false); previewRef.current?.present() }, dim: false },
+              { icon: Eye, label: 'Vista previa', on: () => { setMenuOpen(false); markSheet('preview', true); previewRef.current?.present() }, dim: false },
               ...(canAssignProgramToClients({ isTemplate, programId })
                 ? [{ icon: Users, label: 'Asignar a alumnos', on: () => { void openAssignClients() }, dim: false }]
                 : []),
-              { icon: Scale, label: 'Balance muscular', on: () => { setMenuOpen(false); balanceRef.current?.present() }, dim: false },
+              { icon: Scale, label: 'Balance muscular', on: () => { setMenuOpen(false); markSheet('balance', true); balanceRef.current?.present() }, dim: false },
               { icon: Printer, label: 'Imprimir / PDF', on: handlePrint, dim: false },
               { icon: Undo2, label: 'Deshacer', on: () => { if (canUndo) { setMenuOpen(false); undo() } }, dim: !canUndo },
               { icon: Redo2, label: 'Rehacer', on: () => { if (canRedo) { setMenuOpen(false); redo() } }, dim: !canRedo },
