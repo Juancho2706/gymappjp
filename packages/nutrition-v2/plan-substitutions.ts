@@ -79,10 +79,10 @@ export function describeItemSubstitutions(item: PlanItemWithSubstitutions): stri
  * el alumno lee la misma lista dos veces). Cualquier otra nota del coach se conserva tal cual;
  * sin estructura, cae al `notes` legado completo — no rompe planes viejos.
  *
- * Semantica identica a `resolveItemDisplayNote` del "Hoy" web
- * (`apps/web/src/app/c/[coach_slug]/nutrition-v2/_components/nutrition-today.logic.ts`), que
- * conserva su copia porque ese archivo no entraba en el alcance de SUB-T10; el paso siguiente es
- * que ese modulo re-exporte esta.
+ * IMPLEMENTACION UNICA (dedupe 2026-09-02): el "Hoy" web ya no tiene copia propia —
+ * `apps/web/src/app/c/[coach_slug]/nutrition-v2/_components/nutrition-today.logic.ts` la
+ * RE-EXPORTA desde aca (igual que `apps/mobile/lib/nutrition-v2-plan.ts` en RN), asi que sus
+ * consumidores (`PlanVariantCard`, `TodayExperience`) conservan su import y leen esta funcion.
  */
 export function resolveItemDisplayNote(
   notes: string | null | undefined,

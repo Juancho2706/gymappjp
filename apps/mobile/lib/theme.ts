@@ -64,6 +64,14 @@ export interface Theme {
    */
   destructive600: string
   success600: string
+  /**
+   * --success-100: TINTE suave de estado (fondo de chip/banner de exito), no foreground.
+   * Espejo de `--color-success-100` (mobile global.css: light :78 `219 245 234` / dark :228
+   * `31 184 119`). En DARK el token ES success-500 y se pinta con alpha (~0.18), igual que
+   * el hermano ambar; en LIGHT es el pastel solido. Existe porque los banners lo aplican por
+   * `style.backgroundColor` (no por className), donde una clase dark-aware no llega.
+   */
+  success100: string
   /** --warning-500; imperative status color for native/SVG props. */
   warning: string
   // Extended (new - matches web design system)
@@ -130,6 +138,10 @@ const DS = {
   danger600Dark: '#FF7C97',
   success600Light: '#0F7D50',
   success600Dark: '#4FD9A0',
+  // --success-100 (tinte de chip/banner). light #DBF5EA solido; dark = success-500, que los
+  // consumidores pintan con alpha (global.css:228 lo documenta como rgba(31,184,119,.18)).
+  success100Light: '#DBF5EA',
+  success100Dark: '#1FB877',
   warning500: '#F5A524',
   ember500: '#FF6A3D',
   ember100: '#FFEDE6',
@@ -201,6 +213,7 @@ export const lightTheme: Theme = freezeTheme({
   success: DS.success500,
   destructive600: DS.danger600Light,
   success600: DS.success600Light,
+  success100: DS.success100Light,
   warning: DS.warning500,
   // Extended
   primaryForeground: DS.white, // text-on-sport
@@ -238,6 +251,7 @@ export const darkTheme: Theme = freezeTheme({
   success: DS.success500,
   destructive600: DS.danger600Dark,
   success600: DS.success600Dark,
+  success100: DS.success100Dark,
   warning: DS.warning500,
   // Extended
   primaryForeground: DS.white,

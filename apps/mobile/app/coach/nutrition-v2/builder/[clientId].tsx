@@ -602,7 +602,7 @@ export function CoachNutritionV2BuilderScreen() {
   const [publishError, setPublishError] = useState<string | null>(null)
   const [dateConflict, setDateConflict] = useState(false)
   const [conflictError, setConflictError] = useState<string | null>(null)
-  const [upsell, setUpsell] = useState<string | null>(null)
+  const [blockedFeatureNote, setBlockedFeatureNote] = useState<string | null>(null)
   const [searchTarget, setSearchTarget] = useState<SearchTarget | null>(null)
   /**
    * Selector de día (SPEC punto 10): el coach elige un DÍA de semana, no una variante. Vive en la
@@ -1004,7 +1004,9 @@ export function CoachNutritionV2BuilderScreen() {
       // builderReducer). Se corta aca ademas para no disparar el candado Pro sin necesidad.
       if (strategy === state.strategy) return
       if (strategy === 'hybrid' && !hasNutritionPro) {
-        setUpsell('la estrategia hibrida')
+        setBlockedFeatureNote(
+          'El plan híbrido combina franjas guiadas con libertad de registro en el mismo plan. Ahora no está habilitado en esta cuenta.',
+        )
         return
       }
       // Confirmacion antes de perder franjas (bug 2.3.5 de la auditoria): "flexible" con
@@ -1290,7 +1292,7 @@ export function CoachNutritionV2BuilderScreen() {
         return
       }
       if (res.code === 'UPGRADE_REQUIRED') {
-        setUpsell(res.error)
+        setBlockedFeatureNote(res.error)
         return
       }
       // Red de seguridad: si el pre-chequeo no disparo (plan vigente aun sin cargar, o carrera con
@@ -1716,7 +1718,7 @@ export function CoachNutritionV2BuilderScreen() {
         onClose={() => setSearchTarget(null)}
         onSelect={handleSelectFood}
       />
-      <UpsellSheet reason={upsell} onClose={() => setUpsell(null)} />
+      <FeatureUnavailableSheet reason={blockedFeatureNote} onClose={() => setBlockedFeatureNote(null)} />
     </SafeAreaView>
   )
 }
@@ -1812,7 +1814,7 @@ function PlanStep({
                 {locked ? (
                   <View className="mt-1.5 flex-row items-center gap-1.5 px-1">
                     <Lock color={theme.mutedForeground} size={13} />
-                    <Text className="text-xs font-medium text-muted">Incluido en Nutrición Pro</Text>
+                    <Text className="text-xs font-medium text-muted">No disponible en esta cuenta</Text>
                   </View>
                 ) : null}
               </View>
@@ -3738,10 +3740,16 @@ function FoodSearchModal({
 }
 
 // ---------------------------------------------------------------------------
-// Upsell suave (gate Pro)
+// Hoja de función no disponible (espejo del gate server-side)
 // ---------------------------------------------------------------------------
+// OB3 (regla D1 del owner): Nutrición V2 es el estándar de TODOS los planes y lo único
+// que se cobra es el cupo de alumnos, así que esta hoja ya no vende nada: solo explica
+// qué hace la función y avisa que la cuenta no la tiene habilitada ahora (cuenta
+// expirada/bloqueada o kill-switch de operador — ver services/entitlements.service.ts).
+// Sin nombre de plan, sin «Pro» y sin CTA de upgrade (además del lado seguro del
+// anti-steering Apple 3.1.1 / Google).
 
-function UpsellSheet({ reason, onClose }: { reason: string | null; onClose: () => void }) {
+function FeatureUnavailableSheet({ reason, onClose }: { reason: string | null; onClose: () => void }) {
   const router = useRouter()
   const { theme } = useTheme()
   return (
@@ -3751,25 +3759,25 @@ function UpsellSheet({ reason, onClose }: { reason: string | null; onClose: () =
           <View className="mb-3 h-1.5 w-12 self-center rounded-pill bg-border-default" />
           <View className="mb-2 flex-row items-center gap-2">
             <Lock color={theme.primary} size={18} />
-            <Text className="font-display text-lg font-bold text-strong">Nutrición Pro</Text>
+            <Text className="font-display text-lg font-bold text-strong">Función no disponible</Text>
           </View>
           <Text className="text-sm leading-5 text-body">
-            {reason ?? 'Esta función requiere el complemento Nutrición Pro.'}
+            {reason ?? 'Esta función no está habilitada en esta cuenta ahora mismo.'}
           </Text>
           <View className="mt-5 flex-row gap-3">
             <NutritionMotionButton accessibilityLabel="Cerrar" tone="neutral" onPress={onClose}>
-              Ahora no
+              Cerrar
             </NutritionMotionButton>
             <View className="flex-1">
               <NutritionMotionButton
-                accessibilityLabel="Ver módulos"
+                accessibilityLabel="Ver funciones"
                 onPress={() => {
                   // W3.7: destino directo a Funciones (`/coach/modules` es solo un redirect).
                   onClose()
                   router.push('/coach/settings/funciones')
                 }}
               >
-                Ver módulos
+                Ver funciones
               </NutritionMotionButton>
             </View>
           </View>

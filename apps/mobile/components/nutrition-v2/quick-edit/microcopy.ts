@@ -161,7 +161,9 @@ export const EDITOR_COPY = {
   strategyLabel: 'Estrategia',
   flexibleBlocked:
     'Flexible solo está disponible sin franjas: en esa estrategia el alumno ve metas, no comidas.',
-  hybridLocked: 'Híbrido viene incluido en Nutrición Pro.',
+  // OB3 (regla D1 del owner): sin nombre de plan ni «Pro». La nota describe la estrategia y
+  // enuncia el estado real de la cuenta; el gate vive server-side (entitlements.service).
+  hybridLocked: 'Híbrido combina franjas guiadas con libertad de registro. Ahora no está habilitado en esta cuenta.',
   effectiveFromLabel: 'Vigente desde',
   effectiveFromFormat: 'Formato AAAA-MM-DD. No puede ser anterior a hoy.',
   effectiveFromHint: (whenLabel: string) => `Empieza a regir ${whenLabel}.`,

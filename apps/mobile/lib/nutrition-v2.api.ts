@@ -465,7 +465,7 @@ export async function publishDraftRN(input: {
       ok: false,
       code: 'UPGRADE_REQUIRED',
       feature: proFeature,
-      error: `Activa Nutricion Pro para publicar ${NUTRITION_PRO_FEATURE_LABEL[proFeature]}.`,
+      error: `Este plan usa ${NUTRITION_PRO_FEATURE_LABEL[proFeature]}. Esa función no está habilitada en esta cuenta ahora mismo.`,
     }
   }
 

@@ -2,6 +2,7 @@ import {
   CATALOG_MACROS_BASIS,
   normalizeIntakeUnit,
   prescribedSnapshotMacros,
+  resolveItemDisplayNote,
   scaleSnapshotMacros,
   type NutritionMacroTotalsLike,
 } from '@eva/nutrition-v2'
@@ -456,9 +457,6 @@ export function buildBulkUndoPayloads(
 // puras deciden CÓMO se muestran bajo cada item: el agrupado por item y el reemplazo del texto
 // legado "Alternativas: …" cuando ya hay estructura.
 
-/** Prefijo del texto legado "Alternativas: …" que la conversión V1→V2 congeló en `notes`. */
-const LEGACY_ALTERNATIVES_NOTE_PREFIX = 'Alternativas:'
-
 /**
  * Agrupa los reemplazos autorizados por `prescriptionItemId`, preservando el orden de llegada
  * (el select ya viene ordenado por `order_index`). Un plan sin reemplazos ⇒ `{}`; nunca lanza.
@@ -476,20 +474,13 @@ export function groupSubstitutionsByPrescriptionItem(
 }
 
 /**
- * Nota a mostrar bajo un item prescrito. Cuando el item YA tiene reemplazos estructurados (F-02),
- * la fila estructurada reemplaza al texto legado "Alternativas: …" congelado en `notes` (evita el
- * doble render). Cualquier otra nota del coach se conserva tal cual; sin estructura, cae al `notes`
- * legado completo (fallback, no rompe planes viejos).
+ * Nota a mostrar bajo un item prescrito. La implementacion es UNICA y vive en
+ * `@eva/nutrition-v2` (`plan-substitutions.ts`): este modulo la RE-EXPORTA para no romper a
+ * `PlanVariantCard` / `TodayExperience`, que la importan desde aca. Antes habia una copia
+ * literal en este archivo (misma semantica, mismo prefijo legado "Alternativas: "); web y RN
+ * comparten ahora la misma funcion — RN ya la re-exporta igual desde `lib/nutrition-v2-plan.ts`.
  */
-export function resolveItemDisplayNote(
-  notes: string | null | undefined,
-  hasStructuredSubstitutions: boolean,
-): string | null {
-  const trimmed = notes?.trim() ?? ''
-  if (trimmed.length === 0) return null
-  if (hasStructuredSubstitutions && trimmed.startsWith(LEGACY_ALTERNATIVES_NOTE_PREFIX)) return null
-  return notes ?? null
-}
+export { resolveItemDisplayNote }
 
 // ── "Hoy sin eco" (auditoría H4/H5): un hecho, un solo lugar ─────────────────────
 // El registro de un item prescrito se pinta EN su fila (check + hora), no en una segunda lista.
