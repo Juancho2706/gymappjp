@@ -83,3 +83,21 @@ OTA 1.1.2 android `01a063b0-6a6a…` / ios `01a063b0-86f0…`), QA del owner en 
 - [x] Web móvil: check-in con modo avión a mitad de camino conserva peso, fotos y notas; el asistente
       sigue vivo detrás del aviso «Sin conexión» (`619b881f`) —
       [`qa-ejecutor-share-0209` § P6 B2](../specs/qa-ejecutor-share-0209/TASKS.md)
+
+## Pendiente hasta desplegar — «ola 2 chica» (en código 02-09 noche, sin push/deploy/OTA)
+
+Probar SOLO contra el deploy y la OTA que salgan de `5f3c48f2`…`31c1f7a8` (Android e iOS, claro y oscuro):
+
+- [ ] Catálogo RN y web: «Duplicar» un ejercicio propio dos veces ⇒ «X (copia)» y «X (copia 2)», sin
+      «Ya existe un ejercicio con ese nombre» (`5f3c48f2`).
+- [ ] Alumnos RN: dejar una solicitud por `/join/<código>?ref=<alumno>` → «Sumar» desde la app ⇒ la ficha
+      nueva queda con referente (`clients.referred_by_client_id`) y la solicitud pasa a convertida;
+      archivar para liberar cupo desde ese mismo muro NO convierte la solicitud (`7e1304d4`).
+- [ ] Alumno RN, tab Plan: un plan con reemplazos sigue mostrando «⇄ o …» y no muestra de más; con
+      modo avión (caché) sigue igual (`347f441d`).
+- [ ] Builder de nutrición RN, estrategia híbrida bloqueada (cuenta vencida/kill-switch): hoja «Función no
+      disponible» con «Cerrar» / «Ver funciones», sin «Nutrición Pro» (`fd468c21`).
+- [ ] Dashboard RN, hero/puente a Teams: tinte y texto verdes iguales a antes en claro y oscuro
+      (`theme.success100/600`, `7e1304d4`).
+- [ ] Web: borrar la cuenta de un coach de prueba con alimentos propios, planes y comidas guardadas
+      termina en `/login?deleted=true` (`7354c22d`).

@@ -137,6 +137,8 @@ Las cifras de las dos tablas de arriba son evidencia fechada de julio (3.940 y 4
 
 **Corrida completa del 2026-09-02** (sobre `794aee52` + el reparto por projects, rama `rnmobiledenuevo`): **676 archivos — 674 passed, 2 skipped; 8.892 tests — 8.888 passed, 4 skipped.** Mismo conteo exacto que la corrida base de ese mismo día: el reparto por environment no perdió un solo test.
 
+**Corrida completa del 2026-09-02 noche** (tren «ola 2 chica + higiene», `5f3c48f2`…`31c1f7a8`): **677 archivos — 675 passed, 2 skipped; 8.952 tests — 8.948 passed, 4 skipped** en 110 s. Delta contra la corrida de la mañana: −3 archivos textuales convertidos a reglas eslint, +1 archivo `tests/eslint-rules/local-rules.test.ts` (35 casos) y los tests nuevos del clon de ejercicios, del borrado de cuenta, de leads y del RPC de reemplazos.
+
 ### Costo de la suite: por qué Vitest ya no levanta jsdom para todo (2026-09-02)
 
 Hasta el 02-09 `vitest.config.ts` tenía un solo `test` con `environment: 'jsdom'` global, así que los 676 archivos pagaban el arranque de jsdom — incluidos los 619 `*.test.ts` de lógica pura (endpoints, servicios, schemas, motores) que nunca tocan el DOM. Medido en la misma máquina (16 cores), mismo árbol, misma suite:

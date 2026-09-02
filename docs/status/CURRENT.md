@@ -38,8 +38,9 @@ prevalecen sobre este resumen. La prosa retirada el 2026-09-02 está en
    secrets de E2E ya están (coach QA propio, run verde 33673130561). [MANUAL_TASKS § SEC-01](../operations/MANUAL_TASKS.md)
 3. **Tren «cierre de backlog 02-09» — EN PRODUCCIÓN 02-09 19:55Z** (`master` `794aee52`, deploy
    `dpl_E6Rt7ETY…` READY, OTA 1.1.2 android grupo `ec7da7fb` / ios grupo `6db6747f`): **QA del owner en
-   device VERDE 02-09** (11 puntos, Android e iOS, claro y oscuro). Queda el acumulado de 18 en
-   `docs/testing/QA_DEVICE_PENDIENTE.md`, la ola 2 chica y la higiene de tests. [historial](../archive/current-historial-2026-09.md)
+   device VERDE 02-09** (11 puntos). **Ola 2 chica + higiene EN CÓDIGO 02-09 noche** (`5f3c48f2`…`31c1f7a8`,
+   8 commits, RPC `substitutions` ya aplicado en LIVE): queda push → deploy → OTA, el QA en device de lo nuevo y
+   el acumulado de 18 (`docs/testing/QA_DEVICE_PENDIENTE.md`). [MOBILE_PARITY](MOBILE_PARITY.md)
 4. **`EVA-NEXTJS-18` (hidratación: mes abreviado con punto en Safari) — FIX EN PRODUCCIÓN 02-09**
    (`master` `91e7edf6`, deploy `dpl_EiFib2Xr…` READY, solo web, sin OTA): queda el E394 sin causa
    raíz — el guardián J solo lo convierte en una recarga única.

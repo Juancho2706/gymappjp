@@ -34,6 +34,15 @@ source_of_truth: apps/web responsive + apps/mobile
 > suma una lectura por versión hasta que `get_nutrition_plan_read_v2` transporte reemplazos; `hybrid_strategy` RN sigue nombrando
 > «Nutrición Pro» (4 sitios). QA en device: [`docs/testing/QA_DEVICE_PENDIENTE.md`](../testing/QA_DEVICE_PENDIENTE.md) + lo de este tren.
 >
+> **2026-09-02 noche — «ola 2 chica» EN CÓDIGO (`rnmobiledenuevo` `5f3c48f2`…`31c1f7a8`, sin push/deploy/OTA todavía):** las tres
+> brechas de arriba quedan cerradas en código: el alta móvil devuelve `clientId` y «Sumar» desde una solicitud copia la atribución y
+> emite `coach_client_referred` con la misma lógica que la web (`7e1304d4`); `get_nutrition_plan_read_v2` trae `substitutions` por ítem
+> (migración `20260902220850` **aplicada en LIVE**) y el tab Plan RN + `PlanVariantCard` web dejan de hacer la lectura extra, con
+> fallback si la clave falta (`347f441d`); la estrategia híbrida ya no dice «Nutrición Pro» en RN ni en el string del API
+> (`fd468c21`). Además: duplicar un ejercicio propio nombra «(copia)» / «(copia 2)» en web y RN (`5f3c48f2`); borrar la cuenta desde la
+> web ya no falla con alimentos/planes/comidas propias (`7354c22d`, solo web + cron); 3 hexes del hero del dashboard RN → `theme.success100/600`.
+> QA en device tras la OTA: sección «Pendiente hasta desplegar» de `QA_DEVICE_PENDIENTE.md`.
+>
 > **2026-09-02 (QA del owner del 02-09: ejecutor, Share Entreno y accesos — EN PRODUCCIÓN, QA pendiente)** (SDD
 > [qa-ejecutor-share-0209](../specs/qa-ejecutor-share-0209/SPEC.md), mockup `c4a77ab0` opción B): `master` = `rnmobiledenuevo` =
 > `0f545926`, deploy web `dpl_35ZT6w7oLzBrnMEAsXjmVQVdCy2R` READY, OTA 1.1.2 canal `production` android `bd2bc6e8` (run 33593759289) /

@@ -10,6 +10,12 @@ canonical: false
 Destino en el repo: `docs/specs/cobros-coach-alumno/TASKS.md`. Compañeros: [SPEC](SPEC.md) · [PLAN](PLAN.md) ·
 [EMAILS](EMAILS.md) · [DATA-SECURITY](DATA-SECURITY.md) · [TESTING](TESTING-LEGAL.md) — los **6** se crean juntos en
 W0.8 o `pnpm docs:check` sale rojo.
+
+> **Nota 02-09 (higiene de tests, `31c1f7a8`):** `tests/mobile-no-prices.test.ts` y `tests/mobile/store-copy.test.ts`
+> ya no existen — sus guards son reglas eslint locales que corren en `pnpm lint` (`pnpm lint:mobile`):
+> `tools/eslint-rules/rules/no-prices-in-mobile.mjs` y `tools/eslint-rules/rules/store-plan-caption.mjs`, con sus
+> casos en `tests/eslint-rules/local-rules.test.ts`. Donde estos documentos dicen «ampliar el test» (W4.12, G1, G2,
+> K4, K5, §7 de EMAILS/TESTING-LEGAL) léase «ampliar la regla y su RuleTester».
 Archivos:línea verificados contra `rnmobiledenuevo` @ `c85ef28b` el 2026-08-28. Modelo sugerido entre
 paréntesis. Cada tarea lleva su **criterio de aceptación verificable** (CA).
 
