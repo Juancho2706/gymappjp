@@ -43,6 +43,32 @@ o cierre de ventana), así que `confirm-enrollment` sigue sin correr. Verificado
   `/coach/reactivate`. Alternativa sin Flow: Mercado Pago (su vuelta `/coach/subscription/processing` siempre estuvo exenta).
   El owner le escribe por mail (no WhatsApp) para saber qué ve en la pantalla de Flow.
 
+## P0 — Seguridad
+
+### SEC-01 — Cerrar la enumeración anónima de `coaches.invite_code` (3 fases)
+
+Hallazgo verificado el 02-09: la política `coaches_select_anon` (`USING (true)`) + el grant de columna
+`SELECT (invite_code)` a `anon` permiten `GET /rest/v1/coaches?select=invite_code` con la anon key (viaja en el
+bundle web y en la app) ⇒ 200 con las 91 filas. Los advisors no lo levantan. Revocar la columna de golpe rompe
+web y app: Postgres exige SELECT sobre la columna también para FILTRAR, y hoy hay 9 lecturas anónimas por
+`invite_code` (proxy `/c/<CÓDIGO>/**`, login del alumno, manifest/splash/og/pwa-screenshot, y la pantalla
+«ingresá tu código» de RN, que corre PRE-LOGIN como `anon`). Censo completo en el informe del 02-09.
+
+- [x] **Fase 0 (02-09, LIVE `20260902012559`)**: `REVOKE ALL ON client_payments FROM anon` +
+      `REVOKE TRIGGER, TRUNCATE, REFERENCES ON coaches FROM anon`. Probada en transacción con rollback, advisors
+      sin ERROR, prod 200.
+- [ ] **Fase 1**: RPC `public.get_coach_public_branding(text)` SECURITY DEFINER, UNA fila por slug-o-código con
+      exactamente las columnas de branding que `anon` ya puede leer + `invite_code` de esa fila. Mata la
+      enumeración masiva sin quitarle a nadie el dato que ya conoce.
+- [ ] **Fase 2**: migrar los 9 call sites (web: `proxy.ts:327,1120`, `c/[coach_slug]/login/_data/login.queries.ts`,
+      `api/manifest|splash|og|pwa-screenshot/[coach_slug]`; RN: `apps/mobile/lib/branding.ts`
+      `fetchBrandingByCoachIdentifier` + fallback `BRANDING_COLS_MIN`) al RPC. Deploy web + OTA RN por GH Actions.
+- [ ] **Fase 3 (solo cuando la OTA esté adoptada — verificar en PostHog/EAS que no queden sesiones con el
+      bundle viejo entrando por código)**: `REVOKE SELECT (invite_code) ON public.coaches FROM anon` +
+      `REVOKE EXECUTE ON FUNCTION generate_unique_invite_code(), generate_invite_code() FROM anon`. Después,
+      confirmar con la anon key que `?select=invite_code` devuelve 42501 y que `/c/<slug>/login` sigue 200.
+- Rollback de cualquier fase: `GRANT` inverso (cada migración lo lleva comentado al pie).
+
 ## P1 — Cierre del build y QA móvil
 
 ### MOB-02 — Certificar paridad en dispositivos reales
