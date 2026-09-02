@@ -14,7 +14,13 @@ interface Props {
 
 export function OfflineScreen({ brandName, logoUrl, logoUrlDark, primaryColor }: Props) {
     return (
-        <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-background p-6 text-center">
+        // z-[10100]: desde que el overlay deja de REEMPLAZAR al árbol (ver NetworkProvider), tiene
+        // que taparlo entero — incluidas las pantallas full-screen del ejecutor (z-[9999]) y los
+        // modales de compartir portaleados a body (z-[10000]). Con el z-[200] viejo, un alumno sin
+        // red parado en el resumen del entreno no veía ningún aviso.
+        // `role="alert"`: el fondo queda aria-hidden, así que sin esto un lector de pantalla no
+        // anuncia NADA al caerse la red (antes el remonte del árbol lo forzaba de rebote).
+        <div role="alert" className="fixed inset-0 z-[10100] flex flex-col items-center justify-center bg-background p-6 text-center">
             {/* Ambient glow */}
             <div
                 className="fixed inset-0 pointer-events-none opacity-10"
@@ -58,7 +64,14 @@ export function OfflineScreen({ brandName, logoUrl, logoUrlDark, primaryColor }:
 }
 
 /**
- * Provider que envuelve la app del alumno y muestra OfflineScreen cuando no hay red.
+ * Provider que envuelve la app del alumno y SUPERPONE OfflineScreen cuando no hay red.
+ *
+ * B2 (QA 02-09): antes hacía `return <OfflineScreen/>` en vez de `{children}`, o sea DESMONTABA el
+ * árbol entero del alumno. Un corte de red a mitad del check-in mataba el estado local del form
+ * (peso, notas, energía y los `File` de las fotos) y al volver la red remontaba en el paso 1 en
+ * blanco; el manejo de error de red del propio form («No pudimos enviar / Reintentar») era
+ * literalmente inalcanzable. Ahora `{children}` se renderiza SIEMPRE y el overlay va encima:
+ * ningún componente pierde su estado por un corte de red.
  */
 export function NetworkProvider({ children, brandName, logoUrl, logoUrlDark, primaryColor }: Props & { children: React.ReactNode }) {
     const [isOnline, setIsOnline] = useState(true)
@@ -78,9 +91,23 @@ export function NetworkProvider({ children, brandName, logoUrl, logoUrlDark, pri
         }
     }, [])
 
-    if (!isOnline) {
-        return <OfflineScreen brandName={brandName} logoUrl={logoUrl} logoUrlDark={logoUrlDark} primaryColor={primaryColor} />
-    }
-
-    return <>{children}</>
+    return (
+        <>
+            {/* `contents` = este div NO genera caja: el nav y el <main> siguen siendo hijos flex
+                DIRECTOS del shell de /c (sin esto se rompe el sidebar desktop). Existe solo para
+                colgarle `aria-hidden` + `inert` mientras el overlay está arriba: nada de atrás
+                recibe foco ni clicks, pero sigue montado con su estado intacto. */}
+            <div
+                className="contents"
+                data-offline-backdrop={isOnline ? undefined : 'true'}
+                aria-hidden={isOnline ? undefined : true}
+                inert={!isOnline}
+            >
+                {children}
+            </div>
+            {!isOnline && (
+                <OfflineScreen brandName={brandName} logoUrl={logoUrl} logoUrlDark={logoUrlDark} primaryColor={primaryColor} />
+            )}
+        </>
+    )
 }

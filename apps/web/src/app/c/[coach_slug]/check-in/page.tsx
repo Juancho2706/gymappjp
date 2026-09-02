@@ -24,6 +24,7 @@ export default async function ClientCheckInPage({ params }: Props) {
             <div className="mx-auto max-w-lg">
                 <CheckInForm
                     coachSlug={coach_slug}
+                    studentId={user.id}
                     coachPrimaryColor={coachPrimaryColor}
                     lastCheckIn={lastCheckIn}
                 />

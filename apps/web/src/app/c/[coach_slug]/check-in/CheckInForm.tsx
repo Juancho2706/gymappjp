@@ -50,8 +50,59 @@ export type LastCheckInRow = {
 
 interface Props {
     coachSlug: string
+    /** Alumno dueño del borrador — la clave del draft es por coach + alumno. */
+    studentId: string
     coachPrimaryColor: string
     lastCheckIn: LastCheckInRow
+}
+
+// ---------------------------------------------------------------------------
+// Borrador del check-in (B2, QA 02-09)
+// ---------------------------------------------------------------------------
+// Los campos tipeables viven en `sessionStorage` (per-pestaña, se va solo al cerrarla) con clave
+// por coach + alumno: un reload, una navegación accidental o un corte de red a media carga ya no
+// le borran al alumno lo que escribió. Las FOTOS no viajan acá — un `File` no es serializable;
+// sobreviven porque el árbol del alumno ya no se desmonta al caerse la red (ver NetworkProvider).
+// Todo es fail-soft: en modo privado / storage bloqueado el formulario funciona igual que siempre.
+const CHECKIN_DRAFT_PREFIX = 'eva:checkin-draft:'
+
+type CheckInDraft = { weight?: string; notes?: string; energyLevel?: number }
+
+function checkInDraftKey(coachSlug: string, studentId: string): string {
+    return `${CHECKIN_DRAFT_PREFIX}${coachSlug}:${studentId}`
+}
+
+function readCheckInDraft(coachSlug: string, studentId: string): CheckInDraft | null {
+    try {
+        const raw = window.sessionStorage.getItem(checkInDraftKey(coachSlug, studentId))
+        if (!raw) return null
+        const parsed: unknown = JSON.parse(raw)
+        if (!parsed || typeof parsed !== 'object') return null
+        const { weight, notes, energyLevel } = parsed as CheckInDraft
+        return {
+            weight: typeof weight === 'string' ? weight : undefined,
+            notes: typeof notes === 'string' ? notes : undefined,
+            energyLevel: typeof energyLevel === 'number' && Number.isFinite(energyLevel) ? energyLevel : undefined,
+        }
+    } catch {
+        return null
+    }
+}
+
+function writeCheckInDraft(coachSlug: string, studentId: string, draft: CheckInDraft): void {
+    try {
+        window.sessionStorage.setItem(checkInDraftKey(coachSlug, studentId), JSON.stringify(draft))
+    } catch {
+        /* storage no disponible (modo privado/cuota): el borrador es un extra, nunca un requisito */
+    }
+}
+
+function clearCheckInDraft(coachSlug: string, studentId: string): void {
+    try {
+        window.sessionStorage.removeItem(checkInDraftKey(coachSlug, studentId))
+    } catch {
+        /* idem */
+    }
 }
 
 // 12MB: una foto de cámara moderna (HEIC/JPEG 12-48MP) pesa 3-8MB ANTES de comprimir; el gate
@@ -78,7 +129,7 @@ function isWeightValid(raw: string): boolean {
     return !isNaN(w) && w >= WEIGHT_MIN && w <= WEIGHT_MAX
 }
 
-export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props) {
+export function CheckInForm({ coachSlug, studentId, coachPrimaryColor, lastCheckIn }: Props) {
     const router = useRouter()
     const base = useBasePath(`/c/${coachSlug}`)
     const reducedMotion = useReducedMotion()
@@ -111,6 +162,29 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
         clearAppBadge()
     }, [])
 
+    // Borrador: se restaura DESPUÉS del montaje a propósito. Leer sessionStorage en el
+    // inicializador de useState rompería la hidratación (el server no ve el storage del alumno).
+    const [draftLoaded, setDraftLoaded] = useState(false)
+    // Una vez enviado OK no se vuelve a escribir el borrador: el form ya no se toca y no queremos
+    // resucitar la clave que acabamos de borrar.
+    const draftSealed = useRef(false)
+
+    useEffect(() => {
+        const draft = readCheckInDraft(coachSlug, studentId)
+        if (draft) {
+            if (draft.weight !== undefined) setWeight(draft.weight)
+            if (draft.notes !== undefined) setNotes(draft.notes)
+            if (draft.energyLevel !== undefined) setEnergyLevel(draft.energyLevel)
+        }
+        setDraftLoaded(true)
+    }, [coachSlug, studentId])
+
+    useEffect(() => {
+        // Nunca antes de restaurar: si no, los valores por defecto pisarían el borrador guardado.
+        if (!draftLoaded || draftSealed.current) return
+        writeCheckInDraft(coachSlug, studentId, { weight, notes, energyLevel })
+    }, [draftLoaded, coachSlug, studentId, weight, notes, energyLevel])
+
     useEffect(() => {
         if (state.error != null || state.success) {
             setIsSubmitting(false)
@@ -119,6 +193,10 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
 
     useEffect(() => {
         if (state.success) {
+            // Enviado = el borrador ya no sirve para nada; se borra para que el próximo check-in
+            // arranque limpio (y para no dejar notas viejas en el storage de la pestaña).
+            draftSealed.current = true
+            clearCheckInDraft(coachSlug, studentId)
             // El check-in NUNCA se pierde por una foto: si alguna no pudo subirse, se guarda igual
             // y acá se le dice al alumno (antes fallaba todo en silencio o abortaba el reporte).
             if (state.warning) {
@@ -136,7 +214,7 @@ export function CheckInForm({ coachSlug, coachPrimaryColor, lastCheckIn }: Props
             // COACH_ACCOUNT_PAUSED (gate de suscripcion del coach) => copy humano, nunca el codigo crudo.
             toast.error(humanizeStudentWriteError(state.error), { id: 'client-checkin-err' })
         }
-    }, [state.success, state.error, state.warning, reducedMotion])
+    }, [state.success, state.error, state.warning, reducedMotion, coachSlug, studentId])
 
     const frontInputRef = useRef<HTMLInputElement>(null)
     const backInputRef = useRef<HTMLInputElement>(null)
