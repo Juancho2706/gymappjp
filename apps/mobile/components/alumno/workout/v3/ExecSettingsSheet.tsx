@@ -1,6 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useState } from 'react'
-import { ActivityIndicator, LayoutChangeEvent, Platform, Pressable, Text, View } from 'react-native'
+import { ActivityIndicator, AppState, LayoutChangeEvent, Linking, Platform, Pressable, Text, View } from 'react-native'
 import { Check, ChevronDown, Flag, Sparkles } from 'lucide-react-native'
+import { describeNotifPermission } from '@eva/workout-engine'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { FONT } from '../../../../lib/typography'
@@ -24,6 +25,11 @@ import {
   type TimerSound,
 } from '../timers'
 import { playTimerCue } from '../timers/sound'
+import {
+  getRestNotifPermission,
+  requestRestNotifPermission,
+  type RestNotifPermission,
+} from '../timers/rest-notification'
 import { useExecSettings, setKeepAwake, setShowRpeRir, setCelebrationSounds } from './exec-settings'
 import type { ExecTheme } from './exec-theme'
 
@@ -42,6 +48,16 @@ import type { ExecTheme } from './exec-theme'
  * la prueba directa del usuario). Siguen funcionales: Vibración, Sonidos de celebración (Ola 4),
  * Mantener pantalla encendida y Mostrar RPE/RIR. Primera fila: Cronómetro automático (`omni_autotimer`,
  * decisión CEO 2026-07-25 — ver comentario en la fila); con OFF se pinta en rojo con aviso.
+ *
+ * Hallazgo D (2026-09-02, Android): «Temporizador en la pantalla bloqueada». El permiso de
+ * notificaciones (POST_NOTIFICATIONS en Android 13+) se pide solo la primera vez que arranca un
+ * descanso — `useRestTimerEngine` llama `ensureRestNotifPermission()` al montar el motor, y
+ * `use-cardio-live-timer` hace lo propio para cardio —, pero ese prompt es LAZY y de UNA sola vez: si
+ * el alumno lo negó, no había forma de recuperarlo desde V3 (el card de permiso vive en
+ * `WorkoutSettingsSheet`, que V3 no monta, y el panel web equivalente cuelga del header legacy oculto).
+ * Esta fila es esa vía de recuperación: pide el permiso si aún se puede, y si el sistema ya no
+ * re-pregunta (`canAskAgain=false` ⇒ estado `denied`) abre los ajustes de la app. El mapa
+ * estado→copy/acción es puro y compartido con el sheet web (`describeNotifPermission`).
  *
  * Persistencia AsyncStorage: sonido/tono/volumen/vibración/tono-sistema viven en `rest-timer-preferences`
  * (los consume el motor); keep-awake/RPE/celebración en `exec-settings` (useSyncExternalStore).
@@ -90,6 +106,9 @@ export function ExecSettingsSheet({
   const [volume, setVolumeState] = useState(getRestTimerVolume())
   // UI local: el selector de tono desplegado.
   const [toneOpen, setToneOpen] = useState(false)
+  // Permiso de notificaciones (hallazgo D). `null` = cargando: evita el flash de "Sin permiso"
+  // antes de leer el estado real (mismo criterio que el card del sheet legacy).
+  const [notifPerm, setNotifPerm] = useState<RestNotifPermission | null>(null)
 
   useEffect(() => {
     const sync = () => {
@@ -103,6 +122,38 @@ export function ExecSettingsSheet({
     sync()
     return subscribeRestTimerPrefs(sync)
   }, [])
+
+  // Estado del permiso: se relee al abrir el sheet Y al volver de background — volver de los ajustes
+  // del SO es un cambio de AppState, así que la fila se actualiza sola si el alumno lo concedió allí.
+  useEffect(() => {
+    if (!open) return
+    let alive = true
+    const read = () => {
+      void getRestNotifPermission().then((p) => {
+        if (alive) setNotifPerm(p)
+      })
+    }
+    read()
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') read()
+    })
+    return () => {
+      alive = false
+      sub.remove()
+    }
+  }, [open])
+
+  // Toque en la fila del permiso. `denied` = bloqueo duro (el SO ya no re-pregunta) ⇒ única salida
+  // son los ajustes de la app; en cualquier otro caso se pide el permiso (el prompt del SO devuelve
+  // el estado final, incluso si el alumno lo rechaza).
+  const handleNotifPress = useCallback(() => {
+    void haptics.tap()
+    if (notifPerm === 'denied') {
+      void Linking.openSettings()
+      return
+    }
+    void requestRestNotifPermission().then(setNotifPerm)
+  }, [notifPerm])
 
   // El tono del sistema solo aplica en Android; en iOS jamás se considera "activo".
   const isSystem = Platform.OS === 'android' && systemTone
@@ -128,6 +179,10 @@ export function ExecSettingsSheet({
   }, [])
 
   const s = exec.surface
+  // `null` (cargando) o `unsupported` ⇒ la fila no se pinta.
+  // Superficie por plataforma: en iOS el temporizador de la pantalla bloqueada lo da la Live
+  // Activity (no este permiso) y no existe «No molestar» de Android, así que el copy es otro.
+  const notifRow = notifPerm ? describeNotifPermission(notifPerm, Platform.OS === 'ios' ? 'ios' : 'android') : null
 
   return (
     <Sheet
@@ -259,6 +314,41 @@ export function ExecSettingsSheet({
             />
           }
         />
+
+        {/* Temporizador en la pantalla bloqueada (hallazgo D) — único punto del ejecutor V3 donde se
+            puede conceder o recuperar el permiso de notificaciones. Concedido ⇒ interruptor encendido
+            y sin acción (revocar es cosa del SO). Bloqueado ⇒ fila roja + "Abrir ajustes". */}
+        {notifRow?.visible ? (
+          <SettingRow
+            exec={exec}
+            name={notifRow.label}
+            sublabel={notifRow.status}
+            danger={notifRow.blocked}
+            control={
+              notifRow.action === 'open-settings' ? (
+                <Pressable
+                  testID="setting-lockscreen-notif-settings"
+                  onPress={handleNotifPress}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel="Abrir los ajustes de la app"
+                  style={{ borderRadius: 10, borderWidth: 1.5, paddingHorizontal: 11, paddingVertical: 8, backgroundColor: s.surfaceRaised, borderColor: hexToRgba(DANGER, 0.7) }}
+                >
+                  <Text style={{ fontFamily: FONT.uiBold, fontSize: 13, color: DANGER }}>Abrir ajustes</Text>
+                </Pressable>
+              ) : (
+                <Toggle
+                  testID="setting-lockscreen-notif"
+                  value={notifRow.on}
+                  exec={exec}
+                  disabled={!notifRow.interactive}
+                  accessibilityLabel={notifRow.label}
+                  onChange={handleNotifPress}
+                />
+              )
+            }
+          />
+        ) : null}
 
         {/* Sonidos de celebracion — funcional (pref para Ola 4), OFF por default. */}
         <SettingRow

@@ -5,7 +5,9 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { Flag, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { describeNotifPermission } from '@eva/workout-engine'
 import { playTimerSound, type TimerSound } from '@/lib/audioUtils'
+import { useNotificationPermission } from '@/lib/client/use-notification-permission'
 import {
   useRestTimerPreferences,
   readRestTimerMuted,
@@ -59,12 +61,15 @@ function Toggle({
   onChange,
   label,
   danger = false,
+  disabled = false,
 }: {
   checked: boolean
   onChange: (next: boolean) => void
   label: string
   /** Estado de advertencia (apagado peligroso): tiñe el toggle de rojo. */
   danger?: boolean
+  /** Sin acción posible (p. ej. permiso ya concedido o bloqueado por el navegador): atenuado. */
+  disabled?: boolean
 }) {
   return (
     <button
@@ -72,9 +77,13 @@ function Toggle({
       role="switch"
       aria-checked={checked}
       aria-label={label}
+      disabled={disabled}
       onClick={() => onChange(!checked)}
       className={cn('exec-v3-tog', checked && 'is-on')}
-      style={danger && !checked ? { borderColor: 'rgba(248,113,113,0.7)', background: 'rgba(248,113,113,0.18)' } : undefined}
+      style={{
+        ...(danger && !checked ? { borderColor: 'rgba(248,113,113,0.7)', background: 'rgba(248,113,113,0.18)' } : null),
+        ...(disabled ? { opacity: 0.5, cursor: 'default' } : null),
+      }}
     >
       <span className="exec-v3-tog-knob" aria-hidden />
     </button>
@@ -95,6 +104,12 @@ export function ExecSettingsSheet({
     useExecSettings()
   // Sonido del cronómetro = NO silenciado (mute es la pref persistida real del RestTimer).
   const [soundOn, setSoundOn] = useState(true)
+  // Permiso de notificaciones del navegador (hallazgo D). `null` = cargando ⇒ la fila no se pinta
+  // todavía (evita el flash de "Sin permiso" antes de leer el estado real). Se le pasa `open`
+  // porque este sheet se monta con TODA la sesión V3: sin eso, el permiso se leía una sola vez al
+  // arrancar el entreno y la fila quedaba mintiendo si el alumno lo destrababa desde el candado.
+  const { permission: notifPermission, request: requestNotifPermission } = useNotificationPermission(open)
+  const notifRow = notifPermission ? describeNotifPermission(notifPermission, 'web') : null
 
   useEffect(() => {
     if (open) setSoundOn(!readRestTimerMuted())
@@ -248,6 +263,38 @@ export function ExecSettingsSheet({
                 </div>
                 <Toggle checked={vibration} onChange={setVibration} label="Vibración" />
               </div>
+
+              {/* Avisarme al terminar el descanso (hallazgo D, 2026-09-02) — ÚNICO punto del ejecutor
+                  V3 donde se puede conceder el permiso de notificaciones. La alerta final ya existe
+                  (`RestTimer.tsx` → `registration.showNotification('¡Descanso listo!'…)`), pero está
+                  gateada por `Notification.permission === 'granted'` y jamás promptea en medio del
+                  entreno: el botón que lo pedía vive en `WorkoutTimerSettingsPanel`, colgado del header
+                  legacy que V3 oculta. Sin soporte ⇒ no se pinta; concedido ⇒ interruptor encendido y
+                  sin acción (revocar es cosa del navegador); bloqueado ⇒ fila roja explicando dónde. */}
+              {notifRow?.visible && (
+                <div className="exec-v3-setrow">
+                  <div className="exec-v3-setmain">
+                    <div className="exec-v3-setname" style={notifRow.blocked ? { color: '#f87171' } : undefined}>
+                      {notifRow.label}
+                    </div>
+                    <div
+                      className="exec-v3-setsub"
+                      style={notifRow.blocked ? { color: '#f87171', fontWeight: 700 } : undefined}
+                    >
+                      {notifRow.status}
+                    </div>
+                  </div>
+                  <Toggle
+                    checked={notifRow.on}
+                    onChange={() => {
+                      if (notifRow.action === 'request') void requestNotifPermission()
+                    }}
+                    label={notifRow.label}
+                    danger={notifRow.blocked}
+                    disabled={!notifRow.interactive}
+                  />
+                </div>
+              )}
 
               {/* Sonidos de celebración — OFF por diseño (decisión CEO 3). */}
               <div className="exec-v3-setrow">
