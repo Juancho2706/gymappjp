@@ -6,6 +6,18 @@ import { MODULE_KEYS, type ModuleKey } from '@/lib/module-keys'
 // re-export `export type {}` no crea binding utilizable dentro del módulo).
 import type { BillingCycle } from '@eva/tiers'
 
+// ── Catálogo de grupos musculares. La fuente de verdad es `MUSCLE_GROUPS` de
+// @eva/workout-engine (`muscle-map`), compartida con apps/mobile — antes había una COPIA
+// divergente en `apps/mobile/lib/exercises.ts` (sin «Movilidad»).
+//
+// Acá se mantiene el LITERAL y NO un re-export del paquete a propósito: este módulo lo
+// importan client components de la landing (`LandingHeroSection`) y `@eva/workout-engine`
+// es un barrel de ~50 `export *` sin `"sideEffects": false` — re-exportarlo desde acá le
+// arrastra el motor entero al bundle de la página con tráfico pagado. Que las dos listas no
+// se separen lo garantiza `constants.test.ts`, que las compara valor por valor.
+//
+// El orden es el histórico (Hombros primero): ordena los encabezados y los filtros del
+// catálogo del coach. Los valores guardados en `exercises.muscle_group` no cambian.
 export const MUSCLE_GROUPS = [
     'Hombros',
     'Bíceps',
@@ -24,7 +36,8 @@ export const MUSCLE_GROUPS = [
     'Isquiotibiales',
     'Pectorales',
     'Trapecios',
-    'Movilidad'
+    'Movilidad',
+    'Rehabilitación'
 ] as const;
 
 export type MuscleGroup = typeof MUSCLE_GROUPS[number];

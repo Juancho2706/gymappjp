@@ -15,6 +15,8 @@ import {
     TIER_STUDENT_RANGE_LABEL,
     type SubscriptionTier,
 } from '@eva/tiers'
+import { MUSCLE_GROUPS as ENGINE_MUSCLE_GROUPS } from '@eva/workout-engine'
+import { MUSCLE_GROUPS } from './constants'
 
 describe('subscription constants', () => {
     it('applies quarterly and annual discounts correctly', () => {
@@ -182,4 +184,25 @@ describe('tier labels — all 6 CHECK values have display entries (web + mobile 
             expect(TIER_LABELS[tier].length).toBeGreaterThan(0)
         })
     }
+})
+
+/**
+ * `@/lib/constants` mantiene el LITERAL de los grupos musculares en vez de re-exportar
+ * `@eva/workout-engine`: lo importan client components de la landing y el barrel del motor
+ * (~50 `export *`, sin `"sideEffects": false`) terminaría en el bundle de la página con
+ * tráfico pagado. El precio de esa decisión es que la lista puede quedar desalineada, y esto
+ * es lo que lo impide: misma fuente de verdad, verificada por test y no en tiempo de bundle.
+ */
+describe('MUSCLE_GROUPS (web) vs. @eva/workout-engine', () => {
+    it('es exactamente la lista del motor, en el mismo orden', () => {
+        expect([...MUSCLE_GROUPS]).toEqual([...ENGINE_MUSCLE_GROUPS])
+    })
+
+    it('conserva el orden histórico y los dos grupos que faltaban en LIVE', () => {
+        // Este orden ordena los encabezados y los filtros del catálogo del coach.
+        expect(MUSCLE_GROUPS.length).toBe(19)
+        expect(MUSCLE_GROUPS[0]).toBe('Hombros')
+        expect(MUSCLE_GROUPS).toContain('Movilidad')
+        expect(MUSCLE_GROUPS).toContain('Rehabilitación')
+    })
 })

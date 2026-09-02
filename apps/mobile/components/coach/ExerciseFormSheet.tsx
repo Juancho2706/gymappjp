@@ -11,10 +11,14 @@ import { useTheme } from '../../context/ThemeContext'
 import { Button, Input, SegmentedTabs, Textarea, VideoPlayer } from '../index'
 import { toast } from '../Toast'
 import { execMediaKind } from '../alumno/workout/v3/ExecMediaV3'
+import { MuscleRegionTabs } from './MuscleRegionTabs'
 import {
   DIFFICULTY_OPTIONS,
   EQUIPMENT_OPTIONS,
-  MUSCLE_GROUPS,
+  MUSCLE_GROUP_REGIONS,
+  catalogMuscleGroup,
+  equipmentOption,
+  muscleGroupRegion,
   countExerciseUsage,
   createExercise,
   deleteExercise,
@@ -24,7 +28,15 @@ import {
   youtubeId,
   type ExerciseInput,
   type ExerciseRow,
+  type MuscleGroupRegionId,
 } from '../../lib/exercises'
+
+/**
+ * Última región usada en la SESIÓN (vive en el módulo, no en el estado: la hoja se
+ * desmonta entre altas). Los coaches cargan ejercicios por bloques —primero pierna,
+ * después espalda— así que reabrir en la última región deja el caso normal en 1 toque.
+ */
+let lastMuscleRegion: MuscleGroupRegionId = 'torso'
 
 /** Segundos → "m:ss" para los inputs de recorte (vacío si null). 1:1 con la web. */
 function secondsToMmss(sec: number | null | undefined): string {
@@ -104,6 +116,8 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
 
   const [name, setName] = useState('')
   const [muscle, setMuscle] = useState('')
+  // Pestaña del selector de grupo muscular. Al editar se abre en la región del grupo actual.
+  const [muscleRegion, setMuscleRegion] = useState<MuscleGroupRegionId>(lastMuscleRegion)
   const [exerciseType, setExerciseType] = useState('strength')
   // Modalidad de cardio (Fase C): '' = genérica ⇒ se guarda NULL. Solo se muestra en tipo cardio.
   const [cardioModality, setCardioModality] = useState('')
@@ -146,6 +160,13 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
     setSaving(false)
     setName(exercise?.name ?? initialName ?? '')
     setMuscle(exercise?.muscle_group ?? '')
+    // Editar abre en la región del grupo guardado; crear (o un grupo legado fuera del
+    // catálogo) reabre donde quedó el coach la última vez. La memoria NO se pisa al editar:
+    // el coach que está cargando pierna en bloque y en el medio edita un ejercicio de pecho
+    // volvía a «Torso» en la siguiente alta. Solo la escriben `changeMuscleRegion` y el alta.
+    const region = muscleGroupRegion(exercise?.muscle_group) ?? lastMuscleRegion
+    if (!exercise) lastMuscleRegion = region
+    setMuscleRegion(region)
     setExerciseType(exercise?.exercise_type ?? 'strength')
     setCardioModality(exercise?.cardio_modality ?? '')
     setEquipment(exercise?.equipment ?? null)
@@ -302,6 +323,41 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
     })
   }
 
+  /** Cambiar de pestaña no toca la selección: solo cambia las pills visibles. */
+  function changeMuscleRegion(next: MuscleGroupRegionId) {
+    lastMuscleRegion = next
+    setMuscleRegion(next)
+  }
+
+  // Selector de grupo muscular: solo las pills de la región activa (≤ 6, sin scroll).
+  const activeRegion = MUSCLE_GROUP_REGIONS.find((r) => r.id === muscleRegion) ?? MUSCLE_GROUP_REGIONS[0]
+  // La selección SIEMPRE se ve: si el grupo elegido no está en la región activa —porque el
+  // coach se fue a mirar otra pestaña, o porque es un valor legado fuera del catálogo— se
+  // agrega como pill extra al final. Sin esto el campo se lee vacío y un valor válido se
+  // pierde en silencio al guardar.
+  //
+  // La comparación va NORMALIZADA (`catalogMuscleGroup`/`muscleGroupRegion`, sin tildes ni
+  // mayúsculas) y no por igualdad de string: un valor guardado como «Espalda alta» caía en la
+  // pestaña Torso —que sí normaliza— y con `includes()` exacto pintaba DOS pills, la del
+  // catálogo apagada y la legada marcada.
+  const canonicalMuscle = catalogMuscleGroup(muscle)
+  const muscleInActiveRegion = canonicalMuscle !== null && muscleGroupRegion(muscle) === activeRegion.id
+  const muscleOptions =
+    muscle && !muscleInActiveRegion ? [...activeRegion.groups, muscle] : activeRegion.groups
+  // Pill marcada: el valor CANÓNICO cuando el grupo vive en la región activa (así «Espalda
+  // alta» marca «Espalda Alta»), y el valor crudo cuando es la pill extra.
+  const muscleMarked = muscleInActiveRegion ? canonicalMuscle : muscle
+
+  // Equipo: el catálogo de sistema guarda los valores EN INGLÉS del import original
+  // (dumbbell, body weight, cable…), así que se marca la opción equivalente en español.
+  // Mientras el coach no toque el campo, `equipment` conserva el valor original tal cual.
+  const equipmentSelected = equipmentOption(equipment)
+  const legacyEquipment = equipment && !equipmentSelected ? equipment : null
+  const equipmentMarked = legacyEquipment ?? equipmentSelected
+  const equipmentOptions = legacyEquipment
+    ? [...(EQUIPMENT_OPTIONS as readonly string[]), legacyEquipment]
+    : (EQUIPMENT_OPTIONS as readonly string[])
+
   const isCardio = exerciseType === 'cardio'
   const trimmedVideo = videoUrl.trim()
   const ytId = youtubeId(trimmedVideo)
@@ -367,7 +423,10 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
         />
 
         <Label>Grupo muscular *</Label>
-        <Chips options={MUSCLE_GROUPS as readonly string[]} value={muscle} onSelect={setMuscle} />
+        {/* Pestañas de región + pills de esa región (mockup QA 02-09, opción B): antes eran
+            las 17 pills juntas, ~5 filas amontonadas dentro de una hoja de 5 secciones. */}
+        <MuscleRegionTabs value={muscleRegion} onChange={changeMuscleRegion} />
+        <Chips options={muscleOptions} value={muscleMarked} onSelect={setMuscle} />
         {fieldError?.field === 'muscle' ? (
           <Text className="text-danger-600 font-sans" style={styles.hint}>{fieldError.message}</Text>
         ) : null}
@@ -381,7 +440,11 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
         />
 
         <Label>Equipo</Label>
-        <Chips options={EQUIPMENT_OPTIONS as readonly string[]} value={equipment} onSelect={(v) => setEquipment(v === equipment ? null : v)} />
+        {/* Sin toggle-a-null: tocar la pill YA marcada no borra el equipo. Antes, con el
+            catálogo de sistema (`dumbbell`), «Peso libre» aparecía marcada y el coach que la
+            tocaba para confirmar el dato lo perdía. «Equipo» es opcional y no tiene ✕: para
+            cambiarlo se toca otra pill, que es lo que hace todo el mundo. */}
+        <Chips options={equipmentOptions} value={equipmentMarked} onSelect={setEquipment} />
 
         <Label>Dificultad</Label>
         <SegmentedTabs

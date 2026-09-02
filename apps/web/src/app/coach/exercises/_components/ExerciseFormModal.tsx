@@ -14,16 +14,21 @@ import { Textarea } from '@/components/ui/textarea'
 import {
     Select,
     SelectContent,
+    SelectGroup,
     SelectItem,
+    SelectLabel,
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select'
-import { MUSCLE_GROUPS } from '@/lib/constants'
 import {
     CARDIO_MODALITY_OPTIONS,
+    EQUIPMENT_OPTIONS,
     EXERCISE_TYPE_OPTIONS,
+    MUSCLE_GROUP_REGIONS,
     cardioAxisLabels,
     cardioModalityLabel,
+    catalogMuscleGroup,
+    equipmentOption,
 } from '@eva/workout-engine'
 import {
     createExerciseAction,
@@ -60,15 +65,8 @@ function mmssToSeconds(str: string): number | null {
 /** Sentinela del Select para la opción "Genérica" (el Select no admite `value=""`). */
 const GENERIC_MODALITY = '__generic__'
 
-const EQUIPMENT_OPTIONS = [
-    'Peso libre',
-    'Máquina',
-    'Poleas',
-    'Banda',
-    'Corporal',
-    'Kettlebell',
-    'Otro',
-]
+// EQUIPMENT_OPTIONS ya no se declara acá: la lista (y el mapa de sinónimos que reconoce los
+// valores en inglés del catálogo de sistema) vive en @eva/workout-engine, compartida con RN.
 
 const DIFFICULTY_OPTIONS = [
     { value: 'beginner', label: 'Principiante' },
@@ -171,6 +169,25 @@ export function ExerciseFormModal({ open, onClose, exercise, initialName, onCrea
         ((exercise as Record<string, unknown> | undefined)?.cardio_modality as string | null) ?? ''
     )
     const [difficulty, setDifficulty] = useState(exercise?.difficulty ?? '')
+
+    // Valores guardados vs. opciones ofrecidas. Dos casos distintos:
+    //  1. El valor se RECONOCE pero no se escribe igual que la opción («espalda alta» por
+    //     «Espalda Alta»; `dumbbell` por «Peso libre», que es como quedó el catálogo de
+    //     sistema del import original). El Select arranca marcado en la opción equivalente —
+    //     NO se inyecta un ítem extra, porque un segundo «Peso libre» en la lista se lee como
+    //     un bug del desplegable. Guardar normaliza ese valor al del catálogo, que es la
+    //     escritura canónica del mismo dato.
+    //  2. El valor NO se reconoce («Bastón de madera»): se ofrece como opción extra CON SU
+    //     VALOR ORIGINAL bajo un rótulo aparte, para que el guardado no lo pise en silencio.
+    const savedMuscleGroup = exercise?.muscle_group ?? ''
+    const canonicalMuscleGroup = catalogMuscleGroup(savedMuscleGroup)
+    const legacyMuscleGroup = savedMuscleGroup && !canonicalMuscleGroup ? savedMuscleGroup : null
+    const muscleGroupDefault = canonicalMuscleGroup ?? savedMuscleGroup
+
+    const savedEquipment = exercise?.equipment ?? ''
+    const canonicalEquipment = equipmentOption(savedEquipment)
+    const legacyEquipment = savedEquipment && !canonicalEquipment ? savedEquipment : null
+    const equipmentDefault = canonicalEquipment ?? savedEquipment
 
     useEffect(() => {
         setMedia(initialMedia(exercise))
@@ -291,14 +308,27 @@ export function ExerciseFormModal({ open, onClose, exercise, initialName, onCrea
                             hint="Define en qué grupo lo encuentras al armar el plan."
                             error={state.fieldErrors?.muscle_group?.[0]}
                         >
-                            <Select name="muscle_group" defaultValue={exercise?.muscle_group ?? ''} required>
+                            <Select name="muscle_group" defaultValue={muscleGroupDefault} required>
                                 <SelectTrigger className="w-full" aria-label="Grupo muscular">
                                     <SelectValue placeholder="Selecciona un grupo" />
                                 </SelectTrigger>
+                                {/* Agrupado por región (misma taxonomía que las pestañas de la
+                                    hoja en RN): 19 valores planos obligaban a barrer la lista. */}
                                 <SelectContent>
-                                    {MUSCLE_GROUPS.map((mg) => (
-                                        <SelectItem key={mg} value={mg}>{mg}</SelectItem>
+                                    {MUSCLE_GROUP_REGIONS.map((region) => (
+                                        <SelectGroup key={region.id}>
+                                            <SelectLabel>{region.label}</SelectLabel>
+                                            {region.groups.map((mg) => (
+                                                <SelectItem key={mg} value={mg}>{mg}</SelectItem>
+                                            ))}
+                                        </SelectGroup>
                                     ))}
+                                    {legacyMuscleGroup && (
+                                        <SelectGroup>
+                                            <SelectLabel>Valor guardado</SelectLabel>
+                                            <SelectItem value={legacyMuscleGroup}>{legacyMuscleGroup}</SelectItem>
+                                        </SelectGroup>
+                                    )}
                                 </SelectContent>
                             </Select>
                         </Field>
@@ -314,7 +344,7 @@ export function ExerciseFormModal({ open, onClose, exercise, initialName, onCrea
 
                         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             <Field label="Equipo">
-                                <Select name="equipment" defaultValue={exercise?.equipment ?? ''}>
+                                <Select name="equipment" defaultValue={equipmentDefault}>
                                     <SelectTrigger className="w-full" aria-label="Equipo">
                                         <SelectValue placeholder="Selecciona equipo" />
                                     </SelectTrigger>
@@ -322,6 +352,16 @@ export function ExerciseFormModal({ open, onClose, exercise, initialName, onCrea
                                         {EQUIPMENT_OPTIONS.map((eq) => (
                                             <SelectItem key={eq} value={eq}>{eq}</SelectItem>
                                         ))}
+                                        {/* Solo lo que NO se reconoce: los valores en inglés del
+                                            import de sistema (dumbbell, cable…) ya arrancan
+                                            marcados en su opción en español, así que inyectarlos
+                                            acá pintaba DOS ítems con el mismo rótulo. */}
+                                        {legacyEquipment && (
+                                            <SelectGroup>
+                                                <SelectLabel>Valor guardado</SelectLabel>
+                                                <SelectItem value={legacyEquipment}>{legacyEquipment}</SelectItem>
+                                            </SelectGroup>
+                                        )}
                                     </SelectContent>
                                 </Select>
                             </Field>

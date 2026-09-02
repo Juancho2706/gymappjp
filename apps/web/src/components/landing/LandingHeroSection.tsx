@@ -10,7 +10,6 @@ import { useTheme } from 'next-themes'
 import { motion, useScroll, useTransform, useInView } from 'framer-motion'
 import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { Sparkles, ArrowRight } from 'lucide-react'
-import { MUSCLE_GROUPS } from '@/lib/constants'
 import { cn } from '@/lib/utils'
 
 const WebGLShader = dynamic(
@@ -18,7 +17,12 @@ const WebGLShader = dynamic(
     { ssr: false, loading: () => null }
 )
 
-const muscleGroupCount = MUSCLE_GROUPS.length
+// Cifra de marketing, FIJA a mano: no se deriva de `MUSCLE_GROUPS`. El catálogo del
+// formulario de ejercicios crece por razones de producto (entraron «Rehabilitación» y
+// «Movilidad», que no son músculos) y esta es una superficie con tráfico pagado — nadie
+// quiere que el número del hero cambie solo porque un coach necesitaba una etiqueta nueva.
+// Si hay que moverlo, se mueve acá y a mano.
+const muscleGroupCount = 18
 
 function AnimatedCounter({ value, label }: { value: string; label: string }) {
     const ref = useRef<HTMLDivElement>(null)

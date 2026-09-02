@@ -18,35 +18,27 @@ export {
 // auth.uid()). Mirrors the web feature `app/coach/exercises` but media upload to
 // storage is deferred — mobile creation accepts a YouTube/GIF URL paste.
 
-export const MUSCLE_GROUPS = [
-  'Hombros',
-  'Bíceps',
-  'Tríceps',
-  'Antebrazos',
-  'Cuádriceps',
-  'Glúteos',
-  'Abductores',
-  'Aductores',
-  'Pantorrillas',
-  'Lumbar',
-  'Abdominales',
-  'Cardio',
-  'Dorsales',
-  'Espalda Alta',
-  'Isquiotibiales',
-  'Pectorales',
-  'Trapecios',
-] as const
-
-export const EQUIPMENT_OPTIONS = [
-  'Peso libre',
-  'Máquina',
-  'Poleas',
-  'Banda',
-  'Corporal',
-  'Kettlebell',
-  'Otro',
-] as const
+// Catálogo de grupos musculares y equipo: fuente única en @eva/workout-engine
+// (`muscle-map`), compartida con la web. Acá solo se RE-EXPORTA para no tocar los call
+// sites (`ejercicios.tsx`, `ExerciseSearchSheet`, `ExerciseFormSheet`). La lista de RN
+// tenía 17 valores y le faltaba «Movilidad» (31 filas en LIVE la usan): al editar uno de
+// esos ejercicios no quedaba ninguna opción marcada y el grupo no se podía volver a elegir.
+export {
+  MUSCLE_GROUPS,
+  MUSCLE_GROUP_REGIONS,
+  EQUIPMENT_OPTIONS,
+  catalogMuscleGroup,
+  equipmentLabel,
+  equipmentOption,
+  isCatalogMuscleGroup,
+  muscleGroupRegion,
+} from '@eva/workout-engine'
+export type {
+  EquipmentOption,
+  MuscleGroup,
+  MuscleGroupRegion,
+  MuscleGroupRegionId,
+} from '@eva/workout-engine'
 
 export const DIFFICULTY_OPTIONS = [
   { value: 'beginner', label: 'Principiante' },
