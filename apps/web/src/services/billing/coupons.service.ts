@@ -393,3 +393,112 @@ export async function revertActiveCouponForCoach(db: DB, coachId: string): Promi
         .eq('status', 'active')
     return { reverted: true }
 }
+
+/**
+ * Barrido de registros ABANDONADOS con cupón (REGISTER-CODE), extraído de `cron/mp-reconcile`.
+ *
+ * Caso que SÍ debe cazar: un coach NUEVO que canjeó un código al registrarse queda con
+ * `active_coupon_redemption_id` + `subscription_status='pending_payment'` + `subscription_mp_id=null`.
+ * Si abandona el checkout y nunca paga, mantiene un cupón vivo y quemó un cupo del cap. Tras 48 h se
+ * revierte la redención (`reverted` → el trigger nulea el puntero) y se libera 1 cupo del cap.
+ *
+ * INCIDENTE 2026-09-01 (por qué existen las dos exclusiones de abajo): el predicado original asumía
+ * que `subscription_mp_id IS NULL` ⇒ "nunca pagó". Es FALSO en Flow: el checkout de Flow NULEA
+ * `subscription_mp_id` a propósito (es la columna de MercadoPago; ver
+ * `apps/web/src/app/api/payments/create-preference/route.ts:661,695`), así que en Flow esa columna es
+ * SIEMPRE null. Resultado: un coach que reactivaba por Flow —o cualquier coach viejo que quedó
+ * momentáneamente en `pending_payment`— perdía su cupón en silencio (caso real: coach
+ * 6e825d87-36d5-4fdc-8924-97697cfd9f80, canje forever del 2026-06-24, provider_customer_id
+ * `cus_qc1ad190f3`, 2 filas en `billing_snapshots`).
+ *
+ * DECISIÓN DEL OWNER (2026-09-01): el cupón de un coach que YA PAGÓ alguna vez, o que está pagando por
+ * Flow con tarjeta enrolada, NUNCA se revierte por este barrido — solo el owner lo cancela a mano. Por
+ * eso se saltan (y se cuentan en `skipped`):
+ *   (a) `payment_provider === 'flow'` con `provider_customer_id` presente ⇒ tarjeta enrolada, no es abandono.
+ *   (b) ≥1 fila en `billing_snapshots` para el coach ⇒ ya pagó alguna vez.
+ *
+ * Best-effort por coach (try/catch + console.error): NUNCA throw que tumbe el cron. Idempotente: la 2da
+ * corrida no encuentra los ya revertidos (puntero null). `db` DEBE ser service-role. `deps` existe solo
+ * para tests (inyección de revert/release).
+ */
+export async function sweepAbandonedSignupCoupons(
+    db: DB,
+    now: Date,
+    deps?: { revert?: typeof revertActiveCouponForCoach; release?: typeof releaseCouponCapacity }
+): Promise<{ signupAbandoned: number; skipped: number }> {
+    const revert = deps?.revert ?? revertActiveCouponForCoach
+    const release = deps?.release ?? releaseCouponCapacity
+
+    let signupAbandoned = 0
+    let skipped = 0
+
+    const fortyEightHoursAgo = new Date(now.getTime() - 48 * 60 * 60 * 1000).toISOString()
+    const { data: abandonedCoaches, error: abandonedErr } = await db
+        .from('coaches')
+        .select('id, active_coupon_redemption_id, payment_provider, provider_customer_id')
+        .not('active_coupon_redemption_id', 'is', null)
+        .eq('subscription_status', 'pending_payment')
+        .is('subscription_mp_id', null)
+        .lt('created_at', fortyEightHoursAgo)
+    if (abandonedErr) {
+        console.error('[cron/mp-reconcile] abandoned-coupon query failed:', abandonedErr)
+        return { signupAbandoned: 0, skipped: 0 }
+    }
+
+    for (const coach of abandonedCoaches ?? []) {
+        const redemptionId = coach.active_coupon_redemption_id
+        if (!redemptionId) continue
+        try {
+            // (a) Flow con tarjeta enrolada: en Flow subscription_mp_id es SIEMPRE null, así que este
+            // coach NO es un registro abandonado — está pagando por otro gateway.
+            if (coach.payment_provider === 'flow' && coach.provider_customer_id) {
+                skipped++
+                continue
+            }
+
+            // (b) Ya pagó alguna vez ⇒ su cupón no se toca (decisión del owner 2026-09-01).
+            // FAIL-CLOSED: si la consulta falla no podemos afirmar "nunca pagó", así que tampoco se toca.
+            const { data: snapshots, error: snapshotsErr } = await db
+                .from('billing_snapshots')
+                .select('id')
+                .eq('coach_id', coach.id)
+                .limit(1)
+            if (snapshotsErr) {
+                console.error(`[cron/mp-reconcile] abandoned-coupon snapshots query failed for coach ${coach.id}:`, snapshotsErr)
+                skipped++
+                continue
+            }
+            if ((snapshots?.length ?? 0) > 0) {
+                skipped++
+                continue
+            }
+
+            // Leer la redención viva para obtener el coupon_code_id (necesario para liberar el cap).
+            const { data: redemption } = await db
+                .from('coupon_redemptions')
+                .select('coupon_code_id')
+                .eq('id', redemptionId)
+                .maybeSingle()
+            const codeId = redemption?.coupon_code_id ?? null
+
+            await revert(db, coach.id)
+            if (codeId) await release(db, codeId)
+
+            await db.from('admin_audit_logs').insert({
+                admin_email: 'cron',
+                action: 'coach.coupon_signup_abandoned',
+                target_table: 'coupon_redemptions',
+                target_id: redemptionId,
+                payload: {
+                    coach_id: coach.id,
+                    triggered_by: 'cron/mp-reconcile',
+                },
+            })
+            signupAbandoned++
+        } catch (err) {
+            console.error(`[cron/mp-reconcile] abandoned-coupon revert failed for coach ${coach.id}:`, err)
+        }
+    }
+
+    return { signupAbandoned, skipped }
+}

@@ -16,6 +16,7 @@ import {
     formatCouponTermsText,
     decrementCouponCycleForCharge,
     revertActiveCouponForCoach,
+    sweepAbandonedSignupCoupons,
 } from './coupons.service'
 import type { CouponCatalogRow } from '@/infrastructure/db/coupon-redemptions.repository'
 
@@ -330,5 +331,197 @@ describe('formatCouponTermsText', () => {
             code: 'X', discountClp: 6000, totalClp: 24000, normalClp: 30000, durationLabel: 'de por vida', isLifetime: true,
         })
         expect(lifetime).not.toMatch(/vuelve a/)
+    })
+})
+
+// ── sweepAbandonedSignupCoupons (hotfix 2026-09-01) ──────────────────────────────
+// En Flow subscription_mp_id es SIEMPRE null (create-preference lo nulea), así que el barrido no puede
+// usar esa columna como prueba de "nunca pagó". Reglas del owner: Flow con tarjeta enrolada NO se toca,
+// y quien ya pagó alguna vez (≥1 billing_snapshots) tampoco.
+type SweepCoachRow = {
+    id: string
+    active_coupon_redemption_id: string | null
+    payment_provider: string
+    provider_customer_id: string | null
+}
+
+function makeSweepDb(opts: {
+    coaches?: SweepCoachRow[]
+    coachesError?: { message: string } | null
+    snapshotsByCoach?: Record<string, Array<{ id: string }>>
+    snapshotsError?: { message: string } | null
+    couponCodeId?: string | null
+}) {
+    const audits: Array<Record<string, unknown>> = []
+    const db = {
+        from: vi.fn((table: string) => {
+            if (table === 'coaches') {
+                const result = {
+                    data: opts.coachesError ? null : opts.coaches ?? [],
+                    error: opts.coachesError ?? null,
+                }
+                return {
+                    select: () => ({
+                        not: () => ({
+                            eq: () => ({
+                                is: () => ({
+                                    lt: async () => result,
+                                }),
+                            }),
+                        }),
+                    }),
+                }
+            }
+            if (table === 'billing_snapshots') {
+                return {
+                    select: () => ({
+                        eq: (_col: string, coachId: string) => ({
+                            limit: async () =>
+                                opts.snapshotsError
+                                    ? { data: null, error: opts.snapshotsError }
+                                    : { data: opts.snapshotsByCoach?.[coachId] ?? [], error: null },
+                        }),
+                    }),
+                }
+            }
+            if (table === 'coupon_redemptions') {
+                return {
+                    select: () => ({
+                        eq: () => ({
+                            maybeSingle: async () => ({
+                                data: { coupon_code_id: opts.couponCodeId ?? 'code-1' },
+                                error: null,
+                            }),
+                        }),
+                    }),
+                }
+            }
+            if (table === 'admin_audit_logs') {
+                return {
+                    insert: async (row: Record<string, unknown>) => {
+                        audits.push(row)
+                        return { error: null }
+                    },
+                }
+            }
+            return {}
+        }),
+    }
+    return { db: db as never, audits }
+}
+
+function sweepCoach(over: Partial<SweepCoachRow> = {}): SweepCoachRow {
+    return {
+        id: 'coach-1',
+        active_coupon_redemption_id: 'r1',
+        payment_provider: 'mercadopago',
+        provider_customer_id: null,
+        ...over,
+    }
+}
+
+describe('sweepAbandonedSignupCoupons', () => {
+    it('Flow CON provider_customer_id y sin snapshots → NO revierte (tarjeta enrolada, no es abandono)', async () => {
+        const revert = vi.fn().mockResolvedValue({ reverted: true })
+        const { db, audits } = makeSweepDb({
+            coaches: [sweepCoach({ payment_provider: 'flow', provider_customer_id: 'cus_qc1ad190f3' })],
+        })
+        const r = await sweepAbandonedSignupCoupons(db, new Date('2026-09-02T01:00:00Z'), {
+            revert,
+            release: releaseCouponCapacity,
+        })
+        expect(r).toEqual({ signupAbandoned: 0, skipped: 1 })
+        expect(revert).not.toHaveBeenCalled()
+        expect(releaseCouponCapacity).not.toHaveBeenCalled()
+        expect(audits).toHaveLength(0)
+    })
+
+    it('Flow SIN provider_customer_id y sin snapshots → SÍ revierte + libera cap + audita', async () => {
+        const revert = vi.fn().mockResolvedValue({ reverted: true })
+        const { db, audits } = makeSweepDb({
+            coaches: [sweepCoach({ payment_provider: 'flow', provider_customer_id: null })],
+            couponCodeId: 'code-9',
+        })
+        const r = await sweepAbandonedSignupCoupons(db, new Date('2026-09-02T01:00:00Z'), {
+            revert,
+            release: releaseCouponCapacity,
+        })
+        expect(r).toEqual({ signupAbandoned: 1, skipped: 0 })
+        expect(revert).toHaveBeenCalledWith(db, 'coach-1')
+        expect(releaseCouponCapacity).toHaveBeenCalledWith(db, 'code-9')
+        expect(audits[0]).toMatchObject({
+            admin_email: 'cron',
+            action: 'coach.coupon_signup_abandoned',
+            target_table: 'coupon_redemptions',
+            target_id: 'r1',
+        })
+    })
+
+    it('regresión caso original: MercadoPago sin snapshots → SÍ revierte', async () => {
+        const revert = vi.fn().mockResolvedValue({ reverted: true })
+        const { db } = makeSweepDb({ coaches: [sweepCoach()] })
+        const r = await sweepAbandonedSignupCoupons(db, new Date('2026-09-02T01:00:00Z'), {
+            revert,
+            release: releaseCouponCapacity,
+        })
+        expect(r).toEqual({ signupAbandoned: 1, skipped: 0 })
+        expect(revert).toHaveBeenCalledOnce()
+    })
+
+    it('MercadoPago CON 1 billing_snapshot → NO revierte (ya pagó alguna vez)', async () => {
+        const revert = vi.fn().mockResolvedValue({ reverted: true })
+        const { db, audits } = makeSweepDb({
+            coaches: [sweepCoach()],
+            snapshotsByCoach: { 'coach-1': [{ id: 'snap-1' }] },
+        })
+        const r = await sweepAbandonedSignupCoupons(db, new Date('2026-09-02T01:00:00Z'), {
+            revert,
+            release: releaseCouponCapacity,
+        })
+        expect(r).toEqual({ signupAbandoned: 0, skipped: 1 })
+        expect(revert).not.toHaveBeenCalled()
+        expect(releaseCouponCapacity).not.toHaveBeenCalled()
+        expect(audits).toHaveLength(0)
+    })
+
+    it('fail-closed: si la consulta a billing_snapshots falla → NO revierte (no se puede afirmar "nunca pagó")', async () => {
+        const revert = vi.fn().mockResolvedValue({ reverted: true })
+        const { db, audits } = makeSweepDb({ coaches: [sweepCoach()], snapshotsError: { message: 'timeout' } })
+        const r = await sweepAbandonedSignupCoupons(db, new Date('2026-09-02T01:00:00Z'), {
+            revert,
+            release: releaseCouponCapacity,
+        })
+        expect(r).toEqual({ signupAbandoned: 0, skipped: 1 })
+        expect(revert).not.toHaveBeenCalled()
+        expect(audits).toHaveLength(0)
+    })
+
+    it('query de coaches falla → {0,0} sin throw', async () => {
+        const revert = vi.fn()
+        const { db } = makeSweepDb({ coachesError: { message: 'boom' } })
+        const r = await sweepAbandonedSignupCoupons(db, new Date('2026-09-02T01:00:00Z'), {
+            revert,
+            release: releaseCouponCapacity,
+        })
+        expect(r).toEqual({ signupAbandoned: 0, skipped: 0 })
+        expect(revert).not.toHaveBeenCalled()
+    })
+
+    it('best-effort: si el revert de un coach lanza, el otro igual se procesa', async () => {
+        const revert = vi.fn(async (_db: unknown, coachId: string) => {
+            if (coachId === 'coach-1') throw new Error('revert boom')
+            return { reverted: true }
+        })
+        const { db, audits } = makeSweepDb({
+            coaches: [sweepCoach({ id: 'coach-1' }), sweepCoach({ id: 'coach-2', active_coupon_redemption_id: 'r2' })],
+        })
+        const r = await sweepAbandonedSignupCoupons(db, new Date('2026-09-02T01:00:00Z'), {
+            revert: revert as never,
+            release: releaseCouponCapacity,
+        })
+        expect(r).toEqual({ signupAbandoned: 1, skipped: 0 })
+        expect(revert).toHaveBeenCalledTimes(2)
+        expect(audits).toHaveLength(1)
+        expect(audits[0]).toMatchObject({ target_id: 'r2' })
     })
 })

@@ -18,32 +18,30 @@ Reglas:
 
 ## P0 — Billing
 
-### BILL-01 — Confirmar la reactivación por Flow del coach `movida-la2yw4` y proteger su cupón del cron
+### BILL-01 — Confirmar la reactivación por Flow del coach `movida-la2yw4` (cupón protegido desde el 02-09)
 
 El 01-09 el owner reactivó por SQL el canje `06070508-33d6-4839-8c81-9a723a43e65f` (50 % forever ⇒ Pro mensual
-14.995; `coupon_codes.JHNG3C48AE` sigue inactivo a propósito) y el coach intentó reactivar por Flow 3 veces sin
-completar: el gate del proxy no eximía `/coach/subscription/flow-processing` y `confirm-enrollment` nunca corrió
-(bug prod, fix `850d85a9`, en producción desde `9991d42b` el 01-09 ~23:52Z). Al cierre de este doc el coach seguía
-`pending_payment` con la tarjeta enrolada (`provider_customer_id` presente, `subscription_provider_external_id` null)
-y **no había reintentado después del deploy** (último intento 23:39Z).
+14.995; `coupon_codes.JHNG3C48AE` sigue inactivo a propósito). El coach intentó reactivar por Flow **5 veces**
+(22:45 · 22:47 · 23:39 · 00:03 · 00:04 UTC), las 2 últimas ya con el fix del gate en producción (`850d85a9`,
+READY 23:47:56Z): llega al enrolamiento de Flow y **nunca vuelve a `/flow/retorno`** (probable rechazo de tarjeta
+o cierre de ventana), así que `confirm-enrollment` sigue sin correr. Verificado 02-09 00:14Z: `pending_payment`,
+`provider_customer_id` presente, `subscription_provider_external_id` null, canje `active`, ningún
+`billing_snapshots` de Flow.
 
+- [x] **Barrido «abandoned signup coupons» arreglado (02-09)**: `sweepAbandonedSignupCoupons()` en
+      `apps/web/src/services/billing/coupons.service.ts` excluye a los coaches Flow con `provider_customer_id`
+      y a todo coach con ≥1 fila en `billing_snapshots` (decisión del owner: un cupón de quien ya pagó o está
+      pagando por Flow solo lo cancela él a mano). 7 tests. Con esto el cron de las 10:00 UTC ya no toca este canje.
 - [ ] Verificar en `coaches` (slug `movida-la2yw4`): `subscription_status='active'`, `subscription_provider='flow'`,
       `provider_plan_id='eva_pro_monthly_14995'`, `subscription_provider_external_id` no nulo, `current_period_end`
       futuro; y en `billing_snapshots` la fila con total 14.995 y `coupon_code='JHNG3C48AE'`.
-- [ ] Si a las **10:00 UTC del 02-09** (06:00 Chile) sigue `pending_payment`: el barrido «abandoned signup coupons»
-      del cron `mp-reconcile` (`apps/web/src/app/api/cron/mp-reconcile/route.ts:421-466`, `vercel.json` `0 10 * * *`)
-      revierte el canje en silencio (`subscription_status='pending_payment' AND subscription_mp_id IS NULL AND
-      created_at < now()-48h`). Re-flip por SQL **antes de que pague** (Flow hornea el monto en el plan al crear la
-      sub): `update coupon_redemptions set status='active' where id='06070508-…' and status='reverted'` + fila en
-      `admin_audit_logs` (`coupon.reactivate_redemption`). Evidencia del cron: `admin_audit_logs`
-      `coach.coupon_signup_abandoned`.
-- [ ] Decidir el fix del barrido (bug general, no solo este coach): en Flow `subscription_mp_id` es SIEMPRE null,
-      así que toda alta/reactivación Flow con cupón que no cobra en 48 h desde `coaches.created_at` pierde el cupón.
-      Opciones: excluir `payment_provider='flow' AND provider_customer_id IS NOT NULL`, o medir la edad del canje
-      (`coupon_redemptions.created_at`) en vez de la del coach. Con test.
+- [ ] Si el canje apareciera `reverted` (no debería): re-flip por SQL `update coupon_redemptions set status='active'
+      where id='06070508-…' and status='reverted'` + fila en `admin_audit_logs` (`coupon.reactivate_redemption`) +
+      `update coupon_codes set redeemed_count=1 where id='09afd265-435d-4365-9d24-50e2777f586b' and redeemed_count=0`.
 - Cómo completa el coach: con sesión iniciada, `https://www.eva-app.cl/coach/subscription/flow-processing?tier=pro&cycle=monthly`
   (poll de `confirm-enrollment`: verifica la tarjeta en Flow y crea la sub al toque) o rehacer el checkout Flow desde
   `/coach/reactivate`. Alternativa sin Flow: Mercado Pago (su vuelta `/coach/subscription/processing` siempre estuvo exenta).
+  El owner le escribe por mail (no WhatsApp) para saber qué ve en la pantalla de Flow.
 
 ## P1 — Cierre del build y QA móvil
 
