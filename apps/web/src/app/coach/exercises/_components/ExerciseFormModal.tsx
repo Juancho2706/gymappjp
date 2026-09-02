@@ -91,6 +91,11 @@ interface Props {
      * el coach (el día del builder, el catálogo en curso). Solo se dispara en modo crear.
      */
     onCreated?: (exercise: ExerciseCatalogRow) => void
+    /**
+     * Tras guardar en modo EDITAR (`exercise` presente): el llamador refresca su lista
+     * (`router.refresh()` en el catálogo). Solo se dispara en modo editar, una vez por guardado.
+     */
+    onSaved?: () => void
 }
 
 const initialState: ExerciseActionState = {}
@@ -149,7 +154,7 @@ function Field({
     )
 }
 
-export function ExerciseFormModal({ open, onClose, exercise, initialName, onCreated }: Props) {
+export function ExerciseFormModal({ open, onClose, exercise, initialName, onCreated, onSaved }: Props) {
     const [isPending, startTransition] = useTransition()
     const [media, setMedia] = useState<MediaValue>(() => initialMedia(exercise))
     const [name, setName] = useState(exercise?.name ?? initialName ?? '')
@@ -209,6 +214,7 @@ export function ExerciseFormModal({ open, onClose, exercise, initialName, onCrea
     // Un solo aviso por creación: `state.success` sigue en true tras el cierre y el callback del
     // padre puede cambiar de identidad en cada render (insertaría el ejercicio dos veces).
     const createdNotified = useRef(false)
+    const savedNotified = useRef(false)
 
     useEffect(() => {
         if (!state.success) return
@@ -226,8 +232,13 @@ export function ExerciseFormModal({ open, onClose, exercise, initialName, onCrea
                     if (data) onCreated(data)
                 })
         }
+        // Modo editar: un solo aviso por guardado (mismo motivo que `createdNotified`).
+        if (exercise && onSaved && !savedNotified.current) {
+            savedNotified.current = true
+            onSaved()
+        }
         onClose()
-    }, [state.success, state.exerciseId, exercise, onCreated, onClose])
+    }, [state.success, state.exerciseId, exercise, onCreated, onSaved, onClose])
 
     const isCardio = exerciseType === 'cardio'
     // Preview de las cajas que verá el alumno: derivado del MOTOR (cardioAxesFor), nunca de una

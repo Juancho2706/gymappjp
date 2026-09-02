@@ -11,6 +11,14 @@ export interface ExerciseCatalog {
     globalExercises: Exercise[]
     customExercises: Exercise[]
     byMuscle: Record<string, Exercise[]>
+    /**
+     * id de ejercicio PROPIO → cuántos bloques de programa lo referencian. Alimenta el aviso
+     * previo a eliminar ("lo que ya lo usa lo conserva tal cual"): el borrado es soft, los
+     * bloques ya armados siguen apuntando a la fila.
+     * OJO: con la RLS de `workout_blocks` el conteo es "de tus programas" (los que ves — en un
+     * workspace team, los del pool), NUNCA global. Es informativo: no autoriza nada.
+     */
+    usageByExercise: Record<string, number>
 }
 
 export const getExerciseCatalog = cache(async (
@@ -71,5 +79,25 @@ export const getExerciseCatalog = cache(async (
         return acc
     }, {})
 
-    return { globalExercises, customExercises, byMuscle }
+    // Uso de los ejercicios propios. Solo sobre `customExercises`: son los únicos editables/
+    // eliminables, y los del catálogo global viven en miles de planes (contarlos sería un scan
+    // inútil en cada render). Ante cualquier error el conteo se degrada a {} — es un dato de
+    // apoyo del diálogo de borrado, jamás debe tumbar el catálogo.
+    let usageByExercise: Record<string, number> = {}
+    if (customExercises.length > 0) {
+        const { data: usageRows, error: usageError } = await supabase
+            .from('workout_blocks')
+            .select('exercise_id')
+            .in('exercise_id', customExercises.map(ex => ex.id))
+
+        if (!usageError && usageRows) {
+            usageByExercise = usageRows.reduce<Record<string, number>>((acc, row) => {
+                const id = (row as { exercise_id: string | null }).exercise_id
+                if (id) acc[id] = (acc[id] ?? 0) + 1
+                return acc
+            }, {})
+        }
+    }
+
+    return { globalExercises, customExercises, byMuscle, usageByExercise }
 })

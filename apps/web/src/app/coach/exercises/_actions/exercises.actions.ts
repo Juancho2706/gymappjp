@@ -108,14 +108,24 @@ function resolveMediaFields(parsed: z.infer<typeof exerciseSchema>) {
     }
 }
 
+/**
+ * Duplica un ejercicio (del sistema o propio) dentro del catálogo del contexto activo.
+ *
+ * Dos cosas que NO son obvias:
+ * 1. La media (gif/imagen/video) se copia TAL CUAL desde la fila origen leída en DB, no desde el
+ *    FormData. Los ejercicios del sistema traen `gif_url` de un CDN externo (ExerciseDB), fuera del
+ *    prefijo de Storage, así que pasarlos por el `refine` de `exerciseSchema` los rechazaría; y
+ *    leerla de la fila (en vez de confiar en el cliente) evita que el navegador inyecte URLs
+ *    arbitrarias en el catálogo. Antes ni se copiaban: el clon nacía sin media.
+ * 2. El dueño sale de `resolveExerciseOwner`, igual que create/update: en workspace team el clon
+ *    nace en el catálogo del POOL (team_id) y no personal — si no, sería invisible para el resto
+ *    del equipo y para los alumnos del pool (mismo bug AC6/AC11 que arregló el create).
+ */
 export async function cloneExerciseAction(formData: FormData) {
   try {
     const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
-    if (!user) {
-      return { error: 'No autorizado' }
-    }
+    const owner = await resolveExerciseOwner(supabase)
+    if (!owner.ok) return { error: owner.error }
 
     // Parse instructions
     const instructionsStr = formData.get('instructions') as string
@@ -151,25 +161,68 @@ export async function cloneExerciseAction(formData: FormData) {
       secondary_muscles: secondaryMuscles.length > 0 ? secondaryMuscles : null,
     }
 
-    const validated = CloneExerciseSchema.parse(data)
+    // safeParse y no parse: los datos salen de la fila del catálogo, no de un formulario libre —
+    // si no parsean es un bug del call site y el coach no puede corregirlo. Con `parse`, el
+    // ZodError se colaba tal cual al toast como un JSON ilegible.
+    const cloneParsed = CloneExerciseSchema.safeParse(data)
+    if (!cloneParsed.success) {
+      console.error('cloneExerciseAction datos inválidos:', cloneParsed.error.flatten())
+      return { error: 'No se pudo duplicar: datos del ejercicio inválidos.' }
+    }
+    const validated = cloneParsed.data
+
+    // Fila origen: de acá sale la media (y el tipo/modalidad, que el FormData no trae).
+    const { data: source } = await supabase
+      .from('exercises')
+      .select('exercise_type, cardio_modality, body_part, video_url, gif_url, image_url, video_start_time, video_end_time')
+      .eq('id', validated.id)
+      .maybeSingle()
+
+    if (!source) {
+      return { error: 'No se pudo duplicar: el ejercicio no existe o no es visible.' }
+    }
+
+    // Duplicado de nombre scopeado al owner, mismo criterio que create/update.
+    const { count: nameCount } = await applyExerciseOwnerScope(
+      supabase
+        .from('exercises')
+        .select('id', { count: 'exact', head: true })
+        .ilike('name', validated.name),
+      owner
+    )
+    if ((nameCount ?? 0) > 0) {
+      return { error: 'Ya existe un ejercicio con ese nombre.' }
+    }
 
     const { error } = await supabase
       .from('exercises')
       .insert({
+        coach_id: owner.coachId,
+        org_id: owner.orgId,
+        team_id: owner.teamId,
         name: validated.name,
         muscle_group: validated.muscle_group,
         equipment: validated.equipment,
-        video_url: validated.video_url,
         difficulty: validated.difficulty,
         gender_focus: validated.gender_focus,
         instructions: validated.instructions,
         secondary_muscles: validated.secondary_muscles,
-        coach_id: user.id
+        exercise_type: source.exercise_type,
+        cardio_modality: source.cardio_modality,
+        body_part: source.body_part,
+        video_url: source.video_url,
+        gif_url: source.gif_url,
+        image_url: source.image_url,
+        video_start_time: source.video_start_time,
+        video_end_time: source.video_end_time,
+        source: owner.orgId ? 'org' : owner.teamId ? 'team' : 'coach',
       })
 
     if (error) throw error
 
     revalidatePath('/coach/exercises')
+    revalidatePath('/coach/builder')
+    revalidatePath('/coach/workout-programs/builder')
     return { success: true }
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Error al clonar ejercicio'
@@ -320,6 +373,9 @@ export async function createExerciseAction(
 
     revalidatePath('/coach/exercises')
     revalidatePath('/coach/builder')
+    // El builder de PLANTILLAS vive en otra ruta y también lista el catálogo: sin esto seguía
+    // sirviendo la lista vieja (el ejercicio nuevo no aparecía hasta un refresh duro).
+    revalidatePath('/coach/workout-programs/builder')
     return { success: true, exerciseId: exercise.id }
 }
 
@@ -387,12 +443,16 @@ export async function updateExerciseAction(
             video_end_time: videoEnd,
         })
         .eq('id', exerciseId)
-    applyExerciseOwnerScope(updateQuery, owner)
 
-    const { error } = await updateQuery
+    // `.select('id')` DESPUÉS del scope: sin él un UPDATE que no matchea (ejercicio ajeno o
+    // borrado) vuelve sin error y la UI mostraba "guardado" sobre algo que nunca cambió.
+    const { data: updated, error } = await applyExerciseOwnerScope(updateQuery, owner).select('id')
     if (error) {
         console.error('updateExerciseAction error:', error)
         return { error: 'Error al actualizar el ejercicio.' }
+    }
+    if (!updated || updated.length === 0) {
+        return { error: 'No se pudo guardar: el ejercicio no es tuyo o ya no existe.' }
     }
 
     // Mirror/limpia el thumbnail segun la media nueva (best-effort, nunca tira).
@@ -405,6 +465,17 @@ export async function updateExerciseAction(
         const newUrls = [media.gif_url, media.image_url].filter(Boolean) as string[]
         for (const old of oldUrls) {
             if (!newUrls.includes(old)) {
+                // Un clon comparte la URL de media con su origen (ver cloneExerciseAction): borrar
+                // el archivo a ciegas dejaría al otro ejercicio con una imagen rota. Solo se borra
+                // si NINGUNA otra fila lo referencia. Dos `.eq()` en vez de un `.or()` porque el
+                // filtro `or` de PostgREST parte el valor en comas y una URL puede traerlas.
+                const [{ count: asGif }, { count: asImage }] = await Promise.all([
+                    supabase.from('exercises').select('id', { count: 'exact', head: true })
+                        .neq('id', exerciseId).eq('gif_url', old),
+                    supabase.from('exercises').select('id', { count: 'exact', head: true })
+                        .neq('id', exerciseId).eq('image_url', old),
+                ])
+                if ((asGif ?? 0) > 0 || (asImage ?? 0) > 0) continue
                 deleteExerciseMediaByUrlAction(old).catch(() => undefined)
             }
         }
@@ -412,6 +483,7 @@ export async function updateExerciseAction(
 
     revalidatePath('/coach/exercises')
     revalidatePath('/coach/builder')
+    revalidatePath('/coach/workout-programs/builder')
     return { success: true, exerciseId }
 }
 
@@ -424,13 +496,19 @@ export async function softDeleteExerciseAction(exerciseId: string): Promise<Exer
         .from('exercises')
         .update({ deleted_at: new Date().toISOString() })
         .eq('id', exerciseId)
-    applyExerciseOwnerScope(updateQuery, owner)
 
-    const { error } = await updateQuery
+    // `.select('id')` DESPUÉS del scope: sin él, PostgREST devuelve 204 sin error cuando el UPDATE
+    // no matchea ninguna fila (ejercicio ajeno, del sistema o ya inexistente) y el coach veía
+    // "eliminado" sin que se hubiera tocado nada. Con el select sabemos cuántas filas cambiaron.
+    const { data, error } = await applyExerciseOwnerScope(updateQuery, owner).select('id')
     if (error) return { error: 'Error al eliminar el ejercicio.' }
+    if (!data || data.length === 0) {
+        return { error: 'No se pudo eliminar: el ejercicio no es tuyo o ya no existe.' }
+    }
 
     revalidatePath('/coach/exercises')
     revalidatePath('/coach/builder')
+    revalidatePath('/coach/workout-programs/builder')
     return { success: true }
 }
 
@@ -443,12 +521,16 @@ export async function restoreExerciseAction(exerciseId: string): Promise<Exercis
         .from('exercises')
         .update({ deleted_at: null })
         .eq('id', exerciseId)
-    applyExerciseOwnerScope(updateQuery, owner)
 
-    const { error } = await updateQuery
+    // Mismo motivo que en el soft-delete: 0 filas afectadas es éxito silencioso en PostgREST.
+    const { data, error } = await applyExerciseOwnerScope(updateQuery, owner).select('id')
     if (error) return { error: 'No se pudo restaurar.' }
+    if (!data || data.length === 0) {
+        return { error: 'No se pudo restaurar: el ejercicio no es tuyo o ya no existe.' }
+    }
 
     revalidatePath('/coach/exercises')
     revalidatePath('/coach/builder')
+    revalidatePath('/coach/workout-programs/builder')
     return { success: true }
 }

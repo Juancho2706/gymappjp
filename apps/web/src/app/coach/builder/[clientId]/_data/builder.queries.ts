@@ -23,7 +23,7 @@ export const getBuilderData = cache(async (clientId: string, programId?: string)
     // getClaims(): verificación local del JWT (ES256), sin /user. El proxy ya validó/refrescó la sesión.
     const { data: __cl } = await supabase.auth.getClaims()
     const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
-    if (!user) return { user: null, client: null, exercises: [] as Exercise[], initialProgram: null, areas: [] as WorkoutArea[], cardio: { enabled: false, zones: null } as BuilderCardioContext }
+    if (!user) return { user: null, client: null, exercises: [] as Exercise[], initialProgram: null, areas: [] as WorkoutArea[], cardio: { enabled: false, zones: null } as BuilderCardioContext, orgId: null as string | null, teamId: null as string | null }
 
     const workspace = await resolvePreferredWorkspace(supabase, user.id)
     const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
@@ -138,5 +138,9 @@ export const getBuilderData = cache(async (clientId: string, programId?: string)
         lastEditor,
         areas,
         cardio,
+        // Scope del workspace ACTIVO: el catálogo del builder mezcla sistema + propios en una
+        // sola lista, y sin esto el cliente no puede decidir cuál es editable por el coach.
+        orgId,
+        teamId: activeTeamId,
     }
 })

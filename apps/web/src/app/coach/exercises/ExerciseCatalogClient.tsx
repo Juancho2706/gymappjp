@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, useRef } from 'react'
+import { useState, useMemo, useEffect, useRef, useTransition } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import {
@@ -10,7 +10,17 @@ import {
     DialogTitle,
     DialogClose,
 } from '@/components/ui/dialog'
-import { Dumbbell, Globe, User, ExternalLink, Play, Plus, Zap, Target, Wrench, Search, Filter, X, Copy, ChevronDown, ChevronUp } from 'lucide-react'
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { Dumbbell, Globe, User, ExternalLink, Play, Plus, Zap, Target, Wrench, Search, Filter, X, Copy, ChevronDown, ChevronUp, Pencil, Trash2 } from 'lucide-react'
 import type { Tables } from '@/lib/database.types'
 import { MUSCLE_GROUPS } from '@/lib/constants'
 import { Input } from '@/components/ui/input'
@@ -24,23 +34,53 @@ import { ExerciseVideo } from '@/components/exercise/ExerciseVideo'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ExerciseCreateButton } from './_components/ExerciseCreateButton'
 import { ExerciseFormModal } from './_components/ExerciseFormModal'
+import {
+    cloneExerciseAction,
+    restoreExerciseAction,
+    softDeleteExerciseAction,
+} from './_actions/exercises.actions'
 
 type Exercise = Tables<'exercises'>
+
+/** Ventana del «Deshacer» del borrado — la misma que el resto de acciones destructivas de la app. */
+const UNDO_TOAST_MS = 8000
 
 interface ExerciseCatalogClientProps {
     globalExercises: Exercise[]
     customExercises: Exercise[]
     byMuscle: Record<string, Exercise[]>
     canCreateExercises?: boolean
+    /**
+     * id → bloques de programa que lo usan (solo ejercicios propios). Es informativo: avisa antes
+     * de eliminar que lo ya armado se conserva. Ver `getExerciseCatalog`.
+     */
+    usageByExercise?: Record<string, number>
+    /**
+     * Etiqueta de autoría de las filas propias: en un workspace team el catálogo editable es el
+     * del POOL, no «mío» — decirle «Propio» ahí sería mentir sobre a quién pertenece.
+     */
+    ownLabel?: 'Propio' | 'Del equipo'
 }
 
-export function ExerciseCatalogClient({ globalExercises, customExercises, byMuscle, canCreateExercises = false }: ExerciseCatalogClientProps) {
+export function ExerciseCatalogClient({
+    globalExercises,
+    customExercises,
+    byMuscle,
+    canCreateExercises = false,
+    usageByExercise = {},
+    ownLabel = 'Propio',
+}: ExerciseCatalogClientProps) {
     // Deep-link ?q= desde la búsqueda global del topbar: pre-carga el filtro del catálogo.
     const searchParams = useSearchParams()
     const router = useRouter()
     const [selected, setSelected] = useState<Exercise | null>(null)
     // Término congelado al abrir el CTA «Crear "…"» del empty state (null = modal cerrado).
     const [createName, setCreateName] = useState<string | null>(null)
+    // Ejercicio propio abierto en el formulario de EDICIÓN (null = cerrado).
+    const [editTarget, setEditTarget] = useState<Exercise | null>(null)
+    // Ejercicio en el diálogo de confirmación de borrado (null = cerrado).
+    const [deleteTarget, setDeleteTarget] = useState<Exercise | null>(null)
+    const [isPending, startTransition] = useTransition()
     const [search, setSearch] = useState(() => searchParams.get('q') ?? '')
     const [muscleFilter, setMuscleFilter] = useState<string>('Todos')
     const [customOnly, setCustomOnly] = useState(false)
@@ -79,6 +119,13 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
 
     const allExercises = useMemo(() => [...globalExercises, ...customExercises], [globalExercises, customExercises])
 
+    /**
+     * Autoría por id. El grid mezcla catálogo global y propios en la misma lista de chips y cada
+     * chip necesita saber si la fila es gestionable: un Set evita recorrer `customExercises`
+     * cientos de veces por render.
+     */
+    const customIds = useMemo(() => new Set(customExercises.map(e => e.id)), [customExercises])
+
     const trimmedSearch = search.trim()
 
     const filteredExercises = useMemo(() => {
@@ -95,7 +142,7 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
 
     const groupedByMuscle = useMemo(() => {
         const groups: Record<string, Exercise[]> = {}
-        
+
         // Use the master list to define order and ensure important groups appear
         MUSCLE_GROUPS.forEach(m => {
             groups[m] = []
@@ -111,9 +158,100 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
         if (search || muscleFilter !== 'Todos') {
             return Object.fromEntries(Object.entries(groups).filter(([_, list]) => list.length > 0))
         }
-        
+
         return Object.fromEntries(Object.entries(groups).filter(([_, list]) => list.length > 0))
     }, [filteredExercises, search, muscleFilter])
+
+    /**
+     * Editar: el preview y el formulario son dos modales distintos. Se cierra el primero ANTES de
+     * abrir el segundo para no encimar dos trampas de foco (mismo criterio que el sheet de RN).
+     */
+    const handleEdit = (ex: Exercise) => {
+        setSelected(null)
+        setEditTarget(ex)
+    }
+
+    /**
+     * Eliminar: el borrado es SOFT (`deleted_at`), así que en vez de un segundo «¿estás seguro?»
+     * el flujo ofrece red de seguridad — confirmación corta + «Deshacer» en el toast.
+     */
+    const handleConfirmDelete = () => {
+        const target = deleteTarget
+        if (!target) return
+        startTransition(async () => {
+            const res = await softDeleteExerciseAction(target.id)
+            if (res.error) {
+                toast.error(res.error)
+                return
+            }
+            setDeleteTarget(null)
+            setSelected(null)
+            // El catálogo llega por props del servidor: sin refresh el ejercicio seguiría en el grid.
+            router.refresh()
+            toast.success('Ejercicio eliminado', {
+                duration: UNDO_TOAST_MS,
+                action: {
+                    label: 'Deshacer',
+                    onClick: () => {
+                        void restoreExerciseAction(target.id).then(r => {
+                            if (r.error) {
+                                toast.error(r.error)
+                                return
+                            }
+                            toast.success('Ejercicio restaurado')
+                            router.refresh()
+                        })
+                    },
+                },
+            })
+        })
+    }
+
+    /**
+     * Duplicar: `cloneExerciseAction` recibe un FormData plano con `id` + los campos a copiar
+     * (contrato = CloneExerciseSchema). Las listas viajan como JSON — la action hace JSON.parse
+     * con fallback a split, y mandar JSON evita que un paso con coma se parta en dos.
+     *
+     * La media NO se manda: la action la copia desde la fila origen leída en DB. Mandar el
+     * `video_url` del catálogo global solo puede hacer daño (varias filas guardan ahí un GIF de
+     * ExerciseDB que no pasa el `.url()` del schema y haría fallar un duplicado perfectamente sano).
+     */
+    const handleClone = (ex: Exercise) => {
+        startTransition(async () => {
+            const fd = new FormData()
+            fd.set('id', ex.id)
+            fd.set('name', ex.name)
+            fd.set('muscle_group', ex.muscle_group)
+            if (ex.equipment) fd.set('equipment', ex.equipment)
+            if (ex.difficulty) fd.set('difficulty', ex.difficulty)
+            if (ex.gender_focus) fd.set('gender_focus', ex.gender_focus)
+            if (ex.instructions?.length) fd.set('instructions', JSON.stringify(ex.instructions))
+            if (ex.secondary_muscles?.length) fd.set('secondary_muscles', JSON.stringify(ex.secondary_muscles))
+
+            const res = await cloneExerciseAction(fd)
+            if (res.error) {
+                toast.error(res.error)
+                return
+            }
+            setSelected(null)
+            router.refresh()
+            toast.success('Ejercicio duplicado. Se copió a tus ejercicios.')
+        })
+    }
+
+    const selectedIsOwn = selected ? customIds.has(selected.id) : false
+
+    // Copys del diálogo de borrado. El soft delete solo ESCONDE la fila: lo que ya la usa sigue
+    // apuntando a ella, y el número real (cuando lo tenemos) es lo que le baja la ansiedad al coach.
+    const deleteUsage = deleteTarget ? (usageByExercise[deleteTarget.id] ?? 0) : 0
+    const deleteScopeText = ownLabel === 'Del equipo'
+        ? 'Se oculta del catálogo del equipo y del builder.'
+        : 'Se oculta de tu catálogo y del builder.'
+    const deleteUsageText = deleteUsage > 1
+        ? `Los ${deleteUsage} bloques que ya lo usan lo conservan tal cual.`
+        : deleteUsage === 1
+            ? 'El bloque que ya lo usa lo conserva tal cual.'
+            : 'Los programas que ya lo usan lo conservan tal cual.'
 
     return (
         <div className="space-y-6">
@@ -229,6 +367,15 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
                                                         <div className="mr-2 w-2 h-2 rounded-full bg-sport-500 animate-pulse group-hover:animate-none" />
                                                     )}
                                                     {ex.name}
+                                                    {/* Autoría a simple vista: sin esto el coach no sabe cuál de los
+                                                        cientos de chips puede editar hasta abrirlos uno por uno. Tono
+                                                        éxito discreto y `shrink-0` para no estirar el chip. */}
+                                                    {customIds.has(ex.id) && (
+                                                        <span className="ml-2 shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-bold leading-none bg-[var(--success-100)] text-[var(--success-700)]">
+                                                            <User className="w-2.5 h-2.5" />
+                                                            {ownLabel}
+                                                        </span>
+                                                    )}
                                                 </button>
                                             ))}
                                         </motion.div>
@@ -280,12 +427,67 @@ export function ExerciseCatalogClient({ globalExercises, customExercises, byMusc
                 />
             )}
 
+            {/* Editar un ejercicio propio. El modal se cierra solo al guardar (llama a onClose). */}
+            {editTarget && (
+                <ExerciseFormModal
+                    open
+                    exercise={editTarget}
+                    onClose={() => setEditTarget(null)}
+                    onSaved={() => {
+                        router.refresh()
+                        toast.success('Ejercicio actualizado')
+                    }}
+                />
+            )}
+
             {/* Exercise Preview Modal */}
             <ExercisePreviewModal
                 exercise={selected}
                 open={!!selected}
                 onClose={() => setSelected(null)}
+                isOwn={selectedIsOwn}
+                canManage={canCreateExercises}
+                usage={selected ? (usageByExercise[selected.id] ?? 0) : 0}
+                ownLabel={ownLabel}
+                isPending={isPending}
+                onEdit={handleEdit}
+                onDelete={setDeleteTarget}
+                onClone={handleClone}
             />
+
+            {/* Confirmación de borrado. Montado solo con target para que el nombre del título nunca
+                quede vacío a mitad de la animación de cierre. */}
+            {deleteTarget && (
+                <AlertDialog
+                    open
+                    onOpenChange={(isOpen) => { if (!isOpen && !isPending) setDeleteTarget(null) }}
+                >
+                    <AlertDialogContent className="bg-surface-card border border-subtle text-body rounded-card">
+                        <AlertDialogHeader>
+                            <AlertDialogTitle className="text-strong">
+                                ¿Eliminar “{deleteTarget.name}”?
+                            </AlertDialogTitle>
+                            <AlertDialogDescription className="text-muted">
+                                {deleteScopeText} {deleteUsageText} Puedes deshacerlo justo después.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter className="gap-3">
+                            {/* Cancelar va PRIMERO en el DOM a propósito: es el primer tabbable, así el
+                                foco inicial del diálogo cae en la salida segura y no en la destructiva. */}
+                            <AlertDialogCancel disabled={isPending}>
+                                Cancelar
+                            </AlertDialogCancel>
+                            <AlertDialogAction
+                                variant="danger"
+                                onClick={handleConfirmDelete}
+                                disabled={isPending}
+                            >
+                                {isPending ? 'Eliminando…' : 'Eliminar'}
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+            )}
         </div>
     )
 }
@@ -294,10 +496,29 @@ function ExercisePreviewModal({
     exercise,
     open,
     onClose,
+    isOwn,
+    canManage,
+    usage,
+    ownLabel,
+    isPending,
+    onEdit,
+    onDelete,
+    onClone,
 }: {
     exercise: Exercise | null
     open: boolean
     onClose: () => void
+    /** La fila pertenece al catálogo editable (propio / org / pool del team). */
+    isOwn: boolean
+    /** El rol permite gestionar el catálogo (crear, editar, eliminar, duplicar). */
+    canManage: boolean
+    /** Bloques de programa que ya usan el ejercicio (0 = sin uso o desconocido). */
+    usage: number
+    ownLabel: 'Propio' | 'Del equipo'
+    isPending: boolean
+    onEdit: (exercise: Exercise) => void
+    onDelete: (exercise: Exercise) => void
+    onClone: (exercise: Exercise) => void
 }) {
     if (!exercise) return null
 
@@ -442,20 +663,73 @@ function ExercisePreviewModal({
                         </div>
                     </div>
 
-                    {/* Source badge */}
+                    {/* Source badge. Decide por `isOwn`, no por `coach_id`: en org/team la fila propia
+                        tiene coach_id NULL y, mirando la columna, el catálogo del pool se leía como
+                        global (y por lo tanto no editable). */}
                     <div className="flex items-center gap-2 text-xs text-muted pt-1">
-                        {exercise.coach_id ? (
+                        {isOwn ? (
                             <>
-                                <User className="w-3.5 h-3.5" />
-                                Ejercicio personalizado
+                                <User className="w-3.5 h-3.5 shrink-0" />
+                                {ownLabel === 'Del equipo' ? 'Ejercicio del equipo' : 'Ejercicio personalizado'}
                             </>
                         ) : (
                             <>
-                                <Globe className="w-3.5 h-3.5" />
+                                <Globe className="w-3.5 h-3.5 shrink-0" />
                                 Catálogo global · ExerciseDB
                             </>
                         )}
+                        {/* Peso real del ejercicio antes de tocar nada. Solo con uso > 0: un "0 bloques"
+                            no le dice nada a nadie. */}
+                        {isOwn && usage > 0 && (
+                            <span className="ml-auto shrink-0 tabular-nums">
+                                Usado en {usage} {usage === 1 ? 'bloque' : 'bloques'} de tus programas
+                            </span>
+                        )}
                     </div>
+
+                    {/* Pie de acciones. Sin permiso de gestión no se pinta nada (coach de org en solo
+                        lectura, exactamente como antes). */}
+                    {canManage && (
+                        isOwn ? (
+                            <div className="border-t border-subtle pt-3 flex flex-col sm:flex-row gap-2">
+                                {/* Espejo del sheet de RN: dentro del modal el hero es «Editar» — el
+                                    único `sport` de la pantalla (el header) no compite acá. */}
+                                <Button
+                                    type="button"
+                                    variant="sport"
+                                    onClick={() => onEdit(exercise)}
+                                    disabled={isPending}
+                                    className="w-full sm:flex-1"
+                                >
+                                    <Pencil className="h-4 w-4 shrink-0" />
+                                    Editar ejercicio
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    onClick={() => onDelete(exercise)}
+                                    disabled={isPending}
+                                    className="w-full sm:w-auto bg-transparent text-[var(--cta-danger)] border-[var(--cta-danger)]/35 hover:bg-[color-mix(in_oklab,var(--cta-danger)_10%,transparent)] hover:text-[var(--cta-danger)]"
+                                >
+                                    <Trash2 className="h-4 w-4 shrink-0" />
+                                    Eliminar
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="border-t border-subtle pt-3">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={() => onClone(exercise)}
+                                    disabled={isPending}
+                                    className="w-full bg-[var(--sport-100)] text-[var(--sport-700)] border-[var(--sport-300)]/50 hover:bg-[var(--sport-200)] hover:text-[var(--sport-700)]"
+                                >
+                                    <Copy className="h-4 w-4 shrink-0" />
+                                    Duplicar a mis ejercicios
+                                </Button>
+                            </div>
+                        )
+                    )}
                 </div>
             </DialogContent>
         </Dialog>

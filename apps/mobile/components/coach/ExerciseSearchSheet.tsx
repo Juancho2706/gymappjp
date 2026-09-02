@@ -3,11 +3,12 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, TouchableOpa
 import BottomSheet, { BottomSheetFlatList, type BottomSheetModal } from '@gorhom/bottom-sheet'
 import { Image } from 'expo-image'
 import { MotiView } from 'moti'
-import { Activity, Check, ChevronUp, Clock, Dumbbell, Eye, Plus, Search, X } from 'lucide-react-native'
+import { Activity, Check, ChevronUp, Clock, Dumbbell, Eye, Pencil, Plus, Search, X } from 'lucide-react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useTheme } from '../../context/ThemeContext'
 import { exerciseThumb, filterExercises, MUSCLE_GROUPS, type ExerciseRow } from '../../lib/exercises'
 import { getMuscleColor } from '../../lib/muscle-colors'
+import { Button } from '../Button'
 import { VideoPlayer } from '../VideoPlayer'
 import { execMediaKind } from '../alumno/workout/v3/ExecMediaV3'
 import { ExerciseFormSheet, type CreatedExercise } from './ExerciseFormSheet'
@@ -58,12 +59,19 @@ interface Props {
    *  flotantes (Guardar) mientras el catálogo está expandido — 1:1 web `!isCatalogOpen`. */
   onIndexChange?: (index: number) => void
   onSelect: (block: BuilderBlock) => void
+  /**
+   * El coach editó (o eliminó) un ejercicio propio desde el preview del catálogo. `exercises` es
+   * un prop: la lista vive en el llamador, así que la única forma de que la fila deje de mostrar
+   * el dato viejo es que el llamador relea el catálogo del workspace. Opcional: sin él la edición
+   * igual persiste, solo que el catálogo se ve viejo hasta salir y volver al builder.
+   */
+  onCatalogChanged?: () => void
 }
 
 /** Catálogo persistente jalable 1:1 web (handle colapsado → buscador+chips → catálogo completo).
  *  Lista completa por defecto + filtro en memoria + miniaturas (gif/imagen/YouTube) + preview. */
 export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
-  function ExerciseSearchSheet({ exercises, dayBlockCount, dayName, onIndexChange, onSelect }, ref) {
+  function ExerciseSearchSheet({ exercises, dayBlockCount, dayName, onIndexChange, onSelect, onCatalogChanged }, ref) {
     const { theme } = useTheme()
     const localRef = useRef<BottomSheet | null>(null)
     const [query, setQuery] = useState('')
@@ -77,6 +85,10 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
     // `createName` se congela al abrir para que seguir escribiendo en el buscador no lo pise.
     const formRef = useRef<BottomSheetModal | null>(null)
     const [createName, setCreateName] = useState('')
+    // El MISMO `ExerciseFormSheet` sirve alta y edición: `editTarget = null` ⇒ modo creación.
+    // Al editar necesita la fila COMPLETA (instructions, difficulty, body_part…), no el recorte
+    // `Ex` que guarda el preview — si no, guardar pisaría con vacíos lo que no viajó.
+    const [editTarget, setEditTarget] = useState<ExerciseRow | null>(null)
 
     const setRefs = useCallback((r: BottomSheet | null) => {
       localRef.current = r
@@ -104,7 +116,16 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
 
     const deferredQuery = useDeferredValue(query)
     const filtered = useMemo(() => filterExercises(exercises, deferredQuery, muscle), [exercises, deferredQuery, muscle])
-    const showRecents = deferredQuery.trim() === '' && muscle === 'Todos' && recents.length > 0
+    // "Usados recientemente" es una COPIA en AsyncStorage: manda siempre la fila del catálogo del
+    // workspace, no la copia. Así el ejercicio recién editado se ve con el nombre nuevo y el
+    // eliminado (o el que ya no pertenece a este workspace) deja de ofrecerse. Con el catálogo aún
+    // sin cargar no se esconde nada.
+    const recentsView = useMemo(() => {
+      if (exercises.length === 0) return recents
+      const byId = new Map(exercises.map((e) => [e.id, e]))
+      return recents.flatMap<Ex>((r) => { const fresh = byId.get(r.id); return fresh ? [fresh] : [] })
+    }, [recents, exercises])
+    const showRecents = deferredQuery.trim() === '' && muscle === 'Todos' && recentsView.length > 0
     // Lazy: con el sheet colapsado (index ≤ 0) no virtualizamos filas.
     const data = index >= 1 ? filtered : EMPTY
 
@@ -166,17 +187,44 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
 
     /** Abre el formulario de alta con el término buscado ya escrito en el nombre. */
     function openCreate() {
+      setEditTarget(null)
       setCreateName(query.trim())
       formRef.current?.present()
     }
 
     /**
-     * El ejercicio recién creado entra DIRECTO al día en curso (misma ruta que elegirlo del
+     * Editar el ejercicio propio que se está previsualizando. El preview es un `Modal` nativo y el
+     * formulario un `BottomSheetModal`: presentar el segundo mientras el primero todavía se cierra
+     * lo deja invisible en iOS. Mismo patrón (y mismo delay) que `openEditFromPreview` del tab
+     * Ejercicios — ver `app/coach/(tabs)/ejercicios.tsx`.
+     */
+    function openEditFromPreview(row: ExerciseRow) {
+      setPreview(null)
+      setCreateName('')
+      setEditTarget(row)
+      setTimeout(() => formRef.current?.present(), 280)
+    }
+
+    /**
+     * Guardado del formulario, en sus dos modos.
+     *
+     * EDICIÓN (y eliminación): el sheet devuelve `null` en ambos casos, así que no hay campos que
+     * copiar; la lista del catálogo es un prop, se le pide al llamador que la relea. Las recientes
+     * se resuelven contra ese catálogo (`recentsView`), así que se arreglan solas.
+     * Deuda conocida: si el ejercicio YA estaba agregado como bloque del día, el bloque conserva
+     * el nombre viejo — `exercise_name` se copió al agregarlo — hasta recargar el builder.
+     * Arreglarlo exige reconciliar todos los días contra el catálogo, fuera del alcance del sheet.
+     *
+     * ALTA: el ejercicio recién creado entra DIRECTO al día en curso (misma ruta que elegirlo del
      * catálogo) y el buscador se limpia: el ejercicio nuevo todavía no está en `exercises` (el
      * builder recarga el catálogo aparte), así que dejar el término puesto mostraría "sin
      * resultados" sobre un ejercicio que sí existe. En "Usados recientemente" queda a mano.
      */
-    function handleCreated(created: CreatedExercise | null) {
+    function handleSaved(created: CreatedExercise | null) {
+      if (editTarget) {
+        onCatalogChanged?.()
+        return
+      }
       if (!created) return
       handleSelect({
         id: created.id,
@@ -197,6 +245,13 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
       setCreateName('')
     }
 
+    // Fila COMPLETA del ejercicio previsualizado. El preview puede venir de "usados recientemente"
+    // (copia parcial de AsyncStorage), así que el `isOwn` y los campos que el formulario necesita
+    // salen siempre del catálogo del workspace: si el ejercicio no está ahí, no se ofrece editar.
+    const previewRow = useMemo(
+      () => (preview ? exercises.find((e) => e.id === preview.id) ?? null : null),
+      [preview, exercises]
+    )
     const pthumb = preview ? exerciseThumb(preview) : null
     // Precedencia idéntica a la app del alumno: gif → video directo → YouTube → imagen.
     const pKind = preview ? execMediaKind(preview) : 'none'
@@ -286,7 +341,7 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
                     <Clock size={13} color={theme.mutedForeground} />
                     <Text className="text-muted font-sans-semibold" style={styles.recentLabel}>Usados recientemente</Text>
                   </View>
-                  {recents.map((ex) => <View key={`r-${ex.id}`}>{renderItem({ item: ex })}</View>)}
+                  {recentsView.map((ex) => <View key={`r-${ex.id}`}>{renderItem({ item: ex })}</View>)}
                   <Text className="text-muted font-sans-semibold" style={[styles.recentLabel, { marginTop: 4 }]}>Todos los ejercicios</Text>
                 </>
               ) : null}
@@ -343,18 +398,32 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
                   {pthumb ? <Image source={{ uri: pthumb }} style={styles.pvImg} contentFit="contain" transition={150} /> : <Dumbbell size={40} color={theme.mutedForeground} />}
                 </View>
               )}
+              {/* Editar sin salir del builder: solo para ejercicios PROPIOS (los del sistema no se
+                  tocan) y reusando el formulario que ya vive acá abajo. No se ofrece "Duplicar" ni
+                  "Eliminar": administrar la biblioteca es del tab Ejercicios; acá el coach está
+                  armando el día. Sin gate de permiso extra — este sheet tampoco gatea "Crear", y
+                  `updateExercise` filtra por `coach_id` además de RLS. */}
+              {previewRow?.isOwn ? (
+                <View style={styles.pvActions}>
+                  <Button label="Editar ejercicio" variant="sport" size="lg" full leftIcon={Pencil} onPress={() => openEditFromPreview(previewRow)} />
+                </View>
+              ) : null}
             </Pressable>
           </Pressable>
         </Modal>
 
-        {/* Alta guiada de ejercicio desde el vacío del buscador. Se monta con `exercise={null}`
-            (modo creación) y el nombre precargado; al guardar, el ejercicio entra al día. */}
+        {/* Un solo formulario para los dos caminos: alta guiada desde el vacío del buscador
+            (`editTarget = null` + nombre precargado ⇒ el ejercicio entra al día al guardar) y
+            edición del ejercicio propio abierto en el preview. `onRestored` (deshacer la
+            eliminación desde el toast) también pide relectura: para entonces `editTarget` ya se
+            limpió en `onClose`, así que no pasa por `handleSaved`. */}
         <ExerciseFormSheet
           ref={formRef}
-          exercise={null}
+          exercise={editTarget}
           initialName={createName}
-          onSaved={handleCreated}
-          onClose={() => setCreateName('')}
+          onSaved={handleSaved}
+          onRestored={() => onCatalogChanged?.()}
+          onClose={() => { setCreateName(''); setEditTarget(null) }}
         />
       </BottomSheet>
     )
@@ -398,6 +467,7 @@ const styles = StyleSheet.create({
   pvMuscle: { fontSize: 11, textTransform: 'uppercase', letterSpacing: 1, marginTop: -4 },
   pvMedia: { width: '100%', height: 200, borderRadius: 12, overflow: 'hidden', alignItems: 'center', justifyContent: 'center', marginTop: 4 },
   pvImg: { width: '100%', height: '100%' },
+  pvActions: { marginTop: 4 },
   // Marco del VideoPlayer: SIN `alignItems:'center'` — ese estilo colapsa el WebView a ancho 0
   // (gotcha documentado en VideoPlayer.tsx: "el video se escuchaba pero no se veía").
   pvVideo: { width: '100%', height: 200, marginTop: 4 },

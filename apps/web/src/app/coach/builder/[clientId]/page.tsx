@@ -19,7 +19,7 @@ export default async function BuilderPage(
     const { clientId } = params
     const { planId, programId, primera } = searchParams
     void planId
-    const { user, client, exercises, initialProgram, lastEditor, areas, cardio } = await getBuilderData(clientId, programId)
+    const { user, client, exercises, initialProgram, lastEditor, areas, cardio, orgId, teamId } = await getBuilderData(clientId, programId)
     if (!user) redirect('/login')
 
     const coach = await getCoach()
@@ -44,6 +44,8 @@ export default async function BuilderPage(
                 isDemoClient: onboarding.demoClientId != null && onboarding.demoClientId === client.id,
                 primera: primera === '1',
             }}
+            /* Decide qué ejercicio del catálogo es propio ⇒ editable desde el preview del builder. */
+            ownerScope={{ coachId: user.id, teamId, orgId }}
         />
     )
 }

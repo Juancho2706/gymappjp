@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { StyleSheet, Text, View } from 'react-native'
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, {
@@ -52,6 +52,18 @@ export interface ToastOptions {
   duration?: number
   /** Optional secondary line under the title. */
   description?: string
+  /**
+   * Acción opcional a la derecha del mensaje (parity con la `action` de Sonner en la web).
+   * Es el patrón «Deshacer» de una eliminación: el toast se cierra al tocarla y luego corre
+   * `onPress`. Sin `action` el toast se renderiza exactamente como antes.
+   */
+  action?: ToastAction
+}
+
+/** Botón de acción de un toast (p. ej. «Deshacer» tras eliminar). */
+export interface ToastAction {
+  label: string
+  onPress: () => void
 }
 
 interface ToastData {
@@ -59,6 +71,7 @@ interface ToastData {
   variant: ToastVariant
   message: string
   description?: string
+  action?: ToastAction
   /** ms; Infinity = sticky (loading / promise pending). */
   duration: number
 }
@@ -116,7 +129,7 @@ class ToastStore {
     const duration =
       opts?.duration ??
       (variant === 'loading' ? Infinity : variant === 'error' ? ERROR_DURATION : DEFAULT_DURATION)
-    const data: ToastData = { id, variant, message, description: opts?.description, duration }
+    const data: ToastData = { id, variant, message, description: opts?.description, action: opts?.action, duration }
     const existing = this.toasts.findIndex((t) => t.id === id)
     if (existing >= 0) {
       // Update-in-place: keep queue position, refresh content (promise resolve, dedupe).
@@ -299,6 +312,29 @@ function ToastRow({ data, onDismiss, dark }: { data: ToastData; onDismiss: (id: 
             </Text>
           ) : null}
         </View>
+        {/* Acción opcional («Deshacer»). Tocarla cierra el toast primero y después corre el
+            handler: si la acción recarga una lista, el toast ya no queda colgado sobre ella. */}
+        {data.action ? (
+          <TouchableOpacity
+            onPress={() => {
+              const run = data.action?.onPress
+              onDismiss(data.id)
+              run?.()
+            }}
+            activeOpacity={0.7}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={data.action.label}
+            style={[
+              styles.actionBtn,
+              { borderColor: dark ? DARK_TOAST.border : theme.border },
+            ]}
+          >
+            <Text style={[TYPE.label, { color: dark ? DARK_TOAST.text : theme.primary }]} numberOfLines={1}>
+              {data.action.label}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
       </Animated.View>
     </GestureDetector>
   )
@@ -358,4 +394,6 @@ const styles = StyleSheet.create({
   rowWrap: { width: '100%' },
   rowShadow: {},
   textCol: { flex: 1 },
+  // Pill de la acción: alto táctil suficiente sin desbalancear la fila (el hitSlop cubre el resto).
+  actionBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: StyleSheet.hairlineWidth, flexShrink: 0 },
 })

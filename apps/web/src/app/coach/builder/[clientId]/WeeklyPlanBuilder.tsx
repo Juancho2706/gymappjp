@@ -52,7 +52,7 @@ import { ProgramConfigSheet } from './components/ProgramConfigSheet'
 import { BuilderOnboardingTour, type BuilderTourStep } from './components/BuilderOnboardingTour'
 import { ProgramPhasesBar } from './components/ProgramPhasesBar'
 import { ExerciseBlock } from './components/ExerciseBlock'
-import { DraggableExerciseCatalog } from './DraggableExerciseCatalog'
+import { DraggableExerciseCatalog, type ExerciseOwnerScope } from './DraggableExerciseCatalog'
 import type { BuilderBlock, BuilderCardioContext, DayState, ProgramPhase } from './types'
 import type { WorkoutArea } from '@/domain/workout/types'
 import { effectiveExerciseType, legacyRepsSummaryFor } from '@/lib/workout-exercise-type'
@@ -96,7 +96,7 @@ export interface FirstRoutineContext {
     primera?: boolean
 }
 
-export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName, lastEditor, areas = [], cardio, firstRoutine }: { client?: Partial<Client> | null, exercises: Exercise[], initialProgram?: any, coachName?: string, lastEditor?: { name: string; at: string | null } | null, areas?: WorkoutArea[], cardio?: BuilderCardioContext, firstRoutine?: FirstRoutineContext }) {
+export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName, lastEditor, areas = [], cardio, firstRoutine, ownerScope }: { client?: Partial<Client> | null, exercises: Exercise[], initialProgram?: any, coachName?: string, lastEditor?: { name: string; at: string | null } | null, areas?: WorkoutArea[], cardio?: BuilderCardioContext, firstRoutine?: FirstRoutineContext, ownerScope?: ExerciseOwnerScope }) {
     const router = useRouter()
     const { t } = useTranslation()
 
@@ -325,6 +325,15 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
     const onboardingShortKey = builderTourStorageKey(coachId, 'short')
     const onboardingHelpKey = builderTourStorageKey(coachId, 'help')
     const configHintKey = builderTourStorageKey(coachId, 'config-hint')
+
+    // Scope de propiedad para el botón «Editar ejercicio» del catálogo. Si la page no lo pasa,
+    // el `coachId` de la tarea guiada alcanza para los ejercicios personales (team/org quedan
+    // fuera: sin su id no se puede afirmar que la fila sea del workspace activo).
+    const catalogOwnerScope = useMemo<ExerciseOwnerScope>(() => ({
+        coachId: ownerScope?.coachId ?? coachId,
+        teamId: ownerScope?.teamId ?? null,
+        orgId: ownerScope?.orgId ?? null,
+    }), [ownerScope?.coachId, ownerScope?.teamId, ownerScope?.orgId, coachId])
 
     const scrollBoard = (dir: 'left' | 'right') => {
         const el = boardScrollRef.current
@@ -1426,6 +1435,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                 exercises={exercises}
                                 selectedMuscleGroup={catalogMuscleFilter}
                                 onSelectedMuscleGroupChange={setCatalogMuscleFilter}
+                                ownerScope={catalogOwnerScope}
                             />
                         </div>
                     </div>
@@ -1686,6 +1696,7 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                         exercises={exercises}
                                         selectedMuscleGroup={catalogMuscleFilter}
                                         onSelectedMuscleGroupChange={setCatalogMuscleFilter}
+                                        ownerScope={catalogOwnerScope}
                                         onTapAdd={(exercise) => {
                                             const dayId = days[activeMobileDayIndex]?.id
                                             if (dayId != null) {

@@ -1,9 +1,12 @@
 'use client'
 
 import { useState, useMemo, useEffect, useRef } from 'react'
+import { useRouter } from 'next/navigation'
 import { useDraggable } from '@dnd-kit/core'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Search, Dumbbell, Filter, Eye, Activity, Plus } from 'lucide-react'
+import { Search, Dumbbell, Filter, Eye, Activity, Plus, Pencil, Loader2 } from 'lucide-react'
+import { toast } from 'sonner'
+import { createClient } from '@/lib/supabase/client'
 import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -16,6 +19,28 @@ import { ExerciseFormModal } from '@/app/coach/exercises/_components/ExerciseFor
 import { getMuscleColor } from './muscle-colors'
 
 type Exercise = Tables<'exercises'>
+
+/**
+ * Scope de propiedad del catálogo: decide qué ejercicios puede EDITAR este coach.
+ * Espejo del predicado `customExercises` de `getExerciseCatalog`
+ * (`apps/web/src/app/coach/exercises/_data/exercises.queries.ts`): propio = mío por
+ * `coach_id`, del pool del team activo, o del catálogo de la org. Se pasa desde la page
+ * porque el catálogo recibe UNA sola lista mezclada (sistema + propios) y desde el cliente
+ * no hay forma de distinguirlos sin el scope del workspace.
+ */
+export interface ExerciseOwnerScope {
+    coachId?: string | null
+    teamId?: string | null
+    orgId?: string | null
+}
+
+function isOwnExercise(exercise: Exercise, scope?: ExerciseOwnerScope): boolean {
+    if (!scope) return false
+    if (scope.coachId && exercise.coach_id === scope.coachId) return true
+    if (scope.teamId && exercise.team_id === scope.teamId) return true
+    if (scope.orgId && exercise.org_id === scope.orgId) return true
+    return false
+}
 
 interface DraggableExerciseItemProps {
     exercise: Exercise
@@ -127,6 +152,8 @@ interface DraggableExerciseCatalogProps {
     /** Si se define, el filtro de músculo es controlado por el padre (p. ej. chips del sheet móvil). */
     selectedMuscleGroup?: string
     onSelectedMuscleGroupChange?: (group: string) => void
+    /** Sin scope no se ofrece «Editar ejercicio»: no sabríamos cuál es propio. */
+    ownerScope?: ExerciseOwnerScope
 }
 
 export function DraggableExerciseCatalog({
@@ -136,7 +163,9 @@ export function DraggableExerciseCatalog({
     onTapAdd,
     selectedMuscleGroup: selectedMuscleProp,
     onSelectedMuscleGroupChange,
+    ownerScope,
 }: DraggableExerciseCatalogProps) {
+    const router = useRouter()
     const [search, setSearch] = useState('')
     const [internalMuscle, setInternalMuscle] = useState<string>('Todos')
     const controlled = selectedMuscleProp !== undefined
@@ -152,6 +181,13 @@ export function DraggableExerciseCatalog({
     // Ejercicios creados desde acá: el builder no recarga sus props a mitad de sesión, así que
     // el recién creado se muestra en el catálogo en curso hasta el próximo refresh del servidor.
     const [createdExercises, setCreatedExercises] = useState<Exercise[]>([])
+    // Fila COMPLETA del ejercicio propio que se está editando (null = modal cerrado).
+    const [editTarget, setEditTarget] = useState<Exercise | null>(null)
+    // Id del ejercicio cuya fila completa se está pidiendo (spinner del botón «Editar»).
+    const [editLoadingId, setEditLoadingId] = useState<string | null>(null)
+    // Ediciones hechas desde acá: mismo motivo que `createdExercises`, pero PISAN la fila por id
+    // para que el nombre/media nuevos se vean al toque, sin esperar el `router.refresh()`.
+    const [editedExercises, setEditedExercises] = useState<Record<string, Exercise>>({})
 
     useEffect(() => {
         const loadRecent = () => {
@@ -170,10 +206,16 @@ export function DraggableExerciseCatalog({
     }, [])
 
     const catalogExercises = useMemo(() => {
-        if (createdExercises.length === 0) return exercises
-        const known = new Set(exercises.map(e => e.id))
-        return [...createdExercises.filter(e => !known.has(e.id)), ...exercises]
-    }, [exercises, createdExercises])
+        let list = exercises
+        if (createdExercises.length > 0) {
+            const known = new Set(exercises.map(e => e.id))
+            list = [...createdExercises.filter(e => !known.has(e.id)), ...exercises]
+        }
+        if (Object.keys(editedExercises).length > 0) {
+            list = list.map(e => editedExercises[e.id] ?? e)
+        }
+        return list
+    }, [exercises, createdExercises, editedExercises])
 
     const recentExercises = useMemo(() => {
         return recentIds.map(id => catalogExercises.find(e => e.id === id)).filter(Boolean) as Exercise[]
@@ -200,6 +242,35 @@ export function DraggableExerciseCatalog({
         filteredExercises.forEach(ex => items.push({ kind: 'exercise', exercise: ex, isRecent: false }))
         return items
     }, [search, selectedMuscle, recentExercises, filteredExercises])
+
+    // El preview solo ofrece «Editar» sobre ejercicios propios: los del sistema son de solo lectura
+    // (la action del servidor igual los rechaza, pero el botón no debe siquiera aparecer).
+    const canEditPreview = !!previewExercise && isOwnExercise(previewExercise, ownerScope)
+
+    /**
+     * El catálogo del builder llega con columnas RECORTADAS (`EXERCISE_LIST_COLUMNS`: sin
+     * `instructions` ni `image_url`). Abrir el formulario con esa fila parcial guardaría esos
+     * campos vacíos —`updateExerciseAction` escribe SIEMPRE `instructions` e `image_url`—, así
+     * que pedimos la fila completa antes de abrir el modal.
+     */
+    const openEditor = async (exercise: Exercise) => {
+        setEditLoadingId(exercise.id)
+        try {
+            const supabase = createClient()
+            const { data, error } = await supabase
+                .from('exercises')
+                .select('*')
+                .eq('id', exercise.id)
+                .single()
+            if (error || !data) throw error ?? new Error('exercise_not_found')
+            setPreviewExercise(null)
+            setEditTarget(data)
+        } catch {
+            toast.error('No pudimos abrir el ejercicio. Intenta de nuevo.')
+        } finally {
+            setEditLoadingId(null)
+        }
+    }
 
     const parentRef = useRef<HTMLDivElement>(null)
 
@@ -393,8 +464,54 @@ export function DraggableExerciseCatalog({
                             </div>
                         )
                     })()}
+
+                    {/* Editar sin salir del builder: el coach ve el video acá y arregla el ejercicio
+                        propio en el mismo lugar (paridad con el preview del catálogo en RN). */}
+                    {canEditPreview && previewExercise && (
+                        <button
+                            type="button"
+                            onClick={() => { void openEditor(previewExercise) }}
+                            disabled={editLoadingId === previewExercise.id}
+                            className="eva-press mt-4 inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-control px-3.5 text-xs font-bold text-primary-foreground shadow-sm transition-transform active:scale-95 disabled:opacity-60"
+                            style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
+                        >
+                            {editLoadingId === previewExercise.id ? (
+                                <Loader2 className="w-3.5 h-3.5 shrink-0 animate-spin" />
+                            ) : (
+                                <Pencil className="w-3.5 h-3.5 shrink-0" />
+                            )}
+                            <span>Editar ejercicio</span>
+                        </button>
+                    )}
                 </DialogContent>
             </Dialog>
+
+            {/* Editar ejercicio propio sin salir del builder */}
+            {editTarget && (
+                <ExerciseFormModal
+                    open
+                    exercise={editTarget}
+                    onClose={() => setEditTarget(null)}
+                    onSaved={() => {
+                        const editedId = editTarget.id
+                        toast.success('Ejercicio actualizado')
+                        // El catálogo llega por props del server component: `router.refresh()`
+                        // re-corre la query de la page (el estado del builder se preserva).
+                        router.refresh()
+                        // Además pisamos la fila local con la versión fresca para que el cambio se
+                        // vea al toque, igual que `onCreated` hace con la recién creada.
+                        const supabase = createClient()
+                        void supabase
+                            .from('exercises')
+                            .select('*')
+                            .eq('id', editedId)
+                            .single()
+                            .then(({ data }) => {
+                                if (data) setEditedExercises(prev => ({ ...prev, [editedId]: data }))
+                            })
+                    }}
+                />
+            )}
         </div>
     )
 }

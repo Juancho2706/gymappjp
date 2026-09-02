@@ -457,16 +457,72 @@ export async function cloneExercise(row: ExerciseRow): Promise<{ ok: boolean; id
   })
 }
 
+/**
+ * Soft-delete de un ejercicio PROPIO (espeja `softDeleteExerciseAction` de la web).
+ *
+ * El `.select('id')` no es decorativo: un `update` filtrado que no toca ninguna fila
+ * (ejercicio de otro coach, ya borrado, id inexistente) vuelve SIN error, y antes eso
+ * se reportaba como éxito — la lista se recargaba igual y el coach creía haber borrado
+ * algo que seguía ahí. Con el select, 0 filas = fallo explícito.
+ */
 export async function deleteExercise(id: string): Promise<{ ok: boolean; error?: string }> {
   const coachId = await currentCoachId()
   if (!coachId) return { ok: false, error: 'No autenticado.' }
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('exercises')
     .update({ deleted_at: new Date().toISOString() })
     .eq('id', id)
     .eq('coach_id', coachId)
+    .select('id')
 
   if (error) return { ok: false, error: error.message }
+  if (!data || data.length === 0) {
+    return { ok: false, error: 'No se pudo eliminar: el ejercicio no es tuyo o ya no existe.' }
+  }
   return { ok: true }
+}
+
+/**
+ * Deshacer el soft-delete (espeja `restoreExerciseAction` de la web). Alimenta el
+ * «Deshacer» del toast que aparece justo después de eliminar. Mismo chequeo de filas
+ * afectadas que `deleteExercise`: sin filas, el deshacer NO puede declararse exitoso.
+ */
+export async function restoreExercise(id: string): Promise<{ ok: boolean; error?: string }> {
+  const coachId = await currentCoachId()
+  if (!coachId) return { ok: false, error: 'No autenticado.' }
+
+  const { data, error } = await supabase
+    .from('exercises')
+    .update({ deleted_at: null })
+    .eq('id', id)
+    .eq('coach_id', coachId)
+    .select('id')
+
+  if (error) return { ok: false, error: error.message }
+  if (!data || data.length === 0) {
+    return { ok: false, error: 'No se pudo restaurar: el ejercicio no es tuyo o ya no existe.' }
+  }
+  return { ok: true }
+}
+
+/**
+ * ¿En cuántos bloques de programa está usado el ejercicio?
+ *
+ * RLS de `workout_blocks` acota la cuenta a los programas VISIBLES para el coach, así que el
+ * número es «tus programas», no el uso global del catálogo. Es informativo (confirmación de
+ * borrado + ficha del ejercicio): ante cualquier error devuelve 0 y NUNCA tira, para no
+ * romper la hoja por un dato accesorio.
+ */
+export async function countExerciseUsage(id: string): Promise<number> {
+  try {
+    const { count, error } = await supabase
+      .from('workout_blocks')
+      .select('exercise_id', { count: 'exact', head: true })
+      .eq('exercise_id', id)
+    if (error) return 0
+    return count ?? 0
+  } catch {
+    return 0
+  }
 }

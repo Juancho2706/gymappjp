@@ -9,13 +9,16 @@ import { ImagePlus, Trash2, X } from 'lucide-react-native'
 import { CARDIO_MODALITY_OPTIONS, EXERCISE_TYPE_OPTIONS, cardioAxisLabels } from '@eva/workout-engine'
 import { useTheme } from '../../context/ThemeContext'
 import { Button, Input, SegmentedTabs, Textarea, VideoPlayer } from '../index'
+import { toast } from '../Toast'
 import { execMediaKind } from '../alumno/workout/v3/ExecMediaV3'
 import {
   DIFFICULTY_OPTIONS,
   EQUIPMENT_OPTIONS,
   MUSCLE_GROUPS,
+  countExerciseUsage,
   createExercise,
   deleteExercise,
+  restoreExercise,
   updateExercise,
   uploadExerciseImage,
   youtubeId,
@@ -82,11 +85,16 @@ interface Props {
   /** Nombre precargado en modo creación (el catálogo del builder abre "Crear «término»"). */
   initialName?: string
   onSaved: (created: CreatedExercise | null) => void
+  /**
+   * El coach deshizo la eliminación desde el toast: hay que recargar la lista que abrió el sheet.
+   * Por defecto reusa `onSaved(null)` («volvé a leer»), que es lo que ya hace el guardado en edición.
+   */
+  onRestored?: () => void
   onClose: () => void
 }
 
 export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function ExerciseFormSheet(
-  { exercise, initialName, onSaved, onClose },
+  { exercise, initialName, onSaved, onRestored, onClose },
   ref
 ) {
   const { theme } = useTheme()
@@ -113,6 +121,9 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [fieldError, setFieldError] = useState<FieldError | null>(null)
+  // Bloques de programa que ya usan el ejercicio (solo en modo edición). Alimenta la confirmación
+  // de borrado para que el coach vea el impacto real antes de aceptar. null = todavía no se sabe.
+  const [usageCount, setUsageCount] = useState<number | null>(null)
 
   // E-F1: subir imagen del ejercicio desde galería del device.
   async function pickImage() {
@@ -148,6 +159,17 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
     setImageUrl(exercise?.image_url ?? '')
     setMediaTab(initialMediaTab(exercise))
   }, [exercise, initialName])
+
+  // Conteo de uso: `count exact + head` (no trae filas), y la lib devuelve 0 ante cualquier error,
+  // así que la confirmación cae sola a la frase genérica. Guard de desmontaje para no setear estado
+  // sobre un sheet ya cerrado.
+  useEffect(() => {
+    if (!exercise) { setUsageCount(null); return }
+    let alive = true
+    setUsageCount(null)
+    countExerciseUsage(exercise.id).then((n) => { if (alive) setUsageCount(n) })
+    return () => { alive = false }
+  }, [exercise])
 
   /** Salir de cardio limpia la modalidad (la lib también la anula: acá solo espejamos la UI). */
   function changeType(next: string) {
@@ -229,14 +251,55 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
     ;(ref as React.RefObject<BottomSheetModal>).current?.dismiss()
   }
 
-  async function remove() {
+  /**
+   * Eliminar SIEMPRE pide confirmación (antes borraba al primer toque, sin red de seguridad) y
+   * explica el alcance real del soft-delete: desaparece del catálogo y del builder, pero los
+   * programas ya armados lo conservan. El «Deshacer» del toast cierra el círculo.
+   */
+  function remove() {
     if (!exercise) return
+    const target = exercise
+    const usageLine =
+      usageCount == null || usageCount === 0
+        ? 'Los programas que ya lo usan lo conservan tal cual.'
+        : usageCount === 1
+          ? 'El bloque que ya lo usa lo conserva tal cual.'
+          : `Los ${usageCount} bloques que ya lo usan lo conservan tal cual.`
+    Alert.alert(
+      `¿Eliminar “${target.name}”?`,
+      `Se oculta de tu catálogo y del builder. ${usageLine} Puedes deshacerlo justo después.`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Eliminar', style: 'destructive', onPress: () => { void confirmRemove(target) } },
+      ]
+    )
+  }
+
+  async function confirmRemove(target: ExerciseRow) {
     setSaving(true)
-    const res = await deleteExercise(exercise.id)
+    const res = await deleteExercise(target.id)
     setSaving(false)
     if (!res.ok) { setError(res.error ?? 'No se pudo eliminar.'); return }
     onSaved(null)
     ;(ref as React.RefObject<BottomSheetModal>).current?.dismiss()
+    // Ventana de arrepentimiento: 8 s con «Deshacer». El soft-delete es reversible, así que el
+    // costo de equivocarse baja a un toque en vez de rehacer el ejercicio a mano.
+    toast.success('Ejercicio eliminado', {
+      duration: 8000,
+      action: {
+        label: 'Deshacer',
+        onPress: () => {
+          void (async () => {
+            const r = await restoreExercise(target.id)
+            if (!r.ok) { toast.error(r.error ?? 'No se pudo restaurar.'); return }
+            toast.success(`«${target.name}» volvió a tu catálogo.`)
+            // Sin recarga la fila restaurada no reaparece: la lista quedó filtrada por `deleted_at`.
+            if (onRestored) onRestored()
+            else onSaved(null)
+          })()
+        },
+      },
+    })
   }
 
   const isCardio = exerciseType === 'cardio'

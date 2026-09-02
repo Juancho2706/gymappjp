@@ -1,11 +1,11 @@
-import { forwardRef } from 'react'
+import { forwardRef, useEffect, useState } from 'react'
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
 import { Image } from 'expo-image'
 import { Copy, Dumbbell, Globe, Pencil, Target, User, Wrench } from 'lucide-react-native'
 import { useTheme } from '../../context/ThemeContext'
 import { Badge, Button, VideoPlayer } from '../index'
-import { exerciseThumb, youtubeId, type ExerciseRow } from '../../lib/exercises'
+import { countExerciseUsage, exerciseThumb, youtubeId, type ExerciseRow } from '../../lib/exercises'
 
 const DIFFICULTY_LABEL: Record<string, string> = {
   beginner: 'Principiante',
@@ -43,6 +43,19 @@ export const ExercisePreviewSheet = forwardRef<BottomSheetModal, Props>(function
     .map((s) => s.replace(/^Step:\s*\d+\s*/i, '').trim())
     .filter(Boolean)
   const secondary = (exercise?.secondary_muscles ?? []).filter(Boolean)
+
+  // Uso del ejercicio en programas — solo para los propios: es el dato que le dice al coach si
+  // editarlo o eliminarlo toca algo vivo. El catálogo del sistema no se toca desde acá, así que
+  // ahí la consulta sería ruido. RLS acota la cuenta a SUS programas; ante error la lib da 0 y la
+  // línea simplemente no se pinta.
+  const [usageCount, setUsageCount] = useState<number | null>(null)
+  useEffect(() => {
+    if (!exercise || !exercise.isOwn) { setUsageCount(null); return }
+    let alive = true
+    setUsageCount(null)
+    countExerciseUsage(exercise.id).then((n) => { if (alive) setUsageCount(n) })
+    return () => { alive = false }
+  }, [exercise])
 
   return (
     <BottomSheetModal
@@ -130,6 +143,13 @@ export const ExercisePreviewSheet = forwardRef<BottomSheetModal, Props>(function
               </Text>
             </View>
 
+            {/* Solo si de verdad está en uso: un «Usado en 0 bloques» es ruido, no información. */}
+            {exercise.isOwn && usageCount != null && usageCount > 0 ? (
+              <Text className="text-muted font-sans" style={styles.usageText}>
+                Usado en {usageCount} {usageCount === 1 ? 'bloque' : 'bloques'} de tus programas
+              </Text>
+            ) : null}
+
             {exercise.isOwn && onEdit ? (
               <View style={styles.actionWrap}>
                 <Button label="Editar ejercicio" variant="sport" size="lg" full leftIcon={Pencil} onPress={() => onEdit(exercise)} />
@@ -170,6 +190,8 @@ const styles = StyleSheet.create({
   stepText: { flex: 1, fontSize: 14, lineHeight: 21 },
   source: { flexDirection: 'row', alignItems: 'center', gap: 8, borderTopWidth: StyleSheet.hairlineWidth, paddingTop: 14, marginTop: 4 },
   sourceText: { fontSize: 12 },
+  // Cifras tabulares: el número no salta de ancho si el conteo cambia al recargar la ficha.
+  usageText: { fontSize: 12, marginTop: -6, fontVariant: ['tabular-nums'] },
   actionWrap: { marginTop: 6 },
   cloneBtn: { gap: 8, height: 50, marginTop: 6 },
   cloneText: { fontSize: 15 },

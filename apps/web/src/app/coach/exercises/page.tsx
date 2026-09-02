@@ -24,9 +24,11 @@ export default async function CoachExercisesPage() {
     const activeTeamId = workspace?.type === 'coach_team' ? workspace.teamId : null
     const orgId = activeTeamId ? null : ctx?.orgId ?? null
     // Enterprise coach (role='coach' within org) cannot create exercises; team member can.
+    // Mismo predicado para CREAR y para GESTIONAR (editar/eliminar/duplicar): el coach de una org
+    // sin permiso ve el catálogo en solo lectura, igual que hoy.
     const canCreateExercises = activeTeamId ? true : (!ctx?.isOrgUser || ctx.isOrgAdmin)
 
-    const { globalExercises, customExercises, byMuscle } = await getExerciseCatalog(coach.id, orgId, activeTeamId)
+    const { globalExercises, customExercises, byMuscle, usageByExercise } = await getExerciseCatalog(coach.id, orgId, activeTeamId)
 
     return (
         // Móvil: SIN padding propio — CoachMainWrapper ya da el gutter px-5 (patrón Alumnos).
@@ -49,6 +51,8 @@ export default async function CoachExercisesPage() {
                     customExercises={customExercises}
                     byMuscle={byMuscle}
                     canCreateExercises={canCreateExercises}
+                    usageByExercise={usageByExercise}
+                    ownLabel={activeTeamId ? 'Del equipo' : 'Propio'}
                 />
             </div>
         </div>

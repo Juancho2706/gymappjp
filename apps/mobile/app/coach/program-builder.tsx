@@ -794,6 +794,9 @@ export default function ProgramBuilderScreen() {
   const [initial, setInitial] = useState<DayState[]>(emptyDays())
   // Catálogo completo precargado (1:1 web): alimenta el sheet de añadir + enriquece media de bloques.
   const [catalog, setCatalog] = useState<ExerciseRow[]>([])
+  // Sube cuando el coach edita/elimina un ejercicio propio desde el preview del catálogo: fuerza
+  // la relectura para que la fila no siga mostrando el dato viejo.
+  const [catalogReloadKey, setCatalogReloadKey] = useState(0)
   const catalogRequestRef = useRef(0)
   const catById = useMemo(() => new Map(catalog.map((e) => [e.id, e])), [catalog])
   // E5-03: areas del builder (workout_section_templates) — mismo scope que web. Solo el
@@ -927,7 +930,7 @@ export default function ProgramBuilderScreen() {
       if (active && requestId === catalogRequestRef.current) setCatalog([])
     })
     return () => { active = false }
-  }, [routeWorkspace])
+  }, [routeWorkspace, catalogReloadKey])
 
   // E5-03: precarga de areas del builder segun el workspace del coach (standalone ⇒ system
   // + propias; enterprise ⇒ solo system). Mismo query que web. Resiliente: [] ante error.
@@ -2067,6 +2070,7 @@ export default function ProgramBuilderScreen() {
         dayBlockCount={currentDay?.blocks.length ?? 0}
         dayName={currentDay?.name ?? ''}
         onIndexChange={(i) => setCatalogExpanded(i >= 1)}
+        onCatalogChanged={() => setCatalogReloadKey((k) => k + 1)}
         onSelect={(block) => { addExercise(activeDayId, { ...block, dayId: activeDayId, section: sectionForArea(pendingAreaId), section_template_id: pendingAreaId }); Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => {}) }}
       />
       <BlockEditorSheet ref={editorRef} block={editingBlock} onChange={updateBlock} onRemove={(uid) => { removeBlock(activeDayId, uid); editorRef.current?.dismiss() }}

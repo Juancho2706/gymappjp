@@ -336,6 +336,7 @@ export default function EjerciciosScreen() {
         exercise={editTarget}
         initialName={createName}
         onSaved={() => load('refresh')}
+        onRestored={() => load('refresh')}
         onClose={() => setEditTarget(null)}
       />
     </SafeAreaView>
