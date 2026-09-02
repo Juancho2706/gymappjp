@@ -9,6 +9,7 @@ import {
     NUTRITION_EXCHANGES_MODULE,
 } from '@/services/nutrition-exchanges/nutrition-exchanges.service'
 import { resolvePdfBrand } from '@/lib/nutrition-pdf-brand'
+import { resolveEffectiveBrandColorOrNull } from '@/lib/branding/public-branding'
 import type { PdfBrand } from '@/domain/nutrition/exchange.types'
 
 /**
@@ -79,12 +80,20 @@ export const getCoachPdfBrand = cache(
         }
         const { data: coach } = await supabase
             .from('coaches')
-            .select('id, brand_name, full_name, primary_color, logo_url, subscription_tier')
+            .select('id, brand_name, full_name, primary_color, theme_preset_key, logo_url, subscription_tier')
             .eq('id', coachId)
             .maybeSingle()
         const brand = resolvePdfBrand({
             brandName: coach?.brand_name || coach?.full_name,
-            primaryColor: coach?.primary_color,
+            // Color EFECTIVO (W1a): con tema preset elegido, `primary_color` es la columna libre
+            // LEGACY y el PDF salía en el color viejo del coach mientras la app ya estaba en el del
+            // preset. `…OrNull` conserva el "sin color" (⇒ emerald de `EVA_PDF_BRAND`, como hoy) en
+            // vez de imponer el azul de sistema; el gate de tier lo aplican los dos helpers igual.
+            primaryColor: resolveEffectiveBrandColorOrNull({
+                primaryColor: coach?.primary_color,
+                themePresetKey: coach?.theme_preset_key,
+                subscriptionTier: coach?.subscription_tier,
+            }),
             subscriptionTier: coach?.subscription_tier,
         })
         return { brand, logoUrl: brand.poweredByEva ? null : (coach?.logo_url ?? null) }

@@ -2,7 +2,7 @@ import { ImageResponse } from 'next/og'
 import type { NextRequest } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
-import { fetchPublicCoachBranding } from '@/lib/branding/public-branding'
+import { fetchPublicCoachBranding, resolveEffectiveBrandColorOrNull } from '@/lib/branding/public-branding'
 import { safeColor, rasterLogo } from '@/lib/records/pr-card'
 import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 import { BRAND_APP_ICON, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
@@ -71,7 +71,19 @@ async function resolveBrand(
     const brandingAllowed = isBrandingAllowed((coach?.subscription_tier ?? 'free') as SubscriptionTier)
     let brandName = coach?.brand_name ?? 'EVA'
     let logoUrl = brandingAllowed && coach?.logo_url ? coach.logo_url : evaLogoUrl
-    let accent = safeColor(brandingAllowed ? coach?.primary_color : SYSTEM_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR)
+    // W1a — color EFECTIVO: con tema preset elegido, `primary_color` es la columna libre LEGACY y
+    // la screenshot del richer UI quedaba de otro color que la app (bug del owner 2026-09-02:
+    // `josefit`, preset `sport-blue`, screenshot NARANJA por su #F97316 viejo). El helper aplica el
+    // mismo gate de tier que `brandingAllowed` (fail-closed ⇒ null ⇒ azul de sistema por el
+    // fallback de `safeColor`), que sigue filtrando además un hex inválido guardado en la fila.
+    let accent = safeColor(
+        resolveEffectiveBrandColorOrNull({
+            primaryColor: coach?.primary_color,
+            themePresetKey: coach?.theme_preset_key,
+            subscriptionTier: coach?.subscription_tier,
+        }),
+        SYSTEM_PRIMARY_COLOR,
+    )
 
     // getClaims(): verificación LOCAL del JWT (ES256), sin /user. Identity-only best-effort; la
     // screenshot es pública y cacheada → no requiere revocación fresca.

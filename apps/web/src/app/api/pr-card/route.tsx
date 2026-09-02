@@ -5,6 +5,7 @@ import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { assertCoachClientReadAccess } from '@/services/client/client-scope.service'
 import { getSantiagoIsoYmdForUtcInstant } from '@/lib/date-utils'
 import { safeColor, rasterLogo, fmtWeight, reducePrFromRows } from '@/lib/records/pr-card'
+import { resolveEffectiveBrandColorOrNull } from '@/lib/branding/public-branding'
 import { isBrandingAllowed, type SubscriptionTier } from '@eva/tiers'
 
 // Share-card de RECORD PERSONAL (1080×1350, formato feed/story) — imagen generada al vuelo
@@ -131,14 +132,27 @@ async function resolveBrand(
     } else if (client?.coach_id) {
         const { data: coach } = await admin
             .from('coaches')
-            .select('brand_name, primary_color, logo_url, subscription_tier')
+            // `theme_preset_key` viaja con el color: desde el catálogo curado, `primary_color` es
+            // la columna libre LEGACY y el preset la pisa (W1a).
+            .select('brand_name, primary_color, theme_preset_key, logo_url, subscription_tier')
             .eq('id', client.coach_id)
             .maybeSingle()
         if (coach) {
             brandName = coach.brand_name || brandName
             const tier = (coach.subscription_tier ?? 'free') as SubscriptionTier
             if (isBrandingAllowed(tier)) {
-                accent = safeColor(coach.primary_color, accent)
+                // Color EFECTIVO: un coach con tema preset compartía una card de PR con su color
+                // viejo (bug del owner 2026-09-02: `josefit`, preset `sport-blue`, arte NARANJA por
+                // su #F97316 legacy). Sin color utilizable el helper devuelve `null` y `safeColor`
+                // conserva el `accent` que ya traía (SPORT_500 del DS), igual que antes.
+                accent = safeColor(
+                    resolveEffectiveBrandColorOrNull({
+                        primaryColor: coach.primary_color,
+                        themePresetKey: coach.theme_preset_key,
+                        subscriptionTier: coach.subscription_tier,
+                    }),
+                    accent,
+                )
                 logoUrl = coach.logo_url || null
             }
         }

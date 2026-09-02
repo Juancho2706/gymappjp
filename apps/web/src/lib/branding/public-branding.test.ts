@@ -1,7 +1,13 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
-import { fetchPublicCoachBranding, mapPublicCoachBranding, resolveEffectiveBrandColor } from './public-branding'
+import {
+    effectiveBrandColorFromHeaders,
+    fetchPublicCoachBranding,
+    mapPublicCoachBranding,
+    resolveEffectiveBrandColor,
+    resolveEffectiveBrandColorOrNull,
+} from './public-branding'
 import { SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 import { getThemePreset } from '@eva/brand-kit'
 
@@ -130,5 +136,92 @@ describe('resolveEffectiveBrandColor', () => {
     it('sin fila / sin color ⇒ azul de sistema', () => {
         expect(resolveEffectiveBrandColor(null)).toBe(SYSTEM_PRIMARY_COLOR)
         expect(resolveEffectiveBrandColor({ primaryColor: '   ', subscriptionTier: 'pro' })).toBe(SYSTEM_PRIMARY_COLOR)
+    })
+})
+
+/**
+ * Variante NULLABLE: los callers con fallback propio (card de PR ⇒ SPORT_500 del DS, PDFs de
+ * nutrición ⇒ emerald de `EVA_PDF_BRAND`) necesitan distinguir "sin color de marca" de "color de
+ * sistema". Imponerles el azul les cambiaría el arte a los coaches sin `primary_color`.
+ */
+describe('resolveEffectiveBrandColorOrNull', () => {
+    const SPORT_BLUE = getThemePreset('sport-blue')!.brandColor
+
+    it('mismo color efectivo que la variante string cuando SÍ hay marca', () => {
+        expect(
+            resolveEffectiveBrandColorOrNull({
+                primaryColor: '#F97316',
+                themePresetKey: 'sport-blue',
+                subscriptionTier: 'pro',
+            }),
+        ).toBe(SPORT_BLUE)
+        expect(
+            resolveEffectiveBrandColorOrNull({ primaryColor: '#F97316', themePresetKey: null, subscriptionTier: 'pro' }),
+        ).toBe('#F97316')
+    })
+
+    it('sin color utilizable ⇒ null (NO el azul de sistema): el caller conserva SU fallback', () => {
+        expect(resolveEffectiveBrandColorOrNull(null)).toBeNull()
+        expect(resolveEffectiveBrandColorOrNull({ primaryColor: null, subscriptionTier: 'pro' })).toBeNull()
+        expect(resolveEffectiveBrandColorOrNull({ primaryColor: '   ', subscriptionTier: 'pro' })).toBeNull()
+    })
+
+    it('tier inválido/stale ⇒ null (fail-closed; el wrapper string lo cierra con el azul)', () => {
+        expect(
+            resolveEffectiveBrandColorOrNull({ primaryColor: '#F97316', themePresetKey: 'sport-blue', subscriptionTier: 'zzz' }),
+        ).toBeNull()
+        expect(
+            resolveEffectiveBrandColor({ primaryColor: '#F97316', themePresetKey: 'sport-blue', subscriptionTier: 'zzz' }),
+        ).toBe(SYSTEM_PRIMARY_COLOR)
+    })
+})
+
+/**
+ * Headers del proxy → color efectivo. El helper lo comparten el layout `/c` (theme-color del
+ * viewport) y los PDFs de nutrición del alumno: `x-coach-primary-color` viaja CRUDO y el preset
+ * llega aparte en `x-coach-theme-preset-key`.
+ */
+describe('effectiveBrandColorFromHeaders', () => {
+    const SPORT_BLUE = getThemePreset('sport-blue')!.brandColor
+    const headers = (map: Record<string, string>) => ({ get: (k: string) => map[k] ?? null })
+
+    it('el preset del header PISA el x-coach-primary-color crudo (caso josefit)', () => {
+        expect(
+            effectiveBrandColorFromHeaders(
+                headers({
+                    'x-coach-primary-color': '#F97316',
+                    'x-coach-theme-preset-key': 'sport-blue',
+                    'x-coach-subscription-tier': 'pro',
+                }),
+            ),
+        ).toBe(SPORT_BLUE)
+    })
+
+    it('sin preset en el header ⇒ passthrough del crudo (grandfather)', () => {
+        expect(
+            effectiveBrandColorFromHeaders(
+                headers({ 'x-coach-primary-color': '#F97316', 'x-coach-subscription-tier': 'free' }),
+            ),
+        ).toBe('#F97316')
+    })
+
+    it('marca gestionada (organization|orphan) ⇒ gana el color del header, no el preset personal', () => {
+        // El proxy pisa el COLOR con el de la org pero deja el preset PERSONAL del coach en su header.
+        for (const source of ['organization', 'orphan']) {
+            expect(
+                effectiveBrandColorFromHeaders(
+                    headers({
+                        'x-coach-primary-color': '#EC4899',
+                        'x-coach-theme-preset-key': 'sport-blue',
+                        'x-coach-subscription-tier': 'pro',
+                        'x-workspace-brand-source': source,
+                    }),
+                ),
+            ).toBe('#EC4899')
+        }
+    })
+
+    it('sin headers ⇒ azul de sistema', () => {
+        expect(effectiveBrandColorFromHeaders(headers({}))).toBe(SYSTEM_PRIMARY_COLOR)
     })
 })

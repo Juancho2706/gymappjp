@@ -9,6 +9,7 @@ import {
     EVA_PDF_ACCENT,
     EVA_PDF_HEADER_BG,
 } from './nutrition-pdf-brand'
+import { getThemePreset } from '@eva/brand-kit'
 
 describe('resolvePdfBrand (resolución de marca por tenant)', () => {
     it('team Movida ⇒ marca del team (NO EVA) y SIN sello (la marca es del team)', () => {
@@ -124,6 +125,44 @@ describe('pdfBrandFromProxyHeaders (alumno, headers del proxy)', () => {
         const b = pdfBrandFromProxyHeaders(headers({}))
         expect(b.poweredByEva).toBe(true)
         expect(b.showsEvaBadge).toBe(true)
+    })
+
+    // W1a — `x-coach-primary-color` lleva la columna libre LEGACY `coaches.primary_color`; el
+    // preset curado viaja aparte y es el que ve el alumno en la app. Caso del owner 2026-09-02:
+    // `josefit` = preset `sport-blue` con un #F97316 viejo guardado.
+    it('preset ≠ primary_color crudo ⇒ el PDF sale con el color del PRESET', () => {
+        const b = pdfBrandFromProxyHeaders(
+            headers({
+                'x-coach-brand-name': 'Josefit',
+                'x-coach-primary-color': '#F97316',
+                'x-coach-theme-preset-key': 'sport-blue',
+                'x-coach-subscription-tier': 'pro',
+            })
+        )
+        expect(b.poweredByEva).toBe(false)
+        expect(b.primaryColor).toBe(getThemePreset('sport-blue')!.brandColor)
+        expect(b.primaryColor).not.toBe('#F97316')
+    })
+
+    it('marca gestionada por org (x-workspace-brand-source) ⇒ gana el color de la org, no el preset personal', () => {
+        const b = pdfBrandFromProxyHeaders(
+            headers({
+                'x-coach-brand-name': 'Org Vortex',
+                'x-coach-primary-color': '#EC4899',
+                'x-coach-theme-preset-key': 'sport-blue',
+                'x-coach-subscription-tier': 'pro',
+                'x-workspace-brand-source': 'organization',
+            })
+        )
+        expect(b.primaryColor).toBe('#EC4899')
+    })
+
+    it('sin color en los headers ⇒ sigue cayendo al emerald de EVA (NO al azul de sistema)', () => {
+        const b = pdfBrandFromProxyHeaders(
+            headers({ 'x-coach-brand-name': 'Coach Sin Color', 'x-coach-subscription-tier': 'pro' })
+        )
+        expect(b.poweredByEva).toBe(false)
+        expect(b.primaryColor).toBe(EVA_PDF_BRAND.primaryColor)
     })
 })
 

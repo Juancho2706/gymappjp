@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { safeColor, rasterLogo, fmtWeight, reducePrFromRows } from './pr-card'
+import { resolveEffectiveBrandColorOrNull } from '@/lib/branding/public-branding'
+import { getThemePreset } from '@eva/brand-kit'
 
 // ymd estable por día calendario UTC (evita depender del TZ de Santiago en el test unitario).
 const ymdUtc = (iso: string) => iso.slice(0, 10)
@@ -127,5 +129,42 @@ describe('reducePrFromRows', () => {
             ymdUtc
         )
         expect(r?.deltaKg).toBe(2.7)
+    })
+})
+
+/**
+ * W1a — accent de marca de las imágenes og (`api/pr-card` y `api/pwa-screenshot`): ambos routes
+ * componen EXACTAMENTE esta expresión sobre la fila del coach. `resolveEffectiveBrandColorOrNull`
+ * aplica el preset curado sobre el `primary_color` LEGACY (y el gate de tier, fail-closed a
+ * `null`); `safeColor` conserva el fallback propio de cada arte — SPORT_500 en la card de PR, el
+ * azul de sistema en la screenshot del PWA.
+ */
+describe('accent efectivo de las imágenes og (safeColor ∘ resolveEffectiveBrandColorOrNull)', () => {
+    const SPORT_500 = '#2680FF' // mismo default del route de pr-card
+    const accentFor = (coach: Parameters<typeof resolveEffectiveBrandColorOrNull>[0]) =>
+        safeColor(resolveEffectiveBrandColorOrNull(coach), SPORT_500)
+
+    it('preset ≠ primary_color ⇒ GANA el preset (caso josefit: sport-blue sobre un #F97316 legacy)', () => {
+        expect(
+            accentFor({ primaryColor: '#F97316', themePresetKey: 'sport-blue', subscriptionTier: 'pro' })
+        ).toBe(getThemePreset('sport-blue')!.brandColor)
+    })
+
+    it('sin preset ⇒ passthrough del color libre (grandfather, sin cambio de comportamiento)', () => {
+        expect(accentFor({ primaryColor: '#F97316', themePresetKey: null, subscriptionTier: 'pro' })).toBe('#F97316')
+    })
+
+    it('sin color guardado ⇒ conserva el fallback del arte, NO el azul de sistema', () => {
+        expect(accentFor({ primaryColor: null, themePresetKey: null, subscriptionTier: 'pro' })).toBe(SPORT_500)
+    })
+
+    it('tier inválido/stale ⇒ fallback del arte (fail-closed, igual que el gate del route)', () => {
+        expect(
+            accentFor({ primaryColor: '#F97316', themePresetKey: 'sport-blue', subscriptionTier: 'plan_que_no_existe' })
+        ).toBe(SPORT_500)
+    })
+
+    it('hex inválido guardado en la fila ⇒ lo sigue filtrando safeColor', () => {
+        expect(accentFor({ primaryColor: 'naranjo', themePresetKey: null, subscriptionTier: 'pro' })).toBe(SPORT_500)
     })
 })

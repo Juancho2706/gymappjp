@@ -107,16 +107,66 @@ export type EffectiveBrandColorInput = {
     managed?: boolean
 }
 
-export function resolveEffectiveBrandColor(
+/**
+ * Núcleo de la resolución: el color efectivo, o `null` cuando NO hay color de marca utilizable
+ * (sin fila, sin color guardado, o tier fail-closed).
+ *
+ * Los callers que pintan una superficie propia usan `resolveEffectiveBrandColor` (que cierra ese
+ * `null` con el azul de sistema). Esta variante existe para los callers que YA tienen su propio
+ * fallback y cuya semántica depende de distinguir "sin color" de "color de sistema": la card de PR
+ * cae al `SPORT_500` del DS y los PDFs de nutrición al emerald legacy de `EVA_PDF_BRAND`. Pasarles
+ * el azul de sistema les cambiaría el arte a coaches que hoy no tienen `primary_color`.
+ */
+export function resolveEffectiveBrandColorOrNull(
     input: EffectiveBrandColorInput | null | undefined,
-): string {
-    if (!input) return SYSTEM_PRIMARY_COLOR
+): string | null {
+    if (!input) return null
     if (!isBrandingAllowed((input.subscriptionTier ?? 'free') as SubscriptionTier)) {
-        return SYSTEM_PRIMARY_COLOR
+        return null
     }
     const resolved = resolvePresetBranding({
         theme_preset_key: input.managed ? null : (input.themePresetKey ?? null),
         primary_color: input.primaryColor ?? null,
     })
-    return resolved.primary_color?.trim() || SYSTEM_PRIMARY_COLOR
+    return resolved.primary_color?.trim() || null
+}
+
+export function resolveEffectiveBrandColor(
+    input: EffectiveBrandColorInput | null | undefined,
+): string {
+    return resolveEffectiveBrandColorOrNull(input) ?? SYSTEM_PRIMARY_COLOR
+}
+
+/** Cualquier portador de headers: el `Headers` del proxy o un mapa `{ get }` en tests. */
+export type BrandHeaderSource = { get(name: string): string | null }
+
+/**
+ * Headers del proxy (`proxy.ts`) → entradas de `resolveEffectiveBrandColor`.
+ *
+ * `x-coach-primary-color` viaja CRUDO (el proxy publica `coach.primary_color || BRAND_PRIMARY_COLOR`)
+ * y `x-coach-theme-preset-key` viaja aparte, así que el preset se aplica acá o no se aplica nunca.
+ *
+ * `managed`: en el branch org de `/c` el proxy pisa el COLOR con el de la organización pero deja
+ * el `x-coach-theme-preset-key` PERSONAL del coach en el header; sin este flag el preset del coach
+ * le ganaría a la marca gestionada. `orphan` (alumno de org sin coach activo) publica el azul de
+ * sistema a propósito y tampoco debe recibir el preset.
+ */
+export function effectiveBrandColorInputFromHeaders(h: BrandHeaderSource): EffectiveBrandColorInput {
+    const brandSource = h.get('x-workspace-brand-source')
+    return {
+        primaryColor: h.get('x-coach-primary-color'),
+        themePresetKey: h.get('x-coach-theme-preset-key'),
+        subscriptionTier: h.get('x-coach-subscription-tier'),
+        managed: brandSource === 'organization' || brandSource === 'orphan',
+    }
+}
+
+/**
+ * Color de marca EFECTIVO desde los headers del proxy (white-label W1a): el preset curado manda
+ * sobre el `primary_color` crudo, salvo marca gestionada por org/team (esa gana). Leyendo el header
+ * crudo, un coach con preset publicaba su color libre legacy en superficies que el alumno ve antes
+ * que la app (bug del owner 2026-09-02).
+ */
+export function effectiveBrandColorFromHeaders(h: BrandHeaderSource): string {
+    return resolveEffectiveBrandColor(effectiveBrandColorInputFromHeaders(h))
 }

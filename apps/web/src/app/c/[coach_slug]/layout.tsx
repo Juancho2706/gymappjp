@@ -30,7 +30,7 @@ import { parseVtaMode, VTA_CLIENT_IS_DEMO_HEADER, VTA_MODE_HEADER } from '@/lib/
 import { DemoViewerBanner } from './_components/DemoViewerBanner'
 import { IdentifyStudentOnMount } from '@/components/analytics/IdentifyStudentOnMount'
 import { getClientRootUser } from './_data/client-root.queries'
-import { resolveEffectiveBrandColor } from '@/lib/branding/public-branding'
+import { effectiveBrandColorFromHeaders } from '@/lib/branding/public-branding'
 
 interface Props {
     children: React.ReactNode
@@ -160,22 +160,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
             images: [openGraphImageAbsoluteUrl],
         },
     }
-}
-
-/**
- * Color de marca EFECTIVO desde los headers del proxy (white-label W1a): el preset curado manda
- * sobre el `primary_color` crudo, salvo marca gestionada por org/team (esa gana). Mismo criterio
- * que el cuerpo del layout — leyendo el header crudo, un coach con preset publicaba su color
- * libre legacy en superficies que el alumno ve antes que la app (bug del owner 2026-09-02).
- */
-function effectiveBrandColorFromHeaders(h: Headers): string {
-    const brandSource = h.get('x-workspace-brand-source')
-    return resolveEffectiveBrandColor({
-        primaryColor: h.get('x-coach-primary-color'),
-        themePresetKey: h.get('x-coach-theme-preset-key'),
-        subscriptionTier: h.get('x-coach-subscription-tier'),
-        managed: brandSource === 'organization' || brandSource === 'orphan',
-    })
 }
 
 export async function generateViewport({ params }: Props): Promise<Viewport> {

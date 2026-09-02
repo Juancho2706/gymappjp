@@ -6,6 +6,11 @@
 import { isBrandingAllowed, showsEvaBadge, EVA_BADGE_LABEL, type SubscriptionTier } from '@eva/tiers'
 import type { PdfBrand } from '@/domain/nutrition/exchange.types'
 import { decodeBrandHeaderValue } from '@/lib/brand-header-codec'
+import {
+    effectiveBrandColorInputFromHeaders,
+    resolveEffectiveBrandColorOrNull,
+    type BrandHeaderSource,
+} from '@/lib/branding/public-branding'
 
 export type Rgb = [number, number, number]
 
@@ -130,15 +135,20 @@ export function resolvePdfBrand(source: TenantBrandSource | null | undefined): P
 
 /**
  * Headers del proxy (`/c`, `/t`, `/e`) → marca del PDF del ALUMNO.
- * Misma regla del layout (`app/c/[coach_slug]/layout.tsx`): marca propia en todos los planes y
- * sello «Hecho con EVA» en free/starter.
+ * Misma regla del layout (`app/c/[coach_slug]/layout.tsx`): marca propia en todos los planes,
+ * sello «Hecho con EVA» en free/starter y color EFECTIVO (W1a).
+ *
+ * El color NO sale del header crudo: `x-coach-primary-color` lleva la columna libre LEGACY
+ * `coaches.primary_color`, así que un coach con tema preset se llevaba el PDF en su color viejo
+ * mientras la app ya estaba en el del preset (bug del owner 2026-09-02). `effectiveBrandColorInputFromHeaders`
+ * aporta la MISMA semántica de `managed` que el layout (org/orphan ⇒ la marca gestionada gana sobre
+ * el preset personal). Se usa la variante `…OrNull` para no imponer el azul de sistema cuando no hay
+ * color: sin él, `resolvePdfBrand` sigue cayendo al emerald de `EVA_PDF_BRAND`, como hasta hoy.
  */
-export function pdfBrandFromProxyHeaders(h: {
-    get(name: string): string | null
-}): PdfBrand {
+export function pdfBrandFromProxyHeaders(h: BrandHeaderSource): PdfBrand {
     return resolvePdfBrand({
         brandName: decodeBrandHeaderValue(h.get('x-coach-brand-name')),
-        primaryColor: h.get('x-coach-primary-color'),
+        primaryColor: resolveEffectiveBrandColorOrNull(effectiveBrandColorInputFromHeaders(h)),
         logoUrl: h.get('x-coach-logo-url'),
         subscriptionTier: h.get('x-coach-subscription-tier') ?? 'free',
     })
