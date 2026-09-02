@@ -2,7 +2,9 @@ import { timingSafeEqual } from 'node:crypto'
 import { NextResponse } from 'next/server'
 import { z } from 'zod'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
+import { pruneCoachKpiSnapshots } from '@/infrastructure/db'
 import { snapshotAllCoachKpis, snapshotCoachKpis } from '@/app/coach/dashboard/_data/kpi-snapshot.queries'
+import { SNAPSHOT_RETENTION_DAYS, santiagoYmd, ymdMinusDays } from '@/app/coach/dashboard/_lib/kpi-snapshot'
 
 /**
  * Cron `coach-kpi-snapshot` — la foto diaria que hace posible el delta de «En riesgo» (7C fase 2).
@@ -16,6 +18,9 @@ import { snapshotAllCoachKpis, snapshotCoachKpis } from '@/app/coach/dashboard/_
  *
  * HORARIO. `30 4 * * *` UTC ≈ 01:30 (verano, UTC−3) / 00:30 (invierno, UTC−4) en Santiago: la
  * fila del día se escribe apenas empieza, así que describe el estado al INICIO de ese día.
+ *
+ * RETENCIÓN. Tras el upsert poda lo anterior a `hoy − SNAPSHOT_RETENTION_DAYS` (90 d calendario
+ * Santiago). Es best-effort: si la poda falla, la corrida sigue siendo 200 y solo queda el warn.
  *
  * IDEMPOTENTE. El upsert va por `(coach_id, day)`, así que se puede correr a mano el mismo día sin
  * duplicar — es justamente la forma de SEMBRAR la fila de hoy tras el deploy:
@@ -75,7 +80,26 @@ export async function GET(req: Request) {
             console.warn(`[cron/coach-kpi-snapshot] parciales: ${result.errors.join(' | ')}`)
         }
 
-        return NextResponse.json({ ok: true, day: result.day, snapshotted: result.snapshotted, errors: result.errors })
+        // Poda DESPUÉS del upsert, y a propósito: si el snapshot del día falla, no se borra
+        // historial. El cutoff se calcula en día calendario Santiago, el mismo con el que se
+        // escribió la fila. Best-effort: una poda fallida no puede tumbar una corrida buena.
+        const { deleted, error: pruneError } = await pruneCoachKpiSnapshots(
+            admin,
+            ymdMinusDays(santiagoYmd(now), SNAPSHOT_RETENTION_DAYS)
+        )
+        if (pruneError) {
+            console.warn(`[cron/coach-kpi-snapshot] poda fallida: ${pruneError}`)
+        } else if (deleted > 0) {
+            console.info(`[cron/coach-kpi-snapshot] poda: ${deleted} filas > ${SNAPSHOT_RETENTION_DAYS}d`)
+        }
+
+        return NextResponse.json({
+            ok: true,
+            day: result.day,
+            snapshotted: result.snapshotted,
+            errors: result.errors,
+            deleted,
+        })
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         console.error('[cron/coach-kpi-snapshot] corrida abortada:', message)

@@ -18,7 +18,14 @@ type DB = SupabaseClient<Database>
 export type CoachKpiSnapshotRow = Database['public']['Tables']['coach_kpi_snapshots']['Row']
 export type CoachKpiSnapshotInsert = Database['public']['Tables']['coach_kpi_snapshots']['Insert']
 
-/** Lo único que el dashboard lee de la fila T−7: los números, sin `created_at` ni `coach_id`. */
+/**
+ * Los números de la fila T−7, sin `created_at` ni `coach_id`.
+ *
+ * OJO: de estos, hoy el dashboard solo LEE `risk_count` y `active_clients` (`KpiSnapshot7d` en
+ * `_lib/kpi-deltas.ts`). `avg_adherence` y `sessions_7d` se escriben y se seleccionan pero no
+ * alimentan ningún tile — se conservan a propósito: son el mismo dato irreconstruible a posteriori
+ * que justifica la tabla, y borrarlos costaría esperar otros 7 días para tener el delta.
+ */
 export type CoachKpiSnapshotComparable = Pick<
     CoachKpiSnapshotRow,
     'day' | 'risk_count' | 'active_clients' | 'avg_adherence' | 'sessions_7d'
@@ -75,4 +82,25 @@ export async function upsertCoachKpiSnapshots(
     const { error } = await db.from('coach_kpi_snapshots').upsert(rows, { onConflict: 'coach_id,day' })
 
     return { error: error ? error.message : null }
+}
+
+/**
+ * Poda las filas anteriores a `cutoffYmd` (exclusivo) y devuelve cuántas borró.
+ *
+ * El cutoff llega YA calculado en día calendario Santiago (`ymdMinusDays(santiagoYmd(now), …)`):
+ * acá NO se usa `current_date - N` en SQL porque `current_date` en Postgres es UTC y el corte
+ * quedaría desalineado con el mismo criterio que escribió la fila.
+ *
+ * Mismo contrato que el upsert: devuelve el error como texto, no lo lanza. Podar es higiene y no
+ * puede convertir una corrida de snapshot exitosa en un 500.
+ */
+export async function pruneCoachKpiSnapshots(
+    db: DB,
+    cutoffYmd: string
+): Promise<{ deleted: number; error: string | null }> {
+    const { data, error } = await db.from('coach_kpi_snapshots').delete().lt('day', cutoffYmd).select('day')
+
+    if (error) return { deleted: 0, error: error.message }
+
+    return { deleted: data?.length ?? 0, error: null }
 }

@@ -10,6 +10,16 @@
 export const KPI_SNAPSHOT_LOOKBACK_DAYS = 7
 
 /**
+ * Retención de `coach_kpi_snapshots`: el cron borra lo anterior a `hoy − 90 días` calendario.
+ *
+ * La ventana que se LEE es de solo 7 días (`KPI_SNAPSHOT_LOOKBACK_DAYS`); 90 deja margen de sobra
+ * para backfill y diagnóstico sin que la tabla crezca sin techo (~33k filas/año con la cohorte
+ * actual). La regla vive acá, en TS, y no en un `pg_cron`, para no duplicar en SQL la aritmética de
+ * fechas Santiago que ya define este módulo.
+ */
+export const SNAPSHOT_RETENTION_DAYS = 90
+
+/**
  * Único formateador de fecha calendario del snapshot. El runtime de Vercel es UTC; sin la zona
  * Santiago las corridas nocturnas caen al día siguiente y la fila queda con la etiqueta cambiada.
  * Es el MISMO `Intl.DateTimeFormat` que usa `ymdSantiago` en `dashboard.queries`.

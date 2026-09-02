@@ -9,10 +9,20 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  *  · sin query, la corrida es la cohorte completa;
  *  · `?coach_id=` válido siembra UN coach — es la forma de arreglar una fila puntual sin reescribir
  *    las demás;
- *  · un `coach_id` basura muere en 400 ANTES de tocar la DB.
+ *  · un `coach_id` basura muere en 400 ANTES de tocar la DB;
+ *  · la poda de retención corre DESPUÉS del upsert, con el cutoff en día calendario Santiago, y
+ *    fallar no le cambia el 200 a una corrida que sí guardó sus filas.
  */
 
 vi.mock('@/lib/supabase/admin-client', () => ({ createServiceRoleClient: () => ({}) }))
+
+const pruneCoachKpiSnapshots = vi.fn(async (_db: unknown, _cutoff: string) => ({
+    deleted: 0,
+    error: null as string | null,
+}))
+vi.mock('@/infrastructure/db', () => ({
+    pruneCoachKpiSnapshots: (...a: unknown[]) => pruneCoachKpiSnapshots(a[0], a[1] as string),
+}))
 
 const snapshotAllCoachKpis = vi.fn(async () => ({ day: '2026-09-01', snapshotted: 68, errors: [] as string[] }))
 const snapshotCoachKpis = vi.fn(async (_db: unknown, _ids: string[]) => ({
@@ -37,8 +47,12 @@ const authedReq = (query = '') =>
 beforeEach(() => {
     vi.clearAllMocks()
     vi.stubEnv('CRON_SECRET', SECRET)
+    pruneCoachKpiSnapshots.mockResolvedValue({ deleted: 0, error: null })
 })
-afterEach(() => vi.unstubAllEnvs())
+afterEach(() => {
+    vi.unstubAllEnvs()
+    vi.useRealTimers()
+})
 
 describe('GET /api/cron/coach-kpi-snapshot — auth', () => {
     it('sin CRON_SECRET en el env → 401 y no snapshotea nada', async () => {
@@ -118,5 +132,74 @@ describe('GET /api/cron/coach-kpi-snapshot — corrida', () => {
         const res = await GET(authedReq())
         expect(res.status).toBe(500)
         error.mockRestore()
+    })
+})
+
+describe('GET /api/cron/coach-kpi-snapshot — poda de retención', () => {
+    /** Congela el reloj: el cutoff sale de `new Date()` dentro del handler. */
+    const at = (iso: string) => {
+        vi.useFakeTimers()
+        vi.setSystemTime(new Date(iso))
+    }
+
+    it('el cutoff son 90 dias antes del dia SANTIAGO, no del dia UTC', async () => {
+        // 02:00 UTC del 1 de diciembre = 23:00 del 30 de noviembre en Chile. El corte tiene que
+        // colgar del 30-11 (⇒ 2026-09-01) y no del 01-12 (⇒ 2026-09-02).
+        at('2026-12-01T02:00:00.000Z')
+        const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+
+        const res = await GET(authedReq())
+
+        expect(res.status).toBe(200)
+        expect(pruneCoachKpiSnapshots).toHaveBeenCalledTimes(1)
+        expect(pruneCoachKpiSnapshots.mock.calls[0][1]).toBe('2026-09-01')
+        info.mockRestore()
+    })
+
+    it('en enero el cutoff cruza el año sin off-by-one', async () => {
+        // 02:00 UTC del 15-01-2027 = 14-01 en Chile ⇒ 14-01-2027 − 90 d = 16-10-2026.
+        at('2027-01-15T02:00:00.000Z')
+        const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+
+        await GET(authedReq())
+
+        expect(pruneCoachKpiSnapshots.mock.calls[0][1]).toBe('2026-10-16')
+        info.mockRestore()
+    })
+
+    it('poda despues del upsert y su total viaja en la respuesta', async () => {
+        pruneCoachKpiSnapshots.mockResolvedValue({ deleted: 12, error: null })
+        const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+        const order: string[] = []
+        snapshotAllCoachKpis.mockImplementationOnce(async () => {
+            order.push('snapshot')
+            return { day: '2026-09-01', snapshotted: 68, errors: [] }
+        })
+        pruneCoachKpiSnapshots.mockImplementationOnce(async () => {
+            order.push('prune')
+            return { deleted: 12, error: null }
+        })
+
+        const res = await GET(authedReq())
+        const json = await res.json()
+
+        expect(order).toEqual(['snapshot', 'prune'])
+        expect(json).toMatchObject({ ok: true, snapshotted: 68, deleted: 12 })
+        info.mockRestore()
+    })
+
+    it('poda fallida: warn, pero el 200 y el snapshotted no se mueven', async () => {
+        pruneCoachKpiSnapshots.mockResolvedValue({ deleted: 0, error: 'permission denied' })
+        const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+        const res = await GET(authedReq())
+        const json = await res.json()
+
+        expect(res.status).toBe(200)
+        expect(json).toMatchObject({ ok: true, snapshotted: 68, deleted: 0 })
+        expect(warn.mock.calls.flat().join(' ')).toContain('poda fallida')
+        info.mockRestore()
+        warn.mockRestore()
     })
 })
