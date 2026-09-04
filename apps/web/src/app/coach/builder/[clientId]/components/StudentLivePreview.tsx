@@ -7,6 +7,7 @@ import {
     groupContiguousSupersetRuns,
     type SupersetGroupRow,
     type WorkoutSectionKey,
+    sideSuffix,
 } from '@eva/workout-engine'
 import type { WorkoutArea } from '@/domain/workout/types'
 import { EXERCISE_TYPE_META, effectiveExerciseType, typedBlockSummary } from '@/lib/workout-exercise-type'
@@ -79,7 +80,8 @@ export function blockObjectiveLabel(block: BuilderBlock): string | null {
             type,
         )
     }
-    if ((block.sets ?? 0) > 0 && block.reps?.trim()) return `${block.sets} × ${block.reps.trim()}`
+    // Sufijo «/lado» (R4): la vista previa dice lo mismo que el ejecutor va a pedir.
+    if ((block.sets ?? 0) > 0 && block.reps?.trim()) return `${block.sets} × ${block.reps.trim()}${sideSuffix(block.side_mode)}`
     return null
 }
 

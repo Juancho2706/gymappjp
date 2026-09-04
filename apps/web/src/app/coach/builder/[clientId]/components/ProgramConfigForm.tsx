@@ -233,9 +233,15 @@ export function ProgramConfigForm({
                             className="rounded border-border accent-primary h-4 w-4"
                         />
                         <span className="text-sm font-medium text-muted-foreground transition-colors group-hover:text-foreground">
-                            Inicio flexible — el alumno decide cuándo arranca
+                            Inicio flexible (el alumno decide)
                         </span>
                     </label>
+                    {/* R2/R3 del tren «ciclo real y por lado»: nace apagado; encendido, el programa queda
+                        sin fecha hasta que el alumno toque «Empezar hoy». */}
+                    <p className="-mt-1 text-[12px] leading-snug text-muted-foreground">
+                        Sin fecha fija: el alumno toca «Empezar hoy» en su Inicio y el programa arranca ese día en el Día 1
+                        {programStructureType === 'cycle' && cycleLength > 0 ? ` de ${cycleLength}` : ''}.
+                    </p>
                     {!startDateFlexible && (
                         <Input
                             type="date"

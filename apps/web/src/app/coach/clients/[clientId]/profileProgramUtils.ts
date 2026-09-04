@@ -49,12 +49,19 @@ export function resolveNextProgramWorkout(
         ab_mode?: boolean | null
         start_date?: string | null
         weeks_to_repeat?: number | null
+        program_structure_type?: string | null
     } | null | undefined,
     now: Date = new Date(),
     planCurrentWeekFromCompliance?: number | null
 ): NextProgramWorkoutInfo | null {
     const plans = program?.workout_plans
     if (!program || !plans?.length) return null
+
+    // En `cycle`, `day_of_week` es el índice del ciclo (1..N), no el ISODOW: un ciclo de 3 días
+    // tiene planes con day_of_week 1/2/3, que caen en el rango 1-7 igual que weekly y producían un
+    // "Hoy" por COINCIDENCIA numérica con el día de la semana real (W4.6, un lunes marcaba el
+    // día 1 del ciclo). `isToday` solo puede salir de la comparación ISODOW en `weekly`.
+    const isCycle = program.program_structure_type === 'cycle'
 
     const ab = !!program.ab_mode
     // Variante EFECTIVA (cae a la que tenga planes si la del ciclo está vacía) — el "próximo entreno"
@@ -84,7 +91,7 @@ export function resolveNextProgramWorkout(
             dayName: name,
             title: String(p.title || 'Entrenamiento'),
             exerciseCount: p.workout_blocks?.length ?? 0,
-            isToday: dow >= 1 && dow <= 7 && dow === todayDow,
+            isToday: !isCycle && dow >= 1 && dow <= 7 && dow === todayDow,
         }
     }
 
@@ -96,7 +103,7 @@ export function resolveNextProgramWorkout(
         const next = upcoming || sorted[0]
         if (!next) return null
         const info = pick(next)
-        return { ...info, isToday: info.dayOfWeek === todayDow }
+        return { ...info, isToday: !isCycle && info.dayOfWeek === todayDow }
     }
 
     const sorted = [...withBlocks].sort(

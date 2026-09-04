@@ -183,7 +183,10 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
     const [weeksToRepeat, setWeeksToRepeat] = useState(initialProgram?.weeks_to_repeat || 4)
     const [durationType, setDurationType] = useState<'weeks' | 'async' | 'calendar_days'>((initialProgram?.duration_type as any) || 'weeks')
     const [durationDays, setDurationDays] = useState<number | null>(initialProgram?.duration_days || null)
-    const [startDateFlexible, setStartDateFlexible] = useState<boolean>(initialProgram?.start_date_flexible ?? true)
+    // R2: «Inicio flexible» es opt-in — un programa NUEVO nace con el toggle APAGADO (el coach fija
+    // la fecha), en `weekly` y en `cycle` (R13). Un programa existente respeta su valor guardado;
+    // `?? false` solo cubre las filas con `start_date_flexible` NULL (nunca eligió el coach).
+    const [startDateFlexible, setStartDateFlexible] = useState<boolean>(initialProgram?.start_date_flexible ?? false)
     const [startDate, setStartDate] = useState<string>(
         initialProgram?.start_date 
             ? new Date(initialProgram.start_date).toISOString().split('T')[0] 
@@ -918,7 +921,9 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
         const missingData = allDaysToCheck.some(d => d.blocks.some(blockIncomplete))
         if (missingData) { toast.error('Hay ejercicios con datos incompletos (revisa series, repeticiones, duración o distancia).'); return }
 
-        const parseOptionalKg = (raw: string | undefined): number | null => {
+        // Acepta `null` además de `undefined`: el strip por cambio de tipo (R32) limpia
+        // `load_value`/`distance_value` con `null` EXPLÍCITO. El `== null` ya cubría los dos.
+        const parseOptionalKg = (raw: string | null | undefined): number | null => {
             if (raw == null) return null
             const t = raw.trim().replace(',', '.')
             if (t === '') return null

@@ -16,6 +16,7 @@ import type { ExerciseType, IntervalConfig, SideMode } from '@/domain/workout/ty
 import { EXERCISE_TYPE_META, effectiveExerciseType } from '@/lib/workout-exercise-type'
 import { exerciseThumbnailUrl, extractYoutubeVideoId } from '@/lib/youtube'
 import { INTERVAL_TEMPLATES, repsUnitForModality, cardioRepsUnitShort } from '@eva/workout-engine'
+import { stripFieldsForType } from '@eva/plan-builder'
 import { HR_ZONES } from '@eva/cardio'
 
 interface ExerciseHistory {
@@ -40,11 +41,35 @@ interface BlockEditSheetProps {
 const FIELD_LABEL_CLASS = 'text-[12.5px] font-semibold text-foreground flex items-center gap-1.5'
 const FIELD_INPUT_CLASS = 'h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground font-bold focus:border-primary placeholder:text-muted-foreground'
 
+// Copys canónicos del tren «ciclo real y por lado» (R4): `bilateral` no existe como opción (0 filas
+// en LIVE); `per_side` y `alternating` capturan igual en el ejecutor (dos reps + un peso).
 const SIDE_MODE_OPTIONS: { value: SideMode | null; label: string }[] = [
-    { value: null, label: 'Normal' },
+    { value: null, label: 'Ninguno' },
     { value: 'per_side', label: 'Por lado' },
     { value: 'alternating', label: 'Alternado' },
 ]
+const SIDE_MODE_HINT = 'El alumno registra izquierda y derecha en cada serie.'
+
+/**
+ * Cambio de tipo del bloque (R6 + R32), SIN diálogo de confirmación.
+ *
+ * Dos mitades: `stripFieldsForType` (@eva/plan-builder) limpia los 10 campos polimórficos del tipo
+ * anterior escribiendo `null` EXPLÍCITO y siembra los defaults tipados del nuevo, conservando
+ * `sets`/`rest_time`/`notes`/`superset_group`/`side_mode`/`instructions`; el `exercise_type_override`
+ * lo decide este call site, porque la regla —`null` cuando el tipo elegido es el propio del
+ * ejercicio— vive acá y no en el paquete.
+ *
+ * Pura y exportada a propósito: el cambio de tipo se testea sin montar el sheet
+ * (`BlockEditSheet.test.tsx`). Espejo exacto de `applyBlockTypeChange` del builder RN
+ * (`apps/mobile/components/coach/BlockEditorSheet.tsx`).
+ */
+export function applyBlockTypeChange(block: BuilderBlock, type: ExerciseType): BuilderBlock {
+    const ownType = effectiveExerciseType(null, { exercise_type: block.exercise_type })
+    return {
+        ...stripFieldsForType(block, type),
+        exercise_type_override: type === ownType ? null : type,
+    }
+}
 
 /** Texto + blur: evita `type="number"` en móvil donde a veces no se puede vaciar el campo. */
 function BlockProgressionValueInput({
@@ -228,22 +253,26 @@ function SeriesStepper({
 
 function SideModeSelector({ block, onChange }: { block: BuilderBlock; onChange: (b: BuilderBlock) => void }) {
     return (
-        <div className="grid grid-cols-3 overflow-hidden rounded-control border border-border text-[10px] font-bold uppercase tracking-widest dark:border-white/10">
-            {SIDE_MODE_OPTIONS.map((opt) => (
-                <button
-                    key={opt.label}
-                    type="button"
-                    onClick={() => onChange({ ...block, side_mode: opt.value })}
-                    className={`min-h-[44px] px-2 py-2 transition-colors md:min-h-0 ${
-                        (block.side_mode ?? null) === opt.value
-                            ? 'bg-primary text-primary-foreground'
-                            : 'text-muted-foreground hover:bg-muted'
-                    }`}
-                >
-                    {opt.label}
-                </button>
-            ))}
-        </div>
+        <>
+            <div className="grid grid-cols-3 overflow-hidden rounded-control border border-border text-[10px] font-bold uppercase tracking-widest dark:border-white/10">
+                {SIDE_MODE_OPTIONS.map((opt) => (
+                    <button
+                        key={opt.label}
+                        type="button"
+                        onClick={() => onChange({ ...block, side_mode: opt.value })}
+                        className={`min-h-[44px] px-2 py-2 transition-colors md:min-h-0 ${
+                            (block.side_mode ?? null) === opt.value
+                                ? 'bg-primary text-primary-foreground'
+                                : 'text-muted-foreground hover:bg-muted'
+                        }`}
+                    >
+                        {opt.label}
+                    </button>
+                ))}
+            </div>
+            {/* Hint canónico: el control era «muerto» en fuerza (feedback Movens); ahora sí cambia la captura. */}
+            {block.side_mode ? <p className="text-[10.5px] leading-snug text-muted-foreground">{SIDE_MODE_HINT}</p> : null}
+        </>
     )
 }
 
@@ -562,8 +591,7 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
     })()
 
     const setOverride = (type: ExerciseType) => {
-        const ownType = effectiveExerciseType(null, { exercise_type: block.exercise_type })
-        onChange({ ...block, exercise_type_override: type === ownType ? null : type })
+        onChange(applyBlockTypeChange(block, type))
     }
 
     return (

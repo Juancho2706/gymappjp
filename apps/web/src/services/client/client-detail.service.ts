@@ -47,6 +47,46 @@ import { assertCoachClientReadAccess, getCoachClientScope } from '@/services/cli
 // contexto team en cada carga; team/enterprise siguen usando la ruta dedicada /bodycomp.
 import * as bodyCompRepo from '@/infrastructure/db/body-composition.repository'
 
+/**
+ * Fila de `workout_blocks` tal como la trae `activeProgramPromise` (W4.1,
+ * specs/ciclo-real-y-por-lado): agrega los ejes tipados (cardio/movilidad/roller) y `side_mode`
+ * a los campos legacy de fuerza. Documenta el shape para el consumidor tipado de la ficha
+ * (W4.8); `activeProgram` sigue viajando como `any` río abajo en esta tarea — ningún consumidor
+ * cambia de comportamiento todavía, solo llegan más columnas.
+ */
+export interface ActiveProgramBlockRow {
+    id: string
+    exercise_id: string | null
+    order_index: number | null
+    sets: number | null
+    reps: string | null
+    rest_time: string | null
+    notes: string | null
+    target_weight_kg: number | null
+    tempo: string | null
+    rir: string | null
+    superset_group: string | null
+    exercise_type_override: string | null
+    duration_sec: number | null
+    distance_value: number | null
+    distance_unit: string | null
+    hr_zone: number | null
+    interval_config: unknown
+    reps_value: number | null
+    reps_unit: string | null
+    side_mode: string | null
+    exercises: {
+        id: string
+        name: string
+        muscle_group: string | null
+        gif_url: string | null
+        thumbnail_url: string | null
+        video_url: string | null
+        exercise_type: string | null
+        cardio_modality: string | null
+    } | null
+}
+
 export const getClientProfileData = cache(async (clientId: string) => {
     const supabase = await createClient()
     // getClaims(): verificación local del JWT (ES256), sin /user. Lectura coach-scoped (RLS + assertCoachClientReadAccess la gatean), no es boundary de mutación → no requiere revocación fresca.
@@ -86,7 +126,9 @@ export const getClientProfileData = cache(async (clientId: string) => {
                 workout_blocks (
                     id, exercise_id, order_index, sets, reps, rest_time, notes, target_weight_kg,
                     tempo, rir, superset_group,
-                    exercises ( id, name, muscle_group, gif_url, thumbnail_url, video_url )
+                    exercise_type_override, duration_sec, distance_value, distance_unit,
+                    hr_zone, interval_config, reps_value, reps_unit, side_mode,
+                    exercises ( id, name, muscle_group, gif_url, thumbnail_url, video_url, exercise_type, cardio_modality )
                 )
             )
         `)
@@ -132,7 +174,7 @@ export const getClientProfileData = cache(async (clientId: string) => {
                 id, exercise_id, order_index, section, superset_group, target_weight_kg, reps, sets,
                 exercises ( id, name, muscle_group ),
                 workout_logs (
-                    id, set_number, weight_kg, reps_done, rpe, logged_at
+                    id, set_number, weight_kg, reps_done, rpe, logged_at, metadata
                 )
             )
         `)

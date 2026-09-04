@@ -9,7 +9,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils'
 import { getMuscleColor } from '../muscle-colors'
 import { buildAreaVMs, type BuilderAreaVM } from '../area-ui'
-import { effectiveAreaKey } from '@eva/workout-engine'
+import { effectiveAreaKey, sideSuffix } from '@eva/workout-engine'
 import { EXERCISE_TYPE_LABEL, EXERCISE_TYPE_META, effectiveExerciseType, typedBlockSummary } from '@/lib/workout-exercise-type'
 import { exerciseThumbnailUrl } from '@/lib/youtube'
 import type { BuilderBlock } from '../types'
@@ -271,7 +271,8 @@ function ExerciseBlockInner({
                                     >
                                         <span>{block.sets}</span>
                                         <span className="text-muted-foreground">×</span>
-                                        <span>{block.reps}</span>
+                                        {/* Sufijo «/lado» del motor (R4): el resumen dice lo que el alumno va a registrar. */}
+                                        <span>{block.reps}{sideSuffix(block.side_mode)}</span>
                                     </div>
                                 ) : (
                                     <div

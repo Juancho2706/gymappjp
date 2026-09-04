@@ -28,7 +28,7 @@ export function AssignToClientsDialog({ open, onClose, programId, programName }:
     const [loading, setLoading] = useState(false)
     const [selected, setSelected] = useState<string[]>([])
     const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0])
-    const [flexibleStart, setFlexibleStart] = useState(true)
+    const [flexibleStart, setFlexibleStart] = useState(false) // R2: inicio flexible opt-in
     const [assigning, setAssigning] = useState(false)
     const [search, setSearch] = useState('')
     const [durationWeeks, setDurationWeeks] = useState('4')

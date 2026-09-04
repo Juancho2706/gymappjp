@@ -31,7 +31,14 @@ import {
     uniqueMuscleGroupsFromBlocks,
 } from './profileProgramStructureUtils'
 import { resolveEffectiveWeekVariant } from '@/lib/workout/programWeekVariant'
-import { groupContiguousSupersetRuns } from '@eva/workout-engine'
+import {
+    effectiveExerciseType,
+    groupContiguousSupersetRuns,
+    programDayLabel,
+    sideSuffix,
+    typedBlockSummary,
+    SIDE_LABEL,
+} from '@eva/workout-engine'
 import { cn } from '@/lib/utils'
 import { SectionTitle } from './_components/SectionTitle'
 
@@ -475,14 +482,24 @@ export function ProgramTabB7({
 
     const ex = sheetBlock?.exercises
     type PrescriptionRow = { lbl: string; val: string; icon: React.ReactNode }
+    // Tipo EFECTIVO del bloque (override del coach ?? catálogo) y resumen tipado: un cardio o una
+    // movilidad ya no se leen como «Series × reps» (P2 del feedback Movens). Fuerza conserva su fila.
+    const sheetType = sheetBlock ? effectiveExerciseType(sheetBlock, ex ?? null) : 'strength'
+    const sheetTypedSummary = sheetBlock && sheetType !== 'strength' ? typedBlockSummary(sheetBlock, sheetType) : null
+    const sheetSideLabel = sheetBlock?.side_mode ? (SIDE_LABEL[sheetBlock.side_mode] ?? null) : null
     const prescriptionRows: PrescriptionRow[] = sheetBlock
         ? ([
-              sheetBlock.sets != null || sheetBlock.reps != null
-                  ? {
-                        lbl: 'Series × reps',
-                        val: `${sheetBlock.sets ?? '—'} × ${sheetBlock.reps ?? '—'}`,
-                        icon: <Dumbbell className="h-[17px] w-[17px]" />,
-                    }
+              sheetTypedSummary
+                  ? { lbl: 'Objetivo', val: sheetTypedSummary, icon: <Dumbbell className="h-[17px] w-[17px]" /> }
+                  : sheetBlock.sets != null || sheetBlock.reps != null
+                    ? {
+                          lbl: 'Series × reps',
+                          val: `${sheetBlock.sets ?? '—'} × ${sheetBlock.reps ?? '—'}${sideSuffix(sheetBlock.side_mode)}`,
+                          icon: <Dumbbell className="h-[17px] w-[17px]" />,
+                      }
+                    : null,
+              sheetSideLabel
+                  ? { lbl: 'Lado', val: sheetSideLabel, icon: <Dumbbell className="h-[17px] w-[17px]" /> }
                   : null,
               sheetBlock.target_weight_kg != null
                   ? { lbl: 'Obj. peso', val: `${sheetBlock.target_weight_kg} kg`, icon: <Weight className="h-[17px] w-[17px]" /> }
@@ -682,8 +699,13 @@ export function ProgramTabB7({
                 ) : (
                     <div className="flex flex-col gap-2">
                         {plansView.map((plan: any) => {
+                            // Ciclo (D1, feedback Movens): `day_of_week` es el ÍNDICE del ciclo, nunca un día
+                            // de semana → «Día 1 de 3», jamás «Lun». La etiqueta la da el motor.
                             const dow = Number(plan.day_of_week)
-                            return renderDayCard(plan, { dow, label: dow >= 1 && dow <= 7 ? (DAY_LABELS[dow] ?? `D${dow}`) : String(dow) })
+                            return renderDayCard(plan, {
+                                dow,
+                                label: programDayLabel(dow, structure, activeProgram?.cycle_length ?? null, { form: 'long' }),
+                            })
                         })}
                     </div>
                 )}

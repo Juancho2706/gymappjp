@@ -22,6 +22,7 @@ import {
     effectiveExerciseType,
     typedBlockSummary,
     formatLoggedSetLine,
+    sideRepsFromMetadata,
     EMPTY_LOGGED_SET_LABEL,
     EXERCISE_TYPE_LABEL,
     type ExerciseType,
@@ -753,6 +754,9 @@ function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
                                     }
                                     const target = targetWeightForSet(s)
                                     const done = s.weight_kg
+                                    // Fuerza POR LADO (R19): «10 / 10» desde `metadata` con el helper único del
+                                    // motor; el peso conserva su comparación objetivo↔hecho y «PC».
+                                    const sides = sideRepsFromMetadata(s.metadata)
                                     const cmp =
                                         target != null && done != null
                                             ? done > target
@@ -777,7 +781,7 @@ function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
                                             <span className={cmp ? weightClass : undefined}>
                                                 {done != null ? `${done}kg` : 'PC'}
                                             </span>{' '}
-                                            × {s.reps_done ?? '—'}
+                                            × {sides ? `${sides.left} / ${sides.right}` : (s.reps_done ?? '—')}
                                             {s.rpe != null ? ` · RPE ${s.rpe}` : ''}
                                             {s.rir != null ? ` · RIR ${s.rir}` : ''}
                                         </span>
