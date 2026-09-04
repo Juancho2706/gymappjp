@@ -28,8 +28,9 @@ prevalecen sobre este resumen. La prosa retirada el 2026-09-02 está en
 
 ## Prioridades vigentes
 
-1. **Tren «Ciclo real y por lado» (feedback Movens) — EN DEPLOY 03-09** ([tareas](../specs/ciclo-real-y-por-lado/TASKS.md);
-   `rnmobiledenuevo` `591ea8cd`…`04328c8d` + docs; deploy READY y OTA 1.1.2 se anotan al cierre en [MOBILE_PARITY](MOBILE_PARITY.md)):
+1. **Tren «Ciclo real y por lado» (feedback Movens) — EN PRODUCCIÓN 04-09 02:25Z** ([tareas](../specs/ciclo-real-y-por-lado/TASKS.md);
+   `master` = `rnmobiledenuevo` = `b1bad0a3`, deploy `dpl_DZ76aJq5…` READY, 4 migraciones en LIVE `20260904022120`…`022257`,
+   OTA 1.1.2 android `fd2e1212` / ios `248580e4`; detalle en [MOBILE_PARITY](MOBILE_PARITY.md)):
    ciclo N-días real (cursor por completitud, «Día N de M», «Empezar hoy»), fuerza por lado (reps izq/der + un peso),
    ficha del coach con tipo y lado, builder «Ninguno | Por lado | Alternado», PWA día 1, SW v5 + purga de caches.
    Las 4 migraciones (`20260903212038`…`212800`, validadas en LIVE con ROLLBACK) se aplican DESPUÉS del deploy y ANTES

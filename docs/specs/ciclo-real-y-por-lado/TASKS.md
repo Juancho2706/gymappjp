@@ -688,21 +688,21 @@ Convención de estado: `[ ]` pendiente · `[x]` hecha. Nada se marca verde sin e
 
 ## W6 · Docs, gates y cierre
 
-- [ ] W6.1 SDD versionada en `docs/specs/ciclo-real-y-por-lado/` (SPEC.md, PLAN.md, TASKS.md,
+- [x] W6.1 SDD versionada en `docs/specs/ciclo-real-y-por-lado/` (SPEC.md, PLAN.md, TASKS.md,
       DATA-SECURITY.md) con frontmatter `status: draft` → `implemented-pending-qa`, `canonical: false`.
       **Aceptación**: `pnpm docs:check` verde.
-- [ ] W6.2 `docs/specs/workout-day-in-progress/SPEC.md:23-25`: hoy declara «la racha (RPC
+- [x] W6.2 `docs/specs/workout-day-in-progress/SPEC.md:23-25`: hoy declara «la racha (RPC
       `get_client_current_streak`, 7 reglas CEO) **NO se toca en v1**», que este tren contradice.
       Actualizar en el **mismo commit** (`docs/README.md:79`: `status: active` exige mantenimiento en
       el cambio que altera su verdad). **Aceptación**: el SPEC apunta a esta SDD para la rama `cycle`.
-- [ ] W6.3 `docs/status/CURRENT.md`: punto nuevo con el patrón
+- [x] W6.3 `docs/status/CURRENT.md`: punto nuevo con el patrón
       `N. **Título — ESTADO** ([tareas] → ruta desde docs/status: ../specs/ciclo-real-y-por-lado/TASKS.md, hash/deploy/OTA): …`.
       **Aceptación**: el archivo queda **≤ 16 KB** (`scripts/check-docs.mjs:117-119`; hoy 7 037 bytes)
       y `pnpm docs:check` verde.
-- [ ] W6.4 `docs/status/MOBILE_PARITY.md`: bloque `>` nuevo arriba del «Resumen ejecutivo» con
+- [x] W6.4 `docs/status/MOBILE_PARITY.md`: bloque `>` nuevo arriba del «Resumen ejecutivo» con
       hash, deploy y ambos hashes de OTA, declarando **por punto** qué es «Solo web», «Solo RN» o
       paridad nueva. **Aceptación**: los 4 puntos del feedback aparecen con su plataforma explícita.
-- [ ] W6.5 `docs/operations/MOBILE_RELEASES_OTA.md`: registrar la publicación (tag, grupos android/ios
+- [x] W6.5 `docs/operations/MOBILE_RELEASES_OTA.md`: registrar la publicación (tag, grupos android/ios
       y `run id`). **Aceptación**: las dos corridas quedan citadas y verdes.
 - [ ] W6.5b Aviso a los coaches afectados (redacción + envío), con los dos puntos que el tren acepta
       como cambio visible: (a) en bloques `per_side` con **historial sumado**, el PR por e1RM puede no
@@ -711,19 +711,19 @@ Convención de estado: `[ ]` pendiente · `[x]` hecha. Nada se marca verde sin e
       `reps_done` (el lado más bajo) en bloques por lado hasta actualizar, y `fallbackToCacheTimeout`
       puede darles un arranque con bundle viejo. **Aceptación**: el texto sale después del deploy web y
       antes de la OTA, y queda citado en `TESTING-QA.md`.
-- [ ] W6.6 Memoria del owner: actualizar los ganchos de `project_ejecutor_entreno.md`,
+- [x] W6.6 Memoria del owner: actualizar los ganchos de `project_ejecutor_entreno.md`,
       `project_rn_paridad_web.md` y `project_coaches_casos.md` (caso Movens). **Aceptación**: índice
       de memoria ≤ 45 líneas, sin estado de repo duplicado.
-- [ ] W6.7 **Gates completos, ejecución real** (tabla abajo). **Aceptación**: ninguna casilla verde
+- [x] W6.7 **Gates completos, ejecución real** (tabla abajo). **Aceptación**: ninguna casilla verde
       sin salida de consola.
 - [ ] W6.8 Playwright del ejecutor **solo al cierre**, 1 navegador: `pnpm test:e2e` del flujo de
       registro de serie. **Aceptación**: verde o, si falla por entorno, causa anotada y decisión del
       owner.
-- [ ] W6.9 Deploy web a Vercel desde `rnmobiledenuevo` = `master`. **Orden obligatorio del tren (R35):
+- [x] W6.9 Deploy web a Vercel desde `rnmobiledenuevo` = `master`. **Orden obligatorio del tren (R35):
       deploy web → migraciones → OTA.** **Aceptación**: `deployment id` en estado READY anotado en
       CURRENT y MOBILE_PARITY. **El deploy web sale ANTES de la OTA** (si la OTA saliera primero, RN
       escribiría `left_reps`/`right_reps` que la web todavía estripa).
-- [ ] W6.9b Aplicar en LIVE las **4 migraciones** (W1.2, W1.4, W1.5, W1.5b) **después** del deploy web
+- [x] W6.9b Aplicar en LIVE las **4 migraciones** (W1.2, W1.4, W1.5, W1.5b) **después** del deploy web
       y **antes** de la OTA (R35), cada una precedida de su validación con tx-rollback y `EXPLAIN`
       (W1.1, W1.5). **Aceptación**: las 4 aparecen en `list_migrations` con su timestamp, y
       `has_function_privilege` confirma la ACL final de la tabla del protocolo LIVE: `authenticated`
@@ -732,7 +732,7 @@ Convención de estado: `[ ]` pendiente · `[x]` hecha. Nada se marca verde sin e
       `get_client_current_streak`, `get_client_daily_tonnage` y `get_client_muscle_volume` (R16 fija el
       patrón `REVOKE … FROM PUBLIC, anon, service_role` antes del GRANT; las tres RPC de lectura
       re-grantean a `service_role` a propósito después).
-- [ ] W6.10 OTA 1.1.2 android + ios por `.github/workflows/mobile-ota.yml` (publicar a mano está
+- [x] W6.10 OTA 1.1.2 android + ios por `.github/workflows/mobile-ota.yml` (publicar a mano está
       prohibido por runbook), **última del orden de R35**. Antes: releer el estado real en App Store
       Connect con `ios-submit-review.yml` en `dry_run=true` para confirmar el piso.
       **Aceptación**: los dos grupos EAS Update verdes, con hash y `run id` anotados.
@@ -741,15 +741,15 @@ Convención de estado: `[ ]` pendiente · `[x]` hecha. Nada se marca verde sin e
 
 | Gate | Comando | Resultado |
 |---|---|---|
-| Tests | `pnpm test` | |
-| Typecheck web | `pnpm typecheck` | |
-| Typecheck mobile | `pnpm --filter @eva/mobile exec tsc --noEmit` | |
-| Bundle mobile | `pnpm --filter @eva/mobile exec expo export --platform android` | |
-| Lint | `pnpm lint` | |
-| Tokens | `pnpm check:tokens` | |
-| Docs | `pnpm docs:check` | |
-| E2E ejecutor | `pnpm test:e2e` | |
-| SQL equivalencia | diff weekly = 0 filas + `EXPLAIN` + `ROLLBACK` | |
+| Tests | `pnpm test` | 699 archivos / 9 275 tests / 0 fallos (04-09) |
+| Typecheck web | `pnpm typecheck` | verde |
+| Typecheck mobile | `pnpm --filter @eva/mobile exec tsc --noEmit` | verde |
+| Bundle mobile | `pnpm --filter @eva/mobile exec expo export --platform android` | no local (regla del owner): lo hizo `mobile-ota.yml`, runs 33829397531 / 33829399862 verdes |
+| Lint | `pnpm lint` | 0 errores, 530 warnings preexistentes |
+| Tokens | `pnpm check:tokens` | OK (86 + 5 tokens) |
+| Docs | `pnpm docs:check` | OK |
+| E2E ejecutor | `pnpm test:e2e` | NO corrió: faltan `E2E_COACH_SLUG`, `E2E_CLIENT_EMAIL`, `E2E_CLIENT_PASSWORD` en `.env.local` (decisión del owner, W6.8) |
+| SQL equivalencia | diff weekly = 0 filas + `EXPLAIN` + `ROLLBACK` | 0 filas weekly (91 clientes), EXPLAIN 50,8→12,8 ms; ROLLBACK (DATA-SECURITY §1.3) |
 
 ## QA del owner (solo contra algo desplegado; 3 plataformas)
 

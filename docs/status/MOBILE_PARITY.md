@@ -12,8 +12,10 @@ source_of_truth: apps/web responsive + apps/mobile
 
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
 
-> **2026-09-03 (tren «Ciclo real y por lado», feedback Movens — EN DEPLOY; hashes de deploy/OTA se anotan al cierre)**:
-> `rnmobiledenuevo` `591ea8cd`…`04328c8d` (+ los 9 commits de «ola 2 chica» que viajan en el mismo push). Por punto:
+> **2026-09-04 (tren «Ciclo real y por lado», feedback Movens — EN PRODUCCIÓN, QA del owner pendiente)**: `master` =
+> `rnmobiledenuevo` = `b1bad0a3` (commits `591ea8cd`…`b1bad0a3` + los 9 de «ola 2 chica» en el mismo push), deploy
+> `dpl_DZ76aJq5WfZ7SbKXaSJ4p1TtTkj1` READY, 4 migraciones en LIVE (`20260904022120`…`022257`), OTA 1.1.2 `production`
+> android `fd2e1212-6d09-4bba-a09f-f1fd576cd1f2` (run 33829397531) / ios `248580e4-c493-4bbc-90f3-ea50a37972a8` (run 33829399862). Por punto:
 > **paridad nueva web + RN** — Inicio del alumno por cursor de completitud («Hoy toca · Día 2 de 3», «Día 2 hecho · Próximo»,
 > «Tu programa está listo» + «Empezar hoy» real vía RPC, sin «Recuperar» ni «Día de descanso» en ciclo, tira Lun→Dom de días
 > entrenados, anillo «Sin meta semanal»); fuerza por lado en el ejecutor («Izq»/«Der» + un peso, `reps_done = min`, «20 kg × 10 / 10»,
