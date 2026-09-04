@@ -190,7 +190,11 @@ export function EditableItemRow({
   // categoria derivada del nombre).
   const thumbAlt = item.displayName || 'Alimento'
   const thumbSrc = foodMediaThumbnailUrl(food?.media ?? item.media)
-  const thumbCategory = isCustom ? foodCategoryFromName(item.displayName) : (food?.category ?? item.category)
+  // Espejo de web `EditableItemRow.tsx:184-185`: categoría del catálogo o del item; si ninguna
+  // llega, se deriva del NOMBRE (antes `null` caía al icono genérico «otro»).
+  const thumbCategory = isCustom
+    ? foodCategoryFromName(item.displayName)
+    : (food?.category ?? item.category ?? foodCategoryFromName(item.displayName))
   const itemLabel = item.displayName || 'alimento'
   const substitutions = item.substitutions ?? []
   // Subtitulo v2 (mockup A·1): «marca · 402 kcal / 100 g». La porcion pegajosa («la sueles

@@ -97,9 +97,10 @@ function toListItem(raw: unknown): NutritionV2PlanTemplateListItem | null {
 }
 
 /**
- * Alimento del cable -> `BuilderFood`. `category`/`media` viajan siempre nulos (el endpoint usa el
- * MISMO select que el loader web del builder, que tampoco los trae): el icono lo aporta el
- * read-model del plan, no la plantilla.
+ * Alimento del cable -> `BuilderFood`. `category` viaja desde el endpoint (mismo select que el
+ * loader web del builder, `plan-foods.data.ts`): alimenta el icono estatico de la fila. `media`
+ * sigue nulo en ambas plataformas (la foto la aporta el read-model del plan, no la plantilla).
+ * Antes `category` se forzaba a null y TODO alimento de una plantilla caia al icono «otro».
  */
 function toBuilderFood(raw: unknown): BuilderFood | null {
   if (!raw || typeof raw !== 'object') return null
@@ -116,7 +117,7 @@ function toBuilderFood(raw: unknown): BuilderFood | null {
     fiberG: num(f.fiberG),
     servingSize: num(f.servingSize) ?? 100,
     servingUnit: typeof f.servingUnit === 'string' ? f.servingUnit : 'g',
-    category: null,
+    category: typeof f.category === 'string' && f.category !== '' ? f.category : null,
     media: null,
   }
 }

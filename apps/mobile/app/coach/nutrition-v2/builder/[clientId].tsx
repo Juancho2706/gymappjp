@@ -2549,13 +2549,18 @@ function ItemEditor({
     <View className="rounded-control border border-subtle bg-surface-sunken p-3">
       <View className="flex-row items-start justify-between gap-2">
         <View className="min-w-0 flex-1 flex-row items-start gap-2.5">
-          {/* QA2-B3a: fallback 1:1 con el builder web (`PlanBuilderClient.tsx:622`) —
-              webp estatico de la categoria del catalogo; item libre => categoria
-              derivada del nombre. El emoji queda deprecado. */}
+          {/* QA2-B3a: fallback 1:1 con el builder web (`ItemRow.tsx:89-95`) — webp estatico
+              de la categoria del catalogo; sin `category` (plantilla, snapshot viejo) o item
+              libre => categoria derivada del NOMBRE. Antes un catalogo con `category` nula caia
+              al icono generico «otro». El emoji queda deprecado. */}
           <FoodThumbnail
             alt={item.food?.name ?? item.customName ?? 'Alimento'}
             src={item.food ? foodMediaThumbnailUrl(item.food.media) : null}
-            fallbackCategory={item.food ? item.food.category : foodCategoryFromName(item.customName)}
+            fallbackCategory={
+              item.food
+                ? item.food.category ?? foodCategoryFromName(item.food.name)
+                : foodCategoryFromName(item.customName)
+            }
             size="sm"
           />
           <View className="min-w-0 flex-1">

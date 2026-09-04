@@ -80,7 +80,7 @@ async function gateCoach(request: NextRequest, scope: unknown) {
 // escribiria ese plan mutilado.
 
 const FOOD_SELECT =
-  'id, name, brand, calories, protein_g, carbs_g, fats_g, fiber_g, serving_size, serving_unit, macros_basis'
+  'id, name, brand, calories, protein_g, carbs_g, fats_g, fiber_g, serving_size, serving_unit, category, macros_basis'
 
 /** Override del coach (T2.1). Mismas columnas que la rehidratacion web: una sola definicion. */
 const OVERRIDE_SELECT =
@@ -97,6 +97,7 @@ interface FoodRow {
   fiber_g: number | null
   serving_size: number
   serving_unit: string | null
+  category: string | null
   macros_basis: string | null
 }
 
@@ -128,6 +129,12 @@ interface TemplateFoodPayload {
   fiberG: number | null
   servingSize: number
   servingUnit: string
+  /**
+   * Categoria canonica del catalogo (una de las 10 de `VALID_FOOD_CATEGORIES`, o null). Alimenta
+   * el icono estatico de la fila del builder RN, igual que `plan-foods.data.ts` en web. Sin ella
+   * TODO alimento de una plantilla caia al icono generico «otro».
+   */
+  category: string | null
   /** Base declarada de los macros de arriba (T2.1). El port RN la respeta al recalcular. */
   macrosBasis: NutritionMacrosBasis | null
 }
@@ -193,6 +200,7 @@ async function templateFoods(
         fiberG: macros.fiberG,
         servingSize: row.serving_size,
         servingUnit: row.serving_unit ?? 'g',
+        category: row.category ?? null,
         macrosBasis: macros.macrosBasis,
       }
     }

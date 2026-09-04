@@ -568,7 +568,9 @@ export function FoodRow({
     offline: 'Sin sincronizar',
     error: 'Error',
   }[food.status ?? 'default']
-  const category = fallbackCategory !== undefined ? fallbackCategory : foodCategoryFromName(food.name)
+  // Espejo exacto de web `NutritionFoodRow.tsx:112`: categoría explícita si la hay, si no (null o
+  // ausente) se deriva del NOMBRE. Antes `null` explícito caía al icono genérico «otro».
+  const category = fallbackCategory ?? foodCategoryFromName(food.name)
 
   return (
     <View className="min-h-16 flex-row items-center gap-3 py-3">
