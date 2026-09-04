@@ -3,6 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { clearClientCaches } from '@/lib/client/clear-client-caches'
 
 interface Props {
     /** Prefijo de la app del alumno (`/c/<identificador>` o `/t/<team>`). */
@@ -25,6 +26,7 @@ export function SuspendedSignOutButton({ base, className, children }: Props) {
 
     async function handleSignOut() {
         setLeaving(true)
+        await clearClientCaches()
         try {
             await createClient().auth.signOut()
         } catch {

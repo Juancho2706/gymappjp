@@ -419,7 +419,10 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                 data-loader-variant={loaderVariant}
                 data-executor-theme={executorTheme}
             >
-                <NetworkProvider brandName={brandName} logoUrl={logoUrl} logoUrlDark={logoUrlDark || undefined} primaryColor={primaryColor}>
+                {/* `basePath` va por prop porque NetworkProvider queda POR FUERA de
+                    <BasePathProvider>: adentro lo usa para no tapar el ejecutor de entrenamiento,
+                    que entrena sin red con su propia cola offline. */}
+                <NetworkProvider brandName={brandName} logoUrl={logoUrl} logoUrlDark={logoUrlDark || undefined} primaryColor={primaryColor} basePath={basePath}>
                   <BasePathProvider value={basePath}>
                    {/* Morph de lanzamiento del workout (QA8): el provider vive en ESTE layout — persiste
                        entre dashboard y ejecutor, así el overlay sobrevive al swap del App Router y la

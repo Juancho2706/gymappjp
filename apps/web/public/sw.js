@@ -11,9 +11,23 @@
  * per-URL, so /c and /t never bleed across tenants.
  */
 const SHELL_CACHE = 'eva-shell-v5';
-const NAV_CACHE = 'eva-nav-v4';
+// v4 → v5: el handler de navegación cacheaba con `res.ok` a secas, así que una sesión vencida
+// (fetch que sigue el redirect al login y devuelve 200) dejaba LA PÁGINA DE LOGIN guardada bajo
+// la URL del workout, y la próxima recarga offline servía eso en vez del entreno. El bug ya está
+// tapado abajo, pero las entradas envenenadas siguen en los teléfonos reales: subir la versión
+// hace que el handler 'activate' las borre (no está en `keep`).
+const NAV_CACHE = 'eva-nav-v5';
 const STATIC_CACHE = 'eva-static-v6';
 const CLIENT_DATA_CACHE = 'eva-client-data-v3';
+// Ojo al RENOMBRAR NAV_CACHE o CLIENT_DATA_CACHE: la purga del logout
+// (apps/web/src/lib/client/clear-client-caches.ts) los borra matcheando por PREFIJO
+// ('eva-nav', 'eva-client-data'). El prefijo aguanta los bumps de versión, pero un rename deja esa
+// purga muerta EN SILENCIO — sin test que lo agarre — y el teléfono compartido vuelve a mostrarle
+// al alumno siguiente las páginas cacheadas del anterior. Si cambia el nombre, cambian los dos lados.
+
+// Techo de espera de la red en el handler de navegación, SÓLO cuando ya hay copia en NAV_CACHE.
+// Sin copia no hay timeout: ver el comentario del handler.
+const NAV_TIMEOUT_MS = 2500;
 
 const OFFLINE_URL = '/offline.html';
 const PRECACHE = [OFFLINE_URL, '/LOGOS/eva-icon.png'];
@@ -112,25 +126,82 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // /c/ + /t/ navigation requests — network-first with cache fallback
+  // /c/ + /t/ navigation requests — network-first, pero con techo de espera cuando hay copia
   if (isClientApp(url.pathname) && event.request.mode === 'navigate') {
+    // El fetch se dispara UNA vez, fuera del respondWith, y no se cancela nunca (nada de
+    // AbortController a propósito): aunque terminemos sirviendo la copia cacheada, necesitamos
+    // que llegue para refrescar NAV_CACHE. La pantalla al montar hace router.refresh(), así que
+    // la copia servida se auto-corrige apenas vuelve la red.
+    const fetchPromise = fetch(event.request).then((res) => {
+      // `!res.redirected`: con la sesión vencida la navegación sigue el redirect al login y
+      // devuelve 200 — cachear ESO bajo la URL del workout servía la pantalla de login en la
+      // próxima recarga offline, con el entreno perdido. Misma guarda que el listener 'message'.
+      if (res.ok && !res.redirected) {
+        caches.open(NAV_CACHE).then((cache) => cache.put(event.request, res.clone()));
+      }
+      return res;
+    });
+    // El put tiene que sobrevivir a la respuesta: cuando servimos la copia por timeout, el
+    // navegador puede matar el SW apenas resuelve respondWith y NAV_CACHE nunca se refrescaría.
+    event.waitUntil(fetchPromise.catch(() => {}));
+
     event.respondWith(
-      fetch(event.request)
-        .then((res) => {
-          if (res.ok) {
-            caches.open(NAV_CACHE).then((cache) => cache.put(event.request, res.clone()));
-          }
-          return res;
-        })
-        .catch(async () => {
-          const cached = await caches.match(event.request, { cacheName: NAV_CACHE });
-          if (cached) return cached;
+      (async () => {
+        // Hit EXACTO, con query y todo: el cinturón de ignoreSearch NO puede vivir acá (ver el
+        // catch de abajo). Y el lookup va envuelto porque ahora corre en TODA navegación de /c y /t
+        // —antes sólo dentro del catch, con la red ya caída—: si `caches.match` rechaza (cuota
+        // llena, storage deshabilitado, el escenario típico de iOS) esta IIFE rechazaría y el
+        // navegador tumbaría con la red SANA una navegación que hoy funciona, el mismo
+        // «FetchEvent.respondWith received an error» que blinda el handler de imágenes (Sentry
+        // EVA-NEXTJS-1G). Una falla de storage degrada a "sin copia", nunca mata la navegación.
+        let cached = null;
+        try {
+          cached = await caches.match(event.request, { cacheName: NAV_CACHE });
+        } catch {
+          /* sin copia: se sigue por el camino de red, igual que en la primera visita */
+        }
+
+        // Con "lie-fi" (conectado pero sin throughput real) el fetch NO rechaza nunca, así que el
+        // network-first puro dejaba al alumno mirando una pantalla colgada sin llegar jamás al
+        // NAV_CACHE — sólo se alcanzaba por el .catch(). Teniendo copia corremos la carrera: si
+        // gana el timeout, el entreno cacheado entra igual y el alumno puede seguir registrando.
+        if (cached) {
+          const timeout = new Promise((resolve) => setTimeout(() => resolve(null), NAV_TIMEOUT_MS));
+          const winner = await Promise.race([fetchPromise.catch(() => null), timeout]);
+          return winner || cached;
+        }
+
+        // Sin copia NO hay timeout: adelantar offline.html a los 2,5 s sería peor que hoy —
+        // mataríamos una navegación lenta pero viva para mostrar "no puedes entrenar sin
+        // internet". Acá se espera la red como siempre, y offline.html sigue siendo el último
+        // recurso cuando el fetch efectivamente falla.
+        try {
+          return await fetchPromise;
+        } catch {
           // Cinturón: reintenta ignorando query params (la entrada pudo guardarse con/sin ellos).
-          const cachedLoose = await caches.match(event.request, { cacheName: NAV_CACHE, ignoreSearch: true });
-          if (cachedLoose) return cachedLoose;
-          const offline = await caches.match(OFFLINE_URL, { cacheName: SHELL_CACHE });
-          return offline || new Response('Offline', { status: 503, statusText: 'Offline' });
-        })
+          // Vive ACÁ, en el camino de red MUERTA, y no arriba en el camino feliz: la ruta del
+          // ejecutor lee 'fecha' de los searchParams y el precache guarda la URL COMPLETA, así que
+          // NAV_CACHE acumula varias entradas del mismo path. Servir la de otra query con la red
+          // apenas lenta = servirle al alumno el entreno de OTRO día, y con un 'fecha' pasada el
+          // ejecutor entra en modo solo-UPDATE: las series nuevas fallan con past_set_not_found y
+          // la cola offline las descarta PARA SIEMPRE. Perder series no es una degradación
+          // aceptable. Acá sí lo es: la alternativa es offline.html, la pantalla que le prohíbe
+          // entrenar. Mismo blindaje del lookup de arriba, por la misma razón: si `caches.match`
+          // rechaza por storage, esta IIFE rechazaría y el navegador se comería el 503 de abajo.
+          try {
+            const cachedLoose = await caches.match(event.request, {
+              cacheName: NAV_CACHE,
+              ignoreSearch: true,
+            });
+            if (cachedLoose) return cachedLoose;
+            const offline = await caches.match(OFFLINE_URL, { cacheName: SHELL_CACHE });
+            if (offline) return offline;
+          } catch {
+            /* storage caído: queda el 503 de abajo, que igual es un Response válido */
+          }
+          return new Response('Offline', { status: 503, statusText: 'Offline' });
+        }
+      })()
     );
     return;
   }

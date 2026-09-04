@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { WifiOff } from 'lucide-react'
 import { ThemedLogo } from '@/components/brand/ThemedLogo'
 
@@ -72,9 +73,25 @@ export function OfflineScreen({ brandName, logoUrl, logoUrlDark, primaryColor }:
  * blanco; el manejo de error de red del propio form («No pudimos enviar / Reintentar») era
  * literalmente inalcanzable. Ahora `{children}` se renderiza SIEMPRE y el overlay va encima:
  * ningún componente pierde su estado por un corte de red.
+ *
+ * Excepción del ejecutor de entrenamiento: ahí el overlay NO se muestra. La cola offline del
+ * entreno escribe en localStorage ANTES de tocar la red (write-through, sin TTL, idempotente por
+ * bloque/serie/día) y el propio ejecutor ya avisa con un chip discreto «Sin señal — guardando en
+ * tu teléfono» que no bloquea nada (WorkoutExecutionClient.tsx:2795). Taparlo con la pantalla
+ * completa le prohibía al alumno algo que la app soporta perfecto: en la app RN el mismo alumno
+ * entrena sin señal, y esta es la paridad que faltaba en la web.
+ *
+ * `basePath` viene por prop y NO de `useBasePath()` a propósito: este provider vive POR FUERA de
+ * `<BasePathProvider>` (ver el layout de /c/[coach_slug]), así que el hook devolvería el fallback
+ * vacío. Comparar contra el base path — y no contra un regex de `/c/...` — es lo que hace que la
+ * excepción valga igual bajo los prefijos reescritos por el proxy (/e/[org_slug], /t/...).
  */
-export function NetworkProvider({ children, brandName, logoUrl, logoUrlDark, primaryColor }: Props & { children: React.ReactNode }) {
+export function NetworkProvider({ children, brandName, logoUrl, logoUrlDark, primaryColor, basePath }: Props & { children: React.ReactNode; basePath: string }) {
     const [isOnline, setIsOnline] = useState(true)
+    // `usePathname()` puede venir null en bordes del App Router: sin ruta no asumimos ejecutor.
+    const pathname = usePathname()
+    const enEjecutor = pathname != null && pathname.startsWith(`${basePath}/workout/`)
+    const bloqueando = !isOnline && !enEjecutor
 
     useEffect(() => {
         const handleOnline = () => setIsOnline(true)
@@ -99,13 +116,13 @@ export function NetworkProvider({ children, brandName, logoUrl, logoUrlDark, pri
                 recibe foco ni clicks, pero sigue montado con su estado intacto. */}
             <div
                 className="contents"
-                data-offline-backdrop={isOnline ? undefined : 'true'}
-                aria-hidden={isOnline ? undefined : true}
-                inert={!isOnline}
+                data-offline-backdrop={bloqueando ? 'true' : undefined}
+                aria-hidden={bloqueando ? true : undefined}
+                inert={bloqueando}
             >
                 {children}
             </div>
-            {!isOnline && (
+            {bloqueando && (
                 <OfflineScreen brandName={brandName} logoUrl={logoUrl} logoUrlDark={logoUrlDark} primaryColor={primaryColor} />
             )}
         </>

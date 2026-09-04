@@ -22,6 +22,7 @@ import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
 import { submitVolverAlPanel } from '@/lib/client/volver-al-panel'
+import { clearClientCaches } from '@/lib/client/clear-client-caches'
 import type { VtaMode } from '@/lib/auth/vive-tu-app-cookies'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { PwaNavButton } from './PwaNavButton'
@@ -183,6 +184,10 @@ export function ClientNav({ coachSlug, basePath, coachBrand, coachLogoUrl, coach
         : baseItems.findIndex((i) => isActiveHref(i.href))
 
     async function handleSignOut() {
+        // La purga va ANTES del signOut, no después: el signOut dispara el push al login y el
+        // desmonte de este árbol, y una purga arrancada a esa altura muere a mitad de camino —
+        // las páginas del alumno quedarían cacheadas en un teléfono que ya es de otro.
+        await clearClientCaches()
         await supabase.auth.signOut()
         router.push(`${base}/login`)
         router.refresh()

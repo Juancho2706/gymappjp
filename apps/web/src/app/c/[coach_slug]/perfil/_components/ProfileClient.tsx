@@ -21,6 +21,7 @@ import {
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { submitVolverAlPanel } from '@/lib/client/volver-al-panel'
+import { clearClientCaches } from '@/lib/client/clear-client-caches'
 import type { VtaMode } from '@/lib/auth/vive-tu-app-cookies'
 import { ThemeToggle } from '@/components/ThemeToggle'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -235,6 +236,7 @@ export function ProfileClient({
     }
 
     async function handleSignOut() {
+        await clearClientCaches()
         const supabase = createClient()
         await supabase.auth.signOut()
         router.push(`${base}/login`)

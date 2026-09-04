@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
+import { clearClientCaches } from '@/lib/client/clear-client-caches'
 
 interface Props {
     /** Login del alumno bajo la marca del coach (`/c/<identificador>/login`). */
@@ -31,6 +32,7 @@ export function DemoViewerExit({ loginHref }: Props) {
 
     async function handleExit() {
         setLeaving(true)
+        await clearClientCaches()
         try {
             await createClient().auth.signOut()
         } catch {

@@ -1,6 +1,11 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, fireEvent, render, screen } from '@testing-library/react'
 import { useEffect, useState } from 'react'
+
+// La ruta decide si el overlay tapa o no (el ejecutor es la excepción), así que se mockea mutable.
+const { pathnameRef } = vi.hoisted(() => ({ pathnameRef: { current: '/c/jose/dashboard' as string | null } }))
+
+vi.mock('next/navigation', () => ({ usePathname: () => pathnameRef.current }))
 
 import { NetworkProvider } from './OfflineScreen'
 
@@ -13,7 +18,7 @@ import { NetworkProvider } from './OfflineScreen'
  * `aria-hidden` + `inert` (sin foco ni clicks detrás) pero montado, con su estado intacto.
  */
 
-const BRAND = { brandName: 'Studio Fuerza', primaryColor: '#1462DC' }
+const BRAND = { brandName: 'Studio Fuerza', primaryColor: '#1462DC', basePath: '/c/jose' }
 
 /** Cuenta montajes para probar que un corte de red no remonta nada. */
 let mounts = 0
@@ -37,8 +42,9 @@ function fireNetwork(event: 'online' | 'offline') {
     })
 }
 
-function renderProvider() {
+function renderProvider(pathname: string | null = '/c/jose/dashboard') {
     mounts = 0
+    pathnameRef.current = pathname
     setNavigatorOnline(true)
     return render(
         <NetworkProvider {...BRAND}>
@@ -55,6 +61,7 @@ function backdrop(container: HTMLElement): HTMLElement {
 
 afterEach(() => {
     setNavigatorOnline(true)
+    pathnameRef.current = '/c/jose/dashboard'
 })
 
 describe('NetworkProvider — el corte de red ya no desmonta la app del alumno', () => {
@@ -116,5 +123,65 @@ describe('NetworkProvider — el corte de red ya no desmonta la app del alumno',
         expect(screen.getByText('Sin conexión')).toBeInTheDocument()
         expect(screen.getByLabelText('campo')).toBeInTheDocument()
         expect(mounts).toBe(1)
+    })
+})
+
+/**
+ * El ejecutor de entrenamiento entrena SIN red: la cola offline escribe en localStorage antes de
+ * tocar la red y el propio ejecutor pinta su chip «Sin señal — guardando en tu teléfono»
+ * (WorkoutExecutionClient.tsx:2795). El overlay lo tapaba y le prohibía al alumno algo que la app
+ * soporta — en RN el mismo alumno sigue registrando series.
+ */
+describe('NetworkProvider — el overlay no tapa el ejecutor de entrenamiento', () => {
+    it('sin red FUERA del ejecutor: overlay arriba y fondo inerte (comportamiento de siempre)', () => {
+        const { container } = renderProvider('/c/jose/dashboard')
+
+        fireNetwork('offline')
+
+        expect(screen.getByText('Sin conexión')).toBeInTheDocument()
+        expect(backdrop(container)).toHaveAttribute('inert')
+    })
+
+    it('sin red DENTRO del ejecutor: ni overlay ni `inert` (verse sin poder tocar sería peor)', () => {
+        const { container } = renderProvider('/c/jose/workout/abc-123')
+
+        fireNetwork('offline')
+
+        expect(screen.queryByText('Sin conexión')).not.toBeInTheDocument()
+        // Chequeo aparte: con `inert={!isOnline}` el ejecutor se vería pero no recibiría taps.
+        expect(container.querySelector('[inert]')).toBeNull()
+        expect(container.querySelector('[data-offline-backdrop]')).toBeNull()
+        expect(screen.getByLabelText('campo')).toBeInTheDocument()
+    })
+
+    it('sin red en el ejecutor bajo el prefijo del proxy (/e/[org_slug]): tampoco tapa', () => {
+        pathnameRef.current = '/e/gym-prueba/workout/abc-123'
+        setNavigatorOnline(true)
+        const { container } = render(
+            <NetworkProvider {...BRAND} basePath="/e/gym-prueba">
+                <CampoConEstado />
+            </NetworkProvider>,
+        )
+
+        fireNetwork('offline')
+
+        expect(screen.queryByText('Sin conexión')).not.toBeInTheDocument()
+        expect(container.querySelector('[inert]')).toBeNull()
+    })
+
+    it('con red en el ejecutor: sin overlay (control)', () => {
+        const { container } = renderProvider('/c/jose/workout/abc-123')
+
+        expect(screen.queryByText('Sin conexión')).not.toBeInTheDocument()
+        expect(container.querySelector('[data-offline-backdrop]')).toBeNull()
+    })
+
+    it('sin ruta (usePathname null): no se asume ejecutor, el overlay sigue protegiendo', () => {
+        const { container } = renderProvider(null)
+
+        fireNetwork('offline')
+
+        expect(screen.getByText('Sin conexión')).toBeInTheDocument()
+        expect(backdrop(container)).toHaveAttribute('inert')
     })
 })
