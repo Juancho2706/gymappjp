@@ -115,7 +115,8 @@ export function compactDistance(value: number, unit: string | null | undefined):
     return `${value}m`
 }
 
-function sideSuffix(sideMode: string | null | undefined): string {
+/** Sufijo del objetivo cuando el bloque es unilateral: "3 × 10/lado". Vacío en bilateral. */
+export function sideSuffix(sideMode: string | null | undefined): string {
     return sideMode === 'per_side' || sideMode === 'alternating' ? '/lado' : ''
 }
 
@@ -213,4 +214,46 @@ export function typedBlockSummary(block: TypedBlockFields, type: ExerciseType): 
         return `${block.sets}× ${base}`
     }
     return base
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Lectura defensiva de los lados registrados (`workout_logs.metadata`)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Paridad EXACTA con el `->>` del SQL: la migración compara el TEXTO que devuelve
+ * `metadata ->> 'left_reps'` contra este mismo regex, así que un JSON string `"10"` matchea y suma
+ * igual que el número `10`. Cualquier otra cadena (`'abc'`, `'10.5'`, `'-1'`, `'99999'`) ⇒ descarte.
+ */
+const SIDE_REPS_TEXT_PATTERN = /^[0-9]{1,4}$/
+
+/** Un lado válido: entero 0..9999, o su forma textual de 1 a 4 dígitos. Cualquier otra cosa ⇒ null. */
+function sideRepsValue(raw: unknown): number | null {
+    if (typeof raw === 'number') {
+        // `1e30` es entero para JS pero desborda el rango del regex ⇒ fuera, igual que en SQL.
+        return Number.isInteger(raw) && raw >= 0 && raw <= 9999 ? raw : null
+    }
+    if (typeof raw === 'string') return SIDE_REPS_TEXT_PATTERN.test(raw) ? Number(raw) : null
+    return null
+}
+
+/**
+ * Lee `{left_reps, right_reps}` del jsonb de un log de fuerza por lado (R27). Helper ÚNICO: nadie
+ * castea ni suma el metadata a mano — un `"10" + "10"` en TS da `"1010"` y un `1.5` da `3`, mientras
+ * el SQL resuelve cada caso con su regex, y esa divergencia no la caza ningún test.
+ *
+ * Devuelve los dos lados SÓLO si LOS DOS son válidos; en cualquier otro caso (uno solo presente,
+ * decimal, negativo, `1e30`, otra cadena, objeto, ausente, `null`) devuelve `null` y el consumidor
+ * cae a `reps_done` tal cual — es el `ELSE reps_done` del `CASE` de la migración.
+ *
+ * Vive acá (y no en `session-summary.ts`) porque ésta es la casa de `SIDE_LABEL`/`sideSuffix`, la
+ * semántica de lado del motor; sale por el barrel igual que el resto del módulo.
+ */
+export function sideRepsFromMetadata(metadata: unknown): { left: number; right: number } | null {
+    if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) return null
+    const raw = metadata as Record<string, unknown>
+    const left = sideRepsValue(raw.left_reps)
+    const right = sideRepsValue(raw.right_reps)
+    if (left == null || right == null) return null
+    return { left, right }
 }

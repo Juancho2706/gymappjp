@@ -93,6 +93,56 @@ describe('detectPR — anti-PR-falso (sustitucion)', () => {
     })
 })
 
+// ── Reps POR LADO (tren «ciclo real y por lado», R3/R22) ────────────────────────────────
+// `reps_done` de una serie unilateral es el MINIMO de los dos lados; el desglose vive en
+// `metadata {left_reps, right_reps}`, que `detectPR` NO lee. Estos casos fijan esa invariante:
+// sin ellos, volver a `reps_done = izq + der` inflaria el e1RM y dispararia PRs falsos.
+describe('detectPR — no-regresion con reps por lado (R3: reps_done = minimo)', () => {
+    /** Historico del mismo ejercicio unilateral: 20 kg x 10 (por lado) → e1rm 26.7. */
+    const historicoPorLado: PrSet[] = [{ weight_kg: 20, reps_done: 10 }]
+
+    it('un "10 / 10" sobre 20 kg NO es PR (ignora metadata; empatar no es record)', () => {
+        const serie = { weight_kg: 20, reps_done: 10, metadata: { left_reps: 10, right_reps: 10 } }
+        expect(detectPR(serie, historicoPorLado)).toEqual({
+            isPR: false,
+            kind: null,
+            prevBest: { weightKg: 20, e1rm: 26.7 },
+        })
+    })
+
+    it('lados asimetricos "12 / 10" tampoco: manda el minimo, no el lado bueno', () => {
+        const serie = { weight_kg: 20, reps_done: 10, metadata: { left_reps: 12, right_reps: 10 } }
+        expect(detectPR(serie, historicoPorLado).isPR).toBe(false)
+    })
+
+    // Contra-caso que da sentido al de arriba: si alguien vuelve a guardar la SUMA (10+10=22),
+    // el e1RM salta a 34.7 y `detectPR` celebra un record que el alumno no hizo.
+    it('la suma (22) SI disparaba un PR de e1RM falso — por eso reps_done es el minimo', () => {
+        expect(detectPR({ weight_kg: 20, reps_done: 22 }, historicoPorLado)).toEqual({
+            isPR: true,
+            kind: 'e1rm',
+            prevBest: { weightKg: 20, e1rm: 26.7 },
+        })
+    })
+
+    // R22, costo aceptado y escrito: en bloques unilaterales con logs VIEJOS ya sumados el techo
+    // historico de e1RM queda inflado, asi que el PR por e1RM puede no dispararse por un tiempo.
+    it('R22: contra un historico sumado (36) el e1RM no dispara, pero el PR por PESO sigue vivo', () => {
+        const historicoSumado: PrSet[] = [{ weight_kg: 20, reps_done: 36 }] // e1rm 44
+        const serie = { weight_kg: 20, reps_done: 12, metadata: { left_reps: 12, right_reps: 12 } }
+        expect(detectPR(serie, historicoSumado)).toEqual({
+            isPR: false,
+            kind: null,
+            prevBest: { weightKg: 20, e1rm: 44 },
+        })
+        expect(detectPR({ weight_kg: 22, reps_done: 10 }, historicoSumado)).toEqual({
+            isPR: true,
+            kind: 'weight',
+            prevBest: { weightKg: 20, e1rm: 44 },
+        })
+    })
+})
+
 describe('detectPR — serie actual invalida', () => {
     it('peso o reps <= 0 no puede ser PR', () => {
         expect(detectPR({ weight_kg: 0, reps_done: 5 }, historico).isPR).toBe(false)

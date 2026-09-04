@@ -210,25 +210,72 @@ export function buildTypedPayload(
 }
 
 /**
+ * `metadata` de una serie de FUERZA unilateral: reps por lado (tren «ciclo real y por lado», R3).
+ * Espejo de `{left_sec,right_sec}` para el eje de reps — la columna es la MISMA (`workout_logs.metadata`).
+ *
+ * Se declara como intersección con `WorkoutLogSideMetadata` (y no como shape suelto) para que siga
+ * siendo asignable a `WorkoutLogMetadata`, la columna completa que transporta `OptimisticLogPayload`.
+ * DEUDA declarada en la SDD (DATA-SECURITY §7.2): cuando `WorkoutLogSideMetadata`
+ * (`session-logs.reconcile.ts:13-16`) sume `left_reps`/`right_reps`, este alias colapsa a ese tipo.
+ */
+export type WorkoutLogSideRepsMetadata = WorkoutLogSideMetadata & {
+  left_reps?: number | null
+  right_reps?: number | null
+}
+
+/** Rango válido de reps por lado: espejo exacto de la regex `^[0-9]{1,4}$` del SQL (R27). */
+const SIDE_REPS_MAX = 9999
+
+/** Reps de UN lado: entero 0..9999. Vacío, no numérico o fuera de rango ⇒ `null` (ese lado no viaja). */
+function sideReps(v: string | undefined): number | null {
+  const n = int(v)
+  if (n == null || n < 0 || n > SIDE_REPS_MAX) return null
+  return n
+}
+
+/**
  * Payload de una serie de FUERZA: peso × reps + esfuerzo. A diferencia del teclado multi-paso
  * (una sola key `effort` enrutada por `effortKind`), la fila expandida captura RPE y RIR por separado
  * (dots inline), así que este builder lee ambas keys directo.
+ *
+ * 4º argumento OPCIONAL (`sideMode` suelto o el contexto del bloque, misma convención que
+ * `typedLogValues`): con `side_mode ∈ {per_side, alternating}` (R4: los dos capturan igual) la serie
+ * se tipea POR LADO (`reps_left` / `reps_right`) y entonces:
+ *  - `reps_done` = **mínimo** de los dos lados (R3) —o el único presente—, para que la doble
+ *    progresión y el PR por e1RM sigan comparando una magnitud por lado y no una suma inflada;
+ *  - el desglose viaja en `metadata {left_reps, right_reps}` (de ahí salen el «10 / 10» y el tonelaje).
+ * SIN el argumento (o con cualquier otro `side_mode`) el payload es byte-idéntico al previo: se lee
+ * `values.reps` y el objeto NO gana la key `metadata`.
  */
 export function buildStrengthPayload(
   values: Record<string, string>,
   blockId: string,
   setNumber: number,
+  ctx?: string | null | TypedKeypadContext,
 ): OptimisticLogPayload {
   // Nota rápida por serie (paridad web A.4.d / `handleSubmit` noteTrimmed, LogSetForm.tsx:365/443-458):
   // string crudo tipeado en la fila; vacío/espacios ⇒ null (misma normalización que `note.trim() || null`).
   const note = values.note?.trim()
+  const { sideMode } = typedKeypadContext(ctx)
+  const perSide = sideMode === 'per_side' || sideMode === 'alternating'
+  const left = perSide ? sideReps(values.reps_left) : null
+  const right = perSide ? sideReps(values.reps_right) : null
+  // Un solo lado tipeado alcanza para que la serie sea "por lado": el otro queda `null` en el jsonb
+  // (vaciado explícito) y `reps_done` toma el presente. Ningún lado ⇒ ni metadata ni desvío: se cae a
+  // `values.reps`, que en el teclado por lado no existe (⇒ null) pero sí en superficies legacy.
+  const hasSide = left != null || right != null
+  // `undefined` ⇒ el payload NO gana la key `metadata` (paridad byte-idéntica sin `ctx`).
+  const metadata: WorkoutLogSideRepsMetadata | undefined = hasSide
+    ? { left_reps: left, right_reps: right }
+    : undefined
   return {
     blockId,
     setNumber,
     weightKg: num(values.weight),
-    repsDone: int(values.reps),
+    repsDone: hasSide ? Math.min(...([left, right].filter((r): r is number => r != null))) : int(values.reps),
     rpe: int(values.rpe),
     rir: int(values.rir),
     note: note ? note : null,
+    ...(metadata !== undefined ? { metadata } : {}),
   }
 }

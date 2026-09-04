@@ -9,3 +9,4 @@
 export * from './types'
 export * from './reducer'
 export * from './exit-guard'
+export * from './block-type-fields'

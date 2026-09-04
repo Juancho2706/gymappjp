@@ -57,6 +57,17 @@ export interface KeypadTarget {
    * columnas `actual_*` / `reps_done` (mismo pipeline que web `TypedLogSetRow`).
    */
   typed?: { mode: TypedKeypadMode; fields: TypedKeypadFieldDef[]; objective: string }
+  /**
+   * `side_mode` del bloque de FUERZA (tren «ciclo real y por lado», R3/R4): `per_side` y
+   * `alternating` capturan igual ⇒ el flujo pasa a peso → reps izq → reps der. Ausente/`null` ⇒
+   * flujo strength de siempre (peso → reps), byte-idéntico.
+   *
+   * Vive acá y NO en `typed` a propósito (R18): la fuerza nunca entra al carril tipado —
+   * `buildTypedPayload` escribe `weightKg: null` y `rir: null`, así que una serie por lado
+   * despachada por ahí se guardaría sin peso ni esfuerzo. El commit sigue siendo
+   * `buildStrengthPayload(values, blockId, setNumber, { sideMode })`.
+   */
+  sideMode?: 'per_side' | 'alternating' | null
 }
 
 /**
@@ -78,6 +89,22 @@ export type KeypadStep = {
 export const STRENGTH_KEYPAD_STEPS: KeypadStep[] = [
   { kind: 'keypad', key: 'weight', mode: 'weight', unit: 'kg', label: 'Peso (kg)' },
   { kind: 'keypad', key: 'reps', mode: 'reps', unit: 'reps', label: 'Repeticiones' },
+]
+
+/**
+ * Flujo de FUERZA unilateral (`side_mode` `per_side` | `alternating`): UN peso y DOS reps —
+ * peso → reps izq → reps der (D2: un solo peso, dos lados). Mismo primer paso que
+ * `STRENGTH_KEYPAD_STEPS` (modo `weight` ⇒ decimal + chips de peso en el host) y los dos lados en
+ * modo `reps` (entero), así que el teclado no cambia de comportamiento, solo de secuencia.
+ *
+ * Copys canónicos «Izq» / «Der» — los mismos rótulos que ya pinta la fila per_side de la web
+ * (`LogSetForm.tsx:2097,2110`); nunca «Izquierda»/«Derecha», que no entran en el header.
+ * Las keys son las que lee `buildStrengthPayload` con `ctx.sideMode` (`reps_left` / `reps_right`).
+ */
+export const STRENGTH_PER_SIDE_KEYPAD_STEPS: KeypadStep[] = [
+  { kind: 'keypad', key: 'weight', mode: 'weight', unit: 'kg', label: 'Peso (kg)' },
+  { kind: 'keypad', key: 'reps_left', mode: 'reps', unit: 'reps', label: 'Izq' },
+  { kind: 'keypad', key: 'reps_right', mode: 'reps', unit: 'reps', label: 'Der' },
 ]
 
 /** Subconjunto del bloque que necesita el routing (evita atar a `SessionBlock`, que arrastra RN). */
@@ -119,6 +146,9 @@ export function typedTargetFor(
  * teclado: se captura en la fila, así que `effortKind` no altera esta secuencia. Las reglas decimales de cada
  * campo tipado (min/distancia = decimal; FC/segundos/hold/pasadas = enteros) las decide el engine y
  * acá se mapean a los modos 'decimal' | 'integer' del `TypedKeypad`.
+ *
+ * El `sideMode` solo pesa en la rama NO tipada (R18): manda el TIPO del bloque — un cardio/movilidad/
+ * roller unilateral sigue con sus campos tipados, y la fuerza por lado nunca cruza a ese carril.
  */
 export function keypadStepsForTarget(target: KeypadTarget | null): KeypadStep[] {
   if (!target) return []
@@ -130,6 +160,9 @@ export function keypadStepsForTarget(target: KeypadTarget | null): KeypadStep[] 
       unit: f.unit,
       label: f.label,
     }))
+  }
+  if (target.sideMode === 'per_side' || target.sideMode === 'alternating') {
+    return [...STRENGTH_PER_SIDE_KEYPAD_STEPS]
   }
   return [...STRENGTH_KEYPAD_STEPS]
 }

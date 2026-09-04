@@ -435,6 +435,64 @@ describe('WorkoutLogSetSchema — espejo polimórfico (AC4)', () => {
         expect(WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { right_sec: 86401 } }).success).toBe(false)
     })
 
+    // ── Reps POR LADO en FUERZA (tren «ciclo real y por lado», R3) — metadata {left_reps, right_reps} ──
+    // PIN de regresión: Zod v4 estripa lo no declarado. Sin estas dos claves en el schema el desglose
+    // por lado se perdía en silencio en el server action y en la cola offline, y la fila quedaba con
+    // el `reps_done` mínimo sin nada que explicara de dónde salía.
+    it('NO estripa left_reps/right_reps de metadata (10 / 8 sobrevive el parse)', () => {
+        const result = WorkoutLogSetSchema.safeParse({
+            ...baseLog,
+            weight_kg: '20',
+            reps_done: '8',
+            metadata: { left_reps: 10, right_reps: 8 },
+        })
+        expect(result.success).toBe(true)
+        if (result.success) {
+            expect(result.data.metadata).toEqual({ left_reps: 10, right_reps: 8 })
+        }
+    })
+
+    it('acepta reps por lado como strings (coerción, mismo patrón que left_sec)', () => {
+        const result = WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { left_reps: '12', right_reps: '10' } })
+        expect(result.success).toBe(true)
+        if (result.success) {
+            expect(result.data.metadata).toEqual({ left_reps: 12, right_reps: 10 })
+        }
+    })
+
+    it('acepta un solo lado, nulls explícitos (vaciado) y convive con el hold de movilidad', () => {
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { left_reps: 10 } }).success).toBe(true)
+        const vaciado = WorkoutLogSetSchema.safeParse({
+            ...baseLog,
+            metadata: { left_reps: null, right_reps: null },
+        })
+        expect(vaciado.success).toBe(true)
+        if (vaciado.success) expect(vaciado.data.metadata).toEqual({ left_reps: null, right_reps: null })
+
+        const mixto = WorkoutLogSetSchema.safeParse({
+            ...baseLog,
+            metadata: { left_sec: 30, right_sec: 25, left_reps: 10, right_reps: 10 },
+        })
+        expect(mixto.success).toBe(true)
+        if (mixto.success) {
+            expect(mixto.data.metadata).toEqual({ left_sec: 30, right_sec: 25, left_reps: 10, right_reps: 10 })
+        }
+    })
+
+    it('rechaza reps por lado fuera de rango o no enteras (-1, 10000, 1.5)', () => {
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { left_reps: -1 } }).success).toBe(false)
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { right_reps: -1 } }).success).toBe(false)
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { left_reps: 10000 } }).success).toBe(false)
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { left_reps: 1.5 } }).success).toBe(false)
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { left_reps: 'abc' } }).success).toBe(false)
+    })
+
+    it('estripa lo no declarado pero conserva left_reps', () => {
+        const result = WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { left_reps: 10, foo: 'x' } })
+        expect(result.success).toBe(true)
+        if (result.success) expect(result.data.metadata).toEqual({ left_reps: 10 })
+    })
+
     // ── OMISIÓN (mockup 3) — metadata jsonb {skipped, skip_reason} ──
     // PIN de regresión: Zod v4 estripa lo no declarado. Cuando estas claves faltaban en el schema el
     // action persistía `metadata: {}` y la omisión no sobrevivía al reload ni la veía el coach.

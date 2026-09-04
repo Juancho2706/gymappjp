@@ -14,19 +14,24 @@
  * navegador, y testeable sin depender del locale del runtime.
  */
 
-import type { ExerciseType } from './workout-exercise-type'
+import { sideRepsFromMetadata, type ExerciseType } from './workout-exercise-type'
 import { formatCardioReps, repsUnitForModality } from './cardio-modality'
 
 /** Subconjunto de `workout_logs` que necesita la línea (todas las columnas ya existen). */
 export interface LoggedSetLike {
     reps_done?: number | null
+    /** Peso levantado (kg): sólo lo usa la línea de FUERZA por lado (`formatStrengthSetLine`). */
+    weight_kg?: number | null
     actual_duration_sec?: number | null
     actual_distance_m?: number | null
     actual_avg_hr?: number | null
     actual_hold_sec?: number | null
     /** Pace real derivado (seg/km, RF5); poblado desde la Fase A. */
     actual_pace_sec_per_km?: number | null
-    /** jsonb `{left_sec, right_sec}` de movilidad por lado; cualquier otra forma se ignora. */
+    /**
+     * jsonb `{left_sec, right_sec}` de movilidad por lado y `{left_reps, right_reps}` de fuerza por
+     * lado; cualquier otra forma se ignora.
+     */
     metadata?: unknown
 }
 
@@ -154,4 +159,24 @@ export function formatLoggedSetLine(
               ? mobilityParts(log)
               : rollerParts(log)
     return parts.length > 0 ? parts.join(' · ') : EMPTY_LOGGED_SET_LABEL
+}
+
+/**
+ * Línea de una serie de FUERZA registrada POR LADO: «20 kg × 10 / 10» (R19, opción a).
+ *
+ * Export SEPARADO a propósito: `formatLoggedSetLine('strength')` sigue devolviendo `null` porque ese
+ * `null` es el interruptor con que cada superficie elige su render de fuerza (comparación
+ * objetivo↔hecho, «PC», RPE/RIR). Los call sites llaman a ésta DENTRO de su rama de fuerza y sólo
+ * reemplazan el «peso × reps», conservando todo lo demás.
+ *
+ * Devuelve `null` cuando el log no trae los DOS lados válidos en `metadata` (`sideRepsFromMetadata`)
+ * ⇒ una serie bilateral se pinta exactamente como hoy. Sin peso (peso corporal, `0` o `null`) la
+ * línea es sólo «10 / 10»: el dato del alumno son los lados, no un «0 kg» inventado.
+ */
+export function formatStrengthSetLine(log: LoggedSetLike): string | null {
+    const sides = sideRepsFromMetadata(log.metadata)
+    if (!sides) return null
+    const reps = `${formatEsNumber(sides.left)} / ${formatEsNumber(sides.right)}`
+    const weight = positive(log.weight_kg)
+    return weight != null ? `${formatEsNumber(weight, 1)} kg × ${reps}` : reps
 }

@@ -64,11 +64,15 @@ export interface BuilderBlock {
     reps_value?: number | null
     reps_unit?: RepsUnit | null
     load_type?: LoadType | null
-    /** String para input (igual que target_weight_kg); se parsea al guardar. */
-    load_value?: string
+    /**
+     * String para input (igual que target_weight_kg); se parsea al guardar. Admite `null` porque el
+     * cambio de tipo lo limpia con `null` EXPLÍCITO (R32, `block-type-fields.ts`): es lo único que
+     * el serializador RN propaga al UPDATE. Los lectores ya hacen `|| ''` / `?? ''` / parseo.
+     */
+    load_value?: string | null
     load_unit?: LoadUnit | null
-    /** String para input; se parsea al guardar. */
-    distance_value?: string
+    /** String para input; se parsea al guardar. Admite `null` por el mismo motivo que `load_value`. */
+    distance_value?: string | null
     distance_unit?: DistanceUnit | null
     duration_sec?: number | null
     target_pace_sec_per_km?: number | null

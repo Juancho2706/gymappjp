@@ -189,3 +189,58 @@ describe('computeEffectiveTarget — double (doble progresión)', () => {
         expect(r.mode).toBe('weekly_linear')
     })
 })
+
+// ── Reps POR LADO (tren «ciclo real y por lado», R3) ────────────────────────────────────
+// En un bloque unilateral `workout_logs.reps_done` guarda el MÍNIMO de los dos lados y el desglose
+// vive en `metadata {left_reps, right_reps}`, que esta función NO lee. Por eso la doble progresión
+// sigue comparando reps POR LADO contra el tope del rango y no cambia una línea. Estos casos fijan
+// esa invariante: si alguien volviera a guardar la SUMA, el alumno subiría de peso sin haber
+// completado el rango en ningún lado.
+describe('computeEffectiveTarget — double con reps POR LADO (R3, no-regresión)', () => {
+    const dbl = (over: Partial<ProgressionBlockInput> = {}): ProgressionBlockInput =>
+        weightBlock({ progression_mode: 'double', reps: '8-12', sets: 3, ...over })
+
+    it('«10 / 10» sobre el rango 8-12 → holding: 10 no es el tope, no sube', () => {
+        const r = computeEffectiveTarget(dbl(), {
+            currentWeek: 4,
+            // reps_done por serie = min(izq, der) = 10, con metadata {left_reps:10, right_reps:10}.
+            lastSession: { weightKg: 50, repsDone: [10, 10, 10] },
+        })
+        expect(r.status).toBe('holding')
+        expect(r.status).not.toBe('progressed')
+        expect(r.isProgressed).toBe(false)
+        expect(r.weightKg).toBe(50)
+        expect(r.repsTopToUnlock).toBe(12)
+    })
+
+    it('lados asimétricos «12 / 10» → holding: manda el lado flojo, no el bueno', () => {
+        const r = computeEffectiveTarget(dbl(), {
+            currentWeek: 4,
+            lastSession: { weightKg: 50, repsDone: [10, 10, 10] }, // min(12,10) en las 3 series
+        })
+        expect(r.status).toBe('holding')
+    })
+
+    it('los DOS lados en el tope («12 / 12») → progresa igual que un bloque bilateral', () => {
+        const r = computeEffectiveTarget(dbl(), {
+            currentWeek: 4,
+            lastSession: { weightKg: 50, repsDone: [12, 12, 12] },
+        })
+        expect(r.status).toBe('progressed')
+        expect(r.weightKg).toBe(52.5)
+    })
+
+    // Contra-caso que da sentido a los de arriba: con la SUMA (10+10=20 ≥ 12) el motor creería que
+    // el alumno completó el rango y le subiría el peso. Es exactamente la regresión que R3 evita.
+    it('la suma (20) SÍ dispararía «progressed» — por eso reps_done es el mínimo', () => {
+        const r = computeEffectiveTarget(dbl(), {
+            currentWeek: 4,
+            lastSession: { weightKg: 50, repsDone: [20, 20, 20] },
+        })
+        expect(r.status).toBe('progressed')
+    })
+
+    it('el rango escrito «10-12 por lado» sigue parseando al tope 12', () => {
+        expect(parseRepsTop('10-12 por lado')).toBe(12)
+    })
+})

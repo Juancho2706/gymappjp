@@ -16,7 +16,11 @@
  * no aparecían en ningún lado; una sesión sólo de cardio/movilidad quedaba vacía.
  */
 
-import { effectiveExerciseType, type ExerciseType as WorkoutKind } from './workout-exercise-type'
+import {
+    effectiveExerciseType,
+    sideRepsFromMetadata,
+    type ExerciseType as WorkoutKind,
+} from './workout-exercise-type'
 import { repsUnitForModality, type CardioRepsUnit } from './cardio-modality'
 
 export interface SummaryExercise {
@@ -49,6 +53,12 @@ export interface SummaryLogLike {
     actual_distance_m?: number | null
     actual_hold_sec?: number | null
     actual_avg_hr?: number | null
+    /**
+     * jsonb del log. En fuerza por lado trae `{left_reps, right_reps}` y el volumen suma los DOS
+     * lados (R3/R27): `reps_done` guarda el lado más bajo, así que sin esto el tonelaje de un
+     * unilateral quedaba a la mitad. Opcional ⇒ los consumidores actuales no cambian.
+     */
+    metadata?: { left_reps?: number | null; right_reps?: number | null } | null
 }
 
 export interface StrengthExerciseRow {
@@ -195,7 +205,10 @@ export function summarizeSessionByKind(
         let addMaxW = 0
         for (const l of blockLogs) {
             const w = l.weight_kg ?? 0
-            const r = l.reps_done ?? 0
+            // Espejo EXACTO del `reps_eff` del SQL (R27): con los dos lados válidos el volumen suma
+            // izq + der; en cualquier otro caso cae a `reps_done` tal cual (el `ELSE` del `CASE`).
+            const sides = sideRepsFromMetadata(l.metadata)
+            const r = sides ? sides.left + sides.right : (l.reps_done ?? 0)
             addVol += w * r
             if (isSub) continue
             if (w > addMaxW) addMaxW = w

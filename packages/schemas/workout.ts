@@ -302,6 +302,16 @@ export const WorkoutLogSetSchema = z.object({
         .object({
             left_sec: z.coerce.number().int().min(0).max(86400).nullable().optional(),
             right_sec: z.coerce.number().int().min(0).max(86400).nullable().optional(),
+            // ── Reps POR LADO en FUERZA (tren «ciclo real y por lado», R3) ──
+            // Espejo de {left_sec,right_sec} para el eje de reps. `reps_done` de la fila guarda el
+            // MÍNIMO de los dos lados (R3: protege la doble progresión de progression.ts y el e1RM de
+            // pr-detect.ts); el desglose vive acá y es lo que leen el tonelaje
+            // (get_client_daily_tonnage) y el resumen «10 / 10». Nullable a propósito: mandar
+            // {left_reps: null, right_reps: null} es cómo se VACÍA un lado sin borrar el resto del
+            // jsonb. Rango 0..9999 = exactamente lo que acepta la regex `^[0-9]{1,4}$` del SQL (R27);
+            // no hay CHECK en DB y no se agrega.
+            left_reps: z.coerce.number().int().min(0).max(9999).nullable().optional(),
+            right_reps: z.coerce.number().int().min(0).max(9999).nullable().optional(),
             skipped: z.boolean().nullable().optional(),
             skip_reason: z.string().trim().max(40).nullable().optional(),
         })

@@ -5,6 +5,7 @@ import {
     formatLoggedDuration,
     formatLoggedPace,
     formatLoggedSetLine,
+    formatStrengthSetLine,
     loggedSideSeconds,
 } from './logged-set-summary'
 
@@ -143,5 +144,60 @@ describe('formatLoggedSetLine — cardio rep-based', () => {
         // Movilidad y roller ignoran la modalidad (roller sigue con "pasadas").
         expect(formatLoggedSetLine('roller', { reps_done: 3 }, { cardioModality: 'jump_rope' })).toBe('3 pasadas')
         expect(formatLoggedSetLine('mobility', { actual_hold_sec: 45 }, { cardioModality: 'stairs' })).toBe('45 s')
+    })
+})
+
+// ── R19 (a) · fuerza por lado ────────────────────────────────────────────────
+
+describe('formatLoggedSetLine: identidad con metadata de lados', () => {
+    // El log de fuerza por lado NO cambia ninguna salida de la función existente: `strength` sigue
+    // devolviendo `null` (interruptor del render de fuerza de cada superficie) y los tipos tipados
+    // ignoran `left_reps`/`right_reps` igual que hoy.
+    const sideLog = { weight_kg: 20, reps_done: 10, metadata: { left_reps: 10, right_reps: 12 } }
+
+    it('strength sigue devolviendo null', () => {
+        expect(formatLoggedSetLine('strength', sideLog)).toBeNull()
+        expect(formatLoggedSetLine('strength', {})).toBeNull()
+        expect(formatLoggedSetLine('strength', { reps_done: 10, weight_kg: 20 })).toBeNull()
+    })
+
+    it('cardio / movilidad / roller dan lo mismo con y sin los lados de fuerza', () => {
+        const base = { actual_duration_sec: 600, actual_distance_m: 3200, actual_hold_sec: 45, reps_done: 3 }
+        const withSides = { ...base, metadata: { left_reps: 10, right_reps: 12 } }
+        for (const kind of ['cardio', 'mobility', 'roller'] as const) {
+            expect(formatLoggedSetLine(kind, withSides)).toBe(formatLoggedSetLine(kind, base))
+        }
+    })
+})
+
+describe('formatStrengthSetLine', () => {
+    it('con los dos lados imprime "peso × izq / der"', () => {
+        expect(
+            formatStrengthSetLine({ weight_kg: 20, reps_done: 10, metadata: { left_reps: 10, right_reps: 10 } }),
+        ).toBe('20 kg × 10 / 10')
+        expect(
+            formatStrengthSetLine({ weight_kg: 22.5, reps_done: 8, metadata: { left_reps: 8, right_reps: 10 } }),
+        ).toBe('22,5 kg × 8 / 10')
+        // Cadenas de 1 a 4 dígitos: paridad con el `->>` del SQL.
+        expect(
+            formatStrengthSetLine({ weight_kg: 20, reps_done: 10, metadata: { left_reps: '10', right_reps: '9' } }),
+        ).toBe('20 kg × 10 / 9')
+    })
+
+    it('sin peso (peso corporal) imprime sólo los lados', () => {
+        expect(formatStrengthSetLine({ reps_done: 12, metadata: { left_reps: 12, right_reps: 12 } })).toBe('12 / 12')
+        expect(
+            formatStrengthSetLine({ weight_kg: 0, reps_done: 12, metadata: { left_reps: 12, right_reps: 12 } }),
+        ).toBe('12 / 12')
+    })
+
+    it('sin metadata de lados devuelve null (la serie bilateral se pinta como hoy)', () => {
+        expect(formatStrengthSetLine({ weight_kg: 20, reps_done: 10 })).toBeNull()
+        expect(formatStrengthSetLine({ weight_kg: 20, reps_done: 10, metadata: null })).toBeNull()
+        expect(formatStrengthSetLine({ weight_kg: 20, reps_done: 10, metadata: {} })).toBeNull()
+        // Un lado solo, un valor inválido o el jsonb de movilidad ⇒ null.
+        expect(formatStrengthSetLine({ weight_kg: 20, metadata: { left_reps: 10 } })).toBeNull()
+        expect(formatStrengthSetLine({ weight_kg: 20, metadata: { left_reps: 10, right_reps: -1 } })).toBeNull()
+        expect(formatStrengthSetLine({ weight_kg: 20, metadata: { left_sec: 30, right_sec: 30 } })).toBeNull()
     })
 })

@@ -13,6 +13,14 @@ import type { WorkoutSkipMetadata } from './day-completion'
 export type WorkoutLogSideMetadata = {
     left_sec?: number | null
     right_sec?: number | null
+    /**
+     * Reps por lado de una serie de FUERZA unilateral (`side_mode` `per_side` | `alternating`).
+     * `workout_logs.reps_done` lleva el MÍNIMO de ambos (R3); estos dos son el desglose que ve el
+     * alumno («10 / 10») y la base del tonelaje (`weight_kg × (left + right)`). Se leen SIEMPRE con
+     * `sideRepsFromMetadata` (motor), nunca casteando el jsonb a mano.
+     */
+    left_reps?: number | null
+    right_reps?: number | null
 }
 
 /**
