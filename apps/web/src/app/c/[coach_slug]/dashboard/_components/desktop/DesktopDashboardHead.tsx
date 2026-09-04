@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Flame, UserRound } from 'lucide-react'
 import { getActiveProgram, getClientProfile, getDashboardStreak } from '../../_data/dashboard.queries'
+import { getHeroComplianceBundle } from '../../_data/heroComplianceBundle'
 import { formatLongDateSantiago, getTodayInSantiago, timeGreetingSantiago } from '@/lib/date-utils'
 import { programWeekIndex1Based } from '@/lib/workout/programWeekVariant'
 import { getClientBasePath } from '@/lib/client/base-path'
@@ -23,17 +24,29 @@ export async function DesktopDashboardHead({
     coachSlug: string
 }) {
     const base = await getClientBasePath(coachSlug)
-    const [{ client }, streak, program] = await Promise.all([
+    const [{ client }, streak, program, { cycle }] = await Promise.all([
         getClientProfile(userId),
         getDashboardStreak(userId),
         getActiveProgram(userId),
+        // Deduplicado por `React.cache` con el hero del mismo request.
+        getHeroComplianceBundle(userId, coachSlug),
     ])
 
     const firstName = client?.full_name?.split(' ')[0] ?? 'Atleta'
     const greeting = `${timeGreetingSantiago()}, ${firstName}`
     const { date: userLocalDate } = getTodayInSantiago()
     const weekIdx = program ? programWeekIndex1Based(program, userLocalDate) : null
-    const eyebrow = program ? `${program.name}${weekIdx ? ` · Semana ${weekIdx}` : ''}` : formatLongDateSantiago()
+    // Ciclo: el eyebrow dice el día del cursor («Día 2 de 3»), nunca una semana de calendario; un
+    // programa flexible sin empezar invita a empezar (copys canónicos del SPEC ciclo-real-y-por-lado).
+    const programDetail =
+        cycle.programState === 'not_started'
+            ? 'Empieza cuando quieras'
+            : cycle.mode === 'cycle' && cycle.todayLabel
+              ? cycle.todayLabel
+              : weekIdx
+                ? `Semana ${weekIdx}`
+                : ''
+    const eyebrow = program ? `${program.name}${programDetail ? ` · ${programDetail}` : ''}` : formatLongDateSantiago()
 
     return (
         <div className="mb-[22px] flex flex-wrap items-end justify-between gap-4">

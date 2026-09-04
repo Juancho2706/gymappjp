@@ -6,7 +6,7 @@ export async function HeroAndComplianceGroup({ userId, coachSlug }: { userId: st
     // Master switch del dominio Nutricion: el RestDayCard linkea a /nutrition ("Ver nutrición →") —
     // se oculta ese link cuando el coach apago la nutricion para este alumno. React.cache dedupe la
     // lectura del dominio con el sidebar + tarjeta de compliance (1 query por request).
-    const [{ hero }, nutritionEnabled] = await Promise.all([
+    const [{ hero, cycle }, nutritionEnabled] = await Promise.all([
         getHeroComplianceBundle(userId, coachSlug),
         getDashboardNutritionDomainEnabled(userId),
     ])
@@ -23,6 +23,7 @@ export async function HeroAndComplianceGroup({ userId, coachSlug }: { userId: st
             baseLoggedPerBlock={hero.baseLoggedPerBlock}
             nextWorkoutTitle={hero.nextWorkoutTitle}
             nextWorkoutDayLabel={hero.nextWorkoutDayLabel}
+            cycle={cycle}
             nutritionEnabled={nutritionEnabled}
         />
     )

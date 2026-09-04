@@ -1,9 +1,14 @@
 import {
+    buildCycleCompletions,
     countLoggedSetsByBlock,
     deriveDayCompletion,
+    programDayLabel,
+    resolveCycleCursor,
     skippedBlockIdsFromLogs,
+    type CycleCursorPlan,
     type DayCompletionBlock,
     type LoggedSetRow,
+    type ProgramDayLabelStructure,
 } from '@eva/workout-engine'
 import { getSantiagoIsoYmdForUtcInstant } from '@/lib/date-utils'
 import {
@@ -42,6 +47,16 @@ export type WeekProgramRow = {
     ab_mode?: boolean | null
     start_date?: string | null
     weeks_to_repeat?: number | null
+    /**
+     * Estructura del programa (spec `docs/specs/ciclo-real-y-por-lado`). OPCIONAL: ausente ⇒ `weekly`,
+     * o sea la grilla Lun→Dom de siempre. `getActiveProgram` ya la entrega estrechada, así que los dos
+     * callers (`ActiveProgramSection`, `week-status.queries`) pasan la fila sin casts.
+     */
+    program_structure_type?: 'weekly' | 'cycle' | null
+    /** Largo del ciclo 1..14 (R8). `null` en weekly y en ciclos legacy sin el campo. */
+    cycle_length?: number | null
+    /** Inicio flexible OPT-IN (R2): con `start_date` nulo el programa "no empezó" (R30). */
+    start_date_flexible?: boolean | null
     /** Planes anidados de `getActiveProgram` — su `workout_blocks` es la fuente preferente de targets. */
     workout_plans?: ReadonlyArray<{
         id: string
@@ -68,10 +83,25 @@ export type WeekDayStatus =
     | 'upcoming'
 
 export type WeekDay = {
+    /**
+     * Fecha de la celda. En `cycle` un día NO tiene fecha de calendario: llega la fecha en que se
+     * cerró (`done`) o cadena vacía.
+     */
     dateIso: string
+    /**
+     * ISODOW 1..7 en `weekly`; ÍNDICE del ciclo 1..14 en `cycle` — misma dualidad que la columna
+     * `workout_plans.day_of_week` que lo alimenta. Nunca se lo interprete como día de la semana sin
+     * mirar `mode`; para pintar usá `dayLabel`, que ya resolvió las dos semánticas.
+     */
     dayOfWeek: number
     planId: string | null
     title: string | null
+    /** `Lun` / `Día 1` — `programDayLabel`, la única etiqueta de día del producto. */
+    dayLabel: string
+    /** `Lunes` / `Día 1 de 3`. */
+    dayLabelLong: string
+    /** `Lun` / `D1` — forma de chip (en weekly conserva las 3 letras de hoy, R31). */
+    dayChipLabel: string
     status: WeekDayStatus
     isToday: boolean
     /**
@@ -108,7 +138,13 @@ export type PendingWorkout = {
 }
 
 export type WeekWorkoutStatus = {
-    /** Los 7 días de la semana actual (Lun→Dom) con su estado. */
+    /**
+     * Estructura bajo la que se derivó: `weekly` = grilla de 7 días por fecha; `cycle` = los días del
+     * ciclo que devuelve `resolveCycleCursor` (uno por índice, sin fechas). La UI branchea acá en vez
+     * de volver a mirar `program_structure_type`.
+     */
+    mode: 'weekly' | 'cycle'
+    /** Los días con su estado: los 7 de la semana actual (Lun→Dom) en `weekly`; los del ciclo en `cycle`. */
     days: WeekDay[]
     /**
      * Días PASADOS con plan que siguen abiertos, del más antiguo al más nuevo: sin ninguna serie
@@ -162,7 +198,7 @@ export function deriveWeekWorkoutStatus(input: {
     const { userLocalDate, todayIso, program, activePlans, logs } = input
 
     if (!program) {
-        return { days: [], pending: [] }
+        return { mode: 'weekly', days: [], pending: [] }
     }
 
     const abMode = !!program.ab_mode
@@ -175,6 +211,13 @@ export function deriveWeekWorkoutStatus(input: {
         weekIdx,
         userLocalDate
     )
+
+    // CICLO (R12): la semana de calendario no describe nada — el alumno entrena cuando puede y el
+    // cursor avanza por completitud. Los 7 slots por fecha se reemplazan por los días del ciclo y no
+    // hay «día perdido», así que la cola de recuperables queda vacía.
+    if (program.program_structure_type === 'cycle') {
+        return deriveCycleProgramStatus({ todayIso, program, activePlans, logs, activeVariant, abMode })
+    }
 
     // Lunes de la semana que contiene hoy (misma fórmula que MomentumCard/WeekCalendar).
     const curr = userLocalDate
@@ -343,6 +386,9 @@ export function deriveWeekWorkoutStatus(input: {
             dayOfWeek: s.dayOfWeek,
             planId: s.dayPlan?.id ?? null,
             title: s.dayPlan?.title ?? null,
+            dayLabel: programDayLabel(s.dayOfWeek, 'weekly', null, { form: 'short' }),
+            dayLabelLong: programDayLabel(s.dayOfWeek, 'weekly', null, { form: 'long' }),
+            dayChipLabel: programDayLabel(s.dayOfWeek, 'weekly', null, { form: 'chip' }),
             status,
             isToday: s.isToday,
             doneOnDate,
@@ -369,5 +415,117 @@ export function deriveWeekWorkoutStatus(input: {
             status: d.status,
         }))
 
-    return { days, pending }
+    return { mode: 'weekly', days, pending }
+}
+
+/**
+ * Estado de los días de un programa `cycle` (spec `docs/specs/ciclo-real-y-por-lado`, R12).
+ *
+ * Acá NO hay semana ni fechas: los días salen de `resolveCycleCursor` —el único dueño de "hoy toca"—
+ * alimentado por `buildCycleCompletions`, el mismo par que consumen el hero web y RN. Un ciclo no
+ * tiene «día perdido» (el índice no vence: el alumno entrena cuando puede y el cursor avanza al
+ * cerrar el día), así que la cola de pendientes/recuperables es SIEMPRE vacía y el
+ * `WorkoutRecoverBanner` no se monta. No se inventa una fecha de calendario para los días no hechos:
+ * `dateIso` sólo trae la fecha real de la sesión que cerró un día.
+ */
+function deriveCycleProgramStatus(input: {
+    todayIso: string
+    program: WeekProgramRow
+    activePlans: WeekPlanRow[]
+    logs: WeekLogRow[]
+    activeVariant: 'A' | 'B'
+    abMode: boolean
+}): WeekWorkoutStatus {
+    const { todayIso, program, activePlans, logs, activeVariant, abMode } = input
+    const structure: ProgramDayLabelStructure = 'cycle'
+    const cycleLength = program.cycle_length ?? null
+
+    // Planes del programa EN EL ORDEN RECIBIDO: el motor no reordena ni re-filtra (C18).
+    const programPlans = activePlans.filter(
+        (p) => p.program_id === program.id && workoutPlanMatchesVariant(p, activeVariant, abMode)
+    )
+    const cursorPlans: CycleCursorPlan[] = programPlans.map((p) => ({
+        id: p.id,
+        day_of_week: p.day_of_week,
+        title: p.title,
+    }))
+
+    // Denominador por plan — mismas dos fuentes que la rama weekly (planes sueltos + anidados).
+    const blocksByPlan: Record<string, readonly DayCompletionBlock[]> = {}
+    for (const p of activePlans) if (p.workout_blocks != null) blocksByPlan[p.id] = p.workout_blocks
+    for (const p of program.workout_plans ?? []) if (p.workout_blocks != null) blocksByPlan[p.id] = p.workout_blocks
+
+    const { completions, inProgress } = buildCycleCompletions({
+        plans: cursorPlans,
+        blocksByPlan,
+        logs,
+        todayIso,
+    })
+    const cursor = resolveCycleCursor({
+        program: {
+            program_structure_type: 'cycle',
+            cycle_length: cycleLength,
+            start_date: program.start_date ?? null,
+            start_date_flexible: program.start_date_flexible ?? null,
+        },
+        plans: cursorPlans,
+        completions,
+        inProgress,
+        todayIso,
+    })
+
+    const planById = new Map(programPlans.map((p) => [p.id, p]))
+    // El cursor da el ESTADO del día en curso, no su fracción: la fracción se mide con la misma regla
+    // del motor que usa la rama weekly, sobre los logs de HOY de ese plan.
+    const inProgressPct = inProgress ? dayCompletionPct(inProgress.planId, todayIso, blocksByPlan, logs) : 0
+
+    const days: WeekDay[] = cursor.slots.map((slot) => {
+        const isTodaySlot = slot.state === 'today'
+        const isInProgress = isTodaySlot && cursor.todayState === 'in_progress'
+        const status: WeekDayStatus =
+            slot.state === 'done' ? 'done' : isInProgress ? 'in_progress' : isTodaySlot ? 'today' : 'upcoming'
+
+        return {
+            dateIso: slot.doneDateIso ?? '',
+            dayOfWeek: slot.cycleIndex,
+            planId: slot.planId,
+            title: planById.get(slot.planId)?.title ?? null,
+            dayLabel: programDayLabel(slot.cycleIndex, structure, cycleLength, { form: 'short' }),
+            dayLabelLong: programDayLabel(slot.cycleIndex, structure, cycleLength, { form: 'long' }),
+            dayChipLabel: programDayLabel(slot.cycleIndex, structure, cycleLength, { form: 'chip' }),
+            status,
+            isToday: isTodaySlot,
+            // «Hecho el jueves» es un concepto de calendario: en ciclo no hay día ajeno que recuperar.
+            doneOnDate: null,
+            doneOnLabel: null,
+            completionPct: slot.state === 'done' ? 1 : isInProgress ? inProgressPct : 0,
+        }
+    })
+
+    return { mode: 'cycle', days, pending: [] }
+}
+
+/** Fracción [0,1] del día `dateIso` para `planId`, con la regla única del motor. */
+function dayCompletionPct(
+    planId: string,
+    dateIso: string,
+    blocksByPlan: Record<string, readonly DayCompletionBlock[]>,
+    logs: WeekLogRow[]
+): number {
+    const blocks = blocksByPlan[planId]
+    if (!blocks || blocks.length === 0) return 0
+    const blockIds = new Set(blocks.map((b) => b.id))
+    // El enlace bloque→plan manda (mismo criterio que `buildCycleCompletions`); el `plan_id` del join
+    // sólo cubre el bloque que el coach borró del plan después de la sesión.
+    const rows = logs.filter((l) => {
+        if (getSantiagoIsoYmdForUtcInstant(l.logged_at) !== dateIso) return false
+        if (l.block_id != null && blockIds.has(l.block_id)) return true
+        return l.workout_blocks?.plan_id === planId
+    })
+    if (rows.length === 0) return 0
+    return deriveDayCompletion({
+        blocks,
+        loggedSetsByBlock: countLoggedSetsByBlock(rows),
+        skippedBlockIds: skippedBlockIdsFromLogs(rows),
+    }).pct
 }

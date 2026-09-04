@@ -30,6 +30,11 @@ export async function getExecutorWeekStatusDays(clientId: string): Promise<WeekS
     const activePlans = allPlans.filter((p) => !p.program_id || p.program_id === program.id)
     const { date: userLocalDate, iso: todayIso } = getTodayInSantiago()
     const week = deriveWeekWorkoutStatus({ userLocalDate, todayIso, program, activePlans, logs })
+    // Ciclo (R12, spec `ciclo-real-y-por-lado`): `week.days` son ÍNDICES del ciclo, no días de semana,
+    // y no existe meta semanal que contar («N de M»). La tira del ejecutor se omite (la UI trata `null`
+    // como «sin racha»); el Inicio ya muestra los días entrenados. Seguimiento B18: tira de días
+    // entrenados sin «N de M» también en el ejecutor.
+    if (week.mode === 'cycle') return null
 
     return week.days.map((d) => ({ dayOfWeek: d.dayOfWeek, status: d.status, isToday: d.isToday }))
 }

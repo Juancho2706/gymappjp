@@ -5,7 +5,7 @@ import type { Dispatch, SetStateAction } from 'react'
 import { Keyboard, Pencil } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { LogSetForm, type SetSyncResult } from '../LogSetForm'
-import { sessionLogKey, type OptimisticLogPayload, type RepeatSeedEntry } from '@eva/workout-engine'
+import { SIDE_LABEL, sessionLogKey, type OptimisticLogPayload, type RepeatSeedEntry } from '@eva/workout-engine'
 import type { ExerciseType as WorkoutKind } from '@/domain/workout/types'
 import {
     type BlockType,
@@ -157,6 +157,11 @@ export function ExerciseStepV3({
                     <span className="exec-v3-chip">
                         {RUT_TYPE_META[effType].label} · {exercise.muscle_group}
                     </span>
+                    {/* Chip «Por lado»/«Alternado» en la fila de objetivo (R39): la fuerza nunca entra
+                        a `TypedTargetGrid`; el rótulo sale del motor (`SIDE_LABEL`), no de una copia. */}
+                    {block.side_mode && SIDE_LABEL[block.side_mode] ? (
+                        <span className="exec-v3-chip">{SIDE_LABEL[block.side_mode]}</span>
+                    ) : null}
                     {/* Salida digna del paso activo (mockup 3): «Cambiar» + «Omitir hoy». */}
                     <BlockActionsV3
                         onOpenSubstitute={canSubstitute ? onOpenSubstitute : undefined}
@@ -225,6 +230,7 @@ export function ExerciseStepV3({
                         <div key={`${block.id}-${setNumber}`} className={cn('exec-v3-slot', slot)}>
                             <LogSetForm
                                 blockId={block.id}
+                                sideMode={block.side_mode}
                                 setNumber={setNumber}
                                 restTimeStr={block.rest_time}
                                 warmupRestTimeStr={block.warmup_rest_time}

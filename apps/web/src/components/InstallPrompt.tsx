@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, Share, PlusSquare, Sparkles } from 'lucide-react'
 import Image from 'next/image'
+import { usePostHog } from 'posthog-js/react'
 import { useInstallPrompt } from '@/lib/pwa/use-install-prompt'
 import {
   hasCompletedFirstWorkout,
@@ -63,6 +64,7 @@ export function InstallPrompt({
   primaryColor?: string
 }) {
   const { isIOS, isStandalone, isInstalled, canPrompt, promptInstall } = useInstallPrompt()
+  const ph = usePostHog()
 
   const propBrand = useMemo<PromptBrand>(
     () => ({ brandName, logoUrl: logoUrl ?? null, coachInitial, primaryColor }),
@@ -94,9 +96,14 @@ export function InstallPrompt({
     if (isStandalone || isInstalled) return false
     if (!isEligibleMobileClient()) return false
     if (isInstallPromptDismissed()) return false
+    // W5.3 (spec `ciclo-real-y-por-lado`): en Android Chrome con prompt nativo el aviso sale el DÍA 1,
+    // sin esperar el primer entreno (el descarte de 30 días de arriba sigue mandando: nunca hay dos
+    // prompts, el de después del primer entreno es el MISMO). iOS conserva su camino de instrucciones
+    // manuales tras el primer entreno.
+    if (!isIOS && canPrompt) return true
     if (!hasCompletedFirstWorkout()) return false
-    // Android: sólo si hay prompt nativo que disparar. iOS: siempre por instrucciones manuales.
-    return isIOS || canPrompt
+    // iOS: siempre por instrucciones manuales.
+    return isIOS
     // `tick` (en deps) fuerza la reevaluación aunque las señales de localStorage no sean reactivas.
   }, [isStandalone, isInstalled, isIOS, canPrompt, tick])
 
@@ -106,9 +113,14 @@ export function InstallPrompt({
       return
     }
     setBrand(readBrandFromDom(propBrand))
-    const timer = window.setTimeout(() => setIsVisible(true), SHOW_DELAY_MS)
+    // `day1` separa el prompt del primer día (Android, W5.3) del que llega tras el primer entreno.
+    const day1 = !hasCompletedFirstWorkout()
+    const timer = window.setTimeout(() => {
+      setIsVisible(true)
+      ph?.capture('pwa_install_prompt_shown', { platform: isIOS ? 'ios' : 'android', day1 })
+    }, SHOW_DELAY_MS)
     return () => window.clearTimeout(timer)
-  }, [eligible, propBrand])
+  }, [eligible, propBrand, ph, isIOS])
 
   const handleDismiss = () => {
     setIsVisible(false)

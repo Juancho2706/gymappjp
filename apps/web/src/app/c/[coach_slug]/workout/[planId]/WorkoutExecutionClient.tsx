@@ -37,6 +37,7 @@ import {
     isSkippedSetRow,
     type SkipReason,
     type WorkoutLogMetadata,
+    SIDE_LABEL,
 } from '@eva/workout-engine'
 import { StepperExecution, type StepperStepView } from './StepperExecution'
 import { ExecHeaderV3, type ExecDotState } from './v3/ExecHeaderV3'
@@ -305,10 +306,8 @@ function ManualTimerButton({ defaultTime }: { defaultTime: string | null }) {
     )
 }
 
-const SIDE_LABEL: Record<string, string> = {
-    per_side: 'Por lado',
-    alternating: 'Alternado',
-}
+// `SIDE_LABEL` («Por lado» / «Alternado») vive en el motor (`@eva/workout-engine`, R39): la copia
+// local se retiró en el tren «ciclo real y por lado» para que web y RN no puedan divergir.
 
 /** Meta por tipo de bloque para el chip de tipo (color + label + icono tipado). Deriva de la
  *  fuente única del lib (`EXERCISE_TYPE_META`) para no duplicar el mapa con el builder. */
@@ -1055,6 +1054,7 @@ function SupersetGroupCard({
                                         <LogSetForm
                                             key={`${m.block.id}-${round}`}
                                             blockId={m.block.id}
+                                            sideMode={m.block.side_mode}
                                             setNumber={round}
                                             restTimeStr={m.block.rest_time}
                                             nextUpLabel={memberVMs[0]?.exercise.name}

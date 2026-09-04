@@ -120,7 +120,9 @@ function programMatchesScope(
   scope: ProgramAssignmentNotificationScope,
 ): boolean {
   if (program.coach_id !== userId || !program.client_id) return false
-  if (!program.is_active || !program.source_template_id || !program.start_date) return false
+  // R20: `start_date` NO entra al guard. Con «Inicio flexible» el programa nace sin fecha y el aviso
+  // (email + push) es justo lo que le dice al alumno que ya puede empezar.
+  if (!program.is_active || !program.source_template_id) return false
   if (scope.type === 'enterprise') return program.org_id === scope.orgId
   return program.org_id === null
 }
@@ -193,7 +195,7 @@ export async function sendProgramAssignmentNotifications(input: {
       brandName,
       clientName: client.full_name,
       programName: program.name,
-      startDate: program.start_date!,
+      startDate: program.start_date,
       dashboardUrl,
       logoUrl: emailBrand.logoUrl,
       primaryColor: emailBrand.primaryColor,

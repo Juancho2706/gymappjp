@@ -615,4 +615,120 @@ describe('deriveWeekWorkoutStatus', () => {
         expect(r.pending.map((p) => p.dayOfWeek)).toEqual([1])
         expect(r.days.filter((d) => d.status === 'rest')).toHaveLength(6)
     })
+
+    /**
+     * CICLO (spec `docs/specs/ciclo-real-y-por-lado`, R12): los 7 slots por fecha se reemplazan por los
+     * días del cursor y no existe el «día perdido» ⇒ cero pendientes y cero recuperables. Los casos
+     * weekly de arriba no se tocan: `program_structure_type` es opcional y su ausencia = weekly.
+     */
+    describe('ciclo: días del cursor, cero pendientes', () => {
+        const CY1 = 'c1111111-1111-1111-1111-111111111111'
+        const CY2 = 'c2222222-2222-2222-2222-222222222222'
+        const CY3 = 'c3333333-3333-3333-3333-333333333333'
+
+        // `day_of_week` es el ÍNDICE del ciclo, no el día de la semana. 2 bloques × 2 series por día.
+        const CYCLE_PLANS: WeekPlanRow[] = [
+            plan({ id: CY1, day_of_week: 1, title: 'Empuje', workout_blocks: [{ id: 'cb1a', sets: 2 }, { id: 'cb1b', sets: 2 }] }),
+            plan({ id: CY2, day_of_week: 2, title: 'Tirón', workout_blocks: [{ id: 'cb2a', sets: 2 }, { id: 'cb2b', sets: 2 }] }),
+            plan({ id: CY3, day_of_week: 3, title: 'Pierna', workout_blocks: [{ id: 'cb3a', sets: 2 }, { id: 'cb3b', sets: 2 }] }),
+        ]
+
+        const CYCLE_PROGRAM = {
+            id: PROG,
+            ab_mode: false,
+            start_date: '2026-06-29',
+            weeks_to_repeat: 1,
+            program_structure_type: 'cycle' as const,
+            cycle_length: 3,
+            start_date_flexible: false,
+        }
+
+        /** Las 4 series que cierran un día del ciclo. */
+        function fullDay(planId: string, blocks: [string, string], isoUtc: string): WeekLogRow[] {
+            return blocks.flatMap((b) => setsOf(planId, isoUtc, b, 2))
+        }
+
+        it('días 1 y 2 cerrados (lun y mar) ⇒ hoy miércoles toca el Día 3 y la cola queda VACÍA', () => {
+            const r = deriveWeekWorkoutStatus({
+                userLocalDate: TODAY_DATE,
+                todayIso: TODAY_ISO,
+                program: CYCLE_PROGRAM,
+                activePlans: CYCLE_PLANS,
+                logs: [
+                    ...fullDay(CY1, ['cb1a', 'cb1b'], '2026-07-06T15:00:00.000Z'),
+                    ...fullDay(CY2, ['cb2a', 'cb2b'], '2026-07-07T15:00:00.000Z'),
+                ],
+            })
+
+            expect(r.mode).toBe('cycle')
+            expect(r.pending).toEqual([])
+            expect(r.days.map((d) => [d.dayOfWeek, d.status, d.dayLabel])).toEqual([
+                [1, 'done', 'Día 1'],
+                [2, 'done', 'Día 2'],
+                [3, 'today', 'Día 3'],
+            ])
+            expect(r.days[0].dateIso).toBe('2026-07-06')
+            expect(r.days[2].isToday).toBe(true)
+            expect(r.days[2].dayLabelLong).toBe('Día 3 de 3')
+            expect(r.days[2].dayChipLabel).toBe('D3')
+            // Ningún día del ciclo arrastra la semántica de recuperación del calendario.
+            expect(r.days.every((d) => d.doneOnDate === null && d.doneOnLabel === null)).toBe(true)
+        })
+
+        it('días pasados sin entrenar NO generan pendientes ni recuperables (no hay «día perdido»)', () => {
+            const r = deriveWeekWorkoutStatus({
+                userLocalDate: TODAY_DATE,
+                todayIso: TODAY_ISO,
+                program: CYCLE_PROGRAM,
+                activePlans: CYCLE_PLANS,
+                logs: [],
+            })
+
+            expect(r.pending).toEqual([])
+            expect(r.days.map((d) => d.status)).toEqual(['today', 'upcoming', 'upcoming'])
+            expect(r.days.every((d) => d.dateIso === '')).toBe(true)
+        })
+
+        it('día empezado hoy y sin cerrar ⇒ in_progress con su fracción real, y sigue sin pendientes', () => {
+            const r = deriveWeekWorkoutStatus({
+                userLocalDate: TODAY_DATE,
+                todayIso: TODAY_ISO,
+                program: CYCLE_PROGRAM,
+                activePlans: CYCLE_PLANS,
+                // Día 1 cerrado ayer + 1 de las 4 series del Día 2 hoy.
+                logs: [
+                    ...fullDay(CY1, ['cb1a', 'cb1b'], '2026-07-07T15:00:00.000Z'),
+                    ...setsOf(CY2, '2026-07-08T15:00:00.000Z', 'cb2a', 1),
+                ],
+            })
+
+            expect(r.pending).toEqual([])
+            const day2 = r.days.find((d) => d.dayOfWeek === 2)
+            expect(day2?.status).toBe('in_progress')
+            expect(day2?.completionPct).toBe(0.25)
+        })
+
+        it('un ciclo de 14 días emite 14 días, todos etiquetados (nada colapsa sobre 7)', () => {
+            const plans: WeekPlanRow[] = Array.from({ length: 14 }, (_, i) =>
+                plan({
+                    id: `d${String(i + 1).padStart(2, '0')}-1111-1111-1111-111111111111`,
+                    day_of_week: i + 1,
+                    title: `Día ${i + 1}`,
+                    workout_blocks: [{ id: `bk${i + 1}`, sets: 1 }],
+                })
+            )
+            const r = deriveWeekWorkoutStatus({
+                userLocalDate: TODAY_DATE,
+                todayIso: TODAY_ISO,
+                program: { ...CYCLE_PROGRAM, cycle_length: 14 },
+                activePlans: plans,
+                logs: [],
+            })
+
+            expect(r.days).toHaveLength(14)
+            expect(r.days.every((d) => d.dayLabel.length > 0)).toBe(true)
+            expect(r.days[13].dayLabelLong).toBe('Día 14 de 14')
+            expect(r.pending).toEqual([])
+        })
+    })
 })

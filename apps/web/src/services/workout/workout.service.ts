@@ -50,6 +50,68 @@ export type AssignProgramOptions = {
     startDateFlexible?: boolean
 }
 
+// --- FECHAS DEL PROGRAMA (R2 / R21) ---
+
+/**
+ * R2: «Inicio flexible» es **opt-in**. Sin valor explícito (payload viejo, plantilla con la columna
+ * en NULL) el programa NO es flexible y sigue estampando fecha como siempre.
+ */
+export function resolveStartDateFlexible(value: boolean | null | undefined): boolean {
+    return value ?? false
+}
+
+export type ProgramScheduleInput = {
+    /** `false` para plantillas: nunca llevan fecha. */
+    isClientProgram: boolean
+    /** Valor que se va a persistir en `start_date_flexible` (ya con su default resuelto). */
+    startDateFlexible: boolean
+    /** Fecha pedida explícitamente por el coach (builder o diálogo de asignar). */
+    requestedStartDate: string | null
+    /** `start_date` que el programa ya tiene en la DB, si se está re-guardando uno vivo. */
+    existingStartDate: string | null
+    /** `true` sólo cuando se re-guarda un programa que ya existe. */
+    hasExistingProgram: boolean
+    weeksToRepeat: number
+    /** ISO `YYYY-MM-DD` de hoy, inyectado para que la función sea pura. */
+    today: string
+}
+
+/**
+ * Ancla de fechas de un programa, en un solo lugar puro (espejo web de
+ * `apps/mobile/lib/program-persistence.ts#resolveProgramScheduleMetadata`).
+ *
+ * R2: un programa **nuevo** con «Inicio flexible» nace sin `start_date` — la fecha la pone el
+ * alumno al tocar «Empezar hoy». R21: `end_date` sólo existe si existe `start_date`, así que
+ * acompaña al NULL en vez de quedar colgado.
+ *
+ * Lo que NO cambia: un programa que **ya tiene** fecha la conserva al re-guardarse (los ~50 activos
+ * con el flag encendido nunca ven «Empezar hoy»), y uno no-flexible sigue estampando hoy.
+ */
+export function resolveProgramScheduleDates(input: ProgramScheduleInput): { startDate: string | null; endDate: string | null } {
+    const { isClientProgram, startDateFlexible, requestedStartDate, existingStartDate, hasExistingProgram, weeksToRepeat, today } = input
+
+    let startDate: string | null = requestedStartDate || null
+
+    if (!isClientProgram) {
+        startDate = null // Plantillas no tienen fecha de inicio
+    } else if (!startDate) {
+        if (hasExistingProgram) {
+            // Programa vivo: su fecha manda. Si todavía no tiene y es flexible, sigue esperando al
+            // alumno; si no es flexible, se estampa hoy (camino histórico).
+            startDate = existingStartDate || (startDateFlexible ? null : today)
+        } else {
+            startDate = startDateFlexible ? null : today
+        }
+    }
+
+    if (!startDate) return { startDate: null, endDate: null }
+
+    const start = new Date(startDate)
+    const end = new Date(start)
+    end.setDate(start.getDate() + (weeksToRepeat * 7) - 1)
+    return { startDate, endDate: end.toISOString().split('T')[0] }
+}
+
 // --- ACTIONS ---
 
 type CoachWorkoutScope =
@@ -371,24 +433,17 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
     // Areas visibles para ESTE usuario (RLS via su client) — coerce de ids ajenos en el payload
     const allowedAreaIds = await resolveAllowedAreaIds(supabase)
 
-    let startDateToUse = startDate
+    const startDateFlexibleToUse = resolveStartDateFlexible(start_date_flexible)
 
-    if (clientId) {
-        if (!startDateToUse) {
-            if (programId) {
-                // Si es un programa existente para un cliente, mantenemos su fecha o usamos hoy
-                const { data: existing } = await supabase
-                    .from('workout_programs')
-                    .select('start_date')
-                    .eq('id', programId)
-                    .maybeSingle()
-                startDateToUse = existing?.start_date || new Date().toISOString().split('T')[0]
-            } else {
-                startDateToUse = new Date().toISOString().split('T')[0]
-            }
-        }
-    } else {
-        startDateToUse = null // Plantillas no tienen fecha de inicio
+    let existingStartDate: string | null = null
+    if (clientId && !startDate && programId) {
+        // Si es un programa existente para un cliente, mantenemos su fecha (ver resolveProgramScheduleDates)
+        const { data: existing } = await supabase
+            .from('workout_programs')
+            .select('start_date')
+            .eq('id', programId)
+            .maybeSingle()
+        existingStartDate = existing?.start_date ?? null
     }
 
     // Verificar que el coach pueda gestionar el alumno (propio o del pool del team)
@@ -419,14 +474,16 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
         }
     }
 
-    // Calcular end_date si hay startDate
-    let endDate = null
-    if (startDateToUse) {
-        const start = new Date(startDateToUse)
-        const end = new Date(start)
-        end.setDate(start.getDate() + (weeksToRepeat * 7) - 1)
-        endDate = end.toISOString().split('T')[0]
-    }
+    // Fechas del programa (R2/R21): mismo punto del flujo donde antes se calculaba `end_date`.
+    const { startDate: startDateToUse, endDate } = resolveProgramScheduleDates({
+        isClientProgram: Boolean(clientId),
+        startDateFlexible: startDateFlexibleToUse,
+        requestedStartDate: startDate ?? null,
+        existingStartDate,
+        hasExistingProgram: Boolean(programId),
+        weeksToRepeat,
+        today: new Date().toISOString().split('T')[0],
+    })
 
     try {
         let finalProgramId = programId
@@ -507,7 +564,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
                     duration_days: duration_days || null,
                     program_structure_type: program_structure_type || 'weekly',
                     cycle_length: program_structure_type === 'cycle' ? (cycle_length || null) : null,
-                    start_date_flexible: start_date_flexible ?? true,
+                    start_date_flexible: startDateFlexibleToUse,
                     program_notes: program_notes || null,
                     ab_mode: ab_mode ?? false,
                     program_phases: phasesForDb,
@@ -582,7 +639,7 @@ export async function saveWorkoutProgramAction(payload: WorkoutProgramInput, sav
                     duration_days: duration_days || null,
                     program_structure_type: program_structure_type || 'weekly',
                     cycle_length: program_structure_type === 'cycle' ? (cycle_length || null) : null,
-                    start_date_flexible: start_date_flexible ?? true,
+                    start_date_flexible: startDateFlexibleToUse,
                     program_notes: program_notes || null,
                     ab_mode: ab_mode ?? false,
                     program_phases: phasesForDb,
@@ -795,7 +852,7 @@ export async function duplicateWorkoutProgramAction(
                 duration_days: (original as any).duration_days ?? null,
                 program_structure_type: (original as any).program_structure_type || 'weekly',
                 cycle_length: (original as any).cycle_length ?? null,
-                start_date_flexible: (original as any).start_date_flexible ?? true,
+                start_date_flexible: resolveStartDateFlexible((original as any).start_date_flexible), // R2: default false, nunca true implícito
                 program_notes: (original as any).program_notes ?? null,
                 ab_mode: (original as any).ab_mode ?? false,
                 program_phases: (original as any).program_phases ?? [],
@@ -972,13 +1029,19 @@ export async function assignProgramToClientsAction(
         const startDateFlexible =
             typeof normalizedOptions.startDateFlexible === 'boolean'
                 ? normalizedOptions.startDateFlexible
-                : ((template as { start_date_flexible?: boolean | null }).start_date_flexible ?? true)
+                : resolveStartDateFlexible((template as { start_date_flexible?: boolean | null }).start_date_flexible)
 
         const weeksToRepeat = Math.max(1, Math.min(52, normalizedOptions.durationWeeks || template.weeks_to_repeat))
-        const start = new Date(dateToUse)
-        const end = new Date(start)
-        end.setDate(start.getDate() + (weeksToRepeat * 7) - 1)
-        const endDate = end.toISOString().split('T')[0]
+        // R2/R21: la asignación flexible SIN fecha pedida nace con `start_date` y `end_date` NULL.
+        const { startDate: assignedStartDate, endDate } = resolveProgramScheduleDates({
+            isClientProgram: true,
+            startDateFlexible,
+            requestedStartDate: normalizedOptions.startDate || null,
+            existingStartDate: null,
+            hasExistingProgram: false,
+            weeksToRepeat,
+            today: dateToUse,
+        })
 
         let assignedCount = 0
         const assignedClientIds: string[] = []
@@ -1014,7 +1077,7 @@ export async function assignProgramToClientsAction(
                         org_id: scope.orgId,
                         name: template.name,
                         weeks_to_repeat: weeksToRepeat,
-                        start_date: dateToUse,
+                        start_date: assignedStartDate,
                         end_date: endDate,
                         duration_type: (template as any).duration_type || 'weeks',
                         duration_days: (template as any).duration_days ?? null,
@@ -1095,7 +1158,8 @@ export async function assignProgramToClientsAction(
                         brandName,
                         clientName: clientInfo.full_name,
                         programName: template.name,
-                        startDate: dateToUse,
+                        // R20: sin fecha, la fila «Inicio» del mail dice «Empieza cuando quieras».
+                        startDate: assignedStartDate,
                         dashboardUrl,
                         logoUrl: emailBrand.logoUrl,
                         primaryColor: emailBrand.primaryColor,
@@ -1427,7 +1491,7 @@ export async function syncProgramFromTemplateAction(programId: string): Promise<
         duration_days: program.duration_days,
         program_structure_type: (program.program_structure_type as 'weekly' | 'cycle') || 'weekly',
         cycle_length: program.cycle_length ?? undefined,
-        start_date_flexible: program.start_date_flexible ?? true,
+        start_date_flexible: resolveStartDateFlexible(program.start_date_flexible), // R2
         program_notes: program.program_notes,
         ab_mode: program.ab_mode ?? false,
         program_phases: phasesSafe,

@@ -8,6 +8,7 @@ import {
     resolveEffectiveWeekVariant,
     workoutPlanMatchesVariant,
 } from '@/lib/workout/programWeekVariant'
+import { programDayLabel } from '@eva/workout-engine'
 import { deriveWeekWorkoutStatus } from '../../_data/weekPendingWorkouts'
 import { ProgramPhaseBar, type PhaseSeg } from './ProgramPhaseBar'
 import { WorkoutPlanCards, type WorkoutPlanCardItem } from './WorkoutPlanCard'
@@ -60,6 +61,11 @@ export async function ActiveProgramSection({ userId, coachSlug }: { userId: stri
 
     // Estado por día de la semana + cola de pendientes (misma resolución que la tira/adherencia).
     const week = deriveWeekWorkoutStatus({ userLocalDate, todayIso: today, program, activePlans, logs })
+    const isCycle = week.mode === 'cycle'
+    const structure = program.program_structure_type
+    const cycleLength = program.cycle_length
+    // `dayOfWeek` es ISODOW en weekly e ÍNDICE del ciclo en cycle (misma columna, dos semánticas): las
+    // day-cards se indexan por ese número y nunca por un arreglo de 7 (un ciclo puede tener 8..14 días).
     const dayByDow = new Map<number, (typeof week.days)[number]>()
     for (const d of week.days) dayByDow.set(d.dayOfWeek, d)
 
@@ -70,8 +76,12 @@ export async function ActiveProgramSection({ userId, coachSlug }: { userId: stri
             id: p.id,
             title: p.title,
             day_of_week: p.day_of_week,
+            mode: week.mode,
             status: day?.status ?? 'upcoming',
-            isToday: dow === todayDow,
+            // En ciclo «hoy» lo dice el cursor (slot `today`), nunca el calendario (D1).
+            isToday: isCycle ? (day?.isToday ?? false) : dow === todayDow,
+            dayLabel: day?.dayLabel ?? programDayLabel(p.day_of_week, structure, cycleLength, { form: 'short' }),
+            dayLabelLong: day?.dayLabelLong ?? programDayLabel(p.day_of_week, structure, cycleLength, { form: 'long' }),
             // Atribución (E1.6): fecha de la celda + fecha/label del día en que realmente se registró.
             dateIso: day?.dateIso ?? '',
             doneOnDate: day?.doneOnDate ?? null,
@@ -86,6 +96,8 @@ export async function ActiveProgramSection({ userId, coachSlug }: { userId: stri
 
     const totalWeeks = Math.max(1, program.weeks_to_repeat ?? 1)
     const currentWeek = weekIdx ?? 1
+    // Flexible sin fecha (R2/R21): no hay semana que contar hasta que el alumno empiece.
+    const notStarted = program.start_date_flexible === true && !program.start_date
     const phasesRaw = program.program_phases
     const phases: PhaseSeg[] | null = Array.isArray(phasesRaw) ? (phasesRaw as unknown as PhaseSeg[]) : null
 
@@ -97,8 +109,9 @@ export async function ActiveProgramSection({ userId, coachSlug }: { userId: stri
                     <span className="truncate">{program.name}</span>
                 </h2>
                 <Badge tone="sport" variant="soft">
-                    Semana {currentWeek} de {totalWeeks}
-                    {abMode ? ` · Sem ${activeVariant}` : ''}
+                    {notStarted
+                        ? 'Empieza cuando quieras'
+                        : `Semana ${currentWeek} de ${totalWeeks}${abMode ? ` · Sem ${activeVariant}` : ''}`}
                 </Badge>
             </div>
             <ProgramPhaseBar phases={phases} currentWeek={currentWeek} totalWeeks={totalWeeks} />

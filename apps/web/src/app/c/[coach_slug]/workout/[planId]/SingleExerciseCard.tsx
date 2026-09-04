@@ -8,7 +8,7 @@ import { springs } from '@/lib/animation-presets'
 import { formatRelativeDate } from '@/lib/date-utils'
 import type { ExerciseType as WorkoutKind } from '@/domain/workout/types'
 import { LogSetForm, type SetSyncResult } from './LogSetForm'
-import { formatTypedObjective, type SupersetGroupRow, type OptimisticLogPayload } from '@eva/workout-engine'
+import { SIDE_LABEL, formatTypedObjective, type SupersetGroupRow, type OptimisticLogPayload } from '@eva/workout-engine'
 import type { ClientCardioView } from './_data/workout-execution.queries'
 // Primitivos/tipos compartidos con el resto de la exec (SupersetGroupCard los reusa) → se importan
 // del cliente padre. El import cruzado es render-time-only (ambos módulos solo los usan dentro del
@@ -179,6 +179,13 @@ export function SingleExerciseCard({
                     <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-bold">
                         <TypeGlyph kind={effType} className="h-3.5 w-3.5 shrink-0" />
                         <span className="shrink-0" style={{ color: RUT_TYPE_META[effType].color }}>{RUT_TYPE_META[effType].label}</span>
+                        {/* Chip «Por lado»/«Alternado» (R39): en la fila de objetivo, rótulo del motor. */}
+                        {block.side_mode && SIDE_LABEL[block.side_mode] ? (
+                            <>
+                                <span className="text-on-dark-muted/40">·</span>
+                                <span className="shrink-0 text-on-dark-muted">{SIDE_LABEL[block.side_mode]}</span>
+                            </>
+                        ) : null}
                         <span className="text-on-dark-muted/40">·</span>
                         <span className="truncate font-semibold text-on-dark-muted">
                             {group.type === 'superset'
@@ -398,6 +405,7 @@ export function SingleExerciseCard({
                             <LogSetForm
                                 key={`${block.id}-${setNumber}`}
                                 blockId={block.id}
+                                sideMode={block.side_mode}
                                 setNumber={setNumber}
                                 restTimeStr={block.rest_time}
                                 warmupRestTimeStr={block.warmup_rest_time}
@@ -436,6 +444,7 @@ export function SingleExerciseCard({
                                 <LogSetForm
                                     key={`${block.id}-${setNumber}`}
                                     blockId={block.id}
+                                    sideMode={block.side_mode}
                                     setNumber={setNumber}
                                     restTimeStr={block.rest_time}
                                     nextUpLabel={exercise.name}

@@ -17,9 +17,13 @@ import {
     writeWorkoutOfflineQueue,
     type WorkoutOfflineLog,
 } from './workout-offline-queue'
+// El zod del server: el round-trip de W2.5 se cierra contra el MISMO schema que parsea `logSetAction`.
+import { WorkoutLogSetSchema } from '@eva/schemas'
 
 const QUEUE_KEY = 'eva:workout-offline-queue'
 const ATTEMPTS_KEY = 'eva:workout-offline-queue-attempts'
+/** `block_id` RFC 4122 real: `z.string().uuid()` rechaza los ids sintéticos tipo 'b1'. */
+const BLOCK_UUID = '11111111-1111-4111-8111-111111111111'
 
 function make(over: Partial<WorkoutOfflineLog> = {}): WorkoutOfflineLog {
     return {
@@ -260,6 +264,62 @@ describe('workout-offline-queue', () => {
             expect(perSide.get('actual_hold_sec')).toBe('55')
             expect(workoutLogToFormData(make({})).has('metadata')).toBe(false)
             expect(workoutLogToFormData(make({ metadata: null })).has('metadata')).toBe(false)
+        })
+
+        /**
+         * W2.5 (tren «ciclo real y por lado»): la serie de FUERZA por lado viaja por el MISMO canal
+         * `metadata` que el hold de movilidad — `WorkoutLogSideMetadata` ya declara
+         * `left_reps`/`right_reps`, así que la cola no necesitó campos nuevos. Lo que este test fija
+         * es el round-trip completo encolar → localStorage → `FormData` → zod del server: si alguno
+         * de los tres saltos perdiera un lado, el desglose «10 / 10» y el tonelaje
+         * (`weight_kg × (left + right)`) se comerían la diferencia en silencio.
+         */
+        it('Q1: round-trip de los DOS lados de fuerza (encolar → FormData → parse del schema)', () => {
+            const item = make({
+                blockId: BLOCK_UUID,
+                weightKg: 20,
+                // `reps_done` lleva el MÍNIMO de los dos lados (R3); el desglose vive en metadata.
+                repsDone: 10,
+                metadata: { left_reps: 12, right_reps: 10 },
+            })
+            expect(enqueueWorkoutLog(item)).toBe(true)
+
+            const [drenado] = readWorkoutOfflineQueue()
+            const fd = workoutLogToFormData(drenado)
+            expect(JSON.parse(String(fd.get('metadata')))).toEqual({ left_reps: 12, right_reps: 10 })
+
+            // Mismo parseo que hace `logSetAction` con el FormData del flush.
+            const parsed = WorkoutLogSetSchema.safeParse({
+                block_id: fd.get('block_id'),
+                set_number: fd.get('set_number'),
+                weight_kg: fd.get('weight_kg'),
+                reps_done: fd.get('reps_done'),
+                metadata: JSON.parse(String(fd.get('metadata'))),
+            })
+            expect(parsed.success).toBe(true)
+            expect(parsed.success && parsed.data.metadata).toEqual({ left_reps: 12, right_reps: 10 })
+        })
+
+        it('Q2: dedupe last-wins conserva el metadata del ÚLTIMO intento (no el del viejo)', () => {
+            enqueueWorkoutLog(make({ metadata: { left_reps: 8, right_reps: 8 }, timestamp: 1 }))
+            enqueueWorkoutLog(make({ metadata: { left_reps: 12, right_reps: 10 }, timestamp: 2 }))
+
+            const q = readWorkoutOfflineQueue()
+            expect(q).toHaveLength(1)
+            expect(workoutLogToFormData(q[0]).get('metadata')).toBe('{"left_reps":12,"right_reps":10}')
+        })
+
+        it('Q3: un item legacy sin metadata drena sin inventar la key', () => {
+            // Item tal como quedó en localStorage antes de este tren (sin `metadata`).
+            localStorage.setItem(
+                QUEUE_KEY,
+                JSON.stringify([{ blockId: BLOCK_UUID, setNumber: 1, weightKg: 20, repsDone: 10, rpe: null, rir: null, planId: 'p1', coachSlug: 'coach', timestamp: 1 }])
+            )
+
+            const fd = workoutLogToFormData(readWorkoutOfflineQueue()[0])
+
+            expect(fd.has('metadata')).toBe(false)
+            expect(fd.get('reps_done')).toBe('10')
         })
     })
 

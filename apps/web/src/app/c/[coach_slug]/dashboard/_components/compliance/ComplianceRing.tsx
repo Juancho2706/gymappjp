@@ -9,7 +9,12 @@ import { useTranslation } from '@/lib/i18n/LanguageContext'
 type RingColor = 'sport' | 'ember' | 'success'
 
 interface ComplianceRingProps {
-    value: number
+    /**
+     * Porcentaje 0..100, o `null` cuando la métrica NO TIENE denominador: en un programa `cycle` no
+     * hay meta semanal de entrenos (spec `ciclo-real-y-por-lado`, R12), así que se pinta «—» en vez
+     * de un porcentaje inventado. El rótulo de ese caso llega en la pasada visual (W2.13).
+     */
+    value: number | null
     label: string
     color: RingColor
     /** Sin datos en ventana (p. ej. nutrición 30d): anillo gris y leyenda. */
@@ -25,9 +30,12 @@ const stroke: Record<RingColor, string> = {
 const emptyStroke = 'var(--ink-300)'
 
 export function ComplianceRing({ value, label, color, empty }: ComplianceRingProps) {
+    // Sin métrica (`null`) se pinta igual que "sin datos": anillo gris y «—», nunca un 0 % que
+    // castigue al alumno por entrenar el día que quiso.
+    const noValue = empty || value == null
     // El count-up vive en `CountUpText` (MotionValue → DOM, cero estado React).
-    const ringValue = empty ? 0 : value
-    const pathColor = empty ? emptyStroke : stroke[color]
+    const ringValue = noValue ? 0 : value
+    const pathColor = noValue ? emptyStroke : stroke[color]
 
     return (
         <div className="flex flex-col items-center gap-2">
@@ -37,7 +45,7 @@ export function ComplianceRing({ value, label, color, empty }: ComplianceRingPro
                 stroke={7}
                 color={pathColor}
                 label={
-                    empty ? (
+                    noValue ? (
                         <span className="font-display text-lg font-black text-subtle">—</span>
                     ) : (
                         <span className="font-display text-[19px] font-black tabular-nums tracking-[-0.03em] text-strong">
@@ -49,7 +57,12 @@ export function ComplianceRing({ value, label, color, empty }: ComplianceRingPro
             />
             <div className="text-center">
                 <div className="text-xs font-bold text-strong">{label}</div>
-                {empty ? <div className="text-[10px] text-subtle">Sin datos</div> : null}
+                {empty ? (
+                    <div className="text-[10px] text-subtle">Sin datos</div>
+                ) : value == null ? (
+                    // R12: programa `cycle` ⇒ no hay meta semanal de entrenos; rótulo canónico del SPEC.
+                    <div className="text-[10px] text-subtle">Sin meta semanal</div>
+                ) : null}
             </div>
         </div>
     )
@@ -62,7 +75,8 @@ export function ComplianceRingCluster({
     nutritionHasLogs,
     nutritionEnabled = true,
 }: {
-    workoutScore: number
+    /** `null` en programas `cycle`: sin meta semanal el anillo pinta «—» (R12). */
+    workoutScore: number | null
     /** Engagement de registro (días con log / 30), NO cumplimiento de comidas. */
     nutritionEngagementScore: number
     checkInScore: number

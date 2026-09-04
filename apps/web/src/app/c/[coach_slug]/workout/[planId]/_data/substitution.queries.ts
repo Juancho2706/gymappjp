@@ -1,6 +1,7 @@
 import { cache } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { resolveCatalogScope } from '@/app/c/[coach_slug]/exercises/_data/exercises.queries'
+import { effectiveExerciseType } from '@eva/workout-engine'
 import type { RankableExercise } from '@/services/workout/exercise-substitution'
 
 /**
@@ -44,9 +45,13 @@ export const getSubstitutionCandidates = cache(
         if (!scope) return null
 
         // Ejercicio prescrito del bloque (RLS del alumno gatea la propiedad del plan).
+        // `exercise_type_override` (R5): el coach puede prescribir un ejercicio del catálogo con OTRO
+        // tipo (una sentadilla usada como movilidad). El tipo que manda es el EFECTIVO.
         const { data: block } = await supabase
             .from('workout_blocks')
-            .select('exercise_id, exercises ( id, name, muscle_group, equipment, exercise_type, secondary_muscles )')
+            .select(
+                'exercise_id, exercise_type_override, exercises ( id, name, muscle_group, equipment, exercise_type, secondary_muscles )'
+            )
             .eq('id', blockId)
             .maybeSingle()
 
@@ -64,8 +69,17 @@ export const getSubstitutionCandidates = cache(
             | undefined
         if (!currentExercise || !currentExercise.muscle_group) return null
 
-        // Candidate set: mismo grupo muscular + mismo tipo de catálogo + no borrado + distinto del
+        // Tipo EFECTIVO del bloque (R5): override del bloque > tipo del catálogo > 'strength'. Un
+        // bloque legacy (sin override, ejercicio sin tipo) sigue resolviendo 'strength'.
+        const effectiveType = effectiveExerciseType(
+            { exercise_type_override: block?.exercise_type_override },
+            currentExercise
+        )
+
+        // Candidate set: mismo grupo muscular + mismo tipo EFECTIVO + no borrado + distinto del
         // prescrito, dentro del scope de catálogo del alumno (RLS de `exercises` = techo real).
+        // Sin candidatos la lista vuelve vacía y la UI dice «No hay reemplazos de este tipo»: cambiar
+        // una movilidad por una serie de fuerza rompería la prescripción tipada del bloque.
         let q = supabase
             .from('exercises')
             .select(SUBSTITUTE_COLUMNS)
@@ -73,7 +87,13 @@ export const getSubstitutionCandidates = cache(
             .is('deleted_at', null)
             .eq('muscle_group', currentExercise.muscle_group)
             .neq('id', currentExercise.id)
-        if (currentExercise.exercise_type) q = q.eq('exercise_type', currentExercise.exercise_type)
+        // En 'strength' entran también los del catálogo SIN tipo: su tipo efectivo ES 'strength'
+        // (`effectiveExerciseType`), y excluirlos vaciaría el sheet en los catálogos legacy. Los dos
+        // `.or()` se combinan con AND en PostgREST (scope ∧ tipo).
+        q =
+            effectiveType === 'strength'
+                ? q.or('exercise_type.eq.strength,exercise_type.is.null')
+                : q.eq('exercise_type', effectiveType)
 
         const { data } = await q.order('name').limit(60)
         const candidates = (data ?? []) as unknown as SubstituteCandidate[]
@@ -85,7 +105,8 @@ export const getSubstitutionCandidates = cache(
                 muscle_group: currentExercise.muscle_group,
                 equipment: currentExercise.equipment,
                 secondary_muscles: currentExercise.secondary_muscles,
-                exercise_type: currentExercise.exercise_type,
+                // El tipo EFECTIVO, no el del catálogo: es el que gobierna el candidate set de arriba.
+                exercise_type: effectiveType,
             },
             candidates,
         }

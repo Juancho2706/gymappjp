@@ -27,11 +27,65 @@ import {
     resolveEffectiveWeekVariant,
     workoutPlanMatchesVariant,
 } from '@/lib/workout/programWeekVariant'
+import {
+    buildCycleCompletions,
+    programDayLabel,
+    resolveCycleCursor,
+    type CycleCompletion,
+    type CycleCursorMode,
+    type CycleCursorPlan,
+    type CycleProgramState,
+    type CycleSlotState,
+    type CycleTodayState,
+    type DayCompletionBlock,
+} from '@eva/workout-engine'
 import type { HeroBlock } from '../_components/hero/WorkoutHeroCard'
 import type { AdherenceProgramRow } from '@/lib/workout/workoutAdherence30d'
 import { computeWorkoutScore30d } from '@/lib/workout/workoutAdherence30d'
 
-const DAY_NAMES = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo']
+/** Un día del programa con su estado y sus etiquetas YA resueltas (nadie vuelve a formatear). */
+export type HeroCycleSlot = {
+    planId: string
+    /** ISODOW 1..7 en `weekly`; índice del ciclo 1..14 en `cycle` (misma columna, dos semánticas). */
+    cycleIndex: number
+    state: CycleSlotState
+    /** Sólo en `done`: día Santiago en que se cerró. */
+    doneDateIso: string | null
+    title: string | null
+    /** `Lun` / `Día 1`. */
+    shortLabel: string
+    /** `Lunes` / `Día 1 de 3`. */
+    longLabel: string
+    /** `Lun` / `D1` — chip de 34 px. */
+    chipLabel: string
+}
+
+/**
+ * Salida del cursor (`resolveCycleCursor`) YA resuelta y etiquetada, para que el hero (W2.11) y las
+ * day-cards (W2.12) no vuelvan a derivar "hoy toca" ni a formatear el día. En `weekly` es la
+ * identidad de la resolución por ISODOW que la web ya hacía.
+ */
+export type HeroCycleView = {
+    mode: CycleCursorMode
+    /** Programa activo que alimenta el cursor; lo usa «Empezar hoy» (W2.11). `null` sin programa. */
+    programId: string | null
+    /** `not_started` ⟺ inicio flexible sin fecha (R30). El hero NO lo re-deriva de `start_date`. */
+    programState: CycleProgramState
+    todayState: CycleTodayState
+    todayPlanId: string | null
+    todayCycleIndex: number | null
+    /** `Jueves` / `Día 3 de 3`. `null` si hoy no hay día resuelto. */
+    todayLabel: string | null
+    todayChipLabel: string | null
+    nextPlanId: string | null
+    nextCycleIndex: number | null
+    nextLabel: string | null
+    nextChipLabel: string | null
+    lastCompleted: { planId: string; cycleIndex: number; dateIso: string } | null
+    /** Largo del ciclo (`null` en weekly). */
+    cycleLength: number | null
+    slots: HeroCycleSlot[]
+}
 
 export type HeroComplianceBundle = {
     hero: {
@@ -46,8 +100,14 @@ export type HeroComplianceBundle = {
         nextWorkoutTitle: string | null
         nextWorkoutDayLabel: string | null
     }
+    /** Cursor del programa (W2.7): el hero y las day-cards consumen ESTO, no `day_of_week` crudo. */
+    cycle: HeroCycleView
     scores: {
-        workoutScore: number
+        /**
+         * Adherencia de entrenos 30 d. `null` en `cycle` (y en un programa que no empezó): no hay
+         * meta semanal que sirva de denominador, así que no se inventa un porcentaje (R12).
+         */
+        workoutScore: number | null
         /**
          * ENGAGEMENT de registro: días con `daily_nutrition_log` / 30 * 100.
          * NO es cumplimiento de comidas — mide cuántos días el alumno registró algo.
@@ -89,18 +149,60 @@ export const getHeroComplianceBundle = cache(async (userId: string, _coachSlug: 
         userLocalDate
     )
 
-    // Atajo por fecha SOLO para planes sueltos: los de programa mandan por `day_of_week`. El builder
+    // ---- Cursor del programa (spec `ciclo-real-y-por-lado`, W2.7) --------------------------------
+    // "Hoy toca" deja de resolverse acá: lo resuelve `resolveCycleCursor`, único dueño de las DOS
+    // semánticas de `day_of_week` (ISODOW en weekly, índice del ciclo en cycle). En weekly su salida
+    // es la IDENTIDAD de lo que este archivo hacía (mismo `todayPlan`, mismo "próximo" sin wrap).
+    const structure = program?.program_structure_type ?? null
+    const isCycle = structure === 'cycle'
+    const cycleLength = program?.cycle_length ?? null
+
+    // Planes del PROGRAMA que participan, EN EL ORDEN DE LA QUERY: el motor no reordena ni re-filtra,
+    // así que el primero con el índice de hoy es el mismo que devolvía el `.find()` anterior.
+    const programPlans = program
+        ? activePlans.filter(
+              (p) => p.program_id === program.id && workoutPlanMatchesVariant(p, activeVariant, abMode)
+          )
+        : []
+    const cursorPlans: CycleCursorPlan[] = programPlans.map((p) => ({
+        id: p.id,
+        day_of_week: p.day_of_week,
+        title: p.title,
+    }))
+
+    // Denominador por plan (`sets`): mandan los bloques ANIDADOS del programa activo; los planes
+    // sueltos aportan los suyos desde el select ampliado de `getClientWorkoutPlans`.
+    const blocksByPlan: Record<string, readonly DayCompletionBlock[]> = {}
+    if (isCycle) {
+        for (const p of activePlans) if (p.workout_blocks != null) blocksByPlan[p.id] = p.workout_blocks
+        for (const p of program?.workout_plans ?? []) if (p.workout_blocks != null) blocksByPlan[p.id] = p.workout_blocks
+    }
+
+    // En weekly el cursor NO mira las completitudes (los estados de la semana los siguen derivando las
+    // grillas con su atribución greedy), así que ni se calculan: son 200 logs × derivación por día.
+    const { completions, inProgress } = isCycle
+        ? buildCycleCompletions({ plans: cursorPlans, blocksByPlan, logs, todayIso: today })
+        : { completions: [] as CycleCompletion[], inProgress: undefined }
+
+    const cursor = resolveCycleCursor({
+        program: {
+            program_structure_type: structure,
+            cycle_length: cycleLength,
+            start_date: program?.start_date ?? null,
+            start_date_flexible: program?.start_date_flexible ?? null,
+        },
+        plans: cursorPlans,
+        completions,
+        inProgress,
+        todayIso: today,
+    })
+
+    // Atajo por fecha SOLO para planes sueltos: los de programa mandan por el cursor. El builder
     // estampaba `assigned_date = start_date` en todos los días del programa y el hero de la semana del
     // start_date mostraba un plan arbitrario ("HOY ENTRENAS <otro día> 0/19", incidente 2026-08-25).
     let todayPlan = activePlans.find((p) => p.program_id == null && p.assigned_date === today) ?? null
-    if (!todayPlan && program) {
-        todayPlan =
-            activePlans.find(
-                (p) =>
-                    p.program_id === program.id &&
-                    p.day_of_week === todayDow &&
-                    workoutPlanMatchesVariant(p, activeVariant, abMode)
-            ) ?? null
+    if (!todayPlan && program && cursor.todayPlanId) {
+        todayPlan = activePlans.find((p) => p.id === cursor.todayPlanId) ?? null
     }
 
     const nestedPlan = program?.workout_plans?.find((p) => p.id === todayPlan?.id)
@@ -145,22 +247,49 @@ export const getHeroComplianceBundle = cache(async (userId: string, _coachSlug: 
     const totalSetsLogged = Object.values(setsPerBlock).reduce((a, b) => a + b, 0)
     const isAlreadyLogged = totalSetsTarget > 0 && totalSetsLogged >= totalSetsTarget
 
+    // "Próximo entreno" sólo cuando hoy no toca nada (mismo criterio de siempre). El plan sale del
+    // cursor (`nextPlanId`) y la etiqueta de `programDayLabel`: en weekly es el nombre largo del día
+    // —con "Mañana" cuando es el ISODOW siguiente—; en ciclo, "Día N de M" (no hay "mañana": el día
+    // siguiente del ciclo se desbloquea al cerrar el actual, no por calendario).
     let nextTitle: string | null = null
     let nextLabel: string | null = null
-    if (!todayPlan && program) {
-        const candidates = activePlans
-            .filter(
-                (p) =>
-                    p.program_id === program.id &&
-                    (p.day_of_week ?? 0) > todayDow &&
-                    workoutPlanMatchesVariant(p, activeVariant, abMode)
-            )
-            .sort((a, b) => (a.day_of_week ?? 0) - (b.day_of_week ?? 0))
-        const next = candidates[0]
+    if (!todayPlan && program && cursor.nextPlanId) {
+        const next = activePlans.find((p) => p.id === cursor.nextPlanId) ?? null
         if (next) {
             nextTitle = next.title
-            nextLabel = next.day_of_week === todayDow + 1 ? 'Mañana' : DAY_NAMES[(next.day_of_week ?? 1) - 1]
+            nextLabel =
+                !isCycle && cursor.nextCycleIndex === todayDow + 1
+                    ? 'Mañana'
+                    : programDayLabel(cursor.nextCycleIndex, structure, cycleLength, { form: 'long' })
         }
+    }
+
+    const planTitleById = new Map(activePlans.map((p) => [p.id, p.title]))
+    const cycleView: HeroCycleView = {
+        mode: cursor.mode,
+        programId: program?.id ?? null,
+        programState: cursor.programState,
+        todayState: cursor.todayState,
+        todayPlanId: cursor.todayPlanId,
+        todayCycleIndex: cursor.todayCycleIndex,
+        todayLabel: programDayLabel(cursor.todayCycleIndex, structure, cycleLength, { form: 'long' }) || null,
+        todayChipLabel: programDayLabel(cursor.todayCycleIndex, structure, cycleLength, { form: 'chip' }) || null,
+        nextPlanId: cursor.nextPlanId,
+        nextCycleIndex: cursor.nextCycleIndex,
+        nextLabel: programDayLabel(cursor.nextCycleIndex, structure, cycleLength, { form: 'long' }) || null,
+        nextChipLabel: programDayLabel(cursor.nextCycleIndex, structure, cycleLength, { form: 'chip' }) || null,
+        lastCompleted: cursor.lastCompleted ?? null,
+        cycleLength: isCycle ? cycleLength : null,
+        slots: cursor.slots.map((s) => ({
+            planId: s.planId,
+            cycleIndex: s.cycleIndex,
+            state: s.state,
+            doneDateIso: s.doneDateIso ?? null,
+            title: planTitleById.get(s.planId) ?? null,
+            shortLabel: programDayLabel(s.cycleIndex, structure, cycleLength, { form: 'short' }),
+            longLabel: programDayLabel(s.cycleIndex, structure, cycleLength, { form: 'long' }),
+            chipLabel: programDayLabel(s.cycleIndex, structure, cycleLength, { form: 'chip' }),
+        })),
     }
 
     const { score: workoutScore } = computeWorkoutScore30d({
@@ -195,6 +324,7 @@ export const getHeroComplianceBundle = cache(async (userId: string, _coachSlug: 
             nextWorkoutTitle: nextTitle,
             nextWorkoutDayLabel: nextLabel,
         },
+        cycle: cycleView,
         scores: {
             workoutScore,
             nutritionEngagementScore,

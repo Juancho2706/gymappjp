@@ -71,12 +71,27 @@ function parseISOAnchor(iso: string) {
     return new Date(y, m - 1, d, 12, 0, 0, 0)
 }
 
-export type ActiveProgramRow = Tables<'workout_programs'> & {
+/**
+ * Programa activo del alumno con sus días y bloques.
+ *
+ * `program_structure_type` / `cycle_length` / `start_date_flexible` (spec
+ * `docs/specs/ciclo-real-y-por-lado`, W2.6) viajan acá porque son la ENTRADA del cursor
+ * (`resolveCycleCursor`): sin ellas `day_of_week` se sigue leyendo como ISODOW y un ciclo de 3 días
+ * sólo "tiene entreno" lunes/martes/miércoles. `exercise_type_override` + `exercises(exercise_type)`
+ * son el tipo EFECTIVO del bloque (R5), que decide el ejecutor y los reemplazos.
+ */
+export type ActiveProgramRow = Omit<Tables<'workout_programs'>, 'program_structure_type'> & {
+    /**
+     * ESTRECHADO EN EL BOUNDARY: la columna es `text` en `database.types.ts`, pero el dominio sólo
+     * conoce estas dos estructuras (`null` = weekly legacy). Se estrecha acá, en la query, para que
+     * ningún consumidor (`ActiveProgramSection`, `week-status.queries`, el cursor) tenga que castear.
+     */
+    program_structure_type: 'weekly' | 'cycle' | null
     workout_plans: Array<
         Pick<Tables<'workout_plans'>, 'id' | 'title' | 'day_of_week' | 'week_variant' | 'assigned_date'> & {
             workout_blocks: Array<
-                Pick<Tables<'workout_blocks'>, 'id' | 'sets' | 'reps' | 'exercise_id'> & {
-                    exercises: Pick<Tables<'exercises'>, 'id' | 'name'> | null
+                Pick<Tables<'workout_blocks'>, 'id' | 'sets' | 'reps' | 'exercise_id' | 'exercise_type_override'> & {
+                    exercises: Pick<Tables<'exercises'>, 'id' | 'name' | 'exercise_type'> | null
                 }
             >
         }
@@ -90,9 +105,10 @@ export const getActiveProgram = cache(async (clientId: string) => {
         .select(
             `
             id, name, start_date, end_date, weeks_to_repeat, ab_mode, program_phases,
+            program_structure_type, cycle_length, start_date_flexible,
             workout_plans (
                 id, title, day_of_week, week_variant, assigned_date,
-                workout_blocks ( id, sets, reps, exercise_id, exercises ( id, name ) )
+                workout_blocks ( id, sets, reps, exercise_id, exercise_type_override, exercises ( id, name, exercise_type ) )
             )
         `
         )
@@ -163,6 +179,17 @@ export type RecentWorkoutLog = {
     metadata?: WorkoutSkipMetadata | null
 }
 
+/**
+ * LECTURA ÚNICA de logs (spec `docs/specs/ciclo-real-y-por-lado`, R10): 30 días, `order by logged_at
+ * desc`, `limit 200`. Es la que alimenta `buildCycleCompletions` → `resolveCycleCursor`, y la que RN
+ * espeja tal cual (W3.7b) para que "hoy toca" no pueda divergir entre la PWA y la app.
+ *
+ * `target_date` NO es columna de `workout_logs` (pedirla devuelve `PGRST204`): en LECTURA la fecha de
+ * la completitud es el día Santiago de `logged_at` (R11); el `target_date` del ítem encolado sólo
+ * manda en ESCRITURA (`workout-offline-queue.ts`). `block_id`, `set_number`, `logged_at`, `metadata` y
+ * el join `workout_blocks(plan_id)` son las columnas que exige el motor; `id`, `weight_kg` y
+ * `reps_done` las suman los otros consumidores de esta misma lectura (records, historial, hero).
+ */
 export const getRecentWorkoutLogs = cache(async (clientId: string): Promise<RecentWorkoutLog[]> => {
     const supabase = await createClient()
     const { iso } = getTodayInSantiago()

@@ -6,6 +6,7 @@ import { WorkoutLogSetSchema } from '@eva/schemas'
 import { getTodayInSantiago, getSantiagoUtcBoundsForDay } from '@/lib/date-utils'
 import { STUDENT_ACCESS_COPY } from '@/lib/student-access'
 import { resolveStudentAccessForClient } from '@/lib/student-access.server'
+import { capturePostHogServerEvent } from '@/lib/posthog/server-capture'
 import { PAST_SET_NOT_FOUND_ERROR, validateTargetDate } from '@eva/workout-engine'
 
 export type LogState = {
@@ -146,6 +147,15 @@ export async function logSetAction(
 
     let dbError
 
+    // W2.3 (ciclo real y por lado): la key `metadata` viaja SÓLO cuando el payload la trajo. Antes se
+    // escribía `?? null`, así que re-guardar una serie desde una superficie que no manda la key (el
+    // upsert de hoy sin el campo, el modo solo-UPDATE de un día pasado, un item legacy de la cola)
+    // BORRABA el jsonb entero: el hold por lado `{left_sec, right_sec}` de movilidad y, desde este
+    // tren, el desglose `{left_reps, right_reps}` de fuerza. Omitir la key deja la columna intacta.
+    // Vaciar un lado sigue siendo posible y explícito: mandar `{left_reps: 10, right_reps: null}`
+    // reemplaza el jsonb con ese objeto (el zod acepta `null` por lado justamente para eso).
+    const metadataPayload = parsed.data.metadata
+
     const payloadValues = {
         weight_kg: parsed.data.weight_kg ?? null,
         reps_done: parsed.data.reps_done ?? null,
@@ -162,8 +172,9 @@ export async function logSetAction(
         substituted_exercise_id: parsed.data.substituted_exercise_id ?? null,
         substituted_exercise_name: parsed.data.substituted_exercise_name ?? null,
         substitution_reason: parsed.data.substitution_reason ?? null,
-        // Hold POR LADO (E3.2): jsonb {left_sec, right_sec}; null en todo log que no sea per_side.
-        metadata: parsed.data.metadata ?? null,
+        // Hold POR LADO (E3.2) + reps por lado de fuerza (R3): jsonb. La key sólo existe cuando el
+        // payload la trajo (W2.3) — sin ella el UPDATE no toca la columna y el INSERT la deja NULL.
+        ...(metadataPayload !== undefined ? { metadata: metadataPayload } : {}),
     }
 
     if (existingRows && existingRows.length > 0) {
@@ -240,6 +251,14 @@ export async function logSetAction(
         return { error: dbError.message, code: 'db' }
     }
 
+    // W2.4 · Auto-start del programa flexible (R14/R23). DESPUÉS de que la serie quedó guardada y
+    // nunca antes: si la RPC falla, el registro del alumno ya está en la base. En modo edición de un
+    // día PASADO no corre — la RPC sólo acepta HOY (R14) y una serie de otro día no significa que el
+    // alumno esté empezando el programa hoy.
+    if (!pastEditMode) {
+        await autoStartFlexibleProgram(supabase, user.id, parsed.data.block_id)
+    }
+
     // Sin revalidatePath por serie: la UI del exec es optimista + write-through y el resumen usa
     // sessionLogs en memoria. Revalidar el layout entero en cada serie devolvía payload RSC del
     // layout → parpadeo + salto de scroll (multiplicado N veces por el flush de la cola). Next 16
@@ -247,6 +266,87 @@ export async function logSetAction(
     // el flush offline mantiene su router.refresh() al reconectar. La invalidación explícita ocurre
     // UNA vez al FINALIZAR (revalidateWorkoutViewAction), no por serie.
     return { success: true }
+}
+
+/**
+ * Auto-start del programa de inicio flexible (W2.4 · tren «ciclo real y por lado», R14/R23).
+ *
+ * Un programa creado con `start_date_flexible = true` nace SIN fecha: el alumno la fija con «Empezar
+ * hoy» (`startWorkoutProgramAction`) o, si se saltea el hero y entra directo a entrenar, con la
+ * PRIMERA serie que registra. Acá va esa segunda entrada.
+ *
+ * Por qué una lectura propia: el action sólo conoce el `block_id`, así que resuelve
+ * bloque → plan → programa en UN solo request (PostgREST anidado, PK indexada). No se puede confiar
+ * en un flag del `FormData`: el estado del programa es autoridad del servidor, nunca del body.
+ *
+ * Por qué no se repite: en cuanto la RPC escribe, `start_date` deja de ser NULL y la lectura de la
+ * serie siguiente ya no entra al `if`. Si dos series compiten, la RPC es idempotente (R28) y la
+ * segunda vuelve con `started = false` → el evento se emite UNA vez (R23).
+ *
+ * Best-effort de punta a punta: cualquier fallo (lectura, RPC, `coach_account_paused`, red) se traga
+ * en silencio. El gate real de cuenta pausada del guardado es el tipado de arriba
+ * (`resolveStudentAccessForClient`), que ya corrió; acá romper el flujo sería perder la serie.
+ */
+async function autoStartFlexibleProgram(
+    supabase: Awaited<ReturnType<typeof createClient>>,
+    clientId: string,
+    blockId: string,
+): Promise<void> {
+    try {
+        const { data } = await supabase
+            .from('workout_blocks')
+            .select(
+                'workout_plans ( workout_programs ( id, start_date, start_date_flexible, program_structure_type ) )'
+            )
+            .eq('id', blockId)
+            .maybeSingle()
+
+        const plan = unwrapEmbedded<{ workout_programs: unknown }>(
+            (data as { workout_plans?: unknown } | null)?.workout_plans
+        )
+        const program = unwrapEmbedded<FlexibleProgramRow>(plan?.workout_programs)
+        // `!== true` / `!= null` a propósito: sólo el par exacto (flag prendido, fecha ausente) llama
+        // la RPC. Un programa no flexible o ya iniciado no se toca (matriz LIVE 6a/6b).
+        if (!program || program.start_date_flexible !== true || program.start_date != null) return
+
+        const { data: rpcData, error } = await supabase.rpc('client_start_workout_program' as never, {
+            p_program_id: program.id,
+        } as never)
+        if (error) return
+
+        // `RETURNS TABLE` ⇒ PostgREST devuelve un array de una fila (R23: start_date, end_date, started).
+        const row = unwrapEmbedded<StartWorkoutProgramRow>(rpcData as unknown)
+        if (row?.started !== true) return
+
+        await capturePostHogServerEvent({
+            event: 'program_started_by_client',
+            distinctId: clientId,
+            properties: {
+                program_id: program.id,
+                structure: program.program_structure_type ?? null,
+                via: 'auto',
+            },
+        })
+    } catch {
+        // Nunca romper el guardado de la serie por el auto-start.
+    }
+}
+
+/** Fila del `RETURNS TABLE` de `client_start_workout_program` (R23). */
+type StartWorkoutProgramRow = { start_date: string | null; end_date: string | null; started: boolean }
+
+/** Columnas del programa que deciden el auto-start. */
+type FlexibleProgramRow = {
+    id: string
+    start_date: string | null
+    start_date_flexible: boolean | null
+    program_structure_type: string | null
+}
+
+/** PostgREST devuelve el embed to-one como objeto y el `RETURNS TABLE` como array: normaliza ambos. */
+function unwrapEmbedded<T>(value: unknown): T | null {
+    if (Array.isArray(value)) return (value[0] as T | undefined) ?? null
+    return (value as T | null | undefined) ?? null
 }
 
 /**

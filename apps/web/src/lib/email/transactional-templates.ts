@@ -93,11 +93,18 @@ ${welcomeLine}
 
 // ── Program Assigned ─────────────────────────────────────────────────────────
 
+/**
+ * R20 («Ciclo real y por lado»): con «Inicio flexible» el programa nace sin `start_date` — la pone
+ * el alumno al empezar. La fila «Inicio» no puede quedar vacía ni decir «null».
+ */
+export const PROGRAM_START_WHENEVER_LABEL = 'Empieza cuando quieras'
+
 type ProgramAssignedContext = {
     brandName: string
     clientName: string
     programName: string
-    startDate: string
+    /** `null` = programa flexible que el alumno todavía no empezó (R20). */
+    startDate: string | null
     dashboardUrl: string
     /** White-label (W2): logo/color del coach para el header + CTA. Standalone con tier válido. */
     logoUrl?: string | null
@@ -129,7 +136,7 @@ export function buildProgramAssignedEmail(ctx: ProgramAssignedContext) {
         </tr>
         <tr>
           <td style="padding:4px 0;font-size:13px;color:#6b7280;">Inicio</td>
-          <td style="padding:4px 0;font-size:14px;font-weight:600;color:#111827;">${ctx.startDate}</td>
+          <td style="padding:4px 0;font-size:14px;font-weight:600;color:#111827;">${ctx.startDate ?? PROGRAM_START_WHENEVER_LABEL}</td>
         </tr>
       </table>
     </td>
@@ -254,6 +261,14 @@ ${featureRow('📊', 'Check-in y progreso', 'Tus alumnos reportan su semana; tú
 
 // ── Existing Coach Announcement ───────────────────────────────────────────────
 
+/**
+ * W4.7 («Ciclo real y por lado»): copy canónico del acceso del alumno. Play sigue en closed testing
+ * y la entrada real es el navegador (o la app de iOS), así que ninguna superficie del coach vuelve a
+ * decir «baja EVA» ni a pedirle al alumno que instale algo.
+ */
+export const STUDENT_ACCESS_NO_INSTALL_LABEL =
+    'Tu alumno entra desde el navegador con tu link o desde la app en iOS. No necesita instalar nada.'
+
 type ExistingCoachAnnouncementContext = {
     coachName: string
     currentTier: string
@@ -272,7 +287,7 @@ ${badge('Anuncio · Junio 2026')}
   Te escribimos para contarte dos cosas:
 </p>
 
-${featureRow('📱', 'EVA pronto en iOS y Android', 'Estamos preparando la app nativa de EVA para las tiendas. Pronto vas a poder descargarla y que tus alumnos la instalen como cualquier app.')}
+${featureRow('📱', 'Tu alumno no necesita instalar nada', `${STUDENT_ACCESS_NO_INSTALL_LABEL} La app de Android está en camino.`)}
 ${featureRow('🛠️', 'Mejoras estructurales en curso', 'Durante estos días vas a notar algunos cambios internos mientras dejamos todo listo para el lanzamiento. Tu cuenta, tus alumnos y tus datos están seguros y todo sigue operativo.')}
 
 ${divider()}

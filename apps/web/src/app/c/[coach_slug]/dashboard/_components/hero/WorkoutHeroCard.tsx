@@ -1,8 +1,10 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { Check, Play } from 'lucide-react'
+import { startWorkoutProgramAction } from '../../_actions/start-program.actions'
 import { Card } from '@/components/ui/card'
 import { buttonVariants } from '@/components/ui/button'
 import { ProgressRing } from '@/components/ui/progress-ring'
@@ -30,6 +32,16 @@ interface WorkoutHeroCardProps {
     totalSetsLogged: number
     baseLoggedPerBlock: Record<string, number>
     coachSlug: string
+    /** Eyebrow del hero; default «Hoy entrenas». En ciclo lo resuelve `HeroSection` desde el cursor. */
+    eyebrow?: string
+    /**
+     * Programa flexible SIN fecha (`programState = 'not_started'`, R30): el CTA pasa a ser «Empezar
+     * hoy» — única acción (R14) — y llama `startWorkoutProgramAction`; al volver, el hero se
+     * refresca y muestra «Hoy toca · Día 1 de N». `null` = CTA de entrenar de siempre.
+     */
+    startProgram?: { programId: string } | null
+    /** Sólo con el día cerrado en ciclo: «Próximo: Día 3 de 3» bajo «Entrenamiento completado». */
+    nextLabel?: string | null
 }
 
 export function WorkoutHeroCard({
@@ -41,14 +53,35 @@ export function WorkoutHeroCard({
     totalSetsLogged,
     baseLoggedPerBlock,
     coachSlug,
+    eyebrow,
+    startProgram = null,
+    nextLabel = null,
 }: WorkoutHeroCardProps) {
     const { t } = useTranslation()
     const base = useBasePath(`/c/${coachSlug}`)
+    const router = useRouter()
     const { launch, prefetch, morph } = useWorkoutLaunch()
     const workoutHref = `${base}/workout/${planId}`
     // QA7: entreno de HOY ya completado → la "ventanita" de doble intención (Revisar y editar / Repetir
     // hoy) en vez de ir directo al registro; el morph sale de la opción elegida. Antes se abría directo.
     const [sheetOpen, setSheetOpen] = useState(false)
+    // «Empezar hoy» (W2.11): la RPC fija `start_date` = hoy; `not_startable` NO es un error para el
+    // alumno (otra sesión ya lo empezó, o dejó de ser flexible) ⇒ se refresca y el hero pinta el
+    // estado real. La pausa del coach y los fallos de red sí se muestran, sin 500 opaco (R17).
+    const [starting, startTransition] = useTransition()
+    const [startError, setStartError] = useState<string | null>(null)
+    const handleStartProgram = () => {
+        if (!startProgram || starting) return
+        setStartError(null)
+        startTransition(async () => {
+            const res = await startWorkoutProgramAction({ coachSlug, programId: startProgram.programId })
+            if (res.success || res.code === 'not_startable') {
+                router.refresh()
+                return
+            }
+            setStartError(res.error ?? 'No se pudo empezar el programa. Intenta de nuevo.')
+        })
+    }
 
     const show = blocks.slice(0, 4)
     const more = blocks.length - show.length
@@ -69,12 +102,13 @@ export function WorkoutHeroCard({
                         <Check className="h-7 w-7" />
                     </span>
                     <p className="font-display text-sm font-black text-on-dark">Entrenamiento completado</p>
+                    {nextLabel ? <p className="text-xs font-semibold text-on-dark-muted">Próximo: {nextLabel}</p> : null}
                 </button>
             ) : null}
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                        <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-sport-400">Hoy entrenas</span>
+                        <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-sport-400">{eyebrow ?? 'Hoy entrenas'}</span>
                         <InfoTooltip content={t('section.workoutHero')} />
                     </div>
                     <h2 className="mt-1.5 truncate font-display text-[23px] font-black leading-tight tracking-[-0.02em] text-on-dark">
@@ -103,6 +137,25 @@ export function WorkoutHeroCard({
                 empezar a entrenar. Mismo botón, mismo destino y mismos estados; solo cambia la posición,
                 y el ritmo vertical se conserva pasando el margen de 16 al CTA (la lista pierde su `mb-4`
                 porque ya no es la que separa del botón). */}
+            {startProgram ? (
+                <div className="mt-4 flex flex-col gap-2">
+                    <button
+                        type="button"
+                        onClick={handleStartProgram}
+                        disabled={starting}
+                        aria-busy={starting}
+                        className={cn(buttonVariants({ variant: 'sport', size: 'lg' }), 'w-full')}
+                    >
+                        <Play className="h-5 w-5" />
+                        {starting ? 'Empezando…' : 'Empezar hoy'}
+                    </button>
+                    {startError ? (
+                        <p role="alert" className="text-xs font-semibold text-ember-400">
+                            {startError}
+                        </p>
+                    ) : null}
+                </div>
+            ) : (
             <div className="mt-4 flex gap-2.5">
                 <Link
                     href={workoutHref}
@@ -130,6 +183,7 @@ export function WorkoutHeroCard({
                     {isAlreadyLogged ? 'Ver registro' : liveLogged > 0 ? 'Continuar' : 'Empezar entrenamiento'}
                 </Link>
             </div>
+            )}
 
             <ul className="mt-4 flex flex-col gap-px overflow-hidden rounded-control bg-white/[0.04]">
                 {show.map((b) => {

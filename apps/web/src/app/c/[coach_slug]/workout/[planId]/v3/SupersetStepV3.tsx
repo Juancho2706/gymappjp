@@ -16,6 +16,7 @@ import {
     type RoundLogLike,
     type OptimisticLogPayload,
     type RepeatSeedEntry,
+    SIDE_LABEL,
 } from '@eva/workout-engine'
 import { computeEffectiveTarget } from '@/lib/workout/progression'
 import { effectiveExerciseType } from '@/lib/workout-exercise-type'
@@ -279,6 +280,10 @@ export function SupersetStepV3({
                                     <span className="exec-v3-chip">
                                         {RUT_TYPE_META[m.effType].label} · {m.exercise.muscle_group}
                                     </span>
+                                    {/* Chip «Por lado»/«Alternado» (R39), rótulo del motor. */}
+                                    {m.block.side_mode && SIDE_LABEL[m.block.side_mode] ? (
+                                        <span className="exec-v3-chip">{SIDE_LABEL[m.block.side_mode]}</span>
+                                    ) : null}
                                 </div>
 
                                 {/* Cuerpo expandible: entra con animación de altura (curva estándar). */}
@@ -323,6 +328,7 @@ export function SupersetStepV3({
                                             <LogSetForm
                                                 key={`${m.block.id}-${currentRound}`}
                                                 blockId={m.block.id}
+                                                sideMode={m.block.side_mode}
                                                 setNumber={currentRound}
                                                 restTimeStr={m.block.rest_time}
                                                 warmupRestTimeStr={m.block.warmup_rest_time}
@@ -512,6 +518,7 @@ export function SupersetStepV3({
                                         <LogSetForm
                                             key={`${editVM.block.id}-edit-${log.set_number}`}
                                             blockId={editVM.block.id}
+                                            sideMode={editVM.block.side_mode}
                                             setNumber={log.set_number}
                                             restTimeStr={editVM.block.rest_time}
                                             warmupRestTimeStr={editVM.block.warmup_rest_time}

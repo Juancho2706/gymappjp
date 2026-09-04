@@ -22,7 +22,8 @@ const LABELS = ['L', 'M', 'X', 'J', 'V', 'S', 'D']
  * UNA sola card (antes eran WeekCalendar + ComplianceScoresCard separados). Estructura 1:1 con el
  * jsx: week strip arriba, divisor, anillos (Entrenos / Nutrición / Check-ins) abajo.
  *
- * Mapeo de data real: tira semanal computada igual que `WeekCalendar` (programa + planes + logs).
+ * Mapeo de data real: tira semanal computada como el viejo `WeekCalendar` (borrado en W2.14 del tren
+ * «ciclo real y por lado»; programa + planes + logs).
  * Anillos = `scores` de `getHeroComplianceBundle` (workoutScore, nutritionEngagementScore,
  * checkInScore). El diseño mostraba sublíneas mock ("12/14 días", "3 de 4") → omitidas para no
  * inventar conteos; el % real con count-up vive dentro del anillo (paridad de la métrica).
@@ -47,6 +48,12 @@ export async function MomentumCard({ userId, coachSlug }: { userId: string; coac
         userLocalDate
     )
 
+    // R12 (spec `ciclo-real-y-por-lado`): en ciclo la tira Lun→Dom es «días entrenados» — punto por
+    // día con logs del programa, sin estados asignado/pendiente — porque el cursor no vive en el
+    // calendario. Weekly sigue byte-idéntico.
+    const isCycle = program?.program_structure_type === 'cycle'
+    const programPlanIds = new Set(program ? activePlans.filter((p) => p.program_id === program.id).map((p) => p.id) : [])
+
     const curr = userLocalDate
     const firstDay = curr.getDate() - curr.getDay() + (curr.getDay() === 0 ? -6 : 1)
     const days: MomentumDay[] = Array.from({ length: 7 }).map((_, i) => {
@@ -54,6 +61,15 @@ export async function MomentumCard({ userId, coachSlug }: { userId: string; coac
         d.setDate(firstDay + i)
         const dStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
         const dDow = d.getDay() === 0 ? 7 : d.getDay()
+        if (isCycle) {
+            const trained = logs.some(
+                (l) =>
+                    !!l.workout_blocks?.plan_id &&
+                    programPlanIds.has(l.workout_blocks.plan_id) &&
+                    getSantiagoIsoYmdForUtcInstant(l.logged_at) === dStr
+            )
+            return { label: LABELS[i], isToday: dStr === today, hasWorkout: trained, isCompleted: trained }
+        }
         // Atajo por fecha SOLO para planes sueltos (misma regla que el hero/weekPendingWorkouts): un
         // plan de programa manda por `day_of_week`, porque el builder estampaba `assigned_date =
         // start_date` en todos sus días y colisionaban en el mismo día (incidente 2026-08-25).

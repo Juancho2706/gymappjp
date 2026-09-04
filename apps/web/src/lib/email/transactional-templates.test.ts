@@ -12,6 +12,8 @@ import {
     buildProgramAssignedEmail,
     buildTrialExpiredEmail,
     buildTrialExpiryWarningEmail,
+    PROGRAM_START_WHENEVER_LABEL,
+    STUDENT_ACCESS_NO_INSTALL_LABEL,
 } from './transactional-templates'
 import { assertNoPrices, assertOnlyCatalogPrice } from './__tests__/no-prices'
 
@@ -234,5 +236,71 @@ describe('fin de prueba — el ÚNICO precio es el del catálogo', () => {
 
     it('prueba vencida', () => {
         assertOnlyCatalogPrice(buildTrialExpiredEmail(base).html, TIER_CONFIG.pro.monthlyPriceClp)
+    })
+})
+
+/**
+ * W2.1b / R20 — «Inicio flexible»: el programa nace sin `start_date` y el mail igual sale. La fila
+ * «Inicio» es la única parte del correo que cambia; el resto queda idéntico.
+ */
+describe('buildProgramAssignedEmail — fila «Inicio» con y sin fecha', () => {
+    const base = {
+        brandName: 'Studio Fuerza',
+        clientName: 'Ana',
+        programName: 'Fuerza 12 semanas',
+        dashboardUrl: `${APP_URL}/c/studio-fuerza/dashboard`,
+    }
+
+    it('la frase canónica es exactamente la del SPEC, carácter por carácter', () => {
+        expect(PROGRAM_START_WHENEVER_LABEL).toBe('Empieza cuando quieras')
+    })
+
+    it('con `startDate: null` no lanza y la fila «Inicio» trae la frase canónica', () => {
+        const html = buildProgramAssignedEmail({ ...base, startDate: null }).html
+        expect(html).toContain(`<td style="padding:4px 0;font-size:14px;font-weight:600;color:#111827;">${PROGRAM_START_WHENEVER_LABEL}</td>`)
+        expect(html).not.toContain('null')
+        expect(html).not.toContain('undefined')
+    })
+
+    it('con fecha, la fila «Inicio» sigue imprimiendo la fecha tal cual', () => {
+        const html = buildProgramAssignedEmail({ ...base, startDate: '25 de agosto' }).html
+        expect(html).toContain(`<td style="padding:4px 0;font-size:14px;font-weight:600;color:#111827;">25 de agosto</td>`)
+        expect(html).not.toContain(PROGRAM_START_WHENEVER_LABEL)
+    })
+
+    it('lo único que cambia entre los dos correos es esa celda', () => {
+        const conFecha = buildProgramAssignedEmail({ ...base, startDate: '25 de agosto' })
+        const sinFecha = buildProgramAssignedEmail({ ...base, startDate: null })
+        expect(sinFecha.subject).toBe(conFecha.subject)
+        expect(conFecha.html.replace('>25 de agosto</td>', `>${PROGRAM_START_WHENEVER_LABEL}</td>`)).toBe(sinFecha.html)
+    })
+
+    it('sin fecha tampoco lleva precios', () => {
+        assertNoPrices(buildProgramAssignedEmail({ ...base, startDate: null }).html)
+    })
+})
+
+/**
+ * W4.7 — copy canónico del acceso del alumno. Play sigue en closed testing: ninguna superficie del
+ * coach (mail admin incluido) puede pedirle al alumno que instale nada.
+ */
+describe('buildExistingCoachAnnouncementEmail — el alumno no instala nada', () => {
+    const ctx = {
+        coachName: 'Josefa',
+        currentTier: 'pro',
+        subscriptionUrl: `${APP_URL}/coach/subscription`,
+    }
+
+    it('la frase canónica es la del SPEC, carácter por carácter', () => {
+        expect(STUDENT_ACCESS_NO_INSTALL_LABEL).toBe(
+            'Tu alumno entra desde el navegador con tu link o desde la app en iOS. No necesita instalar nada.',
+        )
+    })
+
+    it('el anuncio la usa y ya no manda a los alumnos a instalar la app', () => {
+        const html = buildExistingCoachAnnouncementEmail(ctx).html
+        expect(html).toContain(STUDENT_ACCESS_NO_INSTALL_LABEL)
+        expect(html).not.toMatch(/baja EVA|descarga EVA|bajar la app/i)
+        expect(html).not.toContain('tus alumnos la instalen')
     })
 })

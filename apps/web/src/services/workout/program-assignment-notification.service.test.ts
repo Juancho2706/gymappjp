@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { PROGRAM_START_WHENEVER_LABEL } from '@/lib/email/transactional-templates'
 import {
   programAssignmentEmailIdempotencyKey,
   sendProgramAssignmentNotifications,
@@ -210,5 +211,79 @@ describe('sendProgramAssignmentNotifications', () => {
 
   it('la clave idempotente depende solo del evento persistido', () => {
     expect(programAssignmentEmailIdempotencyKey(PROGRAM_ID)).toBe(`program-assigned-mobile/${PROGRAM_ID}`)
+  })
+})
+
+/**
+ * W2.1b / R20 — «Inicio flexible» deja `start_date` en NULL hasta que el alumno empieza. El guard
+ * viejo exigía la fecha y devolvía `program_not_eligible`: el coach asignaba desde RN y el alumno no
+ * se enteraba de nada (0 emails, 0 pushes) justo en el flujo nuevo.
+ */
+describe('sendProgramAssignmentNotifications · programa flexible SIN start_date (R20)', () => {
+  const flexibleSnapshot: ProgramAssignmentNotificationSnapshot = {
+    ...baseSnapshot,
+    programs: [{ ...baseSnapshot.programs[0]!, start_date: null }],
+  }
+
+  it('despacha 1 email + 1 push (antes: 0 + 0 por program_not_eligible)', async () => {
+    const d = deps(flexibleSnapshot)
+    const pushSender = vi.fn().mockResolvedValue(undefined)
+
+    const result = await sendProgramAssignmentNotifications({
+      userId: COACH_ID,
+      programIds: [PROGRAM_ID],
+      scope: { type: 'standalone' },
+      appUrl: 'https://www.eva-app.cl',
+      now: new Date('2026-07-13T12:00:00.000Z'),
+      pushSender,
+      ...d,
+    })
+
+    expect(result).toEqual({ sentCount: 1, notifiedProgramIds: [PROGRAM_ID], skipped: [] })
+    expect(d.send).toHaveBeenCalledOnce()
+    expect(pushSender).toHaveBeenCalledOnce()
+    // El push no lee la fecha: su payload es idéntico al del programa con fecha.
+    expect(pushSender.mock.calls[0]![0]).toEqual({
+      clientId: CLIENT_ID,
+      coachSlug: 'fuerza-sur',
+      brandName: 'Fuerza Sur',
+      programName: 'Hipertrofia 4 semanas',
+      logoUrl: 'https://cdn.test/logo.png',
+    })
+  })
+
+  it('la fila «Inicio» del email dice la frase canónica, no un hueco ni «null»', async () => {
+    const d = deps(flexibleSnapshot)
+    await sendProgramAssignmentNotifications({
+      userId: COACH_ID,
+      programIds: [PROGRAM_ID],
+      scope: { type: 'standalone' },
+      appUrl: 'https://www.eva-app.cl',
+      now: new Date('2026-07-13T12:00:00.000Z'),
+      ...d,
+    })
+
+    const html: string = d.send.mock.calls[0]![0].html
+    expect(html).toContain(`>Inicio</td>`)
+    expect(html).toContain(PROGRAM_START_WHENEVER_LABEL)
+    expect(html).not.toContain('null')
+    expect(html).not.toContain('undefined')
+  })
+
+  it('con fecha, el email sale byte a byte igual que antes del cambio', async () => {
+    // El único delta permitido por R20 es el caso NULL: el programa con fecha no se toca.
+    const withDate = deps(baseSnapshot)
+    await sendProgramAssignmentNotifications({
+      userId: COACH_ID,
+      programIds: [PROGRAM_ID],
+      scope: { type: 'standalone' },
+      appUrl: 'https://www.eva-app.cl',
+      now: new Date('2026-07-13T12:00:00.000Z'),
+      ...withDate,
+    })
+
+    const html: string = withDate.send.mock.calls[0]![0].html
+    expect(html).toContain('>2026-07-13</td>')
+    expect(html).not.toContain(PROGRAM_START_WHENEVER_LABEL)
   })
 })

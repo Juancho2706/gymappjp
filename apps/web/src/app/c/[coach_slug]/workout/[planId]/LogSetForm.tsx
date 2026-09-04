@@ -41,7 +41,13 @@ import {
     derivedPaceSecPerKm,
     type TypedKeypadMode,
 } from '@eva/workout-engine'
-import type { OptimisticLogPayload } from '@eva/workout-engine'
+import {
+    buildStrengthPayload,
+    formatStrengthSetLine,
+    sideRepsFromMetadata,
+    type OptimisticLogPayload,
+} from '@eva/workout-engine'
+import { usePostHog } from 'posthog-js/react'
 import { cn } from '@/lib/utils'
 import { humanizeStudentWriteError } from '@/lib/student-access'
 import { springs } from '@/lib/animation-presets'
@@ -120,7 +126,13 @@ interface Props {
         actual_hold_sec?: number | null
         actual_avg_hr?: number | null
         /** Hold POR LADO (E0.5/E3.2): {left_sec, right_sec} — siembra los dos campos de la fila per_side. */
-        metadata?: { left_sec?: number | null; right_sec?: number | null } | null
+        metadata?: {
+            left_sec?: number | null
+            right_sec?: number | null
+            /** Reps POR LADO en fuerza (R3, tren «ciclo real y por lado»): siembra «Izq»/«Der». */
+            left_reps?: number | null
+            right_reps?: number | null
+        } | null
         /**
          * Reconciliación (informe forense 2026-07-04): la serie está en `sessionLogs` porque la reconció
          * el padre desde la COLA offline, pero el server AÚN no la confirmó. `true` ⇒ se muestra como
@@ -327,6 +339,7 @@ function StrengthLogSetForm({
     heroV3 = false,
     effortExpanded,
     onEffortExpandedChange,
+    sideMode,
 }: Props) {
     const params = useParams<{ coach_slug: string; planId: string }>()
     // Teclado numérico custom (Fase L · workstream B). Gate por puntero grueso: en desktop el input
@@ -337,7 +350,13 @@ function StrengthLogSetForm({
     const useKeypad = coarse && keypad != null
     // Captura DUAL (E2.5): en V3 + puntero grueso, mantener presionado kg/reps abre la rueda; tap =
     // teclado. En desktop (puntero fino) la rueda NO se activa (long-press es patrón táctil).
-    const useWheel = v3 && coarse
+    // Fuerza POR LADO (R3/R4, spec `ciclo-real-y-por-lado` W2.15): `per_side` y `alternating` capturan
+    // igual — DOS reps («Izq»/«Der») y UN peso. `reps_done` guarda el mínimo y el desglose viaja en
+    // `metadata {left_reps, right_reps}`; la fórmula es la del motor (`buildStrengthPayload`), la misma
+    // que RN. Sin `side_mode` la fila es byte-idéntica a la de siempre.
+    const perSideReps = sideMode === 'per_side' || sideMode === 'alternating'
+    // La rueda dual (kg/reps) no sabe de lados: en fuerza por lado se usa el teclado de 3 pasos.
+    const useWheel = v3 && coarse && !perSideReps
     // Escala de RIR: en V3 baja a 0 (RIR 0 = al fallo). En V2 queda en 1 (comportamiento histórico).
     const rirMin = v3 ? 0 : 1
     // Día objetivo (Ola 1): si el ejecutor se abrió con `?fecha=…` (editar un día pasado), viaja en
@@ -378,7 +397,8 @@ function StrengthLogSetForm({
         const q = readQueuedFor(blockId, setNumber)
         if (q) {
             setQueuedInit(q)
-            setChipValues({ w: q.weightKg, r: q.repsDone })
+            const qSides = sideRepsFromMetadata(q.metadata)
+            setChipValues({ w: q.weightKg, r: q.repsDone, l: qSides?.left ?? null, rr: qSides?.right ?? null })
             setRpe(q.rpe ?? null)
             setRir(q.rir != null && q.rir >= rirMin && q.rir <= 10 ? q.rir : null)
             setNote(q.note ?? '')
@@ -424,7 +444,11 @@ function StrengthLogSetForm({
     const reducedMotion = useReducedMotion()
     const weightRef = useRef<HTMLInputElement>(null)
     const repsRef = useRef<HTMLInputElement>(null)
+    /** Reps del lado DERECHO (sólo montado con `perSideReps`); `repsRef` pasa a ser el izquierdo. */
+    const repsRightRef = useRef<HTMLInputElement>(null)
     const formRef = useRef<HTMLFormElement>(null)
+    // Analítica de producto (sin PII): `set_logged_per_side` sólo cuando la serie lleva desglose.
+    const ph = usePostHog()
     // Serie VACÍA no cuenta (paridad RN `SetRow.tsx`): flag reactivo de "kg y reps sin nada". Los inputs
     // son uncontrolled, así que se sincroniza desde los MISMOS eventos `input` nativos que alimentan el
     // borrador (tecleo, keypad, rueda) más las mutaciones por ref (prefill "= última vez"). Con precarga
@@ -433,7 +457,8 @@ function StrengthLogSetForm({
     const syncEmptyCapture = () => {
         const w = weightRef.current?.value.trim() ?? ''
         const r = repsRef.current?.value.trim() ?? ''
-        setEmptyCapture(w === '' && r === '')
+        const rr = perSideReps ? (repsRightRef.current?.value.trim() ?? '') : ''
+        setEmptyCapture(w === '' && r === '' && rr === '')
     }
     /** Id estable del hint de serie vacía (`aria-describedby` del CTA inerte). Único por fila. */
     const emptyHintId = `empty-capture-${blockId}-${setNumber}`
@@ -482,7 +507,13 @@ function StrengthLogSetForm({
     const [note, setNote] = useState(existingLog?.note ?? '')
     const [noteOpen, setNoteOpen] = useState(false)
     // Respaldo de valores para el chip recap mientras el prop existingLog se propaga (o pendiente de cola).
-    const [chipValues, setChipValues] = useState<{ w: number | null; r: number | null } | null>(null)
+    const [chipValues, setChipValues] = useState<{
+        w: number | null
+        r: number | null
+        /** Reps por lado de la serie recién cerrada (fuerza por lado); `null` sin desglose. */
+        l?: number | null
+        rr?: number | null
+    } | null>(null)
     // Captura DUAL (E2.5): estado de la rueda long-press. `wheelInit` congela los valores anteriores
     // (leídos de los inputs al abrir) para centrar la rueda.
     const [wheelOpen, setWheelOpen] = useState(false)
@@ -517,7 +548,6 @@ function StrengthLogSetForm({
         if (reopenNonce == null) return
         setEditing(true)
         setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 60)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [reopenNonce])
 
     // Autosave de BORRADOR (BUG 2): persiste lo TIPEADO-SIN-CONFIRMAR para que atrás/reload/kill no lo
@@ -550,13 +580,19 @@ function StrengthLogSetForm({
             captureDraft({ r: repsRef.current?.value ?? '' })
             syncEmptyCapture()
         }
+        // Lado derecho (fuerza por lado): sólo alimenta el flag de serie vacía; el borrador local no
+        // guarda el segundo lado (seguimiento B19 — la cola offline sí lo conserva una vez confirmado).
+        const rrEl = repsRightRef.current
+        const onRepsRight = () => syncEmptyCapture()
         wEl?.addEventListener('input', onWeight)
         rEl?.addEventListener('input', onReps)
+        rrEl?.addEventListener('input', onRepsRight)
         // Estado inicial: `defaultValue` + borrador rehidratado (su efecto corre antes que éste).
         syncEmptyCapture()
         return () => {
             wEl?.removeEventListener('input', onWeight)
             rEl?.removeEventListener('input', onReps)
+            rrEl?.removeEventListener('input', onRepsRight)
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isLogged, editing, existingLog, queuedInit])
@@ -642,18 +678,28 @@ function StrengthLogSetForm({
     // Abre el teclado numérico custom en el campo tocado (solo pointer coarse + provider presente).
     // El objetivo prescrito viaja en el header del keypad (DB-5); "Listo" solo CIERRA el teclado
     // (decisión CEO 2026-07-25) — la serie se concluye con el CTA de la fila.
-    const openKeypadFor = (initialField: 'weight' | 'reps') => {
+    const openKeypadFor = (initialField: 'weight' | 'reps' | 'reps_right') => {
         if (!useKeypad || !keypad) return
         // El input pudo montar como number (punto decimal) antes del gate coarse; normaliza a coma.
         const w = weightRef.current
         if (w && w.value.includes('.')) w.value = w.value.replace('.', ',')
         keypad.openKeypad({
-            fields: [
-                // maxIntDigits 3 = tope 999 kg / 999 reps (incidente 4060 kg 2026-08-27).
-                { key: 'weight', label: 'Kg', unit: 'kg', allowDecimal: true, weightChips: true, maxIntDigits: 3 },
-                { key: 'reps', label: 'Reps', unit: 'reps', allowDecimal: false, maxIntDigits: 3 },
-            ],
-            fieldRefs: { weight: weightRef, reps: repsRef },
+            fields: perSideReps
+                ? [
+                      // Fuerza POR LADO (W0.5): peso → Izq → Der, mismos rótulos que la fila. Nunca entra
+                      // al carril tipado (R18): el commit sigue por `buildStrengthPayload`.
+                      { key: 'weight', label: 'Kg', unit: 'kg', allowDecimal: true, weightChips: true, maxIntDigits: 3 },
+                      { key: 'reps', label: 'Izq', unit: 'reps', allowDecimal: false, maxIntDigits: 3 },
+                      { key: 'reps_right', label: 'Der', unit: 'reps', allowDecimal: false, maxIntDigits: 3 },
+                  ]
+                : [
+                      // maxIntDigits 3 = tope 999 kg / 999 reps (incidente 4060 kg 2026-08-27).
+                      { key: 'weight', label: 'Kg', unit: 'kg', allowDecimal: true, weightChips: true, maxIntDigits: 3 },
+                      { key: 'reps', label: 'Reps', unit: 'reps', allowDecimal: false, maxIntDigits: 3 },
+                  ],
+            fieldRefs: perSideReps
+                ? { weight: weightRef, reps: repsRef, reps_right: repsRightRef }
+                : { weight: weightRef, reps: repsRef },
             initialFieldKey: initialField,
             target: {
                 sets: totalSets ?? null,
@@ -765,7 +811,35 @@ function StrengthLogSetForm({
         const weightRaw = formData.get('weight_kg')
         const repsRaw = formData.get('reps_done')
         const w = weightRaw === null || weightRaw === '' ? null : Number(weightRaw)
-        const r = repsRaw === null || repsRaw === '' ? null : Number(repsRaw)
+        let r = repsRaw === null || repsRaw === '' ? null : Number(repsRaw)
+        // Fuerza POR LADO (R3): `reps_done` = MÍNIMO de los lados (progresión y PR por e1RM intactos) y
+        // el desglose viaja en `metadata` — misma fórmula del motor que usa RN. El input `reps_right` no
+        // es columna: se retira del payload. Sin lados tipeados no viaja metadata (la serie sigue siendo
+        // «reps_done» a secas, nunca un `null` que borre lo guardado).
+        let sideMeta: { left_reps?: number | null; right_reps?: number | null } | null = null
+        if (perSideReps) {
+            const rightRaw = formData.get('reps_right')
+            const side = buildStrengthPayload(
+                {
+                    weight: weightRaw == null ? '' : String(weightRaw),
+                    reps_left: repsRaw == null ? '' : String(repsRaw),
+                    reps_right: rightRaw == null ? '' : String(rightRaw),
+                },
+                blockId,
+                setNumber,
+                sideMode,
+            )
+            formData.delete('reps_right')
+            if (side.metadata) {
+                sideMeta = side.metadata
+                r = side.repsDone
+                if (r == null) formData.delete('reps_done')
+                else formData.set('reps_done', String(r))
+                formData.set('metadata', JSON.stringify(sideMeta))
+            } else {
+                formData.delete('metadata')
+            }
+        }
 
         // Serie VACÍA no cuenta: sin NINGÚN eje de captura no se encola ni se envía nada (una fila con
         // kg y reps NULL se escribía igual y contaba como serie hecha). El CTA ya está inerte; esto es
@@ -785,6 +859,8 @@ function StrengthLogSetForm({
             rpe,
             rir,
             note: noteTrimmed,
+            // Reps POR LADO: el desglose viaja EN el item → el flush reenvía exactamente lo tipeado.
+            metadata: sideMeta,
             planId: params.planId,
             coachSlug: params.coach_slug,
             timestamp: Date.now(),
@@ -815,7 +891,8 @@ function StrengthLogSetForm({
             setPrCelebrateOn(true)
             celebrate('pr_detectado', { isRealPR: true })
         }
-        setChipValues({ w, r })
+        setChipValues({ w, r, l: sideMeta?.left_reps ?? null, rr: sideMeta?.right_reps ?? null })
+        if (sideMeta) ph?.capture('set_logged_per_side', { block_id: blockId, side_mode: sideMode })
         // BUG 2: la serie ya está en la cola (la verdad) → el borrador cumplió su función, se limpia.
         clearDraft(params.planId, blockId, setNumber)
 
@@ -857,6 +934,8 @@ function StrengthLogSetForm({
             rpe,
             rir,
             note: noteTrimmed,
+            // El optimismo del padre conserva el desglose por lado (chip «10 / 10» sin esperar al server).
+            ...(sideMeta ? { metadata: sideMeta } : {}),
         })
 
         // Devolver la promesa mantiene abierta la transición del form mientras dura la petición: el
@@ -868,6 +947,18 @@ function StrengthLogSetForm({
     if (collapsed) {
         const dispW = existingLog?.weight_kg ?? chipValues?.w ?? null
         const dispR = existingLog?.reps_done ?? chipValues?.r ?? null
+        // Fuerza POR LADO (R19 opción a): «20 kg × 10 / 10» lo arma el motor (`formatStrengthSetLine`)
+        // SÓLO con desglose; sin lados la línea es la de siempre. `formatLoggedSetLine('strength')`
+        // sigue en `null`, así que over/under, «PC» y RPE/RIR no cambian de rama.
+        const chipSideMeta =
+            sideRepsFromMetadata(existingLog?.metadata) != null
+                ? existingLog?.metadata
+                : chipValues?.l != null || chipValues?.rr != null
+                  ? { left_reps: chipValues?.l ?? null, right_reps: chipValues?.rr ?? null }
+                  : null
+        const sideLine = perSideReps
+            ? formatStrengthSetLine({ weight_kg: dispW, reps_done: dispR, metadata: chipSideMeta })
+            : null
         // Se celebra sólo la serie recién cerrada en esta sesión (refs en false para logs cargados).
         const isPending = syncStatus === 'pending'
         const settleAnim = !isPending && settleRef.current && !reducedMotion
@@ -907,9 +998,13 @@ function StrengthLogSetForm({
                     {setNumber}
                 </span>
                 <span className="font-mono text-[13px] font-bold tabular-nums text-on-dark">
-                    {dispW ?? '–'}
-                    <span className="text-on-dark-muted"> × </span>
-                    {dispR ?? '–'}
+                    {sideLine ?? (
+                        <>
+                            {dispW ?? '–'}
+                            <span className="text-on-dark-muted"> × </span>
+                            {dispR ?? '–'}
+                        </>
+                    )}
                 </span>
                 {rpe != null && (
                     <span className="font-mono text-[11px] font-semibold text-on-dark-muted">RPE {rpe}</span>
@@ -973,6 +1068,14 @@ function StrengthLogSetForm({
         ? (weightDefaultNum != null ? formatWeightEsCl(weightDefaultNum) : '')
         : (weightDefaultNum ?? '')
     const repsDefaultValue = existingLog?.reps_done ?? queuedInit?.repsDone ?? seedValues?.repsDone ?? ''
+    // Fuerza POR LADO: siembra «Izq»/«Der» desde el log, la cola o la semilla (misma prioridad que reps).
+    // Sin desglose (serie vieja guardada como un solo número) el lado izquierdo hereda `reps_done`.
+    const sideDefault =
+        sideRepsFromMetadata(existingLog?.metadata) ??
+        sideRepsFromMetadata(queuedInit?.metadata) ??
+        sideRepsFromMetadata(seedValues?.metadata)
+    const repsLeftDefault = sideDefault?.left ?? repsDefaultValue
+    const repsRightDefault = sideDefault?.right ?? ''
 
     // ── Captura HERO de fuerza (informe 03 · BLOCKER). Reusa los mismos inputs (refs/handlers/gesto),
     //    estado rpe/rir y `handleSubmit` — el motor NO cambia, sólo el render. Se renderiza para TODA
@@ -1044,9 +1147,9 @@ function StrengthLogSetForm({
                                 type={useKeypad ? 'text' : 'number'}
                                 {...(useKeypad ? { readOnly: true } : { min: '0' })}
                                 inputMode={useKeypad ? 'none' : 'numeric'}
-                                defaultValue={repsDefaultValue}
+                                defaultValue={perSideReps ? repsLeftDefault : repsDefaultValue}
                                 placeholder="-"
-                                aria-label="Repeticiones"
+                                aria-label={perSideReps ? 'Repeticiones lado izquierdo' : 'Repeticiones'}
                                 onFocus={useKeypad ? () => openKeypadFor('reps') : undefined}
                                 onPointerDown={useWheel ? onFieldPointerDown : undefined}
                                 onPointerMove={useWheel ? onFieldPointerMove : undefined}
@@ -1056,13 +1159,39 @@ function StrengthLogSetForm({
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
                                         e.preventDefault()
-                                        e.currentTarget.blur()
+                                        // Por lado: Enter pasa al lado derecho; si no, cierra el teclado.
+                                        if (perSideReps) repsRightRef.current?.focus()
+                                        else e.currentTarget.blur()
                                     }
                                 }}
                                 className={cn('exec-v3-valinput', useWheel && 'exec-v3-touchnone')}
                             />
-                            <span className="exec-v3-valu">REPS</span>
+                            <span className="exec-v3-valu">{perSideReps ? 'IZQ' : 'REPS'}</span>
                         </label>
+                        {perSideReps ? (
+                            // Fuerza POR LADO (mockup B): tercer tile «Der», mismo tamaño y mismo teclado.
+                            <label className="exec-v3-val">
+                                <input
+                                    ref={repsRightRef}
+                                    name="reps_right"
+                                    type={useKeypad ? 'text' : 'number'}
+                                    {...(useKeypad ? { readOnly: true } : { min: '0' })}
+                                    inputMode={useKeypad ? 'none' : 'numeric'}
+                                    defaultValue={repsRightDefault}
+                                    placeholder="-"
+                                    aria-label="Repeticiones lado derecho"
+                                    onFocus={useKeypad ? () => openKeypadFor('reps_right') : undefined}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault()
+                                            e.currentTarget.blur()
+                                        }
+                                    }}
+                                    className="exec-v3-valinput"
+                                />
+                                <span className="exec-v3-valu">DER</span>
+                            </label>
+                        ) : null}
                     </div>
 
                     {/* Panel de esfuerzo compacto y OPCIONAL — COLAPSADO por default (QA2 hallazgo 3): fila
@@ -1352,15 +1481,18 @@ function StrengthLogSetForm({
                         </label>
                         <span className={cn('shrink-0 text-on-dark-muted', isActive ? 'pb-3 text-xl' : 'pb-2 text-base')}>×</span>
                         <label className="flex-1">
-                            <span className="mb-1 block text-[9.5px] font-bold uppercase tracking-[0.08em] text-on-dark-muted">Reps</span>
+                            <span className="mb-1 block text-[9.5px] font-bold uppercase tracking-[0.08em] text-on-dark-muted">
+                                {perSideReps ? 'Izq' : 'Reps'}
+                            </span>
                             <input
                                 ref={repsRef}
                                 name="reps_done"
                                 type={useKeypad ? 'text' : 'number'}
                                 {...(useKeypad ? { readOnly: true } : { min: '0' })}
                                 inputMode={useKeypad ? 'none' : 'numeric'}
-                                defaultValue={repsDefaultValue}
+                                defaultValue={perSideReps ? repsLeftDefault : repsDefaultValue}
                                 placeholder="-"
+                                aria-label={perSideReps ? 'Repeticiones lado izquierdo' : undefined}
                                 onFocus={useKeypad ? () => openKeypadFor('reps') : undefined}
                                 onPointerDown={useWheel ? onFieldPointerDown : undefined}
                                 onPointerMove={useWheel ? onFieldPointerMove : undefined}
@@ -1368,15 +1500,43 @@ function StrengthLogSetForm({
                                 onPointerCancel={useWheel ? onFieldPointerCancel : undefined}
                                 onPointerLeave={useWheel ? onFieldPointerCancel : undefined}
                                 // Enter cierra el teclado (blur) sin submitear — deja meter RPE/RIR antes de "Listo".
+                                // Por lado: pasa el foco al lado derecho.
                                 onKeyDown={(e) => {
                                     if (e.key === 'Enter') {
                                         e.preventDefault()
-                                        e.currentTarget.blur()
+                                        if (perSideReps) repsRightRef.current?.focus()
+                                        else e.currentTarget.blur()
                                     }
                                 }}
                                 className={inputClass}
                             />
                         </label>
+                        {perSideReps ? (
+                            <>
+                                <span className={cn('shrink-0 text-on-dark-muted', isActive ? 'pb-3 text-xl' : 'pb-2 text-base')}>/</span>
+                                <label className="flex-1">
+                                    <span className="mb-1 block text-[9.5px] font-bold uppercase tracking-[0.08em] text-on-dark-muted">Der</span>
+                                    <input
+                                        ref={repsRightRef}
+                                        name="reps_right"
+                                        type={useKeypad ? 'text' : 'number'}
+                                        {...(useKeypad ? { readOnly: true } : { min: '0' })}
+                                        inputMode={useKeypad ? 'none' : 'numeric'}
+                                        defaultValue={repsRightDefault}
+                                        placeholder="-"
+                                        aria-label="Repeticiones lado derecho"
+                                        onFocus={useKeypad ? () => openKeypadFor('reps_right') : undefined}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault()
+                                                e.currentTarget.blur()
+                                            }
+                                        }}
+                                        className={inputClass}
+                                    />
+                                </label>
+                            </>
+                        ) : null}
                     </div>
                 </div>
 

@@ -17,12 +17,16 @@ import { useWorkoutLaunch } from '../launch/WorkoutLaunchMorph'
 import { getTodayInSantiago } from '@/lib/date-utils'
 import type { WeekDayStatus } from '../../_data/weekPendingWorkouts'
 
-const DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
-
 export type WorkoutPlanCardItem = {
     id: string
     title: string
     day_of_week: number | null
+    /** Estructura del programa: en `cycle` no hay fechas de calendario ni «Pendiente» (R12). */
+    mode: 'weekly' | 'cycle'
+    /** `Lun` / `Día 1` — `programDayLabel`, la única etiqueta de día del producto. */
+    dayLabel: string
+    /** `Lunes` / `Día 1 de 3` (subtítulo del sheet). */
+    dayLabelLong: string
     /** Estado del día en la semana actual (derivado en el server, ver `deriveWeekWorkoutStatus`). */
     status: WeekDayStatus
     /** True si esta card es el día de HOY (mantiene el realce aunque ya esté hecho). */
@@ -78,14 +82,24 @@ export function WorkoutPlanCards({
                     // Tercera visual (spec `workout-day-in-progress`): empezado y sin cerrar.
                     const inProgress = p.status === 'in_progress'
                     const isToday = p.isToday
+                    const isCycle = p.mode === 'cycle'
                     // Sub-label de la celda: recuperado → "Hecho el jueves"; resto conserva "Día N" / "Pendiente".
+                    // En ciclo (R12) no hay calendario: hecho con su fecha real, «Hoy» o «Próximo».
                     const subLabel = inProgress
                         ? 'En progreso'
                         : pending
                           ? 'Pendiente'
                           : done && p.doneOnLabel
                             ? doneAttributionLabel(p.doneOnLabel)
-                            : `Día ${dow}`
+                            : isCycle
+                              ? done
+                                  ? p.dateIso
+                                      ? `Hecho ${fmtShortDate(p.dateIso)}`
+                                      : 'Hecho'
+                                  : isToday
+                                    ? 'Hoy'
+                                    : 'Próximo'
+                              : `Día ${dow}`
 
                     // "En progreso" toma el MISMO lenguaje visual de la celda de hoy (ramp sport,
                     // white-label) y se separa por el borde punteado: empezado ≠ cerrado. Gana sobre
@@ -114,7 +128,7 @@ export function WorkoutPlanCards({
                                               : 'text-subtle'
                                     )}
                                 >
-                                    {DAYS[dow - 1]}
+                                    {p.dayLabel}
                                 </span>
                                 {done ? (
                                     <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-[var(--success-500)]" />
@@ -218,7 +232,11 @@ export function WorkoutPlanCards({
                             : 'Ya hiciste este entrenamiento'
                     }
                     title={sheetItem.title}
-                    subtitle={`${weekdayNameFromIso(sheetItem.dateIso)} — Día ${sheetItem.day_of_week ?? 1} · ${fmtShortDate(sheetItem.dateIso)}`}
+                    subtitle={
+                        sheetItem.mode === 'cycle'
+                            ? `${sheetItem.dayLabelLong}${sheetItem.dateIso ? ` · ${fmtShortDate(sheetItem.dateIso)}` : ''}`
+                            : `${weekdayNameFromIso(sheetItem.dateIso)} — Día ${sheetItem.day_of_week ?? 1} · ${fmtShortDate(sheetItem.dateIso)}`
+                    }
                     // Sesión de HOY (celda de hoy hecha, o día recuperado HOY desde otra celda) → flujo
                     // normal de hoy (`?desde=hecho`). Solo una sesión REALMENTE pasada usa `?fecha=`.
                     // Incidente 2026-07-26: la celda de otro día recuperada HOY mandaba `?fecha=<hoy>`,
