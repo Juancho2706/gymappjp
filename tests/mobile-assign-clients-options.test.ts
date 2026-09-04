@@ -9,7 +9,7 @@ import {
 describe('mobile assign clients options', () => {
   it('inicia con hoy Santiago, cuatro semanas, inicio flexible y todos los días', () => {
     expect(defaultAssignClientsOptions('2026-07-13')).toEqual({
-      startDateFlexible: true,
+      startDateFlexible: false,
       startDate: '2026-07-13',
       durationWeeks: 4,
       selectedDays: [],

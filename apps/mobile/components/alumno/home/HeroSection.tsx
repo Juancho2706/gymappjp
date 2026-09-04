@@ -14,8 +14,30 @@ import { measureMorphOriginSafe, useTriggerMorphHide, type MorphOrigin } from '.
 import { InfoTooltip } from '../../InfoTooltip'
 import { ProgressRing } from '../../ProgressRing'
 import { DoubleIntentSheet } from './ActiveProgramSection'
-import type { HeroBlock, Plan, PlanDayView } from './types'
-import { DAY_SHORT, SUCCESS_500 } from './types'
+import type { HeroBlock, Plan, PlanDayView, ProgramCursorView } from './types'
+import { DAY_SHORT, EMBER_400, SUCCESS_500 } from './types'
+
+/**
+ * Eyebrow del hero según el cursor (R30, copys canónicos del SPEC `ciclo-real-y-por-lado`), espejo
+ * exacto del web `hero/HeroSection.tsx`:
+ * · no empezó (flexible sin fecha) → «Tu programa está listo · Día 1 de 3» + «Empezar hoy»;
+ * · ciclo `todo` → «Hoy toca · Día 2 de 3»; `in_progress` → «En progreso · Día 2 de 3»;
+ *   `done` → «Día 2 hecho · Próximo: Día 3 de 3»;
+ * · weekly → «Hoy entrenas» (idéntico a hoy).
+ */
+function heroEyebrow(cursor: ProgramCursorView | null | undefined): string | undefined {
+  if (!cursor) return undefined
+  if (cursor.programState === 'not_started') {
+    return cursor.mode === 'cycle' && cursor.todayLabel ? `Tu programa está listo · ${cursor.todayLabel}` : 'Tu programa está listo'
+  }
+  if (cursor.mode !== 'cycle' || !cursor.todayLabel) return undefined
+  if (cursor.todayState === 'in_progress') return `En progreso · ${cursor.todayLabel}`
+  if (cursor.todayState === 'done') {
+    const doneLabel = cursor.todayCycleIndex != null ? `Día ${cursor.todayCycleIndex} hecho` : `${cursor.todayLabel} hecho`
+    return cursor.nextLabel ? `${doneLabel} · Próximo: ${cursor.nextLabel}` : doneLabel
+  }
+  return `Hoy toca · ${cursor.todayLabel}`
+}
 
 // P0-2 — fondo del overlay "Entrenamiento completado". El web (WorkoutHeroCard.tsx:52)
 // usa `color-mix(in srgb, success-500 22%, surface-inverse)` sobre `surface-inverse`
@@ -49,6 +71,9 @@ export function HeroSection({
   onStart,
   onRest,
   onNoPlan,
+  cursor = null,
+  programId = null,
+  onStartProgram,
 }: {
   todayPlan: Plan | null
   nextPlan: Plan | null
@@ -60,14 +85,39 @@ export function HeroSection({
   onStart: (planId: string, origin?: MorphOrigin | null, label?: string) => void
   onRest: () => void
   onNoPlan: () => void
+  /** Cursor del programa (`derived.cursor`, W3.5/W3.8): el hero NO re-deriva «no empezó» ni «hoy toca». */
+  cursor?: ProgramCursorView | null
+  programId?: string | null
+  /** «Empezar hoy» (R14): devuelve el mensaje de error a mostrar inline, o `null` si arrancó/recargó. */
+  onStartProgram?: (programId: string) => Promise<string | null>
 }) {
   if (todayPlan) {
+    // «Empezar hoy» sólo cuando el motor dice `not_started` (flexible sin fecha, R30) y hay programa.
+    const startProgram =
+      cursor?.programState === 'not_started' && programId && onStartProgram ? { programId, onStart: onStartProgram } : null
     return (
-      <WorkoutHero plan={todayPlan} loggedByBlock={loggedByBlock} isAlreadyLogged={isAlreadyLogged} onStart={onStart} />
+      <WorkoutHero
+        plan={todayPlan}
+        loggedByBlock={loggedByBlock}
+        isAlreadyLogged={isAlreadyLogged}
+        onStart={onStart}
+        eyebrow={heroEyebrow(cursor)}
+        startProgram={startProgram}
+        nextLabel={cursor?.mode === 'cycle' && cursor.todayState === 'done' && cursor.nextLabel ? cursor.nextLabel : null}
+      />
     )
   }
   if (hasProgram) {
-    return <RestDayCard nextPlan={nextPlan} nutritionEnabled={nutritionEnabled} onRest={onRest} />
+    // En ciclo el cursor siempre resuelve un día mientras haya planes (M2: sin «Día de descanso»
+    // forzado); acá sólo se cae con programa vacío. La etiqueta del próximo sale del cursor.
+    return (
+      <RestDayCard
+        nextPlan={nextPlan}
+        nextLabel={cursor?.mode === 'cycle' && cursor.nextLabel ? cursor.nextLabel : null}
+        nutritionEnabled={nutritionEnabled}
+        onRest={onRest}
+      />
+    )
   }
   return <NoPlanCard coachName={coachName} onNoPlan={onNoPlan} />
 }
@@ -77,14 +127,34 @@ function WorkoutHero({
   loggedByBlock,
   isAlreadyLogged,
   onStart,
+  eyebrow,
+  startProgram = null,
+  nextLabel = null,
 }: {
   plan: Plan
   loggedByBlock: Map<string, number>
   isAlreadyLogged: boolean
   onStart: (planId: string, origin?: MorphOrigin | null, label?: string) => void
+  /** Eyebrow; default «Hoy entrenas». En ciclo lo resuelve `HeroSection` desde el cursor. */
+  eyebrow?: string
+  /** Programa flexible SIN fecha: el CTA pasa a «Empezar hoy» (única acción, R14). */
+  startProgram?: { programId: string; onStart: (programId: string) => Promise<string | null> } | null
+  /** Sólo con el día cerrado en ciclo: «Próximo: Día 3 de 3» bajo «Entrenamiento completado». */
+  nextLabel?: string | null
 }) {
   const { theme } = useTheme()
   const ctaRef = useRef<View>(null)
+  // «Empezar hoy» (W3.8): estado de envío + error inline (pausa del coach / red), sin crash ni alert.
+  const [starting, setStarting] = useState(false)
+  const [startError, setStartError] = useState<string | null>(null)
+  const handleStartProgram = async () => {
+    if (!startProgram || starting) return
+    setStarting(true)
+    setStartError(null)
+    const err = await startProgram.onStart(startProgram.programId)
+    setStarting(false)
+    if (err) setStartError(err)
+  }
   // Al lanzar el Despegue el CTA real debe quedar INVISIBLE (el clon flotante lo reemplaza); si no, se
   // ve la caja del botón detrás del morph. Se restaura tras la ventana (ya navegado).
   const { hidden: ctaHidden, hide: hideCta } = useTriggerMorphHide()
@@ -119,7 +189,7 @@ function WorkoutHero({
                 + `<InfoTooltip content={t('section.workoutHero')} />`; copy es.json:416). */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Text className="text-sport-400" style={{ fontFamily: FONT.uiBold, fontSize: 11, textTransform: 'uppercase', letterSpacing: 1 }}>
-                Hoy entrenas
+                {eyebrow ?? 'Hoy entrenas'}
               </Text>
               <InfoTooltip content="Tu entrenamiento asignado para hoy. Toca la tarjeta para comenzar y registrar tus series una por una." />
             </View>
@@ -154,6 +224,27 @@ function WorkoutHero({
             Ref-wrapper medible: al tocar el CTA se mide su rect real en ventana para que el morph
             "Impulso" nazca EXACTO del botón (QA6). `collapsable={false}` evita que Android colapse el
             View y measureInWindow devuelva 0. Si la medición falla, el morph cae al origen sintético. */}
+        {startProgram ? (
+          // Programa flexible sin fecha (R30): única acción «Empezar hoy»; al confirmar, el home se
+          // recarga y el hero pasa a «Hoy toca · Día 1 de N» con el CTA de entrenar de siempre.
+          <View style={{ marginTop: 16, gap: 8 }}>
+            <Button
+              testID="home-hero-start-program"
+              label={starting ? 'Empezando…' : 'Empezar hoy'}
+              variant="sport"
+              size="lg"
+              leftIcon={Play}
+              full
+              disabled={starting}
+              onPress={handleStartProgram}
+            />
+            {startError ? (
+              <Text accessibilityRole="alert" style={{ color: EMBER_400, fontFamily: FONT.uiSemibold, fontSize: 12 }}>
+                {startError}
+              </Text>
+            ) : null}
+          </View>
+        ) : (
         <View ref={ctaRef} collapsable={false} style={{ marginTop: 16, opacity: ctaHidden ? 0 : 1 }}>
           <Button
             testID="home-hero-start"
@@ -173,6 +264,7 @@ function WorkoutHero({
             }}
           />
         </View>
+        )}
 
         {show.length > 0 ? (
           <View style={{ marginTop: 16, borderRadius: theme.radius.control, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.04)' }}>
@@ -226,6 +318,9 @@ function WorkoutHero({
               <Check size={28} color="#fff" strokeWidth={2} />
             </View>
             <Text className="text-on-dark" style={{ fontFamily: FONT.displayBlack, fontSize: 14 }}>Entrenamiento completado</Text>
+            {nextLabel ? (
+              <Text className="text-on-dark-muted" style={{ fontFamily: FONT.uiSemibold, fontSize: 12 }}>Próximo: {nextLabel}</Text>
+            ) : null}
           </Pressable>
         ) : null}
       </Card>
@@ -272,7 +367,18 @@ function HeroBlockRow({ block, logged, first }: { block: HeroBlock; logged: numb
   )
 }
 
-function RestDayCard({ nextPlan, nutritionEnabled, onRest }: { nextPlan: Plan | null; nutritionEnabled: boolean; onRest: () => void }) {
+function RestDayCard({
+  nextPlan,
+  nextLabel = null,
+  nutritionEnabled,
+  onRest,
+}: {
+  nextPlan: Plan | null
+  /** Ciclo: etiqueta del cursor («Día 2 de 3») en vez del día de la semana. */
+  nextLabel?: string | null
+  nutritionEnabled: boolean
+  onRest: () => void
+}) {
   const motion = useEvaMotion()
   const { theme } = useTheme()
   return (
@@ -302,7 +408,7 @@ function RestDayCard({ nextPlan, nutritionEnabled, onRest }: { nextPlan: Plan | 
                   rango de `DAY_SHORT` (1-7). Interpolado en un template string, `undefined` se
                   imprimía literal en pantalla ("Próximo: Fuerza · undefined"). Mismo hueco que
                   cerró el crash del builder (EVA-MOBILE-D). */}
-              {nextPlan.day_of_week ? ` · ${DAY_SHORT[nextPlan.day_of_week] ?? `D${nextPlan.day_of_week}`}` : ''}
+              {nextLabel ? ` · ${nextLabel}` : nextPlan.day_of_week ? ` · ${DAY_SHORT[nextPlan.day_of_week] ?? `D${nextPlan.day_of_week}`}` : ''}
             </>
           ) : (
             'Recupera bien para la próxima sesión.'

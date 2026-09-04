@@ -39,7 +39,7 @@ export function clampAssignDurationWeeks(value: string | number): number {
 
 export function defaultAssignClientsOptions(todaySantiagoIso: string): AssignClientsOptions {
   return {
-    startDateFlexible: true,
+    startDateFlexible: false, // R2 (ciclo real y por lado): opt-in, nunca encendido por defecto
     startDate: todaySantiagoIso,
     durationWeeks: ASSIGN_CLIENTS_DEFAULT_DURATION_WEEKS,
     selectedDays: [],

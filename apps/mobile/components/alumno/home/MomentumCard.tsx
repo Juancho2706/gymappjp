@@ -41,7 +41,8 @@ export function MomentumCard({
   nutritionEnabled,
 }: {
   days: MomentumDay[]
-  workoutCompliance: number
+  /** `null` en programas `cycle`: sin meta semanal el anillo pinta «—» + «Sin meta semanal» (R12). */
+  workoutCompliance: number | null
   nutritionCompliance: number
   checkInCompliance: number
   nutritionEmpty: boolean
@@ -130,20 +131,23 @@ function useCountUp(target: number, instant: boolean): number {
   return display
 }
 
-function ComplianceItem({ value, label, color, empty = false }: { value: number; label: string; color: string; empty?: boolean }) {
+function ComplianceItem({ value, label, color, empty = false }: { value: number | null; label: string; color: string; empty?: boolean }) {
   const { theme } = useTheme()
-  const pct = Math.round(Math.max(0, Math.min(1, value)) * 100)
-  const display = useCountUp(pct, empty)
+  // Sin métrica (`null`, ciclo) se pinta igual que «sin datos»: anillo gris y «—», nunca un 0 % que
+  // castigue al alumno por entrenar el día que quiso (paridad web ComplianceRing.tsx).
+  const noValue = empty || value == null
+  const pct = Math.round(Math.max(0, Math.min(1, value ?? 0)) * 100)
+  const display = useCountUp(pct, noValue)
   return (
     <View style={{ flex: 1, alignItems: 'center', gap: 8 }}>
       <ProgressRing
-        value={empty ? 0 : pct}
+        value={noValue ? 0 : pct}
         size={76}
         stroke={7}
-        color={empty ? theme.ink300 : color}
+        color={noValue ? theme.ink300 : color}
         showValue={false}
         label={
-          empty ? (
+          noValue ? (
             <Text className="text-subtle" style={{ fontFamily: FONT.displayBlack, fontSize: 18 }}>—</Text>
           ) : (
             <Text className="text-strong" style={{ fontFamily: FONT.displayBlack, fontSize: 19, letterSpacing: -0.57, fontVariant: ['tabular-nums'] }}>
@@ -155,7 +159,11 @@ function ComplianceItem({ value, label, color, empty = false }: { value: number;
       />
       <View style={{ alignItems: 'center' }}>
         <Text className="text-strong font-sans-bold" style={{ fontSize: 12 }}>{label}</Text>
-        {empty ? <Text className="text-subtle font-sans" style={{ fontSize: 10 }}>Sin datos</Text> : null}
+        {empty ? (
+          <Text className="text-subtle font-sans" style={{ fontSize: 10 }}>Sin datos</Text>
+        ) : value == null ? (
+          <Text className="text-subtle font-sans" style={{ fontSize: 10 }}>Sin meta semanal</Text>
+        ) : null}
       </View>
     </View>
   )

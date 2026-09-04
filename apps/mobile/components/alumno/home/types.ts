@@ -1,3 +1,10 @@
+import type {
+  CycleCompletionLogRow,
+  CycleCursorMode,
+  CycleProgramState,
+  CycleSlotState,
+  CycleTodayState,
+} from '@eva/workout-engine'
 import type { ClientProfile } from '../../../lib/client'
 import type { HabitsData } from '../../../lib/habits.queries'
 import type { OrgAnnouncement } from '../../../lib/org-announcements'
@@ -44,6 +51,21 @@ export interface Program {
   startDate: string | null
   /** Programa A/B (semanas alternadas). Espejo de `workout_programs.ab_mode`. */
   abMode: boolean
+  /**
+   * Estructura del programa (espejo de `workout_programs.program_structure_type`, W3.3): decide QUE
+   * significa `Plan.day_of_week` — ISODOW 1..7 en `weekly`, INDICE del ciclo 1..14 en `cycle`. Sin
+   * este campo el shell leia siempre el numero como dia de la semana y un ciclo de 3 dias solo
+   * "tenia entreno" lun/mar/mie (feedback Movens 2026-09-03). `null` = weekly (default del schema).
+   */
+  structureType: 'weekly' | 'cycle' | null
+  /** Largo del ciclo 1..14 (espejo de `cycle_length`). `null` en weekly y en ciclos legacy. */
+  cycleLength: number | null
+  /**
+   * Inicio flexible OPT-IN (espejo de `start_date_flexible`, R2). Con `startDate` null significa que
+   * el programa AUN NO EMPEZO (`programState: 'not_started'` del motor, R30); nadie vuelve a derivar
+   * ese estado mirando `startDate`.
+   */
+  startDateFlexible: boolean | null
 }
 
 export interface RecentWorkout {
@@ -74,6 +96,12 @@ export interface HomeData {
   program: Program | null
   recentWorkouts: RecentWorkout[]
   workoutDates: Set<string>
+  /**
+   * Filas CRUDAS de la lectura de 30 dias (W3.7b/R10: la MISMA query que web —
+   * `block_id, workout_blocks(plan_id), set_number, logged_at, metadata`, `limit 200`). Es el insumo
+   * de `buildCycleCompletions`; no se abre una tercera lectura ni se deriva completitud a mano.
+   */
+  cycleLogRows: CycleCompletionLogRow[]
   /** block_id -> series logueadas HOY (para el progreso de la hero card). */
   todayLoggedByBlock: Map<string, number>
   nutritionDates: Set<string>
@@ -107,6 +135,13 @@ export interface PlanDayView {
   doneOnDate: string | null
   /** Nombre completo del dia de `doneOnDate` ("Jueves") para el copy "Hecho el jueves". `null` = mismo caso que doneOnDate. */
   doneOnLabel: string | null
+  /**
+   * Ciclo (R12, W3.8): etiquetas del cursor ("Día 2" / "Día 2 de 3") para que el day-card y el sheet no
+   * vuelvan a mapear `day_of_week` a un dia de la semana. Ausentes en weekly (se conserva `DAY_SHORT`).
+   */
+  isCycle?: boolean
+  label?: string
+  labelLong?: string
 }
 
 /** Dia pasado esta semana sin registro o a medias → recuperable/continuable HOY (delta Fase L / E1-19). */
@@ -118,6 +153,55 @@ export interface PendingDay {
   dateIso: string
   /** 'pending' = sin nada registrado («Recuperar») · 'in_progress' = empezado a medias («Continuar») — paridad web. */
   status: 'pending' | 'in_progress'
+}
+
+/**
+ * UN dia del programa segun el motor (`CycleSlot` + sus etiquetas ya resueltas). En `cycle` es un dia
+ * del ciclo ("Dia 2 de 3"); en `weekly` es el ISODOW con plan ("Mar"). Las secciones lo PINTAN: no
+ * vuelven a mapear `day_of_week` a un dia de la semana ni a recalcular el estado.
+ */
+export interface ProgramSlotView {
+  planId: string
+  /** ISODOW 1..7 en `weekly`; indice del ciclo 1..14 en `cycle`. */
+  cycleIndex: number
+  state: CycleSlotState
+  /** Solo en `done`: dia Santiago en que se cerro (yyyy-mm-dd). */
+  doneDateIso: string | null
+  /** Titulo del plan ("Empuje"), tal cual viene del programa. */
+  title: string | null
+  /** `programDayLabel(form: 'short')` — "Mar" / "Dia 2". */
+  label: string
+  /** `programDayLabel(form: 'long')` — "Martes" / "Dia 2 de 3". */
+  labelLong: string
+  /** `programDayLabel(form: 'chip')` — "Mar" / "D2" (chip de 34 px de las day-cards). */
+  labelChip: string
+}
+
+/**
+ * Resultado del cursor del programa expuesto por el shell (W3.5). Sale ENTERO de
+ * `resolveCycleCursor` (`@eva/workout-engine`): `programState` incluido (R30 — nadie re-deriva "no
+ * empezo" de `startDate`), y las etiquetas ya resueltas con `programDayLabel` (R8/R31). En `weekly`
+ * es la IDENTIDAD de la resolucion de siempre (`day_of_week === ISODOW`).
+ */
+export interface ProgramCursorView {
+  mode: CycleCursorMode
+  /** `not_started` = inicio flexible sin fecha ⇒ hero "Empezar hoy" (R30). */
+  programState: CycleProgramState
+  /** Estado del dia de HOY: sin registrar / a medias / cerrado. */
+  todayState: CycleTodayState
+  todayPlanId: string | null
+  /** ISODOW en weekly; indice del ciclo en cycle. `null` si no hay dia resoluble. */
+  todayCycleIndex: number | null
+  nextPlanId: string | null
+  nextCycleIndex: number | null
+  /** Etiqueta larga del dia de hoy ("Dia 2 de 3"); cadena vacia si no hay dia. */
+  todayLabel: string
+  /** Etiqueta larga del proximo dia; cadena vacia si no hay siguiente. */
+  nextLabel: string
+  /** Ultimo dia CERRADO dentro de la ventana de 30 dias (solo en `cycle`). */
+  lastCompleted: { planId: string; cycleIndex: number; dateIso: string } | null
+  /** Tira de dias del programa con su estado y etiquetas (day-cards / WeekStrip de ciclo). */
+  slots: ProgramSlotView[]
 }
 
 // ── Acentos DS FIJOS (rampas constantes, nunca white-label; sport sigue la marca

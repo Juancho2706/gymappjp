@@ -9,6 +9,7 @@ import {
   type OptimisticLogPayload,
   type ReconciledSessionLog,
   type RepeatSeedEntry,
+  SIDE_LABEL,
 } from '@eva/workout-engine'
 import { FONT } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
@@ -223,6 +224,8 @@ export function ExerciseScreenV3({
         blockId={block.id}
         setNumber={setNumber}
         typedMode={null}
+        // Fuerza POR LADO (W3.9): `per_side`/`alternating` ⇒ cajas «Izq»/«Der» + un peso.
+        sideMode={block.side_mode}
         isActive
         heroMode
         exec={exec}
@@ -297,6 +300,15 @@ export function ExerciseScreenV3({
               {exercise.muscle_group ? ` · ${exercise.muscle_group}` : ''}
             </Text>
           </View>
+          {/* Chip «Por lado»/«Alternado» en la fila de objetivo (R39): la fuerza nunca entra a
+              `TypedTargetGrid`; el rótulo sale del motor (`SIDE_LABEL`), paridad web ExerciseStepV3. */}
+          {block.side_mode && SIDE_LABEL[block.side_mode] ? (
+            <View style={{ borderRadius: 999, borderWidth: 1.5, paddingHorizontal: 11, paddingVertical: 5, backgroundColor: hexToRgba(typeColor, 0.16), borderColor: hexToRgba(typeColor, 0.34) }}>
+              <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: hexToRgba(typeColor, 0.95) }} numberOfLines={1}>
+                {SIDE_LABEL[block.side_mode]}
+              </Text>
+            </View>
+          ) : null}
           {/* Cambiar / Omitir + badges de estado — fila COMPARTIDA con las pantallas tipadas. */}
           <ExerciseActionChips
             exec={exec}

@@ -11,6 +11,7 @@ import {
   type OptimisticLogPayload,
   type ReconciledSessionLog,
   type TypedKeypadMode,
+  SIDE_LABEL,
 } from '@eva/workout-engine'
 import type { HrZoneRange } from '@eva/cardio'
 import { FONT, TYPE, textStyle } from '../../../lib/typography'
@@ -258,6 +259,12 @@ export function SupersetGroupCard({
                       <m.MemberIcon size={12} color={m.memberColor} />
                       <Text style={{ fontFamily: FONT.uiBold, fontSize: 10.5 }} className="text-on-dark">{m.exercise.muscle_group}</Text>
                     </View>
+                    {/* Chip «Por lado»/«Alternado» (R39), rótulo del motor — paridad web SupersetStepV3. */}
+                    {m.block.side_mode && SIDE_LABEL[m.block.side_mode] ? (
+                      <View className="rounded-full bg-white/[0.06] px-2 py-0.5">
+                        <Text style={{ fontFamily: FONT.uiBold, fontSize: 10.5 }} className="text-on-dark">{SIDE_LABEL[m.block.side_mode]}</Text>
+                      </View>
+                    ) : null}
                     {m.hasTechnique && (
                       <Pressable testID={`btn-technique-${m.block.id}`} onPress={() => onOpenTechnique(m.block)} className="flex-row items-center gap-1">
                         {/* Icono 14 y texto 11px semibold (600) = web WEC:757-764 `Info w-3.5 h-3.5` +
@@ -405,6 +412,7 @@ export function SupersetGroupCard({
                     {!log ? (
                       <ActiveSetRow
                         blockId={m.block.id}
+                        sideMode={m.block.side_mode}
                         setNumber={round}
                         typedMode={m.typedMode}
                         // Paridad web (QA-6): TODA serie sin registrar de la ronda es una fila de registro

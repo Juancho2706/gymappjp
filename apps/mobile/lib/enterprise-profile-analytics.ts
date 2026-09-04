@@ -7,6 +7,7 @@ import {
   type WeeklyWeightPR,
   type WorkoutLogRow,
 } from '@eva/profile-analytics'
+import { sideRepsFromMetadata } from '@eva/workout-engine'
 import { getSantiagoIsoYmdForUtcInstant, isoDateAddDays } from './date-utils'
 
 /**
@@ -28,6 +29,7 @@ export type EnterpriseAnalyticsLogDbRow = {
   weight_kg?: number | null
   reps_done?: number | null
   logged_at?: string | null
+  metadata?: unknown
   workout_blocks?: {
     exercise_id?: string | null
     exercises?: { name?: string | null; muscle_group?: string | null } | null
@@ -61,11 +63,14 @@ function normalizeBlock(value: EnterpriseAnalyticsLogDbRow['workout_blocks']) {
   return Array.isArray(value) ? value[0] ?? null : value ?? null
 }
 
+/** `WorkoutLogRow` + el `metadata` crudo del log: los lados por serie viven ahi (R3). */
+export type EnterpriseWorkoutLogRow = WorkoutLogRow & { metadata?: unknown }
+
 export function mapEnterpriseWorkoutLogs(
   rows: EnterpriseAnalyticsLogDbRow[],
   exerciseMeta: ReadonlyMap<string, EnterpriseExerciseMeta> = new Map(),
-): WorkoutLogRow[] {
-  const out: WorkoutLogRow[] = []
+): EnterpriseWorkoutLogRow[] {
+  const out: EnterpriseWorkoutLogRow[] = []
   for (const row of rows) {
     if (!row.logged_at) continue
     const block = normalizeBlock(row.workout_blocks)
@@ -84,6 +89,7 @@ export function mapEnterpriseWorkoutLogs(
       weightKg: row.weight_kg == null ? null : Number(row.weight_kg),
       reps: row.reps_done == null ? null : Number(row.reps_done),
       loggedAt: `${santiagoDay}T12:00:00`,
+      metadata: row.metadata ?? null,
     })
   }
   return out
@@ -107,10 +113,14 @@ function buildPersonalRecords(logs: WorkoutLogRow[]): EnterprisePersonalRecord[]
   return [...best.values()].sort((a, b) => b.maxWeightKg - a.maxWeightKg).slice(0, 8)
 }
 
-function buildMuscleVolume(logs: WorkoutLogRow[]): EnterpriseMuscleVolume[] {
+function buildMuscleVolume(logs: EnterpriseWorkoutLogRow[]): EnterpriseMuscleVolume[] {
   const volume = new Map<string, number>()
   for (const log of logs) {
-    const add = Number(log.weightKg ?? 0) * Number(log.reps ?? 0)
+    // Paridad exacta con el reps_eff de get_client_muscle_volume (R3/R15/R27): en una serie por
+    // lado el volumen suma los DOS lados; `reps` (= reps_done) es el minimo. sideRepsFromMetadata
+    // es el espejo del regex ^[0-9]{1,4}$ del SQL y devuelve null ante metadata mal formada.
+    const sides = sideRepsFromMetadata(log.metadata)
+    const add = Number(log.weightKg ?? 0) * (sides ? sides.left + sides.right : Number(log.reps ?? 0))
     if (add <= 0) continue
     const group = log.muscleGroup?.trim() && log.muscleGroup !== '—' ? log.muscleGroup.trim() : 'Otro'
     volume.set(group, (volume.get(group) ?? 0) + add)

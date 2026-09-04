@@ -37,6 +37,7 @@ import { useEntitlements } from './entitlements'
 import type { StudentAccessState } from './entitlements-core'
 import { isCoachAccountPausedError, STUDENT_ACCESS_COPY } from './student-access-copy'
 import { cachePlan, enqueueLog, getCachedPlan, getPendingLogCount } from './offline-cache'
+import { shouldAutoStartProgram, startWorkoutProgram } from './start-program'
 import { checkOnline } from './use-online'
 import { classifyPlanLoad } from './workout-load-state'
 import {
@@ -214,6 +215,11 @@ function reconciledToOfflineLog(l: ReconciledSessionLog, planId: string): Workou
     substitutedExerciseId: l.substituted_exercise_id ?? null,
     substitutedExerciseName: l.substituted_exercise_name ?? null,
     substitutionReason: l.substitution_reason ?? null,
+    // jsonb de la serie: hold por lado de movilidad `{left_sec, right_sec}` y reps por lado de
+    // fuerza `{left_reps, right_reps}` (R27). Faltaba: el snapshot local viaja por acá para
+    // reconciliarse (`reconcileSessionLogs` lee `q.metadata`), así que al reabrir la sesión una
+    // serie pendiente perdía los dos lados y la fila volvía a pintarse como bilateral.
+    metadata: l.metadata ?? null,
   }
 }
 
@@ -353,6 +359,20 @@ export function useWorkoutSession(
   const clientIdRef = useRef<string | null>(null)
   // Espejo del estado online para leerlo sin stale-closure dentro de listeners (NetInfo/AppState/focus).
   const isOnlineRef = useRef(true)
+  /**
+   * Programa del plan en curso, para el AUTO-START de la primera serie (W3.2, espejo del auto-start
+   * web): id + `start_date_flexible` + `start_date`. Es un ref (no estado) porque `logSet` lo lee
+   * entre `await`s y no debe re-crearse por él. `startDate` se actualiza con lo que devuelve la RPC,
+   * así que la segunda serie ya no cumple la condición y no vuelve a llamar.
+   */
+  const programStartRef = useRef<{
+    id: string
+    flexible: boolean
+    startDate: string | null
+    structure: 'weekly' | 'cycle' | null
+  } | null>(null)
+  /** Candado de la llamada en vuelo: dos series confirmadas a la vez no disparan dos RPC. */
+  const autoStartInFlightRef = useRef(false)
 
   /**
    * Día al que ESCRIBE esta sesión (ymd Santiago): la fecha objetivo en modo edición, hoy si no. Es la
@@ -623,7 +643,7 @@ export function useWorkoutSession(
           .select(
             `id, title, week_variant, program_id, day_of_week,
              workout_blocks ( *, exercises ( id, name, muscle_group, video_url, video_start_time, video_end_time, gif_url, thumbnail_url, instructions, exercise_type, cardio_modality ) ),
-             workout_programs ( name, start_date, weeks_to_repeat, program_structure_type, cycle_length, program_phases, ab_mode )`,
+             workout_programs ( name, start_date, start_date_flexible, weeks_to_repeat, program_structure_type, cycle_length, program_phases, ab_mode )`,
           )
           .eq('id', planId)
           .maybeSingle(),
@@ -720,6 +740,20 @@ export function useWorkoutSession(
             )
           : null
       }
+      // Insumo del auto-start (W3.2): un programa flexible SIN fecha empieza con la primera serie.
+      // El id sale del plan (`workout_plans.program_id`), no del embed: el embed no lo trae y es la
+      // MISMA fila. Sin programa el ref queda en null y el auto-start no existe.
+      const programIdOfPlan = (data as { program_id?: string | null }).program_id ?? null
+      programStartRef.current =
+        prog && programIdOfPlan
+          ? {
+              id: programIdOfPlan,
+              flexible: (prog as { start_date_flexible?: boolean | null }).start_date_flexible === true,
+              startDate: (prog as { start_date?: string | null }).start_date ?? null,
+              structure:
+                (prog as { program_structure_type?: 'weekly' | 'cycle' | null }).program_structure_type ?? null,
+            }
+          : null
       setActiveWeekVariant(resolvedWeekVariant)
       // Cache offline con la variante YA resuelta (no el `week_variant` crudo): al reabrir sin red el badge
       // refleja la variante activa por rotación, igual que online.
@@ -1104,6 +1138,37 @@ export function useWorkoutSession(
       } else {
         isOnlineRef.current = true
         setIsOnline(true)
+      }
+
+      // 2.b) Auto-start del programa flexible (W3.2, espejo del auto-start web W2.4). La PRIMERA
+      // serie del alumno fija el `start_date` vía RPC (sin fecha ⇒ hoy Santiago, R14) y emite
+      // `program_started_by_client {via:'auto'}` SÓLO si la RPC devolvió `started = true` (R23, lo
+      // decide `startWorkoutProgram`). Va DESPUÉS de la persistencia — la serie ya quedó guardada o
+      // encolada, así que un fallo acá no le cuesta nada al alumno — y SIN `await`: un viaje de red
+      // extra no puede atrasar el chip de la serie ni la celebración de PR.
+      const programForStart = programStartRef.current
+      if (
+        programForStart &&
+        shouldAutoStartProgram({
+          programId: programForStart.id,
+          flexible: programForStart.flexible,
+          startDate: programForStart.startDate,
+          editDate: editIsoNow,
+          alreadyAttempted: autoStartInFlightRef.current,
+        })
+      ) {
+        autoStartInFlightRef.current = true
+        void startWorkoutProgram(programForStart.id, { via: 'auto', structure: programForStart.structure })
+          .then((res) => {
+            // Con la fecha ya persistida (la haya escrito esta llamada o ya estuviera, R28) la
+            // condición se apaga sola: la SEGUNDA serie de la sesión no vuelve a llamar. Un fallo
+            // (offline) deja la puerta abierta para que la próxima serie reintente — la RPC es
+            // idempotente, así que reintentar no mueve la fecha ni re-emite el evento.
+            if (res.ok) programStartRef.current = { ...programForStart, startDate: res.startDate }
+          })
+          .finally(() => {
+            autoStartInFlightRef.current = false
+          })
       }
 
       // 3) ¿Récord personal? (peso supera el máximo histórico del ejercicio).

@@ -82,7 +82,8 @@ export function ProgramPreviewCard({
                 <View className="flex-row items-center gap-space-3">
                   <View className="h-[34px] min-w-[34px] items-center justify-center rounded-lg bg-sport-500 px-space-2">
                     <Text style={T_DAY_INDEX} className="text-on-sport">
-                      {dayLabel(plan.day_of_week)}
+                      {/* R31: weekly conserva las 3 letras; un ciclo muestra «D1»/«D2», nunca «Lun». */}
+                      {dayLabel(plan.day_of_week, program.program_structure_type, program.cycle_length ?? null)}
                     </Text>
                   </View>
                   <View className="min-w-0 flex-1">

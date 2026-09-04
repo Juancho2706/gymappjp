@@ -12,6 +12,8 @@ import { Button } from '../Button'
 import { VideoPlayer } from '../VideoPlayer'
 import { execMediaKind } from '../alumno/workout/v3/ExecMediaV3'
 import { ExerciseFormSheet, type CreatedExercise } from './ExerciseFormSheet'
+import { effectiveExerciseType } from '@eva/workout-engine'
+import { defaultBlockForType } from '@eva/plan-builder'
 import type { BuilderBlock } from '../../lib/plan-builder/types'
 
 const RECENTS_KEY = 'builder_recent_exercises'
@@ -41,6 +43,45 @@ type Ex = Pick<
   // los "usados recientemente" persistidos en AsyncStorage pueden venir de una versión anterior.
   video_start_time?: number | null
   video_end_time?: number | null
+}
+
+/**
+ * Bloque nuevo desde el catálogo, con los defaults DEL TIPO del ejercicio (W4.4 · R6).
+ *
+ * Antes esto era un literal fijo de fuerza (`sets: 3 · '8-10' · '60s'`): un ejercicio de cardio
+ * nacía con series×reps y ninguna prescripción tipada, así que `blockIncomplete`
+ * (`app/coach/program-builder.tsx`) lo daba por incompleto y el coach no podía guardar el día.
+ * `defaultBlockForType` (@eva/plan-builder) es el espejo exacto de `createDefaultBlock` de web
+ * (`apps/web/src/app/coach/builder/[clientId]/program-read-mappers.ts`), así que el bloque nace
+ * igual en los dos builders: cardio 1×'10min' con `duration_sec` 600, movilidad 3×'30s' con hold,
+ * roller 1×'10 pasadas' con `reps_value`/`reps_unit`, y fuerza 3×'8-12' · 90s.
+ *
+ * Pura y exportada para testear el alta sin montar el sheet
+ * (`tests/mobile/plan-builder-type-change.test.ts`).
+ */
+export function buildCatalogBlock(ex: Ex, uid: string): BuilderBlock {
+  // El tipo PROPIO del ejercicio (sin override: el bloque recién nace). Igual que web, se guarda ya
+  // normalizado para que `effectiveExerciseType` no dependa de un literal suelto del catálogo.
+  const ownType = effectiveExerciseType(null, { exercise_type: ex.exercise_type })
+  return {
+    uid,
+    exercise_id: ex.id,
+    exercise_name: ex.name,
+    muscle_group: ex.muscle_group ?? 'General',
+    gif_url: ex.gif_url ?? undefined,
+    video_url: ex.video_url ?? undefined,
+    // Solo-memoria (Fase C): viaja con el bloque para que el editor ofrezca el objetivo en la
+    // unidad propia de la modalidad (saltos/pisos/reps). No es columna: el save la ignora.
+    cardio_modality: ex.cardio_modality ?? null,
+    // Deuda #5 (cardio-ejes): el tipo del ejercicio viaja con el bloque nuevo — igual que web —
+    // para que el editor derive el tipo efectivo (cardio/movilidad/roller) sin que el coach
+    // tenga que marcarlo a mano. `effectiveExerciseType` lo lee como fallback del override.
+    exercise_type: ownType,
+    section: 'main',
+    superset_group: null,
+    is_override: false,
+    ...defaultBlockForType(ownType),
+  }
 }
 
 function hexToRgba(hex: string, a: number): string {
@@ -131,28 +172,7 @@ export const ExerciseSearchSheet = forwardRef<BottomSheet, Props>(
 
     function handleSelect(ex: Ex) {
       pushRecent(ex)
-      onSelect({
-        uid: newBlockUid(),
-        exercise_id: ex.id,
-        exercise_name: ex.name,
-        muscle_group: ex.muscle_group ?? 'General',
-        gif_url: ex.gif_url ?? undefined,
-        video_url: ex.video_url ?? undefined,
-        // Solo-memoria (Fase C): viaja con el bloque para que el editor ofrezca el objetivo en la
-        // unidad propia de la modalidad (saltos/pisos/reps). No es columna: el save la ignora.
-        cardio_modality: ex.cardio_modality ?? null,
-        // Deuda #5 (cardio-ejes): el tipo del ejercicio viaja con el bloque nuevo — igual que web —
-        // para que el editor derive el tipo efectivo (cardio/movilidad/roller) sin que el coach
-        // tenga que marcarlo a mano. `effectiveExerciseType` lo lee como fallback del override.
-        // Cast seguro: la columna tiene CHECK de valores y el editor re-normaliza igual.
-        exercise_type: (ex.exercise_type ?? null) as BuilderBlock['exercise_type'],
-        sets: 3,
-        reps: '8-10',
-        rest_time: '60s',
-        section: 'main',
-        superset_group: null,
-        is_override: false,
-      })
+      onSelect(buildCatalogBlock(ex, newBlockUid()))
       // No cerrar el menú: el coach agrega varios. Feedback ✓ verde breve por fila.
       setAddedFlash((f) => ({ ...f, [ex.id]: true }))
       setTimeout(() => setAddedFlash((f) => { const n = { ...f }; delete n[ex.id]; return n }), 900)

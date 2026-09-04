@@ -42,6 +42,7 @@ import {
   type SummaryBlock,
   type TypedKeypadContext,
   type WorkoutCelebrationEvent,
+  sideRepsFromMetadata,
 } from '@eva/workout-engine'
 import {
   downsampleSeries,
@@ -612,10 +613,21 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
       // que hace que `buildStrengthPayload` lo vuelva a escribir y corregir peso/reps no borre el RPE/RIR.
       // El RIR se acepta desde 0 ("al fallo", decisión CEO 8): el filtro previo `>= 1` descartaba ese 0 y
       // editar la serie lo perdía. Fuera de 0-10 se ignora (valor imposible de la escala).
+      // Fuerza POR LADO (W3.10): el teclado de edición admite lados SOLO en esta rama (strength). Se
+      // siembran `reps_left`/`reps_right` desde `metadata` con el helper único del motor; un log viejo
+      // sin desglose siembra el izquierdo con `reps_done` (igual que la fila web).
+      const perSideReps = block.side_mode === 'per_side' || block.side_mode === 'alternating'
+      const existingSides = existingLog ? sideRepsFromMetadata(existingLog.metadata) : null
       const editValues = existingLog
         ? {
             weight: existingLog.weight_kg != null ? formatWeightEsCl(existingLog.weight_kg) : '',
             reps: existingLog.reps_done != null ? String(existingLog.reps_done) : '',
+            ...(perSideReps
+              ? {
+                  reps_left: existingSides ? String(existingSides.left) : existingLog.reps_done != null ? String(existingLog.reps_done) : '',
+                  reps_right: existingSides ? String(existingSides.right) : '',
+                }
+              : {}),
             rpe: existingLog.rpe != null ? String(existingLog.rpe) : '',
             rir: existingLog.rir != null && existingLog.rir >= 0 && existingLog.rir <= 10 ? String(existingLog.rir) : '',
             note: existingLog.note ?? '',
@@ -637,6 +649,9 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         initialValues,
         initialFieldIndex: restored?.fieldIndex,
         isEdit: editValues != null,
+        // Sólo strength (R18): el keypad pasa a peso → Izq → Der y el commit escribe `reps_done = min`
+        // + `metadata`. Movilidad por lado NO pasa por acá (ver `typedCtx` arriba): su hold sigue intacto.
+        sideMode: block.side_mode === 'per_side' ? 'per_side' : block.side_mode === 'alternating' ? 'alternating' : null,
       })
       haptics.tap()
     },
@@ -1218,7 +1233,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
           // no cuentan — misma regla que las day-cards, consistencia con la racha del dashboard.
           supabase
             .from('workout_programs')
-            .select('workout_plans ( id, day_of_week, assigned_date, workout_blocks ( id, sets ) )')
+            .select('program_structure_type, workout_plans ( id, day_of_week, assigned_date, workout_blocks ( id, sets ) )')
             .eq('client_id', clientId)
             .eq('is_active', true)
             .maybeSingle(),
@@ -1237,6 +1252,14 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
             .lt('logged_at', endIso),
         ])
         if (!active) return
+        // Ciclo (R12, spec `ciclo-real-y-por-lado`): `day_of_week` es el ÍNDICE del ciclo, no un día de
+        // semana, y no hay meta semanal que contar («N de M»). La tira del ejecutor se omite (misma
+        // decisión que la web, `week-status.queries.ts`); el Inicio ya muestra los días entrenados.
+        // Seguimiento B18: tira de días entrenados sin «N de M» también acá.
+        if ((programRow as { program_structure_type?: string | null } | null)?.program_structure_type === 'cycle') {
+          setWeeklyStreak(null)
+          return
+        }
         const rawPlans = ((programRow as { workout_plans?: Array<{ id: string; day_of_week: number | null; assigned_date: string | null; workout_blocks?: Array<{ id: string; sets: number | null }> }> } | null)?.workout_plans) ?? []
         const plans = rawPlans.map((p) => ({ id: p.id, day_of_week: p.day_of_week ?? null, assigned_date: p.assigned_date ?? null }))
         const plannedDates = plannedDatesForWeek(plans, weekDates)

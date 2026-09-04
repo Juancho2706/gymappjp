@@ -48,7 +48,7 @@ import {
   type ModuleKey,
   type NutritionSectionKey,
 } from '@eva/feature-prefs'
-import { effectiveExerciseType, typedBlockSummary, type ExerciseType } from '@eva/workout-engine'
+import { effectiveExerciseType, sideRepsFromMetadata, typedBlockSummary, type ExerciseType } from '@eva/workout-engine'
 
 // Coach-side client detail data. Reads via Supabase (RLS: coach sees own clients).
 // Mutations (update/archive/review) also use the coach session. Service-role never runs in RN.
@@ -154,6 +154,19 @@ export interface ProgramBlock {
   gifUrl: string | null
   thumbnailUrl: string | null
   supersetGroup: string | null
+  /** Ejes tipados (cardio/movilidad/roller) + lado — paridad con `client-detail.service.ts` (W4.1). */
+  exercise_type_override: string | null
+  duration_sec: number | null
+  distance_value: number | null
+  distance_unit: string | null
+  hr_zone: number | null
+  interval_config: unknown
+  reps_value: number | null
+  reps_unit: string | null
+  side_mode: string | null
+  /** `exercises.exercise_type` / `exercises.cardio_modality`, camelCase como `WorkoutDaySet` de este archivo. */
+  exerciseType: string | null
+  cardioModality: string | null
 }
 
 export interface ProgramDay {
@@ -217,7 +230,7 @@ export interface WorkoutDaySet {
   actualHoldSec: number | null
   /** Pace real derivado (seg/km, RF5) — la ficha lo pinta vía el motor (deuda #7). */
   actualPaceSecPerKm: number | null
-  /** jsonb `{left_sec, right_sec}` de movilidad por lado. */
+  /** jsonb `{left_sec, right_sec}` de movilidad por lado y `{left_reps, right_reps}` de fuerza por lado (R19). */
   metadata: unknown
   /**
    * `exercises.cardio_modality` (Fase C): da la unidad del conteo de cardio para que el coach lea
@@ -381,7 +394,11 @@ function buildMuscleVolumeBySets(rows: any[]): MuscleVolumeSetsEntry[] {
   const map = new Map<string, { sets: number; reps: number }>()
   for (const row of rows) {
     const group = row.workout_blocks?.exercises?.muscle_group?.trim() || 'Otro'
-    const reps = Number(row.reps_done ?? 0)
+    // Mismo reps_eff que get_client_muscle_volume / get_client_daily_tonnage (R3/R15/R27): en una
+    // serie por lado se suman los DOS lados; reps_done es el minimo. sideRepsFromMetadata es el
+    // espejo del regex ^[0-9]{1,4}$ del SQL y devuelve null ante metadata mal formada.
+    const sides = sideRepsFromMetadata(row.metadata)
+    const reps = sides ? sides.left + sides.right : Number(row.reps_done ?? 0)
     const cur = map.get(group) ?? { sets: 0, reps: 0 }
     cur.sets += 1
     cur.reps += reps > 0 ? reps : 0
@@ -624,7 +641,7 @@ async function loadEnterpriseProfileAnalyticsFallback(
   const [analyticsRows, activityRows] = await Promise.all([
     fetchEnterpriseLogPages<EnterpriseAnalyticsLogDbRow>(
       `
-        exercise_id, exercise_name_at_log, weight_kg, reps_done, logged_at,
+        exercise_id, exercise_name_at_log, weight_kg, reps_done, logged_at, metadata,
         workout_blocks ( exercise_id, exercises ( name, muscle_group ) )
       `,
       clientId,
@@ -758,6 +775,7 @@ export async function getCoachClientDetail(clientId: string, workspace?: ClientA
   // tonelaje, PRs semanales, fechas de actividad, conteo de días) ya viene de RPC agregada.
   const muscleSetsSelect = `
     reps_done,
+    metadata,
     workout_blocks (
       exercises ( muscle_group )
     )
@@ -809,7 +827,9 @@ export async function getCoachClientDetail(clientId: string, workspace?: ClientA
             id, title, day_of_week, week_variant,
             workout_blocks (
               id, order_index, sets, reps, rest_time, tempo, rir, target_weight_kg, notes, superset_group,
-              exercises ( name, muscle_group, gif_url, thumbnail_url )
+              exercise_type_override, duration_sec, distance_value, distance_unit,
+              hr_zone, interval_config, reps_value, reps_unit, side_mode,
+              exercises ( name, muscle_group, gif_url, thumbnail_url, exercise_type, cardio_modality )
             )
           )
         `)
@@ -964,6 +984,17 @@ export async function getCoachClientDetail(clientId: string, workspace?: ClientA
                 gifUrl: block.exercises?.gif_url ?? null,
                 thumbnailUrl: block.exercises?.thumbnail_url ?? null,
                 supersetGroup: block.superset_group ?? null,
+                exercise_type_override: block.exercise_type_override ?? null,
+                duration_sec: block.duration_sec ?? null,
+                distance_value: block.distance_value ?? null,
+                distance_unit: block.distance_unit ?? null,
+                hr_zone: block.hr_zone ?? null,
+                interval_config: block.interval_config ?? null,
+                reps_value: block.reps_value ?? null,
+                reps_unit: block.reps_unit ?? null,
+                side_mode: block.side_mode ?? null,
+                exerciseType: block.exercises?.exercise_type ?? null,
+                cardioModality: block.exercises?.cardio_modality ?? null,
               })),
           }))
           .sort((a, b) => (a.day_of_week ?? 99) - (b.day_of_week ?? 99)),

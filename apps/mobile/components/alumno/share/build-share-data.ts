@@ -12,6 +12,7 @@
  */
 
 import {
+    sideRepsFromMetadata,
     summarizeSessionByKind,
     type StrengthExerciseRow,
     type SummaryBlock,
@@ -51,29 +52,51 @@ export interface BuildWorkoutShareDataInput {
     clientId?: string | null
 }
 
-/** Serie más pesada de un ejercicio, agrupada por (peso, reps) → '3×10 · 60 kg'. */
+/**
+ * Serie más pesada de un ejercicio, agrupada por (peso, reps) → '3×10 · 60 kg'.
+ *
+ * La comparación entre series sigue siendo `reps_done` (R34): con fuerza por lado eso es el MÍNIMO
+ * de los dos lados (R3), que es la magnitud comparable serie a serie — usar la suma cambiaría el
+ * orden y el share elegiría otra serie que la que el alumno vio como más dura. Lo único que cambia
+ * con `metadata` es lo que se IMPRIME: '3×10 / 10 · 20 kg' en vez de '3×10 · 20 kg'.
+ */
 function topSetLabelFor(row: StrengthExerciseRow): string {
     // Agrupamos por combinación peso+reps para poder decir "3×10 · 60 kg" en vez de "1×10 · 60 kg"
-    // repetido tres veces: la lectura natural del alumno es "hice 3 series de 10 con 60".
-    const buckets = new Map<string, { weight: number; reps: number; count: number }>()
+    // repetido tres veces: la lectura natural del alumno es "hice 3 series de 10 con 60". El
+    // desglose por lado entra en la clave para no fundir un 10/10 con un 10/12 (mismo `reps_done`,
+    // series distintas); sin metadata la clave es la de siempre ⇒ agrupado byte-idéntico.
+    const buckets = new Map<string, { weight: number; reps: number; sides: string | null; count: number }>()
     for (const s of row.sets) {
         const weight = s.weight_kg ?? 0
         const reps = s.reps_done ?? 0
-        const key = `${weight}|${reps}`
+        const parsed = sideRepsFromMetadata(s.metadata)
+        const sides = parsed ? `${parsed.left} / ${parsed.right}` : null
+        const key = `${weight}|${reps}|${sides ?? ''}`
         const prev = buckets.get(key)
         if (prev) prev.count += 1
-        else buckets.set(key, { weight, reps, count: 1 })
+        else buckets.set(key, { weight, reps, sides, count: 1 })
     }
-    let top: { weight: number; reps: number; count: number } | null = null
+    let top: { weight: number; reps: number; sides: string | null; count: number } | null = null
     for (const b of buckets.values()) {
         // Más peso gana; a igual peso, más reps (la serie "más dura" del día).
         if (!top || b.weight > top.weight || (b.weight === top.weight && b.reps > top.reps)) top = b
     }
     if (!top || top.reps <= 0) return ''
-    const base = `${top.count}×${top.reps}`
+    const base = `${top.count}×${top.sides ?? top.reps}`
     // Peso 0 = ejercicio con peso corporal / sin registrar ⇒ el "· 0 kg" sería ruido y además
     // mentira (no levantó 0 kg: no registró peso).
     return top.weight > 0 ? `${base} · ${formatKg(top.weight)} kg` : base
+}
+
+/**
+ * Reps que aporta UNA serie a los totales del card: `izq + der` cuando el log trae los dos lados
+ * válidos en `metadata` (R27/R34), `reps_done` tal cual en cualquier otro caso — el mismo `CASE`
+ * que `session-summary.ts` y que el `reps_eff` del SQL del tonelaje. Sin esto el share reportaría
+ * la MITAD del volumen que el resumen de sesión que lo abrió (R3: `reps_done` = el lado más bajo).
+ */
+function effectiveReps(log: SummaryLogLike): number {
+    const sides = sideRepsFromMetadata(log.metadata)
+    return sides ? sides.left + sides.right : log.reps_done || 0
 }
 
 /**
@@ -105,9 +128,13 @@ export function buildWorkoutShareData(input: BuildWorkoutShareDataInput): Workou
 
     // Totales: los MISMOS tres reduce del overlay (WorkoutSummaryOverlay.tsx:286-288) sobre los logs
     // crudos — cuentan TODO lo registrado (fuerza, cardio, movilidad), no solo la fuerza del desglose.
+    // `effectiveReps` (R34) es la ÚNICA diferencia con esos reduce: una serie de fuerza por lado
+    // aporta izq + der, igual que en `summarizeSessionByKind`, para que el volumen del card sea el
+    // MISMO número que el del resumen de sesión y que el tonelaje de la ficha del coach. Sin
+    // metadata, `effectiveReps` devuelve `reps_done` y los tres totales quedan byte-idénticos.
     const completedSets = logs.length
-    const totalReps = logs.reduce((acc, l) => acc + (l.reps_done || 0), 0)
-    const totalVolumeKg = logs.reduce((acc, l) => acc + (l.weight_kg || 0) * (l.reps_done || 0), 0)
+    const totalReps = logs.reduce((acc, l) => acc + effectiveReps(l), 0)
+    const totalVolumeKg = logs.reduce((acc, l) => acc + (l.weight_kg || 0) * effectiveReps(l), 0)
 
     // Récords: detección idéntica a `detectedPRs` del overlay (:246-270). `historicMax == null` =
     // primera vez que se registra el ejercicio ⇒ NO es récord (si no, todo estreno sería PR).
@@ -122,6 +149,9 @@ export function buildWorkoutShareData(input: BuildWorkoutShareDataInput): Workou
                 const bw = best.weight_kg ?? 0
                 return cw > bw ? cur : best
             }, ex.sets[0])
+            // `reps_done` a propósito (R34): el e1RM de Epley compara UNA serie, y con fuerza por
+            // lado la serie son las reps de un lado (el mínimo), no la suma de los dos — sumarlas
+            // inflaría el récord estimado. Misma base que `pr-detect` del motor.
             const repsAtMax = setAtMax?.reps_done ?? 1
             const prevKg = exerciseMaxes[ex.exerciseId]!
             const pct = prevKg > 0 ? Math.round(((ex.maxWeight - prevKg) / prevKg) * 1000) / 10 : 100

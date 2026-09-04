@@ -13,6 +13,7 @@ import {
   MUSCLE_REGIONS,
   muscleGroupsToRegionIntensity,
   summarizeSessionByKind,
+  sideRepsFromMetadata,
   type CardioItem,
   type MobilityItem,
   type SummaryBlock,
@@ -329,7 +330,16 @@ export function SessionCompleteV3({
 
   const completedSets = logs.length
   const plannedSets = useMemo(() => blocks.reduce((n, b) => n + (b.sets || 0), 0), [blocks])
-  const totalVolume = useMemo(() => logs.reduce((acc, l) => acc + (l.weight_kg || 0) * (l.reps_done || 0), 0), [logs])
+  // Volumen: en fuerza POR LADO suma izq + der (R3/R34, misma fórmula que `session-summary` del motor y
+  // que el tonelaje del coach); sin desglose usa `reps_done` como siempre.
+  const totalVolume = useMemo(
+    () =>
+      logs.reduce((acc, l) => {
+        const sides = sideRepsFromMetadata(l.metadata)
+        return acc + (l.weight_kg || 0) * (sides ? sides.left + sides.right : l.reps_done || 0)
+      }, 0),
+    [logs],
+  )
 
   // Stat secundario adaptativo: volumen (fuerza) → distancia (cardio) → series (tipado).
   const hasVolume = totalVolume > 0

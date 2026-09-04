@@ -3,7 +3,7 @@ import { Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View }
 import { Image } from 'expo-image'
 import { Check, ChevronDown, ChevronUp, CircleHelp, GripVertical, Link2, Minus, Play, Plus, Trash2 } from 'lucide-react-native'
 import { ScaleDecorator } from 'react-native-draggable-flatlist'
-import { effectiveExerciseType, typedBlockSummary } from '@eva/workout-engine'
+import { effectiveExerciseType, sideSuffix, typedBlockSummary } from '@eva/workout-engine'
 import { useTheme } from '../../context/ThemeContext'
 import { FONT } from '../../lib/typography'
 import { exerciseThumb, type ExerciseRow } from '../../lib/exercises'
@@ -160,7 +160,7 @@ function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpda
               </TouchableOpacity>
             ) : complete ? (
               <TouchableOpacity onPress={() => setEditing(true)} style={[styles.badge, { backgroundColor: hexToRgba(theme.foreground, 0.06) }]}>
-                <Text style={[styles.badgeT, { color: theme.foreground, fontFamily: FONT.uiBold, fontSize: 10, textTransform: 'none' }]}>{block.sets} × {block.reps}</Text>
+                <Text style={[styles.badgeT, { color: theme.foreground, fontFamily: FONT.uiBold, fontSize: 10, textTransform: 'none' }]}>{block.sets} × {block.reps}{sideSuffix(block.side_mode)}</Text>
               </TouchableOpacity>
             ) : (
               <TouchableOpacity onPress={() => setEditing(true)} style={[styles.badge, { backgroundColor: hexToRgba(theme.destructive, 0.12), borderColor: hexToRgba(theme.destructive, 0.3) }]}>

@@ -15,6 +15,7 @@ import {
   // Copia compartida del rechazo permanente del editor de día pasado: si la serie no existe en esa
   // fecha no hay nada que reintentar ni que corregir → la fila de error se pinta SIN acciones.
   PAST_SET_NOT_FOUND_ERROR,
+  formatStrengthSetLine,
 } from '@eva/workout-engine'
 import type { HrMetadataV1 } from '@eva/cardio'
 import { FONT, TYPE, textStyle } from '../../../lib/typography'
@@ -448,9 +449,15 @@ export function SetRow({
                 `font-mono text-[13px] font-bold tabular-nums`, LogSetForm.tsx:542). SIEMPRE text-on-dark:
                 el web nunca tiñe el valor de ámbar en pending (el borde/badge/estado ya lo señalan). */}
             <Text style={CHIP_MARK_STYLE} className="text-on-dark">
-              {log?.weight_kg ?? '–'}
-              <Text className="text-on-dark-muted"> × </Text>
-              {log?.reps_done ?? '–'}
+              {/* Fuerza POR LADO (R19): «20 kg × 10 / 10» lo arma el motor (`formatStrengthSetLine`) sólo
+                  con desglose en `metadata`; sin lados la línea es la de siempre (misma regla que la web). */}
+              {formatStrengthSetLine({ weight_kg: log?.weight_kg ?? null, reps_done: log?.reps_done ?? null, metadata: log?.metadata }) ?? (
+                <>
+                  {log?.weight_kg ?? '–'}
+                  <Text className="text-on-dark-muted"> × </Text>
+                  {log?.reps_done ?? '–'}
+                </>
+              )}
             </Text>
             {/* RPE/RIR: mono 500 (semibold web) a 11px vía CHIP_EFFORT_STYLE (web
                 `font-mono text-[11px] font-semibold`, LogSetForm.tsx:548,551). La tuerca V3 (E3.7)
@@ -824,11 +831,22 @@ export function ActiveSetRow({
         mode: f.allowDecimal ? ('decimal' as const) : ('integer' as const),
       }))
     }
+    // Fuerza POR LADO (R3/R4, W0.5): `per_side` y `alternating` capturan igual — un peso y DOS reps
+    // (Izq → Der), mismas keys que lee `buildStrengthPayload` con `sideMode`. La fuerza nunca entra al
+    // carril tipado (R18): los pasos salen de esta rama, no de `typedKeypadFields`.
+    if (sideMode === 'per_side' || sideMode === 'alternating') {
+      return [
+        { key: 'weight', label: 'Kg', unit: 'kg', mode: 'weight' },
+        { key: 'reps_left', label: 'Izq', unit: 'reps', mode: 'reps' },
+        { key: 'reps_right', label: 'Der', unit: 'reps', mode: 'reps' },
+      ]
+    }
     return [
       { key: 'weight', label: 'Kg', unit: 'kg', mode: 'weight' },
       { key: 'reps', label: 'Reps', unit: 'reps', mode: 'reps' },
     ]
   }, [typedMode, sideMode, distanceUnit, cardioModality])
+  const perSideReps = !typedMode && (sideMode === 'per_side' || sideMode === 'alternating')
 
   const motion = useEvaMotion()
 
@@ -915,7 +933,9 @@ export function ActiveSetRow({
           cardioModality,
           ...(hrMetadata ? { hrMetadata } : {}),
         })
-      : buildStrengthPayload(valuesRef.current, blockId, setNumber)
+      // `sideMode` (R3): con `per_side`/`alternating` el motor escribe `reps_done = min(izq, der)` y el
+      // desglose en `metadata`; sin lado el payload es byte-idéntico al de siempre.
+      : buildStrengthPayload(valuesRef.current, blockId, setNumber, sideMode ?? null)
     onCommit(payload)
   }
 
@@ -1193,15 +1213,42 @@ export function ActiveSetRow({
                 ×
               </Text>
             </View>
-            <FieldBox
-              label="Reps"
-              value={values.reps ?? ''}
-              active={openKey === 'reps'}
-              onPress={() => openField('reps')}
-              onLongPress={onLongPressValue ? () => onLongPressValue('reps') : undefined}
-              testID={`set-field-${setNumber}-reps`}
-              compact={!isActive}
-            />
+            {perSideReps ? (
+              // Fuerza POR LADO (mockup B): dos cajas «Izq» / «Der» con el mismo teclado de reps.
+              <>
+                <FieldBox
+                  label="Izq"
+                  value={values.reps_left ?? ''}
+                  active={openKey === 'reps_left'}
+                  onPress={() => openField('reps_left')}
+                  testID={`set-field-${setNumber}-reps_left`}
+                  compact={!isActive}
+                />
+                <View className={isActive ? 'pb-3' : 'pb-2'}>
+                  <Text style={textStyle(isActive ? 'xl' : 'md', FONT.ui)} className="text-on-dark-muted">
+                    /
+                  </Text>
+                </View>
+                <FieldBox
+                  label="Der"
+                  value={values.reps_right ?? ''}
+                  active={openKey === 'reps_right'}
+                  onPress={() => openField('reps_right')}
+                  testID={`set-field-${setNumber}-reps_right`}
+                  compact={!isActive}
+                />
+              </>
+            ) : (
+              <FieldBox
+                label="Reps"
+                value={values.reps ?? ''}
+                active={openKey === 'reps'}
+                onPress={() => openField('reps')}
+                onLongPress={onLongPressValue ? () => onLongPressValue('reps') : undefined}
+                testID={`set-field-${setNumber}-reps`}
+                compact={!isActive}
+              />
+            )}
           </>
         )}
       </View>

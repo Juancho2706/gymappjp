@@ -22,8 +22,26 @@
  * atribucion greedy por plan. Un dia a medias queda `in_progress` (ni pendiente ni hecho) para que el
  * alumno interrumpido no caiga al sheet "Ya hiciste este entrenamiento" (incidente P0 2026-07-26).
  */
-import { deriveDayCompletion, type DayCompletionBlock, type DayCompletionState } from '@eva/workout-engine'
+import { deriveDayCompletion, type DayCompletionBlock, type DayCompletionState, type ProgramDayLabelStructure } from '@eva/workout-engine'
 import { isoDateAddDays } from '../../../../lib/date-utils'
+
+/**
+ * ESTRUCTURA DEL PROGRAMA (spec `docs/specs/ciclo-real-y-por-lado`, R12). Todo lo que mapea
+ * `day_of_week` sobre la semana Lun→Dom vale SOLO en `weekly`, donde esa columna es el ISODOW; en
+ * `cycle` guarda el INDICE del ciclo (1..14) y mapearlo a un dia de la semana es exactamente el bug
+ * que reporto Movens (un ciclo de 3 dias "planificaba" lun/mar/mie; uno de 14 doblaba los dias 8..14
+ * sobre los 7 primeros). En `cycle` no hay dia asignado ni dia perdido: la tira Lun→Dom es de dias
+ * ENTRENADOS y el estado por dia del programa lo resuelve `resolveCycleCursor`, no estos helpers.
+ *
+ * Se pasa por parametro OPCIONAL (default `weekly`) para que los callers historicos —que solo tienen
+ * programas semanales— no cambien de comportamiento.
+ */
+export type WeekStructure = ProgramDayLabelStructure
+
+/** ¿La estructura mapea `day_of_week` sobre la semana Lun→Dom? Solo `weekly` (y el default `null`). */
+function usesWeekdayGrid(structure: WeekStructure | undefined): boolean {
+  return structure !== 'cycle'
+}
 
 /** Estado visual de un dot de la semana. `in_progress` = sesion empezada sin cerrar (1–99%). */
 export type WeekDotState = 'done' | 'in_progress' | 'today' | 'pending' | 'rest'
@@ -90,9 +108,13 @@ function usesAssignedDate(plan: WeekPlanRow): boolean {
 /**
  * Dias de la semana con plan, a partir de las filas de plan del alumno. Un dia cuenta si algun plan cae en
  * su `day_of_week` (1..7) o su `assigned_date` coincide con la fecha (plan suelto de fecha fija).
+ *
+ * En `cycle` devuelve SIEMPRE vacio (R12): no existe el dia asignado del calendario, asi que la tira
+ * queda con dias entrenados y sin pendientes.
  */
-export function plannedDatesForWeek(plans: WeekPlanRow[], weekDates: string[]): Set<string> {
+export function plannedDatesForWeek(plans: WeekPlanRow[], weekDates: string[], structure?: WeekStructure): Set<string> {
   const planned = new Set<string>()
+  if (!usesWeekdayGrid(structure)) return planned
   for (const iso of weekDates) {
     const dow = isoWeekday1to7(iso)
     if (plans.some((p) => p.day_of_week === dow || (usesAssignedDate(p) && p.assigned_date === iso))) {
@@ -193,9 +215,16 @@ export function greedyPlanDone(
  *  `weekDates` (Lun→Dom) y, solo cuando el plan no declara dia (suelto de fecha fija, ver
  *  `usesAssignedDate`), su `assigned_date`. `null` si no cae en la semana.
  *  El `day_of_week` va PRIMERO a proposito: con la fecha adelante, los N dias de un programa
- *  —todos con `assigned_date = start_date`— caian en un unico slot (incidente 2026-08-25). */
-function planSlotDate(plan: WeekPlanRow, weekDates: string[]): string | null {
-  if (plan.day_of_week != null) return weekDates[((plan.day_of_week - 1) % 7 + 7) % 7] ?? null
+ *  —todos con `assigned_date = start_date`— caian en un unico slot (incidente 2026-08-25).
+ *
+ *  En `cycle` devuelve SIEMPRE `null` (R12): un dia del ciclo no ocupa un slot del calendario. El
+ *  wrap `((dow - 1) % 7 + 7) % 7` que habia aca ERA el bug — doblaba los indices 8..14 de un ciclo
+ *  largo sobre lunes..domingo. En `weekly` el ISODOW ya es 1..7, asi que el indice es directo y un
+ *  valor fuera de rango (dato inconsistente) devuelve `null` en vez de un dia inventado. */
+function planSlotDate(plan: WeekPlanRow, weekDates: string[], structure?: WeekStructure): string | null {
+  if (!usesWeekdayGrid(structure)) return null
+  const dow = plan.day_of_week
+  if (dow != null) return dow >= 1 && dow <= 7 ? weekDates[dow - 1] ?? null : null
   if (plan.assigned_date != null && weekDates.includes(plan.assigned_date)) return plan.assigned_date
   return null
 }
@@ -219,11 +248,14 @@ export function greedyStatesForWeek(
   weekDates: string[],
   todayIso: string,
   source: PlanWeekCompletionSource,
+  structure?: WeekStructure,
 ): GreedyWeekStates {
   const doneDates = new Set<string>()
   const inProgressDates = new Set<string>()
+  // `cycle`: ningun plan ocupa slot de calendario ⇒ sets vacios y la tira se pinta con dias
+  // entrenados (el caller los aporta), sin greedy ni recuperaciones (R12).
   for (const plan of plans) {
-    const slot = planSlotDate(plan, weekDates)
+    const slot = planSlotDate(plan, weekDates, structure)
     if (slot == null) continue
     const { state } = greedyPlanDone(plan.id, slot, slot > todayIso, weekDates, source)
     if (state === 'done') doneDates.add(slot)

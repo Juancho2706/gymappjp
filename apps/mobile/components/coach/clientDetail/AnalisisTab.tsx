@@ -25,7 +25,7 @@ import {
 import { FONT } from '../../../lib/typography'
 import { getTodayInSantiago } from '../../../lib/date-utils'
 import { themeLucideIcons } from '../../../lib/themed-lucide'
-import { EMPTY_LOGGED_SET_LABEL, EXERCISE_TYPE_LABEL, formatLoggedSetLine } from '@eva/workout-engine'
+import { EMPTY_LOGGED_SET_LABEL, EXERCISE_TYPE_LABEL, formatLoggedSetLine, sideRepsFromMetadata } from '@eva/workout-engine'
 
 // QA2 A1: `className` en un icono lucide solo pinta si el componente está registrado en
 // nativewind (RN no tiene `currentColor`); sin esto el glyph cae al negro por defecto.
@@ -625,10 +625,13 @@ function ExerciseSession({ name, muscle, kind, sets, last }: { name: string; mus
           const target = set.targetWeightKg ?? set.blockTargetWeightKg
           const comparison = target != null && set.weightKg != null ? Math.sign(set.weightKg - target) : 0
           const weightTone = comparison > 0 ? 'text-success-600' : comparison < 0 ? 'text-warning-600' : 'text-strong'
+          // Fuerza POR LADO (R19): «10 / 10» desde `metadata` con el helper único del motor; el peso
+          // conserva su comparación objetivo↔hecho y «PC» (paridad web TrainingTabB4Panels).
+          const sides = sideRepsFromMetadata(set.metadata)
           return (
             <View key={`${set.setNumber ?? index}-${index}`} className="border border-subtle bg-surface-sunken" style={styles.setPill}>
               <Text className="text-strong" style={styles.setText}>
-                {set.setNumber ?? index + 1}: <Text className={weightTone}>{set.weightKg != null ? `${set.weightKg}kg` : 'PC'}</Text> × {set.repsDone ?? '—'}{set.rpe != null ? ` · RPE ${set.rpe}` : ''}{set.rir != null ? ` · RIR ${set.rir}` : ''}
+                {set.setNumber ?? index + 1}: <Text className={weightTone}>{set.weightKg != null ? `${set.weightKg}kg` : 'PC'}</Text> × {sides ? `${sides.left} / ${sides.right}` : set.repsDone ?? '—'}{set.rpe != null ? ` · RPE ${set.rpe}` : ''}{set.rir != null ? ` · RIR ${set.rir}` : ''}
               </Text>
             </View>
           )

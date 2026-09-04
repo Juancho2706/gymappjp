@@ -1,3 +1,4 @@
+import { programDayLabel } from '@eva/workout-engine'
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Image } from 'expo-image'
@@ -423,9 +424,19 @@ function ProgramSummary({
   const scheduled = visiblePlans.filter((plan) => plan.day_of_week != null).sort((a, b) => a.day_of_week! - b.day_of_week!)
   const weekly = scheduled.filter((plan) => plan.day_of_week! >= 1 && plan.day_of_week! <= 7)
   const ordered = weekly.length ? weekly : scheduled
-  const next = ordered.find((plan) => plan.day_of_week! >= todayDow) ?? ordered[0] ?? null
-  const nextDay = next?.day_of_week ? dayLabel(next.day_of_week) : ''
-  const isToday = next?.day_of_week === todayDow
+  // Ciclo (D1, feedback Movens): `day_of_week` es el ÍNDICE del ciclo → «Día N de M», y nunca «Hoy» por
+  // coincidencia numérica (paridad web profileProgramUtils/ProgramTabB7). El «próximo» real vive en el
+  // cursor del alumno (sus completitudes), que esta ficha no carga: se muestra el primer día del ciclo.
+  const isCycleProgram = program.program_structure_type === 'cycle'
+  const next = isCycleProgram
+    ? ordered[0] ?? null
+    : ordered.find((plan) => plan.day_of_week! >= todayDow) ?? ordered[0] ?? null
+  const nextDay = next?.day_of_week
+    ? isCycleProgram
+      ? programDayLabel(next.day_of_week, 'cycle', program.cycle_length ?? null, { form: 'long' })
+      : dayLabel(next.day_of_week)
+    : ''
+  const isToday = !isCycleProgram && next?.day_of_week === todayDow
 
   return (
     <TouchableOpacity
@@ -471,7 +482,7 @@ function ProgramSummary({
           <View className="bg-sport-100 dark:bg-sport-100/20" style={styles.nextWorkout}>
             <CalendarCheck size={18} className="text-sport-600" />
             <View style={styles.nextCopy}>
-              <Text className="text-sport-700" style={styles.nextEyebrow}>Próximo entreno · {nextDay}{isToday ? ' · Hoy' : ''}</Text>
+              <Text className="text-sport-700" style={styles.nextEyebrow}>{isCycleProgram ? 'Programa por ciclos' : 'Próximo entreno'} · {nextDay}{isToday ? ' · Hoy' : ''}</Text>
               <Text className="text-strong" style={styles.nextTitle} numberOfLines={1}>{next.title} · {next.blocks.length} ejercicio{next.blocks.length === 1 ? '' : 's'}</Text>
             </View>
           </View>

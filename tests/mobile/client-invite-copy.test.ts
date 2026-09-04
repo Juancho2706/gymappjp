@@ -1,5 +1,7 @@
 // Copy del acceso por WhatsApp/compartir en mobile (auditoría onboarding v2, 22-08). El módulo
 // bajo test no importa react-native, así que corre con el runner del repo aunque viva en apps/mobile.
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { PERSONAS } from '@eva/schemas'
 import { clientInviteMessage, DEFAULT_INVITE_PERSONA } from '../../apps/mobile/lib/client-invite-copy'
@@ -100,5 +102,53 @@ describe('clientInviteMessage · credencial adentro del mensaje', () => {
       expect(msg).not.toContain('undefined')
       expect(msg).toContain('te mandé tu clave al correo')
     }
+  })
+})
+
+/**
+ * W4.7 («Ciclo real y por lado») — Play sigue en **closed testing** (0 tokens Android en toda la
+ * instancia contra 32 de iOS), así que «Tu alumno baja EVA…» mandaba al alumno a una tienda donde no
+ * está la app. El copy canónico del SPEC lo manda al navegador o a iOS.
+ *
+ * Este guard lee el fuente como texto porque el copy vive inline en el JSX y el componente importa
+ * `react-native` (no se puede montar acá). Si algún día se extrae a constante, este `describe` se
+ * reemplaza por un assert sobre esa constante. `process.cwd()` = raíz del monorepo (mismo recurso
+ * que `tests/coach-invite-code-url.test.ts`).
+ */
+describe('copy del acceso del alumno · superficies del coach en RN', () => {
+  const COACH_ACCESS_COPY =
+    'Tu alumno entra desde el navegador con tu link o desde la app en iOS. No necesita instalar nada.'
+  const PROHIBIDO = /baja EVA|descarga EVA|bajar la app|descargar EVA/i
+
+  function coachSourceFiles(): string[] {
+    const roots = [
+      resolve(process.cwd(), 'apps/mobile/components/coach'),
+      resolve(process.cwd(), 'apps/mobile/app/coach'),
+    ]
+    const out: string[] = []
+    for (const root of roots) {
+      if (!existsSync(root)) continue
+      for (const entry of readdirSync(root, { recursive: true, withFileTypes: true })) {
+        if (!entry.isFile() || !/\.tsx?$/.test(entry.name)) continue
+        out.push(join(entry.parentPath ?? root, entry.name))
+      }
+    }
+    return out
+  }
+
+  it('la hoja «Invitar alumno» dice el copy canónico, carácter por carácter', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'apps/mobile/components/coach/InviteStudent.tsx'),
+      'utf8',
+    )
+    expect(source).toContain(COACH_ACCESS_COPY)
+  })
+
+  it('ninguna superficie del coach manda al alumno a bajar la app', () => {
+    const files = coachSourceFiles()
+    expect(files.length, 'no se encontró ningún fuente del coach: revisa las rutas del guard').toBeGreaterThan(20)
+
+    const culpables = files.filter((file) => PROHIBIDO.test(readFileSync(file, 'utf8')))
+    expect(culpables, `superficies del coach que todavía mandan a instalar la app:\n${culpables.join('\n')}`).toEqual([])
   })
 })

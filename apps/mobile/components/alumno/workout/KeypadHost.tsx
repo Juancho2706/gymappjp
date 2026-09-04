@@ -229,7 +229,9 @@ export function KeypadHost({
     const v = valuesRef.current
     const payload = target.typed
       ? buildTypedPayload(target.typed.mode, v, target.blockId, target.setNumber, typedContext)
-      : buildStrengthPayload(v, target.blockId, target.setNumber)
+      // Fuerza POR LADO (W3.10): el teclado de EDICIÓN admite lados sólo en esta rama (`target.sideMode`
+      // lo pone `openSet` únicamente en strength); el motor escribe `reps_done = min` + `metadata`.
+      : buildStrengthPayload(v, target.blockId, target.setNumber, target.sideMode ?? null)
     onCommit(payload)
   }
 

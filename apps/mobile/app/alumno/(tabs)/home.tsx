@@ -11,7 +11,9 @@ import { useEntitlements } from '../../../lib/entitlements'
 import { useTheme } from '../../../context/ThemeContext'
 import { useMarkDashboardReady } from '../../../context/DashboardReadyContext'
 import { resetChromeScroll, useAlumnoScrollHandler } from '../../../lib/alumno-chrome-scroll'
-import { countLoggedSetsByBlock, deriveDayCompletion, skippedBlockIdsFromLogs, type DayCompletionBlock, type LoggedSetRow } from '@eva/workout-engine'
+import { countLoggedSetsByBlock, deriveDayCompletion, skippedBlockIdsFromLogs, type CycleCompletionLogRow, type DayCompletionBlock, type LoggedSetRow } from '@eva/workout-engine'
+import { deriveProgramCursor } from '../../../components/alumno/home/program-cursor'
+import { startWorkoutProgram } from '../../../lib/start-program'
 import { formatLongDate, getSantiagoIsoYmdForUtcInstant, getSantiagoUtcBoundsForDay, getTodayInSantiago, formatRelativeDate, isoDateAddDays, timeGreeting } from '../../../lib/date-utils'
 import { buildWorkoutDoneEditParams } from '../../../lib/workout-executor-nav'
 import { AppBackground } from '../../../components/AppBackground'
@@ -161,17 +163,24 @@ export default function AlumnoHomeScreen() {
       await Promise.all([
         supabase
           .from('workout_programs')
-          .select('id, name, start_date, weeks_to_repeat, ab_mode, program_phases, workout_plans ( id, title, day_of_week, assigned_date, week_variant, workout_blocks ( id, sets, reps, exercises ( name ) ) )')
+          // `program_structure_type, cycle_length, start_date_flexible` (W3.3): sin ellos el shell no
+          // puede saber si `day_of_week` es un ISODOW o el INDICE de un ciclo, ni si el programa
+          // todavia no empezo (R30). Espejo del contrato web (`dashboard.queries.ts`).
+          .select('id, name, start_date, weeks_to_repeat, ab_mode, program_phases, program_structure_type, cycle_length, start_date_flexible, workout_plans ( id, title, day_of_week, assigned_date, week_variant, workout_blocks ( id, sets, reps, exercises ( name ) ) )')
           .eq('client_id', client.id)
           .eq('is_active', true)
           .maybeSingle(),
-        // 30 dias — solo FECHAS de entreno (momentum/cumplimiento) y actividad reciente. Ya no trae
-        // `block_id`/`workout_blocks(plan_id)`: el estado por dia se calcula con la lectura semanal de
-        // abajo, que no depende del `limit(200)` (200 series se agotan en ~6 sesiones y truncaban la
-        // semana en un alumno con volumen alto).
+        // 30 dias — MISMA lectura que web (`dashboard.queries.ts` getRecentWorkoutLogs, R10): fechas de
+        // entreno (momentum/cumplimiento), actividad reciente Y el insumo de `buildCycleCompletions`
+        // (`block_id`, el `plan_id` del embed, `set_number`, `logged_at`, `metadata`). Con dos
+        // estrategias distintas el mismo alumno veria "Dia 2 de 3" en la PWA y "Dia 1 de 3" en la app.
+        // `target_date` NO se pide: no es columna de `workout_logs` (PGRST204); la fecha de la
+        // completitud es el dia Santiago de `logged_at` (R11).
+        // El `limit(200)` es el de web a proposito; el estado por dia de la SEMANA lo sigue calculando
+        // la lectura semanal serie-a-serie de abajo, que no depende de este tope.
         supabase
           .from('workout_logs')
-          .select('id, logged_at, exercise_name_at_log')
+          .select('id, logged_at, exercise_name_at_log, block_id, set_number, metadata, workout_blocks ( plan_id )')
           .eq('client_id', client.id)
           .gte('logged_at', `${since30Iso}T00:00:00.000Z`)
           .order('logged_at', { ascending: false })
@@ -234,6 +243,11 @@ export default function AlumnoHomeScreen() {
           startDate: (programData as any).start_date ?? null,
           weeksToRepeat: Math.max(1, (programData as any).weeks_to_repeat ?? 1),
           abMode: !!(programData as any).ab_mode,
+          // W3.3 — la estructura decide la semantica de `day_of_week` (ISODOW vs indice del ciclo) y
+          // el flag + la fecha deciden `programState` (R30). `null` de la columna = weekly.
+          structureType: (programData as any).program_structure_type === 'cycle' ? 'cycle' : 'weekly',
+          cycleLength: typeof (programData as any).cycle_length === 'number' ? (programData as any).cycle_length : null,
+          startDateFlexible: (programData as any).start_date_flexible ?? null,
           phases: Array.isArray((programData as any).program_phases) ? ((programData as any).program_phases as Program['phases']) : null,
           plans: rawPlans
             .map((p): Plan => ({
@@ -254,7 +268,9 @@ export default function AlumnoHomeScreen() {
         }
       : null
 
-    const rows = (workoutRows ?? []) as { id: string; logged_at: string; exercise_name_at_log: string | null }[]
+    // `as unknown as` (mismo patron que web `dashboard.queries.ts:172`): el embed to-one
+    // `workout_blocks` llega como OBJETO en runtime y los tipos generados infieren array.
+    const rows = (workoutRows ?? []) as unknown as ({ id: string; logged_at: string; exercise_name_at_log: string | null } & CycleCompletionLogRow)[]
     const workoutDates = new Set(rows.map((r) => getSantiagoIsoYmdForUtcInstant(r.logged_at)))
 
     // `as unknown as` (mismo patron que web dashboard.queries.ts:155): el embed to-one
@@ -308,6 +324,8 @@ export default function AlumnoHomeScreen() {
       program,
       recentWorkouts: rows.map((r) => ({ id: r.id, logged_at: r.logged_at, exercise_name_at_log: r.exercise_name_at_log })),
       workoutDates,
+      // Las MISMAS filas, sin recortar: `deriveProgramCursor` las pasa por `buildCycleCompletions`.
+      cycleLogRows: rows,
       todayLoggedByBlock,
       nutritionDates: new Set((nutritionRows ?? []).map((r: any) => r.log_date)),
       checkIns: (checkInRows ?? []) as any,
@@ -320,6 +338,19 @@ export default function AlumnoHomeScreen() {
     setReloadKey((k) => k + 1)
     setLoading(false)
     setRefreshing(false)
+  }
+
+  /**
+   * «Empezar hoy» (W3.8, R14/R23): la RPC fija `start_date` = hoy y el home se recarga para que el cursor
+   * pinte «Hoy toca · Día 1 de N». `program_not_startable` NO es un error para el alumno (otra sesion ya
+   * lo empezo o dejo de ser flexible): se recarga y se muestra el estado real. Devuelve el mensaje de
+   * error a mostrar inline, o `null` si todo fue bien.
+   */
+  async function handleStartProgram(programId: string): Promise<string | null> {
+    const res = await startWorkoutProgram(programId, { via: 'button', structure: data?.program?.structureType ?? null })
+    if (!res.ok && res.code !== 'program_not_startable') return res.message
+    await load()
+    return null
   }
 
   async function onRefresh() {
@@ -343,26 +374,59 @@ export default function AlumnoHomeScreen() {
     const cycleVariant = weekIdx ? weekIndexToVariantLetter(weekIdx) : 'A'
     const activeVariant = effectiveWeekVariantFromPlans(plans, cycleVariant, abMode)
 
+    // Estructura del programa (W3.3): decide si `day_of_week` es un ISODOW o el INDICE de un ciclo.
+    const structureType = data?.program?.structureType ?? 'weekly'
+    const isCycle = structureType === 'cycle'
+
+    // Planes que participan del programa, filtrados por la variante A/B efectiva (web
+    // ActiveProgramSection.tsx:49). Se calculan ACA arriba porque son la entrada del cursor.
+    const programPlans = plans.filter((p) => p.day_of_week != null && workoutPlanMatchesVariant(p, activeVariant, abMode))
+
+    // CURSOR DEL PROGRAMA (W3.5, D1) — UNICA resolucion de "hoy toca". En `weekly` es la IDENTIDAD de
+    // lo de siempre (`day_of_week === ISODOW`); en `cycle` es el cursor por COMPLETITUD sobre la
+    // lectura de 30 dias: el dia calendario NO participa. `programState` (R30) y las etiquetas
+    // (`programDayLabel`) viajan en el resultado — ninguna seccion vuelve a derivarlos.
+    const cursor = deriveProgramCursor({
+      program: data?.program ?? null,
+      plans: programPlans,
+      logs: data?.cycleLogRows ?? [],
+      todayIso,
+    })
+    const planById = new Map(plans.map((p) => [p.id, p]))
+
     // `plans` viene ANIDADO del programa ACTIVO ⇒ son TODOS planes de programa, cuya identidad de dia
     // es `day_of_week`. El atajo por `assigned_date` (que solo tiene sentido en un plan SUELTO de fecha
     // fija, aca imposible) hacia que durante la semana del `start_date` —estampado por el builder en
     // TODOS los dias del programa— el dia resolviera a un plan arbitrario (incidente 2026-08-25).
-    const todayPlan = plans.find((p) => p.day_of_week === todayDbDay) ?? null
-    const nextPlan = plans.find((p) => p.id !== todayPlan?.id) ?? null
+    // En `cycle` el hero lo lee del cursor: buscar por `todayDbDay` seria leer el indice del ciclo como
+    // dia de la semana (el jueves de un ciclo de 3 dias dejaba el hero VACIO). En `weekly` se conserva
+    // la busqueda historica sobre TODOS los planes (el cursor solo ve los de la variante activa).
+    const todayPlan = isCycle
+      ? (cursor.todayPlanId ? planById.get(cursor.todayPlanId) ?? null : null)
+      : (plans.find((p) => p.day_of_week === todayDbDay) ?? null)
+    const nextPlan = isCycle
+      ? (cursor.nextPlanId ? planById.get(cursor.nextPlanId) ?? null : null)
+      : (plans.find((p) => p.id !== todayPlan?.id) ?? null)
 
     // Semana Lun..Dom + planificados.
     const monday = startOfWeekMonday(today)
     const weekDates = Array.from({ length: 7 }, (_, i) => isoDate(new Date(monday.getTime() + i * MS_DAY)))
     const plannedDays = new Set<string>()
-    for (let i = 0; i < 7; i++) {
-      const dIso = weekDates[i]
-      const dbDay = jsDayToDbDay(new Date(monday.getTime() + i * MS_DAY).getDay())
-      // Solo `day_of_week`: ver `todayPlan` — un plan de programa no se resuelve por fecha.
-      if (plans.some((p) => p.day_of_week === dbDay)) plannedDays.add(dIso)
+    // En CICLO no hay "dia asignado" del calendario (R12): la tira Lun→Dom es de dias ENTRENADOS, sin
+    // estados «asignado»/«pendiente». Marcar planificados por `day_of_week` seria leer el indice del
+    // ciclo como dia de la semana (el ciclo de 3 dias "planificaba" lun/mar/mie).
+    if (!isCycle) {
+      for (let i = 0; i < 7; i++) {
+        const dIso = weekDates[i]
+        const dbDay = jsDayToDbDay(new Date(monday.getTime() + i * MS_DAY).getDay())
+        // Solo `day_of_week`: ver `todayPlan` — un plan de programa no se resuelve por fecha.
+        if (plans.some((p) => p.day_of_week === dbDay)) plannedDays.add(dIso)
+      }
     }
     const momentumDays: MomentumDay[] = weekDates.map((dIso, i) => ({
       label: WEEK_LETTERS[i],
       isToday: dIso === todayIso,
+      // En ciclo `plannedDays` esta vacio ⇒ la tira queda con un punto por dia ENTRENADO (R12).
       hasWorkout: plannedDays.has(dIso) || workoutDates.has(dIso),
       isCompleted: workoutDates.has(dIso),
     }))
@@ -380,7 +444,6 @@ export default function AlumnoHomeScreen() {
     for (const p of plans) blocksByPlan.set(p.id, p.blocks.map((b) => ({ id: b.id, sets: b.sets })))
     const completionSource: PlanWeekCompletionSource = { blocksByPlan, loggedSetsByPlanDay, skippedBlockIdsByPlanDay }
 
-    const programPlans = plans.filter((p) => p.day_of_week != null && workoutPlanMatchesVariant(p, activeVariant, abMode))
     // ATRIBUCION GREEDY POR PLAN — espejo EXACTO del fix web weekPendingWorkouts.ts (Paso 2+3,
     // atribucion greedy, CEO decision 10 2026-07-22): un dia X queda 'done' si SU plan tiene un log
     // en CUALQUIER dia de esta semana Santiago, no solo en su propia fecha. Recuperar el martes un
@@ -396,27 +459,54 @@ export default function AlumnoHomeScreen() {
     // log" sino con el 100% de las series esperadas (`deriveDayCompletion` del engine, misma regla que la
     // web); una sesion a medias deja el dia en 'in_progress' — ni pendiente (ya entreno) ni hecho (le
     // faltan series), y su day-card lleva al ejecutor en vez del sheet "Ya hiciste este entrenamiento".
-    const planDays: PlanDayView[] = programPlans.map((plan) => {
-      const dow = plan.day_of_week as number
-      const idx = ((dow - 1) % 7 + 7) % 7
-      const dIso = weekDates[idx]
-      const isToday = dIso === todayIso
-      const isFuture = dIso > todayIso
-      // Atribucion greedy por plan (Fase 1 en-fecha / Fase 2 recuperacion): helper PURO compartido con la
-      // racha del ejecutor (weekly-streak.ts) — UNICA fuente de verdad del greedy, sin duplicar la logica.
-      const { state, doneOnDate } = greedyPlanDone(plan.id, dIso, isFuture, weekDates, completionSource)
-      const status: PlanDayView['status'] =
-        state === 'done' ? 'done' : state === 'in_progress' ? 'in_progress' : isToday ? 'today' : isFuture ? 'upcoming' : 'pending'
-      const doneOnLabel = doneOnDate ? DAY_FULL[dbDayByDate.get(doneOnDate) ?? 1] : null
-      return { plan, status, isToday, dateIso: dIso, doneOnDate, doneOnLabel }
-    })
+    //
+    // CICLO (R12/D1): el greedy semanal NO aplica — un dia del ciclo no tiene fecha de calendario ni
+    // "dia perdido", asi que los slots salen del cursor (hecho con su fecha / hoy / proximo) y jamas
+    // se mapea `day_of_week` sobre `weekDates`. Ese `((dow - 1) % 7 + 7) % 7` era justamente el bug:
+    // con un ciclo de 14 dias los indices 8..14 se doblaban sobre lunes..domingo.
+    const planDays: PlanDayView[] = isCycle
+      ? cursor.slots.flatMap<PlanDayView>((slot) => {
+          const plan = planById.get(slot.planId)
+          if (!plan) return []
+          const isToday = slot.planId === cursor.todayPlanId
+          const status: PlanDayView['status'] =
+            slot.state === 'done'
+              ? 'done'
+              : isToday
+                ? (cursor.todayState === 'in_progress' ? 'in_progress' : cursor.todayState === 'done' ? 'done' : 'today')
+                : 'upcoming'
+          // Sin fecha de calendario: la unica fecha REAL de un slot de ciclo es la del dia que se cerro
+          // (para abrir «Revisar y editar» sobre esa sesion); el resto apunta a hoy.
+          const dateIso = slot.doneDateIso ?? todayIso
+          return [{
+            plan, status, isToday, dateIso, doneOnDate: null, doneOnLabel: null,
+            // Etiquetas del cursor (W3.8): «Día 2» / «Día 2 de 3», nunca un dia de la semana.
+            isCycle: true, label: slot.label, labelLong: slot.labelLong,
+          }]
+        })
+      : programPlans.map((plan) => {
+          const dow = plan.day_of_week as number
+          // `day_of_week` en weekly es un ISODOW 1..7: el slot es su posicion en la semana Lun→Dom.
+          const dIso = weekDates[dow - 1] ?? weekDates[0]
+          const isToday = dIso === todayIso
+          const isFuture = dIso > todayIso
+          // Atribucion greedy por plan (Fase 1 en-fecha / Fase 2 recuperacion): helper PURO compartido con la
+          // racha del ejecutor (weekly-streak.ts) — UNICA fuente de verdad del greedy, sin duplicar la logica.
+          const { state, doneOnDate } = greedyPlanDone(plan.id, dIso, isFuture, weekDates, completionSource)
+          const status: PlanDayView['status'] =
+            state === 'done' ? 'done' : state === 'in_progress' ? 'in_progress' : isToday ? 'today' : isFuture ? 'upcoming' : 'pending'
+          const doneOnLabel = doneOnDate ? DAY_FULL[dbDayByDate.get(doneOnDate) ?? 1] : null
+          return { plan, status, isToday, dateIso: dIso, doneOnDate, doneOnLabel }
+        })
     // Banner ambar = dias pasados accionables: sin nada registrado ('pending') Y TAMBIEN los
     // empezados a medias ('in_progress') — paridad con la web (weekPendingWorkouts.ts filtra
     // pending || in_progress y su banner cambia el verbo a «Continuar»). Excluirlos era el bug
     // del owner 19-08 («solo del presente a dias futuros»): un dia pasado a medias no tenia
     // NINGUN CTA en RN — su card solo abria el sheet de solo-lectura y la unica salida era
     // «Repetir hoy». El dia de HOY se excluye: su CTA es el hero, no el banner.
-    const pending: PendingDay[] = planDays
+    // En CICLO no existe el «dia perdido» (R12): cero pendientes y cero recuperables, igual que la web
+    // (`weekPendingWorkouts.ts` devuelve vacio y el banner ambar no se monta).
+    const pending: PendingDay[] = isCycle ? [] : planDays
       .filter((d) => (d.status === 'pending' || d.status === 'in_progress') && !d.isToday)
       .map((d) => ({ planId: d.plan.id, dayOfWeek: d.plan.day_of_week as number, dayLabel: DAY_FULL[d.plan.day_of_week as number], dateIso: d.dateIso, status: d.status as 'pending' | 'in_progress' }))
       .sort((a, b) => a.dayOfWeek - b.dayOfWeek)
@@ -429,16 +519,23 @@ export default function AlumnoHomeScreen() {
     // A/B que pinta las day-cards) — no sobre `plannedDays`, que ignora la variante y es de la
     // tira de momentum. Empate de dos planes en un slot (A/B mal armado): el cerrado gana al
     // parcial, sin dot ambiguo (mismo desempate que `greedyStatesForWeek`).
+    // En CICLO la tira es de dias ENTRENADOS (R12): un punto por dia con logs, sin «asignado» ni
+    // «pendiente» — el greedy semanal y `plannedDatesForWeek` no aplican (los slots del ciclo no
+    // tienen fecha de calendario).
     const weekDoneDates = new Set<string>()
     const weekInProgressDates = new Set<string>()
-    for (const d of planDays) {
-      if (d.status === 'done') weekDoneDates.add(d.dateIso)
-      else if (d.status === 'in_progress') weekInProgressDates.add(d.dateIso)
+    if (isCycle) {
+      for (const iso of weekDates) if (workoutDates.has(iso)) weekDoneDates.add(iso)
+    } else {
+      for (const d of planDays) {
+        if (d.status === 'done') weekDoneDates.add(d.dateIso)
+        else if (d.status === 'in_progress') weekInProgressDates.add(d.dateIso)
+      }
+      for (const iso of weekDoneDates) weekInProgressDates.delete(iso)
     }
-    for (const iso of weekDoneDates) weekInProgressDates.delete(iso)
     const weeklyStreak = deriveWeeklyStreak({
       weekDates,
-      plannedDates: plannedDatesForWeek(programPlans, weekDates),
+      plannedDates: plannedDatesForWeek(programPlans, weekDates, structureType),
       doneDates: weekDoneDates,
       inProgressDates: weekInProgressDates,
       todayIso,
@@ -451,7 +548,9 @@ export default function AlumnoHomeScreen() {
 
     // Cumplimiento (mismas formulas que el legacy mobile).
     const workoutTargetDays = plans.length ? Math.min(plans.length * 4, 30) : 12
-    const workoutCompliance = data ? Math.min(1, workoutDates.size / workoutTargetDays) : 0
+    // R12: en ciclo no hay meta semanal ⇒ el anillo «Entrenos» no tiene denominador (`null` ⇒ «—» +
+    // «Sin meta semanal», paridad web `computeWorkoutScore30d`).
+    const workoutCompliance: number | null = data ? (isCycle ? null : Math.min(1, workoutDates.size / workoutTargetDays)) : 0
     const nutritionCompliance = data ? Math.min(1, (data.nutritionDates.size ?? 0) / 30) : 0
     const checkInCompliance = data ? Math.min(1, (data.checkIns.length ?? 0) / 4) : 0
 
@@ -491,7 +590,9 @@ export default function AlumnoHomeScreen() {
           skippedBlockIds: skippedBlockIdsByPlanDay.get(`${todayPlan.id}|${todayIso}`),
         })
       : null
-    const doneToday = todayCompletion?.state === 'done'
+    // En CICLO el veredicto ya lo trae el cursor (`todayState`, calculado sobre la lectura de 30 dias
+    // con la MISMA regla): no se re-deriva contra la ventana semanal.
+    const doneToday = isCycle ? cursor.todayState === 'done' : todayCompletion?.state === 'done'
 
     return {
       todayPlan, nextPlan, momentumDays, planDays, pending, todayPlanId, currentWeek, totalWeeks,
@@ -501,6 +602,19 @@ export default function AlumnoHomeScreen() {
       checkInEmpty: data ? checkIns.length === 0 : true,
       streak, ciVariant, ciDays, ciRelative, doneToday,
       weeklyStreak, todayIso,
+      // CONTRATO DEL CURSOR (W3.5) — lo consumen ActiveProgramSection / WeekStrip / MomentumCard /
+      // StreakRibbon (W3.8) TAL CUAL: `programState` (R30), `todayState`, los indices, la tira de
+      // `slots` con sus etiquetas de `programDayLabel`. Ninguna seccion vuelve a derivar "hoy toca",
+      // "no empezo" ni el nombre del dia a partir de `day_of_week`.
+      isCycle,
+      cursor,
+      programState: cursor.programState,
+      todayState: cursor.todayState,
+      todayCycleIndex: cursor.todayCycleIndex,
+      nextCycleIndex: cursor.nextCycleIndex,
+      todayDayLabel: cursor.todayLabel,
+      nextDayLabel: cursor.nextLabel,
+      slots: cursor.slots,
     }
   }, [data, loggedSetsByPlanDay, skippedBlockIdsByPlanDay])
 
@@ -574,6 +688,11 @@ export default function AlumnoHomeScreen() {
           loggedByBlock={data?.todayLoggedByBlock ?? new Map()}
           isAlreadyLogged={derived.doneToday}
           hasProgram={!!data?.program}
+          // Cursor del motor (W3.8): el hero lee `programState`/`todayState`/etiquetas de aca, nunca de
+          // `startDate` ni de `day_of_week`.
+          cursor={derived.cursor}
+          programId={data?.program?.id ?? null}
+          onStartProgram={handleStartProgram}
           coachName={data?.coachName ?? null}
           nutritionEnabled={nutritionEnabled}
           // `label` = texto REAL del CTA tocado (Empezar/Continuar/Ver registro) → la pildora del Despegue

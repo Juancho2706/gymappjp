@@ -354,6 +354,7 @@ async function persistProgram(opts: {
       existingStartDate,
       todaySantiagoIso: getSantiagoIsoYmdForUtcInstant(new Date().toISOString()),
       weeksToRepeat: opts.meta.weeks_to_repeat,
+      startDateFlexible: opts.meta.start_date_flexible, // R2/R21: flexible nuevo nace sin fecha
     })
     return {
       ...opts.meta,
@@ -839,7 +840,11 @@ export default function ProgramBuilderScreen() {
   const [programNotes, setProgramNotes] = useState('')
   const [startDate, setStartDate] = useState('')
   const [endDate, setEndDate] = useState<string | null>(null)
-  const [startDateFlexible, setStartDateFlexible] = useState(true)
+  // R2 (paridad con WeeklyPlanBuilder de web): «Inicio flexible» es opt-in — un programa NUEVO nace
+  // con el toggle APAGADO, en `weekly` y en `cycle` (R13). Los tres `?? false` de abajo (hidratar un
+  // programa guardado, cargar una plantilla, recuperar el borrador local) mantienen la misma regla:
+  // el valor guardado manda y solo el NULL/ausente cae al default apagado.
+  const [startDateFlexible, setStartDateFlexible] = useState(false)
   const [phases, setPhases] = useState<ProgramPhase[]>([])
   const [sourceTemplateId, setSourceTemplateId] = useState<string | null>(null)
   // Offline-first: autosave local del borrador + restaurar (ventaja nativa vs web).
@@ -1067,7 +1072,9 @@ export default function ProgramBuilderScreen() {
     setProgramNotes('')
     setStartDate('')
     setEndDate(null)
-    setStartDateFlexible(true)
+    // R2: el reset de hidratación es el estado de un programa NUEVO ⇒ toggle apagado (si después
+    // se hidrata un programa guardado, su `start_date_flexible` lo vuelve a fijar más abajo).
+    setStartDateFlexible(false)
     setPhases([])
     setSourceTemplateId(null)
     const blankDays = emptyDays()
@@ -1211,7 +1218,7 @@ export default function ProgramBuilderScreen() {
         setStartDate(prog.start_date ?? '')
         setEndDate(prog.end_date ?? null)
         setDurationDays(prog.duration_days ?? null)
-        setStartDateFlexible(prog.start_date_flexible ?? true)
+        setStartDateFlexible(prog.start_date_flexible ?? false)
         setPhases(Array.isArray(prog.program_phases) ? (prog.program_phases as ProgramPhase[]) : [])
         setSourceTemplateId(prog.source_template_id ?? null)
         const a = variantDays(plans, 'A', structure, len)
@@ -1780,7 +1787,7 @@ export default function ProgramBuilderScreen() {
     setProgramNotes(d.programNotes ?? '')
     setStartDate(d.startDate ?? '')
     setEndDate(d.endDate ?? null)
-    setStartDateFlexible(d.startDateFlexible ?? true)
+    setStartDateFlexible(d.startDateFlexible ?? false)
     setPhases(Array.isArray(d.phases) ? d.phases : [])
     setSourceTemplateId(d.sourceTemplateId ?? null)
     setOtherDays(Array.isArray(d.otherDays) ? d.otherDays : emptyDays())

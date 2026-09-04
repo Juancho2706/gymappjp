@@ -1,3 +1,4 @@
+import { effectiveExerciseType } from '@eva/workout-engine'
 import { supabase } from '../supabase'
 import { getClientProfile } from '../client'
 import { selectWithFallback } from '../db-compat'
@@ -214,6 +215,8 @@ type CurrentExercise = {
 
 type BlockExerciseRow = {
   exercise_id: string | null
+  /** Override de tipo DEL BLOQUE (R5): manda sobre `exercises.exercise_type` para filtrar candidatos. */
+  exercise_type_override?: string | null
   exercises: CurrentExercise | CurrentExercise[] | null
 }
 
@@ -234,7 +237,9 @@ export async function fetchSubstituteCandidates(blockId: string): Promise<Substi
     () =>
       supabase
         .from('workout_blocks')
-        .select('exercise_id, exercises ( id, name, muscle_group, equipment, exercise_type, secondary_muscles )')
+        // `exercise_type_override` viaja acá (y NO en el fallback MIN): una prod standalone vieja sin
+        // las columnas polimórficas cae al select de abajo y se comporta como hoy (sin override).
+        .select('exercise_id, exercise_type_override, exercises ( id, name, muscle_group, equipment, exercise_type, secondary_muscles )')
         .eq('id', blockId)
         .maybeSingle(),
     () =>
@@ -249,12 +254,21 @@ export async function fetchSubstituteCandidates(blockId: string): Promise<Substi
   const current = (Array.isArray(rawExercise) ? rawExercise[0] : rawExercise) ?? null
   if (!current || !current.muscle_group) return null
 
+  // Tipo EFECTIVO del bloque (R5, espejo exacto de la web W2.10): override del bloque > tipo del
+  // catálogo > 'strength'. Una sentadilla prescrita como movilidad EN ESTE bloque ofrece reemplazos
+  // de movilidad, no de fuerza; un bloque legacy (sin override, ejercicio sin tipo) sigue siendo
+  // fuerza.
+  const effectiveType = effectiveExerciseType(
+    { exercise_type_override: blockData?.exercise_type_override },
+    current,
+  )
+
   const currentNorm = {
     id: current.id,
     name: current.name,
     muscle_group: current.muscle_group,
     equipment: current.equipment ?? null,
-    exercise_type: current.exercise_type ?? null,
+    exercise_type: effectiveType,
     secondary_muscles: current.secondary_muscles ?? null,
   }
 
@@ -271,7 +285,8 @@ export async function fetchSubstituteCandidates(blockId: string): Promise<Substi
   const MIN = 'id, name, muscle_group, equipment, gif_url, image_url, video_url, thumbnail_url, instructions, coach_id'
   const muscle = currentNorm.muscle_group as string
 
-  // 3) Candidate set: mismo grupo muscular + (si aplica) mismo tipo de catalogo + no borrado + distinto.
+  // 3) Candidate set: mismo grupo muscular + mismo tipo EFECTIVO + no borrado + distinto. Sin
+  //    candidatos la lista vuelve vacía y el sheet dice «No hay reemplazos de este tipo» (R5).
   const { data } = await selectWithFallback<SubstituteCandidate[]>(
     () => {
       let q = supabase
@@ -281,7 +296,13 @@ export async function fetchSubstituteCandidates(blockId: string): Promise<Substi
         .is('deleted_at', null)
         .eq('muscle_group', muscle)
         .neq('id', currentNorm.id)
-      if (currentNorm.exercise_type) q = q.eq('exercise_type', currentNorm.exercise_type)
+      // En 'strength' entran también los del catálogo SIN tipo: su tipo efectivo ES 'strength'
+      // (`effectiveExerciseType`), y excluirlos vaciaría el sheet en los catálogos legacy. Los dos
+      // `.or()` se combinan con AND en PostgREST (scope ∧ tipo). Espejo literal de la web (W2.10).
+      q =
+        effectiveType === 'strength'
+          ? q.or('exercise_type.eq.strength,exercise_type.is.null')
+          : q.eq('exercise_type', effectiveType)
       return q.order('name').limit(60) as unknown as PromiseLike<{ data: SubstituteCandidate[] | null; error: { code?: string; message?: string } | null }>
     },
     () =>

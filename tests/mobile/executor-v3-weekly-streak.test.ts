@@ -324,3 +324,64 @@ describe('deriveWeeklyStreak', () => {
     expect(r.copy).toBe('2 de 2 esta semana')
   })
 })
+
+/**
+ * CICLO (spec `docs/specs/ciclo-real-y-por-lado`, R12/W3.6). En un programa `cycle` la columna
+ * `day_of_week` guarda el INDICE del ciclo (1..14), no el ISODOW: mapearlo sobre la semana Lun→Dom
+ * "planificaba" lun/mar/mie en un ciclo de 3 dias y doblaba los indices 8..14 de un ciclo largo sobre
+ * los 7 primeros (el `((dow - 1) % 7 + 7) % 7` que se fue). En ciclo la tira Lun→Dom es de dias
+ * ENTRENADOS: sin dia asignado, sin pendientes y sin greedy — el estado por dia del programa lo
+ * resuelve `resolveCycleCursor`, no estos helpers.
+ */
+describe('estructura `cycle` — la grilla Lun→Dom no aplica (R12)', () => {
+  const week = weekDatesMondayToSunday('2026-07-22') // Lun 20 .. Dom 26
+  const cyclePlans = [
+    { id: 'c1', day_of_week: 1, assigned_date: null }, // Dia 1 del ciclo
+    { id: 'c2', day_of_week: 2, assigned_date: null }, // Dia 2
+    { id: 'c3', day_of_week: 3, assigned_date: null }, // Dia 3
+  ]
+  const cycleBlocks = { c1: [{ id: 'x1', sets: 2 }], c2: [{ id: 'x2', sets: 2 }], c3: [{ id: 'x3', sets: 2 }] }
+
+  it('plannedDatesForWeek no marca ningun dia (no existe el "dia asignado" del calendario)', () => {
+    expect(plannedDatesForWeek(cyclePlans, week, 'cycle').size).toBe(0)
+    // El mismo programa leido como weekly SI marca Lun/Mar/Mie: es exactamente el bug que se corrige.
+    expect(plannedDatesForWeek(cyclePlans, week, 'weekly').size).toBe(3)
+  })
+
+  it('un ciclo LARGO ya no dobla los dias 8..14 sobre lunes..domingo', () => {
+    const largo = [{ id: 'c8', day_of_week: 8, assigned_date: null }, { id: 'c14', day_of_week: 14, assigned_date: null }]
+    expect(plannedDatesForWeek(largo, week, 'cycle').size).toBe(0)
+    const source = sourceOf({ c8: [{ id: 'y8', sets: 2 }] }, { 'c8|2026-07-20': { y8: 2 } })
+    // Sin estructura (weekly, default historico) un indice fuera de 1..7 ya no cae en un dia inventado.
+    expect(greedyStatesForWeek(largo, week, '2026-07-22', source).doneDates.size).toBe(0)
+  })
+
+  it('greedyStatesForWeek no atribuye ningun slot en ciclo (cero pendientes, cero recuperaciones)', () => {
+    const source = sourceOf(cycleBlocks, { 'c1|2026-07-20': { x1: 2 }, 'c2|2026-07-22': { x2: 1 } })
+    const { doneDates, inProgressDates } = greedyStatesForWeek(cyclePlans, week, '2026-07-22', source, 'cycle')
+    expect(doneDates.size).toBe(0)
+    expect(inProgressDates.size).toBe(0)
+    // Weekly (el default) sigue atribuyendo igual que siempre: el cambio es opt-in por estructura.
+    // (`c2` cae en el slot del MARTES leido como weekly y su sesion parcial del miercoles se le
+    // atribuye por el greedy — justo la semantica de calendario que en ciclo no existe.)
+    const weekly = greedyStatesForWeek(cyclePlans, week, '2026-07-22', source)
+    expect([...weekly.doneDates]).toEqual(['2026-07-20'])
+    expect([...weekly.inProgressDates]).toEqual(['2026-07-21'])
+  })
+
+  it('la tira de ciclo son DIAS ENTRENADOS: dots done/today/rest, sin un solo pendiente', () => {
+    // El caller (home.tsx) alimenta `doneDates` con los dias de la semana que tienen logs.
+    const entrenados = new Set(['2026-07-20', '2026-07-22'])
+    const r = deriveWeeklyStreak({
+      weekDates: week,
+      plannedDates: plannedDatesForWeek(cyclePlans, week, 'cycle'),
+      doneDates: entrenados,
+      inProgressDates: new Set(),
+      todayIso: '2026-07-23',
+    })
+    expect(r.dots.map((d) => d.state)).toEqual(['done', 'rest', 'done', 'today', 'rest', 'rest', 'rest'])
+    expect(r.dots.some((d) => d.state === 'pending')).toBe(false)
+    expect(r.doneCount).toBe(2)
+    expect(r.plannedCount).toBe(2)
+  })
+})

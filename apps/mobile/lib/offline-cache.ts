@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import * as Sentry from '@sentry/react-native'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import type { WorkoutLogMetadata } from '@eva/workout-engine'
 import { toggleMealCompletion } from './nutrition.queries'
 import { getSantiagoIsoYmdForUtcInstant, getSantiagoUtcBoundsForDay } from './date-utils'
 import { enqueueOp, flushQueue, queueCount, queueDueCount, type AsyncKV, type FlushSummary } from './offline-queue'
@@ -40,8 +41,14 @@ interface PendingLog {
   actual_pace_sec_per_km?: number | null
   actual_hold_sec?: number | null
   actual_avg_hr?: number | null
-  /** jsonb `{left_sec, right_sec}` del hold por lado (E0.5). */
-  metadata?: { left_sec?: number | null; right_sec?: number | null } | null
+  /**
+   * jsonb `workout_logs.metadata` COMPLETO, con el tipo del motor (`WorkoutLogMetadata`) en vez de
+   * un literal propio: hold por lado de movilidad `{left_sec, right_sec}` (E0.5), reps por lado de
+   * fuerza `{left_reps, right_reps}` (R27) y el resto de las claves que ya transporta la columna.
+   * El literal anterior declaraba SÓLO los segundos, así que la cola prometía por tipo que perdía
+   * los lados de fuerza aunque el drain (spread del item) los subiera igual.
+   */
+  metadata?: WorkoutLogMetadata | null
   substituted_exercise_id?: string | null
   substituted_exercise_name?: string | null
   substitution_reason?: string | null

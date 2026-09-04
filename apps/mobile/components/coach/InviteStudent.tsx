@@ -211,7 +211,7 @@ export function InviteStudentSheet({
           Invitar alumno
         </Text>
         <Text className="text-muted" style={styles.sheetSubtitle}>
-          Tu alumno baja EVA, escribe este código y entra directo a tu app.
+          Tu alumno entra desde el navegador con tu link o desde la app en iOS. No necesita instalar nada.
         </Text>
       </View>
 

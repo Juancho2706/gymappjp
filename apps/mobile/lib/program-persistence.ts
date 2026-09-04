@@ -86,17 +86,39 @@ function addIsoCalendarDays(isoYmd: string, days: number): string {
   return instant.toISOString().slice(0, 10)
 }
 
+/**
+ * Calendario del programa al persistir — espejo RN de `workout.service.ts` (W2.1, R13/R21).
+ *
+ * INICIO FLEXIBLE (R2, opt-in): con `startDateFlexible` y sin fecha —ni pedida ni guardada— el
+ * programa se guarda **sin calendario**: `{ startDate: null, endDate: null }`. `end_date` solo se fija
+ * cuando se fija `start_date` (R21); estampar el fin de un programa que aun no empezo era declarar una
+ * ventana que no existe. Ese es el estado `programState: 'not_started'` del motor: el alumno ve
+ * «Empezar hoy» y la RPC `client_start_workout_program` escribe la fecha el dia que arranca.
+ *
+ * El default es `false` (R2): sin el flag —y sin flag es como llegan los programas de siempre— el
+ * comportamiento es el HISTORICO, `requested ?? existing ?? hoy`. Aplica a `weekly` y a `cycle` (R13).
+ *
+ * LOS EXISTENTES NO SE TOCAN: `existing` sigue ganandole a "hoy", asi que re-guardar un programa que
+ * ya tiene fecha la conserva —flexible o no—. Vaciarla habria dejado sin calendario a los ~50
+ * programas activos que hoy llevan el flag en `true` con fecha puesta.
+ */
 export function resolveProgramScheduleMetadata(input: {
   isClientProgram: boolean
   requestedStartDate?: string | null
   existingStartDate?: string | null
   todaySantiagoIso: string
   weeksToRepeat: number
+  /** Inicio flexible del programa (R2). Ausente/`null` ⇒ `false` = comportamiento historico. */
+  startDateFlexible?: boolean | null
 }): { startDate: string | null; endDate: string | null } {
   if (!input.isClientProgram) return { startDate: null, endDate: null }
   const requested = input.requestedStartDate?.trim() || null
   const existing = input.existingStartDate?.trim() || null
-  const startDate = requested ?? existing ?? input.todaySantiagoIso
+  const flexible = input.startDateFlexible ?? false
+  const anchor = requested ?? existing
+  // Flexible sin ancla = programa nuevo que todavia no empezo ⇒ ni inicio ni fin (R21).
+  if (flexible && anchor == null) return { startDate: null, endDate: null }
+  const startDate = anchor ?? input.todaySantiagoIso
   return {
     startDate,
     endDate: addIsoCalendarDays(startDate, input.weeksToRepeat * 7 - 1),

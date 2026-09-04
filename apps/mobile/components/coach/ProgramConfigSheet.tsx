@@ -92,6 +92,12 @@ export const ProgramConfigSheet = forwardRef<BottomSheetModal, Props>(function P
           <Text style={[styles.rowLabel, { color: theme.foreground, fontFamily: theme.fontSans }]}>Inicio flexible (el alumno decide)</Text>
           <Switch value={p.startDateFlexible} onValueChange={(v) => p.setStartDateFlexible(v)} />
         </View>
+        {/* R2/R3 del tren «ciclo real y por lado»: nace apagado; encendido, el programa queda sin fecha
+            hasta que el alumno toque «Empezar hoy» (paridad web ProgramConfigForm). */}
+        <Text style={{ fontSize: 12, lineHeight: 16, marginTop: -4, marginBottom: 8, fontFamily: theme.fontSans, color: theme.mutedForeground }}>
+          Sin fecha fija: el alumno toca «Empezar hoy» en su Inicio y el programa arranca ese día en el Día 1
+          {p.structureType === 'cycle' && p.cycleLength > 0 ? ` de ${p.cycleLength}` : ''}.
+        </Text>
         {!p.startDateFlexible ? (
           <Field theme={theme} label="Fecha de inicio">
             <TextInput value={p.startDate} onChangeText={p.setStartDate} placeholder="YYYY-MM-DD" placeholderTextColor={theme.mutedForeground} autoCapitalize="none"

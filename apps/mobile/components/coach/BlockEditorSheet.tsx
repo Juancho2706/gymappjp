@@ -21,6 +21,7 @@ import {
   type ExerciseType,
   type IntervalConfig,
 } from '@eva/workout-engine'
+import { stripFieldsForType } from '@eva/plan-builder'
 import { HR_ZONES } from '@eva/cardio'
 import { EXERCISE_TYPE_META, exerciseTypeColor } from '../../lib/exercise-type-meta'
 import { buildMobileAreaVMs, type MobileAreaVM } from '../../lib/builder-area-vm'
@@ -75,10 +76,35 @@ const PROGRESSION_MODE_OPTS: { value: 'weekly_linear' | 'double'; label: string 
   { value: 'double', label: 'Al completar reps' },
 ]
 const SIDE_MODE_OPTS: { value: 'bilateral' | 'per_side' | 'alternating' | null; label: string }[] = [
-  { value: null, label: 'Normal' },
+  // Copys canónicos del tren «ciclo real y por lado» (R4): `bilateral` no se ofrece (0 filas en LIVE);
+  // `per_side` y `alternating` capturan igual en el ejecutor (dos reps + un peso).
+  { value: null, label: 'Ninguno' },
   { value: 'per_side', label: 'Por lado' },
   { value: 'alternating', label: 'Alternado' },
 ]
+
+/**
+ * Cambio de tipo del bloque (R6 + R32), SIN diálogo de confirmación. Espejo exacto de
+ * `applyBlockTypeChange` del builder web
+ * (`apps/web/src/app/coach/builder/[clientId]/components/BlockEditSheet.tsx`).
+ *
+ * `stripFieldsForType` (@eva/plan-builder) limpia los 10 campos polimórficos del tipo anterior con
+ * `null` EXPLÍCITO —imprescindible acá: el serializador RN (`lib/plan-builder/serialize.ts`) solo
+ * pisa una columna tipada cuando el campo está DEFINIDO, así que un strip con `undefined` dejaría
+ * que el residuo volviera desde el passthrough de `_raw`— y siembra los defaults del tipo nuevo.
+ * El `exercise_type_override` lo decide este call site: `null` cuando el tipo elegido es el propio
+ * del ejercicio.
+ *
+ * Pura y exportada para testear el cambio de tipo sin montar el sheet
+ * (`tests/mobile/plan-builder-type-change.test.ts`).
+ */
+export function applyBlockTypeChange(block: BuilderBlock, type: ExerciseType): BuilderBlock {
+  const ownType = effectiveExerciseType(null, { exercise_type: block.exercise_type })
+  return {
+    ...stripFieldsForType(block, type),
+    exercise_type_override: type === ownType ? null : type,
+  }
+}
 
 export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function BlockEditorSheet(
   { block, onChange, onRemove, onToggleOverride, onToggleSuperset, onClose, areaVMs, onSetArea, cardioEnabled, days, currentDayId, onMoveToDay, clientId, catalogRow },
@@ -139,8 +165,7 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
   }
 
   function setTypeOverride(t: ExerciseType) {
-    const ownType = effectiveExerciseType(null, { exercise_type: draft!.exercise_type })
-    patch({ exercise_type_override: t === ownType ? null : t })
+    patch(applyBlockTypeChange(draft!, t))
   }
 
   const progression = draft.progression_type ?? 'none'
@@ -679,8 +704,12 @@ function HrZoneSelector({ theme, value, onChange }: { theme: any; value: number 
   )
 }
 
+const SIDE_MODE_HINT = 'El alumno registra izquierda y derecha en cada serie.'
+
 function SideModeSelector({ theme, value, onChange }: { theme: any; value: 'bilateral' | 'per_side' | 'alternating' | null; onChange: (v: 'per_side' | 'alternating' | null) => void }) {
+  const showHint = value === 'per_side' || value === 'alternating'
   return (
+    <View style={{ gap: 6 }}>
     <View style={[styles.segmented, { backgroundColor: theme.secondary, borderColor: theme.border }]}>
       {SIDE_MODE_OPTS.map((o) => {
         const active = (value ?? null) === o.value || (o.value === null && (value === 'bilateral' || value == null))
@@ -697,6 +726,11 @@ function SideModeSelector({ theme, value, onChange }: { theme: any; value: 'bila
           </TouchableOpacity>
         )
       })}
+    </View>
+    {/* Hint canónico (W4.10): el control era «muerto» en fuerza (feedback Movens); ahora cambia la captura. */}
+    {showHint ? (
+      <Text style={{ fontSize: 10.5, lineHeight: 14, fontFamily: theme.fontSans, color: theme.mutedForeground }}>{SIDE_MODE_HINT}</Text>
+    ) : null}
     </View>
   )
 }

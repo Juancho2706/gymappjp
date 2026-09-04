@@ -148,7 +148,12 @@ export function ActiveProgramSection({
           <Calendar size={16} className="text-sport-500" strokeWidth={2} />
           <Text className="text-strong" numberOfLines={1} style={{ flexShrink: 1, minWidth: 0, fontFamily: FONT.displayBold, fontSize: 16 }}>{program.name}</Text>
         </View>
-        <Badge tone="sport" variant="soft">Semana {currentWeek} de {totalWeeks}{weekVariant ? ` · Sem ${weekVariant}` : ''}</Badge>
+        <Badge tone="sport" variant="soft">
+          {/* Flexible sin fecha (R2/R21): no hay semana que contar hasta que el alumno empiece. */}
+          {program.startDateFlexible === true && !program.startDate
+            ? 'Empieza cuando quieras'
+            : `Semana ${currentWeek} de ${totalWeeks}${weekVariant ? ` · Sem ${weekVariant}` : ''}`}
+        </Badge>
       </View>
 
       <ProgramPhaseBar phases={program.phases} currentWeek={currentWeek} totalWeeks={totalWeeks} />
@@ -300,7 +305,7 @@ export function DoubleIntentSheet({
         {view ? (
           <View style={{ gap: 2 }}>
             <Text className="text-strong" style={{ fontFamily: FONT.uiBold, fontSize: 15 }}>
-              {view.plan.title} · {DAY_FULL[dow]} — Día {dow}
+              {view.plan.title} · {view.isCycle && view.labelLong ? view.labelLong : `${DAY_FULL[dow]} — Día ${dow}`}
             </Text>
             {reviewDate ? (
               <Text className="text-muted" style={{ fontFamily: FONT.ui, fontSize: 12.5, textTransform: 'capitalize' }}>
@@ -447,7 +452,8 @@ function DayCard({ view, onPress }: { view: PlanDayView; onPress: (origin: Morph
                 1-7. Acá el valor va como hijo JSX, así que React descartaba el `undefined` en
                 silencio y la etiqueta del día quedaba EN BLANCO (no imprimía "undefined" como en
                 HeroSection). Mismo hueco que el crash del builder, EVA-MOBILE-D. */}
-            {DAY_SHORT[dow] ?? `D${dow}`}
+            {/* Ciclo (W3.8): la etiqueta viene del cursor («Día 2»), nunca de `DAY_SHORT`. */}
+            {view.label ?? DAY_SHORT[dow] ?? `D${dow}`}
           </Text>
           {done ? (
             <CheckCircle2 size={14} color={theme.success} strokeWidth={2.4} />
@@ -464,7 +470,20 @@ function DayCard({ view, onPress }: { view: PlanDayView; onPress: (origin: Morph
         </View>
         <Text className="text-strong" numberOfLines={2} style={{ marginTop: 6, fontFamily: FONT.uiBold, fontSize: 13, lineHeight: 16 }}>{plan.title}</Text>
         <Text className={pieClass} numberOfLines={1} style={{ marginTop: 2, fontSize: 10.5, fontFamily: pending || inProgress ? FONT.uiBold : FONT.ui }}>
-          {pending ? 'Pendiente' : inProgress ? 'En progreso' : doneElsewhere ? `Hecho el ${doneOnLabel!.toLowerCase()}` : `Día ${dow}`}
+          {pending
+            ? 'Pendiente'
+            : inProgress
+              ? 'En progreso'
+              : doneElsewhere
+                ? `Hecho el ${doneOnLabel!.toLowerCase()}`
+                : view.isCycle
+                  // Ciclo (R12): sin calendario — hecho con su fecha real, «Hoy» o «Próximo».
+                  ? done
+                    ? `Hecho ${fmtSheetDate(view.dateIso)}`
+                    : isToday
+                      ? 'Hoy'
+                      : 'Próximo'
+                  : `Día ${dow}`}
         </Text>
       </TouchableOpacity>
     </View>

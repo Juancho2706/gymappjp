@@ -17,7 +17,14 @@ import {
   Weight,
 } from 'lucide-react-native'
 import type { LucideIcon } from 'lucide-react-native'
-import { groupContiguousSupersetRuns } from '@eva/workout-engine'
+import {
+  effectiveExerciseType,
+  groupContiguousSupersetRuns,
+  programDayLabel,
+  sideSuffix,
+  typedBlockSummary,
+  SIDE_LABEL,
+} from '@eva/workout-engine'
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, Sheet } from '../../../components'
 import {
@@ -273,7 +280,9 @@ export function PlanTab({ data, onEdit }: { data: CoachClientDetailData; onEdit:
                   key={plan.id}
                   plan={plan}
                   dow={dow}
-                  label={dow >= 1 && dow <= 7 ? DAY_LABELS[dow] ?? `D${dow}` : String(dow)}
+                  // Ciclo (D1, feedback Movens): `day_of_week` es el ÍNDICE del ciclo → «D1»/«D2» en la caja
+                  // de 34 px (forma chip del motor), jamás «Lun». Paridad con la ficha web (W4.8).
+                  label={programDayLabel(dow, structure, program?.cycle_length ?? null, { form: 'chip' })}
                   isToday={false}
                   open={openDow === dow}
                   onToggle={() => setOpenDow(openDow === dow ? null : dow)}
@@ -550,10 +559,18 @@ function ExerciseMedia({ block }: { block: ProgramBlock }) {
 
 function ExerciseDetail({ block }: { block: ProgramBlock }) {
   const { theme } = useTheme()
+  // Tipo EFECTIVO del bloque (override del coach ?? catálogo) y resumen tipado: un cardio o una
+  // movilidad ya no se leen como «Series × reps» (P2 del feedback Movens; paridad web ProgramTabB7).
+  const blockType = effectiveExerciseType(block, { exercise_type: block.exerciseType ?? null })
+  const typedSummary = blockType !== 'strength' ? typedBlockSummary(block, blockType) : null
+  const sideLabel = block.side_mode ? (SIDE_LABEL[block.side_mode] ?? null) : null
   const rows: { label: string; value: string; Icon: LucideIcon }[] = [
-    block.sets > 0 || block.reps.trim().length > 0
-      ? { label: 'Series × reps', value: `${block.sets > 0 ? block.sets : '—'} × ${block.reps.trim() || '—'}`, Icon: Dumbbell }
-      : null,
+    typedSummary
+      ? { label: 'Objetivo', value: typedSummary, Icon: Dumbbell }
+      : block.sets > 0 || block.reps.trim().length > 0
+        ? { label: 'Series × reps', value: `${block.sets > 0 ? block.sets : '—'} × ${block.reps.trim() || '—'}${sideSuffix(block.side_mode)}`, Icon: Dumbbell }
+        : null,
+    sideLabel ? { label: 'Lado', value: sideLabel, Icon: Dumbbell } : null,
     block.target_weight_kg != null ? { label: 'Obj. peso', value: `${block.target_weight_kg} kg`, Icon: Weight } : null,
     block.rest_time ? { label: 'Descanso', value: String(block.rest_time), Icon: Timer } : null,
     block.rir != null && block.rir !== '' ? { label: 'RIR', value: String(block.rir), Icon: Gauge } : null,

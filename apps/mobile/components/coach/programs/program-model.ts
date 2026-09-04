@@ -1,3 +1,4 @@
+import { programDayLabel } from '@eva/workout-engine'
 /**
  * Programs library — tipos + helpers PUROS (sin React, sin Supabase).
  *
@@ -90,8 +91,6 @@ export type ProgramFilters = {
   filterPhases: FilterPhases
 }
 
-const DAY_LABELS = ['', 'Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom']
-
 export function normalizeProgram(program: ProgramItem): ProgramItem {
   return {
     ...program,
@@ -177,9 +176,14 @@ export function initials(name: string): string {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]?.toUpperCase()).join('') || 'EV'
 }
 
-export function dayLabel(day: number | null): string {
+/**
+ * Etiqueta del chip de 34 px de la biblioteca (W3.11, R31): `programDayLabel(form: 'chip')` del motor —
+ * weekly `Lun`/`Mar`… (3 letras, con tilde en «Mié»/«Sáb»), cycle `D1`/`D2`… Nunca «Lun» para un día
+ * de ciclo ni una inicial suelta. Sin estructura se asume weekly (default del schema).
+ */
+export function dayLabel(day: number | null, structure: 'weekly' | 'cycle' | null = 'weekly', cycleLength: number | null = null): string {
   if (!day) return 'D'
-  return DAY_LABELS[day] ?? `D${day}`
+  return programDayLabel(day, structure ?? 'weekly', cycleLength, { form: 'chip' })
 }
 
 export function defaultDuplicateName(program: ProgramItem): string {
