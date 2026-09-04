@@ -22,6 +22,11 @@ compartida entre web y RN.
   con copy "Entrenamiento incompleto" (editar esa fecha / repetir hoy, semantica actual).
 - **La racha del home (RPC `get_client_current_streak`, 7 reglas CEO) NO se toca en v1.** La
   divergencia deliberada (card "en progreso" + racha intacta) se documenta aqui.
+  **Actualización 2026-09-03:** el tren [ciclo-real-y-por-lado](../ciclo-real-y-por-lado/SPEC.md)
+  (migración `20260903212441_streak_cycle_branch_and_null_start.sql`) agrega a esa RPC la rama
+  `cycle` (R1: cada día entrenado suma; corta solo una semana Lun–Dom cerrada sin entrenos) y el guard
+  de `start_date NULL` (regla 7). El cuerpo `weekly` sigue idéntico (test de equivalencia
+  `supabase/tests/streak_cycle_equivalence.sql`, 0 diff).
 - La regla nace como **funcion pura en `@eva/workout-engine`** (hoy existen 3 implementaciones del
   concepto: TS web, TS RN, SQL del RPC; una cuarta seria drift garantizado).
 

@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-09-01"
+last_verified: "2026-09-03"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -11,6 +11,19 @@ source_of_truth: apps/web responsive + apps/mobile
 Única fuente de verdad para saber qué está cerrado, qué falta y dónde retomar el port de React Native. Los detalles de ejecución viven en [`specs/rn-mobile-parity-redesign/TASKS.md`](../../specs/rn-mobile-parity-redesign/TASKS.md); este archivo prevalece ante cualquier auditoría, spec de unidad o informe histórico.
 
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
+
+> **2026-09-03 (tren «Ciclo real y por lado», feedback Movens — EN DEPLOY; hashes de deploy/OTA se anotan al cierre)**:
+> `rnmobiledenuevo` `591ea8cd`…`04328c8d` (+ los 9 commits de «ola 2 chica» que viajan en el mismo push). Por punto:
+> **paridad nueva web + RN** — Inicio del alumno por cursor de completitud («Hoy toca · Día 2 de 3», «Día 2 hecho · Próximo»,
+> «Tu programa está listo» + «Empezar hoy» real vía RPC, sin «Recuperar» ni «Día de descanso» en ciclo, tira Lun→Dom de días
+> entrenados, anillo «Sin meta semanal»); fuerza por lado en el ejecutor («Izq»/«Der» + un peso, `reps_done = min`, «20 kg × 10 / 10»,
+> chip «Por lado»/«Alternado», cola offline con lados); ficha del coach con «Día N de M», resumen tipado por bloque y pastilla
+> «10 / 10»; builder «Ninguno | Por lado | Alternado» + hint, strip de campos al cambiar tipo, inicio flexible apagado por defecto
+> con copy nuevo; copy de invitación sin «baja EVA». **Solo web**: prompt de instalar PWA el día 1 en Android Chrome; SW v5 + purga
+> de caches al cerrar sesión; OfflineScreen no tapa el ejecutor. **Solo RN**: biblioteca de programas con chip «D1» en ciclos
+> («Mié»/«Sáb» con tilde), racha del ejecutor omitida en ciclo (B18, también web), share con volumen izq+der. Las 4 migraciones se
+> aplican después del deploy y antes de la OTA 1.1.2 (R35); flota mixta aceptada (R35: clientes sin OTA escriben sin metadata).
+> QA del owner: Q1–Q17 en `specs/ciclo-real-y-por-lado/TASKS.md`.
 
 ## Resumen ejecutivo
 
