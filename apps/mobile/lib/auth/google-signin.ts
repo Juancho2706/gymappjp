@@ -165,6 +165,35 @@ export async function signInWithGoogleCoach(): Promise<GoogleAuthResult> {
   }
 }
 
+/**
+ * Limpieza del auth user HUÉRFANO que deja el login con Google sin cuenta de coach (espejo de
+ * `resolvePostGoogleAuthUrl` web, caso Leonardo/Movens 2026-09-04): el alumno que toca «Google» en
+ * la pestaña de coach acaba de crear un `auth.users` sin fila `coaches` ni `clients`, y si se queda
+ * su correo pasa a estar «ocupado» para el alta que hace su coach. El servidor decide si es un
+ * huérfano demostrable (solo identidad google + cero filas) y lo borra; desde acá solo se avisa.
+ *
+ * Se llama ANTES de `signOutGoogleAndSupabase()`: el Bearer de la sesión recién creada es la
+ * credencial del endpoint. Se espera (a diferencia de `notifyGoogleLink`) porque el orden importa,
+ * pero con tope: `fetch` en RN no tiene timeout y una red muerta no puede dejar el spinner pegado.
+ * FAIL-SILENT: si falla, queda como hoy (el huérfano sobrevive) y el usuario ve el mismo error.
+ */
+export async function cleanupGoogleOrphanAuthUser(): Promise<void> {
+  try {
+    const { data } = await supabase.auth.getSession()
+    const accessToken = data.session?.access_token
+    if (!accessToken) return
+    await Promise.race([
+      apiFetch<{ ok: true }>('/api/mobile/auth/google-orphan-cleanup', {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }),
+      new Promise<void>((resolve) => setTimeout(resolve, 4000)),
+    ])
+  } catch {
+    // Silencio deliberado: red caída, 500 o endpoint aún no desplegado JAMÁS bloquean el rebote.
+  }
+}
+
 export type GoogleCoachDestination =
   | { kind: 'home' }
   | { kind: 'onboarding' } // Google OK pero sin fila coaches → completar alta (solo intent register)

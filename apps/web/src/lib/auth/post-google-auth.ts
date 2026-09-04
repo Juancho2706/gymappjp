@@ -15,6 +15,20 @@ interface ResolvePostGoogleAuthUrlParams {
 }
 
 /**
+ * Login con Google RECHAZADO (sin fila `coaches`): avisa al servidor para que borre el auth user si
+ * es un huérfano demostrable (`lib/auth/google-orphan-cleanup.ts`, caso Leonardo/Movens 2026-09-04)
+ * y cierra la sesión en scope local. El aviso va PRIMERO porque la cookie de esa sesión es su
+ * credencial. Los dos pasos son fail-silent: nada de esto puede dejar al usuario mirando el spinner.
+ *
+ * Único punto de código para las dos puertas web (GIS + `signInWithIdToken` en `GoogleSignInButton`
+ * y el redirect viejo en `AuthExchangeClient`): las dos pasan por este resolvedor.
+ */
+async function cleanupRejectedGoogleLogin(supabase: ProjectSupabaseClient): Promise<void> {
+    await fetch('/api/auth/google-orphan-cleanup', { method: 'POST' }).catch(() => {})
+    await supabase.auth.signOut({ scope: 'local' }).catch(() => {})
+}
+
+/**
  * Resolves the post-Google-auth destination URL.
  *
  * Shared by AuthExchangeClient (redirect flow) and GoogleSignInButton (GIS +
@@ -39,15 +53,21 @@ export async function resolvePostGoogleAuthUrl({
     // Un destino EXPLÍCITO bajo `/coach/**` solo sirve si el usuario tiene fila `coaches`: se
     // decide después del lookup para no perderlo en el fallback (caso real: un coach que llega
     // del correo de cupo y elige por error otra cuenta de Google).
-    //
-    // Todo lo demás se respeta de una: `/reset-password` (lo usan también los alumnos, que no
-    // tienen fila `coaches`) y el aterrizaje por defecto `/coach/dashboard`, que los dos callers
-    // mandan siempre como «sin destino explícito» — sin fila `coaches` el proxy lo deriva al alta
-    // OAuth, que es el registro con Google desde /login y no se toca.
     const deferredCoachNext =
         safe !== null && safe.startsWith('/coach') && !isCoachDefaultLanding(safe) ? safe : null
 
-    if (safe && !deferredCoachNext) {
+    // El aterrizaje por defecto `/coach/dashboard` (los dos callers lo mandan como «sin destino
+    // explícito») también espera al lookup cuando la intención es LOGIN. Hasta el 2026-09-04 se
+    // devolvía de una y, sin fila `coaches`, el proxy lo convertía en `/coach/onboarding/complete`:
+    // el alumno que tocaba «Continuar con Google» en el login de coach aterrizaba en «completa tu
+    // cuenta de coach» con un auth user huérfano a cuestas (caso Leonardo/Movens; la misma trampa
+    // que parió la cuenta fantasma de Natalia). Un botón de LOGIN no crea cuentas: el alta por Google
+    // vive en `/register` (`intent = 'register'`) y no cambia.
+    //
+    // `/reset-password` se respeta de una (lo usan también los alumnos, que no tienen fila `coaches`).
+    const defaultLandingLogin = intent === 'login' && safe !== null && isCoachDefaultLanding(safe)
+
+    if (safe && !deferredCoachNext && !defaultLandingLogin) {
         return safe
     }
 
@@ -61,6 +81,10 @@ export async function resolvePostGoogleAuthUrl({
         // Con fila `coaches`, el destino explícito gana sobre el aterrizaje por defecto.
         if (deferredCoachNext) {
             return deferredCoachNext
+        }
+        // Coach real con el aterrizaje por defecto: exactamente lo de siempre.
+        if (defaultLandingLogin && safe) {
+            return safe
         }
 
         let activeOrgSlug: string | null = null
@@ -92,9 +116,17 @@ export async function resolvePostGoogleAuthUrl({
         return '/register?from=google'
     }
 
-    // Sin fila `coaches` el login con Google no puede seguir, pero el destino NO se tira: el coach
-    // que venía del correo de cupo reintenta con contraseña y sigue aterrizando en
-    // `/coach/subscription?utm_...` en vez de caer en el dashboard.
+    // Sin fila `coaches` y con intención de LOGIN, el usuario que Google acaba de crear no le sirve
+    // a nadie: es el alumno que se equivocó de puerta (caso Leonardo/Movens 2026-09-04). Si se
+    // quedara, su correo pasaría a estar «ocupado» y su coach ya no podría darlo de alta. El
+    // servidor decide si es un huérfano demostrable y lo borra (`lib/auth/google-orphan-cleanup.ts`);
+    // desde acá solo se avisa, con la cookie de la sesión recién creada, y ANTES de cerrarla. La
+    // sesión se cierra en scope local porque se rechazó el login: no hay motivo para dejarla viva
+    // (y si hubo borrado, ya no apunta a nadie). Ninguno de los dos pasos puede bloquear el rebote.
+    await cleanupRejectedGoogleLogin(supabase)
+
+    // El destino NO se tira: el coach que venía del correo de cupo reintenta con contraseña y sigue
+    // aterrizando en `/coach/subscription?utm_...` en vez de caer en el dashboard.
     return deferredCoachNext
         ? `/login?error=no_google_account&next=${encodeURIComponent(deferredCoachNext)}`
         : '/login?error=no_google_account'

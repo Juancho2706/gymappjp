@@ -27,6 +27,7 @@ import { getStudentAccountStatus } from '../../lib/student-account-status'
 import { coachAccountLoginMessage } from '../../lib/student-login-notice'
 import {
   GoogleSignInError,
+  cleanupGoogleOrphanAuthUser,
   isGoogleSignInAvailable,
   resolveGoogleCoachDestination,
   signInWithGoogleCoach,
@@ -300,9 +301,13 @@ export default function LoginScreen() {
         router.replace('/coach/home')
         return
       }
-      // Google válido pero sin cuenta coach: cortamos la sesión (como web → /login?error=no_google_account).
+      // Google válido pero sin cuenta coach: el auth user que Google acaba de crear no le sirve a
+      // nadie (es el alumno que se equivocó de puerta) y, si se queda, le «ocupa» el correo a su
+      // coach. El servidor lo borra si es un huérfano demostrable — ANTES de cortar la sesión, que
+      // es la credencial de la llamada. Después, como web → /login?error=no_google_account.
+      await cleanupGoogleOrphanAuthUser()
       await signOutGoogleAndSupabase()
-      setError('No hay una cuenta de coach vinculada a este Google. Regístrate primero.')
+      setError('No hay una cuenta de coach con este Google. Si eres alumno, entra con el código de tu coach; si eres coach, regístrate primero.')
     } catch (err) {
       // Cancelar no es un error para el usuario.
       if (err instanceof GoogleSignInError && err.code === 'cancelled') return

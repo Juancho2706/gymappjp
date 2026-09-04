@@ -16,8 +16,11 @@ const MESSAGES: Record<string, AuthErrorMessage> = {
         coach: 'El enlace de confirmación expiró. Solicita uno nuevo.',
         enterprise: 'El enlace de confirmación expiró. Contacta al administrador.',
     },
+    // Copy que nombra la puerta: este es el login del COACH. El alumno que llega acá con Google (caso
+    // Leonardo/Movens 2026-09-04) tiene que ver de inmediato que su entrada es el código de su coach
+    // (el `StudentEntryCard` de abajo), no reintentar Google seis veces.
     no_google_account: {
-        coach: 'No encontramos una cuenta con ese correo de Google.',
+        coach: 'No encontramos una cuenta de coach con ese Google. Si eres alumno, entra con el código o enlace de tu coach; si eres coach nuevo, crea tu cuenta.',
     },
     session_expired: {
         coach: 'Tu sesión expiró. Inicia sesión nuevamente.',
