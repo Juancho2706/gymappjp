@@ -12,7 +12,7 @@ source_of_truth: apps/web responsive + apps/mobile
 
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
 
-> **2026-09-04 (tren «Ciclo real y por lado», feedback Movens — EN PRODUCCIÓN, QA del owner pendiente)**: `master` =
+> **2026-09-04 (tren «Ciclo real y por lado», feedback Movens — EN PRODUCCIÓN, QA del owner VERDE 04-09 ⇒ SDD `done`)**: `master` =
 > `rnmobiledenuevo` = `b1bad0a3` (commits `591ea8cd`…`b1bad0a3` + los 9 de «ola 2 chica» en el mismo push), deploy
 > `dpl_DZ76aJq5WfZ7SbKXaSJ4p1TtTkj1` READY, 4 migraciones en LIVE (`20260904022120`…`022257`), OTA 1.1.2 `production`
 > android `fd2e1212-6d09-4bba-a09f-f1fd576cd1f2` (run 33829397531) / ios `248580e4-c493-4bbc-90f3-ea50a37972a8` (run 33829399862). Por punto:
@@ -25,7 +25,8 @@ source_of_truth: apps/web responsive + apps/mobile
 > de caches al cerrar sesión; OfflineScreen no tapa el ejecutor. **Solo RN**: biblioteca de programas con chip «D1» en ciclos
 > («Mié»/«Sáb» con tilde), racha del ejecutor omitida en ciclo (B18, también web), share con volumen izq+der. Las 4 migraciones se
 > aplican después del deploy y antes de la OTA 1.1.2 (R35); flota mixta aceptada (R35: clientes sin OTA escriben sin metadata).
-> QA del owner: Q1–Q17 en `specs/ciclo-real-y-por-lado/TASKS.md`.
+> QA del owner VERDE 04-09 (ciclo y fuerza por lado, reporte global del owner; lista Q1–Q17 en `specs/ciclo-real-y-por-lado/TASKS.md`).
+> Queda el aviso a coaches (W6.5b, TESTING-QA §11).
 
 ## Resumen ejecutivo
 

@@ -28,13 +28,14 @@ prevalecen sobre este resumen. La prosa retirada el 2026-09-02 está en
 
 ## Prioridades vigentes
 
-1. **Tren «Ciclo real y por lado» (feedback Movens) — EN PRODUCCIÓN 04-09 02:25Z** ([tareas](../specs/ciclo-real-y-por-lado/TASKS.md);
-   `master` = `rnmobiledenuevo` = `b1bad0a3`, deploy `dpl_DZ76aJq5…` READY, 4 migraciones en LIVE `20260904022120`…`022257`,
+1. **Tren «Ciclo real y por lado» (feedback Movens) — EN PRODUCCIÓN 04-09 02:25Z, QA del owner VERDE 04-09, SDD `done`** ([tareas](../specs/ciclo-real-y-por-lado/TASKS.md);
+   `master` = `rnmobiledenuevo` = `a567f6e2`, deploy `dpl_DZ76aJq5…` READY, 4 migraciones en LIVE `20260904022120`…`022257`,
    OTA 1.1.2 android `fd2e1212` / ios `248580e4`; detalle en [MOBILE_PARITY](MOBILE_PARITY.md)):
    ciclo N-días real (cursor por completitud, «Día N de M», «Empezar hoy»), fuerza por lado (reps izq/der + un peso),
    ficha del coach con tipo y lado, builder «Ninguno | Por lado | Alternado», PWA día 1, SW v5 + purga de caches.
    Las 4 migraciones (`20260903212038`…`212800`, validadas en LIVE con ROLLBACK) se aplican DESPUÉS del deploy y ANTES
-   de la OTA (R35). Queda: QA del owner Q1–Q17 (desktop, PWA, device) y el aviso a coaches (texto en TESTING-QA §aviso).
+   de la OTA (R35). QA del owner verde el 04-09 (ciclo y fuerza por lado, reporte global). Queda: el aviso a coaches (W6.5b,
+   texto en TESTING-QA §11) y el E2E local (W6.8, faltan variables `E2E_*`).
 2. **Tanda «QA del owner 02-09» (ejecutor, Share Entreno, accesos A–J) — EN PRODUCCIÓN, SDD `done`**
    ([spec](../specs/qa-ejecutor-share-0209/SPEC.md)): `master` `0f545926`, deploy `dpl_35ZT6w7o…` READY,
    OTA android `bd2bc6e8` / ios `025d158f`; ronda 2 android `fc78e1c8` / ios `c46d4eed`.

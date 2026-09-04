@@ -1,7 +1,7 @@
 ---
-status: implemented-pending-qa
+status: done
 owner: product-engineering
-last_verified: "2026-09-03"
+last_verified: "2026-09-04"
 canonical: false
 ---
 
@@ -752,6 +752,11 @@ Convención de estado: `[ ]` pendiente · `[x]` hecha. Nada se marca verde sin e
 | SQL equivalencia | diff weekly = 0 filas + `EXPLAIN` + `ROLLBACK` | 0 filas weekly (91 clientes), EXPLAIN 50,8→12,8 ms; ROLLBACK (DATA-SECURITY §1.3) |
 
 ## QA del owner (solo contra algo desplegado; 3 plataformas)
+
+**Resultado 2026-09-04 — VERDE.** Reporte global del owner contra el deploy `dpl_DZ76aJq5…` + OTA 1.1.2
+(`fd2e1212` / `248580e4`): ciclo N-días y fuerza por lado OK, sin Q# fallido. El veredicto fue global, no casilla
+por casilla: la lista de abajo queda como guía del recorrido. SDD → `done`. Siguen abiertos W6.5b (aviso a
+coaches, §11 de TESTING-QA) y W6.8 (E2E local sin variables `E2E_*`).
 
 ### Web desktop (Chrome, light y dark)
 

@@ -1,7 +1,7 @@
 ---
-status: implemented-pending-qa
+status: done
 owner: engineering
-last_verified: "2026-09-03 @ dbdf4b5e"
+last_verified: "2026-09-04 @ a567f6e2"
 canonical: false
 ---
 
