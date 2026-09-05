@@ -1,15 +1,14 @@
 # Reparación del historial de migraciones — 2026-09-05
 
 Auditoría **solo lectura** del proyecto LIVE `jikjeokundmaafuytdcx` contra `supabase/migrations/`.
-Nada se aplicó ni se reparó: este documento deja los comandos listos para que el owner los corra
-cuando quiera.
+La auditoría no aplicó nada; el repair del bloque B sí se **EJECUTÓ el 2026-09-05** (ver § B).
 
 ## Resumen
 
 | bloque | cantidad | qué se hizo hoy |
 |---|---:|---|
 | Versiones **remotas sin archivo local** (nunca existieron en git) | 8 | reconstruidas como `.sql` idempotentes desde el estado de LIVE |
-| Archivos **locales sin fila remota** | 5 | verificado que su efecto YA está en LIVE → sólo falta `migration repair` |
+| Archivos **locales sin fila remota** | 5 | verificado que su efecto YA está en LIVE → **repair EJECUTADO 2026-09-05** |
 
 ---
 
@@ -43,11 +42,18 @@ Dos avisos que van con estos archivos:
 
 ---
 
-## B · Los 5 archivos locales SIN fila remota
+## B · Los 5 archivos locales SIN fila remota — **EJECUTADO 2026-09-05**
 
-Ninguno tiene fila en `supabase_migrations.schema_migrations`. Se verificó **uno por uno con SELECT
-contra LIVE** que su efecto ya está aplicado, así que `migration repair --status applied` es seguro:
-marca la fila sin ejecutar SQL.
+**EJECUTADO 2026-09-05 por INSERT vía MCP (el CLI local no está linkeado).** Las 5 filas
+(`20260609150000`, `20260614120000`, `20260618181000`, `20260621213600`, `20260621220000`) quedaron
+insertadas en `supabase_migrations.schema_migrations`: el historial local ↔ remoto está alineado por
+nombre. No se ejecutó SQL de las migraciones — el INSERT hace lo mismo que
+`supabase migration repair --status applied`, que no se pudo usar porque el CLI local no está
+linkeado al proyecto.
+
+Al momento del repair ninguno tenía fila en `supabase_migrations.schema_migrations`. Se verificó
+**uno por uno con SELECT contra LIVE** que su efecto ya estaba aplicado, así que marcar la fila sin
+ejecutar SQL era seguro.
 
 ### 1. `20260609150000_team_drop_hot_table_rls_incident`
 Contenido: `DROP POLICY IF EXISTS` de 16 policies `team_*_member_all`.
@@ -94,9 +100,10 @@ Verificación (`information_schema.column_privileges`): `authenticated` tiene `U
 
 ---
 
-## Comandos de repair (NO ejecutados)
+## Comandos de repair (equivalente CLI — el 05-09 se hizo por INSERT vía MCP)
 
-Correr desde la raíz del repo, con el proyecto linkeado. **Sólo marcan la fila; no ejecutan SQL.**
+El efecto ya está aplicado (ver § B). Estos son los comandos equivalentes para quien tenga el
+proyecto linkeado desde la raíz del repo. **Sólo marcan la fila; no ejecutan SQL.**
 
 ```bash
 supabase migration repair --status applied 20260609150000
@@ -114,13 +121,22 @@ supabase migration list
 
 ## Evidencia y método
 
-- Proyecto: `jikjeokundmaafuytdcx` (LIVE). Todas las consultas fueron **SELECT** vía MCP.
-  **Cero escrituras, cero `apply_migration`, cero `migration repair`.**
+- Proyecto: `jikjeokundmaafuytdcx` (LIVE). Durante la **auditoría** todas las consultas fueron
+  **SELECT** vía MCP (cero escrituras, cero `apply_migration`, cero `migration repair`). El repair
+  del § B se ejecutó **después**, el mismo 05-09, como 5 `INSERT` en
+  `supabase_migrations.schema_migrations` vía MCP.
+- **Drift del 05-09, REPARADO el mismo día:** las dos migraciones de la tarde se aplicaron en LIVE con
+  la versión que genera `apply_migration` (`20260905171020 revoke_trigger_fns_from_anon` y
+  `20260905171031 nutrition_v2_valid_timezone_fast`) y los archivos locales nacieron como
+  `20260905170000_…` / `20260905170100_…`; se renombraron con `git mv` al timestamp de LIVE. La
+  tercera, `20260905190100_sec01_phase3_revoke_invite_code_anon`, coincidía desde el inicio.
+  Regla para las próximas: aplicar con MCP y DESPUÉS nombrar el archivo con la versión que devuelve
+  `schema_migrations`, no al revés.
 - Fuentes del estado vigente: `supabase_migrations.schema_migrations`, `pg_proc` (`proacl`,
   `proconfig`, `prosrc`, `pg_get_functiondef`), `pg_policies`, `pg_constraint`,
   `information_schema.columns`, `information_schema.column_privileges`, `to_regclass`.
 - Repo en el momento de la auditoría: rama `rnmobiledenuevo`, HEAD `f9ba8a3f`, working tree limpio.
 - Conteo de migraciones: **278 antes**, **+8** por esta reconstrucción. `ls supabase/migrations | grep -c '^[0-9]'`
-  devuelve **288** porque otros dos workers de la misma ola agregaron en paralelo
-  `20260905170000_revoke_trigger_fns_from_anon.sql` y `20260905170100_nutrition_v2_valid_timezone_fast.sql`.
+  devuelve **288** porque otros dos workers de la misma ola agregaron en paralelo las dos migraciones
+  de la tarde (hoy `20260905171020_…` y `20260905171031_…`), y **289** con la de SEC-01 fase 3.
   Este `.md` no entra en el conteo (no empieza con dígito).

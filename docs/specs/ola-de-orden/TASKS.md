@@ -61,7 +61,7 @@ completaba en loop (caso real el 01-09). Seguimiento operativo en
 | B8 | Sin test de `ModuleOffNotice` RN (el web sí) | `components/coach/ModuleOffNotice.tsx` | — |
 | B9 | Gates que W1 dejó fuera: subrutas web de Movimiento por alumno (`movement/[clientId]`, `/new`, `/print`: `null ⇒ notFound()`, sin `status`), editores `program-builder` RN y `/coach/builder/[id]` web sin gate `training`, Resumen de la ficha pinta widgets de Nutrición apagada | web + RN | visibilidad, no permisos |
 | B10 | `builder.tsx` RN arrastra 3 errores previos de `react-hooks` fuera del lint raíz | `apps/mobile/app/coach/(tabs)/builder.tsx` | preexistente |
-| B11 | Sin test del ctx exacto de `resolveDomainsEnabled` en `clients/[clientId]/page.tsx` ni de `ficha-panel.data.ts` | web | verificado por lectura |
+| B11 | Sin test del ctx exacto de `resolveDomainsEnabled` en `clients/[clientId]/page.tsx` ni de `ficha-panel.data.ts` | web | **cerrado 05-09**: `page.test.tsx` + `ficha-panel.data.test.ts` pinnean el ctx `{coachId, clientTeamId, clientOrgId}`; sin cambios de producción; gates sin correr |
 | B12 | Cardio/Movimiento desde la barra RN entran como push de stack (`tab: null`) | `CoachMobileChrome.tsx` | si molesta: tabs re-exportadas sin ← en sus headers |
 | B13 | Adherencia del dashboard: el denominador es el programa actual (mismo sesgo que el número principal) | `dashboard/_lib/kpi-deltas.ts` | — |
 | B14 | W4.6c Facturación RN | — | espera Cobros ([SDD](../cobros-coach-alumno/SPEC.md), P1–P8 del owner) |

@@ -78,7 +78,8 @@ Usar [FOOD_CATALOG_CL_IMPORT.md](FOOD_CATALOG_CL_IMPORT.md). Detener applies y c
 
 ## Crons activos
 
-`vercel.json` es la fuente ejecutable. Estado verificado el 21 de agosto de 2026:
+`vercel.json` es la fuente ejecutable. Estado verificado el 21 de agosto de 2026; filas de
+`purge-data` (ahora diario) y `onboarding-behavior` actualizadas el 5 de septiembre de 2026:
 
 | Endpoint | Horario UTC | Función |
 |---|---:|---|
@@ -86,7 +87,7 @@ Usar [FOOD_CATALOG_CL_IMPORT.md](FOOD_CATALOG_CL_IMPORT.md). Detener applies y c
 | `/api/cron/nutrition-reminder` | `0 0 * * *` | recordatorios de nutrición |
 | `/api/cron/checkin-reminder` | `0 14 * * *` | recordatorio de check-in vencido (push día 8 y 15) |
 | `/api/cron/trial-expiry` | `0 12 * * *` | expiración de trials |
-| `/api/cron/purge-data` | `0 3 * * 0` | purga semanal (retención: ver abajo) |
+| `/api/cron/purge-data` | `0 3 * * *` | purga **diaria** desde `dff9b4fb` (05-09; antes `0 3 * * 0`, semanal). Retención: ver abajo |
 | `/api/cron/audit-checksum` | `0 2 * * 0` | integridad semanal de auditoría |
 | `/api/cron/mp-reconcile` | `0 10 * * *` | reconciliación MercadoPago y expiración de add-ons |
 | `/api/cron/flow-reconcile` | `0 11 * * *` | reconciliación Flow y sincronización acotada de monto |
@@ -94,6 +95,7 @@ Usar [FOOD_CATALOG_CL_IMPORT.md](FOOD_CATALOG_CL_IMPORT.md). Detener applies y c
 | `/api/cron/paid-expiry` | `30 12 * * *` | backstop provider-verified de suscripciones vencidas |
 | `/api/cron/cap-nudge` | `0 13 * * *` | nudge de venta por cupo alcanzado (escalera 0/7/28 d; kill-switch `EVA_SALES_EMAILS_DISABLED=client_limit_reached`; `?dry=1` lista sin enviar) |
 | `/api/cron/coach-kpi-snapshot` | `30 4 * * *` | foto diaria de KPI por coach (7C fase 2: delta «En riesgo» y saldo neto de «Alumnos» leen la fila T−7; `?coach_id=` siembra uno; idempotente) |
+| `/api/cron/onboarding-behavior` | `0 * * * *` | correos por comportamiento del onboarding del coach (W6). Horario (minuto 0), Bearer `CRON_SECRET`; `?dry=1` audita sin enviar. Mientras `ONBOARDING_BEHAVIOR_EMAILS_ENABLED` esté apagado responde `{ok:true,skipped:'disabled'}` |
 
 Handlers sin schedule automático:
 

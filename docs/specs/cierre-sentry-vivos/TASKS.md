@@ -159,8 +159,9 @@ Marcar solo con evidencia real. Prohibido dar un gate por verde sin haberlo corr
 
 > **Cierre 2026-09-05.** C3, O6.8 y O6.9 quedan CERRADAS: `EVA-NEXTJS-19` con 0 eventos desde el 01-09
 > 18:42Z (12.230 spans en la ruta) y `EVA-MOBILE-9` resuelto con nota — el síntoma vive en
-> `EVA-MOBILE-F`, que sigue **abierto**. `EVA-NEXTJS-18` es **regresión activa** y queda en O7. O7.4 se
-> **desestima salvo regresión** (decisión del jefe 05-09). Siguen abiertos O7.6, P3, P4 y P5.
+> `EVA-MOBILE-F`, que sigue **abierto**. `EVA-NEXTJS-18`: **causa identificada y fix en código (O7.7),
+> pendiente de gates, deploy y verificación a 72 h**. O7.4 se **desestima salvo regresión** (decisión del
+> jefe 05-09). O7.6 cerrado el 05-09. Siguen abiertos P3, P4 y P5.
 >
 > **Cierre 2026-09-01 (tarde).** Todo lo del cierre Sentry está en producción con QA del owner verde.
 > Abiertos: C3/O6.8 (verificar Sentry a 72 h, ~04-09), O6.9 (`EVA-MOBILE-9` se reclasifica solo), P3
@@ -202,13 +203,31 @@ Marcar solo con evidencia real. Prohibido dar un gate por verde sin haberlo corr
       del guardián para saber QUÉ devuelve el servidor.
 - [x] O7.5 **Rage clicks falsos** (`8dbd8426`): verificado en PostHog el 02-09 — `$rageclick` sobre el label oculto
       114/día → 0, `$autocapture` basura 1.752/día → 0.
-- [ ] O7.6 **Misma familia, fuera del tren del 02-09** (hallazgos del barrido): (a) `components/nutrition/NotesThread.tsx`
+- [x] O7.6 **Misma familia, fuera del tren del 02-09** (hallazgos del barrido): (a) `components/nutrition/NotesThread.tsx`
       pinta la HORA de cada nota con `toLocaleTimeString` en la TZ del runtime ⇒ Vercel (UTC) «07:00 a. m.» vs alumno
       (Chile) «11:00 a. m.» en cada nota — mismatch propio, más grave que el mes; (b) `deviceLabel`
       (`lib/bodycomp/view-helpers.ts`), `BiaTrendPanel`/`IsakTrendPanel`, `EvolutionCharts`, movimiento,
       `ProfileOverviewB3:468` y `profileOverviewUtils` derivan el DÍA de un `timestamptz` con getters locales: para
       mediciones entre las 20:00 y las 24:00 de Chile el día difiere entre servidor (UTC) y cliente. Fix: derivar el
       día en Santiago (`getSantiagoIsoYmdForUtcInstant`) o formatear solo en cliente (`useEffect`).
+      **Cerrado el 05-09.** (a) y (b) ya estaban en código desde `136e0411` (02-09); el checkbox había quedado sin
+      marcar. Residuo cazado: `ProfileOverviewB3.fmtHabitDate` (`toLocaleDateString('es-ES', { month: 'short' })` en
+      client component) movido a `profileOverviewUtils.formatHabitLogDate` con tabla fija; tests nuevos
+      `NotesThread.test.tsx` (5) y 3 casos en `profileOverviewUtils.test.ts`. Gates sin correr (orden del owner).
+      (c) `dashboard/_components/records/PRDetailSheet.tsx:31,41` y `dashboard/_data/dashboard.queries.ts:234`
+      conservan el patrón (el primero no hidrata, Sheet cerrado; el segundo es server-only): deuda declarada.
+- [x] O7.7 **`EVA-NEXTJS-18` — la regresión del 04-09 es el barrido O7.1 incompleto, en el dashboard del ALUMNO**
+      (96 ocurrencias, `regressed`, último evento 2026-09-04T23:10:50Z sobre `f9ba8a3f`,
+      `/c/7LQ8B/dashboard?recuperar=2026-08-26`, Chrome Mobile iOS 152 / iOS 26.6.1, culture en-US +
+      America/New_York, eventID `0f4bf6e343bd4bf99fe07892d79d0922`). Causa:
+      `dashboard/_components/program/WorkoutPlanCard.tsx:48` (`'use client'`) formateaba el sub-label con
+      `toLocaleDateString('es-CL', { month: 'short', timeZone: 'UTC' })`; O7.1 (`613f870a`) cambió la función
+      idéntica de `PersonalRecordsList` y salteó esta, que solo se pintaba en el sheet; el tren «Ciclo real y por
+      lado» (04-09) subió «Hecho 26 ago» al render inicial y WebKit de iOS 26 abrevia con punto. No hubo
+      corrimiento de día. Confirmado en LIVE que el alumno del evento está en un programa `cycle` (cycle_length 5).
+      El diff literal no fue recuperable por MCP (issue platform `replay_hydration_error`). Fix: `fmtShortDate` →
+      `formatShortDayMonthEs` (cero Intl), test `WorkoutPlanCard.test.tsx` con `renderToStaticMarkup` y TZ UTC vs
+      New_York. EN CÓDIGO 05-09, sin gates ni push; verificar en Sentry a 72 h del deploy.
 
 ## Cierre
 
@@ -218,8 +237,9 @@ Marcar solo con evidencia real. Prohibido dar un gate por verde sin haberlo corr
       **en el release actual**. ⚠ Salvo `EVA-NEXTJS-S`, que está filtrado y no es verificable así.
       — **verificado el 05-09**: todos los issues tocados sin eventos nuevos (`EVA-NEXTJS-19` en 0 desde
       el 01-09 18:42Z con 12.230 spans en la ruta, resuelto con nota; `EVA-MOBILE-9` resuelto con nota,
-      el síntoma vive en `EVA-MOBILE-F`). **Excepción: `EVA-NEXTJS-18` es regresión activa** y queda en
-      O7. QA owner VERDE 05-09, artifact `6bd32370`.
+      el síntoma vive en `EVA-MOBILE-F`). **Excepción: `EVA-NEXTJS-18`, con causa identificada y fix en
+      código en O7.7** (pendiente de gates, deploy y verificación a 72 h). QA owner VERDE 05-09,
+      artifact `6bd32370`.
 
 ## Pendientes declarados (NO se hacen acá)
 

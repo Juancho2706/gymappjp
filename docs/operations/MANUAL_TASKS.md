@@ -42,10 +42,15 @@ web y app: Postgres exige SELECT sobre la columna también para FILTRAR, y hoy h
 - [x] **Fase 2 (02-09)**: los 9 call sites migrados al RPC (web: `lib/branding/public-branding.ts` usado por
       `proxy.ts`, `c/[coach_slug]/login/_data/login.queries.ts`, `api/manifest|splash|og|pwa-screenshot`; RN:
       `apps/mobile/lib/branding.ts` `fetchBrandingByCoachIdentifier`). Deploy web + OTA RN por GH Actions.
-- [ ] **Fase 3 (solo cuando la OTA esté adoptada — verificar en PostHog/EAS que no queden sesiones con el
-      bundle viejo entrando por código)**: `REVOKE SELECT (invite_code) ON public.coaches FROM anon` +
-      `REVOKE EXECUTE ON FUNCTION generate_unique_invite_code(), generate_invite_code() FROM anon`. Después,
-      confirmar con la anon key que `?select=invite_code` devuelve 42501 y que `/c/<slug>/login` sigue 200.
+- [x] **Fase 3 (2026-09-05, LIVE `20260905190100`, archivo `20260905190100_sec01_phase3_revoke_invite_code_anon.sql`)**:
+      gate verificado con los logs de PostgREST (rol del JWT de Authorization, no el de la apikey): 0 lecturas
+      anónimas de `invite_code` desde el 2026-09-02 01:37Z, y 100 % de los eventos nativos en 1.1.2 + OTA 04-09.
+      `REVOKE SELECT (invite_code) ON public.coaches FROM anon` + `REVOKE EXECUTE ON FUNCTION
+      generate_unique_invite_code(), generate_invite_code() FROM PUBLIC, anon, authenticated` (las dos tenían el
+      grant a PUBLIC, así que revocar solo a `anon` no cerraba nada; `generate_invite_code` es función de trigger y
+      no necesita EXECUTE del rol; `generate_unique_invite_code` solo la llama `service_role`). Probado en
+      transacción como `anon` antes de aplicar: branding por código y por slug siguen respondiendo. Verificación
+      post-aplicación con la anon key en el cierre del 05-09 (ver `docs/status/CURRENT.md`).
 - Rollback de cualquier fase: `GRANT` inverso (cada migración lo lleva comentado al pie).
 
 ## P1 — Cierre del build y QA móvil

@@ -1,7 +1,7 @@
 ---
 status: active
 owner: engineering
-last_verified: "2026-09-02 @ 794aee52"
+last_verified: "2026-09-05 @ dff9b4fb"
 canonical: true
 ---
 
@@ -247,6 +247,41 @@ Actualizar este archivo solo con el resultado consolidado:
 - resultado y bloqueador pendiente.
 
 No pegar logs extensos, screenshots, payloads, credenciales ni listas de cientos de suites. Los artefactos viven en GitHub Actions; los defectos accionables viven en issues/specs activos.
+
+## Gates pendientes de la tanda 05-09 (orden del owner: sin gates en la sesión de cierre)
+
+La tanda de código del 05-09 (3 huecos de pricing · `EVA-NEXTJS-18` O7.7 · W6 correos por comportamiento
+detrás de flag · residuo de O7.6 · B11 + PostHog role coach + `app_version`) se commiteó **local, sin push
+y SIN correr ningún gate**, por orden explícita del owner. Nada de esto está verde: se corre entero en la
+sesión siguiente, antes del push.
+
+Vitest primero (comandos deduplicados):
+
+```bash
+pnpm vitest run "apps/web/src/app/join/[invite_code]" apps/web/src/lib/coach-subscription-gate.test.ts "apps/web/src/app/admin/(panel)/coaches" packages/tiers apps/web/src/app/coach/reactivate
+pnpm vitest run WorkoutPlanCard date-utils weekPendingWorkouts
+pnpm vitest run apps/web/src/lib/email apps/web/src/app/api/cron/onboarding-behavior apps/web/src/app/api/cron/drip-hygiene apps/web/src/services/email
+pnpm vitest run apps/web/src/components/nutrition/NotesThread.test.tsx "apps/web/src/app/coach/clients/[clientId]" apps/web/src/lib/bodycomp
+pnpm vitest run apps/web/src/lib/posthog apps/web/src/services/feature-prefs.service.test.ts
+```
+
+Después:
+
+```bash
+pnpm --filter @eva/web typecheck
+pnpm exec eslint $(git diff --name-only dff9b4fb -- '*.ts' '*.tsx')   # solo los archivos tocados
+pnpm test:changed                                                      # suite acotada a lo cambiado vs origin/master
+```
+
+E2E y prod, **después del deploy**:
+
+```bash
+gh workflow run CI --ref master   # job e2e manual
+pnpm qa:prod:suave                # Playwright contra prod, 1 navegador
+```
+
+- El dispatch del CI es lo que **cierra W6.8 de `ciclo-real-y-por-lado` y QA-01**: los secrets `E2E_*`
+  viven en GitHub, no localmente, así que el E2E no se corre desde la máquina ni hace falta `.env.local`.
 
 ## Pendientes actuales
 

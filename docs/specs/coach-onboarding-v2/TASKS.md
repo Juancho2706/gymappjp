@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-08-23"
+last_verified: "2026-09-05"
 canonical: false
 ---
 
@@ -147,9 +147,25 @@ onboarding por área».
 - [x] F5.7 QA visual en device por persona (light/dark, white-label, safe areas, back de hardware en la pantalla de persona, píldora vs cápsula). OTA-able confirmado (`expo export` verde, sin deps nativas nuevas). — **QA del owner VERDE 05-09** (sesión única, artifact `6bd32370`, Android 1.1.2 build 86 / iOS 1.1.2 build 59 con OTA del 04-09 android `d8220490` / ios `54487ddd`, web `f9ba8a3f`).
 
 ## W6 — Correos por comportamiento (Opus; tras ledger de BROCITO)
-- [ ] F6.1 Motor de triggers sobre el ledger del embudo: +2 h sin alumno real · +24 h sin volver · +48 h alumno invitado no entró · aha · +7 d (ayuda humana) · corte 90 d; dedupe; exclusión de cuentas de prueba; cron.
-- [ ] F6.2 Plantillas por persona (`personaCopy`), con el link `/join` y el mensaje de WhatsApp para reenviar al alumno.
-- [ ] F6.3 Tests de templates y servicio; envío real a `qa-free-v3@evatest.cl`.
+
+> **EN CÓDIGO 05-09, sin gates, sin push.** Archivos:
+> `apps/web/src/lib/email/behavior/{behavior-triggers,behavior-templates,behavior-emails}.ts`; cron
+> `apps/web/src/app/api/cron/onboarding-behavior/route.ts` (`0 * * * *` en `vercel.json`). Flag
+> `ONBOARDING_BEHAVIOR_EMAILS_ENABLED` (**default apagado**; no encender hasta aprobar el copy) y
+> `FREE_COACH_DRIP_ENABLED` (el drip viejo queda apagado por defecto). Template keys: `behavior_aha`,
+> `behavior_client_not_entered_48h`, `behavior_no_client_2h`, `behavior_no_return_24h`, `behavior_help_7d`.
+>
+> **Deuda declarada:** `FIRST_LOGIN_SIGNAL_CUTOVER` queda duplicada en `behavior-triggers.ts:98` (espejo de
+> `client-status.ts:29`); `coaches.last_active_at` la escribe **solo la web** (proxy), así que un coach que vive
+> en RN puede matchear «+24 h sin volver» (falso positivo conocido, el copy es inofensivo).
+>
+> **Tensión de copy:** el link `/join` viaja solo dentro del texto de WhatsApp (decisión de FCN W2.5).
+
+- [x] F6.1 Motor de triggers sobre el ledger del embudo: +2 h sin alumno real · +24 h sin volver · +48 h alumno invitado no entró · aha · +7 d (ayuda humana) · corte 90 d; dedupe; exclusión de cuentas de prueba; cron.
+- [x] F6.2 Plantillas por persona (`personaCopy`), con el link `/join` y el mensaje de WhatsApp para reenviar al alumno.
+- [~] F6.3 Tests de templates y servicio; envío real a `qa-free-v3@evatest.cl`. **Tests escritos, SIN correr**
+  (orden del owner: los gates van en la sesión siguiente); el envío real a `qa-free-v3` queda pendiente y exige
+  encender el flag.
 
 ## W7 — Medición, QA y salida (jefe + owner + Opus)
 - [ ] F7.1 Insights PostHog: setup ≤24 h, aha ≤7 d, volvió >6 h, tocó marca, por cohorte semanal y por persona; dashboard «Activación coaches».
@@ -293,11 +309,15 @@ del owner D9–D13 están al final; sin ellas no arranca lo que las cita.
   la purga de QA va por lista de correos, nunca por dominio. [EDGE-13]
 
 ### W8.4 — Precondiciones de W6 (decisiones + 0,5 d)
-- [ ] W8.4.1 **D11** drip por calendario: apagar `scheduleFreeCoachDripSequence` (D6 decía reemplazar) o
+- [x] W8.4.1 **D11** drip por calendario: apagar `scheduleFreeCoachDripSequence` (D6 decía reemplazar) o
   definir convivencia; hoy el D+1 y el trigger «+2 h sin alumno» son el mismo correo con keys distintas.
-  [w6-w7-05]
-- [ ] W8.4.2 **D12** reloj: cron horario (`vercel.json` solo tiene diarios/semanales ⇒ «+2 h» = «hasta +26 h»)
-  + trigger de DB para el aha (hoy solo se calcula cuando el coach abre la guía). [w6-w7-08/10]
+  [w6-w7-05] **Ejecutado 05-09 (EN CÓDIGO, sin gates ni push): el drip por calendario queda APAGADO por
+  defecto y `FREE_COACH_DRIP_ENABLED=true` lo resucita.**
+- [x] W8.4.2 **D12** reloj — **parte A (cron horario) HECHA**: `apps/web/src/app/api/cron/onboarding-behavior/route.ts`
+  con `0 * * * *` en `vercel.json` (antes solo había diarios/semanales ⇒ «+2 h» = «hasta +26 h»).
+- [~] W8.4.2B **parte B (disparo en línea) A MEDIAS**: `enqueueBehaviorCheck` está exportada pero **sin ninguno de
+  sus 3 call sites**: `student-login-signal.service.ts` (`recordStudentFirstLogin`), el escritor de
+  `workout_logs` del alumno y el escritor de `nutrition_intake_entries`. [w6-w7-08/10]
 - [x] W8.4.3 (ejecutado en flujo-coach-nuevo W1, verificado 02-09: W1.1-W1.4 `[x]` 26-08) Señal de login del alumno (`clients` no tiene ninguna; solo `auth.users.last_sign_in_at`):
   columna aditiva `clients.last_login_at` escrita por el login del alumno, o lectura con service_role en el
   barrido. Sin esto no existe «+48 h el alumno no entró». [w6-w7-09]
@@ -307,9 +327,11 @@ del owner D9–D13 están al final; sin ellas no arranca lo que las cita.
   alumno no entró» (el alumno que entró el día 1 y volvió el día 5 desaparecería de la ventana). La columna,
   el servicio y los call sites los implementa FCN W1 (W1.1–W1.4, con [SPEC §5 reglas 1–3](../flujo-coach-nuevo/SPEC.md));
   esta tarea queda en consumir esa columna en el barrido, no en crear una propia.
-- [ ] W8.4.4 Rama «sin persona» en todas las plantillas (48/51), exclusión de cuentas de prueba con bypass
+- [x] W8.4.4 Rama «sin persona» en todas las plantillas (48/51), exclusión de cuentas de prueba con bypass
   explícito para `qa-free-v3` (F6.3), criterio del corte a 90 d (`created_at` vs `persona_set_at`), WhatsApp
-  del owner (**D13**). [w6-w7-12/13/20]
+  del owner (**D13**). [w6-w7-12/13/20] **Hecho 05-09 (EN CÓDIGO, sin gates ni push): rama sin persona en
+  todas las plantillas, bypass explícito de `qa-free-v3`, corte a 90 d por `created_at`, y el WhatsApp del
+  owner por env `OWNER_WHATSAPP_URL`.**
 
 ### W8.5 — Precondiciones de W7 (medición, 0,5 d)
 - [ ] W8.5.1 Tabla de equivalencias SPEC §10 ↔ código (`onboarding_step_completed`→`step_completed`,

@@ -720,7 +720,8 @@ Convención de estado: `[ ]` pendiente · `[x]` hecha. Nada se marca verde sin e
       sin salida de consola.
 - [ ] W6.8 Playwright del ejecutor **solo al cierre**, 1 navegador: `pnpm test:e2e` del flujo de
       registro de serie. **Aceptación**: verde o, si falla por entorno, causa anotada y decisión del
-      owner.
+      owner. **Nota 05-09: se ejecuta por GitHub Actions (`gh workflow run CI --ref master`, job `e2e`
+      con los secrets `E2E_*`) en la sesión de gates; no hace falta `.env.local`.**
 - [x] W6.9 Deploy web a Vercel desde `rnmobiledenuevo` = `master`. **Orden obligatorio del tren (R35):
       deploy web → migraciones → OTA.** **Aceptación**: `deployment id` en estado READY anotado en
       CURRENT y MOBILE_PARITY. **El deploy web sale ANTES de la OTA** (si la OTA saliera primero, RN
