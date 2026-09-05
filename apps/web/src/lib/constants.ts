@@ -84,7 +84,6 @@ export type { PaymentProvider, SubscriptionStatus } from '@/domain/coach/types'
 
 export {
     SALE_TIERS,
-    LEGACY_TIERS,
     isSaleTier,
     // Retiro de Starter (S1): parser tolerante ÚNICO del valor crudo de `coaches.subscription_tier`
     // (reemplaza las copias a mano) + alias de tiers retirados para deep-links de VENTA viejos.

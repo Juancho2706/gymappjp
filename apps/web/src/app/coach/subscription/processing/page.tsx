@@ -8,11 +8,16 @@ import {
     BILLING_CYCLE_CONFIG,
     BILLING_CYCLE_PRICE_SUFFIX,
     FLOW_ENABLED,
+    LEGACY_TIER_ALIASES,
     TIER_CONFIG,
     type BillingCycle,
     type SubscriptionTier,
 } from '@/lib/constants'
-import { resolveCheckoutError, type CheckoutErrorCopy } from '@/lib/payments/checkout-errors'
+import {
+    CHECKOUT_TIER_MISSING,
+    resolveCheckoutError,
+    type CheckoutErrorCopy,
+} from '@/lib/payments/checkout-errors'
 import {
     useCaptureCheckoutConfirmed,
     useCaptureCheckoutFailed,
@@ -115,16 +120,31 @@ export default function SubscriptionProcessingPage() {
     const fromRegister = searchParams.get('from') === 'register'
     const couponFromUrl = searchParams.get('coupon')
     const rawTierParam = searchParams.get('tier')
-    const normalizedTierParam = rawTierParam === 'starter_lite' ? 'starter'
-        : rawTierParam === 'free' ? null  // free coaches don't use this page
-        : rawTierParam
-    // LEGACY: `in TIER_CONFIG` valida contra TODAS las entradas (incluidas growth/scale, ya
-    // fuera de venta). Se queda intencionalmente: esta pantalla solo muestra el label de lo que
-    // se está pagando; un coach grandfathered con un cargo legacy en vuelo debe ver su tier real,
-    // no un fallback a 'starter'. No es una superficie de venta.
-    const tierFromUrl = (
-        normalizedTierParam && normalizedTierParam in TIER_CONFIG ? normalizedTierParam : 'starter'
-    ) as SubscriptionTier
+    // Los deep-links de venta viejos (?tier=starter / starter_lite) se rescatan con el alias
+    // canónico; `free` no usa esta pantalla. Todo lo demás viaja crudo al filtro de abajo.
+    const normalizedTierParam = rawTierParam === 'free' ? null
+        : rawTierParam ? (LEGACY_TIER_ALIASES[rawTierParam] ?? rawTierParam)
+        : null
+    // `in TIER_CONFIG` valida contra TODAS las entradas (incluidas growth/scale, ya fuera de
+    // venta). Se queda intencionalmente: esta pantalla solo muestra el label de lo que se está
+    // pagando; un coach grandfathered con un cargo legacy en vuelo debe ver su tier real. No es
+    // una superficie de venta.
+    //
+    // Retiro de Starter (S2, D2=A): sin un tier del catálogo esto queda en `null` y NO cae a un
+    // literal inventado. Antes caía al plan retirado y la pantalla decía «Starter · Mensual» a un
+    // coach que estaba pagando Pro/Elite — y peor: ese literal viajaba al POST de create-preference.
+    const tierFromQuery: SubscriptionTier | null =
+        normalizedTierParam && normalizedTierParam in TIER_CONFIG
+            ? (normalizedTierParam as SubscriptionTier)
+            : null
+    /** SOLO el chip de plan. `null` ⇒ no se pinta chip: mejor ningún plan que uno inventado. */
+    const tierForDisplay: SubscriptionTier | null = tierFromQuery
+    /**
+     * Todo lo que viaja al SERVER o al funnel: POST a `create-preference`, `checkout_started`,
+     * `checkout_failed`, `checkout_confirmed` y el `tier` del `CheckoutPreview`. `null` ⇒ no hay
+     * checkout que iniciar (ver `startCheckoutFromRegister`).
+     */
+    const tierForCheckout: SubscriptionTier | null = tierFromQuery
     const cycleFromUrl = (searchParams.get('cycle') ?? 'monthly') as BillingCycle
     // Add-ons del signup (plan 05 F5.5): CSV en el query → array en el body del POST.
     // Sin esta lectura el CSV moría en la URL. El botón Reintentar lo conserva gratis (reusa
@@ -135,7 +155,7 @@ export default function SubscriptionProcessingPage() {
         return raw.split(',').map((s) => s.trim()).filter(Boolean)
     }, [searchParams])
 
-    const tierLabel = TIER_CONFIG[tierFromUrl]?.label ?? tierFromUrl
+    const tierLabel = tierForDisplay ? TIER_CONFIG[tierForDisplay]?.label ?? tierForDisplay : null
     const cycleLabel = BILLING_CYCLE_CONFIG[cycleFromUrl]?.label ?? cycleFromUrl
 
     // Dos fuentes de error conviven: `errorCopy` (fallo del checkout, con código y salidas) y
@@ -156,11 +176,9 @@ export default function SubscriptionProcessingPage() {
     // que abandono adentro de MercadoPago.
     const captureCheckoutGatewayOpened = useCaptureCheckoutGatewayOpened()
     // Para checkout_confirmed SOLO va lo que la URL trae de verdad: la vuelta estandar de MP llega
-    // sin tier/cycle y el fallback visual 'starter'/'monthly' de esta pantalla contaminaria el dato.
-    const tierForFunnel =
-        normalizedTierParam && normalizedTierParam in TIER_CONFIG
-            ? (normalizedTierParam as SubscriptionTier)
-            : null
+    // sin tier/cycle y un fallback visual contaminaria el dato. Desde D2=A es exactamente
+    // `tierForCheckout` (ya null cuando la URL no trae un tier del catálogo), asi que no hay una
+    // tercera variable: el funnel y el money-path miran el MISMO valor.
     const cycleForFunnel = searchParams.get('cycle')
     // Una sola vez por aterrizaje: confirmNow y el poll comparten el mismo desenlace 'active'.
     const confirmedFiredRef = useRef(false)
@@ -168,7 +186,7 @@ export default function SubscriptionProcessingPage() {
         if (confirmedFiredRef.current) return
         confirmedFiredRef.current = true
         captureCheckoutConfirmed({
-            tier: tierForFunnel,
+            tier: tierForCheckout,
             billingCycle: cycleForFunnel,
             gateway: 'mercadopago',
             result,
@@ -181,7 +199,32 @@ export default function SubscriptionProcessingPage() {
     // apagado el gate real sigue siendo server-side (create-preference rechaza gateway 'flow').
     const canPayWithFlow = FLOW_ENABLED && fromRegister && !preapprovalId
 
+    /**
+     * D2=A: la URL no dice qué plan se estaba contratando ⇒ no se inventa uno.
+     *
+     * No hay POST a `create-preference` NI eventos de funnel: un `checkout_started` con un tier
+     * inventado ensucia el embudo más que su ausencia. La salida (elegir plan en `/pricing`) la
+     * pinta el render, porque `checkout-errors.ts` es puro y no conoce rutas.
+     */
+    function failWithMissingTier() {
+        setError(null)
+        setCheckoutPreview(null)
+        setRedirecting(false)
+        setCanRetry(false)
+        setStatusText('')
+        setErrorCopy(
+            resolveCheckoutError({
+                code: CHECKOUT_TIER_MISSING,
+                message: 'No pudimos saber qué plan estabas contratando.',
+            })
+        )
+    }
+
     async function startCheckoutFromRegister(gateway: CheckoutGateway = 'mercadopago') {
+        if (!tierForCheckout) {
+            failWithMissingTier()
+            return
+        }
         setError(null)
         setErrorCopy(null)
         setCheckoutPreview(null)
@@ -192,7 +235,7 @@ export default function SubscriptionProcessingPage() {
         // E1 (P8): el registro pago confirmo su plan y se va a pedir la preference. Aca tier/cycle
         // SI vienen en la URL (el register redirige con ambos), son lo que viaja al server.
         captureCheckoutStarted({
-            tier: tierFromUrl,
+            tier: tierForCheckout,
             billingCycle: cycleFromUrl,
             gateway,
             source: 'register',
@@ -206,7 +249,7 @@ export default function SubscriptionProcessingPage() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    tier: tierFromUrl,
+                    tier: tierForCheckout,
                     billingCycle: cycleFromUrl,
                     gateway,
                     ...(addonsFromUrl.length > 0 ? { addons: addonsFromUrl } : {}),
@@ -241,7 +284,7 @@ export default function SubscriptionProcessingPage() {
                 tier:
                     typeof payload.tier === 'string' && payload.tier in TIER_CONFIG
                         ? (payload.tier as SubscriptionTier)
-                        : tierFromUrl,
+                        : tierForCheckout,
                 billingCycle:
                     typeof payload.billingCycle === 'string' && payload.billingCycle in BILLING_CYCLE_CONFIG
                         ? (payload.billingCycle as BillingCycle)
@@ -250,7 +293,7 @@ export default function SubscriptionProcessingPage() {
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Error inesperado al iniciar checkout.'
             captureCheckoutFailed({
-                tier: tierFromUrl,
+                tier: tierForCheckout,
                 billingCycle: cycleFromUrl,
                 gateway,
                 source: 'register',
@@ -378,6 +421,18 @@ export default function SubscriptionProcessingPage() {
         }
 
         if (fromRegister && !preapprovalId) {
+            // D2=A: sin tier del catálogo no arranca NADA del alta (ni el preview del cupón, que
+            // termina encadenando el checkout). El coach ve el error con la salida a /pricing.
+            if (!tierForCheckout) {
+                failWithMissingTier()
+                return () => {
+                    alive = false
+                    if (pollRef.current) {
+                        clearInterval(pollRef.current)
+                        pollRef.current = null
+                    }
+                }
+            }
             // Con código → disclosure SERNAC primero (preview→consent→commit→checkout). Sin código → checkout directo.
             if (couponFromUrl) {
                 void loadCouponPreview()
@@ -469,7 +524,7 @@ export default function SubscriptionProcessingPage() {
             }
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [cycleFromUrl, fromRegister, preapprovalId, tierFromUrl])
+    }, [cycleFromUrl, fromRegister, preapprovalId, tierForCheckout])
 
     // Cambio agendado al corte: estado de confirmación dedicado (sin spinner ni timeout falso).
     if (scheduled) {
@@ -487,7 +542,7 @@ export default function SubscriptionProcessingPage() {
                         ✓
                     </div>
 
-                    {(tierFromUrl || cycleFromUrl) && (
+                    {tierForDisplay && (
                         <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-sport-500/30 bg-sport-100 px-3 py-1 text-xs font-semibold text-sport-600">
                             {tierLabel} · {cycleLabel}
                         </div>
@@ -696,7 +751,7 @@ export default function SubscriptionProcessingPage() {
                 )}
 
                 {/* Plan info */}
-                {(tierFromUrl || cycleFromUrl) && (
+                {tierForDisplay && (
                     <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-sport-500/30 bg-sport-100 px-3 py-1 text-xs font-semibold text-sport-600">
                         {tierLabel} · {cycleLabel}
                     </div>
@@ -722,6 +777,17 @@ export default function SubscriptionProcessingPage() {
                 </div>
 
                 <div className="mt-6 flex flex-col gap-3">
+                    {/* D2=A: la URL no traía plan. `checkout-errors.ts` es puro y no conoce rutas
+                        (no se le agrega un `kind` nuevo), así que la salida la pinta la PÁGINA:
+                        elegir plan es lo único que destraba este caso — reintentar lo mismo no. */}
+                    {errorCopy?.code === CHECKOUT_TIER_MISSING ? (
+                        <Link
+                            href="/pricing"
+                            className="inline-flex h-11 items-center justify-center rounded-control bg-sport-500 px-6 text-sm font-semibold text-white transition-colors hover:bg-sport-600"
+                        >
+                            Elegir mi plan
+                        </Link>
+                    ) : null}
                     {/* P1: las salidas las decide el copy del error (reintentar el MISMO medio /
                         probar Webpay / escribirnos), no la pantalla. */}
                     {errorCopy ? (

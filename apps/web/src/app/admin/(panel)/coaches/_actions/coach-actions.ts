@@ -118,7 +118,7 @@ const UpdateCoachSchema = z.object({
     full_name: z.string().min(1).optional(),
     brand_name: z.string().min(1).optional(),
     // Union COMPLETO (incluye growth/scale LEGACY): el UPDATE admin es la palanca para gestionar cuentas grandfathered (D5). Solo la CREACION baja a sale tiers.
-    subscription_tier: z.enum(['free', 'starter', 'pro', 'elite', 'growth', 'scale']).optional(),
+    subscription_tier: z.enum(['free', 'pro', 'elite', 'growth', 'scale']).optional(),
     subscription_status: z.enum(['active', 'trialing', 'canceled', 'pending_payment', 'expired', 'past_due', 'paused']).optional(),
     max_clients: z.coerce.number().int().min(1).max(500).optional(),
     // 'annual' (no 'yearly'): el CHECK coaches_billing_cycle_check de DB solo permite annual — enviar 'yearly' rompe el cambio de ciclo a anual vía admin.
@@ -354,7 +354,7 @@ export async function bulkCoachStatusAction(coachIds: string[], status: string) 
 // Bulk tier update
 export async function bulkCoachTierAction(coachIds: string[], tier: string, maxClients: number) {
     // Union COMPLETO (incluye growth/scale LEGACY): bulk re-asignación admin sobre cuentas existentes, grandfathered incluidas (D5).
-    const tierSchema = z.enum(['free', 'starter', 'pro', 'elite', 'growth', 'scale'])
+    const tierSchema = z.enum(['free', 'pro', 'elite', 'growth', 'scale'])
     if (!tierSchema.safeParse(tier).success) return { error: 'Tier inválido' }
     if (!coachIds.length) return { error: 'Sin coaches seleccionados' }
 

@@ -141,18 +141,9 @@ export async function redeemCoupon(db: DB, input: RedeemCouponInput): Promise<Re
     // Scope de tier (applies_to_scope.tiers). Vacío = aplica a cualquier tier.
     const scope = (row.appliesToScope ?? {}) as { tiers?: unknown; module_keys?: unknown; moduleKeys?: unknown }
     const scopeTiers = Array.isArray(scope.tiers) ? scope.tiers.filter((t): t is string => typeof t === 'string') : []
-    // Pricing v2 (C2 — decisión pendiente #4 del dueño): starter salió de la VENTA. Un cupón HISTÓRICO
-    // emitido SOLO para starter ya no tiene ningún plan canjeable → se RECHAZA con mensaje claro (es-CL),
-    // no con el genérico de scope. Un cupón mixto (ej. starter+pro) sigue canjeable para sus tiers
-    // vigentes vía el check de scope de abajo. Si el dueño luego decide MIGRAR estos cupones a pro en
-    // vez de rechazarlos, este guard es el único cambio local (mapear 'starter'→'pro' aquí).
-    if (scopeTiers.length > 0 && scopeTiers.every((t) => t === 'starter')) {
-        return {
-            ok: false,
-            code: 'NOT_ELIGIBLE',
-            message: 'Este código era para el plan Starter, que ya no está a la venta. Escríbenos y buscamos una alternativa para ti.',
-        }
-    }
+    // Un cupón cuyo scope apunta solo a tiers retirados cae en el check genérico de acá abajo
+    // (NOT_ELIGIBLE, «El código no aplica a tu plan actual»): el copy dedicado del plan retirado
+    // murió con el tier (S2.10), verificados 0 cupones con ese scope en LIVE.
     if (scopeTiers.length > 0 && !scopeTiers.includes(input.tier)) {
         return { ok: false, code: 'NOT_ELIGIBLE', message: 'El código no aplica a tu plan actual.' }
     }

@@ -30,6 +30,17 @@ export const CHECKOUT_SUPPORT_EMAIL = 'contacto@eva-app.cl'
  */
 export const GATEWAY_PAYER_SITE_MISMATCH = 'GATEWAY_PAYER_SITE_MISMATCH'
 
+/**
+ * La URL de vuelta no dice qué plan se estaba contratando (retiro de Starter, S2/D2=A).
+ *
+ * Es el ÚNICO código que no viene del server: lo emite la propia pantalla de `processing` cuando
+ * llega con `from=register` y sin un `?tier=` que exista en el catálogo. Antes se hacía el POST a
+ * `create-preference` con el literal `'starter'`; hoy no se inventa un plan. Va como código de
+ * NEGOCIO y `retryable: false` porque reintentar lo mismo vuelve a fallar: la salida es elegir
+ * plan, y la pinta la PÁGINA (este módulo es puro y no conoce rutas).
+ */
+export const CHECKOUT_TIER_MISSING = 'CHECKOUT_TIER_MISSING'
+
 /** Acción que la UI puede pintar junto al mensaje. El copy del botón vive acá, no en la pantalla. */
 export type CheckoutErrorAction =
     /** Volver a pedir el checkout con el MISMO medio de pago. */
@@ -73,6 +84,11 @@ function contactAction(code: string): CheckoutErrorAction {
  * `retryable: false` = reintentar no cambia nada (primero hay que arreglar algo en la cuenta).
  */
 const BUSINESS_CODES: Record<string, { title: string; fallback: string; retryable: boolean }> = {
+    [CHECKOUT_TIER_MISSING]: {
+        title: 'No sabemos qué plan estabas contratando',
+        fallback: 'No pudimos saber qué plan estabas contratando.',
+        retryable: false,
+    },
     OVER_CAPACITY: {
         title: 'Ese plan no alcanza para tus alumnos',
         fallback: 'Ese plan tiene menos cupo que tus alumnos activos. Archiva alumnos antes de bajar de plan.',

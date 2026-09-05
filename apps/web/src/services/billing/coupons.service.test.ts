@@ -125,28 +125,6 @@ describe('redeemCoupon', () => {
         expect(r).toMatchObject({ ok: false, code: 'NOT_ELIGIBLE' })
     })
 
-    // Pricing v2 (C2 — decisión pendiente #4 del dueño): starter salió de la venta. Un cupón HISTÓRICO
-    // emitido SOLO para starter se rechaza con mensaje claro (no el genérico de scope); uno mixto sigue
-    // canjeable para sus tiers vigentes.
-    it('Pricing v2 (C2): cupón histórico SOLO-starter → NOT_ELIGIBLE con mensaje claro, sin claim', async () => {
-        findActiveCouponByCode.mockResolvedValue(makeRow({ appliesToScope: { tiers: ['starter'] } }))
-        const r = await redeemCoupon({} as never, baseInput)
-        expect(r).toMatchObject({ ok: false, code: 'NOT_ELIGIBLE' })
-        if (!r.ok) {
-            // Mensaje es-CL específico (menciona Starter y que ya no está a la venta), no el genérico.
-            expect(r.message).toMatch(/Starter/)
-            expect(r.message).toMatch(/ya no está a la venta/)
-        }
-        expect(claimCouponCapacity).not.toHaveBeenCalled()
-        expect(insertRedemption).not.toHaveBeenCalled()
-    })
-
-    it('Pricing v2 (C2): cupón mixto starter+pro canjeado para pro → sigue canjeable', async () => {
-        findActiveCouponByCode.mockResolvedValue(makeRow({ appliesToScope: { tiers: ['starter', 'pro'] } }))
-        const r = await redeemCoupon({} as never, baseInput) // baseInput.tier = 'pro'
-        expect(r.ok).toBe(true)
-    })
-
     it('scope de tier que NO incluye el tier del canje (solo elite vs coach pro) → NOT_ELIGIBLE genérico', async () => {
         findActiveCouponByCode.mockResolvedValue(makeRow({ appliesToScope: { tiers: ['elite'] } }))
         const r = await redeemCoupon({} as never, baseInput)

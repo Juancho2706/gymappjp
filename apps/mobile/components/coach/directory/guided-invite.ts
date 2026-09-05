@@ -338,7 +338,6 @@ export function shouldEmitInviteSent(
  */
 const SUBSCRIPTION_TIER_FLAGS: Record<SubscriptionTier, true> = {
     free: true,
-    starter: true,
     pro: true,
     elite: true,
     growth: true,

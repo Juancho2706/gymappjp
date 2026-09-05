@@ -14,6 +14,7 @@ import {
     getTierPriceClp,
     isBillingCycleAllowedForTier,
     isSaleTier,
+    LEGACY_TIER_ALIASES,
     SALE_TIERS,
     SUBSCRIPTION_BLOCKED_STATUSES,
     TIER_CONFIG,
@@ -34,8 +35,8 @@ import {
 } from './_lib/reactivate-price'
 import { ReactivateArchivePanel, type ReactivateArchiveClient } from './_components/ReactivateArchivePanel'
 
-// Solo se ofertan tiers a la venta (pricing v2: free/pro/elite — starter salió de la venta,
-// mismo trato que growth/scale: LEGACY, grandfathered, fuera de la oferta).
+// Solo se ofertan tiers a la venta (free/pro/elite). growth/scale quedan fuera de la oferta:
+// LEGACY, grandfathered.
 const tierOptions = SALE_TIERS.map((key) => [key, TIER_CONFIG[key]] as const)
 const cycleOptions = Object.entries(BILLING_CYCLE_CONFIG) as [
     BillingCycle,
@@ -120,20 +121,17 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
 
     // Pre-select the minimum viable tier for the coach's current client count,
     // anchored to their actual tier. Los tiers fuera de venta anclan al vecino de la lista
-    // (la reactivacion publica nunca resucita un tier muerto): starter (pricing v2) y sus
-    // deep-links viejos (?tier=starter / starter_lite) anclan a 'pro'; growth/scale a 'elite'
-    // (quien supere elite ve el puente a Teams, no un auto-bump).
+    // (la reactivacion publica nunca resucita un tier muerto): los deep-links viejos
+    // (?tier=starter / starter_lite) anclan a 'pro' vía LEGACY_TIER_ALIASES; growth/scale a
+    // 'elite' (quien supere elite ve el puente a Teams, no un auto-bump).
     const initialTier = useMemo<SaleTier>(() => {
         const raw = searchParams.get('tier')
-        const queryTier = raw === 'starter_lite' || raw === 'starter' ? 'pro' : raw
-        // starter se chequea ANTES de isSaleTier: el guard tipa SaleTier (que aún incluye starter
-        // por compat) pero en runtime devuelve false para starter — chequearlo después haría que
-        // TS lo crea inalcanzable (TS2367) aunque es el caso real del grandfathered.
+        // Cerco de STRING crudo del query, no del union: sobrevive al retiro de un tier del
+        // catálogo y es lo que mantiene vivos los links de campaña/correo viejos.
+        const queryTier = (raw && LEGACY_TIER_ALIASES[raw]) ?? raw
         const candidate: SaleTier =
             queryTier && isSaleTier(queryTier)
                 ? queryTier
-                : currentTier === 'starter'
-                ? 'pro'
                 : isSaleTier(currentTier)
                 ? currentTier
                 : 'elite'

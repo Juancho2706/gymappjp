@@ -52,6 +52,9 @@ export function parseCheckoutExternalReference(
     const cycleRaw = parts[2]?.trim()
     if (!tierRaw || !cycleRaw) return { coachId, tier: null, billingCycle: null, addons }
 
+    // Un tier retirado del catálogo (p. ej. el legacy `starter`) parsea a `tier: null` a propósito:
+    // `confirm-subscription` conserva el tier de la fila del coach y valida el ciclo contra ÉSE.
+    // Nunca degrada al coach a un plan que ya no existe.
     if (!(tierRaw in TIER_CONFIG)) return { coachId, tier: null, billingCycle: null, addons }
     const tier = tierRaw as SubscriptionTier
 

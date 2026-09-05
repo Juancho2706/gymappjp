@@ -3,7 +3,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
-import { BILLING_CYCLE_CONFIG, TIER_CONFIG, type BillingCycle, type SubscriptionTier } from '@/lib/constants'
+import {
+    BILLING_CYCLE_CONFIG,
+    LEGACY_TIER_ALIASES,
+    TIER_CONFIG,
+    type BillingCycle,
+    type SubscriptionTier,
+} from '@/lib/constants'
 import { useCaptureCheckoutConfirmed } from '@/lib/posthog/events'
 
 const POLL_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutos
@@ -56,12 +62,21 @@ export default function FlowProcessingPage() {
     const aliveRef = useRef(true)
 
     const rawTierParam = searchParams.get('tier')
-    const normalizedTierParam = rawTierParam === 'starter_lite' ? 'starter' : rawTierParam
+    // Los deep-links de venta viejos (?tier=starter / starter_lite) se rescatan con el alias
+    // canónico; el resto viaja crudo al filtro de abajo.
+    const normalizedTierParam = rawTierParam
+        ? (LEGACY_TIER_ALIASES[rawTierParam] ?? rawTierParam)
+        : null
     // `in TIER_CONFIG` valida contra todas las entradas (incluidas legacy): esta pantalla solo
     // muestra el label de lo que se está pagando, no es una superficie de venta.
-    const tierFromUrl = (
-        normalizedTierParam && normalizedTierParam in TIER_CONFIG ? normalizedTierParam : 'starter'
-    ) as SubscriptionTier
+    //
+    // Retiro de Starter (S2, D2=A): esta pantalla es SOLO display (no hay create-preference ni
+    // `from=register` acá), así que el único efecto es el chip. Sin un tier del catálogo queda
+    // `null` y el chip NO se pinta, en vez de anunciar un plan retirado que nadie está pagando.
+    const tierForDisplay: SubscriptionTier | null =
+        normalizedTierParam && normalizedTierParam in TIER_CONFIG
+            ? (normalizedTierParam as SubscriptionTier)
+            : null
     const cycleFromUrl = (searchParams.get('cycle') ?? 'monthly') as BillingCycle
 
     // Add-ons del combo (CSV en el query → array en el body del POST). El botón Reintentar los conserva.
@@ -71,17 +86,13 @@ export default function FlowProcessingPage() {
         return raw.split(',').map((s) => s.trim()).filter(Boolean)
     }, [searchParams])
 
-    const tierLabel = TIER_CONFIG[tierFromUrl]?.label ?? tierFromUrl
+    const tierLabel = tierForDisplay ? TIER_CONFIG[tierForDisplay]?.label ?? tierForDisplay : null
     const cycleLabel = BILLING_CYCLE_CONFIG[cycleFromUrl]?.label ?? cycleFromUrl
 
     // E1 (P8) — checkout_confirmed en PostHog, gated por consentimiento (no-op sin opt-in).
-    // Solo lo que la URL trae de verdad (el retorno Flow SIEMPRE incluye tier/cycle, pero el
-    // fallback visual 'starter' de esta pantalla no debe contaminar el funnel).
+    // Solo lo que la URL trae de verdad (el retorno Flow SIEMPRE incluye tier/cycle). Desde D2=A
+    // eso es exactamente `tierForDisplay`: sin tier del catálogo va `null`, nunca un plan inventado.
     const captureCheckoutConfirmed = useCaptureCheckoutConfirmed()
-    const tierForFunnel =
-        normalizedTierParam && normalizedTierParam in TIER_CONFIG
-            ? (normalizedTierParam as SubscriptionTier)
-            : null
     const cycleForFunnel = searchParams.get('cycle')
     const confirmedFiredRef = useRef(false)
 
@@ -160,7 +171,7 @@ export default function FlowProcessingPage() {
                 if (!confirmedFiredRef.current) {
                     confirmedFiredRef.current = true
                     captureCheckoutConfirmed({
-                        tier: tierForFunnel,
+                        tier: tierForDisplay,
                         billingCycle: cycleForFunnel,
                         gateway: 'flow',
                         result: 'active',
@@ -177,7 +188,7 @@ export default function FlowProcessingPage() {
             // Error de red transitorio: seguimos pooleando.
             return true
         }
-    }, [addonsFromUrl, captureCheckoutConfirmed, cycleForFunnel, tierForFunnel])
+    }, [addonsFromUrl, captureCheckoutConfirmed, cycleForFunnel, tierForDisplay])
 
     const startPolling = useCallback(() => {
         stopPolling()
@@ -234,7 +245,7 @@ export default function FlowProcessingPage() {
                     <div className="mx-auto mb-6 h-12 w-12 animate-spin rounded-full border-[3px] border-sport-500 border-t-transparent" />
                 )}
 
-                {(tierFromUrl || cycleFromUrl) && (
+                {tierForDisplay && (
                     <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-sport-500/30 bg-sport-100 px-3 py-1 text-xs font-semibold text-sport-600">
                         {tierLabel} · {cycleLabel}
                     </div>

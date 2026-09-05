@@ -489,7 +489,8 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
     // (coachTier === 'free' → hasActivePaidPlan false).
     const isFlowActivePlanChange = coach?.subscription_provider === 'flow' && hasActivePaidPlan
     // P1-3: ¿el coach tiene un add-on de nutrición por intercambios VIVO? Bloquea bajar a un tier
-    // sin nutrición (Starter) hasta quitarlo — espejo del 409 NUTRITION_ADDON_ON_DOWNGRADE del server.
+    // sin nutrición (hoy ninguno: defensa ante tier corrupto) hasta quitarlo — espejo del 409
+    // NUTRITION_ADDON_ON_DOWNGRADE del server.
     // Solo ACTIVE bloquea: si ya dio de baja la nutrición (cancel_pending) el downgrade se permite.
     const hasLiveNutrition = addons.some(
         (a) => a.moduleKey === 'nutrition_exchanges' && a.status === 'active'
@@ -634,7 +635,7 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
             {coach ? (
                 <section style={{ background: 'var(--surface-inverse)' }} className="mb-3.5 rounded-card border border-[var(--border-inverse)] p-5 shadow-md">
                     {(() => {
-                        // Un tier desconocido (ni venta ni legacy) NO colapsa a 'starter' (mentiría con su label).
+                        // Un tier desconocido (ni venta ni legacy) se pinta crudo: NO se le inventa un label del catálogo.
                         const isKnownTier = coach.subscription_tier in TIER_CONFIG
                         const t = coach.subscription_tier as SubscriptionTier
                         const tierLabel = isKnownTier ? TIER_CONFIG[t].label : coach.subscription_tier
@@ -824,7 +825,7 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                         const wouldExceed =
                             comparePlanDirection(coachTier, tier) === 'downgrade' &&
                             tierMaxClients < activeClientCount
-                        // P1-3: bajar a un tier sin nutrición (Starter) con un add-on de nutrición vivo.
+                        // P1-3: bajar a un tier sin nutrición (hoy ninguno: defensa) con un add-on de nutrición vivo.
                         // Se bloquea (mismo guard que el 409 NUTRITION_ADDON_ON_DOWNGRADE del server).
                         const nutritionBlocks =
                             comparePlanDirection(coachTier, tier) === 'downgrade' &&

@@ -438,7 +438,8 @@ export async function POST(request: Request) {
                     )
                 }
 
-                // NUTRITION_ADDON_ON_DOWNGRADE: si el tier destino no admite nutrición (Starter) y el
+                // NUTRITION_ADDON_ON_DOWNGRADE: si el tier destino no admite nutrición (hoy ningún
+                // tier del catálogo: queda como defensa ante un tier corrupto) y el
                 // coach tiene un add-on de nutrición por intercambios VIVO, se BLOQUEA con 409 y CERO
                 // efectos colaterales (no toca el coach ni crea checkout). Espejo del guard OVER_CAPACITY:
                 // el coach debe quitar el módulo antes de bajar a un plan sin nutrición. Solo cuenta

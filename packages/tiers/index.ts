@@ -15,8 +15,10 @@
  * - trimestral + anual habilitados en los 3 pagos (F0/D2).
  *
  * Pricing v2 (specs/pricing-v2, decisión del dueño 2026-08-17):
- * - Estructura de venta Free / Pro / Elite. starter SALE de la venta (SALE_TIERS) pero QUEDA
- *   en el union, en TIER_CONFIG y en el CHECK de DB — mismo trato que growth/scale.
+ * - Estructura de venta Free / Pro / Elite. starter salió de la venta (SALE_TIERS) en v2 y, con el
+ *   retiro de Starter (docs/specs/retiro-starter-y-enterprise, S2, 2026-09-05), salió también del
+ *   union y de TIER_CONFIG. Sigue en el CHECK de DB solo por el histórico contable (D3=A): el
+ *   union quedó MÁS CHICO que el CHECK a propósito, y `parseSubscriptionTier` es la puerta.
  * - TIER_CONFIG.maxClients = catálogo de VENTA (coaches NUEVOS): free 2 / pro 25 / elite 60.
  * - Los coaches EXISTENTES conservan sus límites viejos (free 3 / pro 30 / elite 100) vía
  *   `tierMaxClientsFor(tier, coachCreatedAt)` con corte en PRICING_V2_CUTOVER. Todo sitio con
@@ -27,7 +29,7 @@
  * - El white-label pasa a estar en TODOS los planes desde v3. Esto REVIERTE la decisión CEO
  *   2026-06-21 («branding = Pro+ ENTERO», white-label v2): ya NO es la regla vigente.
  * - Pro se distingue por dos cosas y solo dos: el CUPO (25 alumnos) y NO llevar el sello
- *   «Hecho con EVA» (capacidad `showsEvaBadge`, helper homónimo). Free/starter sí lo llevan.
+ *   «Hecho con EVA» (capacidad `showsEvaBadge`, helper homónimo). Free sí lo lleva.
  * - Free = 1 alumno (TIER_CONFIG.free.maxClients), con marca propia completa.
  * - El grandfather por USO vive en la columna `coaches.max_clients` (backfill del 2026-08-21,
  *   que NO toca a los free con 2+ alumnos). La escalera de fecha (`tierMaxClientsFor`) es solo
@@ -49,23 +51,28 @@
 
 export type BillingCycle = 'monthly' | 'quarterly' | 'annual'
 
-/** Union completo (CHECK de DB). growth/scale LEGACY pero vivos en runtime — NO borrar. */
-export type SubscriptionTier = 'free' | 'starter' | 'pro' | 'elite' | 'growth' | 'scale'
+/**
+ * Union de los tiers VIVOS. growth/scale LEGACY pero vivos en runtime — NO borrar.
+ *
+ * Es MÁS CHICO que el CHECK de DB (`coaches_subscription_tier_check`, baseline:938), que sigue
+ * aceptando `'starter'` por el histórico contable (retiro de Starter S2, D3=A: el CHECK no se
+ * toca). Todo valor crudo de DB entra por `parseSubscriptionTier`, que degrada a `'free'`.
+ */
+export type SubscriptionTier = 'free' | 'pro' | 'elite' | 'growth' | 'scale'
 
 /**
- * Tiers estructuralmente vendibles. Subconjunto de SubscriptionTier; growth/scale quedan fuera (grandfathered).
- * Pricing v2: starter QUEDA en este TIPO (compat con superficies que aún lo referencian: register,
- * reactivate, cupones históricos) pero ya NO está en SALE_TIERS — la venta real es free/pro/elite.
- * `isSaleTier('starter')` devuelve false; las superficies se limpian en la wave D.
+ * Tiers estructuralmente vendibles. Subconjunto de SubscriptionTier; growth/scale quedan fuera
+ * (grandfathered). La venta real es free/pro/elite. `starter` salió de SALE_TIERS en pricing v2 y
+ * del tipo en el retiro de Starter (S2): los deep-links viejos `?tier=starter` se resuelven con
+ * `LEGACY_TIER_ALIASES`, no con este union.
  */
-export type SaleTier = 'free' | 'starter' | 'pro' | 'elite'
+export type SaleTier = 'free' | 'pro' | 'elite'
 
 export type TierConfig = {
     label: string
     maxClients: number
     monthlyPriceClp: number
     features: string[]
-    isMostAffordable?: boolean
 }
 
 export type TierCapabilities = {
@@ -75,7 +82,7 @@ export type TierCapabilities = {
     canImportClients: boolean
     /**
      * Pricing v3: ¿las superficies del ALUMNO llevan el sello «Hecho con EVA»?
-     * Es el gancho de Pro (D3=A): free/starter true; pro/elite/growth/scale false.
+     * Es el gancho de Pro (D3=A): free true; pro/elite/growth/scale false.
      * NO es lo contrario de canUseBranding — desde v3 un free tiene su marca Y el sello.
      */
     showsEvaBadge: boolean
@@ -85,13 +92,9 @@ export type TierCapabilities = {
 
 /**
  * Tiers a la venta (orden de menor a mayor). Fuente única para selectores y recomendación.
- * Pricing v2: starter FUERA de venta (patrón growth/scale — sigue en el union, TIER_CONFIG y el
- * CHECK de DB para el histórico; compras/cupones nuevos de starter se rechazan en waves C).
+ * growth/scale siguen fuera de venta pero vivos en el union (grandfathered).
  */
 export const SALE_TIERS: readonly SaleTier[] = ['free', 'pro', 'elite'] as const
-
-/** Tiers fuera de venta, conservados en runtime/DB/admin para coaches grandfathered. */
-export const LEGACY_TIERS = ['growth', 'scale'] as const
 
 /** Type guard: ¿el tier (string arbitrario, ej. query param) es uno de los tiers a la venta? */
 export function isSaleTier(tier: string): tier is SaleTier {
@@ -139,10 +142,10 @@ export const LEGACY_TIER_ALIASES: Record<string, SaleTier> = {
 
 const QUARTERLY_DISCOUNT = 0.1
 const ANNUAL_DISCOUNT = 0.2
-// 'Branding personalizado' NO es shared por una razón histórica: starter (fuera de venta) es el
-// único tier que sigue SIN marca propia. Desde pricing v3 (owner 2026-08-21) el white-label está
-// en todos los planes VENDIDOS — free incluido —, así que el bullet se agrega explícitamente a
-// free/pro/elite/growth/scale. La regla vieja «branding = Pro+ ENTERO» (decision CEO 2026-06-21,
+// 'Branding personalizado' NO es shared por una razón histórica: el único tier sin marca propia
+// era starter, ya retirado del catálogo (S2). Desde pricing v3 (owner 2026-08-21) el white-label
+// está en todos los planes VENDIDOS — free incluido —, así que el bullet se agrega explícitamente
+// a free/pro/elite/growth/scale. La regla vieja «branding = Pro+ ENTERO» (decision CEO 2026-06-21,
 // white-label v2) quedó REVERTIDA por v3; no volver a leerla como vigente.
 const SHARED_TIER_FEATURES = [
     'Rutinas ilimitadas con GIFs',
@@ -164,8 +167,6 @@ const MODULES_INCLUDED_FEATURE = '4 módulos profesionales incluidos'
 export const TIER_STUDENT_RANGE_LABEL: Record<SubscriptionTier, string> = {
     // Pricing v3: el Free vende 1 alumno CON marca propia (ese es el gancho, no el cupo).
     free: '1 alumno con tu marca',
-    // Fuera de venta desde pricing v2 (grandfathered) — label solo para display de cuentas históricas.
-    starter: '1–10 alumnos',
     pro: 'Hasta 25 alumnos',
     // Contrato de venta pricing v2: Elite = el tramo 26–60 (Pro cubre hasta 25).
     elite: '26–60 alumnos',
@@ -191,7 +192,6 @@ export function studentCountLabel(n: number, lang: 'es' | 'en' = 'es'): string {
 /** Etiqueta corta por tier (espejo único web + mobile). */
 export const TIER_LABELS: Record<SubscriptionTier, string> = {
     free: 'Gratis',
-    starter: 'Starter',
     pro: 'Pro',
     elite: 'Elite',
     growth: 'Growth',
@@ -210,13 +210,6 @@ export const TIER_CONFIG: Record<SubscriptionTier, TierConfig> = {
         // con cupo 1 y el sello «Hecho con EVA» en las superficies del alumno. Mismo orden de bullets
         // que pro/elite. Los bullets de venta salen de esta lista.
         features: [...SHARED_TIER_FEATURES, MODULES_INCLUDED_FEATURE, 'Branding personalizado', 'Planes de nutrición'],
-    },
-    starter: {
-        label: 'Starter',
-        maxClients: 10,
-        monthlyPriceClp: 19990,
-        isMostAffordable: true,
-        features: [...SHARED_TIER_FEATURES, MODULES_INCLUDED_FEATURE],
     },
     pro: {
         label: 'Pro',
@@ -256,10 +249,11 @@ export const TIER_CONFIG: Record<SubscriptionTier, TierConfig> = {
  * Lo que distingue a los planes pagos ya no es la marca sino:
  *  - el CUPO de alumnos (TIER_CONFIG.maxClients / columna coaches.max_clients), y
  *  - `showsEvaBadge`: el sello «Hecho con EVA» en las superficies del alumno (app /c, login,
- *    PDF de nutrición, correos, export RN). free/starter true; pro/elite/growth/scale false.
+ *    PDF de nutrición, correos, export RN). free true; pro/elite/growth/scale false.
  *
- * starter (fuera de venta) conserva su set histórico grandfathered: sigue SIN nutrición y SIN
- * branding — v3 abre el white-label a los tiers VENDIDOS, no reescribe el histórico.
+ * Los 5 tiers vivos tienen `canUseNutrition` y `canUseBranding` en true: el único que los tenía en
+ * false era starter, retirado del catálogo (S2). Los gates que los leen quedan como defensa ante un
+ * tier corrupto, no como regla de negocio vigente.
  */
 const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
     free: {
@@ -267,13 +261,6 @@ const TIER_CAPABILITIES: Record<SubscriptionTier, TierCapabilities> = {
         // Pricing v3: el free tiene su marca propia completa (logo, color, preset, fuente, loader,
         // layout de login). Lo que paga Pro es el cupo y sacarse el sello.
         canUseBranding: true,
-        canCreateCustomExercises: true,
-        canImportClients: true,
-        showsEvaBadge: true,
-    },
-    starter: {
-        canUseNutrition: false,
-        canUseBranding: false,
         canCreateCustomExercises: true,
         canImportClients: true,
         showsEvaBadge: true,
@@ -335,9 +322,9 @@ export function getTierPriceClp(tier: SubscriptionTier, cycle: BillingCycle) {
  * como fallback, `tierMaxClientsFor(tier, created_at)` (escalera de grandfather v2/v3).
  */
 export function getTierMaxClients(tier: SubscriptionTier) {
-    // Tier fuera del union (string arbitrario de DB o de un form): cae al piso de FREE, jamás a
-    // 'starter' ni a un throw. Mismo fail-safe que `tierMaxClientsFor`, que ya usa `?.` en sus tres
-    // peldaños — acá el acceso directo reventaba con TypeError y tumbaba el alta/gate que lo llame.
+    // Tier fuera del union (string arbitrario de DB o de un form): cae al piso de FREE, jamás al
+    // cupo de un tier pago ni a un throw. Mismo fail-safe que `tierMaxClientsFor`, que ya usa `?.`
+    // en sus tres peldaños — acá el acceso directo reventaba con TypeError y tumbaba el alta/gate.
     return TIER_CONFIG[tier]?.maxClients ?? TIER_CONFIG.free.maxClients
 }
 
@@ -362,12 +349,10 @@ const PRICING_V3_CUTOVER_MS = Date.parse(PRICING_V3_CUTOVER)
 
 /**
  * Límites de alumnos PRE pricing-v2 (los que regían hasta PRICING_V2_CUTOVER).
- * starter conserva 10 en ambos mundos (fuera de venta, no cambia); growth/scale
- * son legacy puros y mantienen su techo en ambos lados del corte.
+ * growth/scale son legacy puros y mantienen su techo en ambos lados del corte.
  */
 const PRE_CUTOVER_TIER_MAX_CLIENTS: Record<SubscriptionTier, number> = {
     free: 3,
-    starter: 10,
     pro: 30,
     elite: 100,
     growth: 120,
@@ -381,7 +366,6 @@ const PRE_CUTOVER_TIER_MAX_CLIENTS: Record<SubscriptionTier, number> = {
  */
 const V2_TIER_MAX_CLIENTS: Record<SubscriptionTier, number> = {
     free: 2,
-    starter: 10,
     pro: 25,
     elite: 60,
     growth: 120,
@@ -395,7 +379,7 @@ const V2_TIER_MAX_CLIENTS: Record<SubscriptionTier, number> = {
  * actuales retienen sus 3; y los demás archivados igual». NINGÚN coach existente pierde
  * capacidad por un cambio de catálogo.
  *
- * - Creado ANTES de PRICING_V2_CUTOVER ⇒ mundo pre-v2 (free 3 / starter 10 / pro 30 / elite 100).
+ * - Creado ANTES de PRICING_V2_CUTOVER ⇒ mundo pre-v2 (free 3 / pro 30 / elite 100).
  * - Creado entre V2 (incl.) y V3 (excl.) ⇒ mundo v2 (free 2 / pro 25 / elite 60).
  * - Creado >= PRICING_V3_CUTOVER ⇒ catálogo v3 vigente (TIER_CONFIG: free 1 / pro 25 / elite 60).
  * - Fecha null/undefined/inválida ⇒ se trata como coach PRE-v2 (fail-safe GENEROSO: ante la duda
@@ -446,8 +430,8 @@ export function getTierCapabilities(tier: SubscriptionTier): TierCapabilities {
  * superficies (proxy, layout alumno, layout coach, login query, manifest/splash) + el write-path.
  *
  * Pricing v3 (owner 2026-08-21): free SÍ tiene marca propia. La regla vieja «branding = Pro+
- * ENTERO» (decision CEO 2026-06-21, white-label v2) está REVERTIDA. Hoy solo starter (fuera de
- * venta, histórico) queda sin marca.
+ * ENTERO» (decision CEO 2026-06-21, white-label v2) está REVERTIDA. Tras el retiro de Starter (S2)
+ * ningún tier del catálogo queda sin marca: los 5 vivos tienen `canUseBranding: true`.
  *
  * FAIL-CLOSED, y sigue siéndolo: un tier inválido (string arbitrario fuera del union) cae a false,
  * o sea NO ve marca propia — nunca se filtra la marca de nadie por un tier corrupto.
@@ -458,7 +442,7 @@ export function isBrandingAllowed(tier: SubscriptionTier): boolean {
 
 /**
  * ¿Las superficies del ALUMNO llevan el sello «Hecho con EVA»? Gancho de Pro en pricing v3
- * (D3=A): free/starter sí; pro/elite/growth/scale no. Superficies: shell del alumno `/c`, login
+ * (D3=A): free sí; pro/elite/growth/scale no. Superficies: shell del alumno `/c`, login
  * del alumno, PDF de nutrición, correos al alumno y export de RN.
  *
  * FAIL-OPEN (a propósito, al revés que isBrandingAllowed): un tier inválido MUESTRA el sello. Ante
@@ -522,7 +506,6 @@ export const BILLING_CYCLE_PRICE_SUFFIX: Record<BillingCycle, string> = {
 
 export const TIER_ALLOWED_BILLING_CYCLES: Record<SubscriptionTier, BillingCycle[]> = {
     free:    [],
-    starter: ['monthly', 'quarterly', 'annual'],
     pro:     ['monthly', 'quarterly', 'annual'],
     elite:   ['monthly', 'quarterly', 'annual'],
     // LEGACY — fuera de venta, grandfathered + placeholder team/org_managed (migracion 20260609230000). NO borrar.
@@ -618,13 +601,17 @@ export function getRecommendedTierFor(
 //
 // Orden total de los tiers para decidir la dirección de un cambio de plan (plan
 // estrategia 06 — comportamiento de cambio de plan decidido por el dueño). Cubre los
-// 6 tiers (incluidos los LEGACY growth/scale) para que un coach grandfathered nunca
+// 5 tiers vivos (incluidos los LEGACY growth/scale) para que un coach grandfathered nunca
 // produzca rank `undefined` al comparar contra un tier a la venta.
 
-/** Orden total de tiers (precio/capacidad creciente). free < starter < pro < elite < growth < scale. */
+/**
+ * Orden total de tiers (precio/capacidad creciente). free < pro < elite < growth < scale.
+ *
+ * El `1` quedó VACANTE al retirar starter (S2) y NO se renumera a propósito: el orden solo
+ * necesita ser creciente, y renumerar movería valores que otros pines comparan.
+ */
 export const TIER_RANK: Record<SubscriptionTier, number> = {
     free: 0,
-    starter: 1,
     pro: 2,
     elite: 3,
     // LEGACY — fuera de venta, grandfathered. Rango definido para no quedar undefined al comparar.
