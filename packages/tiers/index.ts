@@ -33,6 +33,16 @@
  *   que NO toca a los free con 2+ alumnos). La escalera de fecha (`tierMaxClientsFor`) es solo
  *   write-path (qué número se ESCRIBE en activaciones/bajadas) y fallback defensivo cuando el
  *   select omite la columna — NUNCA es la fuente de verdad del cupo de un coach concreto.
+ *
+ * Contrato de fallback del paquete (retiro de Starter, S1):
+ * - Un tier fuera del catálogo se trata como free (precio 0, capabilities de free, ciclos [], rank 0).
+ *   Vale para los 7 helpers blindados: getTierPriceClp, getTierCapabilities,
+ *   getTierAllowedBillingCycles, isBillingCycleAllowedForTier, getDefaultBillingCycleForTier,
+ *   getTierBillingCycleSummary y getTierRank.
+ * - isBrandingAllowed sigue fail-closed y showsEvaBadge fail-open: leen TIER_CAPABILITIES directo,
+ *   no pasan por getTierCapabilities.
+ * - El valor crudo de `coaches.subscription_tier` se normaliza con `parseSubscriptionTier` ANTES de
+ *   entrar al union: esa es la puerta única de las lecturas de DB/RN.
  */
 
 // ── Tipos de negocio ────────────────────────────────────────────────────────
@@ -86,6 +96,43 @@ export const LEGACY_TIERS = ['growth', 'scale'] as const
 /** Type guard: ¿el tier (string arbitrario, ej. query param) es uno de los tiers a la venta? */
 export function isSaleTier(tier: string): tier is SaleTier {
     return (SALE_TIERS as readonly string[]).includes(tier)
+}
+
+/**
+ * Parser tolerante ÚNICO del valor crudo de `coaches.subscription_tier` (lecturas de DB y de RN).
+ *
+ * `'free'|'pro'|'elite'|'growth'|'scale'` ⇒ el mismo; cualquier otra cosa (`'starter'`,
+ * `'starter_lite'`, `null`, basura, un número) ⇒ `'free'`. Reemplaza las 5 copias a mano que vivían
+ * en `coach/dashboard/page.tsx`, `coach/guia/page.tsx`, `coach/layout.tsx`,
+ * `api/mobile/coach/dashboard/route.ts` y `apps/mobile/lib/coach.ts`.
+ *
+ * La lista blanca es de LITERALES a propósito: retirar un tier del catálogo es borrar su literal
+ * de acá y nada más. `'starter'` ya está fuera (retiro de Starter, S1): una fila residual con ese
+ * valor aterriza en `'free'`, que es el default seguro (no cobra, no regala beneficios pagos).
+ *
+ * NO usar para deep-links de venta viejos (`?tier=`): para eso está `LEGACY_TIER_ALIASES`.
+ */
+export function parseSubscriptionTier(raw: unknown): SubscriptionTier {
+    const v = String(raw ?? 'free').toLowerCase()
+    if (v === 'free' || v === 'pro' || v === 'elite' || v === 'growth' || v === 'scale') return v
+    return 'free'
+}
+
+/**
+ * Alias de tiers retirados, SOLO para deep-links de VENTA viejos (`?tier=` en la URL) en TRES
+ * pantallas: `coach/reactivate`, `processing` y `flow-processing`. Un link de campaña o un correo
+ * viejo que todavía diga `?tier=starter` tiene que vender el plan que reemplazó a Starter.
+ *
+ * `(auth)/register` queda FUERA a propósito: ahí un tier que ya no existe degrada a `'free'`
+ * (`isSaleTier(rawTier) ? rawTier : 'free'`), porque el default seguro de un alta es el que NO
+ * cobra — mapearlo a `'pro'` le inventaría un cobro al que recién se registra.
+ *
+ * NUNCA para filas de DB: el valor crudo de `coaches.subscription_tier` pasa por
+ * `parseSubscriptionTier`, que degrada a `'free'`.
+ */
+export const LEGACY_TIER_ALIASES: Record<string, SaleTier> = {
+    starter: 'pro',
+    starter_lite: 'pro',
 }
 
 // ── Catálogo + display testeable ──────────────────────────────────────────────
@@ -269,8 +316,13 @@ function applyDiscount(price: number, discount: number) {
     return Math.round(price * (1 - discount))
 }
 
+/**
+ * Precio TOTAL del período por tier y ciclo (mensual · ×3 −10 % · ×12 −20 %).
+ *
+ * Un tier fuera del catálogo se trata como free (precio 0, capabilities de free, ciclos [], rank 0).
+ */
 export function getTierPriceClp(tier: SubscriptionTier, cycle: BillingCycle) {
-    const monthly = TIER_CONFIG[tier].monthlyPriceClp
+    const monthly = TIER_CONFIG[tier]?.monthlyPriceClp ?? 0
     if (cycle === 'monthly') return monthly
     if (cycle === 'quarterly') return applyDiscount(monthly * 3, QUARTERLY_DISCOUNT)
     // anual = ×12 −20% para todo tier (la rama especial annualPriceClp de scale se eliminó — D3)
@@ -374,8 +426,19 @@ export function tierMaxClientsFor(
     return TIER_CONFIG[tier]?.maxClients ?? TIER_CONFIG.free.maxClients
 }
 
+/**
+ * Capacidades del tier (nutrición, marca, ejercicios propios, importar, sello).
+ *
+ * Un tier fuera del catálogo se trata como free (precio 0, capabilities de free, ciclos [], rank 0).
+ *
+ * Consecuencia declarada (2.º orden): los azúcares de `apps/mobile/lib/coach-tiers.ts`
+ * (`canUseNutrition`/`canUseBranding`/`canCreateCustomExercises`/`canImportClients`) eran
+ * fail-closed por el `?.` sobre `undefined`; con este fallback pasan a ser fail-OPEN ante un tier
+ * corrupto (free tiene las 4 en `true` desde pricing v3). Es inalcanzable en la práctica porque RN
+ * normaliza antes con `parseSubscriptionTier` (`apps/mobile/lib/coach.ts`), pero queda declarado.
+ */
 export function getTierCapabilities(tier: SubscriptionTier): TierCapabilities {
-    return TIER_CAPABILITIES[tier]
+    return TIER_CAPABILITIES[tier] ?? TIER_CAPABILITIES.free
 }
 
 /**
@@ -468,25 +531,44 @@ export const TIER_ALLOWED_BILLING_CYCLES: Record<SubscriptionTier, BillingCycle[
     scale:   ['monthly', 'quarterly', 'annual'],
 }
 
+/**
+ * Ciclos de cobro habilitados para el tier.
+ *
+ * Un tier fuera del catálogo se trata como free (precio 0, capabilities de free, ciclos [], rank 0).
+ */
 export function getTierAllowedBillingCycles(tier: SubscriptionTier): BillingCycle[] {
-    return TIER_ALLOWED_BILLING_CYCLES[tier]
+    return TIER_ALLOWED_BILLING_CYCLES[tier] ?? []
 }
 
+/**
+ * ¿El ciclo está habilitado para el tier? Es el que decide el retorno del checkout cuando un
+ * `external_reference` legacy trae un tier fuera del catálogo (`confirm-subscription/route.ts`).
+ *
+ * Un tier fuera del catálogo se trata como free (precio 0, capabilities de free, ciclos [], rank 0).
+ */
 export function isBillingCycleAllowedForTier(
     tier: SubscriptionTier,
     cycle: BillingCycle
 ): boolean {
-    return TIER_ALLOWED_BILLING_CYCLES[tier].includes(cycle)
+    return (TIER_ALLOWED_BILLING_CYCLES[tier] ?? []).includes(cycle)
 }
 
-// Free tier returns 'monthly' as placeholder — it has no billing cycle in practice
+/**
+ * Ciclo por defecto del tier. Free devuelve `'monthly'` como placeholder — en la práctica no cobra.
+ *
+ * Un tier fuera del catálogo se trata como free (precio 0, capabilities de free, ciclos [], rank 0).
+ */
 export function getDefaultBillingCycleForTier(tier: SubscriptionTier): BillingCycle {
-    return TIER_ALLOWED_BILLING_CYCLES[tier][0] ?? 'monthly'
+    return TIER_ALLOWED_BILLING_CYCLES[tier]?.[0] ?? 'monthly'
 }
 
-/** Texto corto para badges: cobro permitido por plan. */
+/**
+ * Texto corto para badges: cobro permitido por plan.
+ *
+ * Un tier fuera del catálogo se trata como free (precio 0, capabilities de free, ciclos [], rank 0).
+ */
 export function getTierBillingCycleSummary(tier: SubscriptionTier): string {
-    const cycles = TIER_ALLOWED_BILLING_CYCLES[tier]
+    const cycles = TIER_ALLOWED_BILLING_CYCLES[tier] ?? []
     if (cycles.length === 0) return 'Plan gratuito'
     if (cycles.includes('monthly') && cycles.includes('quarterly') && cycles.includes('annual')) {
         return 'Cobro mensual, trimestral o anual'
@@ -551,8 +633,17 @@ export const TIER_RANK: Record<SubscriptionTier, number> = {
     scale: 5,
 }
 
+/**
+ * Rango del tier en el orden total (free 0 … scale 5).
+ *
+ * Un tier fuera del catálogo se trata como free (precio 0, capabilities de free, ciclos [], rank 0).
+ *
+ * Consecuencia declarada: un tier desconocido cuenta como free en `comparePlanDirection` y en el
+ * correo de cupo lleno (`services/billing/sales-emails.service.ts` ⇒ recomienda Pro). Es el
+ * comportamiento deseado; sin la red el bug era SILENCIOSO (`undefined < 2` es `false`).
+ */
 export function getTierRank(tier: SubscriptionTier): number {
-    return TIER_RANK[tier]
+    return TIER_RANK[tier] ?? 0
 }
 
 /**

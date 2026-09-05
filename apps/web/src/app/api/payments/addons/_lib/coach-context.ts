@@ -3,6 +3,7 @@ import type { Database } from '@/lib/database.types'
 import {
     BILLING_CYCLE_CONFIG,
     getTierPriceClp,
+    parseSubscriptionTier,
     type BillingCycle,
     type SubscriptionTier,
 } from '@/lib/constants'
@@ -84,7 +85,7 @@ export function buildActivateContext(
     return {
         coachId: row.id,
         coachEmail,
-        tier: row.subscription_tier as SubscriptionTier,
+        tier: parseSubscriptionTier(row.subscription_tier),
         cycle: normalizeCycle(row.billing_cycle),
         subscriptionMpId: row.subscription_mp_id ?? '',
         currentPeriodEnd: row.current_period_end ? new Date(row.current_period_end) : new Date(),
@@ -100,7 +101,7 @@ export function buildActivateContext(
 export function buildCancelContext(row: CoachBillingRow): CancelAddonContext {
     return {
         coachId: row.id,
-        tier: row.subscription_tier as SubscriptionTier,
+        tier: parseSubscriptionTier(row.subscription_tier),
         cycle: normalizeCycle(row.billing_cycle),
         subscriptionMpId: resolveSubscriptionRef(row),
         currentPeriodEnd: row.current_period_end ? new Date(row.current_period_end) : new Date(),

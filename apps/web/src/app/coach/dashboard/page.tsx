@@ -4,22 +4,13 @@ import type { Metadata } from 'next'
 import { DashboardContent } from './_components/DashboardContent'
 import { getCoach, getActiveStandaloneClientCount } from '@/lib/coach/get-coach'
 import { BrandCoachLoadingShell } from '../_components/BrandCoachLoadingShell'
-import type { SubscriptionTier } from '@/lib/constants'
-import { isBrandingAllowed } from '@eva/tiers'
+import { isBrandingAllowed, parseSubscriptionTier } from '@eva/tiers'
 import { getPersonaScreenContext } from '../onboarding/persona/_data/persona.queries'
 import { GUIDE_ROUTE, shouldRedirectToGuide } from '../guia/_lib/guide-first-entry'
 import { parseOnboardingGuide } from './_lib/onboarding-guide-state'
 import { getCoachEmailVerified } from './_data/email-verification.queries'
 
 export const metadata: Metadata = { title: 'Dashboard' }
-
-function normalizeCoachSubscriptionTier(raw: string | null | undefined): SubscriptionTier {
-    const v = String(raw ?? 'free').toLowerCase()
-    // LEGACY (plan 04): es PARSE del valor crudo de DB, no venta. Reconoce los 6 valores del CHECK
-    // (incluye growth/scale grandfathered + placeholders team/org_managed). NO bajar a sale tiers.
-    if (v === 'free' || v === 'starter' || v === 'pro' || v === 'elite' || v === 'growth' || v === 'scale') return v
-    return 'free'
-}
 
 export default async function CoachDashboardPage() {
     const coach = await getCoach()
@@ -42,7 +33,7 @@ export default async function CoachDashboardPage() {
         redirect(GUIDE_ROUTE)
     }
 
-    const subscriptionTier = normalizeCoachSubscriptionTier(coach.subscription_tier)
+    const subscriptionTier = parseSubscriptionTier(coach.subscription_tier)
     const coachBrandingVisible = isBrandingAllowed(subscriptionTier) && coach.use_brand_colors_coach !== false
 
     // Conteo activo real (mismo servicio que el cap gate) solo para el banner del plan gratuito;

@@ -16,6 +16,7 @@ import {
   getTierCapabilities,
   getTierMaxClients,
   isBrandingAllowed,
+  parseSubscriptionTier,
   showsEvaBadge,
   studentCountLabel,
   type EvaBadgeMedium,
@@ -34,6 +35,10 @@ export {
   // (columna) — esto es para el copy del plan Free en onboarding, donde no hay coach todavía.
   getTierMaxClients,
   isBrandingAllowed,
+  // Retiro de Starter (S1): parser tolerante ÚNICO del valor crudo de `coaches.subscription_tier`.
+  // Mata la copia a mano que vivía en `lib/coach.ts`. `LEGACY_TIER_ALIASES` NO se re-exporta acá:
+  // es de VENTA (deep-links `?tier=`) y RN no vende (regla de tiendas).
+  parseSubscriptionTier,
   showsEvaBadge,
   studentCountLabel,
 }
@@ -41,8 +46,11 @@ export type { EvaBadgeMedium, SubscriptionTier, TierCapabilities }
 
 // Azúcares de capability (1:1 con web). El paquete expone getTierCapabilities; estas envolturas
 // mantienen la API que las pantallas mobile ya importan (nutricion/settings/ejercicios/dashboard).
-// FAIL-CLOSED: un tier fuera del union (columna stale/corrupta en DB) devuelve undefined en el
-// catálogo; el `?.` + `=== true` niega el permiso en vez de tirar TypeError y romper la pantalla.
+// Retiro de Starter (S1): desde que `getTierCapabilities` tiene red (fallback a las capabilities de
+// free), un tier fuera del union ya NO devuelve undefined ⇒ estos 4 azúcares pasan de fail-closed a
+// FAIL-OPEN (free tiene las 4 en `true` desde pricing v3). Es inalcanzable en la práctica: la única
+// entrada del tier a RN es `lib/coach.ts`, que normaliza con `parseSubscriptionTier` antes de mapear
+// el perfil. El `?.` se conserva como cinturón por si el catálogo volviera a devolver undefined.
 export function canUseNutrition(tier: SubscriptionTier): boolean {
   return getTierCapabilities(tier)?.canUseNutrition === true
 }

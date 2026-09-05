@@ -11,7 +11,7 @@ import { parseOneShotAddonReference } from '@/lib/payments/providers/mercadopago
 import { materializeAddonFromOneShot } from '@/services/billing/addons.service'
 import { buildAddonPaymentsPort } from '../addons/_lib/payments-port'
 import { fetchCoachBillingRow, normalizeCycle } from '../addons/_lib/coach-context'
-import { SELF_SERVICE_ADDONS_ENABLED, type SubscriptionTier } from '@/lib/constants'
+import { SELF_SERVICE_ADDONS_ENABLED, parseSubscriptionTier } from '@/lib/constants'
 
 /**
  * POST /api/payments/confirm-addon — camino SÍNCRONO de confirmación del one-shot de add-on
@@ -133,7 +133,7 @@ export async function POST(request: Request) {
             payments,
             {
                 coachId: user.id,
-                tier: coach.subscription_tier as SubscriptionTier,
+                tier: parseSubscriptionTier(coach.subscription_tier),
                 cycle: normalizeCycle(coach.billing_cycle),
                 subscriptionMpId: coach.subscription_mp_id,
             },

@@ -9,7 +9,7 @@ import {
 } from '@/services/billing/addons.service'
 import { resolveActiveDiscountDetail } from '@/services/billing/discount.service'
 import { countActiveStandaloneClients } from '@/services/billing/capacity.service'
-import { CHANGE_CARD_ENABLED, getTierPriceClp, type BillingCycle, type SubscriptionTier } from '@/lib/constants'
+import { CHANGE_CARD_ENABLED, getTierPriceClp, parseSubscriptionTier, type BillingCycle } from '@/lib/constants'
 
 /**
  * Bridge móvil READ-ONLY del estado de suscripción rico (E7-03). Espejo bearer de
@@ -87,7 +87,7 @@ export async function GET(request: NextRequest) {
 
     // Add-ons vivos del coach + billing compuesto — EL ÚNICO origen de montos de la UI (nunca calcula
     // precios). Tolerante a fallos: si la lectura de add-ons falla, el resto de la respuesta sigue viva.
-    const tier = coach.subscription_tier as SubscriptionTier
+    const tier = parseSubscriptionTier(coach.subscription_tier)
     const cycle = normalizeCycle(coach.billing_cycle)
     let addons: Awaited<ReturnType<typeof listLive>> = []
     try {

@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import type { Metadata } from 'next'
 import type { Json } from '@/lib/database.types'
 import { getCoach } from '@/lib/coach/get-coach'
-import { showsEvaBadge, type SubscriptionTier } from '@eva/tiers'
+import { parseSubscriptionTier, showsEvaBadge } from '@eva/tiers'
 import { getCoachOnboardingV2Data } from '../dashboard/_data/dashboard.queries'
 import { parseOnboardingGuide } from '../dashboard/_lib/onboarding-guide-state'
 import { GuideScreen } from './_components/GuideScreen'
@@ -28,13 +28,6 @@ export const metadata: Metadata = { title: 'Tus primeros pasos' }
 /** Misma referencia entre renders RSC para no re-disparar la hidratación del hook con un `{}` nuevo. */
 const DEFAULT_COACH_ONBOARDING_GUIDE: Json = {}
 
-function normalizeCoachSubscriptionTier(raw: string | null | undefined): SubscriptionTier {
-    const v = String(raw ?? 'free').toLowerCase()
-    // PARSE del valor crudo de DB (los 6 del CHECK, legacy incluido), no venta.
-    if (v === 'free' || v === 'starter' || v === 'pro' || v === 'elite' || v === 'growth' || v === 'scale') return v
-    return 'free'
-}
-
 export default async function CoachGuiaPage({
     searchParams,
 }: {
@@ -57,7 +50,7 @@ export default async function CoachGuiaPage({
     }
 
     const onboarding = await getCoachOnboardingV2Data(coach.id)
-    const tier = normalizeCoachSubscriptionTier(coach.subscription_tier)
+    const tier = parseSubscriptionTier(coach.subscription_tier)
     const guide = parseOnboardingGuide(coach.onboarding_guide)
 
     const registrationEid =

@@ -19,7 +19,7 @@ import type { Metadata } from 'next'
 import { BRAND_PRIMARY_COLOR, SYSTEM_PRIMARY_COLOR } from '@/lib/brand-assets'
 import { generateBrandPalette } from '@/lib/color-utils'
 import { resolveBrandTheme, deriveSportTokens, resolvePresetBranding, consolidateStandaloneBranding } from '@eva/brand-kit'
-import { isBrandingAllowed, tierMaxClientsFor, TIER_LABELS, type SubscriptionTier } from '@eva/tiers'
+import { isBrandingAllowed, parseSubscriptionTier, tierMaxClientsFor, TIER_LABELS, type SubscriptionTier } from '@eva/tiers'
 import { resolveBrandFontStack } from '@/lib/brand-fonts'
 import { resolveLoaderVariant } from '@/lib/brand-loaders'
 import { buildSealCssVars } from '@/lib/seal-vars'
@@ -47,13 +47,6 @@ export const metadata: Metadata = {
 
 // Dashboard autenticado: el layout lee cookies (sesion) para TODO /coach ⇒ render dinamico.
 export const dynamic = 'force-dynamic'
-
-/** Parse del tier crudo de DB a uno de los 6 valores del CHECK (incluye legacy). NO es venta. */
-function normalizeCoachTier(raw: string | null | undefined): SubscriptionTier {
-    const v = String(raw ?? 'free').toLowerCase()
-    if (v === 'free' || v === 'starter' || v === 'pro' || v === 'elite' || v === 'growth' || v === 'scale') return v
-    return 'free'
-}
 
 /**
  * Consola: "cleaning up async info that was not on the parent Suspense boundary" con stack
@@ -158,7 +151,7 @@ export default async function CoachLayout({
         ])
     // Sobre-límite: alumnos activos > cupo efectivo (override manual `max_clients` o, si falta, el
     // del tier PARA ESTE COACH — grandfather de pricing v2, no el catálogo de venta).
-    const overLimitTier = normalizeCoachTier(coach.subscription_tier)
+    const overLimitTier = parseSubscriptionTier(coach.subscription_tier)
     const overLimitMax = coach.max_clients ?? tierMaxClientsFor(overLimitTier, coach.created_at)
     const overLimit =
         activeStandaloneCount != null && activeStandaloneCount > overLimitMax
@@ -177,6 +170,10 @@ export default async function CoachLayout({
     // Pricing v3 (owner 2026-08-21): el branding standalone es de TODOS los planes (free incluido);
     // `isBrandingAllowed` queda como red fail-closed (tier inválido/stale o starter legacy ⇒ panel
     // EVA). Si el coach apagó el toggle, su panel también cae a EVA. enterprise/team traen su marca.
+    // Retiro de Starter (S1.10, juicio del jefe J-S5): este cast crudo NO se reemplaza por
+    // `parseSubscriptionTier` a propósito. Con el parser, todo valor aterrizaría dentro del union y
+    // —como los 5 tiers vivos tienen `canUseBranding: true`— `isBrandingAllowed` quedaría constante
+    // en `true`: el fail-closed se volvería código muerto sin que ningún test lo note.
     // W1a — tema preset curado: si el coach eligió un preset, sus valores overridean color/color2/
     // accent/tinte/fuente ANTES de derivar tokens. NULL/desconocida → passthrough (grandfather).
     // Solo se consume en la rama standalone (managed usa la marca de su org/team, no la personal).
@@ -433,7 +430,7 @@ export default async function CoachLayout({
         </OnboardingModeProvider>
         <PwaRegister />
         {/* Identidad de analítica (PostHog identify + user/tags de Sentry). `overLimitTier` ya es
-            `normalizeCoachTier(coach.subscription_tier)`; solo viaja el UUID del coach, sin PII. */}
+            `parseSubscriptionTier(coach.subscription_tier)`; solo viaja el UUID del coach, sin PII. */}
         <IdentifyOnMount coachId={coach.id} tier={overLimitTier} />
         </>
     )

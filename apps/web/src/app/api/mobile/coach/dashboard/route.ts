@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { getCoachDashboardDataV2WithClient } from '@/app/coach/dashboard/_data/dashboard.queries'
-import type { SubscriptionTier } from '@/lib/constants'
 import { isValidInviteCode, needsPublicCodeConfirmation } from '@/lib/coach/invite-code'
 import type { Json } from '@/lib/database.types'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
 import { verifyMobileBearer } from '@/lib/mobile-auth'
 import { resolveMobileCoachDataScope } from '@/app/api/mobile/coach/clients/_mutation-auth'
 import { ONBOARDING_STEP_KEYS } from '@eva/onboarding'
-import { isBrandingAllowed } from '@eva/tiers'
+import { isBrandingAllowed, parseSubscriptionTier } from '@eva/tiers'
 import { loadOnboardingV2ApiData } from '@/services/onboarding/onboarding-v2.queries'
 import { parseOnboardingGuide } from '@/app/coach/dashboard/_lib/onboarding-guide-state'
 import { mirrorOnboardingEventToPostHog } from '@/lib/posthog/onboarding-event-mirror'
@@ -46,14 +45,6 @@ const MOBILE_EVENT_TYPES: readonly string[] = [
     'onboarding_dismissed',
     'first_module_opened',
 ]
-
-function normalizeSubscriptionTier(raw: string | null | undefined): SubscriptionTier {
-    const v = String(raw ?? 'free').toLowerCase()
-    // LEGACY (plan 04): es PARSE del valor crudo de DB, no venta. Reconoce los 6 valores del CHECK
-    // (incluye growth/scale grandfathered + placeholders team/org_managed). NO bajar a sale tiers.
-    if (v === 'free' || v === 'starter' || v === 'pro' || v === 'elite' || v === 'growth' || v === 'scale') return v
-    return 'free'
-}
 
 export async function GET(request: NextRequest) {
     const token = bearerToken(request)
@@ -137,7 +128,7 @@ export async function GET(request: NextRequest) {
     // coach con Mi marca seguía viendo la figura EVA en su propia app. Gate FAIL-CLOSED por tier,
     // el MISMO de `mapCoachRow` en `apps/mobile/lib/coach.ts` (pricing v3: la marca es de todos
     // los planes vendidos; solo caen el starter legacy y un tier corrupto).
-    const tier = normalizeSubscriptionTier(coach.subscription_tier)
+    const tier = parseSubscriptionTier(coach.subscription_tier)
     const brandingAllowed = isBrandingAllowed(tier)
 
     return NextResponse.json({

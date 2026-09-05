@@ -10,7 +10,7 @@ import {
 } from '@/services/billing/addons.service'
 import { resolveActiveDiscountFromRpc } from '@/services/billing/discount.service'
 import { countActiveStandaloneClients } from '@/services/billing/capacity.service'
-import { CHANGE_CARD_ENABLED, getTierPriceClp, type BillingCycle, type DiscountSpec, type SubscriptionTier } from '@/lib/constants'
+import { CHANGE_CARD_ENABLED, getTierPriceClp, parseSubscriptionTier, type BillingCycle, type DiscountSpec } from '@/lib/constants'
 
 function normalizeCycle(raw: string | null): BillingCycle {
     if (raw === 'monthly' || raw === 'quarterly' || raw === 'annual') return raw
@@ -60,7 +60,7 @@ export async function GET() {
     // Add-ons del coach (RLS SELECT propio: el client user-scoped solo ve sus filas) +
     // billing compuesto. EL ÚNICO origen de montos para la UI — la página nunca calcula precios.
     // tolerante a fallos: si la lectura de add-ons falla, el resto de la respuesta sigue viva.
-    const tier = coach.subscription_tier as SubscriptionTier
+    const tier = parseSubscriptionTier(coach.subscription_tier)
     const cycle = normalizeCycle(coach.billing_cycle)
     let addons: Awaited<ReturnType<typeof listLive>> = []
     try {

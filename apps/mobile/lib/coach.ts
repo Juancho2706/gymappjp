@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import { isBrandingAllowed } from '@eva/tiers'
+import { isBrandingAllowed, parseSubscriptionTier } from '@eva/tiers'
 
 // Contrato de color del panel coach cuando el branding white-label no está incluido.
 // Pricing v3 (owner 2026-08-21): el white-label está en todos los planes vendidos (free incluido),
@@ -30,14 +30,6 @@ export interface CoachProfile {
   createdAt: string | null
   hasCoachLogo?: boolean
   logoUrl?: string | null
-}
-
-function normalizeSubscriptionTier(raw: string | null | undefined): CoachProfile['subscriptionTier'] {
-  const v = String(raw ?? 'free').toLowerCase()
-  // LEGACY: reconoce los 6 valores del CHECK de DB (incluye growth/scale) para no degradar
-  // cuentas grandfathered a 'starter'. Fuera de venta, pero vivas en runtime (plan 04).
-  if (v === 'free' || v === 'starter' || v === 'pro' || v === 'elite' || v === 'growth' || v === 'scale') return v
-  return 'free'
 }
 
 const COACH_PROFILE_COLUMNS =
@@ -142,7 +134,7 @@ type CoachRow = {
 }
 
 function mapCoachRow(data: CoachRow): CoachProfile {
-  const subscriptionTier = normalizeSubscriptionTier(data.subscription_tier)
+  const subscriptionTier = parseSubscriptionTier(data.subscription_tier)
   const brandingAllowed = isBrandingAllowed(subscriptionTier)
   return {
     id: data.id,
