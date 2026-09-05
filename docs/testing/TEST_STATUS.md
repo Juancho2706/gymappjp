@@ -255,38 +255,53 @@ detrás de flag · residuo de O7.6 · B11 + PostHog role coach + `app_version`) 
 y SIN correr ningún gate**, por orden explícita del owner. Nada de esto está verde: se corre entero en la
 sesión siguiente, antes del push.
 
-Vitest primero (comandos deduplicados):
+**Sumado el 05-09 (segunda tanda, misma regla):** el retiro de Starter (S0–S3) y Enterprise E0/E1 del SDD
+[retiro-starter-y-enterprise](../specs/retiro-starter-y-enterprise/TASKS.md) quedaron **en código** en 8
+commits más (`8271864d`…`8150fd71`), también sin gates y sin push. Las dos tandas se cierran con **UN solo
+tren**, en este orden, desde la raíz; lo que falle se arregla quirúrgico (test mal escrito ⇒ el test; código
+mal ⇒ el código), un commit por fix, sin dependencias nuevas:
 
 ```bash
-pnpm vitest run "apps/web/src/app/join/[invite_code]" apps/web/src/lib/coach-subscription-gate.test.ts "apps/web/src/app/admin/(panel)/coaches" packages/tiers apps/web/src/app/coach/reactivate
+pnpm docs:check                                                        # frontmatter, enlaces, CURRENT.md ≤ 16 KB
+pnpm install --frozen-lockfile                                         # E1 regeneró pnpm-lock.yaml: mismo modo que CI y Vercel
+pnpm --filter @eva/web typecheck                                       # el union SubscriptionTier perdió 'starter'
+pnpm qa:lint                                                           # allowlist de check-qa-test-lint quedó vacía (E1)
+pnpm exec eslint $(git diff --name-only dff9b4fb -- '*.ts' '*.tsx')   # solo los archivos tocados por las 2 tandas
+pnpm exec eslint --config eslint.mobile.config.mjs apps/mobile         # regla no-prices-in-mobile (S1.9/S2.5)
+pnpm vitest run                                                        # suite completa, UNA sola vez (cubre las 2 tandas)
+git grep -in "starter" -- apps packages scripts tests supabase specs | grep -viE "startError|STARTER SET"   # grep de cierre S: solo la lista cerrada de residuales del TASKS
+git grep -c "@eva/enterprise\|apps/enterprise" -- apps packages tests scripts .github package.json          # grep de cierre E1: 0
+```
+
+Verificación opcional por tanda (los cubre `pnpm vitest run`; solo si se quiere aislar un fallo):
+
+```bash
+pnpm vitest run "apps/web/src/app/join/[invite_code]" apps/web/src/lib/coach-subscription-gate.test.ts "apps/web/src/app/admin/(panel)/coaches" packages/tiers packages/schemas apps/web/src/app/coach/reactivate
 pnpm vitest run WorkoutPlanCard date-utils weekPendingWorkouts
 pnpm vitest run apps/web/src/lib/email apps/web/src/app/api/cron/onboarding-behavior apps/web/src/app/api/cron/drip-hygiene apps/web/src/services/email
 pnpm vitest run apps/web/src/components/nutrition/NotesThread.test.tsx "apps/web/src/app/coach/clients/[clientId]" apps/web/src/lib/bodycomp
-pnpm vitest run apps/web/src/lib/posthog apps/web/src/services/feature-prefs.service.test.ts
+pnpm vitest run apps/web/src/lib/posthog apps/web/src/services/feature-prefs.service.test.ts apps/web/src/lib/constants.test.ts
+pnpm vitest run apps/web/src/services/billing apps/web/src/lib/payments apps/web/src/app/api/payments apps/web/src/app/flow/retorno/route.test.ts apps/web/src/app/coach/subscription
+pnpm vitest run apps/web/src/lib/nutrition-pdf-brand.test.ts tests/brand-settings-standalone-whitelist.test.ts tests/mobile-aura-theme.test.ts tests/mobile/guided-invite.test.ts tests/mobile/plan-change.test.ts tests/mobile/nutrition-export-brand.test.ts tests/mobile/applinks-claims.test.ts apps/web/src/app/api/mobile/coach/dashboard/route.test.ts
 ```
 
-Después:
+Todo verde ⇒ `git branch -f master rnmobiledenuevo && git push origin rnmobiledenuevo master`, deploy de
+producción en Vercel hasta READY, y **después del deploy**:
 
 ```bash
-pnpm --filter @eva/web typecheck
-pnpm exec eslint $(git diff --name-only dff9b4fb -- '*.ts' '*.tsx')   # solo los archivos tocados
-pnpm test:changed                                                      # suite acotada a lo cambiado vs origin/master
-```
-
-E2E y prod, **después del deploy**:
-
-```bash
-gh workflow run CI --ref master   # job e2e manual
+gh workflow run CI --ref master   # job e2e manual: cierra W6.8 de ciclo-real-y-por-lado y QA-01; ahí corren también sherif y actionlint (E1 tocó ci.yml)
 pnpm qa:prod:suave                # Playwright contra prod, 1 navegador
 ```
 
-- El dispatch del CI es lo que **cierra W6.8 de `ciclo-real-y-por-lado` y QA-01**: los secrets `E2E_*`
-  viven en GitHub, no localmente, así que el E2E no se corre desde la máquina ni hace falta `.env.local`.
-- **Sumado el 05-09:** el SDD `docs/specs/retiro-starter-y-enterprise/` quedó **en código** con S0–S3
-  (Starter) y E0/E1 (Enterprise) — **sin gates corridos y sin push**. Sus comandos (docs:check, typecheck,
-  eslint del diff, `pnpm vitest run` completo y el grep de cierre) viven en
-  [su TASKS § Gates acumulados](../specs/retiro-starter-y-enterprise/TASKS.md) y se corren cuando ese tren cierre;
-  hasta entonces esta sección no registra ninguna corrida de esa ola.
+- Humo post-deploy: `https://www.eva-app.cl/c/7LQ8B/login` responde; `POST /api/cron/onboarding-behavior` sin
+  Bearer ⇒ 401; `GET /enterprise` ⇒ 308 a `/pricing`; `/coach/reactivate?tier=starter` preselecciona Pro;
+  anotar la hora del deploy para verificar `EVA-NEXTJS-18` en Sentry a las 72 h.
+- OTA `eas update` sobre el piso 1.1.2, android + ios (S3.10: `apps/mobile` y `packages/tiers` son TS puro,
+  sin build nativo); `tsc` de mobile corre en GitHub al pushear `apps/mobile/**` o `packages/**`.
+- Los secrets `E2E_*` viven en GitHub, no localmente: el E2E no se corre desde la máquina ni hace falta
+  `.env.local`. Los 2 specs Playwright de pricing (`payment-flow-mock`, `sprint3-register-pricing`) se
+  actualizaron sin correrlos y siguen fuera del dispatch.
+- No encender `ONBOARDING_BEHAVIOR_EMAILS_ENABLED` ni `FREE_COACH_DRIP_ENABLED`.
 
 ## Pendientes actuales
 

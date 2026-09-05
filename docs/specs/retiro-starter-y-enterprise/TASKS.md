@@ -2573,3 +2573,34 @@ CHECK de DB), C3-5 (el normalizador de `api/mobile/coach/dashboard` ya existe ho
   bloqueantes por eso: cualquier fila inesperada cancela la fase, no se «migra al vuelo».
 - **Lo que no vale la pena**: E4 (DROP) exige podar 186+ archivos que leen `org_id` como parte de la identidad de
   standalone/team. Recomendación firme: no hacerlo; las columnas quedan como NULL muertos y el CHECK de tiers sigue permisivo.
+
+---
+
+## Estado de ejecución (2026-09-05, misma sesión del estudio)
+
+Decisiones del owner: **D1=A** (`qa-e2e-coach` → pro/25), **D2=A** (sin tier ⇒ sin chip, sin POST inventado),
+**D6=A** (`pnpm install --lockfile-only` autorizado); el resto quedó en la recomendada A (D3, D4, D5, D7, D13).
+Orden de trabajo: el jefe hizo lo que toca LIVE; workers Opus por tanda con juicio de diffs y commit con
+pathspec; Sonnet solo para los comentarios. **Ningún gate corrió** (regla del owner: se corren en Claude Code
+web con el tren de [TEST_STATUS § Gates pendientes](../../testing/TEST_STATUS.md)); **nada se pusheó**.
+
+| Tanda | Estado | Commit | Notas reales |
+|---|---|---|---|
+| S0 · DB aditiva | ✅ aplicada en LIVE `20260905213201` | `64ebcda4` | Verificaciones S0.1 (matiz: `qa-e2e-coach` tenía `payment_provider='mercadopago'` con `subscription_mp_id` null, no `'admin'`; sigue fuera del MRR), ensayo tx-rollback por `DO … RAISE EXCEPTION`, advisors antes/después sin críticos (nuevo: `rls_enabled_no_policy` + `no_primary_key` sobre `_bak_starter_retire_20260905`; desaparece la advertencia de `assign_org_client_to_coach`). Post: 0 starter, DEFAULT `free`/1, `_bak` 1 fila con RLS, serie por tier 83 = 85 − 2 cuentas de prueba, RPC `SECURITY DEFINER` sin EXECUTE para anon/authenticated. S0.8 hecho |
+| S1 · Blindaje | ✅ | `56b96393` | 7 helpers con red, `parseSubscriptionTier` + `LEGACY_TIER_ALIASES`, 5 copias del parser y 5 casts crudos reemplazados, `layout.tsx:188` intacto (J-S5), tests nuevos `parse-subscription-tier.test.ts` |
+| S2 · Retiro del tipo | ✅ | `39806a40` | Union 5/3, 8 claves fuera, `isMostAffordable`/`LEGACY_TIERS` fuera, `tier-display` borrado, 3 `z.enum`, `ReactivateClient`, D2=A con `tierForDisplay`/`tierForCheckout` + código `CHECKOUT_TIER_MISSING` (desvío declarado en `checkout-errors.ts`) + `processing/page.test.tsx`, guard de cupones fuera |
+| S3.1–S3.7, S3.9 | ✅ | `f0f8dfa2` | Labels/copy/scripts, 22 tests reescritos (3 desvíos declarados: `applies quarterly` re-apuntado a pro, happy path de add-ons conservado, `register/actions.test` sin cast por FormData), specs Playwright a free/pro/elite sin correr, docs con notas de superación y CURRENT en 13.458 B |
+| S3.8 · Comentarios | ✅ | `8150fd71` | 72 filas + fila 74, diff 100 % comentarios |
+| S3.10 · OTA | ⏳ | — | después del deploy web verde |
+| E0 · código | ✅ | `6244f788` | 9 borrados, 7 ediciones (desvíos: coma de `package.json`, tipo `InactiveClient`, bloque «Handlers sin schedule» del RUNBOOK) |
+| E0 · DB | ✅ aplicada en LIVE `20260905213203` | `64ebcda4` | V1–V5 (V5 = 76 policies con org, md5 `f62b9d7b…`; V4 = 0 llamadas RPC en 24 h de `edge_logs`), revoke de 2 RPC + trigger `D` |
+| E1 · Demolición sin runtime | ✅ | `8e613a6e` | 40 borrados (el 41.º ya había caído en E0), 13 ediciones versionadas + `AGENTS.md`/`CLAUDE.md` locales, AASA sin appID enterprise (D13-A), lock regenerado: `pnpm install --lockfile-only` ⇒ «Already up to date», diff = solo el importer `apps/enterprise` y el subárbol exclusivo `expo@54.0.36` (544 líneas borradas, 0 agregadas) |
+| E2 / E2-bis / E3 / E4 | ⏳ planificados | — | trenes aparte según PLAN §3; E2.pre borra la fila `workspace_preferences` `enterprise_staff` antes del deploy |
+
+Residuales aceptados del grep de cierre S (además de la lista cerrada de § Gates acumulados): comentarios que
+documentan el retiro en tiempo presente (`constants.ts`, `coach/layout.tsx`, `checkout-errors.ts`,
+`checkout-external-reference.ts`, `coach-tiers.ts`, `coupons.service.ts`), y `packages/schemas/coupon.ts`
+reescrito. Hallazgos aparte anotados por los workers, fuera de esta ola: `seed-e2e-personas` con `pro: 30`
+desalineado de `TIER_CONFIG.pro.maxClients = 25`; el test «pricing lists Trimestral» de
+`sprint3-register-pricing.spec.ts` ya estaba desalineado con `PreciosSection` (un solo toggle de ciclo) antes
+de esta ola; el renglón `Provider` del texto de ayuda de `/admin/coaches` está desactualizado por otra razón.
