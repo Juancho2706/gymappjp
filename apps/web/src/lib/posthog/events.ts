@@ -5,13 +5,21 @@ import { useCallback } from 'react'
 import type { SubscriptionTier } from '@/lib/constants'
 import { PRICING_VERSION, type RegistrationMethod } from '@/lib/posthog/registration'
 
-/** Identify coach after login/registration (only when they opted in). */
+/**
+ * Identify coach after login/registration (only when they opted in).
+ *
+ * `role: 'coach'` (SEC-01, 05-09): antes solo viajaba `platform: 'coach'` — nombre que se pisa con
+ * el `platform: 'web'`/`'ios'`/`'android'` que ya usan otros eventos (`coach_registered`, el init
+ * del provider). `role` es la propiedad nueva y estable para segmentar coach vs alumno en persons
+ * y en cohortes; `platform: 'coach'` se deja intacto para no romper insights/cohorts existentes
+ * que ya filtran por ese valor.
+ */
 export function useIdentifyCoach() {
     const ph = usePostHog()
     return useCallback(
         (coachId: string, tier: SubscriptionTier, hasConsent: boolean) => {
             if (!ph || !hasConsent) return
-            ph.identify(coachId, { tier, platform: 'coach' })
+            ph.identify(coachId, { tier, platform: 'coach', role: 'coach' })
         },
         [ph]
     )

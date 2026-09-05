@@ -41,6 +41,15 @@ export function PostHogProvider({ children }: { children: React.ReactNode }) {
             // del banner puede correr antes que este init (carrera de montaje) y su opt-in se perdería.
             loaded: () => applyConsent(getStoredConsent()),
         })
+        // Super-properties GLOBALES (SEC-01, 05-09): viajan en TODO evento — identify, pageview y
+        // captura anónima pre-consentimiento incluidos, porque `register()` solo guarda props
+        // locales, no dispara una request propia. Sirven para medir cuánto tráfico sigue en un
+        // bundle viejo tras un deploy (`app_version` = commit corto de Vercel; `dev` fuera de
+        // Vercel). Metadatos de build, sin PII: no dependen del opt-in de cookies.
+        posthog.register({
+            app_version: process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA?.slice(0, 8) ?? 'dev',
+            platform: 'web',
+        })
     }, [token, uiHost])
 
     if (!token) return <>{children}</>
