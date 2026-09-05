@@ -61,3 +61,5 @@ el Sello v2); columnas DB; la app enterprise congelada (los studios de Team/Org 
 - Capturas del Team studio: camino preset y camino hex exacto (paleta derivada visible).
 - PDF: test de gating starter → sin marca.
 - Gates de siempre verdes; diff cero en rutas pre-auth y en la app enterprise.
+
+> Los tests de gating que usaban starter como «tier sin marca» pasaron a un string fuera del catálogo ([retiro-starter-y-enterprise](../retiro-starter-y-enterprise/SPEC.md), S3.6, 2026-09-05). El gate `isBrandingAllowed` sigue fail-closed.

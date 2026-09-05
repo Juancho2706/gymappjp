@@ -400,7 +400,7 @@ describe('POST /api/payments/confirm-subscription — P1 scheduled-at-cut NO deg
         fetchCheckoutSnapshot.mockResolvedValue({
             id: 'preapproval-NEW',
             status: 'authorized', // paid-like
-            external_reference: 'coach-1|starter|monthly', // tier menor (downgrade)
+            external_reference: 'coach-1|free|monthly', // tier menor (downgrade)
             start_date: FUTURE,
             next_payment_date: FUTURE,
         })

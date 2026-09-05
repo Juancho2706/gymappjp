@@ -125,3 +125,5 @@ alumnos: 5 (robin-coach 5/3, dudu 3/3, gabriel 2/2, jesus-coach 2/3, kut 2/3). C
 con marca ya guardada: 5 (`pauli-coach`, `robin-coach`, `dudu`, `coach-derek`, `anais-perez`). Altas Free
 semana del 17-08: 14 (vs 6 en las 7 semanas previas). ~6% de las altas históricas llegaron al 2º alumno
 en 2 semanas.
+
+> Superada en la parte de Starter por [retiro-starter-y-enterprise](../retiro-starter-y-enterprise/SPEC.md) (2026-09-05): starter salió del union, del catálogo y de la DB por defecto.

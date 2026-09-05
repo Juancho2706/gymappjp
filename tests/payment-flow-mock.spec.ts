@@ -21,9 +21,9 @@ test.describe('payment flow (mocked MP)', () => {
                 contentType: 'application/json',
                 body: JSON.stringify({
                     provider: 'mercadopago',
-                    tier: 'starter',
+                    tier: 'pro',
                     billingCycle: 'monthly',
-                    amountClp: 14990,
+                    amountClp: 29990,
                     subscriptionId: 'e2e-mock-preapproval',
                     checkoutUrl: '/coach/subscription/processing?preapproval_id=e2e-mock-preapproval',
                 }),
@@ -48,14 +48,14 @@ test.describe('payment flow (mocked MP)', () => {
         await page.getByRole('button', { name: 'Ingresar al Panel' }).click()
         await page.waitForURL(/\/coach\/(dashboard|reactivate|subscription)/, { timeout: 45_000 })
 
-        await page.goto('/coach/subscription/processing?from=register&tier=starter&cycle=monthly')
+        await page.goto('/coach/subscription/processing?from=register&tier=pro&cycle=monthly')
 
         await page.waitForURL(/\/coach\/dashboard/, { timeout: 60_000 })
         await expect(page).toHaveURL(/subscription=active/)
     })
 
-    // Ciclo trimestral recién habilitado en starter (decisión dueño 2026-06-11, plan 04).
-    test('register flow: starter quarterly mock returns in-app URL then confirm activates', async ({ page }) => {
+    // Ciclo trimestral habilitado en los tiers a la venta (decisión dueño 2026-06-11, plan 04).
+    test('register flow: pro quarterly mock returns in-app URL then confirm activates', async ({ page }) => {
         test.setTimeout(120_000)
         test.skip(
             !coachEmail || !coachPassword,
@@ -68,10 +68,10 @@ test.describe('payment flow (mocked MP)', () => {
                 contentType: 'application/json',
                 body: JSON.stringify({
                     provider: 'mercadopago',
-                    tier: 'starter',
+                    tier: 'pro',
                     billingCycle: 'quarterly',
-                    // 19990 × 3 − 10% = 53973
-                    amountClp: 53973,
+                    // 29990 × 3 − 10% = 80973
+                    amountClp: 80973,
                     subscriptionId: 'e2e-mock-preapproval-q',
                     checkoutUrl: '/coach/subscription/processing?preapproval_id=e2e-mock-preapproval-q',
                 }),
@@ -96,7 +96,7 @@ test.describe('payment flow (mocked MP)', () => {
         await page.getByRole('button', { name: 'Ingresar al Panel' }).click()
         await page.waitForURL(/\/coach\/(dashboard|reactivate|subscription)/, { timeout: 45_000 })
 
-        await page.goto('/coach/subscription/processing?from=register&tier=starter&cycle=quarterly')
+        await page.goto('/coach/subscription/processing?from=register&tier=pro&cycle=quarterly')
 
         await page.waitForURL(/\/coach\/dashboard/, { timeout: 60_000 })
         await expect(page).toHaveURL(/subscription=active/)

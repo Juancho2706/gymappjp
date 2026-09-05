@@ -49,14 +49,13 @@ const COACHES_COLOR = 'var(--viz-4)'
 const SESSIONS_COLOR = 'var(--success-500)'
 
 /** Orden del apilado (de abajo hacia arriba). */
-const TIER_ORDER = ['free', 'starter', 'pro', 'elite', 'growth', 'scale']
+const TIER_ORDER = ['free', 'pro', 'elite', 'growth', 'scale']
 
 /** Categóricos --viz-1..6. Alineados con los tonos de AdminStatusBadge donde existe
  *  equivalente (pro→sport, elite→aqua) para que el color del tier sea el mismo en
  *  todo el panel. */
 const TIER_COLORS: Record<string, string> = {
     free:    'var(--viz-6)',
-    starter: 'var(--viz-4)',
     pro:     'var(--viz-1)',
     elite:   'var(--viz-3)',
     growth:  'var(--viz-5)',
@@ -64,7 +63,7 @@ const TIER_COLORS: Record<string, string> = {
 }
 
 const TIER_LABELS: Record<string, string> = {
-    free: 'Free', starter: 'Starter', pro: 'Pro',
+    free: 'Free', pro: 'Pro',
     elite: 'Elite', growth: 'Growth', scale: 'Scale',
 }
 
@@ -197,7 +196,7 @@ interface Props {
 }
 
 export function ChartSection({ mrrSeries, tierSeries, sessions, coachesByTier }: Props) {
-    /* Reshape tier series → [{ ym, starter, pro, ... }]. Los tiers ausentes en un mes
+    /* Reshape tier series → [{ ym, free, pro, ... }]. Los tiers ausentes en un mes
        quedan undefined a propósito: así el tooltip no lista seis filas en cero. */
     const byMonth = new Map<string, Record<string, string | number>>()
     for (const row of tierSeries) {

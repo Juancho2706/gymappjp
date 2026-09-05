@@ -47,7 +47,7 @@ Decisiones cerradas el 2026-08-21: **1A 2A 3A 4A 5A 6A**. Listas para workers (m
 - [x] F4.5 `FreeWelcomeModal.tsx:115` ✓ «Marca personalizada (tu logo y color)»; `verify-email/page.tsx:63` «1 alumno sin costo, con tu marca»; `HelpCenter.tsx:68,125` «incluida en todos los planes», `:152`; `FaqSection.tsx:63` plural + «con tu marca».
 - [x] F4.6 Correos: `transactional-templates.ts:193` (bienvenida Free: «suma más cupo y saca el sello de EVA»); `drip-templates.ts:127,133` (Pro/Elite sin «tu marca propia», con «sin sello»); drip día 7/14 como upsell de cupo.
 - [x] F4.7 RN: `register.tsx:405-413`, `verify-email.tsx:13`, `subscription.tsx`, `perfil.tsx` — derivados; verificar plural y «Incluida».
-- [x] F4.8 `docs/legal` sin cambios (genérico); `PRODUCT_OVERVIEW.md:92` quitar «Starter».
+- [x] F4.8 `docs/legal` sin cambios (genérico); `PRODUCT_OVERVIEW.md:92` quitar «Starter». (marcada hecha sin hacer — se ejecuta de verdad en el SDD retiro-starter-y-enterprise, S3.9)
 
 ## W5 — Comunicación y docs (Opus)
 - [x] F5.1 Plantilla `buildFreePlanV3NoticeEmail` en `apps/web/src/lib/email/pricing-v3-notice-template.ts` (asunto «Tu plan Free ahora incluye tu marca»): qué ganan (logo, color, tu app con tu identidad, sello «Hecho con EVA»), qué cambia (cupo 1 alumno; «los alumnos que ya tienes se conservan»), CTA «Configurar mi marca» → `/coach/settings/brand`, ghost «Ver planes» → `/pricing`. Sin promesas de precio. Español neutro, HTML + texto plano, 6 tests de render.

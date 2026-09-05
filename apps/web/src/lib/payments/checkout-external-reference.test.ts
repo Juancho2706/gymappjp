@@ -50,12 +50,24 @@ describe('parseCheckoutExternalReference', () => {
         })
     })
 
-    // Ciclo trimestral recién habilitado en starter/pro (decisión dueño 2026-06-11).
-    it('parses starter with the newly allowed quarterly cycle', () => {
+    // Boundary legacy: `starter` salió del catálogo (retiro 2026-09), así que un external_reference
+    // viejo con ese tier ya NO resuelve — cae al mismo camino que un tier basura (tier/ciclo null).
+    it('un tier retirado del catálogo parsea a tier:null (boundary legacy)', () => {
         const r = parseCheckoutExternalReference('uuid-4|starter|quarterly')
         expect(r).toEqual({
             coachId: 'uuid-4',
-            tier: 'starter',
+            tier: null,
+            billingCycle: null,
+            addons: [],
+        })
+    })
+
+    // Ciclo trimestral habilitado en pro/elite (decisión dueño 2026-06-11).
+    it('parses pro with the quarterly cycle', () => {
+        const r = parseCheckoutExternalReference('uuid-4|pro|quarterly')
+        expect(r).toEqual({
+            coachId: 'uuid-4',
+            tier: 'pro',
             billingCycle: 'quarterly',
             addons: [],
         })

@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest'
 // F6: la fuente única de tiers es @eva/tiers (paquete puro compartido web+mobile).
 // El test apunta DIRECTO al paquete — '@/lib/constants' solo re-exporta de acá.
 import {
+    getDefaultBillingCycleForTier,
     getRecommendedTier,
+    getTierAllowedBillingCycles,
     getTierCapabilities,
     getTierMaxClients,
     getTierPriceClp,
+    getTierRank,
     isBillingCycleAllowedForTier,
     isBrandingAllowed,
     isSaleTier,
@@ -20,18 +23,16 @@ import { MUSCLE_GROUPS } from './constants'
 
 describe('subscription constants', () => {
     it('applies quarterly and annual discounts correctly', () => {
-        const monthly = getTierPriceClp('starter', 'monthly')
-        const quarterly = getTierPriceClp('starter', 'quarterly')
-        const annual = getTierPriceClp('starter', 'annual')
+        const monthly = getTierPriceClp('pro', 'monthly')
+        const quarterly = getTierPriceClp('pro', 'quarterly')
+        const annual = getTierPriceClp('pro', 'annual')
 
-        expect(monthly).toBe(19990)
+        expect(monthly).toBe(29990)
         expect(quarterly).toBeLessThan(monthly * 3)
         expect(annual).toBeLessThan(monthly * 12)
     })
 
     it('pins exact prices (Math.round of global discounts, no special annual branch — D3)', () => {
-        // 19990 × 3 × 0.9 = 53973
-        expect(getTierPriceClp('starter', 'quarterly')).toBe(53973)
         // 29990 × 3 × 0.9 = 80973
         expect(getTierPriceClp('pro', 'quarterly')).toBe(80973)
         // scale annual: rama especial annualPriceClp eliminada → 190000 × 12 × 0.8 = 1824000
@@ -40,23 +41,18 @@ describe('subscription constants', () => {
     })
 
     it('returns max clients and capabilities by tier', () => {
-        expect(getTierMaxClients('starter')).toBe(10)
         // Pricing v2: catálogo de VENTA (coaches nuevos) — pro baja a 25; los pro
         // existentes retienen 30 vía tierMaxClientsFor (ver packages/tiers/pricing-v2.test.ts).
         expect(getTierMaxClients('pro')).toBe(25)
-        expect(getTierCapabilities('starter').canUseNutrition).toBe(false)
-        // Pricing v3 abre el white-label a los tiers VENDIDOS; starter está fuera de venta y
-        // conserva su set histórico ⇒ sigue siendo el único sin marca propia.
-        expect(getTierCapabilities('starter').canUseBranding).toBe(false)
         expect(getTierCapabilities('pro').canUseNutrition).toBe(true)
         expect(getTierCapabilities('pro').canUseBranding).toBe(true)
     })
 
     it('branding gate (isBrandingAllowed) — abierto en free desde pricing v3, sigue fail-closed', () => {
         // Pricing v3 (owner 2026-08-21): free ve SU marca. Revierte «branding = Pro+ ENTERO»
-        // (decision CEO 2026-06-21). starter (fuera de venta) queda como único tier sin marca.
+        // (decision CEO 2026-06-21). Los 5 tiers vivos tienen marca; el false solo lo produce un
+        // tier corrupto (fail-closed).
         expect(isBrandingAllowed('free')).toBe(true)
-        expect(isBrandingAllowed('starter')).toBe(false)
         expect(isBrandingAllowed('pro')).toBe(true)
         expect(isBrandingAllowed('elite')).toBe(true)
         expect(isBrandingAllowed('growth')).toBe(true)
@@ -72,10 +68,7 @@ describe('subscription constants', () => {
     })
 
     it('enforces allowed billing cycles by tier', () => {
-        // sale tiers (starter/pro/elite) habilitan los 3 ciclos, incluido trimestral
-        expect(isBillingCycleAllowedForTier('starter', 'monthly')).toBe(true)
-        expect(isBillingCycleAllowedForTier('starter', 'quarterly')).toBe(true)
-        expect(isBillingCycleAllowedForTier('starter', 'annual')).toBe(true)
+        // los tiers pagos a la venta (pro/elite) habilitan los 3 ciclos, incluido trimestral
         expect(isBillingCycleAllowedForTier('pro', 'monthly')).toBe(true)
         expect(isBillingCycleAllowedForTier('pro', 'quarterly')).toBe(true)
         expect(isBillingCycleAllowedForTier('pro', 'annual')).toBe(true)
@@ -122,7 +115,7 @@ describe('subscription constants', () => {
 })
 
 describe('sale tiers (D1 + pricing v2)', () => {
-    it('SALE_TIERS has exactly the 3 tiers on sale (starter fuera de venta — pricing v2)', () => {
+    it('SALE_TIERS has exactly the 3 tiers on sale (starter fuera de venta)', () => {
         expect(SALE_TIERS.length).toBe(3)
         expect([...SALE_TIERS]).toEqual(['free', 'pro', 'elite'])
     })
@@ -131,7 +124,8 @@ describe('sale tiers (D1 + pricing v2)', () => {
         expect(isSaleTier('free')).toBe(true)
         expect(isSaleTier('pro')).toBe(true)
         expect(isSaleTier('elite')).toBe(true)
-        // fuera de venta desde pricing v2 (sigue en union/TIER_CONFIG/CHECK, patrón growth/scale)
+        // retirado del catálogo (2026-09): fuera del union y de TIER_CONFIG, vivo solo en el CHECK
+        // de DB por el histórico contable. `isSaleTier` toma `string`, así que el literal no rompe.
         expect(isSaleTier('starter')).toBe(false)
         // legacy fuera de venta
         expect(isSaleTier('growth')).toBe(false)
@@ -146,7 +140,7 @@ describe('getRecommendedTier (SALE_TIERS only, fallback elite)', () => {
     it('recommends the smallest sale tier that fits the client count (pricing v3: sin starter)', () => {
         expect(getRecommendedTier(0)).toBe('free')
         expect(getRecommendedTier(1)).toBe('free')
-        // free ahora topa en 1 y starter salió de la venta: 2..25 ⇒ pro
+        // free topa en 1 y starter ya no existe como plan: 2..25 ⇒ pro
         expect(getRecommendedTier(2)).toBe('pro')
         expect(getRecommendedTier(8)).toBe('pro')
         expect(getRecommendedTier(25)).toBe('pro')
@@ -166,17 +160,21 @@ describe('getRecommendedTier (SALE_TIERS only, fallback elite)', () => {
     })
 })
 
-// Pin estructural (mejora #10 + #2 / F6): los 6 valores del CHECK de DB
-// (baseline.sql:938 — free/starter/pro/elite/growth/scale) deben tener label y display.
-// Como TIER_CONFIG / TIER_STUDENT_RANGE_LABEL / TIER_LABELS ahora viven en @eva/tiers (paquete
-// puro), este UN test pinnea web Y mobile a la vez (mobile re-exporta TIER_LABELS del paquete).
-// Si alguien agrega un tier al CHECK sin entrada acá, el test rompe en ambas plataformas.
+// Pin estructural (mejora #10 + #2 / F6): los 5 valores del union de tiers vivos
+// (free/pro/elite/growth/scale) deben tener label y display.
+// Desde el retiro de Starter (docs/specs/retiro-starter-y-enterprise, D3=A) el union es MÁS CHICO
+// que el CHECK de DB (`coaches_subscription_tier_check`, baseline.sql:938), que sigue aceptando
+// `'starter'` por el histórico contable: el CHECK no se toca. La puerta entre los dos es
+// `parseSubscriptionTier`, que degrada a `'free'` todo valor fuera del union.
+// Como TIER_CONFIG / TIER_STUDENT_RANGE_LABEL / TIER_LABELS viven en @eva/tiers (paquete puro),
+// este UN test pinnea web Y mobile a la vez (mobile re-exporta TIER_LABELS del paquete).
+// Si alguien agrega un tier al union sin entrada acá, el test rompe en ambas plataformas.
 // NOTA: los mapas de display acoplados a React/RN (iconos Lucide de subscription/page.tsx)
 // NO se pueden mover al paquete puro → quedan en su superficie con comentario LEGACY.
-describe('tier labels — all 6 CHECK values have display entries (web + mobile vía @eva/tiers)', () => {
-    const ALL_CHECK_TIERS: SubscriptionTier[] = ['free', 'starter', 'pro', 'elite', 'growth', 'scale']
+describe('tier labels — los 5 valores del union tienen label y display (web + mobile vía @eva/tiers)', () => {
+    const ALL_UNION_TIERS: SubscriptionTier[] = ['free', 'pro', 'elite', 'growth', 'scale']
 
-    for (const tier of ALL_CHECK_TIERS) {
+    for (const tier of ALL_UNION_TIERS) {
         it(`${tier} has a label, student-range label and short TIER_LABEL`, () => {
             expect(TIER_CONFIG[tier]).toBeDefined()
             expect(TIER_CONFIG[tier].label.length).toBeGreaterThan(0)
@@ -184,6 +182,18 @@ describe('tier labels — all 6 CHECK values have display entries (web + mobile 
             expect(TIER_LABELS[tier].length).toBeGreaterThan(0)
         })
     }
+
+    // El único lugar donde el CHECK de DB y el union se miran de frente: una fila residual con
+    // `'starter'` NO tiene entrada de display y ningún helper puede crashear por eso.
+    it("un valor del CHECK fuera del union ('starter') no crashea ningún helper y cae a free", () => {
+        // Cast obligado: `'starter'` salió del union, entra como valor crudo de DB.
+        const RETIRADO = 'starter' as unknown as SubscriptionTier
+        expect(getTierPriceClp(RETIRADO, 'monthly')).toBe(0)
+        expect(getTierRank(RETIRADO)).toBe(0)
+        expect(getTierCapabilities(RETIRADO)).toEqual(getTierCapabilities('free'))
+        expect(getTierAllowedBillingCycles(RETIRADO)).toEqual([])
+        expect(getDefaultBillingCycleForTier(RETIRADO)).toBe('monthly')
+    })
 })
 
 /**

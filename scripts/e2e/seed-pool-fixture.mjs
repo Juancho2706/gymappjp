@@ -93,7 +93,7 @@ const STUDENTS = [
     { id: IDS.alumnoDos, email: EMAILS.alumnoDos, fullName: 'E2E Alumno Dos' },
 ]
 
-const TIER_MAX = { starter: 10, pro: 30, elite: 60, scale: 500 }
+const TIER_MAX = { pro: 30, elite: 60, scale: 500 }
 const INVITE_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ23456789'
 
 // ---------------------------------------------------------------------------

@@ -61,7 +61,6 @@ for (const Icon of [CreditCard, LayoutGrid, LifeBuoy, Moon, Palette, SlidersHori
 
 const TIER_LABEL: Record<string, string> = {
   free: 'Free',
-  starter: 'Starter',
   pro: 'Pro',
   elite: 'Elite',
   growth: 'Growth',

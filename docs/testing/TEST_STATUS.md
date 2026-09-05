@@ -282,9 +282,11 @@ pnpm qa:prod:suave                # Playwright contra prod, 1 navegador
 
 - El dispatch del CI es lo que **cierra W6.8 de `ciclo-real-y-por-lado` y QA-01**: los secrets `E2E_*`
   viven en GitHub, no localmente, así que el E2E no se corre desde la máquina ni hace falta `.env.local`.
-- **Sumado el 05-09 (sesión de estudio, sin código):** el SDD `docs/specs/retiro-starter-y-enterprise/` (draft)
-  agrega solo `pnpm docs:check` a esta tanda. Los gates de su ejecución (Starter S0–S3, Enterprise E0/E1) viven en
-  [su TASKS § Gates acumulados](../specs/retiro-starter-y-enterprise/TASKS.md) y se corren cuando ese tren cierre.
+- **Sumado el 05-09:** el SDD `docs/specs/retiro-starter-y-enterprise/` quedó **en código** con S0–S3
+  (Starter) y E0/E1 (Enterprise) — **sin gates corridos y sin push**. Sus comandos (docs:check, typecheck,
+  eslint del diff, `pnpm vitest run` completo y el grep de cierre) viven en
+  [su TASKS § Gates acumulados](../specs/retiro-starter-y-enterprise/TASKS.md) y se corren cuando ese tren cierre;
+  hasta entonces esta sección no registra ninguna corrida de esa ola.
 
 ## Pendientes actuales
 

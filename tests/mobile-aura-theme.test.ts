@@ -20,11 +20,11 @@ if (!emberPreset || !aquaPreset || !violetPreset) {
 }
 
 describe('branding efectivo del tema mobile', () => {
-  it('gatea un tier conocido sin white-label al color de sistema', () => {
+  it('gatea un tier fuera del catálogo al color de sistema', () => {
     const fallback = resolveEffectiveCoachBrandTheme(null)
     const resolved = resolveEffectiveCoachBrandTheme({
       primaryColor: emberPreset.brandColor,
-      subscriptionTier: 'starter',
+      subscriptionTier: 'legacy_unknown',
       themePresetKey: 'violet',
       accentLight: aquaPreset.brandColor,
     })
@@ -61,12 +61,12 @@ describe('branding efectivo del tema mobile', () => {
     expect(effective).toEqual(fallback)
   })
 
-  it('sanea logo, loader y colores crudos fuera de Pro sin perder la identidad del coach', () => {
+  it('sanea logo, loader y colores crudos con un tier fuera del catálogo sin perder la identidad del coach', () => {
     const effective = resolveEffectiveCoachBrandPresentation({
       coachId: 'coach-1',
       displayName: 'Marca demo',
       primaryColor: emberPreset.brandColor,
-      subscriptionTier: 'starter',
+      subscriptionTier: 'legacy_unknown',
       logoUrl: 'https://example.com/logo.png',
       useCustomLoader: true,
       loaderText: 'Cargando marca',

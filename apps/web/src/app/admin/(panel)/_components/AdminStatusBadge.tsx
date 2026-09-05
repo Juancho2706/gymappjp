@@ -22,7 +22,6 @@ const STATUS_MAP: Record<string, { label: string; tone: Tone }> = {
 
 const TIER_MAP: Record<string, { label: string; tone: Tone }> = {
     free:    { label: 'free',    tone: 'neutral' },
-    starter: { label: 'Starter', tone: 'neutral' },
     pro:     { label: 'Pro',     tone: 'sport' },
     elite:   { label: 'Elite',   tone: 'aqua' },
     growth:  { label: 'Growth',  tone: 'warning' },

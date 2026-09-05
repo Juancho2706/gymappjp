@@ -30,3 +30,5 @@
 - [ ] T4.2 Verificar en el checkout real que el primer cobro del free sale descontado (hoy solo esta probado con la siembra SQL de DIEGO25).
 - [x] T4.3 Commiteado desde `dbd76e50` (2026-08-03) y `adc6f7f7` (2026-09-02), en producción; el gate
       `COUPON_REDEMPTION_ENABLED` sigue apagado (env), así que el endpoint no queda expuesto sin el flag.
+
+> Superada en 2026-09-05 (`docs/specs/retiro-starter-y-enterprise`): el enum del server es free/pro/elite; starter ya no se acepta.

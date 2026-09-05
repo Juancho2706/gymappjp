@@ -5,7 +5,7 @@
  *   node scripts/create-coach-account.mjs --email you@x.com --password 'secret123' --full-name "Nombre" --brand "Marca" --tier pro
  *
  * Options:
- *   --tier starter|pro|elite|scale   (default: pro)
+ *   --tier pro|elite|scale   (default: pro)
  *   --slug my-brand-slug           (optional; auto from --brand if omitted)
  *   --status active                  (default: active, with current_period_end +1y so /coach works without MP)
  */
@@ -19,7 +19,7 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url))
 
 config({ path: resolve(__dirname, '../.env.local') })
 
-const TIER_MAX = { starter: 10, pro: 30, elite: 60, scale: 500 }
+const TIER_MAX = { pro: 30, elite: 60, scale: 500 }
 
 function parseArgs(argv) {
     const out = {}
@@ -68,7 +68,7 @@ async function main() {
         process.exit(1)
     }
 
-    if (!['starter', 'pro', 'elite', 'scale'].includes(tier)) {
+    if (!['pro', 'elite', 'scale'].includes(tier)) {
         console.error('Invalid --tier')
         process.exit(1)
     }

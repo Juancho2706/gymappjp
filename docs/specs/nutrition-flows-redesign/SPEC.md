@@ -63,4 +63,4 @@ Alumno: aura/greeting + anillo energia + mini-anillos macro · tira semanal · b
 
 ## Fuera de alcance
 
-TTFB workout (track propio, instrumentar primero) · pricing `?? 'starter'` · enterprise (congelada) · retiro V1 completo (ola propia ya planificada, no de este programa) · micros avanzados · nombre/marca/foto en overrides v1.
+TTFB workout (track propio, instrumentar primero) · pricing `?? 'starter'` (**absorbido** por [retiro-starter-y-enterprise](../retiro-starter-y-enterprise/SPEC.md), 2026-09-05) · enterprise (congelada) · retiro V1 completo (ola propia ya planificada, no de este programa) · micros avanzados · nombre/marca/foto en overrides v1.

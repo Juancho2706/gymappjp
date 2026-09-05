@@ -39,8 +39,9 @@ misma carpeta y creados en el mismo commit** (`docs/specs/cobros-coach-alumno/`)
   necesita»), `artifact-boton-de-cobro-del-coach.html` (la idea original: el coach pega su link de MP
   y el alumno tiene un botón), `artifact-la-escalera-del-cobro.html` (plan anterior por peldaños).
 - **Antecedente documental en el repo.** `docs/specs/embudo-free-pro/SPEC.md:24` ya lo declaró fuera
-  de ese tren: «`starter` no se toca. El cobro coach→alumno es otro plan». No existe ninguna spec
-  activa ni archivada del tema; `docs/specs/cobros-coach-alumno/` es carpeta nueva.
+  de ese tren: «`starter` no se toca. El cobro coach→alumno es otro plan».
+  (Esa premisa cambió: ver [retiro-starter-y-enterprise](../retiro-starter-y-enterprise/SPEC.md), 2026-09-05.)
+  No existe ninguna spec activa ni archivada del tema; `docs/specs/cobros-coach-alumno/` es carpeta nueva.
 - **Lo único reusable como referencia de arquitectura** es el puerto `PaymentsProvider` del billing
   EVA↔coach (`docs/archive/specs/pagos-multigateway-flow/`), que es **otro dominio** (EVA cobrándole
   al coach) y que este feature **no toca** (§4, pregunta 1).

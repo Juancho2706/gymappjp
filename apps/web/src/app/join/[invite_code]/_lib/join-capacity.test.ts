@@ -137,7 +137,7 @@ describe('checkJoinCapacity — standalone (C-KILL apagado hoy; el cerco queda c
     })
 
     it('el conteo espeja applyArchiveScope: coach_id + org_id null + team_id null + is_archived false + is_demo false', async () => {
-        const coachRow = { max_clients: 10, subscription_tier: 'starter', created_at: '2026-01-10T00:00:00Z' }
+        const coachRow = { max_clients: 10, subscription_tier: 'legacy_unknown', created_at: '2026-01-10T00:00:00Z' }
         const { admin, countFilters } = fakeAdmin({ coachRow, count: 0 })
         await checkJoinCapacity(admin, STANDALONE)
         expect(countFilters).toEqual([

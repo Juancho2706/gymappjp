@@ -21,7 +21,7 @@ describe('netMonthlyClpForCoach', () => {
 
     it('fixed_clp resta con piso 0', () => {
         expect(netMonthlyClpForCoach('pro', 'monthly', { type: 'fixed_clp', value: 5000, target: 'total', remainingCycles: null })).toBe(24990)
-        expect(netMonthlyClpForCoach('starter', 'monthly', { type: 'fixed_clp', value: 999999, target: 'total', remainingCycles: null })).toBe(0)
+        expect(netMonthlyClpForCoach('pro', 'monthly', { type: 'fixed_clp', value: 999999, target: 'total', remainingCycles: null })).toBe(0)
     })
 
     it('target module NO descuenta la base', () => {

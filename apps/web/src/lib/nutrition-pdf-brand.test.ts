@@ -44,13 +44,13 @@ describe('resolvePdfBrand (resolución de marca por tenant)', () => {
         expect(b.showsEvaBadge).toBe(true)
     })
 
-    // starter (LEGACY, fuera de venta) conserva `canUseBranding: false` en @eva/tiers ⇒ sigue
-    // cayendo a la marca EVA. Lleva el sello igual (`showsEvaBadge: true`).
-    it('starter ⇒ EVA (sin white-label, tier legacy) + sello', () => {
+    // Un tier fuera del catálogo (cuenta legacy con dato viejo) no tiene `canUseBranding` en
+    // @eva/tiers ⇒ sigue cayendo a la marca EVA. Lleva el sello igual (`showsEvaBadge: true`).
+    it('tier fuera del catálogo ⇒ EVA (sin white-label) + sello', () => {
         const b = resolvePdfBrand({
-            brandName: 'Coach Starter',
+            brandName: 'Coach Legacy',
             primaryColor: '#FF0000',
-            subscriptionTier: 'starter',
+            subscriptionTier: 'legacy_unknown',
         })
         expect(b).toEqual(EVA_PDF_BRAND)
         expect(b.showsEvaBadge).toBe(true)

@@ -22,3 +22,5 @@ No hay migracion: `coupon_redemptions`, el trigger que apunta `coaches.active_co
 | Apilar redenciones | Chequeo de `active_coupon_redemption_id` en la rama free → 409 explicito |
 | Abrir el canje a free en estados que son del route de signup | El guard exige `active` exacto; test de `free + expired` → 422 `NO_PAID_PLAN` |
 | Disclosure que muestra un precio distinto al cobrado | El preview se invalida al cambiar plan/ciclo; el composite lo recalcula el server en el checkout |
+
+> Superada en 2026-09-05 (`docs/specs/retiro-starter-y-enterprise`): el enum del server es free/pro/elite; starter ya no se acepta.

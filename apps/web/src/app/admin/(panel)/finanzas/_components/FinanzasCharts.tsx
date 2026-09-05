@@ -33,7 +33,6 @@ const CYCLE_COLORS: Record<string, string> = {
 
 const TIER_COLORS: Record<string, string> = {
     free: 'var(--viz-6)',
-    starter: 'var(--viz-4)',
     pro: 'var(--viz-1)',
     elite: 'var(--viz-2)',
     growth: 'var(--viz-5)', // LEGACY — visible en el desglose de grandfathered

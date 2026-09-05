@@ -90,17 +90,17 @@ prevalecen sobre este resumen. La prosa retirada el 2026-09-02 está en
 10. **Pricing — «trial al tocar el cupo»: decisión del owner POSTERGADA al 08-09** (recordatorio
     automático). Los 3 huecos previos quedaron **EN CÓDIGO 05-09, sin gates ni push**: (1) el cerco de cupo
     del `/join` ya estaba cableado (`join-capacity.ts`) — se agregó el pin del Free con columna = 1;
-    (2) fallback a starter: `CoachCreateSheet` arranca en `free` y `getTierMaxClients` cae a Free en vez de
-    `TypeError`; (3) callejón de `paused`: `/coach/subscription/update-card` queda exenta del gate y
-    `/coach/reactivate` suma el CTA «Cambiar tarjeta» cuando hay preapproval MP vivo.
+    (2) fallback a starter: **cerrado** por el retiro de Starter; (3) callejón de `paused`:
+    `/coach/subscription/update-card` queda exenta del gate y `/coach/reactivate` suma el CTA
+    «Cambiar tarjeta» cuando hay preapproval MP vivo.
     **DECISIONES DEL OWNER pendientes:** (a) la gracia de dunning para `paused` es letra muerta porque el
     webhook nulea `current_period_end` (`subscription-state.ts:32` vía `webhook-pipeline.ts:1098`) ⇒ hacerla
     simétrica a `past_due` (otorgar días de acceso) o borrar la gracia del comentario; (b) apuntar el CTA del
     correo de dunning (`webhook-pipeline.ts:244/1241`) a `/coach/subscription/update-card`; (c) el camino Flow
-    del dunning no tiene CTA (`changeCardForCoach` devuelve `WRONG_PROVIDER`); (d) `processing` /
-    `flow-processing` muestran «Starter» cuando `?tier=` es ilegible (solo label).
-    **Retiro de Starter «como tal» (pedido del owner 05-09): SDD en draft** con D1–D15 pendientes
-    ([spec](../specs/retiro-starter-y-enterprise/SPEC.md)); absorbe (2) y (d).
+    del dunning no tiene CTA (`changeCardForCoach` devuelve `WRONG_PROVIDER`); (d) label «Starter» en
+    `processing`/`flow-processing`: **cerrado** por el mismo retiro.
+    **Retiro de Starter: S0–S3 y E0/E1 en código el 05-09, sin gates ni push**
+    ([SDD](../specs/retiro-starter-y-enterprise/SPEC.md)); absorbió (2) y (d).
 11. **iOS/Android — 1.1.2 aprobada y en tienda ⇒ piso OTA 1.1.2**: 1.1.3 no tiene motivo (cero cambio
    nativo desde la build 59); Android sigue en 1.1.2 (build 86, closed testing Alpha) y producción
    espera 12 testers × 14 días. [OTA](../operations/MOBILE_RELEASES_OTA.md)

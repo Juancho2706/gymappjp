@@ -68,7 +68,7 @@ const PROGRAM_BASE_NAME = 'E2E-SEED Programa Base'
 const PROGRAM_MEMBER_NAME = 'E2E-SEED Programa Member'
 const NUTRITION_PLAN_NAME = 'E2E-SEED Plan Nutricional'
 
-const TIER_MAX = { starter: 10, pro: 30, elite: 60, scale: 500 }
+const TIER_MAX = { pro: 30, elite: 60, scale: 500 }
 
 // ---------------------------------------------------------------------------
 // Helpers

@@ -147,9 +147,9 @@ describe('updateBrandSettingsAction — whitelist B2 (standalone)', () => {
         expect(payload).not.toHaveProperty('loader_text_color')
     })
 
-    // El gate fail-closed sigue vivo para el único tier sin marca (starter, legacy fuera de venta).
-    it('coach starter (legacy sin white-label): identidad y welcome persisten; nada de branding visual (gate intacto)', async () => {
-        const sb = makeSupabase({ tier: 'starter' })
+    // El gate fail-closed sigue vivo para un tier fuera del catálogo (dato legacy en la fila).
+    it('coach con tier fuera del catálogo (sin white-label): identidad y welcome persisten; nada de branding visual (gate intacto)', async () => {
+        const sb = makeSupabase({ tier: 'legacy_unknown' })
         createClientMock.mockResolvedValue(sb)
 
         const res = await updateBrandSettingsAction({}, baseFormData({ brand_secondary_color: '#00FF00' }))

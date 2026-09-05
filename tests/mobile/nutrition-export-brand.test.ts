@@ -61,8 +61,8 @@ describe('resolveNutritionExportBrand (Pricing v3)', () => {
     expect(brand.showsEvaBadge).toBe(true)
   })
 
-  it('starter (legacy, sin white-label) ⇒ EVA exacto CON sello', () => {
-    const brand = resolveNutritionExportBrand(source('starter'))
+  it('tier fuera del catálogo (dato legacy, sin white-label) ⇒ EVA exacto CON sello', () => {
+    const brand = resolveNutritionExportBrand(source('legacy_unknown'))
     expect(brand).toEqual(EVA_EXPORT_BRAND)
     expect(brand.showsEvaBadge).toBe(true)
   })

@@ -258,7 +258,7 @@ describe('canPurchaseAddon', () => {
     // Pricing v2 P3: nutrition_exchanges viene incluido en TODO plan (free también) —
     // la compra se retiró; ya no existe el gate por tier con nutrición (requires_nutrition_tier).
     it('nutrition_exchanges → included_in_plan para CUALQUIER tier (compra retirada)', () => {
-        for (const tier of ['starter', 'pro', 'elite'] as const) {
+        for (const tier of ['free', 'pro', 'elite'] as const) {
             const r = canPurchaseAddon(
                 {
                     subscriptionTier: tier,
@@ -272,10 +272,10 @@ describe('canPurchaseAddon', () => {
         }
     })
 
-    it('starter + cardio → permitido (el resto del catálogo no cambió)', () => {
+    it('tier pago + cardio → permitido (el resto del catálogo no cambió)', () => {
         const r = canPurchaseAddon(
             {
-                subscriptionTier: 'starter',
+                subscriptionTier: 'pro',
                 subscriptionStatus: 'active',
                 isManagedByTeamOrOrg: false,
                 currentPeriodEnd: null,

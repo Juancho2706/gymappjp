@@ -45,9 +45,8 @@ describe('TIER_CAPABILITIES.free — white-label abierto + sello', () => {
 })
 
 describe('showsEvaBadge — gancho de Pro (D3=A)', () => {
-    it('free y starter llevan el sello; pro/elite/growth/scale no', () => {
+    it('free lleva el sello; pro/elite/growth/scale no', () => {
         expect(showsEvaBadge('free')).toBe(true)
-        expect(showsEvaBadge('starter')).toBe(true)
         expect(showsEvaBadge('pro')).toBe(false)
         expect(showsEvaBadge('elite')).toBe(false)
         expect(showsEvaBadge('growth')).toBe(false)
@@ -67,8 +66,8 @@ describe('showsEvaBadge — gancho de Pro (D3=A)', () => {
 
     it('isBrandingAllowed ahora es true para free (revierte «branding = Pro+ ENTERO»)', () => {
         expect(isBrandingAllowed('free')).toBe(true)
-        // starter (fuera de venta, histórico) sigue sin marca propia.
-        expect(isBrandingAllowed('starter')).toBe(false)
+        // fail-closed ante tier corrupto: un valor fuera del catálogo NO habilita marca propia.
+        expect(isBrandingAllowed('legacy_unknown' as SubscriptionTier)).toBe(false)
     })
 })
 

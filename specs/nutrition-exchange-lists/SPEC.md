@@ -70,3 +70,5 @@ Los caminos de escritura existentes (`setFoodExchangeEquivalenceAction`, alta we
 - El sheet sugiere gramos coherentes con los macros y muestra la frase del alumno antes de guardar.
 - Cero filas cruzadas: el test de aislamiento por tenant pasa con roles reales, no con `service_role`.
 - Gates verdes: `pnpm test`, `pnpm --filter @eva/web exec tsc --noEmit`, `pnpm lint`, `pnpm check:nutrition-v2-boundaries`, `pnpm check:tokens`.
+
+> Superada en 2026-09-05 (`docs/specs/retiro-starter-y-enterprise`): starter salió del catálogo y `canUseNutrition` es true en Free desde pricing v3.

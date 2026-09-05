@@ -195,7 +195,7 @@ describe('buildPlanExpiringSoonEmail', () => {
 })
 
 describe('buildPlanExpiredEmail', () => {
-    const ctx = { coachName: 'Ani', tierLabel: 'Starter', subscriptionUrl: SUBSCRIPTION_URL }
+    const ctx = { coachName: 'Ani', tierLabel: 'Pro', subscriptionUrl: SUBSCRIPTION_URL }
 
     it('subject tranquiliza: los datos siguen guardados', () => {
         const { subject } = buildPlanExpiredEmail(ctx)
@@ -206,7 +206,7 @@ describe('buildPlanExpiredEmail', () => {
         const { html } = buildPlanExpiredEmail(ctx)
         expect(html).toContain('no borramos nada')
         expect(html).toContain('Ani')
-        expect(html).toContain('Starter')
+        expect(html).toContain('Pro')
     })
 
     it('un solo CTA de reactivación, sin listas de precios', () => {

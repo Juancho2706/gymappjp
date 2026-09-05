@@ -240,20 +240,10 @@ describe('GET /api/mobile/coach/dashboard — logo del coach', () => {
         expect(body.coach).toMatchObject({ hasCoachLogo: false, logoUrl: null, logoUrlDark: null })
     })
 
-    it('tier sin white-label (starter legacy): URLs gateadas, hasCoachLogo intacto', async () => {
-        coachRow = {
-            ...(coachRow as Record<string, unknown>),
-            subscription_tier: 'starter',
-            logo_url: 'https://cdn.eva/logo.png',
-            logo_url_dark: 'https://cdn.eva/logo-oscuro.png',
-        }
-        const body = await (await GET(getReq())).json()
-        expect(body.coach.subscriptionTier).toBe('starter')
-        // El booleano es contrato viejo y NO cambia de semántica; lo que se gatea es la URL.
-        expect(body.coach.hasCoachLogo).toBe(true)
-        expect(body.coach.logoUrl).toBeNull()
-        expect(body.coach.logoUrlDark).toBeNull()
-    })
+    // El caso «tier sin white-label» murió acá con el retiro de Starter (2026-09-05): la ruta
+    // normaliza con `parseSubscriptionTier` ANTES de gatear, así que un tier fuera del catálogo
+    // llega como 'free' y nunca cae al fail-closed. La cobertura del gate sobrevive en `proxy.ts`
+    // (que no normaliza) y en los tests de marca de email/PDF/tema.
 })
 
 describe('POST /api/mobile/coach/dashboard — onboarding_event', () => {

@@ -43,7 +43,7 @@ describe('MercadoPagoProvider.fetchCheckoutSnapshot — preserva start_date (rou
         mockMpResponse({
             id: 'preapproval-scheduled',
             status: 'authorized',
-            external_reference: 'coach-1|starter|monthly',
+            external_reference: 'coach-1|pro|monthly',
             next_payment_date: FUTURE,
             auto_recurring: {
                 frequency: 1,

@@ -36,3 +36,5 @@ Los terminos los sigue armando el server (`formatCouponTermsText`) con los monto
 ## Fuera de alcance
 
 Nutricion · `/api/payments/redeem-coupon-signup` · `/coach/reactivate` · canje desde RN · permitir canje a free en estados no-`active` · cambiar el motor `redeemCoupon` · paridad de la tarjeta en el pane embebido de Opciones (usa el mismo componente, sale gratis).
+
+> Superada en 2026-09-05 (`docs/specs/retiro-starter-y-enterprise`): el enum del server es free/pro/elite; starter ya no se acepta.

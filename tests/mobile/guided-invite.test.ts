@@ -364,7 +364,7 @@ describe('invite_sent: una vez por canal elegido', () => {
 
 describe('guarda de tipo del tier (sello «Hecho con EVA»)', () => {
   it('acepta los tiers reales, incluidos los legacy vivos en runtime', () => {
-    for (const tier of ['free', 'starter', 'pro', 'elite', 'growth', 'scale']) {
+    for (const tier of ['free', 'pro', 'elite', 'growth', 'scale']) {
       expect(isSubscriptionTier(tier)).toBe(true)
     }
   })
@@ -375,6 +375,8 @@ describe('guarda de tipo del tier (sello «Hecho con EVA»)', () => {
     expect(isSubscriptionTier('')).toBe(false)
     expect(isSubscriptionTier('FREE')).toBe(false)
     expect(isSubscriptionTier('enterprise')).toBe(false)
+    // starter salió del union con el retiro de Starter (2026-09-05): la guarda ya no lo acepta.
+    expect(isSubscriptionTier('starter')).toBe(false)
     expect(isSubscriptionTier(3)).toBe(false)
   })
 })

@@ -74,7 +74,7 @@ describe('createClientAction', () => {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       maybeSingle: vi.fn().mockResolvedValue({
-        data: { id: 'coach-1', slug: 'coach', subscription_tier: 'starter', max_clients: 1 },
+        data: { id: 'coach-1', slug: 'coach', subscription_tier: 'pro', max_clients: 1 },
       }),
     }
     const clientsCountQuery = {
@@ -102,7 +102,7 @@ describe('createClientAction', () => {
     // El rechazo lleva el contexto del gate para `upgrade_gate_hit` (sin PII).
     expect(result.upgradeRequired).toBe(true)
     expect(result.currentLimit).toBe(1)
-    expect(result.currentTier).toBe('starter')
+    expect(result.currentTier).toBe('pro')
     expect(result.activeCount).toBe(1)
   })
 
@@ -154,7 +154,7 @@ describe('createClientAction', () => {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       maybeSingle: vi.fn().mockResolvedValue({
-        data: { id: 'coach-1', slug: 'coach', subscription_tier: 'starter', max_clients: 10 },
+        data: { id: 'coach-1', slug: 'coach', subscription_tier: 'pro', max_clients: 10 },
       }),
     }
     // from('clients') sirve el count (select→eq→is) Y el insert user-scoped (R3).
@@ -255,7 +255,7 @@ describe('createClientAction', () => {
           invite_code: 'ABC123',
           brand_name: 'Studio Fuerza',
           full_name: 'Josefa',
-          subscription_tier: 'starter',
+          subscription_tier: 'pro',
           max_clients: 10,
         },
       }),
@@ -305,7 +305,7 @@ describe('createClientAction', () => {
       select: vi.fn().mockReturnThis(),
       eq: vi.fn().mockReturnThis(),
       maybeSingle: vi.fn().mockResolvedValue({
-        data: { id: 'coach-1', slug: 'coach', subscription_tier: 'starter', max_clients: 10 },
+        data: { id: 'coach-1', slug: 'coach', subscription_tier: 'pro', max_clients: 10 },
       }),
     }
     const clientsQuery = {

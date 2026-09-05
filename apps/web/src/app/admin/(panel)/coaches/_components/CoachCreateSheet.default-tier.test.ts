@@ -7,12 +7,15 @@ import { SALE_TIERS } from '@eva/tiers'
 /**
  * Guard estático: el alta MANUAL de coaches del panel admin no puede nacer en un tier LEGACY.
  *
- * POR QUÉ EXISTE: el `<Select name="subscription_tier">` de `CoachCreateSheet` pinta solo
- * `SALE_TIERS` (free/pro/elite desde pricing v2) pero su `defaultValue` había quedado en
- * `"starter"` — un tier que ya ni siquiera aparece en la lista. Un admin que no tocaba el selector
- * creaba un coach `starter` (10 alumnos, $19.990, fuera de venta desde el 17-08): `createCoachAction`
- * NO re-mapea nada, escribe el tier tal cual y `max_clients = getTierMaxClients(tier)`
- * (coach-actions.ts:88-92). Bajo pricing v3 el default correcto es 'free'.
+ * POR QUÉ EXISTE (regresión histórica, 2026-08): el `<Select name="subscription_tier">` de
+ * `CoachCreateSheet` pinta solo `SALE_TIERS` (free/pro/elite desde pricing v2) pero su
+ * `defaultValue` había quedado en `"starter"` — un tier que ya ni siquiera aparecía en la lista.
+ * Un admin que no tocaba el selector creaba un coach `starter`: `createCoachAction` NO re-mapea
+ * nada, escribe el tier tal cual y `max_clients = getTierMaxClients(tier)` (coach-actions.ts:88-92).
+ * Bajo pricing v3 el default correcto es 'free'.
+ *
+ * Desde el retiro de Starter (2026-09) ese tier ya no existe en el catálogo, así que el `not.toBe`
+ * de abajo queda como memoria del bug: el guard real es que el default esté en `SALE_TIERS`.
  *
  * Se pinnea en la FUENTE (mismo criterio que `demo-client-exclusion.guard.test.ts` y
  * `csp-meta-pixel.test.ts`): el default es un literal JSX de un client component cuyo montaje

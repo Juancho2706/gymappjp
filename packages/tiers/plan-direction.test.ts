@@ -7,22 +7,21 @@ import {
 } from './index'
 
 // FUNDACION F1 (plan estrategia 06): orden total de tiers para decidir la dirección de un cambio
-// de plan. Cubre los 6 tiers (incl. los LEGACY growth/scale) para que un coach grandfathered nunca
-// produzca rank `undefined` al comparar contra un tier a la venta.
+// de plan. Cubre los 5 tiers vivos (incl. los LEGACY growth/scale) para que un coach grandfathered
+// nunca produzca rank `undefined` al comparar contra un tier a la venta.
 
-const ALL_TIERS: SubscriptionTier[] = ['free', 'starter', 'pro', 'elite', 'growth', 'scale']
+const ALL_TIERS: SubscriptionTier[] = ['free', 'pro', 'elite', 'growth', 'scale']
 
-describe('TIER_RANK / getTierRank — orden total sobre los 6 tiers', () => {
-    it('mapea los 6 tiers a un rank numérico definido (ninguno undefined)', () => {
+describe('TIER_RANK / getTierRank — orden total sobre los 5 tiers vivos', () => {
+    it('mapea los 5 tiers a un rank numérico definido (ninguno undefined)', () => {
         for (const t of ALL_TIERS) {
             expect(typeof getTierRank(t)).toBe('number')
             expect(Number.isFinite(getTierRank(t))).toBe(true)
         }
     })
 
-    it('rangos estrictamente crecientes free<starter<pro<elite<growth<scale', () => {
+    it('rangos estrictamente crecientes free<pro<elite<growth<scale', () => {
         expect(getTierRank('free')).toBe(0)
-        expect(getTierRank('starter')).toBe(1)
         expect(getTierRank('pro')).toBe(2)
         expect(getTierRank('elite')).toBe(3)
         expect(getTierRank('growth')).toBe(4)
@@ -33,24 +32,24 @@ describe('TIER_RANK / getTierRank — orden total sobre los 6 tiers', () => {
         }
     })
 
-    it('TIER_RANK tiene exactamente las 6 claves del union', () => {
+    it('TIER_RANK tiene exactamente las 5 claves del union', () => {
         expect(Object.keys(TIER_RANK).sort()).toEqual(
-            ['elite', 'free', 'growth', 'pro', 'scale', 'starter']
+            ['elite', 'free', 'growth', 'pro', 'scale']
         )
     })
 })
 
 describe('comparePlanDirection', () => {
     it('next mayor → upgrade', () => {
-        expect(comparePlanDirection('free', 'starter')).toBe('upgrade')
-        expect(comparePlanDirection('starter', 'pro')).toBe('upgrade')
+        expect(comparePlanDirection('free', 'pro')).toBe('upgrade')
         expect(comparePlanDirection('pro', 'elite')).toBe('upgrade')
+        // Tier fuera del catálogo (fila drifteada de DB): cuenta como free (rank 0) ⇒ upgrade.
+        expect(comparePlanDirection('legacy_unknown' as SubscriptionTier, 'pro')).toBe('upgrade')
     })
 
     it('next menor → downgrade', () => {
         expect(comparePlanDirection('elite', 'pro')).toBe('downgrade')
-        expect(comparePlanDirection('pro', 'starter')).toBe('downgrade')
-        expect(comparePlanDirection('starter', 'free')).toBe('downgrade')
+        expect(comparePlanDirection('pro', 'free')).toBe('downgrade')
     })
 
     it('mismo tier → same (el cambio de ciclo lo trata aparte el llamador)', () => {

@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-08-21"
+last_verified: "2026-09-05"
 canonical: false
 ---
 
@@ -21,7 +21,7 @@ reabren**:
    aceptable para apps *consumption-only* la frase «Go to our website to upgrade your subscription to Premium».
    Split por `Platform.OS`, **nunca** por storefront.
 4. **Correo y WhatsApp sin límites**: ahí viven precio, link y oferta (3.1.3 lo autoriza; consentimiento + baja).
-5. `starter` no se toca. El cobro coach→alumno es otro plan (artifact «La escalera del cobro» `49fd620e`).
+5. `starter` se retiró del proyecto el 2026-09-05 ([retiro-starter-y-enterprise](../retiro-starter-y-enterprise/SPEC.md)). El cobro coach→alumno es otro plan (artifact «La escalera del cobro» `49fd620e`).
 
 Fuera de alcance: IAP, cambios de catálogo/precio (ver [pricing-v3](../pricing-v3/SPEC.md)), mensajería in-app.
 

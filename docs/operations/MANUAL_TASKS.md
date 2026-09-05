@@ -127,6 +127,10 @@ con la app, borrada del repo el 2026-09-05 (B15, fase E1 del retiro de Enterpris
   la allowlist de `tests/e2e-accounts.ts`. Si hay que rotar la clave: `auth.admin.updateUserById` +
   `gh secret set` por stdin, nunca por chat ni por argv. Ojo: el reporte de Playwright de un run
   fallido guarda el snapshot de la página con la clave tipeada — borrar el artifact si se filtra.
+  **Tier: `pro` / `max_clients` 25 desde el 2026-09-05** (retiro de Starter, D1=A): quedó con
+  `payment_provider = 'mercadopago'` pero **sin** `subscription_mp_id`, así que no entra al MRR ni a
+  la serie de coaches por tier del panel admin. Si hay que recrear la cuenta, NO nace starter: el
+  DEFAULT de las columnas ya es `free` / `1`.
 - [ ] Ejecutar manualmente el workflow **CI** con `workflow_dispatch` antes de cambios de auth, RLS, pagos, nutrición o releases de tienda.
 - [ ] Confirmar que los secrets E2E existen en el environment de GitHub.
 - [ ] Guardar el run y resultado consolidado en [TEST_STATUS.md](../testing/TEST_STATUS.md).

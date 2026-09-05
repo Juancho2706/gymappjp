@@ -46,7 +46,6 @@ describe('tierMaxClientsFor — escalera de 3 peldaños por fecha de creación (
     // [tier, límite pre-v2, límite en la ventana v2, límite v3]
     const CASES: Array<[SubscriptionTier, number, number, number]> = [
         ['free', 3, 2, 1],
-        ['starter', 10, 10, 10], // starter no cambia de límite en ningún corte: solo sale de la VENTA
         ['pro', 30, 25, 25],
         ['elite', 100, 60, 60],
     ]
@@ -120,9 +119,8 @@ describe('tierMaxClientsFor — escalera de 3 peldaños por fecha de creación (
 })
 
 describe('TIER_CONFIG.maxClients — catálogo de VENTA (coaches nuevos)', () => {
-    it('free 1 (pricing v3) / starter 10 / pro 25 / elite 60; growth/scale intactos', () => {
+    it('free 1 (pricing v3) / pro 25 / elite 60; growth/scale intactos', () => {
         expect(getTierMaxClients('free')).toBe(1)
-        expect(getTierMaxClients('starter')).toBe(10)
         expect(getTierMaxClients('pro')).toBe(25)
         expect(getTierMaxClients('elite')).toBe(60)
         expect(getTierMaxClients('growth')).toBe(120)
@@ -132,17 +130,16 @@ describe('TIER_CONFIG.maxClients — catálogo de VENTA (coaches nuevos)', () =>
     // Gap 2 del estudio de pricing (04-09): ningún tier ilegible puede resolverse a un plan PAGO.
     // `getTierMaxClients` hacía `TIER_CONFIG[tier].maxClients` directo y un valor fuera del union
     // (columna drifteada, form manipulado) reventaba con TypeError en pleno alta/gate.
-    it('tier fuera del union → cupo de FREE, nunca starter ni un throw', () => {
+    it('tier fuera del union → cupo de FREE, nunca el cupo de un tier pago ni un throw', () => {
         expect(getTierMaxClients('enterprise' as SubscriptionTier)).toBe(TIER_CONFIG.free.maxClients)
         expect(getTierMaxClients('' as SubscriptionTier)).toBe(TIER_CONFIG.free.maxClients)
-        expect(getTierMaxClients('enterprise' as SubscriptionTier)).not.toBe(TIER_CONFIG.starter.maxClients)
+        expect(getTierMaxClients('enterprise' as SubscriptionTier)).not.toBe(TIER_CONFIG.pro.maxClients)
     })
 
     it('los precios CLP NO cambian en pricing v3 (el IVA es otro estudio)', () => {
         expect(TIER_CONFIG.free.monthlyPriceClp).toBe(0)
         expect(TIER_CONFIG.pro.monthlyPriceClp).toBe(29990)
         expect(TIER_CONFIG.elite.monthlyPriceClp).toBe(44990)
-        expect(TIER_CONFIG.starter.monthlyPriceClp).toBe(19990)
     })
 })
 
@@ -159,27 +156,17 @@ describe('capabilities de free — TODO liberado, white-label incluido (pricing 
             showsEvaBadge: true,
         })
     })
-
-    it('starter (fuera de venta) conserva su set histórico grandfathered', () => {
-        expect(getTierCapabilities('starter')).toEqual({
-            canUseNutrition: false,
-            canUseBranding: false,
-            canCreateCustomExercises: true,
-            canImportClients: true,
-            showsEvaBadge: true,
-        })
-    })
 })
 
-describe('SALE_TIERS — starter fuera de venta (P1)', () => {
+describe('SALE_TIERS — la venta es free/pro/elite', () => {
     it('la venta es exactamente free/pro/elite, en orden', () => {
         expect([...SALE_TIERS]).toEqual(['free', 'pro', 'elite'])
     })
 
-    it('isSaleTier rechaza starter pero starter SIGUE en el union/TIER_CONFIG (histórico)', () => {
+    // `isSaleTier` toma `string`: el literal crudo es un pin del retiro, no un tier del union.
+    it('starter salió del union y del catálogo (retiro 2026-09)', () => {
         expect(isSaleTier('starter')).toBe(false)
-        expect(TIER_CONFIG.starter).toBeDefined()
-        expect(TIER_CONFIG.starter.maxClients).toBe(10)
+        expect((TIER_CONFIG as Record<string, unknown>).starter).toBeUndefined()
     })
 
     it('getRecommendedTier ya no recomienda starter: 2..25 alumnos ⇒ pro (free topa en 1)', () => {

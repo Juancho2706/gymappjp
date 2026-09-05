@@ -61,7 +61,8 @@ function buildRegisterFormData(overrides?: Partial<Record<string, string>>) {
     email: 'coach@example.com',
     password: 'super-secret-123',
     brand_name: 'Antigravity Pro',
-    // Pricing v2: starter salió de SALE_TIERS (registro lo rechaza) — la fixture de tier PAGO es pro.
+    // La fixture de tier PAGO es pro: starter salió de SALE_TIERS en pricing v2 y del catálogo en
+    // el retiro de Starter (2026-09) — el registro lo rechaza.
     subscription_tier: 'pro',
     billing_cycle: 'monthly',
     ...overrides,
@@ -181,8 +182,9 @@ describe('registerAction', () => {
     expect(result.error).not.toBe('La frecuencia elegida no está disponible para ese plan.')
   })
 
-  // Pricing v2 (P1): starter fuera de venta — el registro lo rechaza como tier inválido.
-  it('rejects starter (fuera de venta desde pricing v2)', async () => {
+  // Retiro de Starter (2026-09): el tier ya no existe ni en el union ni en SALE_TIERS. El literal
+  // entra como string crudo del form (buildRegisterFormData toma strings, no `SaleTier`).
+  it("rechaza un tier retirado ('starter') — cerco de deep-link viejo", async () => {
     const result = await registerAction(
       {},
       buildRegisterFormData({ subscription_tier: 'starter', billing_cycle: 'monthly' })

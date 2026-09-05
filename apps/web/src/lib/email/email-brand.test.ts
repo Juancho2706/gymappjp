@@ -24,9 +24,10 @@ describe('resolveStudentEmailBranding (W2 white-label de borde + sello v3)', () 
             .toEqual({ logoUrl, primaryColor, showsEvaBadge: true })
     })
 
-    // starter (LEGACY, fuera de venta) conserva canUseBranding:false en @eva/tiers ⇒ header EVA.
-    it('starter standalone ⇒ header EVA (sin white-label) pero CON sello', () => {
-        expect(resolveStudentEmailBranding({ isStandalone: true, tier: 'starter', logoUrl, primaryColor }))
+    // Un tier fuera del catálogo (cuenta legacy con dato viejo) no tiene canUseBranding en
+    // @eva/tiers ⇒ header EVA por fail-closed, pero el sello es fail-open y sí se pinta.
+    it('tier fuera del catálogo standalone ⇒ header EVA (sin white-label) pero CON sello', () => {
+        expect(resolveStudentEmailBranding({ isStandalone: true, tier: 'legacy_unknown', logoUrl, primaryColor }))
             .toEqual({ logoUrl: null, primaryColor: null, showsEvaBadge: true })
     })
 

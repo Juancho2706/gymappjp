@@ -8,14 +8,14 @@ const BASE = 'https://www.eva-app.cl'
 
 describe('POST /flow/retorno — puente 303', () => {
     it('alta: 303 a flow-processing con tier/cycle/addons saneados', async () => {
-        const res = await POST(new Request(`${BASE}/flow/retorno?tier=starter&cycle=monthly&addons=cardio,body_composition`, {
+        const res = await POST(new Request(`${BASE}/flow/retorno?tier=pro&cycle=monthly&addons=cardio,body_composition`, {
             method: 'POST',
             headers: { 'content-type': 'application/x-www-form-urlencoded' },
             body: 'token=FLOWTOKEN',
         }))
         expect(res.status).toBe(303)
         expect(res.headers.get('location')).toBe(
-            `${BASE}/coach/subscription/flow-processing?tier=starter&cycle=monthly&addons=cardio%2Cbody_composition`
+            `${BASE}/coach/subscription/flow-processing?tier=pro&cycle=monthly&addons=cardio%2Cbody_composition`
         )
     })
 

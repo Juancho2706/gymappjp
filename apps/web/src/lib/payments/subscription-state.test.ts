@@ -42,7 +42,7 @@ describe('resolveTerminalEvent', () => {
 
     it('expires a paid coach on a cancellation once the paid period has lapsed', () => {
         expect(
-            resolveTerminalEvent({ statusForUpdate: 'canceled', periodExpiredOrNull: true, subscriptionTier: 'starter' })
+            resolveTerminalEvent({ statusForUpdate: 'canceled', periodExpiredOrNull: true, subscriptionTier: 'pro' })
         ).toBe('expire')
     })
 
