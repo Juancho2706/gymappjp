@@ -14,7 +14,7 @@ import {
 } from '@/lib/workout/executor-recovery'
 import { WorkoutDoneSheet } from './WorkoutDoneSheet'
 import { useWorkoutLaunch } from '../launch/WorkoutLaunchMorph'
-import { getTodayInSantiago } from '@/lib/date-utils'
+import { formatShortDayMonthEs, getTodayInSantiago } from '@/lib/date-utils'
 import type { WeekDayStatus } from '../../_data/weekPendingWorkouts'
 
 export type WorkoutPlanCardItem = {
@@ -44,13 +44,19 @@ export type WorkoutPlanCardItem = {
     completionPct: number
 }
 
-/** "15 jul" — fecha corta es-CL de una fecha de calendario ISO (mediodía UTC, sin corrimiento). */
+/**
+ * "15 jul" — fecha corta es-CL de una fecha de calendario ISO (`YYYY-MM-DD`, sin corrimiento).
+ *
+ * Tabla fija `formatShortDayMonthEs` y NUNCA `toLocaleDateString`/`Intl` (Sentry EVA-NEXTJS-18, O7.7):
+ * esta tira de day-cards se hidrata, así que el texto sale en el HTML del servidor. El barrido O7.1
+ * (02-09, commit `613f870a`) dejó afuera esta call site porque entonces `fmtShortDate` solo se pintaba
+ * dentro del sheet; el tren «Ciclo real y por lado» (en producción el 04-09) la subió al render
+ * inicial con el sub-label «Hecho 26 ago» de un día de ciclo cerrado, y con eso el issue regresó: el
+ * WebKit de iOS 26 abrevia el mes con punto («26 ago.», «2 sept.») y el Node 24 de Vercel no.
+ * La salida calca la de antes en Node/Chrome — cero cambio de texto.
+ */
 function fmtShortDate(iso: string): string {
-    return new Date(`${iso}T12:00:00Z`).toLocaleDateString('es-CL', {
-        day: 'numeric',
-        month: 'short',
-        timeZone: 'UTC',
-    })
+    return formatShortDayMonthEs(iso)
 }
 
 export function WorkoutPlanCards({
