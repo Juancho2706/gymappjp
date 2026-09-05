@@ -58,6 +58,9 @@ describe('scheduleFreeCoachDripSequence', () => {
         addResendAudienceContactMock.mockResolvedValue(undefined)
         vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://www.eva-app.cl')
         vi.stubEnv('RESEND_FREE_COACH_AUDIENCE_ID', '')
+        // D11 = A: la serie por calendario nace APAGADA. Estos casos describen la serie
+        // cuando el owner la resucita a mano; el default (apagada) se pinnea abajo.
+        vi.stubEnv('FREE_COACH_DRIP_ENABLED', 'true')
     })
 
     afterEach(() => {
@@ -173,6 +176,57 @@ describe('scheduleFreeCoachDripSequence', () => {
 })
 
 /**
+ * D11 = A (owner 22-08, W6 de coach-onboarding-v2): el drip por CALENDARIO muere y lo reemplazan
+ * los correos por comportamiento. Lo que estos tests pinnean es el DEFAULT: sin la env explícita no
+ * se encola nada. Sin esto, un despliegue con el flag mal escrito sigue mandando el D+1 y el
+ * gatillo «+2 h sin alumno» en paralelo — que son el mismo correo con dos keys distintas.
+ */
+describe('scheduleFreeCoachDripSequence — D11: apagada por defecto', () => {
+    beforeEach(() => {
+        vi.clearAllMocks()
+        buildDripTemplatesMock.mockImplementation((ctx: DripContext) => real.build!(ctx))
+        scheduleCoachEmailMock.mockResolvedValue({ ok: true, ledgerId: 'led', providerMessageId: 'msg', deduped: false })
+        addResendAudienceContactMock.mockResolvedValue(undefined)
+        vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://www.eva-app.cl')
+        vi.stubEnv('RESEND_FREE_COACH_AUDIENCE_ID', '')
+        vi.stubEnv('FREE_COACH_DRIP_ENABLED', undefined)
+    })
+
+    afterEach(() => {
+        vi.unstubAllEnvs()
+        vi.restoreAllMocks()
+    })
+
+    it('sin FREE_COACH_DRIP_ENABLED no agenda NINGUNO de los 4 y devuelve el resumen en cero', async () => {
+        await expect(scheduleFreeCoachDripSequence(INPUT)).resolves.toEqual({
+            scheduled: 0,
+            deduped: 0,
+            failed: 0,
+            failures: [],
+        })
+        expect(scheduleCoachEmailMock).not.toHaveBeenCalled()
+    })
+
+    // La audiencia NO es un correo: apagar el drip no puede dejar al padrón nuevo fuera de la lista
+    // con la que el owner manda un aviso a mano.
+    it('apagada, el alta a la audiencia de Resend SIGUE', async () => {
+        vi.stubEnv('RESEND_FREE_COACH_AUDIENCE_ID', 'aud_123')
+        await scheduleFreeCoachDripSequence(INPUT)
+
+        expect(addResendAudienceContactMock).toHaveBeenCalledWith(
+            expect.objectContaining({ audienceId: 'aud_123', email: INPUT.email })
+        )
+        expect(scheduleCoachEmailMock).not.toHaveBeenCalled()
+    })
+
+    it('un valor distinto de «true» sigue siendo apagado (fail-closed)', async () => {
+        vi.stubEnv('FREE_COACH_DRIP_ENABLED', '1')
+        await scheduleFreeCoachDripSequence(INPUT)
+        expect(scheduleCoachEmailMock).not.toHaveBeenCalled()
+    })
+})
+
+/**
  * I-4 — la función devolvía `void`: las cuatro podían fallar (el ledger no lanza, devuelve
  * `{ ok: false }`) y el caller no tenía forma de enterarse ni de loguearlo. El resumen es lo que
  * hace visible ese modo de fallo, y va SIN PII: solo la key y el motivo.
@@ -184,6 +238,9 @@ describe('scheduleFreeCoachDripSequence — resumen', () => {
         addResendAudienceContactMock.mockResolvedValue(undefined)
         vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://www.eva-app.cl')
         vi.stubEnv('RESEND_FREE_COACH_AUDIENCE_ID', '')
+        // D11 = A: la serie por calendario nace APAGADA. Estos casos describen la serie
+        // cuando el owner la resucita a mano; el default (apagada) se pinnea abajo.
+        vi.stubEnv('FREE_COACH_DRIP_ENABLED', 'true')
     })
 
     afterEach(() => {

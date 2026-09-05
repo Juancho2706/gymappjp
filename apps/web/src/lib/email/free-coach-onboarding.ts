@@ -11,6 +11,13 @@ import {
 /**
  * Bienvenida + secuencia drip del coach Free, en un solo lugar.
  *
+ * ⚠️ D11 = A (owner 22-08, W6 de coach-onboarding-v2): **la serie por calendario está APAGADA.**
+ * `scheduleFreeCoachDripSequence` quedó `@deprecated` y, sin `FREE_COACH_DRIP_ENABLED=true`, no
+ * encola ningún correo (solo mantiene el alta a la audiencia de Resend) y devuelve el resumen en
+ * cero. La BIENVENIDA de este mismo archivo NO se toca: es transaccional y sale igual. Los toques
+ * siguientes los decide el comportamiento del coach (`lib/email/behavior/*`, cron horario
+ * `api/cron/onboarding-behavior` + `enqueueBehaviorCheck`), no el almanaque.
+ *
  * Vivía inline en `auth/confirm/route.ts`, y eso lo convertía en exclusivo del camino por email:
  * el alta por Google (`completeOAuthOnboarding`) nace `active` sin pasar jamás por
  * `pending_email`, así que ese coach entraba sin bienvenida, sin drip día 3/7/14 y fuera de la

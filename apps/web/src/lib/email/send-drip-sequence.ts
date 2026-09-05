@@ -41,7 +41,26 @@ export type DripSequenceSummary = {
 }
 
 /**
+ * D11 = A (owner 22-08, TASKS § W8.4.1): **el drip por calendario MUERE.** Lo reemplazan los
+ * correos por comportamiento de W6 (`lib/email/behavior/*`): el D+1 y el gatillo «+2 h sin alumno»
+ * eran literalmente el mismo correo con dos keys distintas, y el del calendario salía igual aunque
+ * el coach ya hubiera cargado a su primer alumno.
+ *
+ * Se apaga por env y NO se borra: las cuatro plantillas (`drip-templates.ts`) quedan vivas y
+ * testeadas, y `FREE_COACH_DRIP_ENABLED=true` resucita la serie entera si el owner quiere volver
+ * atrás. Sin la env no se agenda ningún correo; el alta a la audiencia de Resend sí sigue (no es
+ * un correo: es la lista para broadcasts manuales).
+ */
+export function freeCoachDripEnabled(): boolean {
+    return (process.env.FREE_COACH_DRIP_ENABLED ?? '').trim().toLowerCase() === 'true'
+}
+
+/**
  * Agenda la serie de bienvenida completa (D+1 / D+2 / D+7 / D+14) de un coach Free.
+ *
+ * @deprecated D11 = A: apagada desde W6. Con `FREE_COACH_DRIP_ENABLED` distinto de `true` esta
+ * función NO encola nada y devuelve el resumen en cero. Su reemplazo es
+ * `sweepBehaviorEmails` / `enqueueBehaviorCheck` (`lib/email/behavior/behavior-emails.ts`).
  *
  * El envío diferido lo hace Resend (`scheduled_at`), pero pasa por `scheduleCoachEmail`: ahí vive
  * el ledger local (`coach_email_ledger`) con el `provider_message_id`, que es lo que permite
@@ -60,6 +79,19 @@ export async function scheduleFreeCoachDripSequence(input: FreeDripInput): Promi
     const baseUrl = siteBaseUrl()
 
     const now = Date.now()
+
+    // ── D11 = A: la serie por calendario NO encola ────────────────────────────────────────────
+    // El alta a la audiencia de Resend sigue (es la lista para broadcasts manuales, no un correo),
+    // y el resumen vuelve en cero: los callers ya saben leerlo y siguen logueando una línea por alta.
+    if (!freeCoachDripEnabled()) {
+        await addToFreeCoachAudience(input, audienceId, now).catch((err: unknown) => {
+            console.warn('[drip] alta a la audiencia de Resend falló', {
+                coachId: input.coachId,
+                message: errMessage(err),
+            })
+        })
+        return { scheduled: 0, deduped: 0, failed: 0, failures: [] }
+    }
 
     const templates = buildDripTemplates({
         coachName: input.coachName,
@@ -86,19 +118,7 @@ export async function scheduleFreeCoachDripSequence(input: FreeDripInput): Promi
     )
 
     // Add to Resend Audience (for dashboard visibility + manual broadcasts)
-    const audiencePromise = audienceId
-        ? addResendAudienceContact({
-              audienceId,
-              email: input.email,
-              firstName: input.coachName.split(' ')[0],
-              lastName: input.coachName.split(' ').slice(1).join(' ') || undefined,
-              data: {
-                  brand_name: input.brandName,
-                  plan: 'free',
-                  registered_at: new Date(now).toISOString(),
-              },
-          })
-        : Promise.resolve()
+    const audiencePromise = addToFreeCoachAudience(input, audienceId, now)
 
     // La audiencia va en el mismo `allSettled` que los correos (un 500 suyo no puede tumbar el alta)
     // pero NO entra en el resumen: no es un correo de la serie.
@@ -134,6 +154,31 @@ export async function scheduleFreeCoachDripSequence(input: FreeDripInput): Promi
 
 function errMessage(err: unknown): string {
     return err instanceof Error ? err.message : String(err)
+}
+
+/**
+ * Alta del coach a la audiencia de Resend (visibilidad en el panel + broadcasts manuales).
+ *
+ * Vive aparte de la serie porque SOBREVIVE a D11: la audiencia no es un correo, y apagar el drip no
+ * puede dejar al padrón nuevo fuera de la lista con la que el owner manda un aviso a mano.
+ */
+function addToFreeCoachAudience(
+    input: FreeDripInput,
+    audienceId: string | undefined,
+    nowMs: number
+): Promise<unknown> {
+    if (!audienceId) return Promise.resolve()
+    return addResendAudienceContact({
+        audienceId,
+        email: input.email,
+        firstName: input.coachName.split(' ')[0],
+        lastName: input.coachName.split(' ').slice(1).join(' ') || undefined,
+        data: {
+            brand_name: input.brandName,
+            plan: 'free',
+            registered_at: new Date(nowMs).toISOString(),
+        },
+    })
 }
 
 // ── Higiene: el drip no le sigue hablando a una casilla que nadie probó (FCN W3.8) ──────────────
