@@ -1,0 +1,5 @@
+# Huellas de gitleaks ignoradas a propósito (ver docs/testing/TEST_STATUS.md § Gates pendientes de la tanda 05-09).
+# Fixtures sintéticos de tests (JWT «…CARGA» y «r3fr3sh-t0k3n») del fix de cookie corrupta (`cd981a9d`):
+# el job `hygiene` escanea los últimos 50 commits en workflow_dispatch y los volvía a reportar.
+cd981a9d222d09d3d3f60374966086e8ad53daf8:apps/web/src/app/api/auth/google-link/route.test.ts:generic-api-key:175
+cd981a9d222d09d3d3f60374966086e8ad53daf8:apps/web/src/lib/supabase/server.test.ts:generic-api-key:40
