@@ -1,7 +1,7 @@
 ---
 status: done
 owner: product-engineering
-last_verified: "2026-09-02"
+last_verified: "2026-09-05"
 canonical: false
 ---
 
@@ -54,7 +54,7 @@ ni desplegado.
       compara `Content-Length` con el largo real del cuerpo).
 - [ ] B5 Verificación post-deploy: `curl -I` con UA de WhatsApp trae `Content-Length` y no `chunked`;
       el HTML del login conserva **todos** los `og:*`; prueba en teléfono con una URL nunca compartida.
-- [ ] B6 Probar un coach con logo y otro sin logo (las dos ramas del arte).
+- [x] B6 Probar un coach con logo y otro sin logo (las dos ramas del arte). — **QA del owner VERDE 05-09** (sesión única, artifact `6bd32370`, Android 1.1.2 build 86 / iOS 1.1.2 build 59 con OTA del 04-09 android `d8220490` / ios `54487ddd`, web `f9ba8a3f`).
 
 ## C · Despegue sin logo
 
@@ -98,7 +98,7 @@ ni desplegado.
 - [x] E8 **Nuevo** `packages/workout-engine/cardio-autolog.test.ts` (tabla completa + acumulador +
       rondas sobre secuencias reales + formato de la caja).
 - [x] E9 Tests de hook web (`useExecCountdown`, `useIntervalRunner`) con timers falsos.
-- [ ] E10 QA: continuo 3 rondas (termina sola ⇒ ✓ y ronda 2 en 30:00 detenido; pausa a los ~40 s ⇒
+- [x] E10 QA (QA owner VERDE 05-09, artifact `6bd32370`): continuo 3 rondas (termina sola ⇒ ✓ y ronda 2 en 30:00 detenido; pausa a los ~40 s ⇒
       rellena y no envía); intervalos 4×(1:00/0:30) con 2 rondas; última ronda ⇒ avanza de ejercicio;
       bloque por distancia; RN en background; pausa desde la notificación; regresión de movilidad,
       roller y fuerza.
@@ -113,8 +113,8 @@ ni desplegado.
 - [x] F4 El acento sale de todo lo que no sea la silueta (chips, título del set-list, barra lateral,
       eyebrow del volumen, `@handle`).
 - [x] F5 `share-presets.ts` reajustado: 6 presets × 3 fondos sin solapes ni recortes.
-- [ ] F6 QA en `/dev-harness/share-canvas` + entreno real con foto clara y foto oscura, mirando el
-      **PNG capturado**, no el preview.
+- [x] F6 QA en `/dev-harness/share-canvas` + entreno real con foto clara y foto oscura, mirando el
+      **PNG capturado**, no el preview. — QA owner VERDE 05-09, artifact `6bd32370`.
 - [ ] F7 Reportar las tres decisiones abiertas (ámbar del récord, ember de la racha, halo del fondo
       `brand`) tal como quedaron.
 
@@ -127,8 +127,8 @@ ni desplegado.
 - [x] G4 Cada `fallback` devuelve su aviso honesto; el guard de `FACEBOOK_APP_ID` se conserva.
 - [x] G5 `saveToGallery`: éxito visible, permiso denegado vs. bloqueo duro, `catch` que no se traga el
       error y reintento con `createAssetAsync`.
-- [ ] G6 Verificar en device: ¿«Guardar» ya funcionaba? ¿está el `<queries>` en el binario 1.1.2?
-- [ ] G7 QA con y sin Instagram/WhatsApp instalados; «Más…» debe seguir igual.
+- [x] G6 Verificar en device: ¿«Guardar» ya funcionaba? ¿está el `<queries>` en el binario 1.1.2? — QA owner VERDE 05-09, artifact `6bd32370` (Android 1.1.2 build 86 / iOS 1.1.2 build 59).
+- [x] G7 QA con y sin Instagram/WhatsApp instalados; «Más…» debe seguir igual. — QA owner VERDE 05-09, artifact `6bd32370`.
 
 ## H · Catálogo compartido y selector por región
 
@@ -142,8 +142,8 @@ ni desplegado.
 - [x] H6 **Nuevo** `packages/workout-engine/muscle-catalog.test.ts` (sin duplicados, partición
       exacta, regiones intactas, equipo real).
 - [x] H7 Opcional: agrupar por región el `Select` de web con `SelectGroup` + `SelectLabel`.
-- [ ] H8 QA en device: Android e iOS, claro y oscuro, «Nuevo» y «Editar», con teclado abierto y
-      cerrado; editar un ejercicio de `Movilidad` y uno de `Rehabilitación`.
+- [x] H8 QA en device: Android e iOS, claro y oscuro, «Nuevo» y «Editar», con teclado abierto y
+      cerrado; editar un ejercicio de `Movilidad` y uno de `Rehabilitación`. — QA owner VERDE 05-09, artifact `6bd32370`.
 
 ## I · Guard de salida del builder
 
@@ -166,8 +166,10 @@ ni desplegado.
 - [x] J2 `instrumentation-client.ts` consolidado sobre el motor nuevo: un solo camino para `error`,
       `unhandledrejection` y `beforeSend`, con `return null` cuando ya recuperó.
 - [x] J3 `apps/web/src/lib/deploy-skew.test.ts` (12 casos, incluido `E715` negativo).
-- [ ] J4 Post-deploy: ver caer `EVA-NEXTJS-3` / `-19` y aparecer el issue `info`
-      `deploy_skew_reload`.
+- [x] J4 Post-deploy: ver caer `EVA-NEXTJS-3` / `-19` y aparecer el issue `info`
+      `deploy_skew_reload`. — verificado el 05-09: `EVA-NEXTJS-19` en **0 eventos desde el 01-09
+      18:42Z** con tráfico alto (12.230 spans en la ruta) y el guardián emitiendo `deploy_skew_reload`
+      (`EVA-NEXTJS-1N`). QA owner VERDE 05-09, artifact `6bd32370`.
 
 ## Gates (corridos 02-09 05:0xZ sobre `0f545926`: vitest 8622/8622 · tsc web y mobile 0 · eslint 0 errores nuevos (1 `react/display-name` preexistente en program-builder) · docs:check · tokens · boundaries — todos verdes)
 

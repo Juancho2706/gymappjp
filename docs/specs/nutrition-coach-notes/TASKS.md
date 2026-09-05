@@ -16,6 +16,5 @@ La feature entró en `0355d67d` (17-08, 14:27), **después** de las tres rondas 
 día, así que ninguna acta la cubre. Sí viajó al teléfono: el OTA #5 del 17-08 (grupo `768389fb` /
 android `01a010fd`) la lleva, y desde el 18-08 los OTA salen android + ios.
 
-- [ ] QA en device del owner del par 📝 editor RN ↔ banda 💬 del alumno RN — **pendiente de QA en
-      device del owner (auditoría 17-08)**.
+- [x] QA en device del owner del par 📝 editor RN ↔ banda 💬 del alumno RN — **QA del owner VERDE 05-09** (sesión única, artifact `6bd32370`, Android 1.1.2 build 86 / iOS 1.1.2 build 59 con OTA del 04-09 android `d8220490` / ios `54487ddd`, web `f9ba8a3f`).
 - [ ] Test de render del «Hoy» **RN** con nota y sin nota: el criterio está cubierto solo en web.

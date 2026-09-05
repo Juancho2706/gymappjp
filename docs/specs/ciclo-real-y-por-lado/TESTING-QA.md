@@ -1112,4 +1112,10 @@ y §9). Canal: el que el owner elija (correo desde Resend o mensaje directo); no
 Texto canónico de los dos puntos aceptados como cambio visible: (a) PR por e1RM con historial sumado
 (R22, `pr-detect.ts` compara `reps_done` = mínimo contra el histórico sumado) y (b) flota mixta 1.1.2
 sin OTA (R35: logs sin `metadata`, `reps_done` como hoy; `fallbackToCacheTimeout` puede dar un arranque
-con bundle viejo). Registro del envío (fecha, canal, cantidad): lo anota el owner acá al enviarlo.
+con bundle viejo). Registro del envío (fecha, canal, cantidad): **ENVIADO el 2026-09-05 ~18:10Z por orden explícita del
+owner en la sesión de cierre**, canal correo (Resend, `EVA <noreply@eva-app.cl>`, reply-to
+`contacto@eva-app.cl`, batch idempotente `w65b-ciclo-por-lado-20260905`, tag `tipo=aviso_ciclo_por_lado`),
+**14 destinatarios** (unión de los 8 con `cycle` y los 11 con `per_side`/`alternating` sobre alumnos reales
+no demo, recalculada en LIVE el 05-09; excluido solo `josefit` = cuenta del owner). Asunto «Dos cambios en
+EVA que tocan tus programas»; a `joaquinamr7` se le sumó el aviso de que sus 10 plantillas volvieron (T5.3
+de plan-templates-v2). Texto = el borrador de arriba con «salen hoy» → «ya están en EVA».

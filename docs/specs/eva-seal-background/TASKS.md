@@ -33,4 +33,4 @@ typecheck local antes de DONE; guardia backend-cero). Referencia visual normativ
 | ID | Quién | Qué |
 |---|---|---|
 | S4.1 | jefe | Gates completos + juicio contra el artifact + `CURRENT`/`MOBILE_PARITY` + docs:check |
-| S4.2 | dueño | QA visual web (preview) + device Android (batería/fluidez de la deriva — si molesta, kill-switch `animated=false` queda a un flag) → entra al OTA acumulado vigente |
+| S4.2 | dueño | **HECHA 2026-09-05** — QA visual web + device (batería/fluidez de la deriva OK; no hizo falta el kill-switch `animated=false`): **QA del owner VERDE 05-09** (sesión única, artifact `6bd32370`, Android 1.1.2 build 86 / iOS 1.1.2 build 59 con OTA del 04-09 android `d8220490` / ios `54487ddd`, web `f9ba8a3f`). Ya salió en el OTA acumulado |

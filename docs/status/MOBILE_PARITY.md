@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-09-03"
+last_verified: "2026-09-05"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -290,6 +290,11 @@ source_of_truth: apps/web responsive + apps/mobile
 > (identidad por uid, nunca por email del body). Cierra el callejón sin salida del coach cuyo
 > correo de confirmación cae en spam. QA en device pendiente (W4.6 de `specs/embudo-free-pro`).
 
+> **2026-09-05 — LEER ESTO ANTES QUE CUALQUIER «QA device pendiente» de abajo**: todos los bloques
+> fechados están congelados en su día. El estado real de QA en dispositivo al 05-09 es el de la tabla
+> resumen: **QA del owner VERDE 05-09** (sesión única, artifact `6bd32370`, Android 1.1.2+86 / iOS
+> 1.1.2+59 con OTA 04-09, web `f9ba8a3f`), con la sola excepción del splash nativo (binario 1.1.3).
+>
 > **2026-08-19 (saneo documental — qué QA en device existe de verdad)**: los bloques fechados de
 > abajo quedaron congelados en su día y varios dicen «QA device pendiente» sobre trabajo que el
 > owner ya probó. Estado real al 19-08: **3 rondas en device Android el 17-08** (cabina, tour,
@@ -571,19 +576,33 @@ source_of_truth: apps/web responsive + apps/mobile
 > verificada campo a campo el mismo día (informe dedicado): estructural IGUAL; 4 drifts
 > corregidos (`0b91ca17`); gaps declarados con plan en artifact «Mi Marca RN Pulido».
 
-La paridad global **no está certificada todavía**.
+La paridad global quedó **certificada por el QA del owner del 2026-09-05**: sesión única contra el desplegado
+vigente (artifact «QA de cierre 05-09» `6bd32370`, 102 verificaciones en 11 áreas), **Android 1.1.2 build 86** e
+**iOS 1.1.2 build 59** con el OTA del 04-09 (android `d8220490` / ios `54487ddd`) y web `www.eva-app.cl`
+`dpl_ASZExsTB…` = `f9ba8a3f`. Abajo se abrevia «QA owner VERDE 05-09, artifact `6bd32370`».
 
 | Bloque | Código y revisión estática | QA en dispositivo | Estado efectivo |
 |---|---:|---:|---|
-| Sección 1 — ejecutor del alumno | Cerrado | Pendiente | Cerrado estático; no certificado |
-| Sección 2 — dashboard del alumno | Cerrado | Pendiente | Cerrado estático; no certificado |
-| Sección 3 — coach (14 unidades) | Cerrado | Pendiente | Cerrado estático; no certificado |
-| Ola 2R — residuos del alumno | Cerrado | Pendiente | Cerrado estático; no certificado |
-| Ola 4A — nutrición del alumno | **12/12 aplicadas** | Pendiente | Cerrada estática; no certificada |
-| Ola 4B — nutrición del coach y catálogos | **Cerrada: 15/15 unidades de rama** | Pendiente | Cerrada estática; no certificada |
-| Experiencia de entrada — splash/onboarding/acceso | Cerrada estática | Pendiente | Código y exports verdes; requiere build nuevo + QA física |
+| Sección 1 — ejecutor del alumno | Cerrado | **VERDE 05-09** | Certificado por QA del owner 05-09 |
+| Sección 2 — dashboard del alumno | Cerrado | **VERDE 05-09** | Certificado por QA del owner 05-09 |
+| Sección 3 — coach (14 unidades) | Cerrado | **VERDE 05-09** | Certificado por QA del owner 05-09 |
+| Ola 2R — residuos del alumno | Cerrado | **VERDE 05-09** | Certificado por QA del owner 05-09 |
+| Ola 4A — nutrición del alumno | **12/12 aplicadas** | **VERDE 05-09** | Certificada por QA del owner 05-09 |
+| Ola 4B — nutrición del coach y catálogos | **Cerrada: 15/15 unidades de rama** | **VERDE 05-09** | Certificada por QA del owner 05-09 |
+| Experiencia de entrada — splash/onboarding/acceso | Cerrada estática | **VERDE 05-09 sobre 1.1.2 + OTA** | Certificada por QA del owner 05-09; la certificación con **binario nuevo** (config plugin del splash) queda para 1.1.3 |
 
-“Cerrado estático” significa que código, spec y verificaciones automatizadas disponibles convergieron. No significa que el comportamiento visual, gestos, teclado, cámara, safe areas u offline estén aprobados en hardware real.
+“Cerrado estático” significa que código, spec y verificaciones automatizadas disponibles convergieron. “Certificado por QA del owner 05-09” significa además que el comportamiento visual, gestos, teclado, cámara, safe areas y offline se aprobaron en hardware real ese día, sobre 1.1.2 + OTA.
+
+**Divergencia intencional aceptada — experiencia de entrada (entrada dark v1).** La entrada de RN
+(SplashGate + pantalla fusionada + morphs + `codigo`/`login` en dark) **no** replica la entrada web: es una
+identidad nativa propia, decidida en [`docs/specs/entrada-dark-v1/DESIGN-SPEC.md`](../specs/entrada-dark-v1/DESIGN-SPEC.md)
+y aprobada por el owner. No es deuda de paridad. QA owner VERDE 05-09, artifact `6bd32370` (halation OLED,
+morph en gama baja, TalkBack básico) sobre 1.1.2 + OTA; el splash nativo se certifica con el binario 1.1.3.
+
+**Share Entreno (workout-share).** Superficie RN completa en producción desde 1.1.2; el QA de iPhone
+(Stories directo, sticker transparente, «Guardar» con permiso, reduced-motion) quedó **VERDE 05-09**
+(artifact `6bd32370`, iPhone 1.1.2 build 59). Canal y grupos del OTA en
+[`MOBILE_RELEASES_OTA.md`](../operations/MOBILE_RELEASES_OTA.md).
 
 > **2026-07-31 (corte compliance stores + timers lockscreen)**: (a) **Purga anti-steering completa**
 > (informe `docs/research/cta-pagos-externos-stores-2026-07-31.md`; Apple 3.1.1 + política de pagos de
@@ -848,20 +867,20 @@ Fuente funcional/visual: `apps/web/src/app/c/[coach_slug]/nutrition-v2/**` y `ap
 
 | Unidad | Alcance | Código | QA device |
 |---|---|---:|---:|
-| 4A-01 | Ruteo y chrome | Aplicado | Pendiente |
-| 4A-02 | Vista Hoy: estructura | Aplicado | Pendiente |
-| 4A-03 | Vista Plan | Aplicado | Pendiente |
-| 4A-04 | Historial | Aplicado | Pendiente |
-| 4A-05 | Shell y tab bar | Aplicado | Pendiente |
-| 4A-06 | Editar y retirar registros | Aplicado | Pendiente |
-| 4A-07 | Kit e ilustraciones | Aplicado | Pendiente |
-| 4A-08 | AuraHero y colores white-label | Aplicado | Pendiente |
-| 4A-09 | Porciones | Aplicado | Pendiente |
-| 4A-10 | Registro y buscador | Aplicado | Pendiente |
-| 4A-11 | Scanner | Aplicado | Pendiente |
-| 4A-12 | Celebraciones y residuos | Aplicado | Pendiente |
+| 4A-01 | Ruteo y chrome | Aplicado | VERDE 05-09 |
+| 4A-02 | Vista Hoy: estructura | Aplicado | VERDE 05-09 |
+| 4A-03 | Vista Plan | Aplicado | VERDE 05-09 |
+| 4A-04 | Historial | Aplicado | VERDE 05-09 |
+| 4A-05 | Shell y tab bar | Aplicado | VERDE 05-09 |
+| 4A-06 | Editar y retirar registros | Aplicado | VERDE 05-09 |
+| 4A-07 | Kit e ilustraciones | Aplicado | VERDE 05-09 |
+| 4A-08 | AuraHero y colores white-label | Aplicado | VERDE 05-09 |
+| 4A-09 | Porciones | Aplicado | VERDE 05-09 |
+| 4A-10 | Registro y buscador | Aplicado | VERDE 05-09 |
+| 4A-11 | Scanner | Aplicado | VERDE 05-09 |
+| 4A-12 | Celebraciones y residuos | Aplicado | VERDE 05-09 |
 
-Aplicadas: **las 12** (wave C en `73f6aa82`; wave D en `3efa1a75`; wave E en `7c6684fa`). Código de la ola completo; falta QA device.
+Aplicadas: **las 12** (wave C en `73f6aa82`; wave D en `3efa1a75`; wave E en `7c6684fa`). Código de la ola completo y **certificado por QA del owner 05-09** (artifact `6bd32370`).
 
 ## Ola 4B (cerrada estática)
 
@@ -891,7 +910,7 @@ SDD: [`docs/specs/workout-day-in-progress/`](../specs/workout-day-in-progress/SP
 `deriveDayCompletion` en `@eva/workout-engine` (done = 100% de series; cardio sin `sets` = 1 unidad)
 con 12 fixtures de paridad consumidos por los tests de AMBAS plataformas. Web y RN comparten visual
 (`CircleDashed` + "En progreso") y copy del sheet ("Entrenamiento incompleto"). La racha del RPC no
-se tocó (decisión CEO). Falta QA device (4 escenarios del PLAN).
+se tocó (decisión CEO). **QA device de los 4 escenarios del PLAN: VERDE 05-09** (artifact `6bd32370`).
 
 ## Experiencia de entrada (cerrada estática 2026-07-26; SUPERADA por entrada dark v1)
 
@@ -917,17 +936,21 @@ El owner aprobó las cuatro decisiones de la SPEC y el frente quedó aplicado so
 
 Evidencia estática: 61 tests focalizados y suite completa de 4130 tests verdes, typecheck
 web/mobile, ESLint afectado sin warnings, tokens `86/86`, docs y exports Expo Android/iOS verdes.
-No hubo cambio de schema, RLS ni dependencias. Como `app.json` cambió configuración nativa, falta
-un build EAS nuevo y QA física; no es un cambio certificable por OTA.
+No hubo cambio de schema, RLS ni dependencias. **QA device VERDE 05-09 sobre 1.1.2 + OTA** (artifact
+`6bd32370`); como `app.json` cambió configuración nativa, la certificación con **binario nuevo** queda
+para 1.1.3: el splash nativo no es certificable por OTA.
 
 ### Dónde retomar
 
-1. Generar build EAS Android/iOS del corte con la nueva configuración de splash.
-2. Ejecutar matriz de entrada en hardware: cold/warm start, primer/segundo uso, sesión, teclado,
-   código/slug/links, cuatro presets, EVA/custom, light/dark, red/offline y VoiceOver/TalkBack.
-3. Corregir cualquier P0/P1/P2 y solo entonces certificar la entrada.
+1. Generar build EAS Android/iOS **1.1.3** con la configuración nativa del splash (`expo.backgroundColor`
+   / `android.backgroundColor`) — único punto que el QA del 05-09 no pudo certificar por OTA.
+2. Ejecutar matriz de entrada en hardware **sobre ese binario**: cold/warm start, primer/segundo uso, sesión,
+   teclado, código/slug/links, cuatro presets, EVA/custom, light/dark, red/offline y VoiceOver/TalkBack.
+3. Corregir cualquier P0/P1/P2 y solo entonces certificar la entrada **con binario nuevo** (lo demás de la
+   entrada ya quedó VERDE 05-09 sobre 1.1.2 + OTA).
 4. Abrir la ola 5 (builder y programas de entrenamiento del coach) con inventario contra código.
-5. Completar matriz device de 4A/4B y regresión dirigida de Secciones 1–3/2R.
+5. ~~Completar matriz device de 4A/4B y regresión dirigida de Secciones 1–3/2R~~ — **hecho: QA owner
+   VERDE 05-09, artifact `6bd32370`**.
 6. Deuda 4B-16 (consolidar nutrition-pro puro en `@eva/nutrition-v2`) en rama de web.
 
 ## Builds móviles
@@ -935,7 +958,7 @@ un build EAS nuevo y QA física; no es un cambio certificable por OTA.
 | Plataforma | Profile | Resultado conocido | Qué significa |
 |---|---|---|---|
 | Android | `production` | Build + **Submit a Play internal testing** verdes en el [run 30185211552](https://github.com/Juancho2706/gymappjp/actions/runs/30185211552) sobre `856829fa` (2026-07-25, corte con deuda cardio + universal links); previos `4382ff6c`/`335c88da` también verdes | Vía completa funcionando sobre el corte actual; retener artefacto (1 día) |
-| iOS | `production` | Build + **Submit a TestFlight** verdes en el [run 30185211552](https://github.com/Juancho2706/gymappjp/actions/runs/30185211552) sobre `856829fa`, con el profile regenerado (HealthKit + Associated Domains; la falla de capability de los runs 07-23/24 quedó cerrada) | Binario del corte actual existe y fue enviado; falta verificación en App Store Connect y QA device |
+| iOS | `production` | Build + **Submit a TestFlight** verdes en el [run 30185211552](https://github.com/Juancho2706/gymappjp/actions/runs/30185211552) sobre `856829fa`, con el profile regenerado (HealthKit + Associated Domains; la falla de capability de los runs 07-23/24 quedó cerrada) | Binario del corte actual existe y fue enviado; **QA device VERDE 05-09** sobre 1.1.2 build 59 (artifact `6bd32370`); queda la verificación en App Store Connect (W7.4 de `embudo-free-pro`) |
 
 Un build/submit verde no sustituye la verificación manual en App Store Connect/Play Console ni el QA en dispositivo (universal links incluidos — el CDN del AASA de Apple puede tardar horas).
 

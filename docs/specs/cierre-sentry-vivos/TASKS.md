@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-09-01"
+last_verified: "2026-09-05"
 canonical: false
 ---
 
@@ -140,12 +140,14 @@ Marcar solo con evidencia real. Prohibido dar un gate por verde sin haberlo corr
       `d2f948a0` / ios `d40564a9`. En Sentry: 18/19/1C/8 «resolved in next release» con nota.
       **QA device del owner VERDE (01-09 tarde)**: O4.4 badge Semana A/B y nombre/fase del programa,
       P6 slider de volumen en iOS, deep link tras el override.
-- [ ] O6.8 A las 72 h del deploy de O6: `EVA-NEXTJS-19` debe quedar en 0 eventos nuevos; si
-      persiste, el mecanismo de la respuesta 200/no-RSC de 2 bytes (registrada en el proxy en
-      `serverless-middleware` a las 20:49:17Z del 31-08) es lo siguiente a cazar — no es skew de
-      deploy (cliente y servidor eran el mismo release `064da7a2`).
-- [ ] O6.9 `EVA-MOBILE-9`: tras el OTA, los eventos nuevos caen en un issue propio con el nombre
-      real; resolver el viejo con nota cuando lleve 72 h sin eventos.
+- [x] O6.8 A las 72 h del deploy de O6: `EVA-NEXTJS-19` debe quedar en 0 eventos nuevos — **cumplida
+      05-09: `EVA-NEXTJS-19` 0 eventos desde el 01-09 18:42Z con 12.230 spans en la ruta; resuelto en
+      Sentry con nota**. No hizo falta cazar el mecanismo de la respuesta 200/no-RSC de 2 bytes
+      (registrada en el proxy en `serverless-middleware` a las 20:49:17Z del 31-08); no era skew de
+      deploy (cliente y servidor eran el mismo release `064da7a2`). QA owner VERDE 05-09, artifact `6bd32370`.
+- [x] O6.9 `EVA-MOBILE-9`: tras el OTA, los eventos nuevos caen en un issue propio con el nombre
+      real — **`EVA-MOBILE-9` resuelto con nota el 05-09; el síntoma sigue vivo en `EVA-MOBILE-F`, que
+      queda ABIERTO**. QA owner VERDE 05-09, artifact `6bd32370`.
 - [x] O6.10 Dependabot a cero (01-09): #99 `decode-uri-component` 0.2.2→0.5.0 (CVE-2026-45822, deep
       links vía `query-string`/react-navigation; override + OTA tren 2) y #100/#101/#102
       `postcss-selector-parser` 6.1.4 + `browserslist` 4.28.8 (tooling de build; override, sin OTA).
@@ -155,6 +157,11 @@ Marcar solo con evidencia real. Prohibido dar un gate por verde sin haberlo corr
       ≥1024 px **verde (01-09)** — ojo de la cabecera pliega/abre, «✕» del panel, memoria tras
       recargar. Reporte de un coach con captura (01-09).
 
+> **Cierre 2026-09-05.** C3, O6.8 y O6.9 quedan CERRADAS: `EVA-NEXTJS-19` con 0 eventos desde el 01-09
+> 18:42Z (12.230 spans en la ruta) y `EVA-MOBILE-9` resuelto con nota — el síntoma vive en
+> `EVA-MOBILE-F`, que sigue **abierto**. `EVA-NEXTJS-18` es **regresión activa** y queda en O7. O7.4 se
+> **desestima salvo regresión** (decisión del jefe 05-09). Siguen abiertos O7.6, P3, P4 y P5.
+>
 > **Cierre 2026-09-01 (tarde).** Todo lo del cierre Sentry está en producción con QA del owner verde.
 > Abiertos: C3/O6.8 (verificar Sentry a 72 h, ~04-09), O6.9 (`EVA-MOBILE-9` se reclasifica solo), P3
 > (Skia = build nativo 1.1.3, decisión del owner), P4 (QA de fluidez) y P5 (431 errores, tanda
@@ -185,7 +192,7 @@ Marcar solo con evidencia real. Prohibido dar un gate por verde sin haberlo corr
 - [x] O7.3 **Diff del replay leído** (owner lo bajó a `server.txt`/`client.txt`; ver O7.1). Regla que queda: en un
       client component que se hidrata, NUNCA `toLocaleDateString`/`Intl.DateTimeFormat` con `month: 'short'` o
       `weekday: 'short'` — tabla fija siempre (`formatShortDayMonthEs` y familia).
-- [ ] O7.4 **Señales nuevas de los fingerprints O6, mismo día** — `EVA-NEXTJS-1P` «exec-v3: fallback 4.6s ganó la
+- [ ] O7.4 **DESESTIMADO SALVO REGRESIÓN (decisión del jefe 2026-09-05)** — **Señales nuevas de los fingerprints O6, mismo día** — `EVA-NEXTJS-1P` «exec-v3: fallback 4.6s ganó la
       carrera — ejecutor sin señal» (`routeReady: true`, `execReady: false`, 4g, online) y `EVA-NEXTJS-1N`
       `deploy_skew_reload`: 2 alumnos (iOS Safari 13:03Z; Samsung Internet/Android 10 13:08Z y 14:03Z) en
       `/c/6SASQ/workout/…`, release `ad6886bf` en los DOS eventos ⇒ el bundle era el actual, **no hay skew de
@@ -207,8 +214,12 @@ Marcar solo con evidencia real. Prohibido dar un gate por verde sin haberlo corr
 
 - [x] C1 `pnpm docs:check`.
 - [x] C2 Commit por ola, sin push ni OTA hasta el QA del owner.
-- [ ] C3 A las 72 h del deploy: confirmar en Sentry que cada issue tocado no registra eventos nuevos
+- [x] C3 A las 72 h del deploy: confirmar en Sentry que cada issue tocado no registra eventos nuevos
       **en el release actual**. ⚠ Salvo `EVA-NEXTJS-S`, que está filtrado y no es verificable así.
+      — **verificado el 05-09**: todos los issues tocados sin eventos nuevos (`EVA-NEXTJS-19` en 0 desde
+      el 01-09 18:42Z con 12.230 spans en la ruta, resuelto con nota; `EVA-MOBILE-9` resuelto con nota,
+      el síntoma vive en `EVA-MOBILE-F`). **Excepción: `EVA-NEXTJS-18` es regresión activa** y queda en
+      O7. QA owner VERDE 05-09, artifact `6bd32370`.
 
 ## Pendientes declarados (NO se hacen acá)
 

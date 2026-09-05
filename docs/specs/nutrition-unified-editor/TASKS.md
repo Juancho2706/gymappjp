@@ -324,9 +324,9 @@ arreglos salen de mirar esas capturas, no de una lista teorica:
 - [x] iOS: OTA `--platform ios` solo post-aprobacion Apple — desde el 18-08 los OTA del canal
   `production` salen android + ios sobre el mismo commit (ver CURRENT)
 
-- [ ] **QA device Android del EDITOR RN** (acumulado con el OTA): editar el plan vigente con
+- [x] **QA device del EDITOR RN** (acumulado con el OTA): editar el plan vigente con
   metadatos, crear desde plantilla / desde otro alumno / en blanco, reemplazos autorizados,
-  duplicar y copiar dia, reorden, porcion pegajosa, y crear/editar una plantilla
+  duplicar y copiar dia, reorden, porcion pegajosa, y crear/editar una plantilla — **QA del owner VERDE 05-09** (sesión única, artifact `6bd32370`, Android 1.1.2 build 86 / iOS 1.1.2 build 59 con OTA del 04-09 android `d8220490` / ios `54487ddd`, web `f9ba8a3f`). La **demolicion del par viejo** sigue abierta: es codigo, no QA
 
 ## Retiro del par viejo
 

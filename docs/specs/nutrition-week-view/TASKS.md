@@ -48,14 +48,17 @@ Estado: `[ ]` pendiente · `[x]` hecho · ejecución por workers Opus con juicio
 - Nota de producto (NO es tarea de esta spec): **lista de compras** de la semana — idea anotada, sin
   implementar.
 
-## QA (agregado el 2026-08-19)
+## QA (agregado el 2026-08-19) — **CERRADA 2026-09-05**
 
 Esta spec cerró **sin una sola tarea de QA**: tener todo en `[x]` prueba código, no comportamiento.
-Ninguna de las rondas registradas del owner (15, 16, 17 y 18-08) menciona la semana completa.
+Ninguna de las rondas registradas del owner (15, 16, 17 y 18-08) mencionaba la semana completa. La
+sesión única del **05-09** sí la cubrió: **QA del owner VERDE 05-09 (artifact `6bd32370`, Android
+1.1.2 build 86 / iOS 1.1.2 build 59 con OTA 04-09, web `f9ba8a3f`)**. Spec sin pendientes.
 
-- [ ] QA en device del owner de las 5 superficies: sábado/domingo desde Hoy y desde Plan (cero 4xx
+- [x] QA en device del owner de las 5 superficies: sábado/domingo desde Hoy y desde Plan (cero 4xx
       en consola, cero controles de registro), y QA visual web (alumno tab Plan y tab Hoy, coach
-      ficha) — **pendiente (auditoría 17-08, fusiona T5.5 + la QA visual de abajo)**.
-- [ ] Caso de riesgo declarado en el PLAN y nunca evaluado: la semana que **cruza cambio de versión
-      del plan**. La regla «snapshot gana» cubre el caso normal; la opción B
-      (`get_nutrition_week_v2`) quedó documentada por si el QA la exigía. **Investigar 02-09 (jefe).**
+      ficha) — **QA del owner VERDE 05-09** (sesión única, artifact `6bd32370`, Android 1.1.2 build 86 / iOS 1.1.2 build 59 con OTA del 04-09 android `d8220490` / ios `54487ddd`, web `f9ba8a3f`).
+- [x] Caso de riesgo declarado en el PLAN: la semana que **cruza cambio de versión del plan**. La regla
+      «snapshot gana» cubre el caso normal; la opción B (`get_nutrition_week_v2`) queda documentada, **sin
+      implementar**. **Evaluado en el QA del 05-09**: el guion lo cubrió en **NUTC-12** y no hubo hallazgo —
+      QA owner VERDE 05-09, artifact `6bd32370`.

@@ -1190,10 +1190,12 @@ regla se cumpla, y **fuera del total base de la estimación** (+4 h condicionale
 
 ## W6 — QA en device + cierre (jefe + owner)
 
-- [ ] **W6.1** · **ARREGLA** Matriz de QA de [PLAN §Matriz](PLAN.md), **15 puntos** (1-13 más 4b y 4c), con evidencia
+- [x] **W6.1** · **ARREGLA** Matriz de QA de [PLAN §Matriz](PLAN.md), **15 puntos** (1-13 más 4b y 4c), con evidencia
   (capturas o video). Los dos nuevos son el banner + `email_verified_at` (12) y el Turnstile de `/join` en el
   webview de Instagram (13).
   Playwright contra prod: **un solo navegador a la vez, tandas en serie**.
+  **Cubierta el 2026-09-05** por el área **COACH-NUEVO** del guion de cierre (9 ítems que cubren los 15 puntos
+  salvo el **7**, condicionado a D6): **QA del owner VERDE 05-09** (sesión única, artifact `6bd32370`, Android 1.1.2 build 86 / iOS 1.1.2 build 59 con OTA del 04-09 android `d8220490` / ios `54487ddd`, web `f9ba8a3f`).
 - [ ] **W6.2** · **MIDE** Correr de nuevo la consulta de W0.1 sobre la cohorte nueva y compararla con la línea base de
   G-BASE. **Regla de lectura ([SPEC §2.3](SPEC.md)):** con ~35 altas por semana (~15 desde el ad) la North
   Star **no** es significativa a 2 semanas; se decide sobre las métricas intermedias y la North Star se juzga

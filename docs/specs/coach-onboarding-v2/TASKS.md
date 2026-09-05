@@ -144,7 +144,7 @@ onboarding por área».
 - [ ] F5.4 Alta: stepper compacto + share sheet + `wa.me`; `QuickCreateClientForm` maneja `UPGRADE_REQUIRED` y emite `upgrade_gate_hit`.
 - [ ] F5.5 Tarjetas embebidas del builder RN (molde `BuilderOnboardingTour` → tarjetas); vista del alumno.
 - [~] F5.6 `MobileOnboardingChecklist`, `MobileFreeWelcomeModal` y bloques viejos BORRADOS (W4.7-rn, −1.348 líneas). **Pendiente:** RN emite solo `guide_engagement` (con `stepKey` fijo `profile_branding` + `metadata.step`); `step_completed`/`aha_moment` desde RN y `captureAppEvent` de los eventos nuevos.
-- [ ] F5.7 QA visual en device/emulador por persona (light/dark, white-label, safe areas, back de hardware en la pantalla de persona, píldora vs cápsula). OTA-able confirmado (`expo export` verde, sin deps nativas nuevas). **Pendiente del owner.**
+- [x] F5.7 QA visual en device por persona (light/dark, white-label, safe areas, back de hardware en la pantalla de persona, píldora vs cápsula). OTA-able confirmado (`expo export` verde, sin deps nativas nuevas). — **QA del owner VERDE 05-09** (sesión única, artifact `6bd32370`, Android 1.1.2 build 86 / iOS 1.1.2 build 59 con OTA del 04-09 android `d8220490` / ios `54487ddd`, web `f9ba8a3f`).
 
 ## W6 — Correos por comportamiento (Opus; tras ledger de BROCITO)
 - [ ] F6.1 Motor de triggers sobre el ledger del embudo: +2 h sin alumno real · +24 h sin volver · +48 h alumno invitado no entró · aha · +7 d (ayuda humana) · corte 90 d; dedupe; exclusión de cuentas de prueba; cron.
@@ -281,8 +281,8 @@ del owner D9–D13 están al final; sin ellas no arranca lo que las cita.
   toques» + «Ver como {demo}»), banners equivalentes en el editor de nutrición V2, movimiento (reporte) y cardio.
   **Pendiente:** vacíos template-first fuera del flujo guiado, tarjetas embebidas en el lienzo del builder,
   DemoCard con KPIs, y sin demo (`other`/borrado) el tab no ofrece nada. [spec-rn-05/canvas-08/09]
-- [ ] W8.2.8 QA device F5.7 incluye: back de hardware en persona, rebote del 302 de `/vive-tu-app` a `/c/*`
-  (app-link `autoVerify`), píldora vs cápsula minimizada, white-label. [spec-rn-14/18, EDGE-12]
+- [x] W8.2.8 QA device F5.7 incluye: back de hardware en persona, rebote del 302 de `/vive-tu-app` a `/c/*`
+  (app-link `autoVerify`), píldora vs cápsula minimizada, white-label. [spec-rn-14/18, EDGE-12] — QA owner VERDE 05-09, artifact `6bd32370`.
 
 ### W8.3 — Datos y backfill D8 (jefe + SQL, 0,3 d)
 - [ ] W8.3.1 Backfill D8 vía `applyCoachPersona` (nunca `UPDATE coaches SET persona`): el coach `0c7e265b`

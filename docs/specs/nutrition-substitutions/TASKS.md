@@ -16,9 +16,10 @@
 - [x] T11. RN coach: editor visual de reemplazos en quick-edit/builder — verificado en
       `editor-state.ts:826-828` + `QuickEditMode` (cierre 2026-08-17).
 - [x] T12. Gates estáticos (tsc web+mobile, vitest, eslint, boundaries) + PR #159 integrado en `master`.
-- [ ] T13. QA device web/RN del flujo completo; seguimiento consolidado en `MOBILE_PARITY.md`.
+- [x] T13. QA device web/RN del flujo completo; seguimiento consolidado en `MOBILE_PARITY.md`.
       **Parcial 02-09:** el lado alumno (item con reemplazos «⇄ o 120 g de …» en web y RN, `bbfc5136`)
-      quedó VERDE con el owner en device; falta el lado coach (editor de reemplazos) de punta a punta.
+      quedó VERDE con el owner en device. **Cerrado 05-09:** el **lado coach** (editor de reemplazos) de
+      punta a punta quedó verde — **QA del owner VERDE 05-09** (sesión única, artifact `6bd32370`, Android 1.1.2 build 86 / iOS 1.1.2 build 59 con OTA del 04-09 android `d8220490` / ios `54487ddd`, web `f9ba8a3f`).
 - [x] T14. `get_nutrition_plan_read_v2` transporta `substitutions` por ítem (array siempre presente) —
       migración `20260902220850_nutrition_v2_plan_read_substitutions` **aplicada en LIVE el 02-09**
       (create or replace aditivo, verificado como `authenticated` contra un plan real: 123 ítems con la

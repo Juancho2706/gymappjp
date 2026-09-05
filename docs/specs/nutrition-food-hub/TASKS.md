@@ -1,7 +1,7 @@
 ---
 status: done
 owner: product-engineering
-last_verified: "2026-09-02"
+last_verified: "2026-09-05"
 canonical: false
 ---
 
@@ -78,7 +78,7 @@ Orden obligatorio: puerta previa → mudar → verificar → borrar. Al reves se
 
 - [x] `nutrition-flows-redesign/TASKS.md` actualizado: T2.3 cerrada con commits + fila en su registro de cierres. `REDESIGN_FEATURE_MATRIX.md` y `MOBILE_PARITY.md` actualizados (la fila de Alimentos apunta al hub; nota de que `/coach/foods` es redirect)
 - [x] Deudas anotadas: paridad RN del tab Alimentos (seguimiento propio, registrado en MOBILE_PARITY); los tres `revalidatePath('/coach/foods')` muertos en V1; `FoodListCompact` quedo con un solo consumidor V1 (`FoodLibrary`)
-- [x] QA en preview por Claude (2026-08-09, deploy `1eaea68c`, sesion coach josefit): `/coach/foods` → redirect al tab ✓ · browse sin buscar con miniaturas ✓ · "Solo míos" (4 propios, badge Propio, placeholder contextual) ✓ · "Editados por mí" (vacio honesto) ✓ · alta: guard 0/0/0/0 en español sin round-trip y CONSERVANDO lo tipeado ✓, creacion real con toast + re-apuntado de busqueda + visible en RPC al instante ✓ · clasificacion propia end-to-end: sugerencia client-side 23 g, guardado, chip en card sin recarga, y verificado en DB (`foods.exchange_*` + 1 fila `exchange_group_foods`) ✓ · 390px: tab, chips y sheet sin desbordes ✓ · consola sin errores ✓ · datos de QA borrados de LIVE. Pendiente owner: QA en device fisico (teclado real) y clasificar un alimento GLOBAL (el QA cubrio el camino propio)
+- [x] QA en preview por Claude (2026-08-09, deploy `1eaea68c`, sesion coach josefit): `/coach/foods` → redirect al tab ✓ · browse sin buscar con miniaturas ✓ · "Solo míos" (4 propios, badge Propio, placeholder contextual) ✓ · "Editados por mí" (vacio honesto) ✓ · alta: guard 0/0/0/0 en español sin round-trip y CONSERVANDO lo tipeado ✓, creacion real con toast + re-apuntado de busqueda + visible en RPC al instante ✓ · clasificacion propia end-to-end: sugerencia client-side 23 g, guardado, chip en card sin recarga, y verificado en DB (`foods.exchange_*` + 1 fila `exchange_group_foods`) ✓ · 390px: tab, chips y sheet sin desbordes ✓ · consola sin errores ✓ · datos de QA borrados de LIVE. **Cerrado 05-09**: QA en device fisico (teclado real) y clasificacion de un alimento GLOBAL verificados por el owner — QA owner VERDE 05-09, artifact `6bd32370`
 
 ## F6 — Paridad RN del tab Alimentos (deuda de T2.3, abierta 2026-08-11)
 
@@ -192,8 +192,8 @@ estas reglas seria exactamente lo que la regla de `packages/*` prohibe:
         eslint 0 errores · boundaries 333/8 · tokens 86/86 · `expo export --platform android` verde
 - [x] F6.4 RN: clasificar desde la ficha (lectura aditiva para movil + flujo grupo → gramos → medida
       casera, espejo de `ClassifyFoodFlow`) — verificado en `foods.tsx:148,790` (cierre 2026-08-17)
-- [ ] F6.5 QA en device fisico + `MOBILE_PARITY.md` + OTA android — se resuelve en el QA del OTA
-      acumulado (nota 2026-08-17)
+- [x] F6.5 QA en device fisico + `MOBILE_PARITY.md` + OTA android — **QA del owner VERDE 05-09** (sesión única, artifact `6bd32370`, Android 1.1.2 build 86 / iOS 1.1.2 build 59 con OTA del 04-09 android `d8220490` / ios `54487ddd`, web `f9ba8a3f`); la fila del tab
+      Alimentos queda certificada en `MOBILE_PARITY.md` (olas 4A/4B, tabla resumen 05-09)
 - [x] **F6.6 (2026-08-19)** — saldada la duplicacion que F6.0 dejo anotada y la auditoria 17-08 (§1.1)
       volvio a levantar: la parte PURA de la ficha (modelo `FoodDetailData` + copys de fuente,
       verificacion y codigo de barras) vive en `packages/nutrition-v2/food-detail.ts`, exportada por

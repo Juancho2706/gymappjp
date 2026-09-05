@@ -37,4 +37,4 @@ de motor: artifact «Guía Viva EVA» (aprobado por el dueño 2026-08-17).
 |---|---|---|
 | G4.1 | jefe | Gates completos + diff-guard (builder/alumno/_actions/_data/services intactos) + juicio contra el artifact |
 | G4.2 | jefe | `CURRENT.md` + `MOBILE_PARITY.md` (entrada Guía Viva) + `docs:check` |
-| G4.3 | owner | QA preview + device (fundible con el QA del paquete vigente) → entra al OTA android acumulado |
+| G4.3 | owner | **HECHA 2026-09-05** — QA preview + device: **QA del owner VERDE 05-09** (sesión única, artifact `6bd32370`, Android 1.1.2 build 86 / iOS 1.1.2 build 59 con OTA del 04-09 android `d8220490` / ios `54487ddd`, web `f9ba8a3f`); ya salió en el OTA acumulado |

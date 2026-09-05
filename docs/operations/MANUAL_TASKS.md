@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-owner
-last_verified: "2026-09-02"
+last_verified: "2026-09-05"
 canonical: true
 ---
 
@@ -50,17 +50,11 @@ web y app: Postgres exige SELECT sobre la columna también para FILTRAR, y hoy h
 
 ## P1 — Cierre del build y QA móvil
 
-### MOB-02 — Certificar paridad en dispositivos reales
+### MOB-02 — Cerrado 2026-09-05
 
-MOB-01 quedó CERRADO el 2026-07-25: profile con HealthKit + Associated Domains validado en el [run 30185211552](https://github.com/Juancho2706/gymappjp/actions/runs/30185211552) (`856829fa`, Android+iOS verdes con submits), procesamiento verificado por el owner en App Store Connect y Play Console, artefactos retenidos en `D:\tmp\eva-artifacts-856829fa\`. Código estático y tests no sustituyen esta prueba.
+Matriz transversal corrida por el owner en una sesión única sobre el **binario vigente**: Android **1.1.2 build 86** e iPhone **1.1.2 build 59** (ambos con el OTA del 04-09 android `d8220490` / ios `54487ddd`) más web `www.eva-app.cl` `dpl_ASZExsTB…` = `f9ba8a3f` — **QA del owner VERDE 05-09 (artifact `6bd32370`, 102 verificaciones en 11 áreas)**: smoke de alumno y coach en light/dark con marca EVA y custom, navegación, safe areas, teclado, cámara/scanner, offline/reintentos y cambio de workspace; cero defectos que registrar. Resultado consolidado en [MOBILE_PARITY.md](../status/MOBILE_PARITY.md); detalle por ítem en [QA_DEVICE_PENDIENTE.md](../testing/QA_DEVICE_PENDIENTE.md).
 
-**Actualización 2026-08-19 (saneo documental)**: esta tarea pedía el smoke sobre el TestFlight de julio (`856829fa`) cuando el binario vigente ya es otro — iOS pasó por 1.1.0 (54) y `app.json` va en **1.1.1**. Las rondas de QA del owner del 15, 16, 17 y 18-08 cubrieron nutrición, el editor único y el tour; **no** la matriz transversal de esta tarea. Y no se certifica por OTA: la experiencia de entrada cambió el config plugin del splash, así que exige **binario nuevo**.
-
-- [ ] Android: smoke de alumno y coach, light/dark y marca EVA/custom, sobre el binario vigente (no sobre un OTA).
-- [ ] iOS: mismo smoke sobre el binario vigente en TestFlight/App Store, anotando versión y build usados.
-- [ ] Validar navegación, safe areas, teclado, cámara/scanner, offline/reintentos y cambio de workspace.
-- [ ] Registrar cada defecto con plataforma, build, pantalla, pasos, resultado esperado/real y captura.
-- [ ] Actualizar únicamente el resultado consolidado en [MOBILE_PARITY.md](../status/MOBILE_PARITY.md).
+Residual declarado (no bloquea esta tarea): la **experiencia de entrada** (config plugin del splash) no es certificable por OTA — su certificación con build EAS propia queda para **1.1.3**.
 
 ## P1 — Operación de datos
 

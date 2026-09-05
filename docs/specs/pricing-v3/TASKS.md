@@ -1,7 +1,7 @@
 ---
-status: active
+status: done
 owner: product-engineering
-last_verified: "2026-08-21"
+last_verified: "2026-09-05"
 canonical: false
 ---
 
@@ -84,4 +84,4 @@ instrucción vigente: es el registro de lo que ya pasó, con sus hashes, deploys
 
 ### Pricing v3 en producción (2026-08-21)
 
-**Pricing v3 EN PRODUCCIÓN (2026-08-21, [spec](../pricing-v3/SPEC.md), commit `2edea500` = `master` = `rnmobiledenuevo`).** Free = 1 alumno + white-label completo + sello «Hecho con EVA» en las superficies del alumno; Pro 25 sin sello; `tierMaxClientsFor` con tercer peldaño (pre-v2 3 · v2 2 · v3 1). Backfill por uso aplicado en LIVE (`20260821153527`: 31 Free con ≤1 alumno → 1, respaldo `_bak_pricing_v3_free_limits_20260821`; los 5 con ≥2 conservan su fila; `robin-coach` sigue 3/5 por decisión del owner). Verificado en prod (`/pricing`, `#precios`, login Free con marca + sello, login Pro sin sello). OTA a los tres runtimes (tags `ota/*-20260821`). Insights PostHog `I5QSlFSq` / `9cVq1F6v`. Correo «Tu plan Free ahora incluye tu marca» enviado desde el panel admin el 21-08 21:31Z (34/34). **Queda solo el QA visual del owner en device (sello en login/perfil del alumno, Mi Marca abierta en Free) y archivar la spec cuando se dé por cerrada.**
+**Pricing v3 EN PRODUCCIÓN (2026-08-21, [spec](../pricing-v3/SPEC.md), commit `2edea500` = `master` = `rnmobiledenuevo`).** Free = 1 alumno + white-label completo + sello «Hecho con EVA» en las superficies del alumno; Pro 25 sin sello; `tierMaxClientsFor` con tercer peldaño (pre-v2 3 · v2 2 · v3 1). Backfill por uso aplicado en LIVE (`20260821153527`: 31 Free con ≤1 alumno → 1, respaldo `_bak_pricing_v3_free_limits_20260821`; los 5 con ≥2 conservan su fila; `robin-coach` sigue 3/5 por decisión del owner). Verificado en prod (`/pricing`, `#precios`, login Free con marca + sello, login Pro sin sello). OTA a los tres runtimes (tags `ota/*-20260821`). Insights PostHog `I5QSlFSq` / `9cVq1F6v`. Correo «Tu plan Free ahora incluye tu marca» enviado desde el panel admin el 21-08 21:31Z (34/34). **QA visual del owner en device — VERDE 05-09**: sello en login/perfil del alumno y **Mi Marca en Free** verificados en la sesión única del 05-09 (**QA del owner VERDE 05-09** (sesión única, artifact `6bd32370`, Android 1.1.2 build 86 / iOS 1.1.2 build 59 con OTA del 04-09 android `d8220490` / ios `54487ddd`, web `f9ba8a3f`)). Sin pendientes: la spec queda lista para archivar.

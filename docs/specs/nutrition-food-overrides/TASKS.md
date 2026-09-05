@@ -92,7 +92,7 @@ inflado (deberia rondar 25 g). La base quedo bien etiquetada; los gramos siguen 
 ## Cierre de la tanda
 
 - [x] Suite completa (**5401 tests verdes**) + typecheck web + tsc mobile + eslint 0 errores + boundaries + tokens + docs:check
-- [ ] QA manual coach josefit en preview: crear override por SQL, verificar que aparece en busqueda, scanner y sugerencias; publicar plan y verificar que congela el numero corregido; alumno ve el plan sin cambios de contrato. **Requiere push a la rama** (decision del owner)
+- [x] QA del override end-to-end: aparece en busqueda, scanner y sugerencias; el plan publicado congela el numero corregido; el alumno ve el plan sin cambios de contrato. Verificado **contra produccion** (ya no en preview: el codigo esta en `master`) — **QA del owner VERDE 05-09** (sesión única, artifact `6bd32370`, Android 1.1.2 build 86 / iOS 1.1.2 build 59 con OTA del 04-09 android `d8220490` / ios `54487ddd`, web `f9ba8a3f`)
 - [ ] Acta con evidencia + actualizar TASKS del programa padre
 - [x] **Deuda de tipos retirada de aquí (2026-08-17)**: registro ÚNICO en [`nutrition-flows-redesign/TASKS.md`](../nutrition-flows-redesign/TASKS.md) (T2.1) — regen completo de `database.types.ts` + retiro del cast `V2ReadClient` de T1.1
 
@@ -106,7 +106,7 @@ inflado (deberia rondar 25 g). La base quedo bien etiquetada; los gramos siguen 
 - [x] `APPLY_FOOD_OVERRIDE` en los DOS reducers: la correccion es del ALIMENTO, asi que alcanza todas sus apariciones del borrador — otros dias y tambien los reemplazos autorizados. Tocar solo la fila abierta mostraria dos verdades para el mismo alimento en la misma pantalla. 4 tests
 - [x] Camino de escritura RN: `/api/mobile/nutrition-v2/food-overrides` (POST/DELETE) + cliente `nutrition-v2-food-overrides.api.ts`. Mismo servicio que la web; RN no tiene server actions
 - [x] Gates: suite **5405 verde** · typecheck web · tsc mobile · `expo export --platform android` OK (bundle 18,4 MB) · eslint 0 errores · boundaries (310 archivos) · tokens
-- [ ] QA en device (Metro + USB) y en preview web
+- [x] QA en device y en web — QA owner VERDE 05-09, artifact `6bd32370` (sobre el binario 1.1.2 + OTA en produccion, no por Metro/USB)
 - Fuera: filtro "Editados por mi" (vive en el hub de alimentos, T2.3) · lista de alumnos afectados en el aviso de republicar
 
 ## Fuera de esta tanda

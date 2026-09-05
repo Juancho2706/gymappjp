@@ -43,7 +43,7 @@
 - [x] T6.1 Tests de contratos + forma exacta del payload del importador.
 - [x] T6.2 Gates: 5111 tests, tsc web y mobile, lint 0 errores, tokens, boundaries, docs.
 - [x] T6.3 `docs/status/CURRENT.md` y `docs/status/MOBILE_PARITY.md` actualizados.
-- [ ] T6.4 QA visual: nadie abrio la biblioteca ni el modal de dos pestañas en un navegador.
+- [x] T6.4 QA visual de la biblioteca y del modal de dos pestañas — **QA del owner VERDE 05-09** (sesión única, artifact `6bd32370`, Android 1.1.2 build 86 / iOS 1.1.2 build 59 con OTA del 04-09 android `d8220490` / ios `54487ddd`, web `f9ba8a3f`).
 - [x] T6.5 Desplegado — verificado 2026-09-05: árbol limpio, `master` = `f9ba8a3f`; `git log` sobre los
       archivos de plantillas V2 (servicio, actions, biblioteca, editor) confirma commits en la historia
       de `master`, el más reciente `4fce820b` (fix del catch de las server actions), ancestro de HEAD.

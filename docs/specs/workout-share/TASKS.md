@@ -1,7 +1,7 @@
 ---
 status: done
 owner: product-engineering
-last_verified: "2026-09-02"
+last_verified: "2026-09-05"
 canonical: false
 ---
 
@@ -222,12 +222,16 @@ encolar el build 1.1.2 (F9).
 - [x] F9.1 Gates acumulados: tsc mobile, lint, tests, suite completa UNA vez (cuando owner
       libere CPU).
 - [x] F9.2 QA device Android (cable): drag, captura, transparente, targets, low-end MIUI.
-- [ ] F9.3 QA iPhone: Stories directo, sticker transparente, Guardar (permiso), reduced-motion.
+- [x] F9.3 QA iPhone: Stories directo, sticker transparente, Guardar (permiso), reduced-motion. —
+      **QA del owner VERDE 05-09** (sesión única, artifact `6bd32370`, iPhone **1.1.2 build 59** con
+      el OTA del 04-09 ios `54487ddd`; Android 1.1.2 build 86; web `f9ba8a3f`).
 - [x] F9.4 Bump `version` 1.1.2 + build GH Actions `mobile-build.yml` submit_ios+submit_android
       (GATE: 1.1.1 aprobada por Apple). Novedades ASC en ES-MX Y EN-US. — 1.1.2 APROBADA y
       READY_FOR_SALE 28-08 (piso OTA sube a 1.1.2)
-- [ ] F9.5 Actualizar docs canónicos: MOBILE_PARITY (share entreno), CURRENT, MOBILE_RELEASES_OTA
-      (canal 1.1.2), TEST_STATUS — `TEST_STATUS.md` queda abierto
+- [x] F9.5 Actualizar docs canónicos: **MOBILE_PARITY** gana el bloque «Share Entreno (workout-share)»
+      junto a la tabla resumen (05-09, QA owner VERDE 05-09, artifact `6bd32370`); **CURRENT** y
+      **MOBILE_RELEASES_OTA** ya llevaban el canal 1.1.2 con sus grupos y el piso OTA. `TEST_STATUS.md`
+      queda abierto, como declara esta misma tarea
 
 ## F10 — Fase 2 (NO v1, anotado para no perderlo; requiere SPEC propia si se retoma)
 

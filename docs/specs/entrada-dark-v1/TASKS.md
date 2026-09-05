@@ -1,7 +1,7 @@
 ---
-status: draft
+status: done
 owner: engineering
-last_verified: 2026-07-28
+last_verified: 2026-09-05
 canonical: false
 ---
 
@@ -52,9 +52,14 @@ Estado: `[ ]` pendiente · `[x]` hecho · `[-]` descartado. Referencias: [SPEC](
 
 ## Fase 4 — QA integral + docs
 
-- [ ] F4.1 QA device owner: halation OLED, morph gama baja, TalkBack basico
-- [ ] F4.2 Docs: `MOBILE_PARITY.md` (divergencia intencional de entrada), `CURRENT.md`, cierre F10 QA ronda 1
-- [ ] F4.3 Revision jefe de diffs completos + `pnpm docs:check`
+- [x] F4.1 QA device owner: halation OLED, morph gama baja, TalkBack basico — **QA del owner VERDE
+      05-09** (sesión única, artifact `6bd32370`, Android 1.1.2 build 86 / iOS 1.1.2 build 59 con OTA
+      del 04-09 android `d8220490` / ios `54487ddd`, web `f9ba8a3f`). ⚠ Certificado sobre **1.1.2 + OTA**:
+      el splash nativo cambia config plugin, así que su certificación con **binario nuevo** queda para 1.1.3
+- [x] F4.2 Docs: `MOBILE_PARITY.md` con el bloque «Divergencia intencional aceptada — experiencia de
+      entrada» junto a la tabla resumen (05-09) y `CURRENT.md` con la fila «App nativa (RN)» en VERDE
+      05-09; el cierre F10 QA ronda 1 vive en el mismo bloque de MOBILE_PARITY
+- [x] F4.3 Revision jefe de diffs completos + `pnpm docs:check` — revisado en el informe 05-09
 
 ## Fase 5 — Binario (solo con pedido del owner)
 

@@ -30,9 +30,10 @@
 - [x] T5.2 `tests/team/exchange-lists-isolation.sql` con roles reales — ejecutada en LIVE con ROLLBACK: `ALL PASSED`.
 - [x] T5.3 Gates: `pnpm test` 5096 pass, `tsc --noEmit` web limpio, `pnpm lint` 0 errores / 445 warnings (baseline),
       `check:nutrition-v2-boundaries` 256/8, `check:tokens` 86.
-- [ ] T5.4 QA visual del coach en `/coach/foods → Porciones` (pendiente: nadie lo abrio en un navegador todavia).
+- [x] T5.4 QA visual del coach en `/coach/foods → Porciones` — **QA del owner VERDE 05-09** (sesión única, artifact `6bd32370`, Android 1.1.2 build 86 / iOS 1.1.2 build 59 con OTA del 04-09 android `d8220490` / ios `54487ddd`, web `f9ba8a3f`).
 - [x] T5.5 Paridad RN de esta superficie (F4 ola 2): pestaña Porciones en NativeWind, "Duplicar y
       ajustar" con copia+reescalado via `PUT /api/mobile/nutrition/exchanges/groups`, conteo de
       equivalencias (`foodCounts` en el GET de grupos) y aviso de porciones huerfanas en el builder RN.
       Bonus: fix del truncamiento de `countExchangeListRowsByGroup` (PostgREST max_rows=1000 sobre
-      2.525 filas) que ya afectaba `/coach/foods`. Pendiente: QA fisica + build EAS.
+      2.525 filas) que ya afectaba `/coach/foods`. **QA fisica VERDE 05-09** (QA owner VERDE 05-09, artifact `6bd32370`, sobre 1.1.2 +
+      OTA); la build EAS nueva sigue pendiente.

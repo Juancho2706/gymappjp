@@ -32,7 +32,8 @@
 - [x] Gates: lint, typecheck, vitest targeted, tsc web + mobile.
 - [x] QA manual (owner, 2026-07-26, preview Vercel vs prod DB): parcial hoy, parcial pasado, 100%, cardio-only y sheet/banner — aprobado. Hallazgo colateral: planes de programas inactivos con assigned_date secuestran celdas (backlog).
 - [x] `MOBILE_PARITY.md` + `CURRENT.md`.
-- [ ] QA fisica device: pendiente owner.
+- [x] QA fisica device: **QA del owner VERDE 05-09** (sesión única, artifact `6bd32370`, Android 1.1.2
+      build 86 / iOS 1.1.2 build 59 con OTA 04-09, web `f9ba8a3f`) — los 4 escenarios del PLAN.
 
 ## Fuera de alcance (explicito)
 - RPC `get_client_current_streak` (racha real), `workout_sessions` (O3), adherencia 30d/momentum.

@@ -1,7 +1,7 @@
 ---
-status: implemented-pending-qa
+status: done
 owner: product-engineering
-last_verified: "2026-08-28"
+last_verified: "2026-09-05"
 canonical: false
 ---
 
@@ -26,10 +26,14 @@ canonical: false
 ## W2 · Salida y QA
 
 - [x] W2.1 Deploy web READY (`dpl_B1Bspc9s8w4mWAFsjrV121s1hPZY`, `a4fedef4`) + OTA runtime 1.1.2: android `e416bbff` (run 33217562571) / ios `c85fb81f` (run 33217563954), ambos SUCCESS 28-08 22:4xZ.
-- [ ] W2.2 QA owner RN (dark + claro): tocar «+ Nueva» → hoja; «Programa nuevo» → builder;
+- [x] W2.2 QA owner RN (dark + claro): tocar «+ Nueva» → hoja; «Programa nuevo» → builder;
       «Ejercicio personalizado» → catálogo con el formulario abierto (incluido arranque en frío);
-      volver atrás NO reabre el formulario; hoja «Entrenamiento incompleto» legible.
-- [ ] W2.3 QA owner web: desktop (dropdown), PWA 390 px (sheet), dark; `?create=1` abre el modal y
-      la URL queda limpia.
-- [ ] W2.4 Si en device se ve parpadeo del Modal al navegar desde la hoja RN: envolver el push en
-      `setTimeout(…, 300)` (una línea, patrón del muro de cupo).
+      volver atrás NO reabre el formulario; hoja «Entrenamiento incompleto» legible. — **QA del owner
+      VERDE 05-09** (sesión única, artifact `6bd32370`, Android 1.1.2 build 86 / iOS 1.1.2 build 59
+      con OTA del 04-09, web `f9ba8a3f`).
+- [x] W2.3 QA owner web: desktop (dropdown), PWA 390 px (sheet), dark; `?create=1` abre el modal y
+      la URL queda limpia. — QA owner VERDE 05-09, artifact `6bd32370` (web `www.eva-app.cl`
+      `dpl_ASZExsTB…` = `f9ba8a3f`).
+- [x] W2.4 Fix condicional de parpadeo del Modal al navegar desde la hoja RN — **no hizo falta: sin
+      parpadeo en el QA 05-09** (artifact `6bd32370`). El `setTimeout(…, 300)` queda anotado como
+      patrón por si reaparece, sin aplicar.

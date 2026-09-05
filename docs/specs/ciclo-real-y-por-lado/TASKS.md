@@ -706,7 +706,7 @@ Convención de estado: `[ ]` pendiente · `[x]` hecha. Nada se marca verde sin e
       paridad nueva. **Aceptación**: los 4 puntos del feedback aparecen con su plataforma explícita.
 - [x] W6.5 `docs/operations/MOBILE_RELEASES_OTA.md`: registrar la publicación (tag, grupos android/ios
       y `run id`). **Aceptación**: las dos corridas quedan citadas y verdes.
-- [ ] W6.5b Aviso a los coaches afectados (redacción + envío), con los dos puntos que el tren acepta
+- [x] W6.5b Aviso a los coaches afectados (redacción + envío), con los dos puntos que el tren acepta — **ENVIADO 2026-09-05 ~18:10Z** por correo (Resend, 14 destinatarios, batch `w65b-ciclo-por-lado-20260905`) por orden explícita del owner; registro en TESTING-QA §11
       como cambio visible: (a) en bloques `per_side` con **historial sumado**, el PR por e1RM puede no
       dispararse; el PR por peso sigue funcionando (R22, 11 coaches con bloques `per_side`); (b) **flota
       mixta** (R35): los clientes en 1.1.2 sin la OTA escriben logs sin metadata —válido— y ven
@@ -757,61 +757,68 @@ Convención de estado: `[ ]` pendiente · `[x]` hecha. Nada se marca verde sin e
 
 **Resultado 2026-09-04 — VERDE.** Reporte global del owner contra el deploy `dpl_DZ76aJq5…` + OTA 1.1.2
 (`fd2e1212` / `248580e4`): ciclo N-días y fuerza por lado OK, sin Q# fallido. El veredicto fue global, no casilla
-por casilla: la lista de abajo queda como guía del recorrido. SDD → `done`. Siguen abiertos W6.5b (aviso a
-coaches, §11 de TESTING-QA) y W6.8 (E2E local sin variables `E2E_*`).
+por casilla: la lista de abajo queda como guía del recorrido. SDD → `done`. Quedaban abiertos W6.5b (aviso a
+coaches, §11 de TESTING-QA; **enviado el 05-09**) y W6.8 (E2E local sin variables `E2E_*`, sigue abierto).
+
+**Cierre casilla por casilla 2026-09-05 — Q1…Q17 en `[x]`.** El owner corrió la sesión única de QA de cierre
+siguiendo el guion del artifact `6bd32370-a460-42d6-9f2f-128e07c11bca` (102 verificaciones en 11 áreas) y la
+declaró **VERDE COMPLETO**. Evidencia canónica de este archivo: **QA del owner VERDE 05-09 (sesión única,
+artifact `6bd32370`, Android 1.1.2 build 86 / iOS 1.1.2 build 59 con OTA del 04-09 android `d8220490` / ios
+`54487ddd`, web `www.eva-app.cl` deploy `dpl_ASZExsTB…` = `f9ba8a3f`)**. W6.5b se cerró aparte el mismo día (correo
+a 14 coaches, ver §11 de TESTING-QA); W6.8 sigue abierto.
 
 ### Web desktop (Chrome, light y dark)
 
-- [ ] Q1 Ficha del alumno de Movens con el programa **«Performance Coto» (ciclo de 3)** → pestaña
+- [x] Q1 Ficha del alumno de Movens con el programa **«Performance Coto» (ciclo de 3)** → pestaña
       Programa: el microciclo dice «Día 1 de 3 / Día 2 de 3 / Día 3 de 3» y **ningún** «Lun/Mar/Mié».
-- [ ] Q2 En esa misma ficha, un bloque de cardio o movilidad muestra su resumen tipado (no
+- [x] Q2 En esa misma ficha, un bloque de cardio o movilidad muestra su resumen tipado (no
       «Series × reps» con mancuerna) y el bloque **«Remo a un brazo con kettlebell»** muestra el
       sufijo de lado.
-- [ ] Q3 Ningún día marcado «Hoy» por coincidencia numérica (abrir un lunes o simular).
-- [ ] Q4 Builder: cambiar el tipo de un bloque de fuerza a cardio y volver deja el bloque limpio;
+- [x] Q3 Ningún día marcado «Hoy» por coincidencia numérica (abrir un lunes o simular).
+- [x] Q4 Builder: cambiar el tipo de un bloque de fuerza a cardio y volver deja el bloque limpio;
       «Lado» ofrece solo `Ninguno | Por lado | Alternado`.
-- [ ] Q5a Un programa **weekly** de otro coach: el **Inicio del alumno** y el **microciclo weekly** se
+- [x] Q5a Un programa **weekly** de otro coach: el **Inicio del alumno** y el **microciclo weekly** se
       ven exactamente igual que antes del deploy (comparar con la captura previa, tomada **antes** de
       desplegar — criterio duro de D1: weekly no cambia ni un byte de comportamiento).
-- [ ] Q5b En la **ficha weekly** del coach, en cambio, los resúmenes tipados por bloque y el selector
+- [x] Q5b En la **ficha weekly** del coach, en cambio, los resúmenes tipados por bloque y el selector
       «Lado» **SÍ** son nuevos: W4.1, W4.3, W4.5, W4.8 y W4.10 cambian esas pantallas a propósito para
       **todos** los coaches. Es cambio esperado, **no** regresión: no revertir nada por este QA.
-- [ ] Q5c **Control weekly del coach** (R37): en un programa weekly de otro coach, la **ficha** sigue
+- [x] Q5c **Control weekly del coach** (R37): en un programa weekly de otro coach, la **ficha** sigue
       diciendo «Lun/Mar/Mié» (nunca «Día N») y el **builder** weekly se ve igual que antes salvo los
       cambios esperados de Q5b (resumen tipado y selector «Lado»).
 
 ### PWA móvil (Android Chrome, 390 px, instalada y sin instalar)
 
-- [ ] Q6 Alumno de Movens con ciclo sin empezar: hero «Tu programa está listo · Día 1 de 3» con
+- [x] Q6 Alumno de Movens con ciclo sin empezar: hero «Tu programa está listo · Día 1 de 3» con
       «Empezar hoy» como **única** acción (no hay «Elegir otra fecha», R14); al tocarlo pasa a «Hoy
       toca · Día 1 de 3».
-- [ ] Q7 Entrenar el día 1 y cerrarlo: el hero pasa a «Día 1 hecho · Próximo: Día 2 de 3»; al día
+- [x] Q7 Entrenar el día 1 y cerrarlo: el hero pasa a «Día 1 hecho · Próximo: Día 2 de 3»; al día
       siguiente (o al volver a entrar) toca el **día 2**, no el día del calendario.
-- [ ] Q8 **«Remo a un brazo con kettlebell»**: la serie pide «Izq» y «Der» + un peso; registrar
+- [x] Q8 **«Remo a un brazo con kettlebell»**: la serie pide «Izq» y «Der» + un peso; registrar
       10 / 10 con 20 kg muestra «20 kg × 10 / 10» y el chip «Por lado».
-- [ ] Q9 Registrar una serie por lado **en avión** y volver a tener red: los dos lados sobreviven al
+- [x] Q9 Registrar una serie por lado **en avión** y volver a tener red: los dos lados sobreviven al
       drenado de la cola.
-- [ ] Q10 Racha del alumno de Movens **> 0** (hoy es 0 en los 5 alumnos con logs).
-- [ ] Q10b En modo ciclo, el anillo «Entrenos» muestra **«—» con «Sin meta semanal»** (nunca un
+- [x] Q10 Racha del alumno de Movens **> 0** (hoy es 0 en los 5 alumnos con logs).
+- [x] Q10b En modo ciclo, el anillo «Entrenos» muestra **«—» con «Sin meta semanal»** (nunca un
       porcentaje) y la tira semanal sigue siendo Lun→Dom de días entrenados, sin «Recuperar» (R12).
-- [ ] Q11 El prompt de instalar aparece el día 1 y, al descartarlo, no vuelve por 30 días; no
+- [x] Q11 El prompt de instalar aparece el día 1 y, al descartarlo, no vuelve por 30 días; no
       aparecen dos prompts.
-- [ ] Q11b **Control weekly en PWA** (R37): un alumno con programa **weekly** ve su Inicio exactamente
+- [x] Q11b **Control weekly en PWA** (R37): un alumno con programa **weekly** ve su Inicio exactamente
       igual que antes del deploy (anillo con porcentaje, grilla y «Recuperar» incluidos).
 
 ### RN device (app 1.1.2, después de aplicar la OTA)
 
-- [ ] Q12 Mismo recorrido Q6–Q10 en la app: hero, «Empezar hoy», día 2 tras cerrar el 1, captura por
+- [x] Q12 Mismo recorrido Q6–Q10 en la app: hero, «Empezar hoy», día 2 tras cerrar el 1, captura por
       lado y resumen de sesión con «10 / 10».
-- [ ] Q13 Editar una serie de **movilidad** por lado desde el teclado de edición **no** borra el hold
+- [x] Q13 Editar una serie de **movilidad** por lado desde el teclado de edición **no** borra el hold
       guardado.
-- [ ] Q14 Ficha del coach en RN: mismo «Día N de 3» y mismos resúmenes tipados que en web (Q1–Q2).
-- [ ] Q15 Biblioteca de programas en RN: un programa de **ciclo** muestra «D1/D2/D3», nunca «Lun»; y un
+- [x] Q14 Ficha del coach en RN: mismo «Día N de 3» y mismos resúmenes tipados que en web (Q1–Q2).
+- [x] Q15 Biblioteca de programas en RN: un programa de **ciclo** muestra «D1/D2/D3», nunca «Lun»; y un
       programa **weekly** mantiene el chip de 3 letras con la misma inicial que antes de la OTA (nunca
       «L/M/M»): la **única** diferencia admitida respecto de hoy son las tildes de «Mié» y «Sáb»
       (OUTLINE §11); el resto de los días sale byte-idéntico.
-- [ ] Q16 Hoja «Invitar alumno»: el copy ya no dice «Tu alumno baja EVA».
-- [ ] Q17 Un alumno con programa **weekly** en la app se ve igual que antes de la OTA.
+- [x] Q16 Hoja «Invitar alumno»: el copy ya no dice «Tu alumno baja EVA».
+- [x] Q17 Un alumno con programa **weekly** en la app se ve igual que antes de la OTA.
 
 ## Backlog heredado (para próximas sesiones; ninguno bloquea)
 

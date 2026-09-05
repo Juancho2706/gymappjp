@@ -19,9 +19,9 @@ prevalecen sobre este resumen. La prosa retirada el 2026-09-02 está en
 | Frente | Estado | Fuente de detalle |
 |---|---|---|
 | Web/PWA | Pricing v3 productivo: Free = 1 alumno + white-label + sello «Hecho con EVA»; Pro 25 sin sello. | [Runbook](../operations/RUNBOOK.md) · [spec](../specs/pricing-v3/SPEC.md) |
-| App nativa (RN) | 1.1.2 es el piso OTA; canal `production` recibe android e ios por separado sobre el mismo commit. **Hotfix 04-09** íconos de alimentos al reabrir una plantilla (endpoint móvil `plan-templates` no enviaba `category` + RN no derivaba del nombre como web): OTA 1.1.2 publicada el 04-09 desde `rnmobiledenuevo` @`7395b4fb` (android `e09935cb`, ios `22c32aed`) y deploy web `dpl_Gjh6Wbrhhkk8FDKZE2qvqspTRhwS` READY (`master` = `rnmobiledenuevo` = `e9c48127`). QA del owner en device pendiente. | [Mobile parity](MOBILE_PARITY.md) · [OTA](../operations/MOBILE_RELEASES_OTA.md) |
-| Auth: Google en el login de coach | **Fix 04-09 EN PRODUCCIÓN** (`master` = `rnmobiledenuevo` = `22644899`, deploy `dpl_CZKUwNthWaeQL2cvS6nG55k4eMGx` READY, OTA 1.1.2 android `d8220490` / ios `54487ddd`; QA del owner pendiente: alumno que toca Google en `/login` ve el copy nuevo y su correo queda libre; coach nuevo va a `/register`): «Continuar con Google» sin cuenta de coach dejaba un `auth.users` huérfano que «ocupaba» el correo del alumno (caso Leonardo/Movens; huérfano borrado a mano en LIVE el 04-09). Ahora un LOGIN con Google sin fila `coaches` ya no cae en `/coach/onboarding/complete` (alta de coach): `resolvePostGoogleAuthUrl` (web) y `login.tsx` (RN) avisan a `POST /api/auth/google-orphan-cleanup` / `/api/mobile/auth/google-orphan-cleanup`, que borra solo al usuario demostrablemente vacío (`lib/auth/google-orphan-cleanup.ts`), cierran la sesión y rebotan a `/login` con copy que manda al alumno a su código y al coach nuevo a `/register` (el alta por Google sigue ahí). F2b (alta de alumno con cuenta existente) sigue en backlog. | [Login y auth](../architecture/FLOWS_AND_COMPONENTS.md) |
-| Archivado de alumnos | P0 de alta en producción (2026-08-03); falta QA físico y matriz Team. | [Spec de corte](../../specs/archive-nutrition-v2-cutover/SPEC.md) |
+| App nativa (RN) | 1.1.2 es el piso OTA; canal `production` recibe android e ios por separado sobre el mismo commit. **Hotfix 04-09** íconos de alimentos al reabrir una plantilla (endpoint móvil `plan-templates` no enviaba `category` + RN no derivaba del nombre como web): OTA 1.1.2 publicada el 04-09 desde `rnmobiledenuevo` @`7395b4fb` (android `e09935cb`, ios `22c32aed`) y deploy web `dpl_Gjh6Wbrhhkk8FDKZE2qvqspTRhwS` READY (`master` = `rnmobiledenuevo` = `e9c48127`). **QA del owner en device VERDE 05-09** (sesión única, artifact `6bd32370`, Android 1.1.2+86 / iOS 1.1.2+59 con OTA 04-09, web `f9ba8a3f`). | [Mobile parity](MOBILE_PARITY.md) · [OTA](../operations/MOBILE_RELEASES_OTA.md) |
+| Auth: Google en el login de coach | **Fix 04-09 EN PRODUCCIÓN** (`master` = `rnmobiledenuevo` = `22644899`, deploy `dpl_CZKUwNthWaeQL2cvS6nG55k4eMGx` READY, OTA 1.1.2 android `d8220490` / ios `54487ddd`; **QA del owner VERDE 05-09** — artifact `6bd32370`: el alumno que toca Google en `/login` ve el copy nuevo y su correo queda libre; el coach nuevo va a `/register`): «Continuar con Google» sin cuenta de coach dejaba un `auth.users` huérfano que «ocupaba» el correo del alumno (caso Leonardo/Movens; huérfano borrado a mano en LIVE el 04-09). Ahora un LOGIN con Google sin fila `coaches` ya no cae en `/coach/onboarding/complete` (alta de coach): `resolvePostGoogleAuthUrl` (web) y `login.tsx` (RN) avisan a `POST /api/auth/google-orphan-cleanup` / `/api/mobile/auth/google-orphan-cleanup`, que borra solo al usuario demostrablemente vacío (`lib/auth/google-orphan-cleanup.ts`), cierran la sesión y rebotan a `/login` con copy que manda al alumno a su código y al coach nuevo a `/register` (el alta por Google sigue ahí). F2b (alta de alumno con cuenta existente) sigue en backlog. | [Login y auth](../architecture/FLOWS_AND_COMPONENTS.md) |
+| Archivado de alumnos | P0 de alta en producción (2026-08-03); **QA físico VERDE 05-09** (artifact `6bd32370`); queda la matriz Team. | [Spec de corte](../../specs/archive-nutrition-v2-cutover/SPEC.md) |
 | Nutrition V2 | Canónica para Standalone/Team; el programa de rediseño cerró el 2026-08-17. | [Programa](../specs/nutrition-flows-redesign/TASKS.md) · [Runbook de corte](../operations/NUTRITION_V2_CUTOVER_RUNBOOK.md) |
 | V1 nutrición | Congelada, **no se borra** (decisión owner 2026-08-03): solo migrar usuarios a V2. | [Delta del mapa](../audits/v1-deprecation-map-delta-2026-08-03.md) |
 | Teams | Pool, membresías y workspaces implementados. | [Flows](../architecture/FLOWS_AND_COMPONENTS.md#team) |
@@ -40,33 +40,37 @@ prevalecen sobre este resumen. La prosa retirada el 2026-09-02 está en
 2. **Tanda «QA del owner 02-09» (ejecutor, Share Entreno, accesos A–J) — EN PRODUCCIÓN, SDD `done`**
    ([spec](../specs/qa-ejecutor-share-0209/SPEC.md)): `master` `0f545926`, deploy `dpl_35ZT6w7o…` READY,
    OTA android `bd2bc6e8` / ios `025d158f`; ronda 2 android `fc78e1c8` / ios `c46d4eed`.
-   P5 (color efectivo, `8c7161f3`) y B2–B9 salieron en los trenes del 02-09 tarde. Queda: QA del owner en device.
+   P5 (color efectivo, `8c7161f3`) y B2–B9 salieron en los trenes del 02-09 tarde. **QA del owner en device VERDE 05-09**
+   (artifact `6bd32370`): B6, E10, F6, G6, G7, H8 y J4 cerradas; quedan F7 (reportar 3 decisiones) y P3.
 3. **Tren «billing + seguridad» — EN PRODUCCIÓN 02-09** (`master` `16c06fba`, deploy `dpl_8AJgWw36…`
-   READY, OTA android `42f021f4` / ios `4052b874`): queda la fase 3 de SEC-01 (revocar `invite_code`
-   a `anon`) cuando la OTA esté adoptada y el QA del owner en device (código → marca → login). Los
-   secrets de E2E ya están (coach QA propio, run verde 33673130561). [MANUAL_TASKS § SEC-01](../operations/MANUAL_TASKS.md)
+   READY, OTA android `42f021f4` / ios `4052b874`): **QA del owner en device VERDE 05-09** (código → marca →
+   login; artifact `6bd32370`). Queda la **fase 3 de SEC-01** (revocar `invite_code` a `anon`), agendada para el
+   **09-09** con el gate verificado: 0 lecturas anónimas de `invite_code` desde el 02-09 01:37Z. Los secrets de
+   E2E ya están (coach QA propio, run verde 33673130561). [MANUAL_TASKS § SEC-01](../operations/MANUAL_TASKS.md)
 4. **Tren «cierre de backlog 02-09» — EN PRODUCCIÓN 02-09 19:55Z** (`master` `794aee52`, deploy
    `dpl_E6Rt7ETY…` READY, OTA 1.1.2 android grupo `ec7da7fb` / ios grupo `6db6747f`): **QA del owner en
    device VERDE 02-09** (11 puntos). **Ola 2 chica + higiene EN CÓDIGO 02-09 noche** (`5f3c48f2`…`31c1f7a8`,
-   8 commits, RPC `substitutions` ya aplicado en LIVE): sale con el push del tren «Ciclo real y por lado» (03-09); queda el QA en device de lo nuevo y
-   el acumulado de 18 (`docs/testing/QA_DEVICE_PENDIENTE.md`). [MOBILE_PARITY](MOBILE_PARITY.md)
+   8 commits, RPC `substitutions` ya aplicado en LIVE): salió con el push del tren «Ciclo real y por lado» (03-09).
+   **QA en device de lo nuevo y del acumulado de 18: VERDE 05-09** (artifact `6bd32370`) ⇒
+   `docs/testing/QA_DEVICE_PENDIENTE.md` queda **sin pendientes**. [MOBILE_PARITY](MOBILE_PARITY.md)
 5. **(a) `EVA-NEXTJS-18` (hidratación en `/c/[coach_slug]/dashboard?recuperar=…`) — REGRESIÓN ACTIVA
    05-09**: el fix del 02-09 (`master` `91e7edf6`) NO la cerró; 6 eventos / 2 usuarios en 24 h al
    05-09 sobre `f9ba8a3f`, 47 replays. **(b) `E394` = `EVA-NEXTJS-19` — 0 eventos desde el 01-09
-   18:42Z con tráfico alto ⇒ O6.8 cumplida**: resolver en Sentry con nota; O7.4 se desestima salvo
-   regresión. [tareas § O7](../specs/cierre-sentry-vivos/TASKS.md)
+   18:42Z con tráfico alto (12.230 spans en la ruta) ⇒ O6.8 cumplida**, **resuelto en Sentry con nota
+   el 05-09** (C3 cerrada con la misma evidencia); O7.4 desestimado salvo regresión (decisión del jefe
+   05-09). [tareas § O7](../specs/cierre-sentry-vivos/TASKS.md)
 6. **Errores al día (ola O6) — EN PRODUCCIÓN 01-09** (`master` `231d2937`, OTA 1.1.2 android
    `d2f948a0` / ios `d40564a9`; QA device del owner verde): O6.8 cumplida el 05-09 (ver 5b);
-   `EVA-MOBILE-9` en 0 pero el mismo síntoma vive en `EVA-MOBILE-F` (iOS 02-09, Android 04-09,
-   viaMorph fresh 4,7 s) ⇒ resolver el 9 con nota y seguir el F; Skia exige build nativo y P5
+   `EVA-MOBILE-9` **resuelto con nota el 05-09** (O6.9), pero el mismo síntoma vive en `EVA-MOBILE-F`
+   (iOS 02-09, Android 04-09, viaMorph fresh 4,7 s), que sigue **abierto**; Skia exige build nativo y P5
    `noUncheckedIndexedAccess` (431 errores) como tanda propia. [tareas § O6](../specs/cierre-sentry-vivos/TASKS.md)
 7. **PLAN «Cobros coach → alumno» — BLOQUEADO, nada implementado** ([spec](../specs/cobros-coach-alumno/SPEC.md)
    `draft`, versionada en `edf6a07c`; artifact `046f3bb1`): esperan 8 decisiones del owner (§18.1) y
    3 verificaciones externas (§18.2: contador SII, abogado retracto, smoke MP con plata real).
    Estimación 26-32 días-agente + 2-3 semanas de beta.
 8. **Embudo Free→Pro — W0–W6 EN PRODUCCIÓN** ([spec](../specs/embudo-free-pro/SPEC.md); último OTA
-   1.1.2 `28ca5f8d` / `8cced802`): queda el QA del owner en device de W4.6 y W6.8 (guía en el artifact
-   `00246733-723b-456f-82c0-f14c8588d137`) y App Store Connect (W7.4).
+   1.1.2 `28ca5f8d` / `8cced802`): **W4.6 y W6.8 con QA del owner en device VERDE 05-09** (artifact
+   `6bd32370`); queda App Store Connect (W7.4).
 9. **Onboarding del coach v2 — W1–W4.7 y W5 parcial EN PRODUCCIÓN** ([spec](../specs/coach-onboarding-v2/SPEC.md),
    último `8cf7b886`): quedan W6 (correos por comportamiento), W7 (medición/Playwright/Maestro),
    F5.3–F5.5 RN y la revisión D4 del contenido de ejemplo; de
