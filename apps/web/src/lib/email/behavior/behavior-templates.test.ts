@@ -54,7 +54,8 @@ describe('cobertura: 5 keys × 6 ramas', () => {
                 expect(email.subject).not.toMatch(/[{}]/)
                 expect(email.text).not.toMatch(/\{[a-z]+\}/)
                 // Pie legal + firma en TODOS (Ley 19.496 art. 28 B: la serie la inicia EVA).
-                expect(email.html).toContain('Enviado por EVA')
+                // La firma la pone `wrapEmailLayout`: en html va con `<strong>`, en texto plana.
+                expect(email.html).toContain('Enviado por <strong>EVA Fitness Platform</strong>')
                 expect(email.html).toContain(BEHAVIOR_FOOTER)
                 expect(email.text).toContain('Enviado por EVA')
                 expect(email.text).toContain(BEHAVIOR_FOOTER)
