@@ -28,7 +28,7 @@ import { TeamsPlanCard } from './TeamsPlanCard'
 const ALL_CYCLES: BillingCycle[] = ['monthly', 'quarterly', 'annual']
 
 // Pricing v2: free es el único tier sin ciclos de cobro — el tier mínimo que soporta
-// cualquier ciclo prepagado es pro (primer plan pago a la venta; starter salió de venta).
+// cualquier ciclo prepagado es pro (primer plan pago a la venta).
 const MIN_TIER_FOR_CYCLE: Partial<Record<BillingCycle, SubscriptionTier>> = {
     annual: 'pro',
     quarterly: 'pro',
@@ -64,7 +64,7 @@ const planDisplay: Array<{
         topBorder: 'border-t-slate-400/60',
         badge: 'Gratis para siempre',
     },
-    // Pricing v2 — starter FUERA de venta (patrón growth/scale): sigue en union/TIER_CONFIG/CHECK
+    // La venta es free/pro/elite; growth/scale son legacy: sigue en union/TIER_CONFIG/CHECK
     // para el histórico, pero no se vende. NO re-agregar aquí.
     {
         id: 'pro',
@@ -836,14 +836,14 @@ export function LandingPricingPreview() {
                     scrollFnRef={carouselScrollFnRef}
                 />
 
-                {/* Desktop grid — 3 tiers a la venta (pricing v2: sin starter) + card Teams.
+                {/* Desktop grid — 3 tiers a la venta (free/pro/elite) + card Teams.
                     lg: parrilla 2×2 (free/pro arriba, elite/teams abajo).
                     xl: 4 cards en una fila. */}
                 <div className="hidden lg:grid lg:grid-cols-2 xl:grid-cols-4 gap-3 overflow-y-visible pt-3">
                     <PlanCardCompact plan={planById('free')} billingCycle={billingCycle} />
                     <PlanCardCompact plan={planById('pro')} billingCycle={billingCycle} />
                     <PlanCardCompact plan={planById('elite')} billingCycle={billingCycle} />
-                    {/* starter/growth/scale recortados (fuera de venta). Card Teams = componente dedicado, sin precio. */}
+                    {/* growth/scale recortados (fuera de venta). Card Teams = componente dedicado, sin precio. */}
                     <TeamsPlanCard variant="grid" />
                 </div>
 

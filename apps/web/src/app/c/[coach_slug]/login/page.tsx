@@ -64,7 +64,7 @@ export default async function ClientLoginPage({ params, searchParams }: Props) {
 
     // Pricing v3 (owner 2026-08-21): el branding pre-auth es de TODOS los planes. `brandingAllowed`
     // queda como red de seguridad FAIL-CLOSED (solo un tier inválido/stale cae a skin EVA); lo que
-    // separa a Free/Starter de Pro es el sello «Hecho con EVA» bajo el formulario.
+    // separa a Free de Pro es el sello «Hecho con EVA» bajo el formulario.
     // white-label W1a — tema preset curado: si el coach eligió un preset, sus valores overridean
     // color/color2/accent/tinte/fuente/loader ANTES de resolver el tema. NULL/desconocida → passthrough.
     const presetBrand = resolvePresetBranding(coach)

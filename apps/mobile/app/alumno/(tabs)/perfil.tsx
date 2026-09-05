@@ -462,7 +462,7 @@ export default function AlumnoPerfilScreen() {
   // a las iniciales del alumno (fallback ya existente, también si la URL muere: `Avatar.tsx:52-56`),
   // que es el caso de los coaches sin logo. Pricing v3 (owner 2026-08-21): el white-label está en
   // todos los planes vendidos, así que un free TAMBIÉN trae su logo; el branding runtime solo lo
-  // sanea a null cuando `isBrandingAllowed` falla (tier inválido o el legacy starter).
+  // sanea a null cuando `isBrandingAllowed` falla (tier inválido).
   const coachLogoUri = (resolvedScheme === 'dark' ? branding?.logoUrlDark : null) || branding?.logoUrl || null
   const streakSubtitle = stats.streak > 0
     ? `${stats.streak} ${stats.streak === 1 ? 'día' : 'días'} seguidos activo`
@@ -749,7 +749,7 @@ export default function AlumnoPerfilScreen() {
 
             {/* Sello «Hecho con EVA» (Pricing v3, D3=A, owner 2026-08-21). Reemplaza al
                 «Potenciado por EVA» hardcodeado que comparaba el tier a mano contra 'free': ahora
-                el gate es `showsEvaBadge` de @eva/tiers (free/starter sí, pro/elite no) y el texto
+                el gate es `showsEvaBadge` de @eva/tiers (free sí, pro/elite no) y el texto
                 + la URL con UTMs salen del paquete compartido. El tier del coach YA venía en el
                 mismo load (`detail.coachTier`) — cero queries nuevas. Superficie neutra, texto
                 muted del DS, sin CTA de pago (políticas de las tiendas). Con `detail` aún null

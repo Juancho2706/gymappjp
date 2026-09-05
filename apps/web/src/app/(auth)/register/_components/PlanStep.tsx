@@ -17,7 +17,7 @@ import {
     type SaleTier,
 } from '@/lib/constants'
 
-// Solo se ofrecen tiers a la venta (free/pro/elite — pricing v2). starter salió de venta;
+// Solo se ofrecen tiers a la venta (free/pro/elite).
 // growth/scale siguen fuera de venta (grandfathered, ver plan 04).
 const tierOptions = SALE_TIERS.map((tier) => [tier, TIER_CONFIG[tier]] as const)
 const cycleOptions = Object.entries(BILLING_CYCLE_CONFIG) as [

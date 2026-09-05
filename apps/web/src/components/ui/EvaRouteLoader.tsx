@@ -141,7 +141,7 @@ export function EvaRouteLoader({
     }
 
     // white-label v2: si el coach Pro+ eligió una variante (≠ 'eva'), la renderizamos en lugar del
-    // wordmark shimmer por defecto. 'eva' (default + free/starter) sigue con el loader actual intacto.
+    // wordmark shimmer por defecto. 'eva' (default + free) sigue con el loader actual intacto.
     if (loaderVariant !== 'eva') {
         return (
             <LoaderVariantView

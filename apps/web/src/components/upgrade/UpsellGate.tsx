@@ -69,7 +69,7 @@ export function UpsellGate({ variant, currentTier }: Props) {
 
     // Pricing v2 (P4/D3): estas capacidades vienen incluidas en TODOS los planes (free tambien),
     // asi que este gate solo puede aparecer en estados anomalos; si aparece, el upsell apunta a Pro
-    // (starter salio de la venta — jamas ofrecer un plan muerto).
+    // (jamas ofrecer un plan que no esta a la venta).
     const subtitle = isExercises
         ? <>Crea tus propios ejercicios con video de YouTube y apareceran en el builder. Disponible en <span className="font-semibold text-foreground">Pro</span>.</>
         : <>Migra toda tu cartera de alumnos desde Excel en minutos, sin cargar uno por uno. Disponible en <span className="font-semibold text-foreground">Pro</span>.</>

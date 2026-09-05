@@ -85,7 +85,7 @@ export interface PdfBrand {
     poweredByEva: boolean
     /**
      * Pricing v3 (D3=A, owner 2026-08-21): el PDF firma «Hecho con EVA» en el footer.
-     * true en free/starter y en el fallback EVA; false en Pro/Elite (`showsEvaBadge(tier)`).
+     * true en free y en el fallback EVA; false en Pro/Elite (`showsEvaBadge(tier)`).
      */
     showsEvaBadge: boolean
 }

@@ -129,7 +129,7 @@ export default function LoginScreen() {
   // ── Theming white-label del login (mismo gate que web) ──
   // Pricing v3 (owner 2026-08-21): el white-label está en TODOS los planes vendidos, así que un
   // free abre su login con su marca. `isBrandingAllowed` NO se borra: sigue siendo el fail-closed
-  // para tier inválido, caché vieja del device o el legacy starter ⇒ branding EVA conservando el
+  // para tier inválido, caché vieja del device ⇒ branding EVA conservando el
   // nombre. El preset curado (theme_preset_key) override color/color2/acento ANTES de derivar el
   // tema (paridad web). Lo que paga Pro acá es sacarse el sello «Hecho con EVA» (`showsEvaBadge`).
   const brandName = branding?.displayName ?? 'tu coach'
@@ -433,7 +433,7 @@ export default function LoginScreen() {
 
   // Sello «Hecho con EVA» al pie del formulario del ALUMNO (Pricing v3, D3=A, owner 2026-08-21).
   // Reemplaza al «con tecnología de EVA» que se pintaba para TODO tier: ahora es el gancho de Pro
-  // — free/starter lo llevan, pro/elite no. Un solo sello (nada de doble firma) y sobre la
+  // — free lo lleva, pro/elite no. Un solo sello (nada de doble firma) y sobre la
   // superficie neutra de la hoja, nunca sobre el color de marca. El gate es `showsEvaBadge`,
   // FAIL-OPEN a propósito: tier CORRUPTO ⇒ se muestra. Pero «todavía no sé el tier» no es lo
   // mismo que «tier corrupto»: `branding` llega async desde ThemeContext (AsyncStorage) y en los

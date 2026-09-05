@@ -59,7 +59,7 @@ export function BrandQuickCard({
     onSaved,
 }: {
     brand: CoachBrandDraft
-    /** Free y Starter llevan el sello «Hecho con EVA» en las superficies del alumno (pricing v3). */
+    /** Free lleva el sello «Hecho con EVA» en las superficies del alumno (pricing v3). */
     showsEvaBadge: boolean
     /** Tilda el paso 1 de la guía sin esperar al refresh del servidor. */
     onSaved: () => void

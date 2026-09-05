@@ -3,7 +3,7 @@ import { isBrandingAllowed, parseSubscriptionTier } from '@eva/tiers'
 
 // Contrato de color del panel coach cuando el branding white-label no está incluido.
 // Pricing v3 (owner 2026-08-21): el white-label está en todos los planes vendidos (free incluido),
-// así que esta rama es hoy el fail-closed de `isBrandingAllowed` — tier inválido o legacy starter.
+// así que esta rama es hoy el fail-closed de `isBrandingAllowed` — tier inválido.
 const SYSTEM_PRIMARY_COLOR = '#007AFF'
 // F6 (plan 04): el union de tiers vive en @eva/tiers (fuente única web+mobile). NO redeclarar acá.
 import type { SubscriptionTier } from '@eva/tiers'

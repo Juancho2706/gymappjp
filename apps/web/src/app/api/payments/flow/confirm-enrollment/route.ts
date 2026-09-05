@@ -227,7 +227,7 @@ export async function POST(request: Request) {
                 ? (intentPayload.addons as string[])
                 : []
             // Validaciones DURAS del intent: solo tiers pagos EN VENTA (pro/elite). Pricing v2 (C2):
-            // starter salio de la venta — un intent starter (residual de un checkout viejo) ya no es
+            // un intent con un tier retirado (residual de un checkout viejo) ya no es
             // valido. Si no cumple, el intent esta corrupto/inconsistente → 409 (no crear).
             if (tier !== 'pro' && tier !== 'elite') {
                 return NextResponse.json(
@@ -244,7 +244,7 @@ export async function POST(request: Request) {
         } else {
             // Fallback back-compat: tier/cycle del coach row. GUARD: jamas crear una sub que no sea de
             // un tier pago EN VENTA (pro/elite) — cubre free (base $0) y, desde pricing v2 (C2), tambien
-            // starter/growth/scale: la compra nueva de un tier fuera de venta se rechaza en TODAS las
+            // growth/scale: la compra nueva de un tier fuera de venta se rechaza en TODAS las
             // puertas de pago (espejo del enum de create-preference).
             tier = (coach.subscription_tier ?? 'free') as SubscriptionTier
             cycle = (coach.billing_cycle ?? 'monthly') as BillingCycle

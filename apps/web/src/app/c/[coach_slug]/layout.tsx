@@ -182,7 +182,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
 
     // Branding desde los headers del proxy (`proxy.ts`).
     // Pricing v3 (owner 2026-08-21): el white-label es de TODOS los planes — Free incluido. Lo que
-    // distingue a Free/Starter es el sello «Hecho con EVA» del footer (`showsEvaBadge`), no la marca.
+    // distingue a Free es el sello «Hecho con EVA» del footer (`showsEvaBadge`), no la marca.
     const subscriptionTier = (headersList.get('x-coach-subscription-tier') ?? 'free') as SubscriptionTier
     // `brandLocked` = red de seguridad FAIL-CLOSED de `isBrandingAllowed`: solo cae acá un tier
     // inválido/stale (fila corrupta, valor desconocido). En ese caso servimos skin EVA entero.
@@ -504,7 +504,7 @@ export default async function ClientBrandLayout({ children, params }: Props) {
                         )}
                         {children}
                         {/* Pricing v3 (D3=A): el viejo «Potenciado por EVA» (opacidad 50, solo Free
-                            sin marca) muere; ahora el sello «Hecho con EVA» lo llevan Free/Starter
+                            sin marca) muere; ahora el sello «Hecho con EVA» lo lleva Free
                             CON su marca puesta. Va acá, sobre el fondo de página (superficie
                             neutra) y arriba del enlace de privacidad — nunca sobre el color del
                             coach, así el contraste no depende de su hex. La bottom-nav flotante ya

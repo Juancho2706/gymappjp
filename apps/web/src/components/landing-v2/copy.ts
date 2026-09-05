@@ -117,7 +117,7 @@ export const EN_DICT: Record<string, string> = {
   pe_4: 'Priority support',
   pe_5: '4 professional modules included',
   pe_cta: 'Choose Elite',
-  // Pricing v2: sale = free/pro/elite only — no starter/growth/scale here. 60+ clients → Teams.
+  // Pricing v2: sale = free/pro/elite only — no growth/scale here. 60+ clients → Teams.
   table_note: '// more than 60 clients, or a team? let’s talk — eva teams',
 
   tm_mark: '// teams mode',

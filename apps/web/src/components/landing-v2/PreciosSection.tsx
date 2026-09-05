@@ -9,7 +9,7 @@
  *  - Equivalente mensual = round(total período / meses) — mismo cálculo que
  *    `LandingPricingPreview.tsx`.
  *  - Rangos derivados de `getTierMaxClients` en AMBOS idiomas (pricing v3:
- *    Free 1 con marca · Pro 25 sin sello · Elite 26–60; starter fuera de venta).
+ *    Free 1 con marca · Pro 25 sin sello · Elite 26–60).
  *  - CTAs → `/register?tier=<id>&cycle=<ciclo activo>` (Free → `/register`).
  *
  * Analitica (Pricing v2 E1, invariante P8): el embudo de precios vivia SOLO en `/pricing`, que es
@@ -43,7 +43,7 @@ const FONT_DISPLAY = 'var(--font-montserrat), var(--font-inter), sans-serif'
 const FONT_NUM = 'var(--font-archivo), var(--font-montserrat), sans-serif'
 
 // Rangos derivados de la fuente REAL (@eva/tiers) — catálogo de venta pricing v3.
-// Pro ya no arranca «después de starter» (fuera de venta): su rango es «hasta 25».
+// Pro arranca en 2: su rango es «hasta 25».
 const FREE_HI = getTierMaxClients('free') // 1
 const PRO_HI = getTierMaxClients('pro') // 25
 const ELITE_LO = getTierMaxClients('pro') + 1 // 26
@@ -529,7 +529,7 @@ export function PreciosSection({ exerciseCount }: { exerciseCount: number }) {
                     letterSpacing: '0.1em',
                 }}
             >
-                {/* Pricing v2: la venta es SOLO free/pro/elite — nada de starter/growth/scale acá.
+                {/* Pricing v2: la venta es SOLO free/pro/elite — nada de growth/scale acá.
                     Más de 60 alumnos o equipos → EVA Teams (sección tm_* más abajo). */}
                 {t(
                     'table_note',

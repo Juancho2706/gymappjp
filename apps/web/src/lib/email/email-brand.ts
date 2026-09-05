@@ -11,7 +11,7 @@ import { isBrandingAllowed, showsEvaBadge, type SubscriptionTier } from '@eva/ti
  *    mentira: esa marca no es del coach y el plan del team no la paga).
  *  - `isBrandingAllowed` queda como red FAIL-CLOSED: desde Pricing v3 el white-label es de
  *    todos los planes, así que solo cae fuera un tier inválido/stale.
- *  - `showsEvaBadge`: true en free/starter (fail-open ante tier corrupto), false en Pro+.
+ *  - `showsEvaBadge`: true en free (fail-open ante tier corrupto), false en Pro+.
  *
  * El NOMBRE del coach viaja SIEMPRE en el texto del template (identidad, no gateada). Esto
  * gatea únicamente el VISUAL (logo + color) del header/CTA. Sin elegibilidad → `{null,null}`

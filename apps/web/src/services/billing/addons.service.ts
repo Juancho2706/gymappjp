@@ -44,7 +44,7 @@ type DB = SupabaseClient<Database>
  * = one-shot prorrateado inmediato + PUT del valor completo desde la renovación; compromiso
  * mínimo 1 ciclo.
  * SUPERSEDIDO por Pricing v2 P3 (2026-08-17, `docs/specs/pricing-v2/SPEC.md`): la regla
- * «starter NO compra nutrition_exchanges (Pro+)» murió — nutrition_exchanges viene INCLUIDO
+ * «el tier chico NO compra nutrition_exchanges (Pro+)» murió — nutrition_exchanges viene INCLUIDO
  * en todo plan (free también) vía la derivación de `entitlements.service`, así que su compra
  * se retira (`canPurchaseAddon` la rechaza como `included_in_plan`). El motor de cobro se
  * conserva intacto para el billing histórico y las cortesías `admin_grant`.

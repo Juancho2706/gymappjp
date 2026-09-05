@@ -485,7 +485,7 @@ export function useCaptureCheckoutConfirmed() {
     const ph = usePostHog()
     return useCallback(
         // tier/billingCycle nullable a proposito: la vuelta estandar de MP llega a /processing SIN
-        // tier ni cycle en la URL — mandar el fallback visual ('starter'/'monthly') envenenaria el
+        // tier ni cycle en la URL — mandar el fallback visual de la pantalla envenenaria el
         // funnel, mejor null honesto.
         (props: {
             tier: SubscriptionTier | null

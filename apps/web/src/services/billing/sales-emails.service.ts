@@ -265,7 +265,7 @@ export async function sendClientLimitReachedEmail(
 ): Promise<SalesEmailOutcome> {
     const tier = (input.tier ?? 'free') as SubscriptionTier
     const trigger = input.trigger ?? 'attempt'
-    // Pricing v2 (D3): el upsell apunta a Pro (starter salió de la venta) — free/starter reciben
+    // Pricing v2 (D3): el upsell apunta a Pro — free recibe
     // «Pasar a Pro», un pro recibe «Pasar a Elite», elite+/legacy mantienen el copy genérico
     // (su siguiente paso es Teams, no un tier de venta). Solo la ETIQUETA, sin números: el cupo
     // exacto depende del grandfather de cada coach y se ve en /coach/subscription.

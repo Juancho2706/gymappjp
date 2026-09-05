@@ -168,7 +168,7 @@ export default async function CoachLayout({
 
     // Marca por contexto: enterprise → org; team → team; standalone → la del coach.
     // Pricing v3 (owner 2026-08-21): el branding standalone es de TODOS los planes (free incluido);
-    // `isBrandingAllowed` queda como red fail-closed (tier inválido/stale o starter legacy ⇒ panel
+    // `isBrandingAllowed` queda como red fail-closed (tier inválido/stale ⇒ panel
     // EVA). Si el coach apagó el toggle, su panel también cae a EVA. enterprise/team traen su marca.
     // Retiro de Starter (S1.10, juicio del jefe J-S5): este cast crudo NO se reemplaza por
     // `parseSubscriptionTier` a propósito. Con el parser, todo valor aterrizaría dentro del union y
@@ -250,7 +250,7 @@ export default async function CoachLayout({
         iconMode: 'eva' as const,
         coachLogoUrl: undefined,
     }
-    // Free/Starter conservan el logo en DB, pero el panel autenticado también muestra EVA
+    // Free conserva el logo en DB, pero el panel autenticado también muestra EVA
     // mientras no exista entitlement white-label. Team/Enterprise siguen usando su contexto.
     const coachPanelLogoUrl = isManaged || standaloneBrandOn ? coach.logo_url : null
     const coachPanelLogoDarkUrl = isManaged || standaloneBrandOn ? coach.logo_url_dark : null

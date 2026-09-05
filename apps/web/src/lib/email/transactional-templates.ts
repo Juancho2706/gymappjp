@@ -13,7 +13,7 @@ type WelcomeClientContext = {
     /** White-label (W2): logo/color del coach para el header + CTA. Standalone con tier válido. */
     logoUrl?: string | null
     primaryColor?: string | null
-    /** Pricing v3: sello «Hecho con EVA» en el footer (free/starter standalone). */
+    /** Pricing v3: sello «Hecho con EVA» en el footer (free standalone). */
     showsEvaBadge?: boolean
     /**
      * Correo del coach (W2.6, flujo-coach-nuevo). Con él, el `reply_to` del envío apunta al coach
@@ -109,7 +109,7 @@ type ProgramAssignedContext = {
     /** White-label (W2): logo/color del coach para el header + CTA. Standalone con tier válido. */
     logoUrl?: string | null
     primaryColor?: string | null
-    /** Pricing v3: sello «Hecho con EVA» en el footer (free/starter standalone). */
+    /** Pricing v3: sello «Hecho con EVA» en el footer (free standalone). */
     showsEvaBadge?: boolean
 }
 
@@ -467,7 +467,7 @@ type ClientArchivedContext = {
     /** White-label (W2): logo/color del coach para el header + CTA. Standalone con tier válido. */
     logoUrl?: string | null
     primaryColor?: string | null
-    /** Pricing v3: sello «Hecho con EVA» en el footer (free/starter standalone). */
+    /** Pricing v3: sello «Hecho con EVA» en el footer (free standalone). */
     showsEvaBadge?: boolean
 }
 
@@ -525,7 +525,7 @@ type ClientUnarchivedContext = {
     /** White-label (W2): logo/color del coach para el header + CTA. Standalone con tier válido. */
     logoUrl?: string | null
     primaryColor?: string | null
-    /** Pricing v3: sello «Hecho con EVA» en el footer (free/starter standalone). */
+    /** Pricing v3: sello «Hecho con EVA» en el footer (free standalone). */
     showsEvaBadge?: boolean
 }
 

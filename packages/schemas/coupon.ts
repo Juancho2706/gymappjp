@@ -10,10 +10,8 @@ export const COUPON_MODULE_KEYS = [
 ] as const
 
 /**
- * Tiers pagos a los que un cupón puede aplicar. Pricing v2 (specs/pricing-v2, C2): starter salió de
- * la VENTA — la EMISIÓN nueva ya no lo ofrece (este enum) y el CANJE de un cupón starter HISTÓRICO
- * se rechaza con mensaje claro en coupons.service (decisión pendiente #4 del dueño: si luego decide
- * MIGRAR esos cupones a pro en vez de rechazarlos, ese guard es el único cambio local).
+ * Tiers pagos a los que un cupón puede aplicar: pro/elite. Un cupón histórico con un scope
+ * retirado cae en el check genérico de scope (`coupons.service.ts`).
  */
 export const COUPON_TIERS = ['pro', 'elite'] as const
 

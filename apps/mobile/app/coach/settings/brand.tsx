@@ -492,7 +492,7 @@ export default function MiMarcaScreen() {
 
   // Pricing v3 (owner 2026-08-21): el white-label está en TODOS los planes — Pro se paga por cupo
   // de alumnos y por sacarse el sello «Hecho con EVA», NO por la marca. Murió el tier-gate M-F4
-  // («branding es starter+») y con él la pantalla «Marca personalizada no disponible»: el form ya
+  // («branding es de pago») y con él la pantalla «Marca personalizada no disponible»: el form ya
   // no lo gatea el tier. El caso `orgManaged` sigue igual (la marca la manda la organización).
 
   const scoreBarClass = brandScore >= 80 ? 'bg-success-500' : brandScore >= 50 ? 'bg-warning-500' : 'bg-primary'

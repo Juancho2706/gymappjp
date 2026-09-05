@@ -127,7 +127,7 @@ export async function GET(request: NextRequest) {
     // («Mi panel», perfil, loader de marca) y hasta ahora solo sabía QUE existía — por eso el
     // coach con Mi marca seguía viendo la figura EVA en su propia app. Gate FAIL-CLOSED por tier,
     // el MISMO de `mapCoachRow` en `apps/mobile/lib/coach.ts` (pricing v3: la marca es de todos
-    // los planes vendidos; solo caen el starter legacy y un tier corrupto).
+    // los planes vendidos; solo cae un tier corrupto).
     const tier = parseSubscriptionTier(coach.subscription_tier)
     const brandingAllowed = isBrandingAllowed(tier)
 

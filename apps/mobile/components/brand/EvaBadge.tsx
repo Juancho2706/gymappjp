@@ -5,7 +5,7 @@ import { EVA_BADGE_LABEL, getEvaBadgeUrl, type EvaBadgeMedium } from '../../lib/
  * Sello «Hecho con EVA» — gancho de Pro en Pricing v3 (docs/specs/pricing-v3, owner 2026-08-21).
  *
  * Desde v3 el white-label está en TODOS los planes: lo que distingue a Pro es el cupo de alumnos
- * y sacarse este sello. Free/starter lo llevan en las superficies del ALUMNO; pro/elite y los
+ * y sacarse este sello. Free lo lleva en las superficies del ALUMNO; pro/elite y los
  * legacy (growth/scale) no. El gate es `showsEvaBadge(tier)` de `@eva/tiers` — FAIL-OPEN a
  * propósito (tier corrupto ⇒ sello): ante un dato dudoso preferimos regalar atribución de EVA
  * antes que regalar el beneficio pago. Este componente NO decide: lo monta el caller que ya

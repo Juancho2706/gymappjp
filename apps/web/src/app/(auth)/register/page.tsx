@@ -245,7 +245,7 @@ export default function RegisterPage() {
         const rawTier = params.get('tier')
         const queryCycle = params.get('cycle')
         // Solo aceptamos tiers a la venta (free/pro/elite). Un link viejo con
-        // ?tier=starter/starter_lite/growth/scale (fuera de venta) degrada a 'free': ante un tier
+        // ?tier fuera de SALE_TIERS (starter/starter_lite legacy, growth/scale) degrada a 'free': ante un tier
         // que ya no existe, el default seguro es el que no cobra.
         const nextTier: SaleTier =
             rawTier && isSaleTier(rawTier)

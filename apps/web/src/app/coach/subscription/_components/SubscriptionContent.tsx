@@ -155,7 +155,7 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
     const [reason, setReason] = useState('')
     // Panel de cancelación (diseño: ghost danger al pie que revela el motivo). Conserva handleCancel.
     const [showCancelPanel, setShowCancelPanel] = useState(false)
-    // Pricing v2: starter salió de la venta — el default es Pro (el pago más económico de la lista).
+    // El default es Pro (el pago más económico de la lista).
     const [selectedTier, setSelectedTier] = useState<SubscriptionTier>('pro')
     const [selectedCycle, setSelectedCycle] = useState<BillingCycle>('monthly')
     const [events, setEvents] = useState<SubscriptionEvent[]>([])
@@ -203,7 +203,7 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                 // Pre-seleccion para la lista de venta (pricing v2: pro/elite):
                 //  - un tier de venta pago (pro/elite) se pre-selecciona a si mismo;
                 //  - un tier fuera de venta ancla al vecino de la lista: growth/scale a 'elite',
-                //    starter (grandfathered) a 'pro' — sin esto un grandfathered abriria con un
+                //    un tier legacy a 'pro' — sin esto un grandfathered abriria con un
                 //    selectedTier que ya no se renderiza y "Continuar" mandaria un tier que
                 //    create-preference rechaza (400);
                 //  - free / desconocido cae al default 'pro' (el pago mas economico de la lista).
@@ -725,7 +725,7 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
 
             {/* Cupón — código de descuento (cupones, F5) — self-gated: se oculta sin plan pago activo ni
                 free activo / flag OFF. Para el coach FREE el código se precia sobre el plan ELEGIDO abajo
-                (previewTier/previewCycle); 'free' nunca viaja (el server solo acepta starter/pro/elite). */}
+                (previewTier/previewCycle); 'free' nunca viaja (el server solo acepta pro/elite). */}
             <div className="mb-4">
                 <CouponRedeemCard
                     selectedTier={isSaleTier(selectedTier) && selectedTier !== 'free' ? selectedTier : undefined}

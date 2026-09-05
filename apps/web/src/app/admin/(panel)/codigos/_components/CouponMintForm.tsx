@@ -237,8 +237,7 @@ export function CouponMintForm({
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                    {/* Pricing v2 (C2): starter fuera de venta — la emisión nueva solo ofrece pro/elite
-                        (espejo de COUPON_TIERS en @eva/schemas; el server rechaza starter igual). */}
+                    {/* la emisión solo ofrece pro/elite (espejo de COUPON_TIERS en @eva/schemas) */}
                     {(['pro', 'elite'] as const).map((t) => (
                         <label key={t} className="flex items-center gap-1 text-xs text-body">
                             <input name="scopeTiers" type="checkbox" value={t} /> {t}

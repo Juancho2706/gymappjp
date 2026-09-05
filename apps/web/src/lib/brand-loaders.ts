@@ -6,7 +6,7 @@
  * specs/whitelabel-v2/loaders-source/). Este módulo es puro → lo consumen schema + proxy + UI.
  *
  * Decisiones CEO 2026-06-21:
- * - El DEFAULT 'eva' = el loader EVA ACTUAL (no se reemplaza). Lo ven free/starter + Pro que no eligen.
+ * - El DEFAULT 'eva' = el loader EVA ACTUAL (no se reemplaza). Lo ven free + Pro que no eligen.
  * - Las 6 variantes (progreso/anillo/radar/cometa/ritmo/orbitas) = opciones del coach Pro+.
  * - Brand-aware: color = --theme-primary del coach; fondo theme-aware; icono = logo del coach.
  */

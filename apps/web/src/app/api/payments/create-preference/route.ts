@@ -35,13 +35,11 @@ import { countActiveStandaloneClients } from '@/services/billing/capacity.servic
 import { claimUpgradeInFlight, clearUpgradeInFlight } from '@/services/billing/plan-change-lock'
 import type { BillableAddon } from '@/domain/billing/types'
 
-// El checkout solo acepta los tiers EN VENTA pagos: pro/elite. Pricing v2 (specs/pricing-v2, C2):
-// starter SALIÓ de la venta — mismo trato que growth/scale (LEGACY): queda en el union/TIER_CONFIG/
-// CHECK de DB para el histórico, pero su compra NUEVA se rechaza acá con 400 de Zod. Consecuencia
-// (igual que la D4 de growth/scale): un coach grandfathered en starter/growth/scale NO puede
-// re-checkout en su tier por esta puerta; su continuidad/cambio se gestiona vía admin o conversación
-// EVA Teams (elite). NO reintroducir starter/growth/scale aquí. El guard de ciclo
-// (isBillingCycleAllowedForTier) y el monto (getTierPriceClp) mantienen su firma.
+// El checkout solo acepta los tiers EN VENTA pagos: pro/elite. growth/scale son LEGACY: quedan en
+// el union/TIER_CONFIG/CHECK pero no se compran. NO reintroducirlos acá. Consecuencia (igual que la
+// D4 de growth/scale): un coach grandfathered en growth/scale NO puede re-checkout en su tier por
+// esta puerta; su continuidad/cambio se gestiona vía admin o conversación EVA Teams (elite). El
+// guard de ciclo (isBillingCycleAllowedForTier) y el monto (getTierPriceClp) mantienen su firma.
 const schema = z.object({
     tier: z.enum(['pro', 'elite']),
     billingCycle: z.enum(['monthly', 'quarterly', 'annual']),
@@ -154,7 +152,7 @@ export async function POST(request: Request) {
         // Add-ons solicitados (signup/supersede). Dedup + filtro contra MODULE_KEYS (defensa extra
         // sobre el Zod). D8: coherencia contra el tier SOLICITADO del body — NO confiar en que la UI
         // del registro lo filtró. Tier sin nutrición + nutrition_exchanges → 400 (cobrar algo
-        // inusable). Pricing v2: con starter fuera del enum, pro/elite siempre tienen nutrición —
+        // inusable). pro/elite siempre tienen nutrición —
         // el 400 queda como DEFENSA por si el catálogo vuelve a diferenciarse.
         //
         // FAIL-CLOSED del switch de lanzamiento: con SELF_SERVICE_ADDONS_ENABLED OFF, se IGNORAN los

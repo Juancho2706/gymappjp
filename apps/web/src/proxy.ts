@@ -1146,7 +1146,7 @@ async function proxyInner(request: NextRequest) {
         // White-label: desde Pricing v3 (owner 2026-08-21) el branding VISUAL es de TODOS los
         // planes — free incluido —, así que color/logo/loader/accent/font viajan para cualquier
         // tier que pase `isBrandingAllowed`. Ese helper queda como red FAIL-CLOSED: solo un tier
-        // inválido/stale (o el starter legacy, fuera de venta) cae al skin EVA del `else`.
+        // inválido/stale cae al skin EVA del `else`.
         // Lo que separa a free de Pro NO es la marca sino el sello «Hecho con EVA» del alumno
         // (`showsEvaBadge`), que se resuelve aguas abajo con `x-coach-subscription-tier`.
         // Identidad (id/slug/brand-name/tier) viaja SIEMPRE.
@@ -1180,7 +1180,7 @@ async function proxyInner(request: NextRequest) {
                 // Loader compuesto (jsonb) — el layout lo valida/sanitiza antes de emitirlo como CSS var.
                 h.set('x-coach-loader-config', coach.loader_config ? encodeBrandHeaderValue(JSON.stringify(coach.loader_config)) : '')
             } else {
-                // Sin branding permitido (tier inválido/stale o starter legacy) → TODO EVA system
+                // Sin branding permitido (tier inválido/stale) → TODO EVA system
                 // (visual). El nombre del coach se conserva (identidad).
                 h.set('x-coach-primary-color', BRAND_PRIMARY_COLOR)
                 h.set('x-coach-logo-url', BRAND_APP_ICON)

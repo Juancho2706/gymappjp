@@ -174,7 +174,7 @@ export function CoachCreateSheet({ open, onClose }: Props) {
                             </div>
                             <div>
                                 <Label className="text-body text-xs">Plan</Label>
-                                {/* Pricing v3: el default es 'free' — 'starter' salió de venta en v2 y
+                                {/* Pricing v3: el default es 'free' y las opciones salen de SALE_TIERS;
                                     ni siquiera está en `SALE_TIERS` (las opciones de abajo), así que el
                                     default viejo daba de alta coaches en un tier LEGACY (10 alumnos,
                                     $19.990) sin que el admin lo eligiera. `createCoachAction` no re-mapea:

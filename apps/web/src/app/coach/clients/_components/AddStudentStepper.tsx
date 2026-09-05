@@ -68,7 +68,7 @@ export interface AddStudentBrand {
     name: string
     logoUrl: string | null
     primaryColor: string
-    /** Free y Starter llevan el sello «Hecho con EVA» en las superficies del alumno (pricing v3). */
+    /** Free lleva el sello «Hecho con EVA» en las superficies del alumno (pricing v3). */
     showsEvaBadge: boolean
 }
 

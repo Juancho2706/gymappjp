@@ -136,7 +136,7 @@ export function resolvePdfBrand(source: TenantBrandSource | null | undefined): P
 /**
  * Headers del proxy (`/c`, `/t`, `/e`) → marca del PDF del ALUMNO.
  * Misma regla del layout (`app/c/[coach_slug]/layout.tsx`): marca propia en todos los planes,
- * sello «Hecho con EVA» en free/starter y color EFECTIVO (W1a).
+ * sello «Hecho con EVA» en free y color EFECTIVO (W1a).
  *
  * El color NO sale del header crudo: `x-coach-primary-color` lleva la columna libre LEGACY
  * `coaches.primary_color`, así que un coach con tema preset se llevaba el PDF en su color viejo

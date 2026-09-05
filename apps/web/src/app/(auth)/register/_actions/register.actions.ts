@@ -53,7 +53,7 @@ function reject(code: string, error: string): RegisterState {
     return { error, code }
 }
 
-// Solo se vende free/starter/pro/elite. growth/scale fuera de venta (grandfathered, plan 04).
+// Solo se vende free/pro/elite. growth/scale fuera de venta (grandfathered, plan 04).
 const VALID_TIERS = SALE_TIERS
 const VALID_CYCLES: BillingCycle[] = ['monthly', 'quarterly', 'annual']
 

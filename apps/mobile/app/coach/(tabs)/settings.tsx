@@ -315,7 +315,7 @@ export default function CoachSettingsHubScreen() {
   const tier = profile?.subscriptionTier ?? 'free'
   // Pricing v3 (owner 2026-08-21): el white-label está en todos los planes VENDIDOS, así que este
   // flag ya NO gatea el hero. Sobrevive solo para el badge de la fila «Mi Marca»: el único tier
-  // que sigue sin marca propia es `starter` (fuera de venta, histórico grandfathered).
+  // sin marca propia no existe hoy: el flag queda como fail-closed de tier corrupto.
   const brandingOk = canUseBranding(tier)
   const displayName = profile?.brandName?.trim() || profile?.fullName?.trim() || 'Coach'
   // QA2-B2: el hero pinta el LOGO de la marca cuando existe (`coaches.logo_url`, la misma

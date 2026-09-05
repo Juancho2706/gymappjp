@@ -49,7 +49,7 @@ function tierRank(tier: string): number {
 /**
  * ¿Qué cambió entre dos fotos del plan?
  *
- * - `tier_up`: el tier subió en la escalera (free/starter → pro/elite es el caso real de venta).
+ * - `tier_up`: el tier subió en la escalera (free → pro/elite es el caso real de venta).
  * - `cap_up`: mismo tier (o tier desconocido) pero `max_clients` creció — el grandfather de
  *   Pricing v3 mueve la columna sin tocar el tier, y eso también merece celebrarse.
  * - `none`: todo lo demás, incluidas las bajadas.

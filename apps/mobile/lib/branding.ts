@@ -21,8 +21,8 @@ export interface CoachBranding {
   /**
    * Tier de suscripcion. Dos usos, ambos con la MISMA fuente (`@eva/tiers`):
    *  - `isBrandingAllowed` — gate de marca. Pricing v3 (owner 2026-08-21): el white-label esta en
-   *    todos los planes vendidos, asi que hoy solo cae a EVA un tier invalido o el legacy starter.
-   *  - `showsEvaBadge` — sello «Hecho con EVA» en las superficies del ALUMNO (free/starter si,
+   *    todos los planes vendidos, asi que hoy solo cae a EVA un tier invalido.
+   *  - `showsEvaBadge` — sello «Hecho con EVA» en las superficies del ALUMNO (free si,
    *    pro/elite no). Pro = cupo + sin sello.
    */
   subscriptionTier?: string | null

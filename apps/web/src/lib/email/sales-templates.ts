@@ -41,14 +41,14 @@ function escHtml(s: string): string {
 
 export type ClientLimitReachedContext = {
     coachName: string
-    /** Etiqueta del tier (`TIER_LABELS`): 'Gratis' | 'Starter' | 'Pro' | … */
+    /** Etiqueta del tier (`TIER_LABELS`): 'Gratis' | 'Pro' | 'Elite' */
     tierLabel: string
     /** Cupo de alumnos activos del plan vigente. */
     currentLimit: number
     subscriptionUrl: string
     /**
      * Tier de venta recomendado como próximo paso (pricing v2, D3: el upsell apunta a Pro — nunca a
-     * starter, que salió de la venta). 'Pro' para free/starter, 'Elite' para pro; null (elite o
+     * 'Pro' para free, 'Elite' para pro; null (elite o
      * legacy sin techo de venta mayor) mantiene el copy genérico. Sin números de cupo a propósito:
      * el límite concreto depende del grandfather de cada coach y se ve en /coach/subscription.
      */

@@ -76,7 +76,7 @@ export interface NutritionExportBrand {
   /**
    * Sello «Hecho con EVA» en el pie del PDF (Pricing v3, D3=A, owner 2026-08-21). NO es lo
    * contrario de `poweredByEva`: desde v3 un free tiene su MARCA PROPIA en el PDF *y* el sello.
-   * Gate único: `showsEvaBadge(tier)` de @eva/tiers (free/starter sí, pro/elite no), FAIL-OPEN.
+   * Gate único: `showsEvaBadge(tier)` de @eva/tiers (free sí, pro/elite no), FAIL-OPEN.
    */
   showsEvaBadge: boolean
 }
@@ -112,7 +112,7 @@ function darken(rgb: Rgb, factor: number): Rgb {
  * Pricing v3 (owner 2026-08-21): el white-label está en todos los planes vendidos, así que un FREE
  * exporta con SU marca. Lo que lo separa de Pro es el sello «Hecho con EVA» del pie
  * (`showsEvaBadge`, FAIL-OPEN). `isBrandingAllowed` no se borra: sigue mandando a EVA al tier
- * inválido y al legacy starter.
+ * inválido.
  */
 export function resolveNutritionExportBrand(source: NutritionExportBrandSource | null | undefined): NutritionExportBrand {
   if (!source) return EVA_EXPORT_BRAND

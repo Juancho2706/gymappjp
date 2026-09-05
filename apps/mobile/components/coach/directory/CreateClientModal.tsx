@@ -656,7 +656,7 @@ export function CreateClientModal({
   const brandColor = branding?.primaryColor?.trim() || theme.primary
   const brandName = branding?.displayName?.trim() || ''
   const brandLogo = (theme.scheme === 'dark' ? branding?.logoUrlDark : null) || branding?.logoUrl || null
-  // Sello «Hecho con EVA»: mismo gate FAIL-OPEN que las superficies del alumno (free/starter sí).
+  // Sello «Hecho con EVA»: mismo gate FAIL-OPEN que las superficies del alumno (free sí).
   // El tier del branding llega como `string | null` del servidor ⇒ pasa por la guarda de tipo
   // (`isSubscriptionTier`) en vez de un `as`: un valor desconocido cae a `free` y el sello se
   // pinta, que es el lado seguro (regalar atribución antes que regalar el beneficio pago).

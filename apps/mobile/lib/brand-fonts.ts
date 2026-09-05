@@ -113,7 +113,7 @@ export function isFontKey(value: string | null | undefined): value is FontKey {
 /**
  * Resuelve la key de fuente EFECTIVA para el branding almacenado — espejo exacto del gate
  * del layout web /c (apps/web/src/app/c/[coach_slug]/layout.tsx:146-166,194):
- * 1. tier sin marca (`isBrandingAllowed` false ⇒ tier inválido o el legacy starter) ⇒ sin fuente
+ * 1. tier sin marca (`isBrandingAllowed` false ⇒ tier inválido) ⇒ sin fuente
  *    custom (web: `fontKey = ''`). Pricing v3 (owner 2026-08-21): el white-label está en todos los
  *    planes vendidos, así que un free SÍ resuelve su fuente de marca; el gate queda como
  *    fail-closed para tiers corruptos/cachés viejas.

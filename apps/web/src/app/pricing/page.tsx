@@ -62,7 +62,7 @@ function buildStructuredData() {
     const pricingUrl = new URL('/pricing', base).href
 
     // Pricing v2: el JSON-LD se regenera SOLO desde el catálogo de venta (SALE_TIERS =
-    // free/pro/elite) — starter fuera de venta ya no se emite como Offer.
+    // free/pro/elite) — solo los tiers de `SALE_TIERS` se emiten como Offer.
     const offerTiers: readonly SubscriptionTier[] = SALE_TIERS
     const registerUrl = (tier: SubscriptionTier) =>
         tier === 'free'
@@ -166,8 +166,6 @@ const planDisplay: Array<{
         bg: 'bg-amber-500/10',
         border: 'border-amber-500/20',
     },
-    // Pricing v2 — starter FUERA de venta (patrón growth/scale: sigue en union/TIER_CONFIG/CHECK
-    // para el histórico, pero no se vende). NO re-agregar aquí.
     // LEGACY — growth/scale fuera de venta (grandfathered + placeholder team/org_managed). Recortados de planDisplay; runtime/DB/admin intactos. NO re-agregar aquí.
 ]
 
@@ -225,8 +223,7 @@ export default function PricingPage() {
                 </p>
             </div>
 
-            {/* Planes — pricing v2: una sola parrilla de 3 planes (Free/Pro/Elite) + card Teams.
-                El agrupado viejo (starter+pro) murió con starter fuera de venta. */}
+            {/* Planes — pricing v2: una sola parrilla de 3 planes (Free/Pro/Elite) + card Teams. */}
             <div className="px-6 pb-20 max-w-6xl mx-auto">
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
                     {planDisplay.map((plan) => (

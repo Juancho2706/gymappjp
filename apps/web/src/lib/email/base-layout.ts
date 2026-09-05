@@ -10,7 +10,7 @@
  * footer se mantiene discreto. Sin `brand` (emails al COACH, team/org, fallback) → EVA.
  *
  * Pricing v3 (owner 2026-08-21): el white-label del email es de TODOS los planes; lo que
- * distingue a free/starter es `brand.showsEvaBadge` ⇒ el sello «Hecho con EVA» en el footer.
+ * distingue a free es `brand.showsEvaBadge` ⇒ el sello «Hecho con EVA» en el footer.
  */
 import { deriveSportTokens } from '@eva/brand-kit'
 import { EVA_BADGE_LABEL, getEvaBadgeUrl } from '@eva/tiers'
@@ -94,7 +94,7 @@ export function wrapEmailLayout(body: string, opts: BaseEmailOptions = {}): stri
         : `Enviado por <strong>EVA Fitness Platform</strong>. Si no esperabas este correo, puedes ignorarlo.`
 
     // Sello «Hecho con EVA» (Pricing v3, D3=A): línea propia ANTES del remitente, sobre el footer
-    // gris neutro (nunca sobre el color de marca). Solo free/starter standalone.
+    // gris neutro (nunca sobre el color de marca). Solo free standalone.
     const evaBadgeLine = brand?.showsEvaBadge
         ? `<p style="margin:0 0 4px;"><a href="${getEvaBadgeUrl('student_email')}" target="_blank" style="color:${accent};text-decoration:none;font-size:12px;">${EVA_BADGE_LABEL}</a></p>`
         : ''

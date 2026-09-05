@@ -31,7 +31,7 @@ const FRAME: Record<CoachBrandAvatarSize, { box: string; sizes: string; pad: str
     lg: { box: 'size-14', sizes: '56px', pad: 'p-2' },
 }
 
-/** Fallback de identidad EVA para un coach sin white-label visible (Free/Starter). */
+/** Fallback de identidad EVA para un coach sin white-label visible (tier sin marca). */
 export function EvaBrandFallback({
     size = 'sm',
     className,
