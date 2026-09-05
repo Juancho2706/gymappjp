@@ -297,6 +297,8 @@ export type AdminClientsEstado = 'activo' | 'inactivo' | 'archivado'
 export type AdminClientsOnboarding = 'completo' | 'pendiente'
 
 /**
+ * Los alumnos de prueba (`is_demo = true`) NO se listan ni entran en `total` (pedido del owner
+ * 05-09): viajan aparte en `demoTotal` solo como dato informativo.
  * Los filtros de estado/onboarding viajan a PostgREST (no se filtra en cliente):
  * de otro modo solo recortarian los 50 de la pagina visible y `total`/paginacion
  * mentirian sobre el universo real (misma clase de bug que ROTO-4 con `q`).
@@ -308,12 +310,12 @@ export async function getAllClients(
     pageSize = 50,
     estado?: AdminClientsEstado,
     onboarding?: AdminClientsOnboarding
-): Promise<{ clients: ClientListItem[]; total: number }> {
+): Promise<{ clients: ClientListItem[]; total: number; demoTotal: number }> {
     noStore()
     const admin = createServiceRoleClient()
     const offset = (page - 1) * pageSize
 
-    const { clients: data, total } = await findAdminClientsForDashboard(admin, {
+    const { clients: data, total, demoTotal } = await findAdminClientsForDashboard(admin, {
         search,
         coachId,
         estado,
@@ -334,5 +336,5 @@ export async function getAllClients(
         onboarding_completed: c.onboarding_completed,
     }))
 
-    return { clients, total }
+    return { clients, total, demoTotal }
 }

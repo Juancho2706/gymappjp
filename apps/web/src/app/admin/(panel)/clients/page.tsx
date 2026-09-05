@@ -34,7 +34,7 @@ const CLIENTS_INFO = [
     },
     {
         heading: 'Fuente de datos',
-        body: 'Tabla clients en Supabase con JOIN a coaches para mostrar el nombre del coach. Sin cache — siempre muestra datos actuales. Paginación de 50 alumnos por página.',
+        body: 'Tabla clients en Supabase con JOIN a coaches para mostrar el nombre del coach. Sin cache — siempre muestra datos actuales. Paginación de 50 alumnos por página. Los alumnos de prueba/demo (is_demo) NO se listan ni se cuentan: aparecen solo como "(+N de prueba)" junto al total, con los mismos filtros aplicados.',
     },
 ]
 
@@ -55,7 +55,7 @@ export default async function AdminClientsPage({
     const estado = ESTADO_VALUES.find(v => v === params.estado)
     const onboarding = ONBOARDING_VALUES.find(v => v === params.onboarding)
 
-    const [{ clients, total }, coaches] = await Promise.all([
+    const [{ clients, total, demoTotal }, coaches] = await Promise.all([
         getAllClients(params.q, params.coachId, page, 50, estado, onboarding),
         getAllCoachesBasic(),
     ])
@@ -67,6 +67,7 @@ export default async function AdminClientsPage({
                     <h1 className="text-2xl font-bold tracking-tight text-strong">Clientes</h1>
                     <p className="text-xs text-muted">
                         {total} alumno{total !== 1 ? 's' : ''} registrado{total !== 1 ? 's' : ''} en la plataforma.
+                        {demoTotal > 0 ? ` (+${demoTotal} de prueba, no cuentan)` : ''}
                     </p>
                 </div>
                 <PageInfoButton title="Clientes — Guía completa" sections={CLIENTS_INFO} />

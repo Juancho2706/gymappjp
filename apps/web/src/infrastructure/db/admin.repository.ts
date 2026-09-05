@@ -155,6 +155,59 @@ export async function findAdminClientsPaginated(
 export type AdminClientEstadoFilter = 'activo' | 'inactivo' | 'archivado'
 export type AdminClientOnboardingFilter = 'completo' | 'pendiente'
 
+/**
+ * Filtros compartidos entre el listado de alumnos del panel y el conteo de demos:
+ * si divergen, el chip «(+N de prueba)» dejaria de describir el mismo universo que la tabla.
+ * El tipo es estructural a proposito — los builders de PostgREST devuelven `this`.
+ */
+type AdminClientsFilterable<Q> = {
+    or(filters: string): Q
+    eq(column: string, value: unknown): Q
+    is(column: string, value: unknown): Q
+    not(column: string, operator: string, value: unknown): Q
+}
+
+function applyAdminClientFilters<Q extends AdminClientsFilterable<Q>>(
+    query: Q,
+    params: {
+        search?: string
+        coachId?: string
+        estado?: AdminClientEstadoFilter
+        onboarding?: AdminClientOnboardingFilter
+    }
+): Q {
+    let q = query
+    if (params.search) {
+        q = q.or(`full_name.ilike.%${params.search}%,email.ilike.%${params.search}%`)
+    }
+    if (params.coachId) {
+        q = q.eq('coach_id', params.coachId)
+    }
+    // Estado: archivado es el corte duro (is_archived gana). is_active es NULLABLE y la UI
+    // pinta NULL como "Activo" (is_active !== false) — por eso activo usa `not.is.false`
+    // en vez de `eq(true)`: con eq(true) los alumnos sin flag desaparecian del filtro.
+    if (params.estado === 'archivado') {
+        q = q.eq('is_archived', true)
+    } else if (params.estado === 'activo') {
+        q = q.eq('is_archived', false).not('is_active', 'is', false)
+    } else if (params.estado === 'inactivo') {
+        q = q.eq('is_archived', false).is('is_active', false)
+    }
+    if (params.onboarding === 'completo') {
+        q = q.eq('onboarding_completed', true)
+    } else if (params.onboarding === 'pendiente') {
+        q = q.eq('onboarding_completed', false)
+    }
+    return q
+}
+
+/**
+ * Pedido del owner 05-09: «los alumnos de prueba no deben contar como alumnos en la seccion
+ * alumnos del CEO panel». Los demo (`clients.is_demo = true`, sembrados por onboarding) quedan
+ * FUERA del listado y de `total`; se devuelven aparte en `demoTotal` para el chip informativo.
+ * Es la misma regla que ya aplican la RPC `get_admin_coaches_paginated` (client_count sin demos)
+ * y `get_platform_clients_count`.
+ */
 export async function findAdminClientsForDashboard(
     db: DB,
     params: {
@@ -165,38 +218,29 @@ export async function findAdminClientsForDashboard(
         pageSize: number
         offset: number
     }
-): Promise<{ clients: AdminDashboardClientRow[]; total: number }> {
-    let query = db
-        .from('clients')
-        .select('id, full_name, email, coach_id, is_active, is_archived, created_at, onboarding_completed, coaches(full_name)', { count: 'exact' })
-        .order('created_at', { ascending: false })
+): Promise<{ clients: AdminDashboardClientRow[]; total: number; demoTotal: number }> {
+    const listQuery = applyAdminClientFilters(
+        db
+            .from('clients')
+            .select('id, full_name, email, coach_id, is_active, is_archived, created_at, onboarding_completed, coaches(full_name)', { count: 'exact' })
+            .eq('is_demo', false)
+            .order('created_at', { ascending: false }),
+        params
+    )
+    const demoCountQuery = applyAdminClientFilters(
+        db.from('clients').select('id', { count: 'exact', head: true }).eq('is_demo', true),
+        params
+    )
 
-    if (params.search) {
-        query = query.or(`full_name.ilike.%${params.search}%,email.ilike.%${params.search}%`)
-    }
-    if (params.coachId) {
-        query = query.eq('coach_id', params.coachId)
-    }
-    // Estado: archivado es el corte duro (is_archived gana). is_active es NULLABLE y la UI
-    // pinta NULL como "Activo" (is_active !== false) — por eso activo usa `not.is.false`
-    // en vez de `eq(true)`: con eq(true) los alumnos sin flag desaparecian del filtro.
-    if (params.estado === 'archivado') {
-        query = query.eq('is_archived', true)
-    } else if (params.estado === 'activo') {
-        query = query.eq('is_archived', false).not('is_active', 'is', false)
-    } else if (params.estado === 'inactivo') {
-        query = query.eq('is_archived', false).is('is_active', false)
-    }
-    if (params.onboarding === 'completo') {
-        query = query.eq('onboarding_completed', true)
-    } else if (params.onboarding === 'pendiente') {
-        query = query.eq('onboarding_completed', false)
-    }
+    const [listRes, demoRes] = await Promise.all([
+        listQuery.range(params.offset, params.offset + params.pageSize - 1),
+        demoCountQuery,
+    ])
 
-    const { data, error, count } = await query.range(params.offset, params.offset + params.pageSize - 1)
-    if (error || !data) return { clients: [], total: 0 }
+    const demoTotal = demoRes.error ? 0 : demoRes.count ?? 0
+    if (listRes.error || !listRes.data) return { clients: [], total: 0, demoTotal }
 
-    return { clients: data as unknown as AdminDashboardClientRow[], total: count ?? 0 }
+    return { clients: listRes.data as unknown as AdminDashboardClientRow[], total: listRes.count ?? 0, demoTotal }
 }
 
 export async function findAdminAuditLogs(db: DB, limit = 50): Promise<AdminAuditLogRow[]> {
