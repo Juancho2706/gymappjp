@@ -1,4 +1,5 @@
 import { createServerClient } from '@supabase/ssr'
+import { dropCorruptAuthCookies } from '@/lib/supabase/auth-cookies'
 import { createClient as createBareClient, isAuthApiError, type SupabaseClient } from '@supabase/supabase-js'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { NextResponse, after, type NextRequest } from 'next/server'
@@ -297,7 +298,8 @@ async function proxyInner(request: NextRequest) {
         {
             cookies: {
                 getAll() {
-                    return request.cookies.getAll()
+                    // Incidente 04-09: una cookie de sesión corrupta hacía que auth-js logueara la sesión entera.
+                    return dropCorruptAuthCookies(request.cookies.getAll())
                 },
                 setAll(cookiesToSet) {
                     cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))

@@ -1,4 +1,5 @@
 import { createServerClient } from '@supabase/ssr'
+import { dropCorruptAuthCookies } from './auth-cookies'
 import { cookies } from 'next/headers'
 import type { Database } from '@/lib/database.types'
 
@@ -19,7 +20,7 @@ export async function createClient() {
         {
             cookies: {
                 getAll() {
-                    return cookieStore.getAll()
+                    return dropCorruptAuthCookies(cookieStore.getAll())
                 },
                 setAll(cookiesToSet) {
                     try {

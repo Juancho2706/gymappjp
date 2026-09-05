@@ -26,12 +26,25 @@ import { rotatePasswordOnGoogleLink } from '@/lib/auth/google-link-rotation'
  * parámetros — el id sale de la cookie, nunca del cuerpo.
  */
 export async function POST() {
-    const supabase = await createClient()
-    const {
-        data: { user },
-    } = await supabase.auth.getUser()
+    // El corte REAL de la fuga del 04-09 vive en `lib/supabase/server.ts` (la cookie corrupta ni
+    // siquiera llega a supabase-js). Esto es el cinturón: si alguna vez la librería RELANZARA en vez
+    // de tragarse el error, su `message` trae la sesión entera (access_token, refresh_token, email).
+    // Por eso acá NO se loguea el error, ni su `message`, ni el objeto: SOLO el nombre de la clase.
+    let userId: string | null = null
+    try {
+        const supabase = await createClient()
+        const {
+            data: { user },
+        } = await supabase.auth.getUser()
+        userId = user?.id ?? null
+    } catch (err) {
+        console.error('[auth.google-link] sesion ilegible, se responde 401', {
+            error: err instanceof Error ? err.name : 'Unknown',
+        })
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-    if (!user?.id) {
+    if (!userId) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
@@ -40,7 +53,7 @@ export async function POST() {
     // identidades, se rota igual: la cuenta de auth es lo que hay que proteger.
     await rotatePasswordOnGoogleLink({
         admin: createServiceRoleClient(),
-        userId: user.id,
+        userId,
         verification: { source: 'lookup' },
         context: 'post_google_auth',
     })
