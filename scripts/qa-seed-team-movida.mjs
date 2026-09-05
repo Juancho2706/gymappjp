@@ -271,7 +271,7 @@ async function up() {
         slug: coachSlug(c.key),
         invite_code: coachInvite(c.key),
         subscription_status: 'team_managed', // fuera de billing standalone
-        subscription_tier: 'starter',
+        subscription_tier: 'scale',
       },
       { onConflict: 'id' }
     )
