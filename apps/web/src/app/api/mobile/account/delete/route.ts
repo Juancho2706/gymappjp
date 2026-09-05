@@ -252,6 +252,34 @@ export async function POST(request: NextRequest) {
         return errorResponse(500, 'ACCOUNT_DELETE_FAILED', 'No se pudo eliminar la cuenta. Intenta de nuevo.')
     }
 
+    // T9 (`specs/account-deletion/TASKS.md`) — REVOCACION INMEDIATA de las sesiones vivas.
+    // El ban corta login y refresh, pero un access token YA EMITIDO sigue siendo valido por firma
+    // hasta que expira (~1 h): sin esto, durante esa hora la cuenta "eliminada" sigue leyendo y
+    // escribiendo, desde este dispositivo y desde cualquier otro con sesion abierta.
+    // POR QUE `signOut(jwt, 'global')` Y NO una revocacion por userId: supabase-js 2.101.1 (raiz
+    // `package.json:57`) no expone ninguna — `GoTrueAdminApi` solo tiene
+    // `signOut(jwt: string, scope?: SignOutScope)` (`@supabase/auth-js/dist/module/GoTrueAdminApi.d.ts:46`).
+    // El `jwt` es el bearer del request, que ya se verifico contra GoTrue arriba; el scope `'global'`
+    // mata TODAS las sesiones del usuario, no solo esta.
+    // BEST-EFFORT, igual que el billing y los correos: el ban ya cerro la cuenta, un fallo de GoTrue
+    // acá solo deja viva la ventana del token y viaja como warning para que soporte lo persiga.
+    try {
+        const { error: signOutError } = await admin.auth.admin.signOut(token, 'global')
+        if (signOutError) {
+            warnings.push('SESSION_REVOKE_FAILED')
+            console.error('[mobile.account.delete] no se pudieron revocar las sesiones', {
+                userId: user.id,
+                message: signOutError.message,
+            })
+        }
+    } catch (err) {
+        warnings.push('SESSION_REVOKE_FAILED')
+        console.error('[mobile.account.delete] session revoke threw', {
+            userId: user.id,
+            message: err instanceof Error ? err.message : String(err),
+        })
+    }
+
     // Traza durable del pedido sin migracion (mismo patron que `activateFreePlanForCoach`).
     // Best-effort: la cuenta ya quedo deshabilitada, un fallo de auditoria no revierte nada.
     const auditRow: TablesInsert<'admin_audit_logs'> = {

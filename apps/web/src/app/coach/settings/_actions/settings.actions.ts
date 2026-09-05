@@ -494,7 +494,28 @@ export async function deleteCoachAccountAction(
         })
     }
 
-    // 7. Delete auth user — CASCADE will delete coaches row via FK
+    // 7. Revocar TODAS las sesiones vivas ANTES de borrar (T9 de `specs/account-deletion/TASKS.md`).
+    // El paso 8 saca al usuario de GoTrue, pero un access token YA EMITIDO sigue validando por FIRMA
+    // en PostgREST hasta que expira (~1 h): sin esto queda una ventana en la que el token de una
+    // cuenta borrada todavia entra. `signOut(jwt, 'global')` mata todas las sesiones del usuario —
+    // supabase-js 2.101.1 no expone revocacion por userId, `GoTrueAdminApi.signOut(jwt, scope)` es la
+    // unica via. El jwt sale de la cookie de ESTA sesion (nunca del cliente).
+    // VA ACA y no antes: el paso 5 (borrado del logo) usa el cliente del usuario y con la sesion ya
+    // revocada fallaria. BEST-EFFORT: Ley 21.719 manda que la baja se complete igual, asi que ni un
+    // fallo de GoTrue ni un `getSession` vacio pueden abortar el borrado.
+    try {
+        const { data: { session } } = await supabase.auth.getSession()
+        if (session?.access_token) {
+            await adminDb.auth.admin.signOut(session.access_token, 'global')
+        }
+    } catch (err) {
+        console.warn('[deleteAccount] no se pudieron revocar las sesiones activas', {
+            coachId,
+            message: err instanceof Error ? err.message : String(err),
+        })
+    }
+
+    // 8. Delete auth user — CASCADE will delete coaches row via FK
     const { error: authError } = await adminDb.auth.admin.deleteUser(coachId)
     if (authError) {
         console.error('[deleteAccount] failed to delete auth user:', authError)

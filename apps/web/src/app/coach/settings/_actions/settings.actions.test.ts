@@ -159,13 +159,21 @@ function deleteSetup(options: { cancelRejects?: boolean; purgeError?: string } =
             Promise.resolve({ data: [], error: null }).then(resolve, reject),
     }
 
+    const signOut = vi.fn(async () => {
+        order.push('signOut')
+        return { data: null, error: null }
+    })
+
     const adminDb = {
-        auth: { admin: { deleteUser } },
+        auth: { admin: { deleteUser, signOut } },
         from: vi.fn(() => ({ select: vi.fn(() => ({ eq: vi.fn(() => eqResult) })) })),
     }
 
     const supabase = {
-        auth: { getUser: vi.fn(async () => ({ data: { user: { id: COACH_ID } } })) },
+        auth: {
+            getUser: vi.fn(async () => ({ data: { user: { id: COACH_ID } } })),
+            getSession: vi.fn(async () => ({ data: { session: { access_token: 'jwt-de-la-cookie' } } })),
+        },
         storage: { from: vi.fn(() => ({ remove: vi.fn(async () => ({ error: null })) })) },
     }
 
@@ -181,7 +189,7 @@ function deleteSetup(options: { cancelRejects?: boolean; purgeError?: string } =
         return options.purgeError ? { error: options.purgeError, table: 'foods' } : {}
     })
 
-    return { adminDb, deleteUser, order }
+    return { adminDb, deleteUser, signOut, order }
 }
 
 describe('deleteCoachAccountAction — correos agendados (B7)', () => {
@@ -198,7 +206,31 @@ describe('deleteCoachAccountAction — correos agendados (B7)', () => {
         // `'*'`, no las keys del drip: se va la cuenta entera.
         expect(cancelCoachEmailsMock).toHaveBeenCalledWith(adminDb, COACH_ID, '*')
         // El orden ES el arreglo: al revés la cascada ya borró el ledger.
-        expect(order).toEqual(['purgeCoachOwnedRows', 'cancelCoachEmails', 'deleteUser'])
+        expect(order).toEqual(['purgeCoachOwnedRows', 'cancelCoachEmails', 'signOut', 'deleteUser'])
+    })
+
+    /**
+     * T9 de `specs/account-deletion`: `deleteUser` saca al usuario de GoTrue, pero un access token ya
+     * emitido sigue validando por firma en PostgREST hasta que expira (~1 h). La revocación global
+     * cierra esa ventana; y como la baja no puede quedar rehén de GoTrue (Ley 21.719), si falla el
+     * borrado sigue.
+     */
+    it('revoca TODAS las sesiones con el jwt de la cookie, justo antes del deleteUser', async () => {
+        const { signOut, order } = deleteSetup()
+
+        await deleteCoachAccountAction('ELIMINAR')
+
+        expect(signOut).toHaveBeenCalledWith('jwt-de-la-cookie', 'global')
+        expect(order.indexOf('signOut')).toBeLessThan(order.indexOf('deleteUser'))
+    })
+
+    it('si la revocación falla, la cuenta se borra igual', async () => {
+        const { signOut, deleteUser } = deleteSetup()
+        signOut.mockRejectedValueOnce(new Error('gotrue 503'))
+
+        await deleteCoachAccountAction('ELIMINAR')
+
+        expect(deleteUser).toHaveBeenCalledTimes(1)
     })
 
     it('si la cancelación falla, la cuenta se borra igual', async () => {

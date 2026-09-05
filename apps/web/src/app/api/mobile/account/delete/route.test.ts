@@ -27,6 +27,8 @@ const harness = vi.hoisted(() => {
         /** Quedan agendados que no se pudieron cancelar. */
         cancelFailed: 0,
         banError: null as { message: string } | null,
+        /** T9: GoTrue no pudo revocar las sesiones. */
+        signOutError: null as { message: string } | null,
     }
     /** Orden real de efectos: sirve para probar que la cancelación va ANTES del ban. */
     const order: string[] = []
@@ -42,12 +44,17 @@ const harness = vi.hoisted(() => {
         return { error: state.banError }
     })
 
+    const signOutMock = vi.fn(async () => {
+        order.push('signOut')
+        return { data: null, error: state.signOutError }
+    })
+
     const inserts: { table: string; row: Record<string, unknown> }[] = []
 
     const adminStub = {
         auth: {
             getUser: vi.fn(async () => ({ data: { user: { id: COACH_ID } }, error: null })),
-            admin: { updateUserById: updateUserByIdMock },
+            admin: { updateUserById: updateUserByIdMock, signOut: signOutMock },
         },
         from: (table: string) => ({
             select: () => ({
@@ -66,7 +73,7 @@ const harness = vi.hoisted(() => {
         }),
     }
 
-    return { state, order, inserts, cancelCoachEmailsMock, updateUserByIdMock, adminStub }
+    return { state, order, inserts, cancelCoachEmailsMock, updateUserByIdMock, signOutMock, adminStub }
 })
 
 vi.mock('@/lib/supabase/admin-client', () => ({
@@ -118,6 +125,7 @@ describe('POST /api/mobile/account/delete — correos agendados', () => {
         harness.state.cancelThrows = false
         harness.state.cancelFailed = 0
         harness.state.banError = null
+        harness.state.signOutError = null
     })
 
     it('cancela TODO lo agendado del coach y lo hace antes del ban', async () => {
@@ -129,7 +137,7 @@ describe('POST /api/mobile/account/delete — correos agendados', () => {
         // `'*'` y no las keys del drip: se va la cuenta entera, no una serie.
         expect(harness.cancelCoachEmailsMock).toHaveBeenCalledTimes(1)
         expect(harness.cancelCoachEmailsMock).toHaveBeenCalledWith(harness.adminStub, COACH_ID, '*')
-        expect(harness.order).toEqual(['cancelCoachEmails', 'ban'])
+        expect(harness.order).toEqual(['cancelCoachEmails', 'ban', 'signOut'])
     })
 
     it('si la cancelación explota, la cuenta se da de baja igual (con warning)', async () => {
@@ -160,5 +168,64 @@ describe('POST /api/mobile/account/delete — correos agendados', () => {
         expect(res.status).toBe(200)
         expect(harness.cancelCoachEmailsMock).not.toHaveBeenCalled()
         expect(harness.updateUserByIdMock).toHaveBeenCalledTimes(1)
+    })
+})
+
+/**
+ * T9 de `specs/account-deletion` — revocacion INMEDIATA de las sesiones activas.
+ *
+ * El bug que cierra: el ban (`ban_duration`) corta login y refresh, pero NO invalida un access token
+ * ya emitido, que sigue validando por firma hasta que expira (~1 h). Durante esa hora la cuenta que
+ * la app declara «eliminada» seguia pudiendo leer y escribir — en el propio dispositivo y en
+ * cualquier otro con sesion abierta.
+ */
+describe('POST /api/mobile/account/delete — revocacion de sesiones (T9)', () => {
+    beforeEach(() => {
+        vi.clearAllMocks()
+        harness.order.length = 0
+        harness.inserts.length = 0
+        harness.state.coachRow = { ...COACH_SIN_SUB }
+        harness.state.cancelThrows = false
+        harness.state.cancelFailed = 0
+        harness.state.banError = null
+        harness.state.signOutError = null
+    })
+
+    it('revoca TODAS las sesiones (scope global) con el bearer del request, despues del ban', async () => {
+        const res = await POST(request())
+
+        expect(res.status).toBe(200)
+        // `'global'` y no `'local'`: se van todas las sesiones del usuario, no solo la de este device.
+        expect(harness.signOutMock).toHaveBeenCalledTimes(1)
+        expect(harness.signOutMock).toHaveBeenCalledWith('token-de-prueba', 'global')
+        // Despues del ban: si GoTrue rechaza la revocacion, la cuenta ya quedo cerrada igual.
+        expect(harness.order.indexOf('ban')).toBeLessThan(harness.order.indexOf('signOut'))
+    })
+
+    it('si la revocacion falla, la baja sigue con warning (el ban ya cerro la cuenta)', async () => {
+        harness.state.signOutError = { message: 'gotrue 503' }
+
+        const res = await POST(request())
+
+        expect(res.status).toBe(200)
+        await expect(res.json()).resolves.toEqual({ ok: true, warnings: ['SESSION_REVOKE_FAILED'] })
+    })
+
+    it('un ALUMNO tambien queda con las sesiones revocadas', async () => {
+        harness.state.coachRow = null
+
+        const res = await POST(request())
+
+        expect(res.status).toBe(200)
+        expect(harness.signOutMock).toHaveBeenCalledWith('token-de-prueba', 'global')
+    })
+
+    it('sin ban no hay revocacion: la cuenta sigue viva y no se le matan las sesiones', async () => {
+        harness.state.banError = { message: 'gotrue 500' }
+
+        const res = await POST(request())
+
+        expect(res.status).toBe(500)
+        expect(harness.signOutMock).not.toHaveBeenCalled()
     })
 })
