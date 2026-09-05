@@ -8,6 +8,11 @@ overrides:
   react-dom: 19.1.0
   # Security: Dependabot transitive bumps, in-major only (verified build+test+CI+preview green).
   # Multi-major deps use pkg@major selectors so each consumer stays within its own major.
+  # Dependabot: CVE-2026-45820 (GHSA-px8p-9vwx-vf98) — DoS por ZIP64 malformado en unzipSync,
+  # fix en fflate 0.8.3. En el arbol: 0.4.8 via posthog-js (solo usa gzipSync/strToU8/strFromU8,
+  # firma identica en 0.8.x) y 0.8.2 via jspdf/@types/three. In-major para posthog-js (0.4->0.8
+  # es cruce de minor real pero funciones usadas sin cambios, ver docs/status); jspdf ya declara ^0.8.1.
+  'fflate@<0.8.3': '>=0.8.3'
   shell-quote: '>=1.8.4 <2'
   dompurify: '>=3.4.12 <4'
   protobufjs: '>=7.6.5 <8'

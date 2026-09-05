@@ -6,7 +6,8 @@
   "regions": ["pdx1"],
   "git": {
     "deploymentEnabled": {
-      "dependabot/**": false
+      "dependabot/**": false,
+      "rnmobiledenuevo": false
     }
   },
   "redirects": [
@@ -36,7 +37,7 @@
     },
     {
       "path": "/api/cron/purge-data",
-      "schedule": "0 3 * * 0"
+      "schedule": "0 3 * * *"
     },
     {
       "path": "/api/cron/audit-checksum",
