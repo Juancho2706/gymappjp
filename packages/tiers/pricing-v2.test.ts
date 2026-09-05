@@ -129,6 +129,15 @@ describe('TIER_CONFIG.maxClients — catálogo de VENTA (coaches nuevos)', () =>
         expect(getTierMaxClients('scale')).toBe(500)
     })
 
+    // Gap 2 del estudio de pricing (04-09): ningún tier ilegible puede resolverse a un plan PAGO.
+    // `getTierMaxClients` hacía `TIER_CONFIG[tier].maxClients` directo y un valor fuera del union
+    // (columna drifteada, form manipulado) reventaba con TypeError en pleno alta/gate.
+    it('tier fuera del union → cupo de FREE, nunca starter ni un throw', () => {
+        expect(getTierMaxClients('enterprise' as SubscriptionTier)).toBe(TIER_CONFIG.free.maxClients)
+        expect(getTierMaxClients('' as SubscriptionTier)).toBe(TIER_CONFIG.free.maxClients)
+        expect(getTierMaxClients('enterprise' as SubscriptionTier)).not.toBe(TIER_CONFIG.starter.maxClients)
+    })
+
     it('los precios CLP NO cambian en pricing v3 (el IVA es otro estudio)', () => {
         expect(TIER_CONFIG.free.monthlyPriceClp).toBe(0)
         expect(TIER_CONFIG.pro.monthlyPriceClp).toBe(29990)

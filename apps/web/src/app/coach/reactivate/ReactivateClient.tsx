@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
-import { AlertTriangle, ArrowRight, Check, CheckCircle2, Users } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Check, CheckCircle2, CreditCard, Users } from 'lucide-react'
 import {
     BILLING_CYCLE_CONFIG,
     FLOW_ENABLED,
@@ -84,9 +84,21 @@ interface ReactivateClientProps {
      * casualidad. null/ausente ⇒ se cae a la escalera de fecha.
      */
     coachMaxClients?: number | null
+    /**
+     * ¿Ofrecer «Cambiar tarjeta» como salida? Lo resuelve el server (`page.tsx`): flag
+     * `CHANGE_CARD_ENABLED` (server-only, en el cliente evalúa siempre false) + preapproval MP
+     * vivo (`coaches.subscription_mp_id`) + estado de DUNNING (`paused`/`past_due`).
+     *
+     * Cierra el callejón del dunning (pricing 05-09): un coach en `paused`/`past_due` sin
+     * `current_period_end` vigente cae bloqueado y el proxy lo deposita en ESTA pantalla, que
+     * hasta hoy solo ofrecía checkout nuevo o bajar a Free — mientras MP seguía reintentando el
+     * cobro sobre la misma suscripción y `changeCardForCoach` aceptaba el swap
+     * (services/billing/change-card.service.ts:63). Cambiar la tarjeta es la recuperación barata.
+     */
+    canChangeCard?: boolean
 }
 
-export function ReactivateClient({ currentTier, activeClientCount, activeClients = [], subscriptionStatus, currentPeriodEnd = null, paidAccessEndedAt = null, couponsEnabled = false, coachCreatedAt = null, coachMaxClients = null, activeDiscount = null }: ReactivateClientProps) {
+export function ReactivateClient({ currentTier, activeClientCount, activeClients = [], subscriptionStatus, currentPeriodEnd = null, paidAccessEndedAt = null, couponsEnabled = false, coachCreatedAt = null, coachMaxClients = null, activeDiscount = null, canChangeCard = false }: ReactivateClientProps) {
     const searchParams = useSearchParams()
     // E1 (P8): checkout_started gated por consentimiento (no-op si el coach no acepto cookies).
     const captureCheckoutStarted = useCaptureCheckoutStarted()
@@ -385,6 +397,29 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
                             recuperarás el acceso de inmediato.
                         </p>
                     </div>
+                </div>
+            )}
+
+            {/* Salida del DUNNING: si MP todavía puede cobrar (preapproval vivo) el camino barato no
+                es un checkout nuevo, es cambiar la tarjeta y dejar que el reintento apruebe — el
+                webhook `approved` devuelve la sub a 'active' (lib/payments/webhook-pipeline.ts).
+                Sin esto la pantalla del bloqueo era un callejón: el gate deposita acá al coach en
+                paused/past_due y /coach/subscription (destino del correo de dunning) rebota igual. */}
+            {canChangeCard && (
+                <div className="mb-3.5 flex items-center gap-2.5 rounded-card border border-subtle bg-surface-sunken px-3.5 py-3">
+                    <CreditCard className="h-[18px] w-[18px] shrink-0 text-muted" />
+                    <div className="min-w-0 flex-1">
+                        <p className="text-[13px] font-semibold text-strong">¿Falló el cobro de tu tarjeta?</p>
+                        <p className="mt-0.5 text-xs text-muted">
+                            Actualízala y recuperamos el cobro de tu plan actual — no necesitas contratar de nuevo.
+                        </p>
+                    </div>
+                    <a
+                        href="/coach/subscription/update-card"
+                        className="shrink-0 rounded-control px-2.5 py-1.5 text-[13px] font-bold text-primary hover:opacity-80"
+                    >
+                        Cambiar tarjeta
+                    </a>
                 </div>
             )}
 

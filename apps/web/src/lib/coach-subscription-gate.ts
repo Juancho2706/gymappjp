@@ -79,12 +79,27 @@ export function resolveCoachSubscriptionRedirect(
     // aunque el coach esté BLOQUEADO: son justamente el paso que lo desbloquea.
     //   · /coach/subscription/processing      → back_url de Mercado Pago (confirm-subscription).
     //   · /coach/subscription/flow-processing → urlReturn de Flow vía /flow/retorno (confirm-enrollment).
+    //   · /coach/subscription/update-card     → la salida del DUNNING (paused/past_due).
     // Incidente 2026-09-01 (coach expirada reactivando por Flow): solo `processing` estaba exento, el
     // proxy rebotaba `flow-processing` a /coach/reactivate?reason=subscription_blocked y la Fase 2
     // (confirm-enrollment) NUNCA corría — tarjeta enrolada en Flow, sub jamás creada, loop infinito.
+    //
+    // Callejón del dunning (pricing 05-09): `changeCardForCoach` PERMITE el swap en paused/past_due a
+    // propósito (services/billing/change-card.service.ts:63 — «sin esto el CTA del email de dunning
+    // sería un callejón sin salida»), pero la PANTALLA vivía detrás de este gate. Un coach en 'paused'
+    // sin `current_period_end` vigente —el caso NORMAL: el webhook de preapproval escribe 'paused' y
+    // `resolveCurrentPeriodEnd` devuelve null para todo lo que no sea active/trialing/canceled
+    // (lib/payments/subscription-state.ts:32, aplicado en webhook-pipeline.ts:1098-1107)— cae en
+    // `hasEffectiveAccess` → false y el proxy lo rebotaba a /coach/reactivate, que solo ofrece
+    // checkout nuevo o bajar a Free. Mientras tanto MP sigue reintentando el cobro (para
+    // `paid-expiry` una sub 'paused' está VIVA: lib/payments/paid-expiry.ts:39-44), así que la
+    // recuperación barata —cambiar la tarjeta y dejar que el retry apruebe— era inalcanzable por UI.
+    // La pantalla es inerte: el POST real lo siguen gateando `TERMINAL_STATUSES` /
+    // `PUT_ALLOWED_STATUSES` / `NO_ACTIVE_SUBSCRIPTION` del servicio, que devuelven a /coach/reactivate.
     const isSubscriptionProcessingPage =
         pathname.startsWith('/coach/subscription/processing') ||
-        pathname.startsWith('/coach/subscription/flow-processing')
+        pathname.startsWith('/coach/subscription/flow-processing') ||
+        pathname.startsWith('/coach/subscription/update-card')
     const isSubscriptionGatePage = isReactivatePage || isSubscriptionProcessingPage
     const isFreeStandaloneOverCapacity =
         context?.subscriptionTier === 'free' &&

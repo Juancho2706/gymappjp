@@ -174,7 +174,12 @@ export function CoachCreateSheet({ open, onClose }: Props) {
                             </div>
                             <div>
                                 <Label className="text-body text-xs">Plan</Label>
-                                <Select name="subscription_tier" defaultValue="starter">
+                                {/* Pricing v3: el default es 'free' — 'starter' salió de venta en v2 y
+                                    ni siquiera está en `SALE_TIERS` (las opciones de abajo), así que el
+                                    default viejo daba de alta coaches en un tier LEGACY (10 alumnos,
+                                    $19.990) sin que el admin lo eligiera. `createCoachAction` no re-mapea:
+                                    escribe el tier tal cual + `getTierMaxClients(tier)`. */}
+                                <Select name="subscription_tier" defaultValue="free">
                                     <SelectTrigger className="mt-1 bg-surface-sunken border-subtle text-strong">
                                         <SelectValue />
                                     </SelectTrigger>

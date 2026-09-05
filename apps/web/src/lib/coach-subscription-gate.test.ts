@@ -51,6 +51,38 @@ describe('resolveCoachSubscriptionRedirect', () => {
         expect(resolveCoachSubscriptionRedirect('/coach/subscription/flow-processing', 'active')).toBeNull()
     })
 
+    // Callejón del dunning (pricing 05-09): /coach/subscription/update-card es la ÚNICA salida barata
+    // de un cobro rechazado — `changeCardForCoach` permite el swap en paused/past_due a propósito
+    // (change-card.service.ts:63) y MP sigue reintentando sobre el MISMO preapproval. La pantalla
+    // vivía detrás del gate: el coach en 'paused' con `current_period_end` null —el caso NORMAL, el
+    // webhook de preapproval lo nulea (subscription-state.ts:32 vía webhook-pipeline.ts:1098)— salía
+    // rebotado a /coach/reactivate, que solo ofrece checkout NUEVO o bajar a Free.
+    it('deja entrar a /coach/subscription/update-card a un coach en dunning YA bloqueado', () => {
+        // paused sin período (lo que escribe el webhook): bloqueado en todo el resto del panel…
+        expect(resolveCoachSubscriptionRedirect('/coach/dashboard', 'paused', null)).toBe('/coach/reactivate')
+        expect(resolveCoachSubscriptionRedirect('/coach/subscription', 'paused', null)).toBe('/coach/reactivate')
+        // …pero la pantalla del cambio de tarjeta pasa.
+        expect(resolveCoachSubscriptionRedirect('/coach/subscription/update-card', 'paused', null)).toBeNull()
+        // past_due con el período YA vencido (MP todavía reintenta): mismo trato.
+        const periodEndPast = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+        expect(resolveCoachSubscriptionRedirect('/coach/subscription/update-card', 'past_due', periodEndPast)).toBeNull()
+    })
+
+    it('update-card también pasa para el resto de los estados bloqueados (el POST los filtra)', () => {
+        // La página es inerte: el gate de dinero real vive en `changeCardForCoach`
+        // (TERMINAL_STATUSES → PREAPPROVAL_TERMINAL; sin subscription_mp_id → NO_ACTIVE_SUBSCRIPTION),
+        // que devuelve al coach a /coach/reactivate con un mensaje, no un rebote mudo del proxy.
+        expect(resolveCoachSubscriptionRedirect('/coach/subscription/update-card', 'expired')).toBeNull()
+        expect(resolveCoachSubscriptionRedirect('/coach/subscription/update-card', 'pending_payment')).toBeNull()
+    })
+
+    it('un coach CON acceso entra a update-card sin ser echado al dashboard', () => {
+        expect(resolveCoachSubscriptionRedirect('/coach/subscription/update-card', 'active')).toBeNull()
+        expect(
+            resolveCoachSubscriptionRedirect('/coach/subscription/update-card', 'paused', periodEndFuture)
+        ).toBeNull()
+    })
+
     it('does not redirect active coaches on normal pages', () => {
         expect(resolveCoachSubscriptionRedirect('/coach/dashboard', 'active')).toBeNull()
         expect(resolveCoachSubscriptionRedirect('/coach/clients', 'trialing', periodEndFuture)).toBeNull()

@@ -101,6 +101,23 @@ describe('checkJoinCapacity — standalone (C-KILL apagado hoy; el cerco queda c
         })
     })
 
+    // Caso canónico del trial (estudio de pricing 04-09): el coach Free de v3 con su cupo REAL en la
+    // columna (1). Es el escenario que el cerco del /join tiene que cortar antes de crear auth.user.
+    it('free con columna 1: 0 activos ACEPTA, 1 activo RECHAZA', async () => {
+        const coachRow = { max_clients: 1, subscription_tier: 'free', created_at: '2026-09-01T00:00:00Z' }
+
+        const vacio = fakeAdmin({ coachRow, count: 0 })
+        expect(await checkJoinCapacity(vacio.admin, STANDALONE)).toEqual({ ok: true, used: 0, limit: 1 })
+
+        const lleno = fakeAdmin({ coachRow, count: 1 })
+        expect(await checkJoinCapacity(lleno.admin, STANDALONE)).toEqual({
+            ok: false,
+            reason: 'limit_reached',
+            used: 1,
+            limit: 1,
+        })
+    })
+
     it('la columna max_clients GANA sobre el catálogo del tier', async () => {
         // Pro viejo con columna 30: 29 usados pasan aunque el catálogo nuevo diga 25.
         const coachRow = { max_clients: 30, subscription_tier: 'pro', created_at: '2026-01-10T00:00:00Z' }

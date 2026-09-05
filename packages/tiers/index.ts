@@ -283,7 +283,10 @@ export function getTierPriceClp(tier: SubscriptionTier, cycle: BillingCycle) {
  * como fallback, `tierMaxClientsFor(tier, created_at)` (escalera de grandfather v2/v3).
  */
 export function getTierMaxClients(tier: SubscriptionTier) {
-    return TIER_CONFIG[tier].maxClients
+    // Tier fuera del union (string arbitrario de DB o de un form): cae al piso de FREE, jamás a
+    // 'starter' ni a un throw. Mismo fail-safe que `tierMaxClientsFor`, que ya usa `?.` en sus tres
+    // peldaños — acá el acceso directo reventaba con TypeError y tumbaba el alta/gate que lo llame.
+    return TIER_CONFIG[tier]?.maxClients ?? TIER_CONFIG.free.maxClients
 }
 
 // ── Grandfather por fecha: escalera pre-v2 / v2 / v3 (specs/pricing-v2 P2 + pricing-v3 D4) ──
