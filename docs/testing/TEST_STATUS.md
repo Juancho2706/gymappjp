@@ -248,7 +248,32 @@ Actualizar este archivo solo con el resultado consolidado:
 
 No pegar logs extensos, screenshots, payloads, credenciales ni listas de cientos de suites. Los artefactos viven en GitHub Actions; los defectos accionables viven en issues/specs activos.
 
-## Gates pendientes de la tanda 05-09 (orden del owner: sin gates en la sesión de cierre)
+## Gates de la tanda 05-09 — CERRADOS el 05-09 22:48–23:20Z (sesión local, PC libre por el owner)
+
+**Resultado real del tren (en el orden de abajo):** `docs:check` OK · `install --frozen-lockfile` «Already up to date» ·
+typecheck web 0 errores (tras `next typegen`: el `.next/types/validator.ts` local apuntaba a las 5 rutas cron que E0
+borró; CI y Vercel nacen sin `.next`) · `qa:lint` OK · eslint de los 106 archivos web/tests/scripts tocados 0 errores /
+15 warnings preexistentes (`apps/mobile` se lintea SOLO con `eslint.mobile.config.mjs`, como CI: verde) · `vitest run`
+719 archivos / 9.446 tests: **2 archivos rojos, ambos tests mal escritos**, arreglados en un commit cada uno —
+`651762a6` (`behavior-templates.test.ts`: el pie del html lleva `<strong>` entre «Enviado por» y «EVA Fitness
+Platform») y `9c24815d` (`page.test.tsx` B11: el helper nunca renderizaba el árbol, ahora lee los props del dashboard
+como descriptor) · grep S: solo comentarios, tests de rechazo, migraciones históricas y la landing enterprise (E2) ·
+grep E1: 0. `tsc` de mobile local 0 errores. **Push 22:56Z** `master` = `rnmobiledenuevo` = `9c24815d`, deploy
+`dpl_yJUsqXJ83osGwH9nY3zVQEiymQ3E` READY. CI de `master` (run 33997293311): `quality`, `unit` ×3 e `hygiene` verdes
+(`hygiene` venía rojo desde `dff9b4fb`); `nutrition-smoke` rojo PREEXISTENTE (el job no recibe `NEXT_PUBLIC_SUPABASE_*`).
+**E2E** (run 33997451520, `workflow_dispatch`): job `e2e` `prod-suave` **9/9 en 38,9 s, 1 worker** ⇒ W6.8 y QA-01
+cerradas; el run marca `failure` solo porque `hygiene` con `-n 50` volvía a reportar 2 fixtures sintéticos de
+`cd981a9d` ⇒ `.gitleaksignore` por huella (`c8548373`, 0 leaks local en ambos rangos). Humo: `/c/7LQ8B/login` 200 ·
+`GET /api/cron/onboarding-behavior` sin Bearer 401 (la ruta solo exporta GET; POST ⇒ 405) · `/enterprise` y
+`/enterprise/*` ⇒ 308 a `/pricing` · `/coach/reactivate?tier=starter` sin sesión ⇒ 307 a `/login`, y con un coach de
+prueba **elite expirado** (creado por admin API y borrado al final, 0 residuos) ⇒ 200 con «Plan seleccionado: Pro» y
+cero menciones a Starter. OTA por `mobile-ota.yml` desde `master`: android `ea487622` (run 33997547120) · ios
+`59f92afe` (run 33997548609), runtime 1.1.2. Hallazgo lateral: un coach insertado a mano con `invite_code` inválido
+(≠ 5 chars) hace 500 en todo `/coach/*` (`ensureCoachPublicCode` regenera y el trigger `coaches_invite_code_set_once`
+rechaza el UPDATE); los 101 coaches reales tienen código válido, así que solo afecta seeds — sembrar SIEMPRE 5 chars
+de `INVITE_CODE_CHARS`. Verificar `EVA-NEXTJS-18` en Sentry el 08-09 ~23:00Z. Lo de abajo queda como referencia.
+
+### Tren tal como se planificó (referencia)
 
 La tanda de código del 05-09 (3 huecos de pricing · `EVA-NEXTJS-18` O7.7 · W6 correos por comportamiento
 detrás de flag · residuo de O7.6 · B11 + PostHog role coach + `app_version`) se commiteó **local, sin push

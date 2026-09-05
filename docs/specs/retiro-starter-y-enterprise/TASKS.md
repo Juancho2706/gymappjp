@@ -2581,8 +2581,12 @@ CHECK de DB), C3-5 (el normalizador de `api/mobile/coach/dashboard` ya existe ho
 Decisiones del owner: **D1=A** (`qa-e2e-coach` → pro/25), **D2=A** (sin tier ⇒ sin chip, sin POST inventado),
 **D6=A** (`pnpm install --lockfile-only` autorizado); el resto quedó en la recomendada A (D3, D4, D5, D7, D13).
 Orden de trabajo: el jefe hizo lo que toca LIVE; workers Opus por tanda con juicio de diffs y commit con
-pathspec; Sonnet solo para los comentarios. **Ningún gate corrió** (regla del owner: se corren en Claude Code
-web con el tren de [TEST_STATUS § Gates pendientes](../../testing/TEST_STATUS.md)); **nada se pusheó**.
+pathspec; Sonnet solo para los comentarios. **Gates corridos y verdes el 05-09 en sesión local** (tren de
+[TEST_STATUS § Gates de la tanda 05-09](../../testing/TEST_STATUS.md): 2 tests ajenos a esta ola arreglados en
+`651762a6` / `9c24815d`, `.gitleaksignore` `c8548373`); **push 22:56Z**, deploy `dpl_yJUsqXJ83osGwH9nY3zVQEiymQ3E`
+READY, E2E `prod-suave` 9/9 (run 33997451520). Humo: `/enterprise` ⇒ 308 a `/pricing`; `/coach/reactivate?tier=starter`
+⇒ «Plan seleccionado: Pro» con un coach de prueba elite expirado (creado y borrado); `/e/org-prueba/login` sigue 200
+hasta E2.
 
 | Tanda | Estado | Commit | Notas reales |
 |---|---|---|---|
@@ -2591,7 +2595,7 @@ web con el tren de [TEST_STATUS § Gates pendientes](../../testing/TEST_STATUS.m
 | S2 · Retiro del tipo | ✅ | `39806a40` | Union 5/3, 8 claves fuera, `isMostAffordable`/`LEGACY_TIERS` fuera, `tier-display` borrado, 3 `z.enum`, `ReactivateClient`, D2=A con `tierForDisplay`/`tierForCheckout` + código `CHECKOUT_TIER_MISSING` (desvío declarado en `checkout-errors.ts`) + `processing/page.test.tsx`, guard de cupones fuera |
 | S3.1–S3.7, S3.9 | ✅ | `f0f8dfa2` | Labels/copy/scripts, 22 tests reescritos (3 desvíos declarados: `applies quarterly` re-apuntado a pro, happy path de add-ons conservado, `register/actions.test` sin cast por FormData), specs Playwright a free/pro/elite sin correr, docs con notas de superación y CURRENT en 13.458 B |
 | S3.8 · Comentarios | ✅ | `8150fd71` | 72 filas + fila 74, diff 100 % comentarios |
-| S3.10 · OTA | ⏳ | — | después del deploy web verde |
+| S3.10 · OTA | ✅ 05-09 23:02Z | `9c24815d` | `mobile-ota.yml` desde `master`, canal `production`, runtime 1.1.2: android grupo `ea487622-e5fc-4751-a210-1f66e4f91242` (run 33997547120) · ios grupo `59f92afe-2e7e-4381-97b9-d91ce586c046` (run 33997548609); `tsc` de mobile local 0 errores antes de publicar |
 | E0 · código | ✅ | `6244f788` | 9 borrados, 7 ediciones (desvíos: coma de `package.json`, tipo `InactiveClient`, bloque «Handlers sin schedule» del RUNBOOK) |
 | E0 · DB | ✅ aplicada en LIVE `20260905213203` | `64ebcda4` | V1–V5 (V5 = 76 policies con org, md5 `f62b9d7b…`; V4 = 0 llamadas RPC en 24 h de `edge_logs`), revoke de 2 RPC + trigger `D` |
 | E1 · Demolición sin runtime | ✅ | `8e613a6e` | 40 borrados (el 41.º ya había caído en E0), 13 ediciones versionadas + `AGENTS.md`/`CLAUDE.md` locales, AASA sin appID enterprise (D13-A), lock regenerado: `pnpm install --lockfile-only` ⇒ «Already up to date», diff = solo el importer `apps/enterprise` y el subárbol exclusivo `expo@54.0.36` (544 líneas borradas, 0 agregadas) |
