@@ -8,7 +8,6 @@ import {
     buildCoachEmailConfirmationEmail,
     buildExistingCoachAnnouncementEmail,
     buildFreeCoachWelcomeEmail,
-    buildOrgInactiveClientsEmail,
     buildProgramAssignedEmail,
     buildTrialExpiredEmail,
     buildTrialExpiryWarningEmail,
@@ -100,17 +99,6 @@ describe('correos transaccionales al COACH — sin precios', () => {
 
     it('fin de beta → plan gratuito', () => {
         assertNoPrices(buildBetaTrialEndedFreeEmail({ coachName: 'Josefa', appUrl: APP_URL }).html)
-    })
-
-    it('alerta de alumnos inactivos (org)', () => {
-        assertNoPrices(
-            buildOrgInactiveClientsEmail({
-                orgName: 'Gimnasio Norte',
-                adminName: 'Rodrigo',
-                inactiveClients: [{ name: 'Ana', coachName: 'Josefa', daysSinceLastLog: 12 }],
-                orgUrl: `${APP_URL}/org/gimnasio-norte`,
-            }).html
-        )
     })
 })
 

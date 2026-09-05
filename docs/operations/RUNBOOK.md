@@ -88,7 +88,6 @@ Usar [FOOD_CATALOG_CL_IMPORT.md](FOOD_CATALOG_CL_IMPORT.md). Detener applies y c
 | `/api/cron/checkin-reminder` | `0 14 * * *` | recordatorio de check-in vencido (push día 8 y 15) |
 | `/api/cron/trial-expiry` | `0 12 * * *` | expiración de trials |
 | `/api/cron/purge-data` | `0 3 * * *` | purga **diaria** desde `dff9b4fb` (05-09; antes `0 3 * * 0`, semanal). Retención: ver abajo |
-| `/api/cron/audit-checksum` | `0 2 * * 0` | integridad semanal de auditoría |
 | `/api/cron/mp-reconcile` | `0 10 * * *` | reconciliación MercadoPago y expiración de add-ons |
 | `/api/cron/flow-reconcile` | `0 11 * * *` | reconciliación Flow y sincronización acotada de monto |
 | `/api/cron/mirror-exercise-thumbnails` | `0 4 * * *` | mirror de thumbnails |
@@ -97,12 +96,9 @@ Usar [FOOD_CATALOG_CL_IMPORT.md](FOOD_CATALOG_CL_IMPORT.md). Detener applies y c
 | `/api/cron/coach-kpi-snapshot` | `30 4 * * *` | foto diaria de KPI por coach (7C fase 2: delta «En riesgo» y saldo neto de «Alumnos» leen la fila T−7; `?coach_id=` siembra uno; idempotente) |
 | `/api/cron/onboarding-behavior` | `0 * * * *` | correos por comportamiento del onboarding del coach (W6). Horario (minuto 0), Bearer `CRON_SECRET`; `?dry=1` audita sin enviar. Mientras `ONBOARDING_BEHAVIOR_EMAILS_ENABLED` esté apagado responde `{ok:true,skipped:'disabled'}` |
 
-Handlers sin schedule automático:
-
-- `/api/cron/weekly-snapshot`;
-- `/api/cron/weekly-report-email`;
-- `/api/cron/org-health-alert`;
-- `/api/cron/payment-reminder`.
+Hoy no queda ningún handler de cron sin schedule: los cuatro huérfanos de organizaciones
+(`weekly-snapshot`, `weekly-report-email`, `org-health-alert`, `payment-reminder`) se borraron en
+Enterprise E0, junto con `audit-checksum` (que sí estaba programado y se desprogramó en la misma tanda).
 
 ### Retención de datos — `purge-data`
 
@@ -112,7 +108,7 @@ best-effort en cada paso: un paso caído no aborta los demás y todos los conteo
 
 | Qué borra | Corte | Nota |
 |---|---|---|
-| `org_audit_logs` | 90 días | vía RPC `purge_old_audit_logs` |
+| `org_audit_logs` | **sin retención automática** | El paso existe en `purge-data` pero llama a un RPC `purge_old_audit_logs` que **nunca se creó**: el error queda silenciado con un `console.warn` y no se borra nada. No se va a crear la función — la tabla se demuele en Enterprise E4 (y el paso sale de `purge-data` en E2) |
 | `organization_members` soft-deleted | 30 días desde `deleted_at` | |
 | `coach_client_assignments` soft-deleted | 30 días desde `deleted_at` | |
 | `coach_leads` con `status` `new` o `dismissed` | 90 días desde `created_at` | `converted` y `contacted` se **conservan** |

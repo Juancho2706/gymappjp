@@ -40,10 +40,6 @@
       "schedule": "0 3 * * *"
     },
     {
-      "path": "/api/cron/audit-checksum",
-      "schedule": "0 2 * * 0"
-    },
-    {
       "path": "/api/cron/mp-reconcile",
       "schedule": "0 10 * * *"
     },
