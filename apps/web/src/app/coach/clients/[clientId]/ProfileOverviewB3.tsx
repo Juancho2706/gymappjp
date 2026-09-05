@@ -45,6 +45,7 @@ import {
     buildProfileActivityCalendarData,
     longestActivityStreakFromCalendar,
     countWorkoutDaysInRange,
+    formatHabitLogDate,
 } from './profileOverviewUtils'
 import { ProfileProgramSummaryCard } from './ProfileProgramSummaryCard'
 import { ProfileCheckInSnapshot } from './ProfileCheckInSnapshot'
@@ -864,15 +865,6 @@ function fmtHours(h: number | null | undefined): string | null {
     if (h == null) return null
     return `${Number.isInteger(h) ? h : h.toFixed(1)} h`
 }
-/** Parseo local de `log_date` (YYYY-MM-DD) para evitar corrimiento de día por TZ. */
-function fmtHabitDate(logDate: string): string {
-    const [y, m, d] = logDate.split('-').map(Number)
-    if (!y || !m || !d) return logDate
-    return new Date(y, m - 1, d).toLocaleDateString('es-ES', {
-        day: '2-digit',
-        month: 'short',
-    })
-}
 
 /**
  * Mini-widget de hábitos diarios en el Resumen del coach.
@@ -1020,7 +1012,7 @@ function HabitsMiniWidget({
                                             className="border-t border-subtle text-body"
                                         >
                                             <td className="px-2 py-1.5 text-left font-medium text-muted">
-                                                {fmtHabitDate(r.log_date)}
+                                                {formatHabitLogDate(r.log_date)}
                                             </td>
                                             <td className="px-2 py-1.5 text-right tabular-nums text-strong">
                                                 {fmtWaterL(r.water_ml) ?? '—'}

@@ -6,7 +6,11 @@ import {
     parseISO,
     subDays,
 } from 'date-fns'
-import { formatShortDayMonthYearEs, getSantiagoIsoYmdForUtcInstant } from '@/lib/date-utils'
+import {
+    formatShortDayMonthEs,
+    formatShortDayMonthYearEs,
+    getSantiagoIsoYmdForUtcInstant,
+} from '@/lib/date-utils'
 
 /**
  * Regularidad de check-in alineada con `getClientProfileData`:
@@ -69,6 +73,19 @@ export function formatRelativeLastActivity(iso: string | null): string {
     // con los getters locales de `new Date(iso)` una actividad de las 22:00 chilenas se imprimía un
     // día más adelante en Vercel (UTC) que en el navegador del coach.
     return formatShortDayMonthYearEs(getSantiagoIsoYmdForUtcInstant(iso), { day: '2-digit' })
+}
+
+/**
+ * `log_date` (`YYYY-MM-DD`, día calendario ya resuelto por la DB) → `"05 sept"` para la tabla de
+ * hábitos del Resumen. Vivía en `ProfileOverviewB3` con
+ * `new Date(y, m - 1, d).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })`: el día no
+ * se corría (la fecha ya es date-only) pero la abreviatura del mes salía de `Intl`, y el widget se
+ * pinta en el SSR de un client component ⇒ el Safari nuevo imprime "sept." con punto y el HTML del
+ * servidor deja de coincidir (EVA-NEXTJS-18 / regla de O7.3). La tabla fija calca byte a byte lo que
+ * imprimía Node, así que a nadie le cambia el texto. Fuera de patrón → se devuelve tal cual.
+ */
+export function formatHabitLogDate(logDate: string): string {
+    return formatShortDayMonthEs(logDate, { day: '2-digit' })
 }
 
 export function buildProfileActivityCalendarData(

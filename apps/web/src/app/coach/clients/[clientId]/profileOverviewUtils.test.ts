@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatRelativeLastActivity } from './profileOverviewUtils'
+import { formatHabitLogDate, formatRelativeLastActivity } from './profileOverviewUtils'
 
 /**
  * Regresión EVA-NEXTJS-18 (O7.6b): `profileLastActivityAt` es un instante UTC (el máximo de varios
@@ -27,5 +27,29 @@ describe('profileOverviewUtils — formatRelativeLastActivity (fecha absoluta en
         expect(formatRelativeLastActivity(ahora.toISOString())).toBe('Hoy')
         const ayer = new Date(ahora.getTime() - 24 * 60 * 60 * 1000)
         expect(formatRelativeLastActivity(ayer.toISOString())).toBe('Ayer')
+    })
+})
+
+/**
+ * Regla de O7.3 (misma familia EVA-NEXTJS-18): la tabla de hábitos del Resumen se pinta en el SSR de
+ * un client component, así que la abreviatura del mes NUNCA puede salir de `Intl` — el Safari nuevo
+ * escribe "sept." con punto y el HTML deja de coincidir tras hidratar. `log_date` ya es un día
+ * calendario (date-only), así que acá lo único en juego es el TEXTO, no el corrimiento de día.
+ */
+describe('profileOverviewUtils — formatHabitLogDate (mes por tabla fija, sin Intl)', () => {
+    it('calca la salida vieja de Node: día de 2 dígitos + mes corto sin punto', () => {
+        expect(formatHabitLogDate('2026-09-05')).toBe('05 sept')
+        expect(formatHabitLogDate('2026-08-31')).toBe('31 ago')
+        expect(formatHabitLogDate('2026-01-01')).toBe('01 ene')
+    })
+
+    it('el resultado no depende de la TZ del proceso: el día es el del string, tal cual', () => {
+        // Antes se construía `new Date(y, m - 1, d)` (medianoche LOCAL) antes de formatear; con
+        // tabla fija no hay `Date` de por medio y el 01 nunca puede imprimirse como 31 del anterior.
+        expect(formatHabitLogDate('2026-12-01')).toBe('01 dic')
+    })
+
+    it('fuera de patrón se devuelve tal cual (defensivo, igual que antes)', () => {
+        expect(formatHabitLogDate('sin-fecha')).toBe('sin-fecha')
     })
 })
