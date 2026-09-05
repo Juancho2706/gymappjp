@@ -1,7 +1,7 @@
 ---
 status: active
 owner: quality-engineering
-last_verified: "2026-09-02"
+last_verified: "2026-09-05"
 canonical: false
 ---
 
@@ -84,9 +84,11 @@ OTA 1.1.2 android `01a063b0-6a6a…` / ios `01a063b0-86f0…`), QA del owner en 
       sigue vivo detrás del aviso «Sin conexión» (`619b881f`) —
       [`qa-ejecutor-share-0209` § P6 B2](../specs/qa-ejecutor-share-0209/TASKS.md)
 
-## Pendiente hasta desplegar — «ola 2 chica» (en código 02-09 noche, sin push/deploy/OTA)
+## Pendiente — «ola 2 chica» (EN PRODUCCIÓN desde el 04-09)
 
-Probar SOLO contra el deploy y la OTA que salgan de `5f3c48f2`…`31c1f7a8` (Android e iOS, claro y oscuro):
+Los commits `5f3c48f2`…`31c1f7a8` (Android e iOS, claro y oscuro) ya son ancestros de `origin/master`
+(`f9ba8a3f`): salieron con el deploy `dpl_CZKUwNth…` del 04-09 y la OTA 1.1.2 android `d8220490` / ios
+`54487ddd`. Probar contra ese desplegado, como el resto de la lista:
 
 - [ ] Catálogo RN y web: «Duplicar» un ejercicio propio dos veces ⇒ «X (copia)» y «X (copia 2)», sin
       «Ya existe un ejercicio con ese nombre» (`5f3c48f2`).

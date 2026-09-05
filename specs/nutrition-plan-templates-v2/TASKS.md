@@ -44,4 +44,6 @@
 - [x] T6.2 Gates: 5111 tests, tsc web y mobile, lint 0 errores, tokens, boundaries, docs.
 - [x] T6.3 `docs/status/CURRENT.md` y `docs/status/MOBILE_PARITY.md` actualizados.
 - [ ] T6.4 QA visual: nadie abrio la biblioteca ni el modal de dos pestañas en un navegador.
-- [ ] T6.5 Desplegar (4 commits locales en `master`, sin push).
+- [x] T6.5 Desplegado — verificado 2026-09-05: árbol limpio, `master` = `f9ba8a3f`; `git log` sobre los
+      archivos de plantillas V2 (servicio, actions, biblioteca, editor) confirma commits en la historia
+      de `master`, el más reciente `4fce820b` (fix del catch de las server actions), ancestro de HEAD.

@@ -28,4 +28,5 @@
 ## T4 — Pendientes reales
 - [ ] T4.1 QA manual en navegador con un coach free+active y `COUPON_REDEMPTION_ENABLED=true` (nadie lo abrio todavia).
 - [ ] T4.2 Verificar en el checkout real que el primer cobro del free sale descontado (hoy solo esta probado con la siembra SQL de DIEGO25).
-- [ ] T4.3 Sin commit ni deploy: los cambios quedan locales por pedido explicito.
+- [x] T4.3 Commiteado desde `dbd76e50` (2026-08-03) y `adc6f7f7` (2026-09-02), en producción; el gate
+      `COUPON_REDEMPTION_ENABLED` sigue apagado (env), así que el endpoint no queda expuesto sin el flag.

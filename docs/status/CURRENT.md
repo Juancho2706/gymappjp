@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-09-02"
+last_verified: "2026-09-05"
 canonical: true
 ---
 
@@ -50,14 +50,16 @@ prevalecen sobre este resumen. La prosa retirada el 2026-09-02 está en
    device VERDE 02-09** (11 puntos). **Ola 2 chica + higiene EN CÓDIGO 02-09 noche** (`5f3c48f2`…`31c1f7a8`,
    8 commits, RPC `substitutions` ya aplicado en LIVE): sale con el push del tren «Ciclo real y por lado» (03-09); queda el QA en device de lo nuevo y
    el acumulado de 18 (`docs/testing/QA_DEVICE_PENDIENTE.md`). [MOBILE_PARITY](MOBILE_PARITY.md)
-5. **`EVA-NEXTJS-18` (hidratación: mes abreviado con punto en Safari) — FIX EN PRODUCCIÓN 02-09**
-   (`master` `91e7edf6`, deploy `dpl_EiFib2Xr…` READY, solo web, sin OTA): queda el E394 sin causa
-   raíz — el guardián J solo lo convierte en una recarga única.
-   [tareas § O7](../specs/cierre-sentry-vivos/TASKS.md)
+5. **(a) `EVA-NEXTJS-18` (hidratación en `/c/[coach_slug]/dashboard?recuperar=…`) — REGRESIÓN ACTIVA
+   05-09**: el fix del 02-09 (`master` `91e7edf6`) NO la cerró; 6 eventos / 2 usuarios en 24 h al
+   05-09 sobre `f9ba8a3f`, 47 replays. **(b) `E394` = `EVA-NEXTJS-19` — 0 eventos desde el 01-09
+   18:42Z con tráfico alto ⇒ O6.8 cumplida**: resolver en Sentry con nota; O7.4 se desestima salvo
+   regresión. [tareas § O7](../specs/cierre-sentry-vivos/TASKS.md)
 6. **Errores al día (ola O6) — EN PRODUCCIÓN 01-09** (`master` `231d2937`, OTA 1.1.2 android
-   `d2f948a0` / ios `d40564a9`; QA device del owner verde): queda O6.8 = verificar a 72 h (~04-09)
-   que nada regresó, `EVA-MOBILE-9` abierto, Skia exige build nativo y P5 `noUncheckedIndexedAccess`
-   (431 errores) como tanda propia. [tareas § O6](../specs/cierre-sentry-vivos/TASKS.md)
+   `d2f948a0` / ios `d40564a9`; QA device del owner verde): O6.8 cumplida el 05-09 (ver 5b);
+   `EVA-MOBILE-9` en 0 pero el mismo síntoma vive en `EVA-MOBILE-F` (iOS 02-09, Android 04-09,
+   viaMorph fresh 4,7 s) ⇒ resolver el 9 con nota y seguir el F; Skia exige build nativo y P5
+   `noUncheckedIndexedAccess` (431 errores) como tanda propia. [tareas § O6](../specs/cierre-sentry-vivos/TASKS.md)
 7. **PLAN «Cobros coach → alumno» — BLOQUEADO, nada implementado** ([spec](../specs/cobros-coach-alumno/SPEC.md)
    `draft`, versionada en `edf6a07c`; artifact `046f3bb1`): esperan 8 decisiones del owner (§18.1) y
    3 verificaciones externas (§18.2: contador SII, abogado retracto, smoke MP con plata real).

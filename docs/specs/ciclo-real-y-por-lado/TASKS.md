@@ -660,14 +660,16 @@ Convención de estado: `[ ]` pendiente · `[x]` hecha. Nada se marca verde sin e
 
 ## W5 · PWA / working tree
 
-- [ ] W5.1 Commit del tren offline/SW ya presente en el working tree: `apps/web/public/sw.js`,
+- [x] W5.1 Commiteado — verificado 2026-09-05: árbol limpio, `git ls-files` confirma trackeados los 9
+      archivos del tren offline/SW (`apps/web/public/sw.js`,
       `apps/web/src/components/client/OfflineScreen.tsx` (+ `.test.tsx`),
       `apps/web/src/lib/client/clear-client-caches.ts` (+ `.test.ts`),
       `tests/pwa-sw-navigation.test.ts`, `apps/web/src/components/client/ClientNav.tsx`,
       `apps/web/src/app/c/[coach_slug]/layout.tsx`,
       `apps/web/src/app/c/[coach_slug]/_components/DemoViewerExit.tsx`,
       `apps/web/src/app/c/[coach_slug]/perfil/_components/ProfileClient.tsx`,
-      `apps/web/src/app/c/[coach_slug]/suspended/_components/SuspendedSignOutButton.tsx`.
+      `apps/web/src/app/c/[coach_slug]/suspended/_components/SuspendedSignOutButton.tsx`),
+      `sw.js` en `591ea8cd` (03-09), integrado en `master`.
       **Aceptación**: `pnpm test` sin rojos nuevos **antes** de que W2–W4 mezclen.
 - [x] W5.2 `apps/web/src/lib/client/clear-client-caches.test.ts:9-10` deriva los nombres de caché desde
       `apps/web/public/sw.js`. Hoy ese test guarda una **copia manual** (`SW_CACHES`) mientras la purga

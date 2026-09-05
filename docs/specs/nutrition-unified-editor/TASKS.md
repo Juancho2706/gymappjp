@@ -416,7 +416,7 @@ en el aviso, aviso bajo «Empezar vacío», RN + web en el mismo tren).
 - [x] **QA** — device Android/iOS (light/dark, marca propia) + web móvil/desktop contra desplegado:
   crear plan híbrido con un día «Empezar vacío», tocar Publicar → chip ámbar + salto + aviso con
   botones + barra con nombre del día; corregir → la barra se apaga sola. **QA del owner VERDE
-  02-09** (device + web).
+  02-09** (device + web) — este fix puntual de días no activos queda cerrado con ese QA.
 
 Gates (02-09): vitest paquete 16/16 ✓ · vitest `_quick-edit` web 106/106 ✓ · eslint 0 ✓ ·
 tsc mobile ✓ · tsc web ✓ · tokens ✓ · boundaries ✓ · docs:check ✓.
@@ -424,7 +424,9 @@ tsc mobile ✓ · tsc web ✓ · tokens ✓ · boundaries ✓ · docs:check ✓.
 **En producción (02-09 18:55Z):** commit `ee6766ae` (master = rnmobiledenuevo) → deploy Vercel
 `dpl_BWKwbJ8B` READY (eva-app.cl) · OTA runtime 1.1.2: android `0e96143d` (run 33669999912) /
 ios `61605963` (run 33670003993). El coach que lo reportó (jotap-coach) ya había resuelto su caso a
-mano; el QA en device/web contra desplegado sigue pendiente.
+mano. Lo que sigue pendiente NO es este fix puntual (QA verde arriba), sino el QA device del
+**editor RN completo**, ya listado en [`docs/testing/QA_DEVICE_PENDIENTE.md`](../../testing/QA_DEVICE_PENDIENTE.md)
+y en § T3.3 más arriba de este mismo archivo.
 
 ## Registro de cierres
 
