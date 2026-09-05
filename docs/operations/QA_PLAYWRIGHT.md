@@ -164,7 +164,6 @@ calcule bien un total se prueba con Vitest, sin tocar producción.
 - La suite general (`tests/*.spec.ts`) → proyecto `chromium`, contra el dev server local con
   Supabase local. `tests/smoke/**` está explícitamente excluido de ese proyecto para que no se cuele
   en un fan-out paralelo.
-- Cualquier cosa contra `apps/enterprise`, congelada desde el 2026-08-06.
 
 ## Relacionados
 

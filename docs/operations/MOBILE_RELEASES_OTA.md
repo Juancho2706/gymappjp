@@ -16,8 +16,6 @@ Política operativa para `apps/mobile`. La configuración ejecutable prevalece:
 - `apps/mobile/metro.config.js`: Debug ID del bundle (`getSentryExpoConfig`);
 - `apps/mobile/lib/ota.ts`: descarga y aplicación en runtime.
 
-`apps/enterprise` no está cubierto por esta guía: conserva identificadores EAS placeholder y no tiene `expo-updates` configurado.
-
 ## Estado efectivo
 
 - Expo SDK 54, React Native 0.81 y Expo Router 6.

@@ -20,19 +20,12 @@
           "/reset-password",
           "/coach/subscription"
         ]
-      },
-      {
-        "appID": "5GKWMMZ46Q.cl.evaapp.eva-enterprise",
-        "paths": [
-          "/org/*"
-        ]
       }
     ]
   },
   "webcredentials": {
     "apps": [
-      "5GKWMMZ46Q.cl.evaapp.eva",
-      "5GKWMMZ46Q.cl.evaapp.eva-enterprise"
+      "5GKWMMZ46Q.cl.evaapp.eva"
     ]
   }
 }

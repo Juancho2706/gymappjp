@@ -117,8 +117,8 @@ Las suites E2E no bloquean PR automáticamente porque utilizan un entorno Supaba
 Desde el 2026-09-02 el job `e2e` del dispatch corre **solo el project `prod-suave`**
 (`npx playwright test --project=prod-suave`): un navegador, sin paralelismo, `retries: 0`, header
 `x-eva-qa` y el guardián de `/api/health`. El project `chromium` —specs que escriben en producción
-sobre un coach real— ya no se lanza desde CI, y el paso de RLS de `apps/enterprise` (app congelada,
-B15) se eliminó.
+sobre un coach real— ya no se lanza desde CI, y el paso de RLS de `apps/enterprise` se eliminó junto
+con la app, borrada del repo el 2026-09-05 (B15, fase E1 del retiro de Enterprise).
 
 - [x] **Secrets cargados (2026-09-02)**: `E2E_QA_COACH_EMAIL` y `E2E_QA_COACH_PASSWORD` apuntan al
   coach QA propio **`qa-e2e-coach@evatest.cl`** (slug `qa-e2e-coach`, id `19fc07a3-…`), creado por la

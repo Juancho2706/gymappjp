@@ -14,7 +14,6 @@ const AASA = path.join(REPO_ROOT, 'apps/web/public/.well-known/apple-app-site-as
 const STUDENT_TREE = path.join(REPO_ROOT, 'apps/web/src/app/c/[coach_slug]')
 
 const MAIN_APP_ID = '5GKWMMZ46Q.cl.evaapp.eva'
-const ENTERPRISE_APP_ID = '5GKWMMZ46Q.cl.evaapp.eva-enterprise'
 
 interface IntentFilterData {
     scheme?: string
@@ -137,10 +136,5 @@ describe('App Links iOS — el AASA excluye el árbol del alumno pero conserva l
         expect(aasaClaims(mainPaths, '/c/ana-fit')).toBe(true)
         expect(aasaClaims(mainPaths, '/reset-password')).toBe(true)
         expect(aasaClaims(mainPaths, '/coach/subscription')).toBe(true)
-    })
-
-    it('el appID enterprise queda intacto', () => {
-        const enterprise = aasaDetails.find((detail) => detail.appID === ENTERPRISE_APP_ID)
-        expect(enterprise?.paths).toEqual(['/org/*'])
     })
 })

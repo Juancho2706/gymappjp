@@ -65,7 +65,7 @@ completaba en loop (caso real el 01-09). Seguimiento operativo en
 | B12 | Cardio/Movimiento desde la barra RN entran como push de stack (`tab: null`) | `CoachMobileChrome.tsx` | si molesta: tabs re-exportadas sin ← en sus headers |
 | B13 | Adherencia del dashboard: el denominador es el programa actual (mismo sesgo que el número principal) | `dashboard/_lib/kpi-deltas.ts` | — |
 | B14 | W4.6c Facturación RN | — | espera Cobros ([SDD](../cobros-coach-alumno/SPEC.md), P1–P8 del owner) |
-| B15 | **Demolición de Enterprise** (regla del owner 01-09: ELIMINADO, no tocar, quitar a futuro) | `apps/enterprise`, `/org/*`, `enterprise_coach` en coach-nav/workspace, RLS/policies de org, cron/e2e enterprise | ola propia, fuera de esta |
+| B15 | **Demolición de Enterprise** (regla del owner 01-09: ELIMINADO, no tocar, quitar a futuro) | `apps/enterprise`, `/org/*`, `enterprise_coach` en coach-nav/workspace, RLS/policies de org, cron/e2e enterprise | **en curso 05-09**: E0+E1 en código (app Expo, specs y scripts borrados) por el [SDD de retiro](../retiro-starter-y-enterprise/TASKS.md); E2/E3 quedan planificadas ahí |
 | B16 | 7C: verificar la corrida automática del cron (04:30Z del 02-09 ⇒ 2.ª fila por coach) y el primer delta real el 08-09 | `coach_kpi_snapshots` | operación |
 
 **02-09 — tren «cierre de backlog» EN PRODUCCIÓN (`794aee52`, OTA 1.1.2 `01a063b0`):** B1 = solo en

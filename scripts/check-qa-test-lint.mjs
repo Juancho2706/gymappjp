@@ -34,7 +34,7 @@ const SKIPPED_DIRS = new Set(['node_modules', 'archive', '.auth', 'fixtures'])
  * regla existiera y no se tocan en esta tanda. La lista NO crece — un archivo nuevo con
  * `networkidle` es un error. Al limpiar uno, se borra su línea de acá.
  */
-const LEGACY_ALLOWLIST = new Set(['tests/enterprise/journey-e2e.spec.ts'])
+const LEGACY_ALLOWLIST = new Set([])
 
 /** Cada patrón: qué se busca y qué se hace en su lugar. */
 const FORBIDDEN_PATTERNS = [

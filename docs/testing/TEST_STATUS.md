@@ -84,7 +84,7 @@ Motivo: usan Supabase real, secrets y datos preparados; todavía no son determin
   [MANUAL_TASKS.md](../operations/MANUAL_TASKS.md));
 - artefacto `playwright-report-e2e`.
 
-El paso de aislamiento RLS de `apps/enterprise` se eliminó (app congelada, cuarentena 2026-08-06).
+El paso de aislamiento RLS de `apps/enterprise` se eliminó junto con la app, borrada del repo el 2026-09-05 (fase E1 del retiro de Enterprise).
 
 `nutrition-smoke` valida el entorno y ejecuta el smoke de alumno, solo si están presentes las credenciales E2E requeridas. Produce `playwright-report-nutrition-smoke`.
 
@@ -104,7 +104,7 @@ Estado confirmado al 25 de julio de 2026 (`a59acfd1`, post-merge PR #170):
 | Gate | Estado | Evidencia |
 |---|---|---|
 | Integración PR #170 en `master` | verde | job `quality` en el [run 30181033720](https://github.com/Juancho2706/gymappjp/actions/runs/30181033720) sobre `baef4283`: docs, lint 0 errores, typecheck web, tokens y Vitest 328 archivos aprobados, 2 omitidos; 3940 tests aprobados, 4 omitidos |
-| TypeScript móvil/enterprise | verde local | `tsc --noEmit` de web, `@eva/mobile` y `@eva/enterprise` ejecutados el 2026-07-25 sobre `a59acfd1` |
+| TypeScript móvil | verde local | `tsc --noEmit` de web y `@eva/mobile` ejecutados el 2026-07-25 sobre `a59acfd1` |
 | Android `production` | build + submit verdes en el corte ACTUAL | [run 30185211552](https://github.com/Juancho2706/gymappjp/actions/runs/30185211552) sobre `856829fa` (2026-07-25): build + upload + Submit AAB a Play internal testing, todo success (también verdes los runs previos `4382ff6c`/`335c88da`); artefactos con retención de 1 día |
 | iOS `production` | build + submit verdes en el corte ACTUAL | [run 30185211552](https://github.com/Juancho2706/gymappjp/actions/runs/30185211552) sobre `856829fa`: build + upload + **Submit TestFlight success** con el profile regenerado (HealthKit + Associated Domains + push, expira 2027-05-18; secret actualizado 2026-07-26). La falla por capability HealthKit (runs `29976332962`/`30063566202`, diagnóstico [30183498116](https://github.com/Juancho2706/gymappjp/actions/runs/30183498116)) quedó cerrada |
 | Universal links iOS | en el binario `856829fa` | `ios.associatedDomains` repuesto (revertido desde 2026-07-08); AASA ya publicado. QA en device pendiente (CDN de Apple puede tardar horas) |

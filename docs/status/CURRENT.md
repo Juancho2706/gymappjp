@@ -25,7 +25,7 @@ prevalecen sobre este resumen. La prosa retirada el 2026-09-02 está en
 | Nutrition V2 | Canónica para Standalone/Team; el programa de rediseño cerró el 2026-08-17. | [Programa](../specs/nutrition-flows-redesign/TASKS.md) · [Runbook de corte](../operations/NUTRITION_V2_CUTOVER_RUNBOOK.md) |
 | V1 nutrición | Congelada, **no se borra** (decisión owner 2026-08-03): solo migrar usuarios a V2. | [Delta del mapa](../audits/v1-deprecation-map-delta-2026-08-03.md) |
 | Teams | Pool, membresías y workspaces implementados. | [Flows](../architecture/FLOWS_AND_COMPONENTS.md#team) |
-| Enterprise | **ELIMINADO de EVA (decisión del owner 2026-09-01)**: no tocar; la demolición es el backlog B15. **SDD de retiro en draft (05-09)**: 5 fases E0–E4 + retiro de Starter, 15 decisiones del owner pendientes. | [SDD retiro](../specs/retiro-starter-y-enterprise/SPEC.md) · [Ola de orden](../specs/ola-de-orden/TASKS.md) · [Flows](../architecture/FLOWS_AND_COMPONENTS.md#enterprise) |
+| Enterprise | **ELIMINADO de EVA (decisión del owner 2026-09-01)**: E0+E1 en código el 05-09 (app Expo, specs y scripts borrados); E2/E3 planificadas en el SDD. | [SDD retiro](../specs/retiro-starter-y-enterprise/SPEC.md) · [Ola de orden](../specs/ola-de-orden/TASKS.md) · [Flows](../architecture/FLOWS_AND_COMPONENTS.md#enterprise) |
 
 ## Prioridades vigentes
 
