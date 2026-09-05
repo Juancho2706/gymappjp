@@ -14,8 +14,6 @@ const resolveDomainsEnabled = vi.fn()
 const resolveNutritionTabV2 = vi.fn()
 const getCoachOnboardingEmptyContext = vi.fn()
 const redirectMock = vi.fn()
-/** Últimos `domainsEnabled` que le llegaron al dashboard — así se ve el resultado, no solo el ctx. */
-const domainsEnabledSeen: unknown[] = []
 
 vi.mock('./_actions/client-detail.actions', () => ({
     getClientProfileData: (...args: unknown[]) => getClientProfileData(...args),
@@ -50,14 +48,12 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('./ClientProfileHero', () => ({ ClientProfileHero: () => null }))
 vi.mock('./_components/DemoStudentBanner', () => ({ DemoStudentBanner: () => null }))
-vi.mock('./ClientProfileDashboard', () => ({
-    ClientProfileDashboard: (props: { domainsEnabled: unknown }) => {
-        domainsEnabledSeen.push(props.domainsEnabled)
-        return null
-    },
-}))
+vi.mock('./ClientProfileDashboard', () => ({ ClientProfileDashboard: () => null }))
 
 import ClientProfilePage from './page'
+// `vi.mock` está hoisteado, así que esto resuelve al mock de arriba: la MISMA referencia de función
+// que `page.tsx` usa como `type` del elemento, y con eso lo ubicamos dentro del árbol.
+import { ClientProfileDashboard } from './ClientProfileDashboard'
 
 const CLIENT_ID = 'client-1'
 const COACH_ID = 'coach-1'
@@ -111,10 +107,25 @@ async function renderProfileContent() {
     return (inner.type as (p: unknown) => Promise<ReactElement>)(inner.props)
 }
 
+/**
+ * El árbol que devuelve `ProfileContent` tampoco se renderiza: se lee como descriptor. Este helper
+ * recorre los `children` del `<div>` raíz (puede traer `null` por el banner de demo) y devuelve los
+ * props del elemento cuyo `type` es `ClientProfileDashboard`, para afirmar sobre lo que REALMENTE
+ * le llega al dashboard y no solo sobre el ctx.
+ */
+function findDashboardProps(tree: ReactElement) {
+    const children = (tree.props as { children: unknown }).children
+    for (const child of Array.isArray(children) ? children : [children]) {
+        if (isValidElement(child) && child.type === ClientProfileDashboard) {
+            return child.props as { domainsEnabled: unknown }
+        }
+    }
+    throw new Error('ClientProfileDashboard no encontrado en el árbol de ProfileContent')
+}
+
 describe('ClientProfilePage — ctx exacto de resolveDomainsEnabled (B11)', () => {
     beforeEach(() => {
         vi.clearAllMocks()
-        domainsEnabledSeen.length = 0
         getClientProfileData.mockResolvedValue(baseProfileData())
         getEnabledModulesForRender.mockResolvedValue({})
         resolveNutritionTabV2.mockResolvedValue(null)
@@ -162,10 +173,10 @@ describe('ClientProfilePage — ctx exacto de resolveDomainsEnabled (B11)', () =
             baseProfileData({ client: baseClient({ coach_id: null }) }),
         )
 
-        await renderProfileContent()
+        const tree = await renderProfileContent()
 
         expect(resolveDomainsEnabled).not.toHaveBeenCalled()
-        expect(domainsEnabledSeen.at(-1)).toEqual({})
+        expect(findDashboardProps(tree).domainsEnabled).toEqual({})
     })
 
     it('coach con los 5 dominios apagados: el resultado llega intacto al dashboard (mismo objeto)', async () => {
@@ -178,8 +189,8 @@ describe('ClientProfilePage — ctx exacto de resolveDomainsEnabled (B11)', () =
         }
         resolveDomainsEnabled.mockResolvedValue(allOff)
 
-        await renderProfileContent()
+        const tree = await renderProfileContent()
 
-        expect(domainsEnabledSeen.at(-1)).toEqual(allOff)
+        expect(findDashboardProps(tree).domainsEnabled).toEqual(allOff)
     })
 })
