@@ -185,6 +185,53 @@ describe('sendFreeCoachOnboardingEmails', () => {
         expect(error).not.toHaveBeenCalled()
     })
 
+    /**
+     * Cerco de cuentas de prueba: el alta de QA disparaba bienvenida + drip a un buzón que no
+     * existe y esos rebotes eran el grueso del 6,4 % de bounce del dominio. Se corta ANTES de armar
+     * la plantilla: ni un request a Resend, ni una fila del ledger del drip.
+     */
+    it('cuenta de prueba @evatest.cl: ni bienvenida, ni drip, ni plantilla (log sin PII)', async () => {
+        const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+        await expect(
+            sendFreeCoachOnboardingEmails({ ...PARAMS, email: 'qa-persona-1@evatest.cl' })
+        ).resolves.toBeUndefined()
+
+        expect(buildFreeCoachWelcomeEmailMock).not.toHaveBeenCalled()
+        expect(sendTransactionalEmailMock).not.toHaveBeenCalled()
+        expect(scheduleFreeCoachDripSequenceMock).not.toHaveBeenCalled()
+        // Ni siquiera la línea de resumen del drip: no hubo serie que resumir.
+        expect(warn).not.toHaveBeenCalled()
+        const logged = JSON.stringify(info.mock.calls)
+        expect(logged).not.toContain('qa-persona-1@evatest.cl')
+        expect(logged).not.toContain(PARAMS.coachName)
+    })
+
+    // W8.4.4: `qa-free-v3@evatest.cl` es la cuenta con la que el owner recorre las personas a mano,
+    // así que es la ÚNICA `@evatest.cl` que tiene que seguir recibiendo la bienvenida de verdad.
+    it('la excepción qa-free-v3@evatest.cl recorre el camino normal', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+        await sendFreeCoachOnboardingEmails({ ...PARAMS, email: 'qa-free-v3@evatest.cl' })
+
+        expect(sendTransactionalEmailMock).toHaveBeenCalledWith(
+            expect.objectContaining({ to: 'qa-free-v3@evatest.cl' })
+        )
+        expect(scheduleFreeCoachDripSequenceMock).toHaveBeenCalledWith(
+            expect.objectContaining({ email: 'qa-free-v3@evatest.cl' })
+        )
+    })
+
+    it('coach real: el cerco no lo toca (bienvenida + drip intactos)', async () => {
+        vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+        await sendFreeCoachOnboardingEmails({ ...PARAMS, email: 'coach.real@gmail.com' })
+
+        expect(sendTransactionalEmailMock).toHaveBeenCalledTimes(1)
+        expect(scheduleFreeCoachDripSequenceMock).toHaveBeenCalledTimes(1)
+    })
+
     // El bug real: en Vercel la función se congela al devolver el redirect. Si el helper no espera,
     // los dos POST a Resend mueren con la invocación (19-08: 2 de 5 bienvenidas perdidas).
     it('NO resuelve hasta que ambas promesas se asientan', async () => {

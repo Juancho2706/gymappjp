@@ -4,6 +4,8 @@ import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { buildClientLimitReachedEmail } from '@/lib/email/sales-templates'
 import { buildSubscriptionUrl } from '@/lib/email/subscription-url'
 import { getTierRank, TIER_LABELS, type SubscriptionTier } from '@/lib/constants'
+import { isTestCoachEmail } from '@/lib/test-accounts'
+import { isBehaviorTestBypass } from '@/lib/email/behavior/behavior-triggers'
 
 /**
  * Envío de los correos de VENTA por evento (límite de alumnos, vence pronto, venció).
@@ -91,6 +93,8 @@ export type SalesEmailOutcome =
     | 'skipped_disabled'
     | 'skipped_duplicate'
     | 'skipped_no_recipient'
+    /** Cuenta de prueba (`isTestCoachEmail`) sin el bypass de QA: ni Resend ni ledger. */
+    | 'skipped_test_account'
     | 'failed'
 
 type SendSalesEmailInput = {
@@ -258,11 +262,27 @@ type ClientLimitEmailInput = {
  *
  * El CTA sale con UTM (`utm_source=cap_email`, `utm_campaign=<trigger>`) para separar en PostHog el
  * checkout que nace del rechazo del que nace del barrido.
+ *
+ * CERCO DE CUENTAS DE PRUEBA: los buzones de QA (`@evatest.cl` y la lista de `lib/test-accounts`) no
+ * existen, así que cada correo rebota y los rebotes eran el grueso del 6,4 % de bounce del dominio,
+ * que es reputación de envío que pagan los coaches reales. El barrido del cron (`cap-nudge`) y W6 ya
+ * filtraban; el gatillo `attempt` no, y es el que más dispara (cada QA de cupo choca el 402). El
+ * cerco vive ACÁ y no en los cuatro callers del 402 (acción web, importación web, endpoint móvil e
+ * importación móvil) para que ninguno pueda olvidarlo.
  */
 export async function sendClientLimitReachedEmail(
     admin: Db,
     input: ClientLimitEmailInput
 ): Promise<SalesEmailOutcome> {
+    // Excepción `qa-free-v3@evatest.cl` (`isBehaviorTestBypass`, W8.4.4): es la cuenta con la que el
+    // owner recorre el embudo a mano, y sin bypass el correo de cupo sería imposible de probar
+    // salvo leyendo el HTML en un test.
+    if (isTestCoachEmail(input.coachEmail) && !isBehaviorTestBypass(input.coachEmail)) {
+        // Sin PII: el uuid del coach alcanza para rastrearlo en el ledger y en los logs.
+        console.info(`[sales-email:client_limit_reached] cuenta de prueba, no se envía: coach ${input.coachId}`)
+        return 'skipped_test_account'
+    }
+
     const tier = (input.tier ?? 'free') as SubscriptionTier
     const trigger = input.trigger ?? 'attempt'
     // Pricing v2 (D3): el upsell apunta a Pro — free recibe

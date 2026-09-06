@@ -235,6 +235,69 @@ describe('sendClientLimitReachedEmail — gatillos attempt vs sweep', () => {
         const { subject } = sendTransactionalEmail.mock.calls[0][0] as { subject: string }
         expect(subject).toBe('Alcanzaste el límite de 1 alumno de tu plan Gratis')
     })
+
+    /**
+     * Cerco de cuentas de prueba: los buzones de QA no existen, rebotan y eran el grueso del 6,4 %
+     * de bounce del dominio. El cron `cap-nudge` ya filtraba antes de llamar; el gatillo `attempt`
+     * (los cuatro caminos del 402) no, así que el cerco vive en el service.
+     */
+    it('cuenta de prueba @evatest.cl → skipped_test_account, sin Resend y sin ledger', async () => {
+        const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+        const { admin, inserts } = makeAdmin([])
+        const outcome = await sendClientLimitReachedEmail(admin, {
+            ...capInput,
+            coachEmail: 'qa-persona-1@evatest.cl',
+            source: 'web_create',
+        })
+
+        expect(outcome).toBe('skipped_test_account')
+        expect(sendTransactionalEmail).not.toHaveBeenCalled()
+        expect(inserts).toHaveLength(0)
+        // El log vive en Vercel sin retención acotada: nunca el email ni el nombre.
+        const logged = JSON.stringify(info.mock.calls)
+        expect(logged).not.toContain('qa-persona-1@evatest.cl')
+        expect(logged).not.toContain('Josefa')
+        info.mockRestore()
+    })
+
+    it('el cerco es case-insensitive (el dominio entra como lo escriba GoTrue)', async () => {
+        const info = vi.spyOn(console, 'info').mockImplementation(() => {})
+        const { admin } = makeAdmin([])
+        const outcome = await sendClientLimitReachedEmail(admin, {
+            ...capInput,
+            coachEmail: '  QA-Persona-1@EvaTest.CL  ',
+            source: 'mobile_create',
+        })
+        expect(outcome).toBe('skipped_test_account')
+        expect(sendTransactionalEmail).not.toHaveBeenCalled()
+        info.mockRestore()
+    })
+
+    it('la excepción qa-free-v3@evatest.cl atraviesa el cerco (QA a mano del owner)', async () => {
+        const { admin, inserts } = makeAdmin([])
+        const outcome = await sendClientLimitReachedEmail(admin, {
+            ...capInput,
+            coachEmail: 'qa-free-v3@evatest.cl',
+            source: 'web_create',
+        })
+
+        expect(outcome).toBe('sent')
+        expect(sendTransactionalEmail).toHaveBeenCalledTimes(1)
+        expect(inserts).toHaveLength(1)
+    })
+
+    it('coach real: el cerco no lo toca (manda y escribe el ledger igual que antes)', async () => {
+        const { admin, inserts } = makeAdmin([])
+        const outcome = await sendClientLimitReachedEmail(admin, {
+            ...capInput,
+            coachEmail: 'coach.real@gmail.com',
+            source: 'web_create',
+        })
+
+        expect(outcome).toBe('sent')
+        expect(sendTransactionalEmail).toHaveBeenCalledTimes(1)
+        expect(inserts).toHaveLength(1)
+    })
 })
 
 describe('sendSalesEmailOnce — gate, dedupe y no-romper-el-flujo', () => {

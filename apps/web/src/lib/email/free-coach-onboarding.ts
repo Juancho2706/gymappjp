@@ -2,6 +2,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { buildFreeCoachWelcomeEmail } from '@/lib/email/transactional-templates'
+import { isTestCoachEmail } from '@/lib/test-accounts'
+import { isBehaviorTestBypass } from '@/lib/email/behavior/behavior-triggers'
 import {
     DRIP_SCHEDULE,
     scheduleFreeCoachDripSequence,
@@ -36,6 +38,13 @@ import {
  *
  * `allSettled` mantiene la garantía vieja: un fallo de Resend nunca rompe un alta ni la retrasa
  * más allá de sus dos requests. La función JAMÁS lanza; un rechazo solo deja un warn sin PII.
+ *
+ * CERCO DE CUENTAS DE PRUEBA: un alta de QA (`@evatest.cl` o la lista de `lib/test-accounts`)
+ * disparaba bienvenida + drip a un buzón que no existe, y esos rebotes eran el grueso del 6,4 % de
+ * bounce del dominio — reputación de envío que terminan pagando los correos de coaches reales. El
+ * cron `cap-nudge` y W6 ya filtraban; el alta era el hueco, y es el camino que MÁS se recorre en QA.
+ * ÚNICA excepción: `qa-free-v3@evatest.cl` (`isBehaviorTestBypass`, W8.4.4), la cuenta con la que el
+ * owner recorre las personas a mano — existe justamente para poder ver la bienvenida real llegar.
  */
 export async function sendFreeCoachOnboardingEmails(params: {
     /** Service-role client: el ledger de correos (`coach_email_ledger`) se escribe con service_role. */
@@ -48,6 +57,13 @@ export async function sendFreeCoachOnboardingEmails(params: {
     inviteCode?: string | null
     appUrl: string
 }): Promise<void> {
+    // Antes de armar nada: la plantilla y el drip cuestan requests y el buzón de QA rebota igual.
+    // Log sin PII (solo el uuid), que alcanza para rastrear el alta en `coaches`.
+    if (isTestCoachEmail(params.email) && !isBehaviorTestBypass(params.email)) {
+        console.info('[onboarding-emails] cuenta de prueba, no se envía', { coachId: params.coachId })
+        return
+    }
+
     const { subject, html } = buildFreeCoachWelcomeEmail({
         coachName: params.coachName,
         brandName: params.brandName,
