@@ -105,6 +105,7 @@ import {
   buildQuickEditBaseline,
   buildQuickEditIdempotencyKey,
   loadQuickEditSubstitutions,
+  type PublishEffectiveFromChoice,
 } from '../../../lib/nutrition-v2-quick-edit'
 import type { PortionPickerGroup, QuickEditGroupAdmin } from './EditablePortionsSection'
 import { captureNutritionItemImplausible } from '../../../lib/analytics'
@@ -142,6 +143,7 @@ import { TargetsEditorCard } from './TargetsEditorCard'
 import { FoodSearchSheet, type FoodSearchMode } from './FoodSearchSheet'
 import { PublishBar, UndoSnackbar, type PublishBarDayTotals } from './PublishBar'
 import { PublishBlockedSheet, PublishConfirmSheet, StaleBaseSheet } from './QuickEditSheets'
+import { PublishTodaySheet } from './PublishTodaySheet'
 import {
   EDITOR_COPY,
   QUICK_EDIT_COPY,
@@ -274,6 +276,7 @@ export function QuickEditMode({
   todayIso,
   hasNutritionPro = false,
   editor = null,
+  todayIntakeSummary = null,
   onExit,
   onPublished,
   onStaleReload,
@@ -293,6 +296,12 @@ export function QuickEditMode({
   hasNutritionPro?: boolean
   /** Editor unico (T3.3b). Ausente = quick-edit clasico, bit-identico a como era. */
   editor?: QuickEditEditorInput | null
+  /**
+   * Lo que el alumno YA registro HOY (W3.2 «Cantidades honestas», SPEC §6.2), resuelto por la
+   * pantalla desde el `today` del detalle. Con `entryCount > 0` y vigencia HOY, «Publicar»
+   * pregunta antes «Aplicar hoy / desde manana». `null` (default) = el flujo de siempre.
+   */
+  todayIntakeSummary?: { entryCount: number; slotCount: number } | null
   onExit: () => void
   onPublished: () => void
   onStaleReload: () => void
@@ -408,6 +417,11 @@ export function QuickEditMode({
   const [publishing, setPublishing] = useState(false)
   const [publishError, setPublishError] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
+  // W3.2: paso previo al confirm cuando el alumno ya registro hoy.
+  const [publishTodayOpen, setPublishTodayOpen] = useState(false)
+  // Vigencia elegida en ese paso. En un REF y no en estado: `doPublish` la lee dentro del await
+  // y el reintento de la misma intencion reusa la eleccion (igual que la idempotency key).
+  const effectiveFromChoiceRef = useRef<PublishEffectiveFromChoice>('today')
   const [stale, setStale] = useState(false)
   const [publishBlocked, setPublishBlocked] = useState<string | null>(null)
   const [searchTarget, setSearchTarget] = useState<SearchTarget | null>(null)
@@ -1367,6 +1381,9 @@ export function QuickEditMode({
         foodId: food.id,
         quantity: found.item.quantity,
         unit: found.item.unit,
+        // R10: la memoria vive en g/ml/un; en medida casera se convierte antes del RPC.
+        servingUnit: food.servingUnit,
+        householdGrams: found.item.householdGrams ?? food.householdGrams,
       })
     },
     [editorMode, template, findItem, clientId],
@@ -1512,12 +1529,17 @@ export function QuickEditMode({
       carryOverSubstitutions: carryOverSubs,
       idempotencyKey: intentKeyRef.current,
       todayIso,
+      // W3.2: 'today' salvo que el coach haya elegido «Aplicar desde manana» en el paso previo.
+      // La FECHA la recalcula el servidor en la tz del alumno; aca solo viaja la intencion.
+      effectiveFromChoice: effectiveFromChoiceRef.current,
     })
     if (!mountedRef.current) return
     setPublishing(false)
     setConfirmOpen(false)
     if (res.ok) {
       intentKeyRef.current = null
+      // Intencion consumida: la proxima publicacion vuelve a preguntar (W3.2).
+      effectiveFromChoiceRef.current = 'today'
       // Publicado: el respaldo local ya no aporta (best-effort, sin bloquear la salida).
       void clearNutritionDraft(draftKey)
       onPublished()
@@ -1572,6 +1594,14 @@ export function QuickEditMode({
     setPublishError(null)
     // Key FRESCA por intencion (abrir el confirm); los reintentos de esta intencion la reusan.
     intentKeyRef.current = buildQuickEditIdempotencyKey({ clientId, operationId: genKey('qe') })
+    // W3.2 (SPEC §6.2): con registros de HOY y vigencia efectiva HOY, la vigencia se decide
+    // ANTES del confirm de siempre. Creacion y plantilla quedan fuera (no tocan el dia de
+    // nadie), y con vigencia FUTURA el dia del alumno ya queda intacto por si solo.
+    const publishesToday = baseline != null && baseline.effectiveFrom <= todayIso
+    if (!template && !creation && publishesToday && (todayIntakeSummary?.entryCount ?? 0) > 0) {
+      setPublishTodayOpen(true)
+      return
+    }
     setConfirmOpen(true)
   }, [
     count,
@@ -1581,10 +1611,28 @@ export function QuickEditMode({
     clientId,
     subsStatus,
     template,
+    creation,
+    baseline,
+    todayIso,
+    todayIntakeSummary,
     editorMode,
     orderedVariants,
     activeVariant,
   ])
+
+  /** W3.2: el coach eligio la vigencia -> sigue el flujo de siempre (confirm -> publicar). */
+  const handlePublishTodayChoice = useCallback((choice: PublishEffectiveFromChoice) => {
+    effectiveFromChoiceRef.current = choice
+    setPublishTodayOpen(false)
+    setConfirmOpen(true)
+  }, [])
+
+  /** Cerrar el paso = seguir editando: nada se publica y la eleccion vuelve al default. */
+  const handlePublishTodayClose = useCallback(() => {
+    if (publishing) return
+    effectiveFromChoiceRef.current = 'today'
+    setPublishTodayOpen(false)
+  }, [publishing])
 
   const handleRetry = useCallback(() => {
     // Con el carry-over sin resolver, "Reintentar" reintenta la LECTURA de reemplazos (es
@@ -2297,6 +2345,16 @@ export function QuickEditMode({
         onClose={() => setSearchTarget(null)}
         onSelect={handleSelectFood}
         onFreeItem={handleFreeItem}
+      />
+      {/* W3.2 «Cantidades honestas»: paso previo al confirm cuando el alumno ya registro hoy
+          (mockup M3). Copy espejo del `PublishTodayDialog` web. */}
+      <PublishTodaySheet
+        open={publishTodayOpen}
+        publishing={publishing}
+        slotCount={todayIntakeSummary?.slotCount ?? 0}
+        entryCount={todayIntakeSummary?.entryCount ?? 0}
+        onChoose={handlePublishTodayChoice}
+        onClose={handlePublishTodayClose}
       />
       <PublishConfirmSheet
         open={confirmOpen}

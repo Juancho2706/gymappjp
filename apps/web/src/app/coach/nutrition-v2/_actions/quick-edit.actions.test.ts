@@ -293,6 +293,38 @@ describe('quickEditPublishAction — effectiveFrom', () => {
     expect(call.effectiveFrom).toMatch(/^\d{4}-\d{2}-\d{2}$/)
     expect(call.effectiveFrom > '2020-01-01').toBe(true)
   })
+
+  // W3.2 «Cantidades honestas» (SPEC §6.2). «Aplicar desde manana» es lo que hace que la opcion
+  // valga: la version vigente queda intacta HOY, el snapshot del dia no se rearma y los registros
+  // del alumno no pueden quedar huerfanos (cero fantasmas por construccion).
+  it('effectiveFromChoice tomorrow => effectiveFrom = hoy + 1 dia en la tz del alumno', async () => {
+    authOk(makeDb({ baseVersion: baseVersionRow({ effective_from: '2020-01-01' }), plan: { id: PLAN, client_id: CLIENT }, variants: [{ id: 'v1' }], versionNumber: 4 }))
+    await quickEditPublishAction(input())
+    const hoy = vi.mocked(persistAndPublishDraft).mock.calls[0][0].effectiveFrom
+    vi.mocked(persistAndPublishDraft).mockClear()
+
+    authOk(makeDb({ baseVersion: baseVersionRow({ effective_from: '2020-01-01' }), plan: { id: PLAN, client_id: CLIENT }, variants: [{ id: 'v1' }], versionNumber: 4 }))
+    await quickEditPublishAction(input({ effectiveFromChoice: 'tomorrow' }))
+    const manana = vi.mocked(persistAndPublishDraft).mock.calls[0][0].effectiveFrom
+
+    expect(manana).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(manana > hoy).toBe(true)
+    // Un dia exacto de calendario (y no un salto de mes mal hecho ni un corrimiento por DST).
+    expect(Date.parse(`${manana}T00:00:00Z`) - Date.parse(`${hoy}T00:00:00Z`)).toBe(86400000)
+  })
+
+  it('sin effectiveFromChoice el comportamiento es el de siempre (default today)', async () => {
+    authOk(makeDb({ baseVersion: baseVersionRow({ effective_from: '2099-01-01' }), plan: { id: PLAN, client_id: CLIENT }, variants: [{ id: 'v1' }], versionNumber: 4 }))
+    await quickEditPublishAction(input())
+    expect(vi.mocked(persistAndPublishDraft).mock.calls[0][0].effectiveFrom).toBe('2099-01-01')
+  })
+
+  it('un choice invalido no publica (VALIDATION), jamas cae al default en silencio', async () => {
+    authOk(makeDb({ baseVersion: baseVersionRow(), plan: { id: PLAN, client_id: CLIENT }, variants: [{ id: 'v1' }], versionNumber: 4 }))
+    const res = await quickEditPublishAction(input({ effectiveFromChoice: 'pasado' }))
+    expect(res).toEqual({ ok: false, code: 'VALIDATION' })
+    expect(persistAndPublishDraft).not.toHaveBeenCalled()
+  })
 })
 
 describe('quickEditPublishAction — mapeo de fallos del RPC', () => {

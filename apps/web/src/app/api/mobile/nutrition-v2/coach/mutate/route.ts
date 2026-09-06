@@ -34,6 +34,7 @@ import {
   type AssignClientResult,
 } from '@/app/coach/nutrition-v2/_lib/assign-plan'
 import { ArchivePlanInputSchema, classifyArchiveWrite } from '@/app/coach/nutrition-v2/_lib/archive-plan'
+import { nextDayIso, todayInTimezone } from '@/app/coach/nutrition-v2/_lib/effective-from'
 import { CoachFoodInputSchema, insertCoachFood } from '@/app/coach/nutrition-v2/_lib/coach-food'
 import {
   foodExchangeEquivalenceShape,
@@ -88,6 +89,15 @@ const QuickEditPublishSchema = z.object({
   baseVersionId: z.string().uuid(),
   idempotencyKey: z.string().trim().min(8).max(200),
   effectiveFrom: z.string().date(),
+  /**
+   * W3.2 «Cantidades honestas» (SPEC §6.2): que hacer con el DIA del alumno cuando ya registro
+   * algo hoy. `'today'` (default) = la fecha que ya mandaba el cliente, byte-identico a antes.
+   * `'tomorrow'` = el servidor PISA `effectiveFrom` con el dia siguiente: la version vigente
+   * queda intacta hoy y no hay snapshot que rearmar (cero huerfanos por construccion).
+   *
+   * Opcional a proposito: una build RN vieja no lo manda y publica exactamente como hasta hoy.
+   */
+  effectiveFromChoice: z.enum(['today', 'tomorrow']).default('today'),
 })
 
 const AssignSchema = z.object({
@@ -433,7 +443,7 @@ async function handleQuickEditPublish(
       { fields: zodFields(parsed.error) },
     )
   }
-  const { draft, baseVersionId, idempotencyKey, effectiveFrom } = parsed.data
+  const { draft, baseVersionId, idempotencyKey, effectiveFromChoice } = parsed.data
 
   // Versión base: pertenencia al plan del draft (anti-confusión de ids) + carry-over de notas +
   // capacidades ya presentes para el delta-gate. Se lee con el cliente RLS del coach (fail-closed).
@@ -474,6 +484,15 @@ async function handleQuickEditPublish(
       { feature: pro.feature },
     )
   }
+
+  // W3.2 «Cantidades honestas» (SPEC §6.2): con «Aplicar desde mañana» la fecha la pone el
+  // SERVIDOR (hoy + 1 en la tz del alumno) y no el cliente — el reloj del teléfono del coach no
+  // manda sobre el día del alumno. Con 'today' (default, y lo único que manda una build vieja) se
+  // usa la fecha que ya venía en el payload: byte-idéntico a antes.
+  const effectiveFrom =
+    effectiveFromChoice === 'tomorrow'
+      ? nextDayIso(todayInTimezone(merged.timezone))
+      : parsed.data.effectiveFrom
 
   const result = await persistAndPublishDraft({
     db,

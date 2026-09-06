@@ -48,6 +48,7 @@ import {
   injectSubstitutionsIntoDraft,
   mapPublishFailureCode,
   quickEditEffectiveFrom,
+  type PublishEffectiveFromChoice,
   type QuickEditPublishResult,
 } from './nutrition-v2-quick-edit'
 // T3.3a: el estado del quick-edit RN es la gramatica COMPARTIDA del paquete (R1); el draft se
@@ -491,6 +492,13 @@ export async function publishQuickEditDraftRN(input: {
   baseVersionId: string
   idempotencyKey: string
   effectiveFrom: string
+  /**
+   * W3.2 «Cantidades honestas» (SPEC §6.2). `'today'` (default) = la fecha de `effectiveFrom`,
+   * como siempre. `'tomorrow'` = el SERVIDOR la recalcula a hoy + 1 en la tz del alumno y la
+   * versión vigente queda intacta hoy: no se rearma el snapshot del día, así que los registros
+   * del alumno no pueden quedar huérfanos (cero fantasmas por construcción).
+   */
+  effectiveFromChoice?: PublishEffectiveFromChoice
 }): Promise<PublishResult> {
   const parsed = NutritionPlanDraftSchema.safeParse(input.draft)
   if (!parsed.success) {
@@ -504,6 +512,7 @@ export async function publishQuickEditDraftRN(input: {
     baseVersionId: input.baseVersionId,
     idempotencyKey: input.idempotencyKey,
     effectiveFrom: input.effectiveFrom,
+    effectiveFromChoice: input.effectiveFromChoice ?? 'today',
   })
   if (!res.ok) return res
   return { ok: true, versionId: res.data.versionId, planId: res.data.planId }
@@ -526,6 +535,8 @@ export async function publishQuickEditRN(input: {
   carryOverSubstitutions?: ReadonlyMap<string, NutritionItemSubstitution[]>
   idempotencyKey: string
   todayIso: string
+  /** W3.2: vigencia elegida por el coach cuando el alumno ya registró hoy. Default 'today'. */
+  effectiveFromChoice?: PublishEffectiveFromChoice
 }): Promise<QuickEditPublishResult> {
   // Proyeccion identica a la del web: draft base del read model + arbol editable encima. Las
   // porciones viajan EN el arbol (ya no hay estado paralelo) y el server re-congela snapshots.
@@ -548,6 +559,9 @@ export async function publishQuickEditRN(input: {
     baseVersionId: plan.versionId,
     idempotencyKey: input.idempotencyKey,
     effectiveFrom,
+    // La fecha de arriba es la de SIEMPRE (hoy, o la vigencia futura de la base). Con
+    // «Aplicar desde mañana» el servidor la pisa: la tz del alumno vive server-side.
+    effectiveFromChoice: input.effectiveFromChoice ?? 'today',
   })
   if (res.ok) return { ok: true, versionId: res.versionId }
   return { ok: false, code: mapPublishFailureCode(res), message: res.error, ...(res.feature ? { feature: res.feature } : {}) }

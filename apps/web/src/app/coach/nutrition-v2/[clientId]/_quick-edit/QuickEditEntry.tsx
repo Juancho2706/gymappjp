@@ -18,7 +18,7 @@ import { Pencil } from 'lucide-react'
 import type { NutritionItemSubstitutionRead, NutritionPlanReadModel } from '@eva/nutrition-v2'
 import { FoodPickerPrefsProvider } from '@/app/coach/nutrition-v2/_components/food-picker/FoodPickerPrefsContext'
 import type { FoodPickerRestriction } from '@/app/coach/nutrition-v2/_components/food-picker/food-picker-grouping'
-import { QuickEditProvider } from './QuickEditProvider'
+import { QuickEditProvider, type QuickEditTodayIntakeSummary } from './QuickEditProvider'
 import { QuickEditPlanView } from './QuickEditPlanView'
 import { QE_COPY } from './microcopy'
 
@@ -33,6 +33,7 @@ export function QuickEditEntry({
   viewerCoachId = null,
   foodRestrictions,
   favoriteFoodIds,
+  todayIntakeSummary = null,
 }: {
   clientId: string
   clientName: string
@@ -60,6 +61,11 @@ export function QuickEditEntry({
   foodRestrictions?: readonly FoodPickerRestriction[]
   /** Favoritos declarados del alumno (estrellita en el picker). */
   favoriteFoodIds?: readonly string[]
+  /**
+   * Qué hay REGISTRADO hoy (W3.2/W4.1): alimenta el aviso previo a republicar con vigencia HOY.
+   * `null` = sin dato ⇒ el provider no avisa.
+   */
+  todayIntakeSummary?: QuickEditTodayIntakeSummary | null
 }) {
   const [editing, setEditing] = useState(false)
 
@@ -115,6 +121,7 @@ export function QuickEditEntry({
             substitutionsLoadFailed={substitutionsLoadFailed}
             today={today}
             hasNutritionPro={hasNutritionPro}
+            todayIntakeSummary={todayIntakeSummary}
             onExit={() => setEditing(false)}
           >
             <QuickEditPlanView />

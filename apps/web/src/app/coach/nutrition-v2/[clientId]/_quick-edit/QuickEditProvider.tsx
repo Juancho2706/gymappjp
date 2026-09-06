@@ -38,6 +38,7 @@ import {
   updatePlanTemplateDraftAction,
 } from '../../_actions/plan-templates.actions'
 import { useCaptureCoachNutritionPlanPublished } from '@/lib/posthog/events'
+import { PublishTodayDialog, type PublishEffectiveFromChoice } from './PublishTodayDialog'
 import {
   loadExchangeGroupsForBuilderAction,
   loadExchangeGroupsForCoachAction,
@@ -122,6 +123,18 @@ export function genQuickEditKey(): string {
   return 'k-' + Math.random().toString(36).slice(2) + Date.now().toString(36)
 }
 
+/**
+ * Lo que el alumno YA registró HOY, resuelto server-side desde el `today` del detalle de la ficha
+ * (W3.2, «Cantidades honestas» SPEC §6.2). `null` = no se sabe (o no aplica): el flujo de publicar
+ * queda exactamente como estaba.
+ */
+export interface QuickEditTodayIntakeSummary {
+  /** Registros ACTIVOS de hoy: franjas + «Fuera del plan». 0 ⇒ el diálogo no se abre. */
+  entryCount: number
+  /** Franjas con al menos un registro activo hoy (manda en el copy del diálogo). */
+  slotCount: number
+}
+
 interface QuickEditContextValue {
   state: QuickEditState
   dispatch: (action: QuickEditAction) => void
@@ -191,6 +204,12 @@ interface QuickEditContextValue {
   upgradeRequired: boolean
   confirmOpen: boolean
   staleOpen: boolean
+  /**
+   * W3.2: «Publicar» abrió el paso «Aplicar hoy / desde mañana» en vez del confirm. Lo pinta el
+   * propio provider (`PublishTodayDialog`, junto al `ExitConfirmDialog`); se expone para que la
+   * UI sepa que hay un paso previo abierto.
+   */
+  publishTodayOpen: boolean
   openConfirm: () => void
   closeConfirm: () => void
   publishNow: () => void
@@ -232,6 +251,7 @@ export function QuickEditProvider({
   editPlanMeta = false,
   creation = null,
   template = null,
+  todayIntakeSummary = null,
   foodsById,
   onExit,
   afterPublish = null,
@@ -271,6 +291,12 @@ export function QuickEditProvider({
   creation?: EditorCreationInput | null
   /** Modo plantilla (ver EditorTemplateInput). Excluyente con `creation`. */
   template?: EditorTemplateInput | null
+  /**
+   * Registros del alumno de HOY (W3.2). Con `entryCount > 0` y vigencia efectiva HOY, «Publicar»
+   * pregunta antes «Aplicar hoy / desde mañana» (`PublishTodayDialog`). Default `null` = el flujo
+   * de siempre, sin un paso nuevo.
+   */
+  todayIntakeSummary?: QuickEditTodayIntakeSummary | null
   /** Cierra el modo edicion (vuelve a la ficha normal). */
   onExit: () => void
   /**
@@ -334,6 +360,12 @@ export function QuickEditProvider({
   const [upgradeRequired, setUpgradeRequired] = useState(false)
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [staleOpen, setStaleOpen] = useState(false)
+  // W3.2 «Cantidades honestas»: paso previo al confirm cuando el alumno ya registró hoy.
+  const [publishTodayOpen, setPublishTodayOpen] = useState(false)
+  // Vigencia elegida en ese paso. En un REF y no en estado: `runPublish` la lee dentro de la
+  // transición (y el reintento tras un error reusa la MISMA elección, igual que la clave de
+  // idempotencia). Sin el diálogo vale siempre 'today' = el comportamiento de siempre.
+  const effectiveFromChoiceRef = useRef<PublishEffectiveFromChoice>('today')
   // Guard de salida con cambios sin publicar: reemplaza los window.confirm() nativos por el
   // dialogo del DS (ver ExitConfirmDialog). La intencion se conserva al cerrar (solo baja
   // `exitConfirmOpen`) para que el copy no salte durante la animacion de cierre.
@@ -533,6 +565,21 @@ export function QuickEditProvider({
     return formatIsoDateDdMmYyyy(effectiveFrom)
   }, [planModel.plan, today])
 
+  /**
+   * W3.2 (SPEC §6.2): ¿hay que preguntar «Aplicar hoy / desde mañana» antes de publicar?
+   *
+   * Solo en EDICIÓN del plan vigente (una creación o una plantilla no tocan el día de nadie),
+   * con registros de hoy en mano y cuando la publicación caería HOY. Con vigencia FUTURA
+   * (`futureDateLabel`) el servidor publica en esa fecha: el día del alumno queda intacto por sí
+   * solo y un diálogo ahí sería ruido.
+   */
+  const needsPublishTodayChoice =
+    !template &&
+    !creation &&
+    futureDateLabel === null &&
+    todayIntakeSummary != null &&
+    todayIntakeSummary.entryCount > 0
+
   const openConfirm = useCallback(() => {
     // NUT-008: sin los reemplazos de la version base, publicar los borraria (el publish
     // reescribe el arbol completo). Fail-closed: no se abre el confirm.
@@ -557,12 +604,31 @@ export function QuickEditProvider({
         kind: 'publish',
       })
     }
+    // W3.2: con registros de hoy, la vigencia se decide ANTES de la confirmación de siempre.
+    if (needsPublishTodayChoice) {
+      setPublishTodayOpen(true)
+      return
+    }
     setConfirmOpen(true)
-  }, [validation.ok, clientId, substitutionsLoadFailed])
+  }, [validation.ok, clientId, substitutionsLoadFailed, needsPublishTodayChoice])
 
   const closeConfirm = useCallback(() => {
     if (isPending) return
     setConfirmOpen(false)
+  }, [isPending])
+
+  /** W3.2: el coach eligió la vigencia → sigue el flujo de siempre (confirm → publicar). */
+  const choosePublishToday = useCallback((choice: PublishEffectiveFromChoice) => {
+    effectiveFromChoiceRef.current = choice
+    setPublishTodayOpen(false)
+    setConfirmOpen(true)
+  }, [])
+
+  /** Cerrar el paso = seguir editando: nada se publica y la elección vuelve al default. */
+  const cancelPublishToday = useCallback(() => {
+    if (isPending) return
+    effectiveFromChoiceRef.current = 'today'
+    setPublishTodayOpen(false)
   }, [isPending])
 
   // Qué pasa DESPUES de publicar bien: salir del editor (siempre, desde que existe) o cederle el
@@ -699,6 +765,10 @@ export function QuickEditProvider({
           baseVersionId,
           draft: currentDraft,
           idempotencyKey,
+          // W3.2: 'today' salvo que el coach haya elegido «Aplicar desde mañana» en el paso
+          // previo. La FECHA la calcula el servidor en la tz del alumno; acá solo viaja la
+          // intención (el reloj del navegador del coach no manda sobre el día del alumno).
+          effectiveFromChoice: effectiveFromChoiceRef.current,
         })
       } catch {
         // Red caida / server action inalcanzable: el draft NO se pierde y el reintento
@@ -710,6 +780,8 @@ export function QuickEditProvider({
       if (res.ok) {
         if (openedAtRef.current !== null) capturePublished('quick_edit', Date.now() - openedAtRef.current)
         idempotencyKeyRef.current = null
+        // Intención consumida: la próxima publicación vuelve a preguntar (W3.2).
+        effectiveFromChoiceRef.current = 'today'
         clearNutritionDraft(draftKey)
         setConfirmOpen(false)
         toast.success(QE_COPY.success(clientName))
@@ -853,6 +925,7 @@ export function QuickEditProvider({
     upgradeRequired,
     confirmOpen,
     staleOpen,
+    publishTodayOpen,
     openConfirm,
     closeConfirm,
     publishNow,
@@ -878,6 +951,18 @@ export function QuickEditProvider({
         surface={template ? 'template' : 'plan'}
         onCancel={cancelExit}
         onConfirm={confirmExit}
+      />
+      {/* W3.2 «Cantidades honestas»: paso previo a la confirmación cuando el alumno ya registró
+          hoy. Vive acá —junto al ExitConfirmDialog— y no en el lienzo porque «Publicar» se toca
+          desde DOS lugares (la PublishBar y la cinta `EditorRibbon`) y los dos pasan por
+          `openConfirm`: un solo montaje, una sola verdad. */}
+      <PublishTodayDialog
+        open={publishTodayOpen}
+        pending={isPending}
+        slotCount={todayIntakeSummary?.slotCount ?? 0}
+        entryCount={todayIntakeSummary?.entryCount ?? 0}
+        onChoose={choosePublishToday}
+        onCancel={cancelPublishToday}
       />
     </QuickEditContext.Provider>
   )

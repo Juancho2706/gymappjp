@@ -304,6 +304,68 @@ describe('POST coach/mutate · publish · carry-over de notas', () => {
   })
 })
 
+// W3.2 «Cantidades honestas» (SPEC §6.2): el coach elige si la edicion entra HOY o MANANA cuando
+// el alumno ya registro algo. La FECHA la pone el servidor en la tz del alumno — el reloj del
+// telefono del coach no puede decidir en que dia entra el plan de otra persona.
+describe('POST coach/mutate · quickEditPublish · effectiveFromChoice', () => {
+  const base = (over: Record<string, unknown> = {}) => ({
+    action: 'quickEditPublish',
+    workspace: SCOPE,
+    draft: draft(),
+    baseVersionId: VERSION_ID,
+    idempotencyKey: 'quick-edit:key:abcdef',
+    effectiveFrom: '2026-07-28',
+    ...over,
+  })
+
+  /** Hoy en la tz del draft (`America/Santiago`), calculado igual que el servidor. */
+  function hoyEnSantiago(): string {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Santiago',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date())
+  }
+
+  beforeEach(() => {
+    mockBaseVersionRead({ data: baseVersionRow({ strategy: 'structured' }) })
+  })
+
+  it('sin la clave (build RN vieja) usa el effectiveFrom del payload: byte-identico a antes', async () => {
+    const res = await POST(req(base()))
+    expect(res.status).toBe(200)
+    expect(persistAndPublishDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ effectiveFrom: '2026-07-28', expectedCurrentVersionId: VERSION_ID }),
+    )
+  })
+
+  it("'today' explicito se comporta igual que la ausencia de la clave", async () => {
+    const res = await POST(req(base({ effectiveFromChoice: 'today' })))
+    expect(res.status).toBe(200)
+    expect(persistAndPublishDraft).toHaveBeenCalledWith(
+      expect.objectContaining({ effectiveFrom: '2026-07-28' }),
+    )
+  })
+
+  it("'tomorrow' PISA la fecha del cliente con hoy + 1 en la tz del alumno", async () => {
+    const res = await POST(req(base({ effectiveFromChoice: 'tomorrow' })))
+    expect(res.status).toBe(200)
+    const { effectiveFrom } = persistAndPublishDraft.mock.calls[0][0] as { effectiveFrom: string }
+    const hoy = hoyEnSantiago()
+    expect(effectiveFrom).not.toBe('2026-07-28')
+    expect(Date.parse(`${effectiveFrom}T00:00:00Z`) - Date.parse(`${hoy}T00:00:00Z`)).toBe(86400000)
+  })
+
+  it('un choice invalido => 400 INVALID_PAYLOAD, jamas cae al default en silencio', async () => {
+    const res = await POST(req(base({ effectiveFromChoice: 'pasado' })))
+    const body = await res.json()
+    expect(res.status).toBe(400)
+    expect(body.code).toBe('INVALID_PAYLOAD')
+    expect(persistAndPublishDraft).not.toHaveBeenCalled()
+  })
+})
+
 describe('POST coach/mutate · assign', () => {
   it('relee la FUENTE con la RPC scoped antes de copiar nada (NUT-012)', async () => {
     userRpc.mockResolvedValue({ data: null, error: null })

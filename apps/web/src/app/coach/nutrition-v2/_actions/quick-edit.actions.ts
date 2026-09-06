@@ -17,6 +17,7 @@ import {
   type NutritionV2Db,
 } from '@/app/coach/nutrition-v2/_actions/plan-persistence'
 import { collectBlankUuidPaths } from '@eva/nutrition-v2'
+import { resolveQuickEditEffectiveFrom } from '@/app/coach/nutrition-v2/_lib/effective-from'
 
 // Quick-edit V2 (edicion fluida del plan, web coach): publica una VERSION NUEVA por el MISMO
 // pipeline canonico del builder (persistAndPublishDraft -> publish_nutrition_plan_v2), pero con:
@@ -37,6 +38,12 @@ export interface QuickEditPublishInput {
   draft: NutritionPlanDraft
   /** Fresca por intencion de publicacion, estable en retries. */
   idempotencyKey: string
+  /**
+   * W3.2 «Cantidades honestas» (SPEC §6.2): que hacer con el DIA del alumno. `'today'` (default,
+   * decision D5 a) = como siempre. `'tomorrow'` = la version nueva entra manana y la vigente
+   * queda intacta hoy. Ausente = 'today', asi que un cliente viejo publica exactamente igual.
+   */
+  effectiveFromChoice?: 'today' | 'tomorrow'
 }
 
 export type QuickEditPublishResult =
@@ -72,6 +79,9 @@ const QuickEditInputSchema = z.object({
   baseVersionId: z.string().uuid(),
   draft: NutritionPlanDraftSchema,
   idempotencyKey: z.string().trim().min(8).max(200),
+  // W3.2: la INTENCION viaja del cliente; la FECHA la calcula el servidor en la tz del alumno
+  // (el reloj del navegador del coach no manda sobre el dia del alumno). Default compatible.
+  effectiveFromChoice: z.enum(['today', 'tomorrow']).default('today'),
 })
 
 /** Codigos de fallo de `persistAndPublishDraft` que mapean a cada codigo tipado del quick-edit. */
@@ -105,22 +115,6 @@ function toQuickEditFailure(failure: ActionFailure): QuickEditPublishResult {
       return { ok: false, code: 'VALIDATION', message: failure.error }
     default:
       return { ok: false, code: 'UNKNOWN', message: failure.error }
-  }
-}
-
-/** `today` (YYYY-MM-DD) en la zona horaria del alumno. `en-CA` produce el formato ISO. */
-function todayInTimezone(timezone: string): string {
-  const format = (tz: string): string =>
-    new Intl.DateTimeFormat('en-CA', {
-      timeZone: tz,
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).format(new Date())
-  try {
-    return format(timezone)
-  } catch {
-    return format('America/Santiago')
   }
 }
 
@@ -165,7 +159,7 @@ export async function quickEditPublishAction(input: unknown): Promise<QuickEditP
     void zodFields(parsed.error)
     return { ok: false, code: 'VALIDATION' }
   }
-  const { clientId, baseVersionId, draft, idempotencyKey } = parsed.data
+  const { clientId, baseVersionId, draft, idempotencyKey, effectiveFromChoice } = parsed.data
 
   // El draft debe apuntar al alumno autenticado y a un plan existente (quick-edit NUNCA crea plan).
   if (draft.clientId !== clientId) return { ok: false, code: 'VALIDATION' }
@@ -245,8 +239,17 @@ export async function quickEditPublishAction(input: unknown): Promise<QuickEditP
   // (5) La edicion no puede "adelantar" un plan con vigencia futura: effectiveFrom = max(hoy en la
   // tz del alumno, effectiveFrom de la version base). Con la migracion same-day, el MISMO dia se
   // permite (supersede intra-dia); solo una fecha < vigente seria rechazada por el RPC.
-  const today = todayInTimezone(draftFinal.timezone)
-  const effectiveFrom = base.effective_from && base.effective_from > today ? base.effective_from : today
+  //
+  // W3.2 «Cantidades honestas» (SPEC §6.2): con «Aplicar desde mañana» la version nueva entra el
+  // dia siguiente EN LA TZ DEL ALUMNO y la vigente se queda intacta hoy. Eso es lo que vuelve la
+  // opcion valiosa: el snapshot de hoy no se rearma, los ids de los items no cambian y los
+  // registros del alumno no pueden quedar huerfanos — cero fantasmas POR CONSTRUCCION, sin
+  // depender del linaje de W3.1 (que es la red para el caso «Aplicar hoy»).
+  const effectiveFrom = resolveQuickEditEffectiveFrom({
+    choice: effectiveFromChoice,
+    timezone: draftFinal.timezone,
+    baseEffectiveFrom: base.effective_from,
+  })
 
   // (6) Re-validacion server-side del draft (defensa en profundidad; ya paso el schema al entrar).
   const revalidated = NutritionPlanDraftSchema.safeParse(draftFinal)

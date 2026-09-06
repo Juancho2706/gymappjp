@@ -215,8 +215,19 @@ export interface QuickEditPortionGroup {
 // ---------------------------------------------------------------------------
 
 /**
+ * W3.2 «Cantidades honestas» (SPEC §6.2): que hacer con el DIA del alumno al republicar cuando ya
+ * registro algo hoy. Union literal identica a la del sheet (`PublishTodaySheet`) y al enum del
+ * endpoint; vive aca —en la lib PURA— para que `nutrition-v2.api.ts` no tenga que importar un
+ * componente de React solo por un tipo.
+ */
+export type PublishEffectiveFromChoice = 'today' | 'tomorrow'
+
+/**
  * Vigencia de la republicacion: hoy en la tz del plan, salvo que la version base
  * arranque en el futuro (el edit no puede "adelantar" el plan) — qe-design §2.3.5.
+ *
+ * Solo cubre «Aplicar hoy». «Aplicar desde manana» (W3.2) la calcula el SERVIDOR en la tz del
+ * alumno: el reloj del telefono del coach no puede decidir en que dia entra el plan de otro.
  */
 export function quickEditEffectiveFrom(todayIso: string, baseEffectiveFrom: string): string {
   return baseEffectiveFrom > todayIso ? baseEffectiveFrom : todayIso

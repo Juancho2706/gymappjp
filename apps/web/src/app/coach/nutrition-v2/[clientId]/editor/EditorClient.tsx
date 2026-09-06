@@ -17,7 +17,11 @@ import type {
 } from '@eva/nutrition-v2'
 import { FoodPickerPrefsProvider } from '@/app/coach/nutrition-v2/_components/food-picker/FoodPickerPrefsContext'
 import type { FoodPickerRestriction } from '@/app/coach/nutrition-v2/_components/food-picker/food-picker-grouping'
-import { QuickEditProvider, type EditorCreationInput } from '../_quick-edit/QuickEditProvider'
+import {
+  QuickEditProvider,
+  type EditorCreationInput,
+  type QuickEditTodayIntakeSummary,
+} from '../_quick-edit/QuickEditProvider'
 import { QuickEditPlanView } from '../_quick-edit/QuickEditPlanView'
 import {
   RememberedQuantitiesContext,
@@ -42,6 +46,7 @@ export function EditorClient({
   creation,
   originUnavailable,
   rememberedQuantities,
+  todayIntakeSummary = null,
   primera = null,
 }: {
   clientId: string
@@ -66,6 +71,12 @@ export function EditorClient({
   originUnavailable: boolean
   /** Porcion pegajosa (T2.6 F4): mapa foodId → ultima cantidad, resuelto server-side. */
   rememberedQuantities: Record<string, RememberedQuantity>
+  /**
+   * Registros del alumno de HOY, resueltos server-side (W3.2 «Cantidades honestas»). Con
+   * `entryCount > 0` y vigencia HOY, «Publicar» pregunta antes «Aplicar hoy / desde mañana».
+   * `null` (default) = el flujo de publicar de siempre.
+   */
+  todayIntakeSummary?: QuickEditTodayIntakeSummary | null
   /**
    * Entrada guiada «Arma su primera pauta» (W4 F4.3), resuelta SERVER-SIDE. `null` (el default) =
    * editor de siempre: sin tarjetas, sin aviso y saliendo al publicar como hasta hoy.
@@ -135,6 +146,7 @@ export function EditorClient({
         hasNutritionPro={hasNutritionPro}
         editPlanMeta
         creation={creation}
+        todayIntakeSummary={todayIntakeSummary}
         onExit={exitToClient}
         afterPublish={primera ? afterPublish : null}
       >
