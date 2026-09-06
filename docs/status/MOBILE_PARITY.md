@@ -604,7 +604,7 @@ morph en gama baja, TalkBack básico) sobre 1.1.2 + OTA; el splash nativo se cer
 (artifact `6bd32370`, iPhone 1.1.2 build 59). Canal y grupos del OTA en
 [`MOBILE_RELEASES_OTA.md`](../operations/MOBILE_RELEASES_OTA.md).
 
-**Rediseño «bloque único» (2026-09-06, EN MASTER, OTA pendiente).** Se retiran los 6 presets, los
+**Rediseño «bloque único» (2026-09-06, EN PRODUCCIÓN: OTA 1.1.2 android `45819218` / ios `eac94332`, QA del owner pendiente).** Se retiran los 6 presets, los
 9 toggles y los stickers sueltos: queda **un solo bloque de texto blanco en Inter** (mover con drag,
 tamaño con pellizco, tope `maxScaleFor` sin cambios), sin fecha/racha/récords/set-list/QR/`@handle`.
 Sale por OTA sobre 1.1.2 (Inter ya viaja en el binario vía `brand-fonts.ts`), sin build nativa. QA
