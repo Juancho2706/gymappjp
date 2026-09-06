@@ -248,6 +248,20 @@ Actualizar este archivo solo con el resultado consolidado:
 
 No pegar logs extensos, screenshots, payloads, credenciales ni listas de cientos de suites. Los artefactos viven en GitHub Actions; los defectos accionables viven en issues/specs activos.
 
+## Tanda 1 de correos — 06-09 03:15–03:45Z (5 commits `00061836`…`2bdd9aa5`, deploy `dpl_CijuEuGm…` READY)
+
+Cambios: higiene del drip por rebote real, cuentas de prueba sin correo de cupo ni bienvenida, digests admin con
+supresión por hash, W6 con corte de lanzamiento y espaciado de 24 h, script `scripts/day2-pro-catchup.ts`.
+Gates reales: 5 workers corrieron sus tests de archivo (todos verdes) · `tsc` web 0 errores (tras corregir un
+TS2556 en el mock de `mp-reconcile/route.test.ts`) · eslint 0 errores / 9 warnings `no-console` (patrón
+preexistente) · **`pnpm vitest run` completo 721 archivos / 9.552 tests verdes** · esbuild del script OK y `--dry`
+contra LIVE con la lista esperada (22 elegibles). Ejecución: `--send` agendó 22 correos en Resend para el 06-09
+13:00Z con una API key temporal de solo envío (el `vercel env pull` trae las envs sensibles vacías); el primer
+intento con esa env vacía dejó 22 filas `failed` en `coach_email_ledger` (reintentables, inofensivas).
+Verificar el 06-09: log de `drip-hygiene` 13:30Z con `skipped.delivered > 0` y `cancelled` solo por rebote;
+`mp-reconcile` 10:00Z sin correo (divergencia de `ljfitness` cerrada en LIVE); `onboarding-behavior` con
+`beforeLaunch` y `wouldSendByKey` en el log.
+
 ## Gates de la tanda 05-09 — CERRADOS el 05-09 22:48–23:20Z (sesión local, PC libre por el owner)
 
 **Resultado real del tren (en el orden de abajo):** `docs:check` OK · `install --frozen-lockfile` «Already up to date» ·

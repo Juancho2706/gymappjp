@@ -84,9 +84,14 @@ prevalecen sobre este resumen. La prosa retirada el 2026-09-02 está en
    a medias**: `enqueueBehaviorCheck` exportada pero sin sus 3 call sites. D13 (WhatsApp del owner) entra por
    `OWNER_WHATSAPP_URL`. Quedan W7 (medición/Playwright/Maestro), F5.3–F5.5 RN y la revisión D4 del contenido de
    ejemplo; de [vive-tu-app-directo](../specs/vive-tu-app-directo/SPEC.md) quedan V5.4 y V2.13.
-   **Envs pendientes en Vercel:** `ONBOARDING_BEHAVIOR_EMAILS_ENABLED` (NO setear aún),
-   `ONBOARDING_BEHAVIOR_EMAILS_DRY_RUN=true` para la primera auditoría y `OWNER_WHATSAPP_URL` (D13).
-   `FREE_COACH_DRIP_ENABLED` **no** se setea.
+   **W6 en ENSAYO desde el 06-09 02:45Z**: `ONBOARDING_BEHAVIOR_EMAILS_ENABLED=true` + `..._DRY_RUN=true` en
+   Vercel Production. El primer ensayo (03:00Z) daba 83 correos de golpe ⇒ **tanda 1 de correos EN PRODUCCIÓN
+   06-09 03:41Z** (`2bdd9aa5`, deploy `dpl_CijuEuGmwmmkuHVWVzURuDVNrSTT`): corte de lanzamiento (solo coaches
+   creados desde el 06-09), 24 h entre correos a un mismo coach, `drip-hygiene` cancela solo por rebote real,
+   cuentas de prueba sin correo de cupo ni bienvenida, digests admin sin repetición. Reenvío único del día 2
+   «pásate a Pro» a 22 coaches agendado para el 06-09 13:00Z (`day2_pro_catchup`). Falta aprobar el copy y
+   quitar el DRY_RUN; `OWNER_WHATSAPP_URL` (D13) sigue pendiente; `FREE_COACH_DRIP_ENABLED` **no** se setea.
+   Detalle en [auditoría de correos](../audits/correos-y-crons-2026-09-05.md).
 10. **Pricing — «trial al tocar el cupo»: decisión del owner POSTERGADA al 08-09** (recordatorio
     automático). Los 3 huecos previos quedaron **EN PRODUCCIÓN 05-09 22:56Z**: (1) el cerco de cupo
     del `/join` ya estaba cableado (`join-capacity.ts`) — se agregó el pin del Free con columna = 1;

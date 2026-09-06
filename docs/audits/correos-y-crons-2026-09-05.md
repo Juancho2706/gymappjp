@@ -82,10 +82,15 @@ Fuera de Vercel no hay nada programado (0 GitHub Actions con `schedule`, 0 `pg_c
 | — | Cola del drip (30 filas) | Dejarla salir |
 | — | W6 | Ensayo: `ONBOARDING_BEHAVIOR_EMAILS_ENABLED=true` + `ONBOARDING_BEHAVIOR_EMAILS_DRY_RUN=true` en Vercel Production + redeploy (lo setea el owner) |
 
-## 4. Plan en tres tandas (sin implementar)
+## 4. Plan en tres tandas
 
-1. **Destrabar el «pásate a Pro» (~1 día-agente):** D1 · D2 · `isTestCoachEmail` en el correo de cupo por evento y en
-   la bienvenida · D4.
+1. **Destrabar el «pásate a Pro» — HECHA el 06-09 03:41Z** (`00061836`…`2bdd9aa5`, deploy `dpl_CijuEuGmwmmkuHVWVzURuDVNrSTT`):
+   D1 (`drip-hygiene` cancela solo por rebote real del día 1) · D2 (`scripts/day2-pro-catchup.ts`: 22 correos
+   agendados para el 06-09 13:00Z con key `day2_pro_catchup`, que también entra en `DRIP_SALES_KEYS`) ·
+   `isTestCoachEmail` en el correo de cupo por evento y en la bienvenida · D4 (digests con supresión por hash y
+   divergencia de `ljfitness` cerrada en LIVE: `subscription_mp_id` a null con auditoría) · **extra por el ensayo
+   de W6** (83 correos de golpe): corte de lanzamiento `BEHAVIOR_LAUNCH_CUTOVER` = 06-09 y 24 h entre correos
+   a un mismo coach (el aha exceptuado). Gates en [TEST_STATUS](../testing/TEST_STATUS.md).
 2. **Higiene de lo que ya existe (~1 día-agente):** bienvenida única con el botón de confirmar adentro · dedupe del
    dunning por período reusando `sendSalesEmailOnce` · botón manual de trial escribe `trial_warning_days_sent` o se
    retira · retirar el «anuncio masivo» del panel admin (copy de junio, sin freno) y canalizar masivos por broadcast de

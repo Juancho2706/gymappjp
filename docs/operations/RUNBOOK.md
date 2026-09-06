@@ -78,8 +78,9 @@ Usar [FOOD_CATALOG_CL_IMPORT.md](FOOD_CATALOG_CL_IMPORT.md). Detener applies y c
 
 ## Crons activos
 
-`vercel.json` es la fuente ejecutable. Estado verificado el 21 de agosto de 2026; filas de
-`purge-data` (ahora diario) y `onboarding-behavior` actualizadas el 5 de septiembre de 2026:
+`vercel.json` es la fuente ejecutable. Tabla verificada completa (15 crons) el 6 de septiembre de 2026
+con la [auditoría de correos y crons](../audits/correos-y-crons-2026-09-05.md); horarios en UTC (Chile
+está en UTC-3 desde el 06-09):
 
 | Endpoint | Horario UTC | Función |
 |---|---:|---|
@@ -88,13 +89,16 @@ Usar [FOOD_CATALOG_CL_IMPORT.md](FOOD_CATALOG_CL_IMPORT.md). Detener applies y c
 | `/api/cron/checkin-reminder` | `0 14 * * *` | recordatorio de check-in vencido (push día 8 y 15) |
 | `/api/cron/trial-expiry` | `0 12 * * *` | expiración de trials |
 | `/api/cron/purge-data` | `0 3 * * *` | purga **diaria** desde `dff9b4fb` (05-09; antes `0 3 * * 0`, semanal). Retención: ver abajo |
-| `/api/cron/mp-reconcile` | `0 10 * * *` | reconciliación MercadoPago y expiración de add-ons |
+| `/api/cron/mp-reconcile` | `0 10 * * *` | reconciliación MercadoPago y expiración de add-ons. Digest a `ADMIN_EMAILS` solo si su contenido cambió respecto del último (hash en `admin_audit_logs` `cron.mp_reconcile_digest`, `2bdd9aa5`) |
 | `/api/cron/flow-reconcile` | `0 11 * * *` | reconciliación Flow y sincronización acotada de monto |
 | `/api/cron/mirror-exercise-thumbnails` | `0 4 * * *` | mirror de thumbnails |
-| `/api/cron/paid-expiry` | `30 12 * * *` | backstop provider-verified de suscripciones vencidas |
+| `/api/cron/paid-expiry` | `30 12 * * *` | backstop provider-verified de suscripciones vencidas. Digest a `ADMIN_EMAILS` con la misma supresión por hash (`cron.paid_expiry_digest`) |
+| `/api/cron/checkout-abandoned` | `15 * * * *` | «Tu plan Pro quedó a un paso» al coach que quedó `pending` en la pasarela > 2 h; una vez por coach (ledger `coach_email_ledger`); resumen `cron.checkout_abandoned_ran` |
+| `/api/cron/drip-hygiene` | `30 13 * * *` | cancela en Resend lo agendado del drip (día 2/7/14) SOLO si el día 1 rebotó (`bounced`/`complained`/`failed` en el ledger). Desde `2bdd9aa5` (06-09) ya no cancela por «correo no verificado»: la prueba de la casilla es la entrega del día 1. Devuelve el desglose `skipped` por motivo |
+| `/api/cron/north-star-weekly` | `0 13 * * 1` | reporte semanal de activación al owner (`NORTH_STAR_REPORT_TO`) |
 | `/api/cron/cap-nudge` | `0 13 * * *` | nudge de venta por cupo alcanzado (escalera 0/7/28 d; kill-switch `EVA_SALES_EMAILS_DISABLED=client_limit_reached`; `?dry=1` lista sin enviar) |
 | `/api/cron/coach-kpi-snapshot` | `30 4 * * *` | foto diaria de KPI por coach (7C fase 2: delta «En riesgo» y saldo neto de «Alumnos» leen la fila T−7; `?coach_id=` siembra uno; idempotente) |
-| `/api/cron/onboarding-behavior` | `0 * * * *` | correos por comportamiento del onboarding del coach (W6). Horario (minuto 0), Bearer `CRON_SECRET`; `?dry=1` audita sin enviar. Mientras `ONBOARDING_BEHAVIOR_EMAILS_ENABLED` esté apagado responde `{ok:true,skipped:'disabled'}` |
+| `/api/cron/onboarding-behavior` | `0 * * * *` | correos por comportamiento del onboarding del coach (W6). Horario (minuto 0), Bearer `CRON_SECRET`; `?dry=1` audita sin enviar. Sin `ONBOARDING_BEHAVIOR_EMAILS_ENABLED=true` responde `{ok:true,skipped:'disabled'}`; con `..._DRY_RUN=true` (estado desde el 06-09 02:45Z) barre y loguea `wouldSendByKey` sin mandar. Solo coaches creados desde `BEHAVIOR_LAUNCH_CUTOVER` (06-09) y con 24 h de espaciado entre correos a un mismo coach (el aha se exceptúa) |
 
 Hoy no queda ningún handler de cron sin schedule: los cuatro huérfanos de organizaciones
 (`weekly-snapshot`, `weekly-report-email`, `org-health-alert`, `payment-reminder`) se borraron en
@@ -102,7 +106,7 @@ Enterprise E0, junto con `audit-checksum` (que sí estaba programado y se despro
 
 ### Retención de datos — `purge-data`
 
-Un único handler concentra toda la retención automática. Corre los domingos 03:00 UTC y es
+Un único handler concentra toda la retención automática. Corre a diario a las 03:00 UTC (semanal hasta el 05-09) y es
 best-effort en cada paso: un paso caído no aborta los demás y todos los conteos quedan en
 `admin_audit_logs` bajo la acción `cron.purge_data_ran`.
 
