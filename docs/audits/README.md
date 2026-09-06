@@ -10,6 +10,7 @@ canonical: false
 Estas auditorías son evidencia puntual del commit y fecha indicados en cada informe. No describen
 por sí solas el estado actual ni crean backlog.
 
+- [Correos y crons](correos-y-crons-2026-09-05.md) — 15 crons, todos los correos (app, Supabase Auth, Resend), veredicto de duplicados, quién recibió el «pásate a Pro», decisiones D1–D4 del owner y plan en 3 tandas (sin implementar)
 - [Specs, documentación y repositorio](auditoria-repo-2026-08-17.md) — estado real de las 34 specs, pendientes operativos, regresiones del retiro del par viejo, organización documental e higiene de git
 - [Nutrición V2 — coach/alumno standalone + Team](nutricion-v2-coach-alumno-2026-07-28.md)
 - [Mapa de deprecación V1 — delta](v1-deprecation-map-delta-2026-08-03.md)
