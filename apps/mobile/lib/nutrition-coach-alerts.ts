@@ -1,4 +1,5 @@
 // Alertas de coach para nutrición — port 1:1 de la web (lib/nutrition-coach-alerts), sin date-fns.
+import { deriveNutritionV2Alerts, type NutritionV2AlertsInput } from '@eva/nutrition-v2'
 
 export type NutritionCoachAlertVariant = 'danger' | 'warning' | 'info'
 export type NutritionCoachAlert = { id: string; variant: NutritionCoachAlertVariant; title: string; description: string }
@@ -11,6 +12,12 @@ function ymd(d: Date): string {
 }
 function subDays(d: Date, n: number): Date { const x = new Date(d); x.setDate(x.getDate() - n); return x }
 
+/**
+ * `v2` (opcional, W4.2 «Cantidades honestas»): las señales del read model V2 —sobreconsumo del día
+ * y registros de una versión anterior del plan— que este motor, nacido sobre datos V1, no ve. Van
+ * al FINAL; sin el bloque el resultado es idéntico al de antes. Misma derivación compartida que la
+ * web (`deriveNutritionV2Alerts`), no un segundo port.
+ */
 export function deriveNutritionCoachAlerts(input: {
   hasActivePlan: boolean
   kcalTarget: number
@@ -19,6 +26,7 @@ export function deriveNutritionCoachAlerts(input: {
   monthlyAvgPct: number | null | undefined
   nutritionTimeline: TimelineRow[]
   santiagoTodayIso: string
+  v2?: NutritionV2AlertsInput | null
 }): NutritionCoachAlert[] {
   const out: NutritionCoachAlert[] = []
   if (!input.hasActivePlan || !input.santiagoTodayIso) return out
@@ -56,5 +64,8 @@ export function deriveNutritionCoachAlerts(input: {
   if (!anyDone && distinctDaysLast30 >= 3) {
     out.push({ id: 'silent_recent', variant: 'warning', title: 'Sin comidas registradas (últimos 5 días)', description: 'No hay comidas marcadas en la app en los últimos 5 días. El alumno puede estar desconectado o el plan ser difícil.' })
   }
+
+  if (input.v2) out.push(...deriveNutritionV2Alerts(input.v2))
+
   return out
 }

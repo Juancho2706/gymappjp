@@ -66,6 +66,31 @@ Usar [NUTRITION_V2_CUTOVER_RUNBOOK.md](NUTRITION_V2_CUTOVER_RUNBOOK.md). Contene
 
 Usar [FOOD_CATALOG_CL_IMPORT.md](FOOD_CATALOG_CL_IMPORT.md). Detener applies y conservar batches/rows.
 
+### Nutrición V2: migraciones del tren «Cantidades honestas» (pendientes de aplicar, 2026-09-06)
+
+Tres migraciones aditivas e idempotentes, **validadas en LIVE con `BEGIN … ROLLBACK`** y **no aplicadas** (decisión del
+owner: sale todo junto). Orden y momento: **después del deploy web y antes de la OTA 1.1.2**, en este orden:
+`20260906202957_nutrition_v2_household_units.sql` (columnas `household_label/household_grams` + CHECKs + 4 `create or replace`) →
+`20260906210308_nutrition_v2_item_lineage.sql` (columna `source_item_id`, `private.nutrition_v2_item_alias_map`, parche por
+texto de `get_nutrition_today_v2`) → `20260906213000_foods_density_review.sql` (columna `review_reason` + trigger). Después,
+regenerar `apps/web/src/lib/database.types.ts` (`pnpm supa gen types typescript --linked --schema public`). Smokes de
+verificación (siempre terminan en ROLLBACK): `supabase/tests/nutrition_v2_household_units_rollback.sql`,
+`nutrition_v2_item_lineage_rollback.sql`, `foods_density_review_rollback.sql`. Reversa: bloque `ROLLBACK` comentado al final
+de cada migración. Detalle en [SDD](../specs/nutrition-cantidades-honestas/TASKS.md).
+
+### Catálogo: revisión por densidad (2026-09)
+
+`foods.review_reason` es un aviso de curación, no un candado. El trigger `foods_flag_density_review` (migración `20260906213000_foods_density_review.sql`) marca `density_veg_fruit_gt_150` cuando una fila `verdura`/`fruta` con base `per_100` declara más de 150 kcal, y limpia esa misma razón cuando deja de aplicar; no rechaza escrituras ni se backfilleó, así que las filas cargadas antes siguen en `NULL` hasta que alguien edite `calories`, `category` o `macros_basis`. Candidatos existentes (el caso testigo es un «Mix de Vegetales» de Open Food Facts con 500 kcal/100 g dentro de un plan activo):
+
+```sql
+select id, name, brand, catalog_source, calories
+from public.foods
+where category in ('verdura', 'fruta') and coalesce(macros_basis, 'per_100') = 'per_100' and calories > 150
+order by calories desc;
+```
+
+Corregir a mano y fila por fila (override del coach o curación del catálogo). Nunca un `UPDATE` masivo automático: hay falsos positivos legítimos como la fruta deshidratada o el coco seco.
+
 ## Verificación tras mitigar
 
 - error rate vuelve a baseline;

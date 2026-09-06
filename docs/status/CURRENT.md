@@ -117,10 +117,11 @@ prevalecen sobre este resumen. La prosa retirada el 2026-09-02 está en
 10. Regen completo de `database.types.ts` (deja 13 errores en 7 archivos V1; ahí se retiran los
     workarounds tipados de T2.3 y el cast `V2ReadClient`).
 11. Matriz RLS con JWTs reales + preflight V1→V2 (7 enlaces) — sin cambios desde 08-06.
-13. **Tren «Cantidades honestas» (Nutrición V2) — W1 EN CÓDIGO 06-09 en el worktree `nutrition-cantidades-honestas`, sin push**
-    ([SDD](../specs/nutrition-cantidades-honestas/SPEC.md)): el editor convierte al cambiar unidad, rotula «1 un = 100 g»,
-    avisa ítems > 600 g / 700 kcal y días > 1,5× la meta (sin bloquear), RN muestra y retira registros de una versión
-    anterior, «Lo comí» confirma sobre umbral, evento `nutrition_item_implausible`. W0 en LIVE el 06-09. Quedan W2–W4.
+13. **Tren «Cantidades honestas» (Nutrición V2) — W1–W4 EN CÓDIGO 06-09 en el worktree `nutrition-cantidades-honestas`, sin push
+    (decisión del owner: sale todo junto)** ([SDD](../specs/nutrition-cantidades-honestas/SPEC.md)): W1 conversión al cambiar
+    unidad + avisos de plausibilidad + huérfanos visibles en RN; W2 medida casera «2 huevos (122 g)» (gramos como verdad);
+    W3 linaje `source_item_id` + diálogo «Aplicar hoy/desde mañana»; W4 registros del día en la ficha del coach con Retirar/Editar.
+    3 migraciones validadas en LIVE con ROLLBACK, **no aplicadas** (orden en [RUNBOOK](../operations/RUNBOOK.md)). W0 en LIVE el 06-09.
 14. **TTFB del área alumno**: la causa medida era la REGIÓN y ya está corregida (`regions: ["pdx1"]`,
     `deb8aee3`). Queda re-medir el delta (p50/p75 de `/c/:coach_slug/dashboard`, 24 h antes vs
     después) y decidir QW3 (doble render móvil+desktop).

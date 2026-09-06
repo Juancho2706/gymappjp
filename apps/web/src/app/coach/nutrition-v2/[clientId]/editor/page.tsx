@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation'
 import {
+  buildCoachDayIntakeSummary,
   parsePlanBuilderOrigin,
   readModelToDraft,
   type NutritionPlanDraft,
@@ -151,6 +152,10 @@ export default async function NutritionUnifiedEditorPage({
     foodRestrictions: foodPrefs.restrictions,
     favoriteFoodIds: foodPrefs.favoriteIds,
     rememberedQuantities,
+    // W3.2/W4.1: qué hay REGISTRADO hoy, para avisar antes de republicar con vigencia HOY (los
+    // registros del día quedan apuntando a ítems de la versión anterior). Cero lectura nueva:
+    // `detail.today` ya viajó, y el conteo sale del mismo builder que el panel de la ficha.
+    todayIntakeSummary: buildCoachDayIntakeSummary(detail.today),
   }
 
   // ── MODO EDICION (W1): sin origen y con plan vigente ────────────────────────────────────

@@ -9,7 +9,10 @@ import {
   StrategyBadge,
 } from '@/components/nutrition-v2'
 import {
+  buildCoachDayIntakeRows,
+  buildCoachDayIntakeSummary,
   buildNutritionWeek,
+  consumedRatioChipLabel,
   createNutritionMacroValue,
   nutritionDayOfWeekFromIso,
 } from '@eva/nutrition-v2'
@@ -40,6 +43,7 @@ import { AssignPlanToClientsDialog, type AssignRosterEntry } from '../_component
 import { ArchivePlanButton } from '../_components/ArchivePlanButton'
 import { ConvertedPlanBanner } from '../_components/ConvertedPlanBanner'
 import { canAssignSourcePlan } from '../_lib/assign-plan'
+import { resolveFoodMediaUrl } from '../_lib/food-catalog-card'
 import {
   fetchItemSubstitutionsForVersion,
   type ItemSubstitutionsLoad,
@@ -58,6 +62,7 @@ import { PortionDayCoverageCard } from './PortionDayCoverageCard'
 import { CoachWeekDayNav } from './CoachWeekDayNav'
 import { PrescribedStructureSection } from './PrescribedStructureSection'
 import { SelectedDayPanel } from './SelectedDayPanel'
+import { TodayIntakePanel } from './TodayIntakePanel'
 import { resolveCoachWeekSelection } from './_lib/week-nav'
 
 // Regla transversal (owner, 2026-07-29): toda lista de alimentos muestra su miniatura — foto
@@ -217,6 +222,24 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
   // ayudas visuales, no la barrera de autorización.
   const foodPrefs = hasPlan ? await fetchClientFoodPrefsForPicker(clientId) : EMPTY_CLIENT_FOOD_PREFS
 
+  // W4.1 «Cantidades honestas»: los REGISTROS de hoy del alumno, para que el coach vea de dónde
+  // salen las kcal del día y pueda retirar o corregir el que está mal. Cero lectura nueva —
+  // `detail.today` ya viajó. Solo HOY (decisión R3 de SPEC §5.7: el historial V2 no emite ítems por
+  // día, así que los días pasados siguen mostrando agregados). La miniatura se resuelve acá, en el
+  // servidor, con el mismo helper y la misma base pública que las cards del catálogo.
+  const todayIntakeRows = buildCoachDayIntakeRows(detail.today).map((row) => ({
+    ...row,
+    row: { ...row.row, thumbnailUrl: resolveFoodMediaUrl(row.entry.media ?? null, SUPABASE_BASE) },
+  }))
+  const todayRatioChipLabel = consumedRatioChipLabel({
+    consumedCalories: detail.today.consumed.calories,
+    targetCalories: detail.today.targets.calories,
+  })
+  // Resumen que el editor único usa para avisar antes de republicar con vigencia HOY (W3.2): qué
+  // hay registrado y en cuántas franjas. Sale del MISMO builder que el panel, así que el aviso y la
+  // lista nunca se contradicen.
+  const todayIntakeSummary = buildCoachDayIntakeSummary(detail.today)
+
   return (
     // Header movil compacto: flecha (vuelve al Centro) + eyebrow/nombre + UNA CTA primaria.
     // "Asignar a otros alumnos" se demueve a accion secundaria junto a los badges del plan.
@@ -240,6 +263,7 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
             viewerCoachId={user.id}
             foodRestrictions={foodPrefs.restrictions}
             favoriteFoodIds={foodPrefs.favoriteIds}
+            todayIntakeSummary={todayIntakeSummary}
           />
         ) : (
           <Link
@@ -424,6 +448,13 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
               <p className="mt-1 text-sm text-muted">
                 {detail.today.consumed.entryCount} registro{detail.today.consumed.entryCount === 1 ? '' : 's'} · {detail.today.mealSlots.length} franjas
               </p>
+              {/* W4.1: la lista de lo registrado HOY con "Retirar" y "Editar cantidad". Con cero
+                  registros el panel no pinta nada — la línea de arriba ya lo dice. */}
+              <TodayIntakePanel
+                clientId={clientId}
+                rows={todayIntakeRows}
+                ratioChipLabel={todayRatioChipLabel}
+              />
             </NutritionCard>
           </div>
 

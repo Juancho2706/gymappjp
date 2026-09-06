@@ -1,4 +1,5 @@
 import { format, parseISO, subDays } from 'date-fns'
+import { deriveNutritionV2Alerts, type NutritionV2AlertsInput } from '@eva/nutrition-v2'
 
 export type NutritionCoachAlertVariant = 'danger' | 'warning' | 'info'
 
@@ -18,6 +19,12 @@ type TimelineRow = {
 /**
  * Alertas deterministas para la ficha nutrición del coach (Fase D doc).
  * Sin nuevas queries: solo props ya agregadas al tab.
+ *
+ * `v2` (opcional, W4.2 del tren «Cantidades honestas», SPEC §7.2): las señales del read model V2
+ * —sobreconsumo del día y registros de una versión anterior del plan— que este motor, nacido sobre
+ * datos V1 (meta del plan, adherencia semanal, timeline de comidas marcadas), no podía ver. Van al
+ * FINAL y solo si el llamador tiene el `today` a mano; sin el bloque, el resultado es byte-idéntico
+ * al de antes. La derivación es la compartida con RN (`deriveNutritionV2Alerts`), no una copia.
  */
 export function deriveNutritionCoachAlerts(input: {
   hasActivePlan: boolean
@@ -27,6 +34,7 @@ export function deriveNutritionCoachAlerts(input: {
   monthlyAvgPct: number | null | undefined
   nutritionTimeline: TimelineRow[]
   santiagoTodayIso: string
+  v2?: NutritionV2AlertsInput | null
 }): NutritionCoachAlert[] {
   const out: NutritionCoachAlert[] = []
   if (!input.hasActivePlan || !input.santiagoTodayIso) return out
@@ -102,6 +110,8 @@ export function deriveNutritionCoachAlerts(input: {
         'No hay comidas marcadas en la app en los últimos 5 días. El alumno puede estar desconectado o el plan ser difícil de cumplir.',
     })
   }
+
+  if (input.v2) out.push(...deriveNutritionV2Alerts(input.v2))
 
   return out
 }

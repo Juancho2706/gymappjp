@@ -72,4 +72,55 @@ describe('deriveNutritionCoachAlerts', () => {
     })
     expect(a.some((x) => x.id === 'silent_recent')).toBe(true)
   })
+
+  // W4.2 «Cantidades honestas»: el bloque V2 es OPCIONAL y va al final; sin él el motor V1 tiene
+  // que devolver exactamente lo mismo que antes.
+  describe('bloque V2 (W4.2)', () => {
+    const V1_INPUT = {
+      hasActivePlan: true,
+      kcalTarget: 2000,
+      weeklyAvgPct: 80,
+      prevWeeklyAvgPct: 80,
+      monthlyAvgPct: 80,
+      nutritionTimeline: [mkRow('2026-04-30', 2)],
+      santiagoTodayIso: '2026-04-30',
+    }
+
+    it('sin `v2` el resultado es idéntico al de antes', () => {
+      expect(deriveNutritionCoachAlerts(V1_INPUT)).toEqual([])
+      expect(deriveNutritionCoachAlerts({ ...V1_INPUT, v2: null })).toEqual([])
+    })
+
+    it('concatena sobreconsumo y registros de una versión anterior, después de las V1', () => {
+      const a = deriveNutritionCoachAlerts({
+        ...V1_INPUT,
+        kcalTarget: 900,
+        v2: { todayConsumedCalories: 5637, todayTargetCalories: 1556, priorVersionEntryCount: 5 },
+      })
+      expect(a.map((x) => x.id)).toEqual([
+        'over_restriction',
+        'overconsumption',
+        'prior_version_entries',
+      ])
+    })
+
+    it('un día V2 limpio no agrega nada', () => {
+      expect(
+        deriveNutritionCoachAlerts({
+          ...V1_INPUT,
+          v2: { todayConsumedCalories: 1400, todayTargetCalories: 1556, priorVersionEntryCount: 0 },
+        }),
+      ).toEqual([])
+    })
+
+    it('sin plan activo el corte temprano manda: ni siquiera se miran las V2', () => {
+      expect(
+        deriveNutritionCoachAlerts({
+          ...V1_INPUT,
+          hasActivePlan: false,
+          v2: { todayConsumedCalories: 5637, todayTargetCalories: 1556, priorVersionEntryCount: 5 },
+        }),
+      ).toEqual([])
+    })
+  })
 })

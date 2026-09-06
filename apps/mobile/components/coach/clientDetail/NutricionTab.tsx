@@ -9,6 +9,7 @@ import { MACRO_COLORS } from '../../MacroRingSummary'
 import { FONT } from '../../../lib/typography'
 import { BarComposed, type BarComposedPoint } from '../charts/BarComposed'
 import { StatCard, CardHeader, MetricBox, cd, formatDate, adherenceColor } from './shared'
+import { deriveNutritionV2Alerts, priorVersionEntries } from '@eva/nutrition-v2'
 import { deriveNutritionCoachAlerts, type NutritionCoachAlert } from '../../../lib/nutrition-coach-alerts'
 import { getTodayInSantiago, isoDateAddDays } from '../../../lib/date-utils'
 import {
@@ -29,6 +30,30 @@ import { NutritionV2Summary, useCoachNutritionV2Detail } from './nutrition/Nutri
 
 function alertColor(variant: NutritionCoachAlert['variant'], theme: { destructive: string; warning: string; primary: string }): string {
   return variant === 'danger' ? theme.destructive : variant === 'warning' ? theme.warning : theme.primary
+}
+
+/**
+ * La pila de alertas del coach. Extraída VERBATIM del render de `NutricionTabV1` (mismo markup,
+ * mismos estilos) para que la superficie V2 pinte las suyas igual en vez de una segunda copia:
+ * hasta W4.2 las alertas solo existían en el camino V1 (legacy/enterprise) y el coach de V2 —o
+ * sea, todos— no veía ninguna.
+ */
+function CoachAlertsList({ alerts }: { alerts: NutritionCoachAlert[] }) {
+  const { theme } = useTheme()
+  if (!alerts.length) return null
+  return (
+    <View style={{ gap: 8 }}>
+      {alerts.map((a) => {
+        const c = alertColor(a.variant, theme)
+        return (
+          <View key={a.id} style={[styles.alert, { backgroundColor: c + '14', borderColor: c + '40' }]}>
+            <Text style={[styles.alertTitle, { color: c, fontFamily: FONT.uiBold }]}>{a.title}</Text>
+            <Text style={[styles.alertDesc, { color: theme.foreground, fontFamily: theme.fontSans }]}>{a.description}</Text>
+          </View>
+        )
+      })}
+    </View>
+  )
 }
 
 function DetailAccordion({ title, children }: { title: string; children: ReactNode }) {
@@ -155,19 +180,7 @@ function NutricionTabV1({
   return (
     <View style={{ gap: 14 }}>
       {/* Alertas de coach */}
-      {alerts.length ? (
-        <View style={{ gap: 8 }}>
-          {alerts.map((a) => {
-            const c = alertColor(a.variant, theme)
-            return (
-              <View key={a.id} style={[styles.alert, { backgroundColor: c + '14', borderColor: c + '40' }]}>
-                <Text style={[styles.alertTitle, { color: c, fontFamily: FONT.uiBold }]}>{a.title}</Text>
-                <Text style={[styles.alertDesc, { color: theme.foreground, fontFamily: theme.fontSans }]}>{a.description}</Text>
-              </View>
-            )
-          })}
-        </View>
-      ) : null}
+      <CoachAlertsList alerts={alerts} />
 
       {/* Plan + macros */}
       <StatCard>
@@ -821,14 +834,35 @@ function NutricionTabResolving() {
 // de esconder el problema con datos V1. Enterprise conserva el tab aislado temporalmente.
 export function NutricionTab(props: Parameters<typeof NutricionTabV1>[0]) {
   const gate = useCoachNutritionV2Detail(props.clientId)
+
+  /**
+   * Alertas V2 (W4.2 «Cantidades honestas», SPEC §7.2). Van acá y no dentro de
+   * `deriveNutritionCoachAlerts` porque ese motor corre en el camino V1 (legacy/enterprise), donde
+   * NO hay read model V2 del que sacar el día: en la superficie canónica el `today` solo existe en
+   * `gate.detail`. La lib igual ganó el input opcional `v2` para el llamador que sí lo tenga a mano
+   * (paridad con web); la derivación es la MISMA función pura del paquete en los dos casos.
+   */
+  const v2Alerts = useMemo(() => {
+    const today = gate.active ? gate.detail?.today : null
+    if (!today) return []
+    return deriveNutritionV2Alerts({
+      todayConsumedCalories: today.consumed.calories,
+      todayTargetCalories: today.targets.calories,
+      priorVersionEntryCount: priorVersionEntries(today).length,
+    })
+  }, [gate.active, gate.detail])
+
   if (gate.resolving) return <NutricionTabResolving />
   if (gate.active && gate.detail) {
     return (
-      <NutritionV2Summary
-        detail={gate.detail}
-        clientId={props.clientId}
-        offline={gate.offline}
-      />
+      <View style={{ gap: 14 }}>
+        <CoachAlertsList alerts={v2Alerts} />
+        <NutritionV2Summary
+          detail={gate.detail}
+          clientId={props.clientId}
+          offline={gate.offline}
+        />
+      </View>
     )
   }
   if (gate.legacyWorkspace) return <NutricionTabV1 {...props} />

@@ -23,7 +23,21 @@ source_of_truth: apps/web responsive + apps/mobile
 > anillo con las kcal que vienen de ahí, `consumedPrescriptionItemIds` deja de contar ids no vigentes; **«Lo comí» y «Comí
 > toda esta comida»** piden confirmación sobre umbral (`ImplausibleIntakeSheet` RN / `ImplausibleIntakeDialog` web);
 > evento PostHog `nutrition_item_implausible` (bucket de kcal, sin cifras exactas). Lógica pura en `packages/nutrition-v2/`
-> (`unit-change`, `plausibility`, `today-entries`). Queda W2 (medida casera), W3 (linaje al republicar), W4 (ficha del coach).
+> (`unit-change`, `plausibility`, `today-entries`).
+> **W2–W4 también EN CÓDIGO el 06-09** (misma rama; el owner decidió salir todo junto). **W2 medida casera** (web + RN): el
+> selector ofrece por alimento g/ml, «huevo · 61 g» (medida casera del catálogo) y «un» solo en alimentos nativos por unidad;
+> la unidad `casera` vive solo en el editor y se persiste en g/ml con el par `household_label/household_grams` congelado
+> (SQL passthrough, cero cambio de fórmula; CHECK `unit <> 'casera'`); rótulo «2 huevos (122 g)» (`formatItemQuantity`) en
+> editor, wizards, Hoy, Plan, ficha y reemplazos; buscador y scanner del alumno convierten a gramos al enviar; badge «Revisar
+> unidad» + «Usar huevos» en ítems «un» divergentes; scripts de backfill USDA/EVA (SQL + CSV, sin aplicar). **W3 linaje**:
+> `source_item_id` en el ítem, `get_nutrition_today_v2` resuelve `prescriptionItemId` al ítem vigente y emite
+> `originalPrescriptionItemId` (cero UPDATE de eventos); diálogo/hoja «Tu alumno ya registró N comidas hoy — Aplicar hoy /
+> desde mañana» antes de publicar (`effectiveFromChoice`). **W4 el coach ve y corrige**: card «Hoy» de la ficha con los
+> registros del día (`DayIntakeEntries` web / `CoachDayIntakeEntries` RN), Retirar con confirmación inline y Editar
+> cantidad (RPC `void`/`correct_nutrition_intake_v2`, ya autorizan al coach; RN vía `/api/mobile/nutrition-v2/coach/intake`),
+> chip «N× la meta», alertas V2 (`deriveNutritionV2Alerts`, vivas en `NutricionTab` RN), guard de densidad en `foods`.
+> Solo hoy (el historial V2 no emite ítems). Gates reales en [TEST_STATUS](../testing/TEST_STATUS.md). Migraciones
+> `20260906202957`, `20260906210308`, `20260906213000` validadas con ROLLBACK, pendientes de aplicar (tras deploy, antes de OTA).
 >
 > **2026-09-04 (tren «Ciclo real y por lado», feedback Movens — EN PRODUCCIÓN, QA del owner VERDE 04-09 ⇒ SDD `done`)**: `master` =
 > `rnmobiledenuevo` = `b1bad0a3` (commits `591ea8cd`…`b1bad0a3` + los 9 de «ola 2 chica» en el mismo push), deploy

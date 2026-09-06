@@ -54,7 +54,8 @@ real; cada ola cierra con su sección «Gates» y la salida pegada. Modelo por t
       formateadores es-CL del paquete, copy casero con label); B sin BLOQUEA (1 MEJORA: huérfanos DENTRO de la card con chip
       en el encabezado, un solo refetch en «Retirar los N»); `ImplausibleNotice` web movido a `components/nutrition-v2/` para
       que el wizard no importe desde `_quick-edit`. Docs: CURRENT #13, MOBILE_PARITY (bloque 06-09), TEST_STATUS.
-- [ ] W1.9 [owner] OK para push + deploy + OTA 1.1.2 (android + ios) de W1.
+- [x] W1.9 [owner] **Decisión 06-09: «nada todavía»** — W1 queda commiteada en el worktree (`d35e454e`); push, deploy,
+      migraciones en LIVE y OTA salen TODOS JUNTOS al cierre del tren (W2–W4), con OK explícito en ese momento.
 
 ## W2 · Medida casera de verdad («2 huevos (122 g)»)
 
@@ -67,35 +68,51 @@ real; cada ola cierra con su sección «Gates» y la salida pegada. Modelo por t
       Q4 solo 4 de los 30 alimentos `serving_unit = 'un'` tienen medida (pan pita/pita integral EVA: `per_100`,
       porción 60 g, sin medida ⇒ «60 un» = 3,6 kg) · Q5 candidatos al badge (publicados, > 30 %): coach `7b2914a1`
       26 ítems / 13 versiones / 11 alumnos y coach `baa4f2a1` 4 ítems / 1 alumno.
-- [ ] W2.1 [Opus C] `HOUSEHOLD_UNIT`, `foodUnitOptions(food)` con labels («huevo · 61 g»), `defaultCatalogUnit` nuevo;
+- [x] W2.1 [Opus C] `HOUSEHOLD_UNIT`, `foodUnitOptions(food)` con labels («huevo · 61 g»), `defaultCatalogUnit` nuevo;
       `BuilderFood` += `householdGrams/householdLabel` (paquete; RN re-exporta el tipo) en `food-catalog-mapping.ts:13`,
       `nutrition-v2-builder.ts:1669`, `plan-persistence.ts:213` (`FREEZE_FOOD_SELECT`/`toBuilderFood`); selector web
       (`<select>` con opción vigente si falta) y RN (`UnitToggle` con label) en editor y wizards; buscador/scanner del alumno
       web + RN (convertir a gramos al enviar); comentario de `food-catalog-card.ts:137`. Tests `intake-units.test.ts`.
-- [ ] W2.2 [Opus C] `computeItemMacros` rama `casera` (paquete; RN `nutrition-v2-builder.ts:1097` re-exporta), conversión
+- [x] W2.2 [Opus C] `computeItemMacros` rama `casera` (paquete; RN `nutrition-v2-builder.ts:1097` re-exporta), conversión
       con `casera` en `unit-change.ts`, contrato `contracts.ts:82/102` (+ `householdLabel/householdGrams`), `QeItem` modo
       casera + rehidratación, `buildItemInsertRow` (`plan-draft-rows.ts`) ⇒ g/ml + columnas; error de borrador si falta
       medida. Extender `draft-builder.macros-basis.test.ts:63` (byte-idéntico se mantiene) + `editor-food.test.ts`.
-- [ ] W2.2b [Opus D] migración `nutrition_v2_household_units` (SPEC §5.4): columnas + CHECKs (`not valid`/`validate`,
+- [x] W2.2b [Opus D] migración `nutrition_v2_household_units` (SPEC §5.4): columnas + CHECKs (`not valid`/`validate`,
       pre-check de solo lectura en LIVE) + `persist_and_publish` + `build_prescription_snapshot` + `get_nutrition_plan_read_v2`
       + `nutrition_v2_intake_item_json` emitiendo el par; schemas de read models `.nullable().optional()`; test
       `supabase/tests/nutrition_v2_household_units_rollback.sql`; `database.types.ts` (tras aplicar).
-- [ ] W2.3 [Sonnet E] `quantity-format.ts` (`formatItemQuantity`, `formatHouseholdCount` exportado desde
+- [x] W2.3 [Sonnet E] `quantity-format.ts` (`formatItemQuantity`, `formatHouseholdCount` exportado desde
       `nutrition-engine/micros.ts:95`) + reemplazo en las 16 superficies: `packages/nutrition-v2/design.ts` ·
       web `components/nutrition-v2/NutritionV2Kit.tsx`, `coach/nutrition-v2/_data/last-quantity.data.ts`,
       `c/[coach_slug]/nutrition/_components/ShoppingListView.tsx`, `c/[coach_slug]/nutrition-v2/_components/{nutrition-today.logic,TodayExperience,PlanVariantCard,NutritionFoodRow}.tsx` ·
       RN `lib/{nutrition-v2-last-quantity,nutrition-v2-intake,nutrition-shopping.api,coach-nutrition-detail-logic}.ts`,
       `components/nutrition-v2/NutritionV2Kit.tsx`, `components/alumno/nutrition/ShoppingList.tsx`,
       `app/coach/nutrition-v2/[clientId].tsx`, `app/alumno/(tabs)/nutrition-v2/index.tsx`. Test `quantity-format.test.ts`.
-- [ ] W2.4 [Sonnet F] `scripts/nutrition-household/backfill-usda-household.mjs` (SQL idempotente + CSV, sin aplicar) y
-      `suggest-eva-household.mjs` (CSV); README corto en `scripts/nutrition-household/`; nota en
-      `docs/operations/FOOD_CATALOG_CL_IMPORT.md`.
-- [ ] W2.5 [Opus C + Fable] badge «Revisar unidad» (web/RN `EditableItemRow`, `ItemBadge` tone warning) con tooltip y
-      «Usar {label}»; query de los 64 ítems en `docs/audits/cantidades-honestas-revisar-unidad-2026-09.md`; texto del
-      aviso por coach (abajo, lo manda el owner).
-- [ ] W2.6 [Fable] juicio de W2.
-- [ ] W2.7 Gates W2 (PLAN) + ROLLBACK en LIVE del test SQL + `EXPLAIN` de las lecturas tocadas. Commit. Docs.
-- [ ] W2.8 [owner] OK para aplicar migración + push + deploy + OTA. Aplicar en LIVE **después** del deploy y **antes** de la OTA.
+- [ ] W2.3b [Sonnet E, segunda pasada tras C/C2] `formatHouseholdCount` con coma decimal es-CL («1,5 huevos») ·
+      reemplazos pendientes en `nutrition-today.logic.ts:195`, `TodayExperience.tsx` (707, 940, 1461, 1472, 1502, 1560,
+      1698, 2331, 2414) y RN `alumno/(tabs)/nutrition-v2/index.tsx` (2298, 2582-2585, 2594, 3077-3078, 3286, 4060).
+      Fuera de alcance (decisión del jefe): `last-quantity.data.ts` (texto editable, no rótulo) y las listas de compras
+      V1 web/RN (suman gramos de varios ítems, sin par casero).
+- [x] W2.4 [Sonnet F] `scripts/nutrition-household/backfill-usda-household.mjs` (lee catálogo, consulta USDA FDC por
+      `source_ref`, emite SQL idempotente + CSV, `--dry-run` por defecto, NUNCA escribe en la DB) y
+      `suggest-eva-household.mjs` (CSV por diccionario); README; nota en `docs/operations/FOOD_CATALOG_CL_IMPORT.md`.
+      `node --check` OK; el dry-run real no corrió (el worktree no tiene `.env.local`): correrlo desde el checkout
+      principal al cierre. `USDA_FDC_API_KEY` es obligatoria (sin fallback literal, regla de `docs:check`).
+- [x] W2.5 [Opus C + Fable] badge «Revisar unidad» (`shouldFlagUnitReview` + `unitReviewHint` en `plausibility.ts`; web y RN
+      `EditableItemRow` y wizards) y acción «Usar {label}» en el aviso (`householdUnitActionLabel`); informe con la consulta
+      en LIVE y los avisos por coach en [docs/audits/cantidades-honestas-revisar-unidad-2026-09.md](../../audits/cantidades-honestas-revisar-unidad-2026-09.md):
+      en planes vigentes solo 2 coaches (`jotap-coach`: claras de huevo ×2 alumnos, atún ×1, pepino ×8 irrelevante;
+      `olympuswolf`: «Huevo duro 2 un» = 200 g = 310 kcal). Los avisos los manda el owner.
+- [x] W2.6 [Fable] juicio de W2: C sin BLOQUEA (decisiones aceptadas: el par se conserva al salir de casera, `householdRowShape`
+      para los wizards, `itemChanged` compara el par, RN no traduce `casera` porque no escribe); D sin BLOQUEA (claves
+      `householdLabel/householdGrams` siempre presentes con null; CHECKs de columnas nuevas sin `not valid`); E aprobado + MEJORA
+      coma decimal; F aprobado con la clave USDA obligatoria por env (sin fallback literal); C2 aprobado (cantidad inicial 1 en
+      casera/un, `canSubmit` exige gramaje). Verificado además que las 4 funciones reescritas por W2 no tienen parches de texto
+      posteriores (solo `get_nutrition_today_v2`, tratada en W3).
+- [x] W2.7 Gates W2 (con W3 y W4, salida real en [TEST_STATUS](../../testing/TEST_STATUS.md)): vitest 152 / 2.316 · typecheck web
+      y tsc mobile verdes · eslint · boundaries 450 · docs:check · smoke SQL W2 en LIVE con ROLLBACK «W2 SMOKE OK».
+- [ ] W2.8 [owner] OK para aplicar migración + push + deploy + OTA al cierre del tren. Aplicar en LIVE **después** del deploy y
+      **antes** de la OTA, en orden `20260906202957` → `20260906210308` → `20260906213000`; luego regenerar `database.types.ts`.
 
 Texto del aviso único a los coaches con ítems «un» sobre alimentos de 100 g (W2.5, lo manda el owner):
 «Hola {nombre}. En EVA, «1 un» de un alimento del catálogo vale una porción de 100 g, salvo que el alimento sea por
@@ -105,41 +122,60 @@ corresponde, tocá «Usar huevos». Cualquier duda, escribime.»
 
 ## W3 · Republicar sin fantasmas
 
-- [ ] W3.1a [Opus G] migración `nutrition_v2_item_lineage` (columna + FK + índice) · `private.nutrition_v2_item_alias_map`
-      · `persist_and_publish` acepta `source_item_id` del mismo plan · `get_nutrition_today_v2` (+ `history_detail` si
-      emite `intakeItems`) resuelve `prescriptionItemId` y emite `originalPrescriptionItemId` · test
-      `supabase/tests/nutrition_v2_item_lineage_rollback.sql` · schema `NutritionIntakeReadItemSchema`.
-- [ ] W3.1b [Opus H] `QeItem.sourceItemId` (hidratación; se anula en `SET_ITEM_QUANTITY`, `STEP_ITEM_QUANTITY`,
+- [x] W3.1a [Opus G] migración `20260906210308_nutrition_v2_item_lineage.sql`: columna `source_item_id` + FK
+      `on delete set null` + CHECK `<> id` + índices parciales `source_item_idx` y `lineage_seed_idx (version_id, source_item_id)`
+      (no había índice por `version_id`: la semilla corre en cada Today) · `private.nutrition_v2_item_alias_map` (CTE recursiva,
+      tope 20, anti-colisión con ítems vivos) · `persist_and_publish` acepta `source_item_id` solo del mismo plan (si no,
+      `null`, nunca error) · `get_nutrition_today_v2` **parcheada por texto con `pg_get_functiondef`** (misma mecánica que
+      `20260803194000`/`20260804091000`: la última definición completa del repo NO es la viva; un copy-body habría revertido
+      la fuga cross-tenant B1) con guard de idempotencia y canarios · `originalPrescriptionItemId` en
+      `NutritionIntakeReadItemSchema` (+5 tests) · test `supabase/tests/nutrition_v2_item_lineage_rollback.sql` (A–F).
+      Juicio del jefe: aprobada; **validación en LIVE apilada (W2 → W3 → test) pendiente al cierre**. Verificado además que
+      las 4 funciones que W2 reescribe (`persist_and_publish`, `build_prescription_snapshot`, `get_nutrition_plan_read_v2`,
+      `nutrition_v2_intake_item_json`) NO tienen parches de texto posteriores a su última definición completa.
+- [x] W3.1b [Opus H] `QeItem.sourceItemId` (hidratación; se anula en `SET_ITEM_QUANTITY`, `STEP_ITEM_QUANTITY`,
       `SET_ITEM_UNIT`, `SWAP_ITEM_FOOD`, `SET_ITEM_NAME`, mover de franja) · contrato del borrador · `buildItemInsertRow`
       ⇒ `source_item_id` · `plan-persistence.ts:489` conserva `randomUUID` para el id nuevo · tests `editor-state.lineage.test.ts`
       + caso resuelto en `bulk-mark.test.ts`.
-- [ ] W3.2a [Opus H] `effectiveFromChoice` en `quick-edit.actions.ts:249` y en la op `quick-edit` de
+- [x] W3.2a [Opus H] `effectiveFromChoice` en `quick-edit.actions.ts:249` y en la op `quick-edit` de
       `api/mobile/nutrition-v2/coach/mutate/route.ts` (zod, default `today`; servidor calcula `hoy + 1` en la tz del alumno);
       `publishQuickEditRN` lo pasa; `todayEntryCount` desde el detail a `QuickEditMode` web/RN; tests de la action y de la ruta.
-- [ ] W3.2b [Fable] diálogo M3 web (`_quick-edit/PublishTodayDialog.tsx`) y paso en `PublishConfirmSheet` RN.
-- [ ] W3.2c [Opus H] cablear diálogo ⇒ `effectiveFromChoice`.
-- [ ] W3.3 [Opus H, extra] chip «Tu plan cambió hoy» en Hoy web/RN (`plan.effectiveFrom === hoy && versionNumber > 1`).
-- [ ] W3.4 [Fable] juicio de W3.
-- [ ] W3.5 Gates W3 + ROLLBACK en LIVE + `EXPLAIN` de `get_nutrition_today_v2` con alias (loops=1 en la CTE). Commit. Docs.
-- [ ] W3.6 [owner] OK para aplicar migración + push + deploy + OTA.
+- [x] W3.2b [Fable] diálogo M3 web (`_quick-edit/PublishTodayDialog.tsx`) y paso en `PublishConfirmSheet` RN.
+- [x] W3.2c [Opus H] cablear diálogo ⇒ `effectiveFromChoice`.
+- [ ] W3.3 [extra, NO hecho] chip «Tu plan cambió hoy» en Hoy web/RN: queda como AGREGA para otro tren (con el linaje de W3.1
+      el caso que lo motivaba casi no ocurre).
+- [x] W3.4 [Fable] juicio de W3: G sin BLOQUEA (parche por texto sobre la definición viva, anti-colisión, índice `lineage_seed`);
+      H sin BLOQUEA (guard «no cambió ⇒ no anula», `tomorrow` = hoy + 1 sin `max`, rama `today` byte-idéntica en la ruta móvil,
+      `itemChanged` no compara `sourceItemId`).
+- [x] W3.5 Gates W3 (ver TEST_STATUS) + smoke SQL apilado W2 → W3 en LIVE con ROLLBACK «W3 SMOKE OK» (A–G: linaje 1 y 2 saltos,
+      huérfano intacto, `source_item_id` de otro plan ⇒ null sin fallar, cero UPDATE de `nutrition_intake_entries`).
+      `EXPLAIN` de la CTE pendiente para el momento de aplicar (índices `source_item_idx`/`lineage_seed_idx` creados en la migración).
+- [ ] W3.6 [owner] OK al cierre del tren (junto con W2.8).
 
 ## W4 · El coach ve y corrige
 
-- [ ] W4.1a [Opus I] acciones server `_actions/coach-intake.actions.ts` (`voidIntakeAsCoach`, `correctIntakeQuantityAsCoach`
+- [x] W4.1a [Opus I] acciones server `_actions/coach-intake.actions.ts` (`voidIntakeAsCoach`, `correctIntakeQuantityAsCoach`
       sobre `void_nutrition_intake_v2` / `correct_nutrition_intake_v2`, verificar firma y autorización del coach en LIVE
       de solo lectura) · ops `void-intake` / `correct-intake` en la API móvil · verificación de que `history-detail`
       emite `intakeItems` (si no, solo hoy) · tests de action y ruta.
-- [ ] W4.1b [Fable] panel M4 web (`SelectedDayPanel.tsx:169`: filas + Retirar + Editar cantidad + chip «N× la meta») y
+- [x] W4.1b [Fable] panel M4 web (`SelectedDayPanel.tsx:169`: filas + Retirar + Editar cantidad + chip «N× la meta») y
       lista + hoja RN (`app/coach/nutrition-v2/[clientId].tsx`).
-- [ ] W4.1c [Opus I] cablear panel ⇒ acciones; `revalidatePath`; RN refetch.
-- [ ] W4.2 [Opus I] `packages/nutrition-v2/coach-alerts.ts` (`deriveNutritionV2Alerts`) consumido por
+- [x] W4.1c [Opus I] cablear panel ⇒ acciones; `revalidatePath`; RN refetch.
+- [x] W4.2 [Opus I] `packages/nutrition-v2/coach-alerts.ts` (`deriveNutritionV2Alerts`) consumido por
       `apps/web/src/lib/nutrition-coach-alerts.ts:40` (+ `client-detail.service.ts`) y RN `nutrition-coach-alerts.ts` /
       `NutricionTab.tsx`; tests en `nutrition-coach-alerts.test.ts` y `coach-alerts.test.ts`.
-- [ ] W4.3 [Opus I] migración `foods_density_review` (columna + trigger, no bloquea, no toca filas existentes) + test
-      `supabase/tests/foods_density_review_rollback.sql` + consulta de candidatos en RUNBOOK.
-- [ ] W4.4 [Fable] juicio de W4.
-- [ ] W4.5 Gates W4 + ROLLBACK en LIVE. Commit. Docs.
-- [ ] W4.6 [owner] OK para aplicar migración + push + deploy + OTA.
+- [x] W4.3 [Opus I-sql] migración `20260906213000_foods_density_review.sql` (columna `review_reason` + trigger
+      `private.foods_flag_density_review` before insert/update of calories, category, macros_basis; no bloquea, no toca filas
+      existentes) + test `supabase/tests/foods_density_review_rollback.sql` + RUNBOOK «Catálogo: revisión por densidad».
+      **Validada en LIVE 06-09 con ROLLBACK (casos A–D, «W4.3 SMOKE OK»); NO aplicada.** 7 candidatos existentes hoy
+      (verdura/fruta `per_100` > 150 kcal), quedan para curación manual. Hueco declarado: un UPDATE que toque solo
+      `review_reason` no re-evalúa (flag consultivo; un coach puede silenciar un falso positivo de SU alimento).
+- [x] W4.4 [Fable] juicio de W4: I sin BLOQUEA (re-lectura RLS del registro, cuerpo mínimo, ruta móvil propia `coach/intake`,
+      `priorVersion` con criterio global del día); decisión del jefe: en web NO se enciende el panel de alertas muerto
+      (`NutritionCoachAlertsPanel`): el chip «N× la meta» y el chip «versión anterior» del panel M4 cubren los dos avisos; la lib
+      `deriveNutritionV2Alerts` queda viva en RN (`NutricionTab`) y lista en web. I-sql sin BLOQUEA (hueco consultivo declarado).
+- [x] W4.5 Gates W4 (ver TEST_STATUS) + smoke SQL W4.3 en LIVE con ROLLBACK «W4.3 SMOKE OK».
+- [ ] W4.6 [owner] OK al cierre del tren (junto con W2.8).
 
 ## Cierre del tren
 

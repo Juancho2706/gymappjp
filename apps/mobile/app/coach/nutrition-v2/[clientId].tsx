@@ -34,17 +34,23 @@ import {
   WeekDayNav,
 } from '../../../components/nutrition-v2'
 import { Sheet } from '../../../components/Sheet'
+import { CoachDayIntakeEntries } from '../../../components/nutrition-v2/CoachDayIntakeEntries'
 import {
   NUTRITION_PLAN_DOW_UNIFORM_NOTE,
   NutritionClientDetailReadModelSchema,
+  buildCoachDayIntakeRows,
+  buildCoachDayIntakeSummary,
   buildNutritionPlanDowStrip,
   buildNutritionWeek,
+  consumedRatioChipLabel,
   createNutritionMacroValue,
   describeNutritionPlanDowSelection,
+  formatItemQuantity,
   initialNutritionPlanDow,
   isNutritionPlanDowUniform,
   nutritionDayOfWeekFromIso,
   type NutritionClientDetailReadModel,
+  type NutritionIntakeReadItem,
   type NutritionV2CoachScope,
   type NutritionWeekCell,
 } from '@eva/nutrition-v2'
@@ -62,6 +68,10 @@ import {
   resolveDetailPhase,
   type DetailErrorKind,
 } from '../../../lib/coach-nutrition-detail-phase'
+import {
+  correctIntakeQuantityAsCoachRN,
+  voidIntakeAsCoachRN,
+} from '../../../lib/nutrition-v2-coach-intake.api'
 import {
   archiveNutritionPlan,
   assignNutritionPlanToClients,
@@ -251,6 +261,11 @@ export default function CoachNutritionV2ClientScreen() {
   // vigente. El link NO viaja en el read-model/API RN (igual que en web); se lee aparte RLS-scoped.
   // null = sin link (o fail-soft) => sin banner, paridad con el `null` del web.
   const [convertedAtLabel, setConvertedAtLabel] = useState<string | null>(null)
+  // W4.1 «Cantidades honestas»: retiro / corrección de un registro de HOY del alumno. Una sola
+  // acción en vuelo por vez (la fila la marca con `pendingEntryId`) y el error se pinta inline en
+  // el panel, no en un toast que se va antes de leerse.
+  const [pendingIntakeEntryId, setPendingIntakeEntryId] = useState<string | null>(null)
+  const [intakeError, setIntakeError] = useState<string | null>(null)
   // Inline a proposito: `react-hooks/use-memo` exige una expresion de funcion (lint preexistente).
   const date = useMemo(() => todayInSantiago(), [])
   // T3.5 — semana Lu-Do del alumno dentro de la ficha. Estado LOCAL (la ficha no navega ni vuelve
@@ -386,6 +401,61 @@ export default function CoachNutritionV2ClientScreen() {
     if (needsRetryRef.current) retry()
   }, [retry])
   useOnline(onReconnect)
+
+  // W4.1 «Cantidades honestas»: las dos escrituras del panel de registros de hoy. Pasan por la API
+  // móvil del coach (NUT-005), nunca por el RPC directo, y al terminar re-leen la ficha
+  // (`reloadNonce`): el consumido, el conteo y el chip «N× la meta» salen del read model, jamás de
+  // un estado optimista que podría discrepar de lo que la base aceptó.
+  const runIntakeMutation = useCallback(
+    async (entry: NutritionIntakeReadItem, run: () => Promise<{ ok: boolean; error?: string }>) => {
+      setIntakeError(null)
+      setPendingIntakeEntryId(entry.id)
+      const result = await run()
+      setPendingIntakeEntryId(null)
+      if (!result.ok) {
+        setIntakeError(result.error ?? 'No se pudo actualizar el registro.')
+        return
+      }
+      setReloadNonce((n) => n + 1)
+    },
+    [],
+  )
+
+  const onVoidIntake = useCallback(
+    (entry: NutritionIntakeReadItem) => {
+      if (!scope) return
+      void runIntakeMutation(entry, () => voidIntakeAsCoachRN({ scope, clientId, entryId: entry.id }))
+    },
+    [clientId, runIntakeMutation, scope],
+  )
+
+  const onEditIntakeQuantity = useCallback(
+    (entry: NutritionIntakeReadItem, quantity: number) => {
+      if (!scope) return
+      void runIntakeMutation(entry, () =>
+        correctIntakeQuantityAsCoachRN({ scope, clientId, entryId: entry.id, quantity }),
+      )
+    },
+    [clientId, runIntakeMutation, scope],
+  )
+
+  // Filas del panel: mismo builder que la web, con la miniatura resuelta por el helper de RN. Cero
+  // lectura nueva (sale de `detail.today`, que ya viajó) y solo HOY (SPEC §5.7 R3: el historial V2
+  // no emite ítems por día).
+  const todayIntakeRows = useMemo(() => {
+    if (!detail) return []
+    return buildCoachDayIntakeRows(detail.today).map((row) => ({
+      ...row,
+      row: { ...row.row, thumbnailUrl: foodMediaThumbnailUrl(row.entry.media) },
+    }))
+  }, [detail])
+
+  // Resumen para el aviso de republicación con vigencia HOY del editor único (W3.2). Mismo helper
+  // que la web, así que las dos superficies cuentan igual.
+  const todayIntakeSummary = useMemo(
+    () => (detail ? buildCoachDayIntakeSummary(detail.today) : null),
+    [detail],
+  )
 
   const recentDays = useMemo(() => {
     if (!detail) return []
@@ -547,6 +617,7 @@ export default function CoachNutritionV2ClientScreen() {
         scope={scope}
         todayIso={date}
         hasNutritionPro={hasNutritionPro}
+        todayIntakeSummary={todayIntakeSummary}
         onExit={() => setEditing(false)}
         onPublished={() => {
           setEditing(false)
@@ -715,6 +786,19 @@ export default function CoachNutritionV2ClientScreen() {
                     {detail.today.consumed.entryCount === 1 ? '' : 's'} ·{' '}
                     {detail.today.mealSlots.length} franjas
                   </Text>
+                  {/* W4.1: los registros de HOY con "Retirar" y "Editar cantidad" (espejo del web).
+                      Con cero registros el panel no pinta nada — la línea de arriba ya lo dice. */}
+                  <CoachDayIntakeEntries
+                    rows={todayIntakeRows}
+                    ratioChipLabel={consumedRatioChipLabel({
+                      consumedCalories: detail.today.consumed.calories,
+                      targetCalories: detail.today.targets.calories,
+                    })}
+                    pendingEntryId={pendingIntakeEntryId}
+                    error={intakeError}
+                    onVoid={onVoidIntake}
+                    onEditQuantity={onEditIntakeQuantity}
+                  />
                 </NutritionCard>
               </>
             ) : (
@@ -961,7 +1045,12 @@ function PrescribedStructureSection({
                               name: prescription.name || 'Alimento',
                               detail: prescription.brand,
                               thumbnailUrl: foodMediaThumbnailUrl(prescription.media),
-                              quantityLabel: `${prescription.quantity} ${prescription.unit}`,
+                              quantityLabel: formatItemQuantity({
+                                quantity: prescription.quantity,
+                                unit: prescription.unit,
+                                householdLabel: prescription.householdLabel ?? null,
+                                householdGrams: prescription.householdGrams ?? null,
+                              }),
                               calories: prescription.macros.calories,
                               proteinG: prescription.macros.proteinG,
                               carbsG: prescription.macros.carbsG,

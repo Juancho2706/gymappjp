@@ -356,7 +356,26 @@ jefe en el worktree tras el juicio de los workers (salida real):
 - `pnpm check:nutrition-v2-boundaries` ⇒ 430 archivos OK · `pnpm docs:check` ⇒ OK.
 - SQL: la migración de W2 (`20260906202957_nutrition_v2_household_units.sql`) y su smoke `supabase/tests/nutrition_v2_household_units_rollback.sql`
   ya se validaron en LIVE dentro de una sola transacción con **ROLLBACK** (casos A–E verdes, «W2 SMOKE OK»); **no está aplicada**.
-- E2E `qa:prod:suave`: solo al cierre del tren.
+
+**W2–W4, 06-09 (tarde), gates del jefe tras el juicio de los 9 workers, con OK del owner para usar la CPU:**
+
+- `pnpm exec vitest run packages/nutrition-v2 packages/nutrition-engine apps/web/src/app/coach/nutrition-v2 "apps/web/src/app/c/[coach_slug]/nutrition-v2" apps/web/src/app/api/mobile/nutrition-v2 apps/web/src/lib/posthog apps/web/src/lib/nutrition-coach-alerts.test.ts apps/web/src/components/nutrition-v2 tests/mobile-nutrition-v2-*.test.ts tests/mobile-coach-*.test.ts`
+  ⇒ **152 archivos / 2.316 tests verdes** (34,3 s). Tests nuevos: `editor-food`, `editor-state.household`, `editor-state.lineage`,
+  `quantity-format`, `coach-day-entries`, `coach-alerts`, `plan-draft-rows.{household,lineage}`, `coach-intake.actions`,
+  `api/mobile/nutrition-v2/coach/intake/route`, `effective-from`; extendidos `intake-units`, `unit-change`, `contracts`,
+  `plausibility`, `read-models`, `bulk-mark`, `nutrition-today.logic`, `quick-edit.actions`, `coach/mutate/route`,
+  `mobile-nutrition-v2-{add-food-logic,intake,builder*}`, `nutrition-coach-alerts`, `micros`.
+- `pnpm typecheck` ⇒ verde · `pnpm --filter @eva/mobile exec tsc --noEmit` ⇒ verde (tras 6 errores mecánicos de fixtures y del tipo
+  `AssignSourceItem`, corregidos por el jefe).
+- eslint por archivo (web/paquete y `--config eslint.mobile.config.mjs`) ⇒ sin hallazgos nuevos (2 `react-hooks/refs` preexistentes en
+  `apps/mobile/app/coach/nutrition-v2/[clientId].tsx`, 2 warnings preexistentes en `NutricionTab.tsx` y `plan-templates.ts`).
+- `pnpm check:nutrition-v2-boundaries` ⇒ 450 archivos OK · `pnpm docs:check` ⇒ OK.
+- SQL en LIVE, siempre `BEGIN … ROLLBACK`: **W3** `20260906210308_nutrition_v2_item_lineage.sql` apilada sobre las columnas y CHECKs
+  de W2 + smoke `supabase/tests/nutrition_v2_item_lineage_rollback.sql` (A–G) ⇒ «W3 SMOKE OK»; **W4.3**
+  `20260906213000_foods_density_review.sql` + `supabase/tests/foods_density_review_rollback.sql` (A–D) ⇒ «W4.3 SMOKE OK»
+  (7 candidatos existentes, sin tocar). **Ninguna de las 3 migraciones está aplicada.**
+- No corridos: dry-run de `scripts/nutrition-household/*.mjs` (el worktree no tiene `.env.local`; correr desde el checkout
+  principal) · E2E `qa:prod:suave` (solo tiene sentido tras el deploy).
 
 ## Pendientes actuales
 
