@@ -113,8 +113,13 @@ real; cada ola cierra con su sección «Gates» y la salida pegada. Modelo por t
       posteriores (solo `get_nutrition_today_v2`, tratada en W3).
 - [x] W2.7 Gates W2 (con W3 y W4, salida real en [TEST_STATUS](../../testing/TEST_STATUS.md)): vitest 152 / 2.316 · typecheck web
       y tsc mobile verdes · eslint · boundaries 450 · docs:check · smoke SQL W2 en LIVE con ROLLBACK «W2 SMOKE OK».
-- [ ] W2.8 [owner] OK para aplicar migración + push + deploy + OTA al cierre del tren. Aplicar en LIVE **después** del deploy y
-      **antes** de la OTA, en orden `20260906202957` → `20260906210308` → `20260906213000`; luego regenerar `database.types.ts`.
+- [x] W2.8 [owner] **OK dado el 06-09 ~22:55Z («Merge + push + deploy + migraciones + OTA ahora»)** ⇒ push ff de la rama a
+      `rnmobiledenuevo` y `master` (`2fe28d61`), deploy `dpl_C95u9ArNCBx8VwvaZfnRLpdRijkm` READY ~23:00Z, migraciones aplicadas por
+      MCP en LIVE ~23:03Z en orden (versiones LIVE `20260906230222` household units · `20260906230357` item lineage ·
+      `20260906230411` foods density review; verificación posterior: columnas, CHECKs, índices, alias en `get_nutrition_today_v2`,
+      trigger y 3 filas en `schema_migrations`), OTA 1.1.2 `production` android `27028d0f-2025-48d5-b6fa-30e5dfeaf7e5`
+      (run 34065842472) / ios `ddf839b8-42b6-4a01-98e0-2117add5da92` (run 34065844358). `database.types.ts` NO regenerado
+      (deuda conocida: el regen completo deja 13 errores en 7 archivos V1; el código nuevo no depende de los tipos generados).
 
 Texto del aviso único a los coaches con ítems «un» sobre alimentos de 100 g (W2.5, lo manda el owner):
 «Hola {nombre}. En EVA, «1 un» de un alimento del catálogo vale una porción de 100 g, salvo que el alimento sea por
@@ -152,7 +157,7 @@ corresponde, tocá «Usar huevos». Cualquier duda, escribime.»
 - [x] W3.5 Gates W3 (ver TEST_STATUS) + smoke SQL apilado W2 → W3 en LIVE con ROLLBACK «W3 SMOKE OK» (A–G: linaje 1 y 2 saltos,
       huérfano intacto, `source_item_id` de otro plan ⇒ null sin fallar, cero UPDATE de `nutrition_intake_entries`).
       `EXPLAIN` de la CTE pendiente para el momento de aplicar (índices `source_item_idx`/`lineage_seed_idx` creados en la migración).
-- [ ] W3.6 [owner] OK al cierre del tren (junto con W2.8).
+- [x] W3.6 [owner] Salió con W2.8 (mismo push, deploy, migración `20260906230357` en LIVE y OTA).
 
 ## W4 · El coach ve y corrige
 
@@ -177,15 +182,19 @@ corresponde, tocá «Usar huevos». Cualquier duda, escribime.»
       (`NutritionCoachAlertsPanel`): el chip «N× la meta» y el chip «versión anterior» del panel M4 cubren los dos avisos; la lib
       `deriveNutritionV2Alerts` queda viva en RN (`NutricionTab`) y lista en web. I-sql sin BLOQUEA (hueco consultivo declarado).
 - [x] W4.5 Gates W4 (ver TEST_STATUS) + smoke SQL W4.3 en LIVE con ROLLBACK «W4.3 SMOKE OK».
-- [ ] W4.6 [owner] OK al cierre del tren (junto con W2.8).
+- [x] W4.6 [owner] Salió con W2.8 (mismo push, deploy, migración `20260906230411` en LIVE y OTA).
 
 ## Cierre del tren
 
-- [ ] C1 Docs finales: CURRENT (4 líneas), MOBILE_PARITY (bloque «Cantidades honestas»), TEST_STATUS (tests y SQL),
-      RUNBOOK (migraciones, consulta de densidad, backfill de catálogo), `docs/README.md` si suma la spec.
-- [ ] C2 E2E `pnpm qa:prod:suave` (solo al cierre, con OK del owner).
-- [ ] C3 Resumen al owner: qué arregla cada ola, gates reales, migraciones listas (sin aplicar), checklist de QA en device.
-- [ ] C4 Memoria del proyecto actualizada (`project_nutricion_cantidades_honestas_20260906.md`).
+- [x] C1 Docs finales: CURRENT #13, MOBILE_PARITY (bloque 06-09), TEST_STATUS, RUNBOOK (migraciones aplicadas + revisión por
+      densidad), MOBILE_RELEASES_OTA (aplicación del 06-09 ~23:07Z + fila 1.1.2).
+- [x] C2 E2E `prod-suave` en CI (job `e2e` es manual, `workflow_dispatch`): run `34065862670` sobre `master` @`2fe28d61` ya
+      desplegado ⇒ **9/9 verdes en 45,6 s** (23:11Z). CI del push (`34065484308`) verde salvo `nutrition-smoke` preexistente.
+- [x] C3 Resumen al owner con checklist de QA en device (mensaje final de la sesión 06-09).
+- [x] C4 Memoria del proyecto actualizada (`project_nutricion_cantidades_honestas_20260906.md`).
+- [ ] C5 [owner] `git pull --ff-only` en el checkout principal (`D:\Proyectos\Antigravity\gymappjp`, hoy en `f5d50cdc`) y borrar
+      la carpeta del worktree `.claude/worktrees/nutrition-cantidades-honestas` (luego `git worktree prune` + `git branch -D`);
+      correr el dry-run de `scripts/nutrition-household/backfill-usda-household.mjs` desde ahí (`USDA_FDC_API_KEY` obligatoria).
 
 ## Checklist de QA en device (se completa al cierre)
 

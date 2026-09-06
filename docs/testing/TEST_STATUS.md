@@ -374,8 +374,12 @@ jefe en el worktree tras el juicio de los workers (salida real):
   de W2 + smoke `supabase/tests/nutrition_v2_item_lineage_rollback.sql` (A–G) ⇒ «W3 SMOKE OK»; **W4.3**
   `20260906213000_foods_density_review.sql` + `supabase/tests/foods_density_review_rollback.sql` (A–D) ⇒ «W4.3 SMOKE OK»
   (7 candidatos existentes, sin tocar). **Ninguna de las 3 migraciones está aplicada.**
-- No corridos: dry-run de `scripts/nutrition-household/*.mjs` (el worktree no tiene `.env.local`; correr desde el checkout
-  principal) · E2E `qa:prod:suave` (solo tiene sentido tras el deploy).
+- No corrido: dry-run de `scripts/nutrition-household/*.mjs` (el worktree no tiene `.env.local`; correr desde el checkout principal).
+- **Tren en producción 06-09 ~23:07Z** (`master` = `rnmobiledenuevo` = `2fe28d61`, deploy `dpl_C95u9ArNCBx8VwvaZfnRLpdRijkm`,
+  3 migraciones en LIVE, OTA android `27028d0f` / ios `ddf839b8`): CI del push (run `34065484308`) verde en `hygiene`, `unit` ×3 y
+  `quality`; `nutrition-smoke` rojo **preexistente** (job sin `NEXT_PUBLIC_SUPABASE_*`); `e2e` `skipped` porque es manual ⇒
+  disparado aparte por `workflow_dispatch`: run `34065862670` **verde** (`e2e` `prod-suave` **9/9 en 45,6 s** sobre `master`
+  @`2fe28d61` ya desplegado; `quality`, `unit` ×3 y `hygiene` verdes; `nutrition-smoke` skipped en el dispatch).
 
 ## Pendientes actuales
 

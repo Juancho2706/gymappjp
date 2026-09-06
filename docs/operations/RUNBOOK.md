@@ -66,10 +66,12 @@ Usar [NUTRITION_V2_CUTOVER_RUNBOOK.md](NUTRITION_V2_CUTOVER_RUNBOOK.md). Contene
 
 Usar [FOOD_CATALOG_CL_IMPORT.md](FOOD_CATALOG_CL_IMPORT.md). Detener applies y conservar batches/rows.
 
-### Nutrición V2: migraciones del tren «Cantidades honestas» (pendientes de aplicar, 2026-09-06)
+### Nutrición V2: migraciones del tren «Cantidades honestas» (APLICADAS en LIVE el 2026-09-06 ~23:03Z)
 
-Tres migraciones aditivas e idempotentes, **validadas en LIVE con `BEGIN … ROLLBACK`** y **no aplicadas** (decisión del
-owner: sale todo junto). Orden y momento: **después del deploy web y antes de la OTA 1.1.2**, en este orden:
+Tres migraciones aditivas e idempotentes, validadas antes con `BEGIN … ROLLBACK` y **aplicadas por MCP `apply_migration`**
+(versiones LIVE `20260906230222` household units · `20260906230357` item lineage · `20260906230411` foods density review; los
+archivos del repo son los espejos con timestamp propio). Se aplicaron **después del deploy web `dpl_C95u9ArN…` y antes de la
+OTA 1.1.2**, en este orden:
 `20260906202957_nutrition_v2_household_units.sql` (columnas `household_label/household_grams` + CHECKs + 4 `create or replace`) →
 `20260906210308_nutrition_v2_item_lineage.sql` (columna `source_item_id`, `private.nutrition_v2_item_alias_map`, parche por
 texto de `get_nutrition_today_v2`) → `20260906213000_foods_density_review.sql` (columna `review_reason` + trigger). Después,

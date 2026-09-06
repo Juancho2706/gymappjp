@@ -12,7 +12,10 @@ source_of_truth: apps/web responsive + apps/mobile
 
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
 
-> **2026-09-06 (tren «Cantidades honestas», Nutrición V2 — W1 EN CÓDIGO en el worktree `nutrition-cantidades-honestas`, sin push ni OTA)**
+> **2026-09-06 (tren «Cantidades honestas», Nutrición V2 — W1–W4 EN PRODUCCIÓN ~23:07Z: `master` = `rnmobiledenuevo` =
+> `2fe28d61`, deploy `dpl_C95u9ArNCBx8VwvaZfnRLpdRijkm` READY, 3 migraciones en LIVE `20260906230222`/`230357`/`230411`, OTA 1.1.2
+> `production` android `27028d0f-2025-48d5-b6fa-30e5dfeaf7e5` (run 34065842472) / ios `ddf839b8-42b6-4a01-98e0-2117add5da92`
+> (run 34065844358); QA del owner en device PENDIENTE)**
 > ([SDD](../specs/nutrition-cantidades-honestas/SPEC.md), mockups M1–M4 aprobados por el owner el 06-09). Paridad web + RN:
 > **editor único y wizards** convierten la cantidad al cambiar de unidad (`convertQuantityTextOnUnitChange`, un solo helper para
 > el reductor compartido, el wizard web y el wizard RN), caption «1 un = {porción} g» bajo el selector, aviso ámbar
@@ -37,7 +40,8 @@ source_of_truth: apps/web responsive + apps/mobile
 > cantidad (RPC `void`/`correct_nutrition_intake_v2`, ya autorizan al coach; RN vía `/api/mobile/nutrition-v2/coach/intake`),
 > chip «N× la meta», alertas V2 (`deriveNutritionV2Alerts`, vivas en `NutricionTab` RN), guard de densidad en `foods`.
 > Solo hoy (el historial V2 no emite ítems). Gates reales en [TEST_STATUS](../testing/TEST_STATUS.md). Migraciones
-> `20260906202957`, `20260906210308`, `20260906213000` validadas con ROLLBACK, pendientes de aplicar (tras deploy, antes de OTA).
+> `20260906202957`, `20260906210308`, `20260906213000` (espejos del repo) aplicadas en LIVE el 06-09 ~23:03Z tras el deploy y antes
+> de la OTA, en ese orden. Brecha declarada: un 1.1.2 sin la OTA que republique un plan casero pierde el rótulo (queda en gramos honestos).
 >
 > **2026-09-04 (tren «Ciclo real y por lado», feedback Movens — EN PRODUCCIÓN, QA del owner VERDE 04-09 ⇒ SDD `done`)**: `master` =
 > `rnmobiledenuevo` = `b1bad0a3` (commits `591ea8cd`…`b1bad0a3` + los 9 de «ola 2 chica» en el mismo push), deploy
