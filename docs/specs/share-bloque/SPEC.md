@@ -9,8 +9,9 @@ canonical: false
 
 Cambio aprobado por el owner el 2026-09-06 sobre [`workout-share`](../workout-share/SPEC.md), ya en
 producción desde 1.1.2. Mockup aprobado: artifact `6937fe7a-2bfd-4e2b-bdec-39a6f7dcf96d`, **opción
-A**. Estado: en código en el worktree `share-bloque-strava`, commit local pendiente, **sin push ni
-OTA** (ambos solo a pedido del owner). QA en device pendiente del owner tras la OTA.
+A**. Estado: **en master desde el 2026-09-06** (rama `worktree-share-bloque-strava` fusionada por
+pedido del owner); **OTA 1.1.2 pendiente** (solo a pedido del owner). QA en device pendiente del
+owner tras la OTA.
 
 ## Antes → después
 

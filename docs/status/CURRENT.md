@@ -110,10 +110,10 @@ prevalecen sobre este resumen. La prosa retirada el 2026-09-02 está en
 11. **iOS/Android — 1.1.2 aprobada y en tienda ⇒ piso OTA 1.1.2**: 1.1.3 no tiene motivo (cero cambio
    nativo desde la build 59); Android sigue en 1.1.2 (build 86, closed testing Alpha) y producción
    espera 12 testers × 14 días. [OTA](../operations/MOBILE_RELEASES_OTA.md)
-12. **Share Entreno — rediseño «bloque único» (owner 06-09) — EN CÓDIGO, sin push ni OTA**
-    (worktree `share-bloque-strava`): se retiran los 6 presets, los toggles y los stickers sueltos;
-    queda un solo bloque de texto en Inter (drag + pellizco, sin build nativa). QA en device
-    pendiente del owner tras la OTA. [SDD](../specs/share-bloque/SPEC.md)
+12. **Share Entreno — rediseño «bloque único» (owner 06-09) — EN MASTER desde el 06-09, OTA pendiente**
+    (rama `worktree-share-bloque-strava` fusionada): se retiran los 6 presets, los toggles y los
+    stickers sueltos; queda un solo bloque de texto en Inter (drag + pellizco, sin build nativa).
+    Falta la OTA 1.1.2 android+ios y el QA en device del owner. [SDD](../specs/share-bloque/SPEC.md)
 10. Regen completo de `database.types.ts` (deja 13 errores en 7 archivos V1; ahí se retiran los
     workarounds tipados de T2.3 y el cast `V2ReadClient`).
 11. Matriz RLS con JWTs reales + preflight V1→V2 (7 enlaces) — sin cambios desde 08-06.
