@@ -17,26 +17,28 @@
 
 import { z } from 'zod'
 import {
+  HOUSEHOLD_UNIT,
   NUTRITION_DAY_LABELS,
   NUTRITION_DAY_SHORT_LABELS,
   NUTRITION_WEEK_ORDER,
   NutritionPlanDraftSchema,
   assessItemPlausibility,
   buildNutritionIdempotencyKey,
+  computeItemMacros,
+  defaultFoodUnit,
   formatNutritionDayOfWeek,
-  intakeEntryFactor,
+  isHouseholdUnit,
   nutritionDayOfWeekFromIso,
   resolveNutritionDayVariantForDow,
+  type BuilderFood,
+  type BuilderFoodMacrosPatch,
   type FoodCatalogItem,
-  type FoodMacroSet,
   type ItemPlausibility,
-  type NutritionMacrosBasis,
   type NutritionItemSubstitution,
   type NutritionPlanDowCell,
   type NutritionPlanDraft,
   type NutritionStrategy,
 } from '@eva/nutrition-v2'
-import { calculateFoodItemMacros, type FoodMacrosRow } from '@eva/nutrition-engine'
 import { foodExchangeEquivalenceShape, refineFoodExchangeEquivalence } from '@eva/schemas'
 import { portionsKey, type PortionsBySlot } from './nutrition-v2-builder-portions'
 
@@ -49,39 +51,21 @@ export type DraftMealSlot = DraftDayVariant['mealSlots'][number]
 export type DraftPrescriptionItem = DraftMealSlot['items'][number]
 
 export const BUILDER_UNITS = ['g', 'ml', 'un'] as const
-export type BuilderUnit = (typeof BUILDER_UNITS)[number]
+/**
+ * Unidad de una fila del wizard. `casera` (W2 «Cantidades honestas») entra al dominio del EDITOR
+ * —no al persistible—: nunca se escribe en `unit`, `buildItemInsertRow` la traduce a g/ml con la
+ * medida congelada aparte. `BUILDER_UNITS` sigue siendo la lista de las persistibles.
+ */
+export type BuilderUnit = (typeof BUILDER_UNITS)[number] | typeof HOUSEHOLD_UNIT
 
-export interface BuilderFood {
-  id: string
-  name: string
-  brand: string | null
-  calories: number
-  proteinG: number
-  carbsG: number
-  fatsG: number
-  fiberG: number | null
-  servingSize: number
-  servingUnit: string
-  category: string | null
-  media: { bucket: string; objectPath: string; version: number } | null
-  /**
-   * Base declarada de los macros (NUT-001). Ausente = "no declarada" y rige la formula
-   * historica por 100 g/ml. Espejo 1:1 de la web draft-builder.ts.
-   */
-  macrosBasis?: NutritionMacrosBasis | null
-  /**
-   * El coach corrigio los macros de este alimento (T2.2). Los de arriba YA son los corregidos;
-   * esto solo marca la fila con ✎ y guarda el valor del catalogo para el tachado.
-   */
-  hasOverride?: boolean
-  originalMacros?: FoodMacroSet | null
-}
-
-/** Lo que cambia de un alimento al guardar o restaurar su correccion. Espejo de la web. */
-export type BuilderFoodMacrosPatch = Pick<
-  BuilderFood,
-  'calories' | 'proteinG' | 'carbsG' | 'fatsG' | 'fiberG' | 'macrosBasis' | 'hasOverride' | 'originalMacros'
->
+/**
+ * `BuilderFood` y `computeItemMacros` YA NO se duplican aca (b2/b4 de la auditoria W2.0): el
+ * tipo y la funcion viven en `@eva/nutrition-v2` y RN los re-exporta desde su ruta historica.
+ * La copia RN estaba condenada a driftar — el par casero de W2 habria que agregarlo dos veces y
+ * la rama `casera` de las macros tendria que dar el MISMO decimal en los dos lados.
+ */
+export type { BuilderFood, BuilderFoodMacrosPatch }
+export { computeItemMacros }
 
 /**
  * Reemplazo autorizado por el coach dentro del builder (F-02). La afordancia agrega SOLO
@@ -868,12 +852,19 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
       }
     }
     case 'ADD_ITEM': {
+      // W2 (b13): con medida casera el alta arranca en «1 huevo» y no en «61 g» — la unidad que
+      // el coach entiende. Sin medida, `defaultFoodUnit` devuelve lo mismo que `toBuilderUnit`.
+      const unit = action.food ? (defaultFoodUnit(action.food) as BuilderUnit) : 'g'
       const item: BuilderItem = {
         ...createEmptyItem(action.key),
         food: action.food,
         customName: action.food ? null : '',
-        quantity: action.food ? String(action.food.servingSize || '') : '',
-        unit: action.food ? toBuilderUnit(action.food.servingUnit) : 'g',
+        quantity: action.food
+          ? unit === HOUSEHOLD_UNIT
+            ? '1'
+            : String(action.food.servingSize || '')
+          : '',
+        unit,
       }
       return mapSlot(state, action.variantKey, action.slotKey, (slot) => ({ ...slot, items: [...slot.items, item] }))
     }
@@ -1062,11 +1053,16 @@ export function migrateBuilderState(raw: unknown, fallbackEffectiveFrom: string)
   }
 }
 
-/** Unidad libre (catalogo / read-model) -> unidad del wizard. Desconocida => gramos. */
+/**
+ * Unidad libre (catalogo / read-model) -> unidad del wizard. Desconocida => gramos.
+ * `casera` sobrevive tal cual: un item rehidratado de un borrador ya en medida casera no puede
+ * caer a gramos por el camino, o el numero escrito («2») pasaria a significar 2 g.
+ */
 export function toBuilderUnit(servingUnit: string | null | undefined): BuilderUnit {
   const u = String(servingUnit ?? '').toLowerCase()
   if (u === 'ml') return 'ml'
   if (u === 'un' || u === 'unit' || u === 'unidad') return 'un'
+  if (u === HOUSEHOLD_UNIT) return HOUSEHOLD_UNIT
   return 'g'
 }
 
@@ -1089,46 +1085,8 @@ function round1(value: number): number {
   return Number.isFinite(n) ? Math.round(n * 10) / 10 : 0
 }
 
-/**
- * Espejo 1:1 de la web. Rama `per_serving`: un alimento con macros POR PORCION (seed de
- * intercambios, override de coach) escalado con la formula por-100 congela numeros
- * equivocados en el snapshot, que ya es inmutable cuando el alumno lo ve. El factor sale de
- * `intakeEntryFactor`, espejo byte a byte de `private.nutrition_v2_entry_factor`. Sin base
- * declarada el camino queda BYTE-IDENTICO al anterior.
- */
-export function computeItemMacros(food: BuilderFood, quantity: number, unit: string): ItemMacros {
-  if (!Number.isFinite(quantity) || quantity <= 0) return ZERO_MACROS
-  if (food.macrosBasis === 'per_serving') {
-    const factor = intakeEntryFactor({
-      quantity,
-      unit,
-      servingSize: food.servingSize,
-      basis: 'per_serving',
-    })
-    return {
-      calories: round1(food.calories * factor),
-      proteinG: round1(food.proteinG * factor),
-      carbsG: round1(food.carbsG * factor),
-      fatsG: round1(food.fatsG * factor),
-      fiberG: food.fiberG == null ? 0 : round1(food.fiberG * factor),
-    }
-  }
-  const foodsRow: FoodMacrosRow = {
-    name: food.name,
-    calories: food.calories,
-    protein_g: food.proteinG,
-    carbs_g: food.carbsG,
-    fats_g: food.fatsG,
-    serving_size: food.servingSize,
-    serving_unit: food.servingUnit,
-  }
-  const m = calculateFoodItemMacros({ quantity, unit, foods: foodsRow })
-  const unitLower = (unit || 'g').toLowerCase()
-  const isDirect = unitLower === 'g' || unitLower === 'ml'
-  const factor = isDirect ? quantity / 100 : (quantity * (food.servingSize || 0)) / 100
-  const fiber = food.fiberG == null ? 0 : Math.round(food.fiberG * factor * 10) / 10
-  return { calories: m.calories, proteinG: m.protein, carbsG: m.carbs, fatsG: m.fats, fiberG: fiber }
-}
+// `computeItemMacros` se re-exporta del paquete al tope del modulo (b4): una sola implementacion
+// para las cinco superficies, con la rama `casera` de W2 incluida.
 
 function toNonNegNumber(value: string): number {
   const n = Number(String(value).trim())
@@ -1155,15 +1113,14 @@ export function itemMacros(item: BuilderItem): ItemMacros {
 /**
  * ¿La cantidad de este item del wizard es plausible? (W1.3 «Cantidades honestas»). Espejo 1:1 de
  * la web (`draft-builder.ts`) y hermano de `qeItemPlausibility` del editor unico: las MISMAS
- * kcal que la fila ya muestra y la misma porcion del catalogo. La medida casera
- * (`householdGrams`) llega en W2 junto con el campo en `BuilderFood`.
+ * kcal que la fila ya muestra, la misma porcion del catalogo y la misma medida casera (W2).
  */
 export function builderItemPlausibility(item: BuilderItem): ItemPlausibility {
   return assessItemPlausibility({
     quantity: Number(item.quantity),
     unit: item.unit,
     servingSize: item.food?.servingSize ?? null,
-    householdGrams: null,
+    householdGrams: item.food?.householdGrams ?? null,
     calories: itemMacros(item).calories,
   })
 }
@@ -1420,6 +1377,14 @@ function assembleSlots(
             substitutionGroupId: null,
             notes: item.notes && item.notes.trim() !== '' ? item.notes.trim() : null,
             orderIndex: itemIndex,
+            // Medida casera (W2): el par se congela SOLO cuando el coach publica el item EN
+            // `casera` — es el gesto con el que la autoriza. En cualquier otra unidad viaja en
+            // null y la fila queda en gramos honestos, sin rotulo que nadie eligio.
+            householdLabel: isHouseholdUnit(item.unit) ? (item.food?.householdLabel ?? null) : null,
+            householdGrams: isHouseholdUnit(item.unit) ? (item.food?.householdGrams ?? null) : null,
+            // Linaje W3.1: el WIZARD no lo emite (SPEC §6.1). Arma un plan desde cero, no una
+            // copia de la version vigente: no hay ancestro del que colgar los registros de hoy.
+            sourceItemId: null,
             ...(substitutions.length > 0
               ? {
                   substitutions: substitutions.map(
@@ -1543,6 +1508,11 @@ export function buildSlotInsertRow(versionId: string, dayVariantId: string, slot
   }
 }
 
+/**
+ * ⚠️ RN NO ESCRIBE (NUT-005): la publicacion movil viaja por la API web, que usa
+ * `apps/web/.../_lib/plan-draft-rows.ts`. Esta copia sobrevive por paridad de tests y NO traduce
+ * la unidad `casera` de W2 — si algun dia RN volviera a escribir, hay que portar `translateHouseholdUnit`.
+ */
 export function buildItemInsertRow(input: {
   versionId: string
   mealSlotId: string
@@ -1704,6 +1674,10 @@ export function mapFoodCatalogItemToBuilderFood(item: FoodCatalogItem): BuilderF
     hasOverride: item.hasOverride ?? false,
     originalMacros: item.original ?? null,
     media: item.media,
+    // Medida casera (W2, b21): el RPC `search_food_catalog_v2` ya la emite con la precedencia
+    // override-del-coach > catalogo. Es lo que habilita la unidad `casera` en el selector.
+    householdGrams: item.householdGrams ?? null,
+    householdLabel: item.householdLabel ?? null,
   }
 }
 

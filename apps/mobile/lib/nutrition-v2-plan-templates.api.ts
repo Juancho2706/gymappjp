@@ -119,6 +119,10 @@ function toBuilderFood(raw: unknown): BuilderFood | null {
     servingUnit: typeof f.servingUnit === 'string' ? f.servingUnit : 'g',
     category: typeof f.category === 'string' && f.category !== '' ? f.category : null,
     media: null,
+    // Medida casera (W2): sin ella, una plantilla con items en `casera` no tendria con que
+    // traducirlos a gramos al publicar (`buildItemInsertRow` cortaria con un error claro).
+    householdGrams: num(f.householdGrams),
+    householdLabel: typeof f.householdLabel === 'string' && f.householdLabel !== '' ? f.householdLabel : null,
   }
 }
 

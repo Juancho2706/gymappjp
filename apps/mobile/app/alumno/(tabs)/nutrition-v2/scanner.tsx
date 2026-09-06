@@ -28,9 +28,8 @@ import { useAlumnoScrollHandler } from '../../../../lib/alumno-chrome-scroll'
 import {
   CATALOG_MACROS_BASIS,
   NutritionTodayReadModelSchema,
-  convertIntakeQuantity,
-  defaultCatalogUnit,
-  intakeUnitLabel,
+  convertQuantityBetweenUnits,
+  formatItemQuantity,
   normalizeIntakeUnit,
   scaleSnapshotMacros,
   type FoodBarcodeLookupReadModel,
@@ -58,6 +57,11 @@ import {
   scannedFoodUnitOptions,
   type ScannerRegistrationContext,
 } from '../../../../lib/nutrition-v2-scanner.logic'
+// Misma casa que el registro por búsqueda: defaults y traducción de la medida casera a gramos.
+import {
+  catalogIntakeDefaults,
+  catalogIntakeSubmission,
+} from '../../../../lib/nutrition-v2-catalog-units'
 import {
   getStableDeviceId,
   newNutritionV2OperationId,
@@ -643,26 +647,32 @@ function RegisterScannedFoodSheet({
   onRegistered: () => void
 }) {
   const { theme } = useTheme()
-  const [quantity, setQuantity] = useState(String(food.servingSize))
-  const [unit, setUnit] = useState<string>(defaultCatalogUnit(food.servingUnit))
+  // Cantidad y unidad iniciales del alimento (W2.1): medida casera cuando la tiene, y la cantidad
+  // acompaña (1 medida, no la porción del catálogo). Mismo helper que el registro por búsqueda.
+  const defaults = useMemo(() => catalogIntakeDefaults(food), [food])
+  const [quantity, setQuantity] = useState(String(defaults.quantity))
+  const [unit, setUnit] = useState<string>(defaults.unit)
   const [mealSlot, setMealSlot] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Mismas opciones de unidad que el diálogo web: códigos canónicos g|ml|un (NUT-017).
-  const unitOptions = useMemo(() => scannedFoodUnitOptions(food), [food])
+  // Mismas opciones de unidad que el diálogo web: magnitud + medida casera rotulada con sus
+  // gramos + contable solo si el alimento lo es, más la unidad vigente si quedó fuera (W2.1).
+  const unitOptions = useMemo(() => scannedFoodUnitOptions(food, unit), [food, unit])
 
-  /** Cambio de unidad: convierte la cantidad (o la limpia si no es convertible). NUT-017. */
+  /**
+   * Cambio de unidad: convierte la cantidad (o la limpia si no es convertible). NUT-017.
+   * `convertQuantityBetweenUnits` entiende además `casera` (2 huevos ⇔ 122 g).
+   */
   const changeUnit = (nextUnit: string) => {
-    const from = normalizeIntakeUnit(unit)
-    const to = normalizeIntakeUnit(nextUnit)
     setUnit(nextUnit)
-    if (!from || !to || from === to) return
-    const converted = convertIntakeQuantity({
+    if (unit === nextUnit) return
+    const converted = convertQuantityBetweenUnits({
       quantity: Number(quantity.replace(',', '.')),
-      from,
-      to,
+      from: unit,
+      to: nextUnit,
       servingSize: food.servingSize,
+      householdGrams: food.householdGrams,
     })
     setQuantity(converted === null ? '' : String(converted))
   }
@@ -671,22 +681,31 @@ function RegisterScannedFoodSheet({
     [registration.slotOptions],
   )
   const quantityNumber = Number(quantity)
-  const canSubmit =
-    Number.isFinite(quantityNumber) && quantityNumber > 0 && unit.trim().length > 0 && !submitting
+  // Lo que realmente se persiste: `casera` se traduce a gramos + magnitud antes de salir de la
+  // pantalla (SPEC §5.3); `null` = sin gramaje casero con que traducir ⇒ no se puede registrar.
+  const submission = useMemo(
+    () =>
+      Number.isFinite(quantityNumber) && quantityNumber > 0
+        ? catalogIntakeSubmission({ food, quantity: quantityNumber, unit })
+        : null,
+    [food, quantityNumber, unit],
+  )
+  const canSubmit = submission !== null && submission.unit.trim().length > 0 && !submitting
 
   // Total ESTIMADO con la MISMA función pura del servidor (paridad con web y con add-food).
+  // Escala con la cantidad YA traducida: `casera` no es una unidad del factor (SPEC R9).
   const estimatedTotals = useMemo(() => {
-    if (!Number.isFinite(quantityNumber) || quantityNumber <= 0) return null
+    if (!submission) return null
     return scaleSnapshotMacros(food, {
-      quantity: quantityNumber,
-      unit: normalizeIntakeUnit(unit) ?? unit,
+      quantity: submission.quantity,
+      unit: normalizeIntakeUnit(submission.unit) ?? submission.unit,
       servingSize: food.servingSize,
       basis: CATALOG_MACROS_BASIS,
     })
-  }, [food, quantityNumber, unit])
+  }, [food, submission])
 
   const submit = async () => {
-    if (!canSubmit) return
+    if (!canSubmit || !submission) return
     setSubmitting(true)
     setError(null)
     try {
@@ -697,8 +716,9 @@ function RegisterScannedFoodSheet({
         occurredAt: new Date().toISOString(),
         registration,
         food,
-        quantity: quantityNumber,
-        unit: unit.trim(),
+        // Sale en g/ml: la medida casera es interfaz, la verdad persistida son gramos (§5.3).
+        quantity: submission.quantity,
+        unit: submission.unit.trim(),
         mealSlotCode: mealSlot === '' ? null : mealSlot,
       })
       const outcome = await submitRecordIntake(userId, payload)
@@ -804,28 +824,30 @@ function RegisterScannedFoodSheet({
         <View>
           <Text className="mb-1 text-xs font-semibold text-muted">Unidad</Text>
           <View className="flex-row flex-wrap gap-2">
+            {/* Cada pill lleva SU rótulo con gramos («huevo · 61 g»): así una medida casera no se
+                confunde con una porción, que es la causa 1 del tren (SPEC §5.2). */}
             {unitOptions.map((option) => {
-              const active = unit === option
+              const active = unit === option.code
               return (
                 <Pressable
-                  key={option}
+                  key={option.code}
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
-                  accessibilityLabel={`Unidad ${intakeUnitLabel(option)}`}
+                  accessibilityLabel={`Unidad ${option.label}`}
                   onPress={() => {
                     void Haptics.selectionAsync()
-                    changeUnit(option)
+                    changeUnit(option.code)
                   }}
                   className={`min-h-11 items-center justify-center rounded-control border px-3 ${active ? 'border-primary bg-primary/10' : 'border-default bg-surface-app'}`}
                 >
-                  <Text className={`text-sm font-semibold ${active ? 'text-primary' : 'text-muted'}`}>{intakeUnitLabel(option)}</Text>
+                  <Text className={`text-sm font-semibold ${active ? 'text-primary' : 'text-muted'}`}>{option.label}</Text>
                 </Pressable>
               )
             })}
           </View>
         </View>
 
-        {estimatedTotals ? (
+        {estimatedTotals && submission ? (
           <View
             accessibilityLiveRegion="polite"
             className="rounded-control border border-subtle bg-surface-sunken px-3 py-2"
@@ -837,7 +859,13 @@ function RegisterScannedFoodSheet({
                 proteinG={estimatedTotals.proteinG}
                 carbsG={estimatedTotals.carbsG}
                 fatsG={estimatedTotals.fatsG}
-                per={`por ${quantity} ${intakeUnitLabel(normalizeIntakeUnit(unit) ?? 'g')}`}
+                // El rótulo dice lo que se va a GUARDAR: «por 2 huevos (122 g)» con medida casera.
+                per={`por ${formatItemQuantity({
+                  quantity: submission.quantity,
+                  unit: submission.unit,
+                  householdLabel: food.householdLabel,
+                  householdGrams: food.householdGrams,
+                })}`}
                 size="sm"
               />
             </View>

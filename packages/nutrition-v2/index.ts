@@ -15,6 +15,14 @@ export * from './intake-units'
 // aviso de cantidad poco plausible viven en UN solo lugar (como `substitution-intake`).
 export * from './unit-change'
 export * from './plausibility'
+// Rotulo honesto de «cantidad + unidad» en todas las superficies (W2.3): «2 huevos (122 g)»
+// con medida casera congelada en el item, «{cantidad} {unidad}» sin ella.
+export * from './quantity-format'
+// Tren «Cantidades honestas» (W4.1): filas y chip «N× la meta» del panel de registros del día del coach.
+export * from './coach-day-entries'
+// Tren «Cantidades honestas» (W4.2): las dos alertas V2 de la ficha (sobreconsumo del día y
+// registros de una versión anterior). Web y RN las concatenan a su motor de alertas existente.
+export * from './coach-alerts'
 export * from './substitution-intake'
 // SUB-T10: como se leen los reemplazos autorizados del coach en la tarjeta del PLAN del alumno
 // (web + RN). Puro y sin equivalencias caloricas — el calculo vive en `substitution-intake`.

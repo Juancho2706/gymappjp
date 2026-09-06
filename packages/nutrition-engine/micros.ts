@@ -51,6 +51,16 @@ function round1(n: number): number {
   return Math.round(n * 10) / 10
 }
 
+/**
+ * Numero de una CUENTA casera en es-CL: coma decimal, a lo sumo 1 decimal, sin ceros de mas
+ * ("2" y no "2,0"). Mejora del jefe 06-09: la interpolacion directa (`${value}`) usaba punto
+ * ("1.5 huevos"), inconsistente con el resto de los rotulos es-CL del paquete (`gramsToHousehold`
+ * ya formatea los gramos con `Intl.NumberFormat`, solo la cuenta se habia quedado atras).
+ */
+function formatCountNumber(value: number): string {
+  return new Intl.NumberFormat('es-CL', { maximumFractionDigits: 1 }).format(value)
+}
+
 /** Micros de un ítem según cantidad/unidad. Valores ausentes cuentan como 0. */
 export function calculateFoodItemMicros(item: FoodItemForMicros): MealMicros {
   const factor = portionFactor(item)
@@ -115,7 +125,12 @@ const COMMON_FRACTIONS: Array<{ value: number; glyph: string }> = [
   { value: 0.75, glyph: '¾' },
 ]
 
-function pluralizeLabel(label: string, count: number): string {
+/**
+ * Pluraliza un rótulo casero es-latam (huevo → huevos, taza → tazas). Exportada además de
+ * `formatHouseholdCount` para que `packages/nutrition-v2/quantity-format.ts` (tren «Cantidades
+ * honestas», W2.3) pueda pluralizar el rótulo casero de la unidad `casera` sin duplicar la regla.
+ */
+export function pluralizeLabel(label: string, count: number): string {
   if (count <= 1) return label
   // Pluralización liviana es-latam: termina en vocal → +s; en consonante → +es.
   const last = label.slice(-1).toLowerCase()
@@ -123,7 +138,13 @@ function pluralizeLabel(label: string, count: number): string {
   return `${label}es`
 }
 
-function formatHouseholdCount(count: number, label: string): string {
+/**
+ * Rotula una CUENTA (no gramos) de porciones caseras con fracciones comunes y plural
+ * («2 huevos», «½ taza»). Exportada (tren «Cantidades honestas», W2.3, SPEC §5.5) para que
+ * `formatItemQuantity` (`packages/nutrition-v2/quantity-format.ts`) la reuse tal cual — mismo
+ * comportamiento que ya usa `gramsToHousehold` acá mismo.
+ */
+export function formatHouseholdCount(count: number, label: string): string {
   if (!Number.isFinite(count) || count <= 0) return ''
 
   // < 1: intentar fracción común (tolerancia 0.06).
@@ -138,12 +159,12 @@ function formatHouseholdCount(count: number, label: string): string {
       }
     }
     if (best) return `${best} ${label}`
-    // Sin fracción cercana: 1 decimal.
-    return `${round1(count)} ${pluralizeLabel(label, count)}`
+    // Sin fracción cercana: 1 decimal, coma es-CL (no punto).
+    return `${formatCountNumber(count)} ${pluralizeLabel(label, count)}`
   }
 
-  // >= 1: redondear a entero si está muy cerca, si no 1 decimal.
+  // >= 1: redondear a entero si está muy cerca, si no 1 decimal (coma es-CL).
   const rounded = Math.round(count)
   const value = Math.abs(count - rounded) <= 0.06 ? rounded : round1(count)
-  return `${value} ${pluralizeLabel(label, value)}`
+  return `${formatCountNumber(value)} ${pluralizeLabel(label, value)}`
 }

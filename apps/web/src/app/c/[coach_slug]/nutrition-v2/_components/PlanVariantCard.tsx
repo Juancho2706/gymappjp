@@ -1,6 +1,7 @@
 import {
   NUTRITION_ITEM_SUBSTITUTION_SELECT,
   describeItemSubstitutions,
+  formatItemQuantity,
   formatNutritionAmount,
   formatNutritionCalories,
   mapNutritionItemSubstitutionRow,
@@ -198,7 +199,12 @@ export function PlanSlotBlock({
                 <NutritionFoodRow
                   name={item.name ?? 'Alimento prescrito'}
                   detail={item.brand}
-                  quantityLabel={`${item.quantity} ${item.unit}${item.optional ? ' · opcional' : ''}`}
+                  quantityLabel={`${formatItemQuantity({
+                    quantity: item.quantity,
+                    unit: item.unit,
+                    householdLabel: item.householdLabel ?? null,
+                    householdGrams: item.householdGrams ?? null,
+                  })}${item.optional ? ' · opcional' : ''}`}
                   calories={item.macros.calories}
                   proteinG={item.macros.proteinG}
                   carbsG={item.macros.carbsG}

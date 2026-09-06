@@ -134,8 +134,9 @@ export function foodCatalogItemToCardModel(
  * ya cargado por la busqueda. Evita un segundo fetch al tocar la card. La ficha
  * expone la atribucion de fuente/verificacion via los helpers de `food-detail`.
  *
- * `householdGrams`/`householdLabel` no viajan en el read model del catalogo, asi
- * que quedan en null (la ficha los oculta). `isLiquid` se deriva de la unidad.
+ * `householdGrams`/`householdLabel` SÍ viajan en el read model del catálogo desde W2
+ * («Cantidades honestas»): la ficha muestra «1 huevo ≈ 61 g» en vez de ocultarlo.
+ * `isLiquid` se deriva de la unidad.
  */
 export function foodCatalogItemToDetail(item: FoodCatalogItem): FoodDetailData {
   return {
@@ -154,8 +155,8 @@ export function foodCatalogItemToDetail(item: FoodCatalogItem): FoodDetailData {
     isLiquid: isLiquidUnit(item.servingUnit),
     servingSize: item.servingSize,
     servingUnit: item.servingUnit,
-    householdGrams: null,
-    householdLabel: null,
+    householdGrams: item.householdGrams ?? null,
+    householdLabel: item.householdLabel ?? null,
     packageQuantity: item.packageQuantity,
     packageUnit: item.packageUnit,
     barcode: item.gtin,

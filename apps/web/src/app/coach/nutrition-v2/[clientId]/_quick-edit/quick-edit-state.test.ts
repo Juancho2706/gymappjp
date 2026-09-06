@@ -140,6 +140,8 @@ const swapFood: BuilderFood = {
   servingUnit: 'g',
   category: null,
   media: null,
+  householdGrams: null,
+  householdLabel: null,
 }
 
 function hydrate(): { state: QuickEditState; baseline: ReturnType<typeof applyQuickEditToDraft> } {

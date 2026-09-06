@@ -276,6 +276,10 @@ async function loadSubstitutionFoodsById(
         servingUnit: row.serving_unit ?? 'g',
         category: row.category ?? null,
         media: null,
+        // Estos alimentos son de REEMPLAZOS y solo alimentan el display de la equivalencia por
+        // kcal: la medida casera (W2) no participa de ese calculo y no se lee.
+        householdGrams: null,
+        householdLabel: null,
       }
     }
     return foods

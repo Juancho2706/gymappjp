@@ -1,3 +1,4 @@
+import { formatItemQuantity } from '@eva/nutrition-v2'
 import { isoDateAddDays } from './date-utils'
 
 export type NutritionSemanticTone = 'muted' | 'success' | 'warning' | 'danger'
@@ -415,8 +416,15 @@ export function buildNutritionPlanMealRows(
       kcalLabel: calories > 0 ? `${Math.round(calories)} kcal` : null,
       foods: items.map((item, index) => {
         const food = item.foods
+        // Plan V1 (`food_items`, tabla `foods` legada): sin medida casera congelada, el
+        // rotulo cae siempre a "cantidad + unidad" plano (tren «Cantidades honestas», W2.3).
         const quantityLabel = item.quantity != null
-          ? `${item.quantity}${item.unit ? ` ${item.unit}` : ''}`
+          ? formatItemQuantity({
+              quantity: Number(item.quantity),
+              unit: item.unit ?? null,
+              householdLabel: null,
+              householdGrams: null,
+            })
           : ''
         const kcalLabel = food?.calories != null && Number.isFinite(food.calories)
           ? ` · ${Math.round(food.calories)} kcal`

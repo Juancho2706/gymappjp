@@ -27,9 +27,10 @@ export const NUTRITION_INTAKE_UNITS = ['g', 'ml', 'un', 'porción'] as const
 export type NutritionIntakeUnit = (typeof NUTRITION_INTAKE_UNITS)[number]
 
 /**
- * Unidades ofrecibles al registrar un alimento del CATALOGO (buscador y scanner, web y RN).
- * `porción` queda fuera: es la unidad del intake sintetico de intercambios, no una eleccion
- * del alumno sobre un alimento del catalogo.
+ * Vocabulario PERSISTIBLE de un registro libre sobre un alimento del catalogo. `porción` queda
+ * fuera: es la unidad del intake sintetico de intercambios, no una eleccion del alumno sobre un
+ * alimento del catalogo. Que unidades se OFRECEN en pantalla ya no sale de aqui sino de
+ * `foodUnitOptions(food)` (W2.1): depende del alimento, no del vocabulario.
  */
 export const NUTRITION_CATALOG_UNITS = ['g', 'ml', 'un'] as const
 export type NutritionCatalogUnit = (typeof NUTRITION_CATALOG_UNITS)[number]
@@ -117,39 +118,203 @@ export function isMassIntakeUnit(unit: NutritionIntakeUnit): boolean {
 }
 
 /**
- * Unidades ofrecidas para un alimento del catalogo: su propia magnitud (g o ml segun el
- * `servingUnit` del alimento) + la unidad contable. Espeja `swapOptionAllowedUnits` del motor
- * canonico (packages/nutrition-engine/macros.ts:63-65) — registrar un solido en ml (o un liquido
- * en g) no significa nada y era una de las formas de llegar al x100 de NUT-017.
- */
-export function catalogUnitOptions(
-  servingUnit: string | null | undefined,
-): readonly NutritionCatalogUnit[] {
-  return normalizeIntakeUnit(servingUnit) === 'ml' ? (['ml', 'un'] as const) : (['g', 'un'] as const)
-}
-
-/**
  * Magnitud REAL de un alimento a partir de su `serving_unit`: un liquido se mide en ml y todo
  * lo demas en g. Un `serving_unit` contable (`un`) no es una magnitud — su `serving_size` igual
- * esta en gramos —, asi que cae al lado solido, mismo criterio que `catalogUnitOptions`.
+ * esta en gramos —, asi que cae al lado solido, mismo criterio que `foodUnitOptions`.
  * La usan el rotulo «1 un = 100 g» y el aviso de plausibilidad (./plausibility.ts).
  */
 export function foodMagnitudeUnit(servingUnit: string | null | undefined): 'g' | 'ml' {
   return normalizeIntakeUnit(servingUnit) === 'ml' ? 'ml' : 'g'
 }
 
-/** Unidad inicial de un alimento del catalogo: la suya si es ofrecible, si no la de su magnitud. */
-export function defaultCatalogUnit(servingUnit: string | null | undefined): NutritionCatalogUnit {
-  const options = catalogUnitOptions(servingUnit)
-  const normalized = normalizeIntakeUnit(servingUnit)
-  if (normalized && (options as readonly string[]).includes(normalized)) {
-    return normalized as NutritionCatalogUnit
+// ---------------------------------------------------------------------------
+// Unidades POR ALIMENTO con medida casera (W2.1, tren «Cantidades honestas»)
+// ---------------------------------------------------------------------------
+
+/** Rango aceptable de gramos de una medida casera. Espeja los CHECK SQL (SPEC §5.4, R4). */
+export const HOUSEHOLD_GRAMS_MIN = 1
+export const HOUSEHOLD_GRAMS_MAX = 1000
+
+/**
+ * Una opcion del selector de unidad de un alimento. `label` es lo UNICO que se pinta («huevo ·
+ * 61 g»); `code` es lo que viaja al estado. `grams` son los gramos que vale UNA de esas unidades
+ * (la porcion en `un`, la medida en `casera`) o `null` para las magnitudes, que ya son gramos.
+ */
+export interface FoodUnitOption {
+  code: 'g' | 'ml' | 'un' | 'casera'
+  label: string
+  grams: number | null
+}
+
+/**
+ * Lo minimo que hace falta del alimento para armar sus unidades. Estructural (y no `BuilderFood`)
+ * porque los llamadores traen tipos distintos: `QeItem.food` del paquete, el `BuilderFood` del
+ * wizard web, su espejo RN y el `FoodCatalogItem` del buscador del alumno.
+ */
+export interface FoodUnitOptionsFood {
+  servingUnit: string | null | undefined
+  /** `serving_size` del catalogo: SIEMPRE en g/ml (el `serving_unit` es solo una etiqueta). */
+  servingSize?: number | null
+  householdGrams?: number | null
+  householdLabel?: string | null
+}
+
+function usablePositive(value: number | null | undefined): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : null
+}
+
+/** Gramos de la medida casera SOLO si son ofrecibles: dentro del rango del CHECK (R4). */
+function usableHouseholdGrams(value: number | null | undefined): number | null {
+  const grams = usablePositive(value)
+  if (grams === null) return null
+  return grams >= HOUSEHOLD_GRAMS_MIN && grams <= HOUSEHOLD_GRAMS_MAX ? grams : null
+}
+
+/** Numero corto para una etiqueta: «61», «0,5» — sin `Intl` (Hermes con ICU recortado). */
+function shortAmount(value: number): string {
+  const rounded = Math.round(value * 10) / 10
+  return Number.isInteger(rounded) ? String(rounded) : String(rounded).replace('.', ',')
+}
+
+/**
+ * Unidades ofrecibles para UN alimento concreto (W2.1, SPEC §5.2). Reemplazo (y unica casa desde
+ * W2.1) del viejo `catalogUnitOptions`, que ofrecia `un` a TODO el catalogo: en el 96 % de las
+ * filas «1 un» es una porcion de 100 g y nadie lo decia — la causa 1 del tren (SPEC §1).
+ *
+ *   magnitud (`g`/`ml`) : siempre. Es la verdad persistida.
+ *   `casera`            : solo con el PAR completo y el gramaje dentro del CHECK [1, 1000] (R4).
+ *   `un`                : solo si el alimento es REALMENTE contable (`serving_unit = 'un'`).
+ *
+ * El orden es el del selector: primero la magnitud, despues la medida casera (la que queremos
+ * que el coach elija) y al final la contable. Un alimento `per_serving` + `un` con medida ofrece
+ * las dos, cada una rotulada con SUS gramos («huevo · 61 g» vs «un · 58 g»), que es justo lo que
+ * pide R7 — no hay forma de confundirlas si las dos dicen cuanto pesan.
+ */
+export function foodUnitOptions(food: FoodUnitOptionsFood): readonly FoodUnitOption[] {
+  const magnitude = foodMagnitudeUnit(food.servingUnit)
+  const options: FoodUnitOption[] = [{ code: magnitude, label: magnitude, grams: null }]
+
+  const householdGrams = usableHouseholdGrams(food.householdGrams)
+  const householdLabel = (food.householdLabel ?? '').trim()
+  if (householdGrams !== null && householdLabel.length > 0) {
+    options.push({
+      code: HOUSEHOLD_UNIT,
+      label: `${householdLabel} · ${shortAmount(householdGrams)} ${magnitude}`,
+      grams: householdGrams,
+    })
   }
-  return options[0]
+
+  if (normalizeIntakeUnit(food.servingUnit) === 'un') {
+    const servingSize = usablePositive(food.servingSize)
+    options.push({
+      code: 'un',
+      label: servingSize === null ? 'un' : `un · ${shortAmount(servingSize)} ${magnitude}`,
+      grams: servingSize,
+    })
+  }
+
+  return options
+}
+
+/**
+ * Unidad inicial de un alimento (W2.1). La medida casera GANA siempre que exista, incluso en un
+ * alimento nativo `un` (R7): «2 huevos» es lo que el coach quiere escribir, y «2 un» es
+ * exactamente el numero que nadie sabia leer.
+ */
+export function defaultFoodUnit(food: FoodUnitOptionsFood): FoodUnitOption['code'] {
+  const options = foodUnitOptions(food)
+  return (
+    options.find((option) => option.code === HOUSEHOLD_UNIT)?.code ??
+    options.find((option) => option.code === 'un')?.code ??
+    options[0]!.code
+  )
+}
+
+/**
+ * Una opcion del selector tal como la pinta la UI. Igual que `FoodUnitOption` pero con `code`
+ * abierto: el selector tiene que poder mostrar la unidad VIGENTE de un item aunque ya no sea
+ * ofrecible (una `porción` heredada de la conversion V1→V2, o un `un` de un alimento que hoy no
+ * es contable). Quitarsela dejaria al coach atrapado fuera de su propia unidad.
+ */
+export interface UnitSelectOption {
+  code: string
+  label: string
+  grams: number | null
+}
+
+/**
+ * Opciones del selector de un item: las del alimento (`foodUnitOptions`) mas la unidad VIGENTE
+ * si quedo fuera del set. Una sola casa para las cuatro superficies de autoria (editor y wizard,
+ * web y RN), que antes resolvian este mismo detalle cada una a su manera.
+ */
+export function foodUnitOptionsWithCurrent(
+  food: FoodUnitOptionsFood,
+  currentUnit: string | null | undefined,
+): readonly UnitSelectOption[] {
+  const options: UnitSelectOption[] = [...foodUnitOptions(food)]
+  const current = String(currentUnit ?? '').trim()
+  if (current.length === 0) return options
+  if (options.some((option) => option.code === current)) return options
+  return [...options, { code: current, label: current, grams: null }]
 }
 
 function round1(value: number): number {
   return Math.round(value * 10) / 10
+}
+
+/**
+ * Conversion de cantidad ENTRE cualquier par de unidades del editor, incluida `casera` (W2.1).
+ * Envuelve a `convertIntakeQuantity` (que solo conoce el vocabulario persistible) y agrega:
+ *
+ *   g|ml ↔ casera : `qty / householdGrams` y su inversa (2 huevos ⇔ 122 g con hg = 61)
+ *   un   ↔ casera : via gramos, `qty × servingSize / householdGrams` y su inversa
+ *   porción ↔ casera : `null` — las macros de una porcion son las del grupo, no hay gramaje
+ *
+ * `null` = la conversion NO es representable (falta el gramaje con que multiplicar, o hay una
+ * `porción` de por medio). El llamador conserva el numero escrito (SPEC §4.1); nunca inventa.
+ */
+export function convertQuantityBetweenUnits(input: {
+  quantity: number
+  from: string
+  to: string
+  servingSize: number | null | undefined
+  householdGrams?: number | null
+}): number | null {
+  const { quantity } = input
+  if (!Number.isFinite(quantity) || quantity <= 0) return null
+
+  // `casera` no es un codigo de intake (nunca se persiste): se compara literal contra la
+  // constante, JAMAS derivandola de `householdLabel` — una etiqueta «unidad» es solo display (R8).
+  const fromHousehold = isHouseholdUnit(input.from)
+  const toHousehold = isHouseholdUnit(input.to)
+  if (fromHousehold && toHousehold) return quantity
+
+  if (fromHousehold || toHousehold) {
+    const householdGrams = usablePositive(input.householdGrams)
+    if (householdGrams === null) return null
+    const other = normalizeIntakeUnit(fromHousehold ? input.to : input.from)
+    if (other === null || other === 'porción') return null
+
+    // Todo pasa por gramos: la medida casera SIEMPRE se define en la magnitud del alimento.
+    if (isMassIntakeUnit(other)) {
+      return round1(fromHousehold ? quantity * householdGrams : quantity / householdGrams)
+    }
+    const servingSize = usablePositive(input.servingSize)
+    if (servingSize === null) return null
+    return round1(
+      fromHousehold ? (quantity * householdGrams) / servingSize : (quantity * servingSize) / householdGrams,
+    )
+  }
+
+  const from = normalizeIntakeUnit(input.from)
+  const to = normalizeIntakeUnit(input.to)
+  if (from === null || to === null) return null
+  return convertIntakeQuantity({ quantity, from, to, servingSize: input.servingSize })
+}
+
+/** ¿Este texto de unidad es la medida casera? Comparacion literal (ver `HOUSEHOLD_UNIT`). */
+export function isHouseholdUnit(unit: string | null | undefined): boolean {
+  return String(unit ?? '').trim().toLowerCase() === HOUSEHOLD_UNIT
 }
 
 /**

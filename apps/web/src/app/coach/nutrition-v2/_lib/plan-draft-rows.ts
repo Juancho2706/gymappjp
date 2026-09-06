@@ -11,7 +11,11 @@
  */
 
 import {
+  HOUSEHOLD_GRAMS_MAX,
+  HOUSEHOLD_GRAMS_MIN,
   computeItemMacros,
+  foodMagnitudeUnit,
+  isHouseholdUnit,
   type BuilderFood,
   type NutritionExchangeTarget,
   type NutritionItemSubstitution,
@@ -62,6 +66,45 @@ export function buildSlotInsertRow(versionId: string, dayVariantId: string, slot
 }
 
 /**
+ * Código del `throw` cuando un ítem llega en medida casera sin gramaje utilizable. Se corta ACÁ
+ * y no en la base: el CHECK `nutrition_prescription_items_v2_household_grams_range` haría fallar
+ * la publicación ENTERA con un `23514` que no dice qué ítem fue (R13).
+ */
+export const HOUSEHOLD_GRAMS_ERROR = 'nutrition_v2_household_grams_invalid'
+
+/**
+ * Traducción de la MEDIDA CASERA a lo que acepta la tabla (W2, b18 de la auditoría W2.0).
+ * «Gramos como verdad, medida casera como interfaz» (SPEC §5.1): la unidad `casera` vive en el
+ * editor y en el borrador, y muere acá — la fila se escribe en g/ml y el par viaja congelado en
+ * sus dos columnas. El CHECK `unit <> 'casera'` de la tabla es el cierre real de esa regla.
+ *
+ * Un ítem NO casero escribe el par en `null` a propósito: la medida se congela sólo cuando el
+ * coach la eligió, no porque el alimento la tenga.
+ */
+function translateHouseholdUnit(item: DraftPrescriptionItem, food: BuilderFood | null) {
+  if (!isHouseholdUnit(item.unit)) {
+    return { quantity: item.quantity, unit: item.unit, householdLabel: null, householdGrams: null }
+  }
+  const householdGrams = item.householdGrams ?? food?.householdGrams ?? null
+  const householdLabel = (item.householdLabel ?? food?.householdLabel ?? '').trim()
+  if (
+    typeof householdGrams !== 'number' ||
+    !Number.isFinite(householdGrams) ||
+    householdGrams < HOUSEHOLD_GRAMS_MIN ||
+    householdGrams > HOUSEHOLD_GRAMS_MAX ||
+    householdLabel.length === 0
+  ) {
+    throw new Error(HOUSEHOLD_GRAMS_ERROR)
+  }
+  return {
+    quantity: item.quantity * householdGrams,
+    unit: foodMagnitudeUnit(food?.servingUnit),
+    householdLabel,
+    householdGrams,
+  }
+}
+
+/**
  * Fila de item prescrito. Las macros de snapshot se re-derivan del alimento resuelto
  * en el servidor (leido de foods), no del cliente. Para items custom (sin foodId)
  * quedan en null y el snapshot_name usa el nombre libre.
@@ -77,7 +120,11 @@ export function buildItemInsertRow(input: {
   id?: string
 }) {
   const { versionId, mealSlotId, orderIndex, item, food, id } = input
+  // Las macros se congelan con la unidad del BORRADOR, ANTES de traducir: en `casera`
+  // `computeItemMacros` ya recursa a gramos, así que el número es el mismo por los dos caminos
+  // y el snapshot no depende del orden de estas dos líneas.
   const macros = food ? computeItemMacros(food, item.quantity, item.unit) : null
+  const household = translateHouseholdUnit(item, food)
   return {
     ...(id ? { id } : {}),
     version_id: versionId,
@@ -85,8 +132,8 @@ export function buildItemInsertRow(input: {
     food_id: item.foodId,
     recipe_id: item.recipeId,
     custom_name: item.customName,
-    quantity: item.quantity,
-    unit: item.unit,
+    quantity: household.quantity,
+    unit: household.unit,
     minimum_quantity: item.minimumQuantity,
     maximum_quantity: item.maximumQuantity,
     is_optional: item.optional,
@@ -100,6 +147,14 @@ export function buildItemInsertRow(input: {
     snapshot_carbs_g: macros ? macros.carbsG : null,
     snapshot_fats_g: macros ? macros.fatsG : null,
     snapshot_fiber_g: macros ? macros.fiberG : null,
+    household_label: household.householdLabel,
+    household_grams: household.householdGrams,
+    // Linaje W3.1 («Cantidades honestas», SPEC §6.1): de que item de la version anterior es copia
+    // esta fila. El `id` sigue siendo nuevo por publicacion (plan-persistence.ts:489) — eso NO
+    // cambia; lo que cambia es que ahora la fila declara su ancestro y la lectura puede
+    // reasignarle los registros del alumno. `persist_and_publish_nutrition_plan_v2` lo REVALIDA
+    // (mismo plan, ≠ id) y lo baja a NULL sin fallar la publicacion.
+    source_item_id: item.sourceItemId ?? null,
   }
 }
 

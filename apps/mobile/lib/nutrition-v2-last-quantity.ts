@@ -18,6 +18,7 @@
  * comportamiento historico. Una comodidad de autoria jamas puede romper la pantalla.
  */
 
+import { convertQuantityBetweenUnits, foodMagnitudeUnit, isHouseholdUnit } from '@eva/nutrition-v2'
 import type { NutritionV2WriteClient } from './nutrition-v2-builder'
 
 /** Cantidad recordada, lista para precargar el campo del editor. */
@@ -79,10 +80,32 @@ export async function fetchRememberedQuantities(
  */
 export async function rememberFoodQuantity(
   db: NutritionV2WriteClient,
-  input: { clientId: string; foodId: string; quantity: string; unit: string },
+  input: {
+    clientId: string
+    foodId: string
+    quantity: string
+    unit: string
+    /** `serving_unit` del alimento: decide si la medida casera se recuerda en g o en ml. */
+    servingUnit?: string | null
+    /** Gramos de la medida casera, para traducir `casera` antes de tocar el RPC (R10). */
+    householdGrams?: number | null
+  },
 ): Promise<void> {
-  const quantity = Number(input.quantity.trim())
-  if (!Number.isFinite(quantity) || quantity <= 0) return
+  // La memoria vive en g/ml/un (CHECK de `coach_food_last_qty`; decision R10/a10: NO se amplia
+  // el dominio a `casera`, se convierte antes). Espejo web: `_actions/last-quantity.actions.ts`.
+  const magnitude = foodMagnitudeUnit(input.servingUnit)
+  const household = isHouseholdUnit(input.unit)
+  const quantity = household
+    ? convertQuantityBetweenUnits({
+        quantity: Number(input.quantity.trim()),
+        from: input.unit,
+        to: magnitude,
+        servingSize: null,
+        householdGrams: input.householdGrams ?? null,
+      })
+    : Number(input.quantity.trim())
+  const unit = household ? magnitude : input.unit
+  if (quantity === null || !Number.isFinite(quantity) || quantity <= 0) return
   try {
     await (
       db as unknown as {
@@ -92,7 +115,7 @@ export async function rememberFoodQuantity(
       p_client_id: input.clientId,
       p_food_id: input.foodId,
       p_quantity: quantity,
-      p_unit: input.unit,
+      p_unit: unit,
     })
   } catch {
     // Silencio intencional: ver el docblock del modulo.

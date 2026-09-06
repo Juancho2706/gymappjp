@@ -63,6 +63,8 @@ const FOOD: BuilderFood = {
   servingUnit: 'g',
   category: null,
   media: null,
+  householdGrams: null,
+  householdLabel: null,
 }
 
 function foodItem(overrides: Partial<BuilderItem> = {}): BuilderItem {
@@ -868,6 +870,9 @@ describe('insert row builders (args del servidor)', () => {
     substitutionGroupId: null,
     notes: null,
     orderIndex: 0,
+    householdLabel: null,
+    householdGrams: null,
+    sourceItemId: null,
   }
 
   it('buildItemInsertRow re-deriva macros de snapshot desde el alimento', () => {

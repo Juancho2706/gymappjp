@@ -106,7 +106,6 @@ import {
   BUILDER_STEP_COUNT,
   BUILDER_STEP_DAYS,
   BUILDER_STEP_PLAN,
-  BUILDER_UNITS,
   CoachFoodInputSchema,
   MAX_DAY_VARIANTS,
   MAX_ITEM_SUBSTITUTIONS,
@@ -149,15 +148,23 @@ import {
 // H-07: mismo paso del stepper que el quick-edit (5 para g/ml, 0,5 para unidad/porción). El
 // helper vive en la gramatica compartida (@eva/nutrition-v2) desde T3.3a.
 import {
+  HOUSEHOLD_UNIT,
+  UNIT_REVIEW_BADGE_LABEL,
   convertQuantityTextOnUnitChange,
   dayWarningCopy,
   foodMagnitudeUnit,
+  foodUnitOptionsWithCurrent,
+  householdUnitActionLabel,
   implausibleItemCopy,
+  isHouseholdUnit,
   kcalBucket,
   normalizeIntakeUnit,
   quantityStep,
   reinterpretUnitActionLabel,
+  shouldFlagUnitReview,
   unitEquivalenceCaption,
+  unitReviewHint,
+  type UnitSelectOption,
 } from '@eva/nutrition-v2'
 import { captureNutritionItemImplausible } from '../../../../lib/analytics'
 import { ImplausibleNotice } from '../../../../components/nutrition-v2/quick-edit/ImplausibleNotice'
@@ -2498,18 +2505,36 @@ function PortionsUnconfirmedNotice({
 
 type BuilderDispatch = React.Dispatch<import('../../../../lib/nutrition-v2-builder').BuilderAction>
 
-function UnitToggle({ unit, onChange }: { unit: BuilderUnit; onChange: (unit: BuilderUnit) => void }) {
+/**
+ * Ciclo de unidades del wizard RN. W2.1: las opciones salen del ALIMENTO
+ * (`foodUnitOptionsWithCurrent`) y no de una lista fija — `un` solo si es realmente contable, la
+ * medida casera con sus gramos («huevo · 61 g») y siempre la unidad vigente aunque ya no se
+ * ofrezca. Sin alimento (item libre) quedan las dos magnitudes, como antes.
+ */
+function UnitToggle({
+  unit,
+  options,
+  onChange,
+}: {
+  unit: BuilderUnit
+  options: readonly UnitSelectOption[]
+  onChange: (unit: BuilderUnit) => void
+}) {
+  const cycle = options.length > 0 ? options : [{ code: unit, label: unit, grams: null }]
+  const current = cycle.find((option) => option.code === unit) ?? cycle[0]!
   return (
     <Pressable
-      accessibilityLabel={`Unidad: ${unit}. Toca para cambiar.`}
+      accessibilityLabel={`Unidad: ${current.label}. Toca para cambiar.`}
       accessibilityRole="button"
-      className="min-h-11 min-w-14 items-center justify-center rounded-control border border-default bg-surface-sunken px-2"
+      className="min-h-11 min-w-14 max-w-40 items-center justify-center rounded-control border border-default bg-surface-sunken px-2"
       onPress={() => {
-        const idx = BUILDER_UNITS.indexOf(unit)
-        onChange(BUILDER_UNITS[(idx + 1) % BUILDER_UNITS.length])
+        const idx = cycle.findIndex((option) => option.code === unit)
+        onChange(cycle[(idx + 1) % cycle.length]!.code as BuilderUnit)
       }}
     >
-      <Text className="text-sm font-semibold text-strong">{unit}</Text>
+      <Text numberOfLines={1} className="text-sm font-semibold text-strong">
+        {current.label}
+      </Text>
     </Pressable>
   )
 }
@@ -2559,6 +2584,34 @@ function ItemEditor({
         servingUnit: item.food.servingUnit,
       })
     : null
+  // ── W2 «Cantidades honestas» en el wizard RN: opciones por alimento, badge y «Usar huevos».
+  const householdGrams = item.food?.householdGrams ?? null
+  const householdLabel = item.food?.householdLabel ?? null
+  const unitOptions: readonly UnitSelectOption[] = item.food
+    ? foodUnitOptionsWithCurrent(item.food, item.unit)
+    : [
+        { code: 'g', label: 'g', grams: null },
+        { code: 'ml', label: 'ml', grams: null },
+      ]
+  const householdAction =
+    !isHouseholdUnit(item.unit) && householdGrams != null ? householdUnitActionLabel(householdLabel) : null
+  const unitReviewTitle =
+    item.food &&
+    householdGrams != null &&
+    householdLabel != null &&
+    shouldFlagUnitReview({
+      unit: item.unit,
+      servingUnit: item.food.servingUnit,
+      servingSize: item.food.servingSize,
+      householdGrams,
+    })
+      ? unitReviewHint({
+          servingSize: item.food.servingSize,
+          householdGrams,
+          householdLabel,
+          servingUnit: item.food.servingUnit,
+        })
+      : null
   useEffect(() => {
     if (implausibleReason === null) return
     const key = item.key + '|' + implausibleReason
@@ -2624,6 +2677,20 @@ function ItemEditor({
                 {item.food?.hasOverride ? (
                   <Pencil color={theme.primary} size={12} accessibilityLabel="Macros corregidos por ti" />
                 ) : null}
+                {/* W2.5 — «Revisar unidad»: aca «1 un» son los gramos de la porcion y el catalogo
+                    dice que una pieza de verdad pesa otra cosa. Avisa, no reescribe. */}
+                {unitReviewTitle ? (
+                  <View
+                    accessible
+                    accessibilityLabel={UNIT_REVIEW_BADGE_LABEL}
+                    accessibilityHint={unitReviewTitle}
+                    className="shrink-0 rounded-pill border border-warning-500/30 bg-warning-500/10 px-1.5 py-px"
+                  >
+                    <Text className="text-[10px] font-semibold text-warning-700">
+                      {UNIT_REVIEW_BADGE_LABEL}
+                    </Text>
+                  </View>
+                ) : null}
               </View>
             )}
           </View>
@@ -2682,6 +2749,7 @@ function ItemEditor({
             queda intacto (SPEC §4.1). */}
         <UnitToggle
           unit={item.unit}
+          options={unitOptions}
           onChange={(unit) =>
             patch({
               unit,
@@ -2716,9 +2784,10 @@ function ItemEditor({
               calories: plausibility.calories,
               servingSize: item.food?.servingSize ?? null,
               servingUnit: item.food?.servingUnit ?? null,
+              householdLabel,
             })}
-            actions={
-              item.food && normalizeIntakeUnit(item.unit) === 'un'
+            actions={[
+              ...(item.food && normalizeIntakeUnit(item.unit) === 'un'
                 ? [
                     {
                       label: reinterpretUnitActionLabel({
@@ -2728,8 +2797,19 @@ function ItemEditor({
                       onPress: () => patch({ unit: foodMagnitudeUnit(item.food?.servingUnit) }),
                     },
                   ]
-                : []
-            }
+                : []),
+              /* W2.5 — «Usar huevos»: la cifra estaba bien y lo que faltaba era la medida. El
+                 patch NO pasa por el `onChange` del toggle (que si convierte), asi que el numero
+                 escrito queda tal cual — misma premisa que «Cambiar a 30 g» de W1. */
+              ...(item.food && householdAction
+                ? [
+                    {
+                      label: householdAction,
+                      onPress: () => patch({ unit: HOUSEHOLD_UNIT, quantity: item.quantity }),
+                    },
+                  ]
+                : []),
+            ]}
           />
         </View>
       ) : null}

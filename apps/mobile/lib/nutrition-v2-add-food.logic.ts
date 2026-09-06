@@ -3,7 +3,9 @@
  * Espejo 1:1 de los helpers web del `RegisterFoodDialog` — unidad 4A-10:
  *
  *  - `mealSlotOptions`     ← apps/web .../nutrition-v2/_components/nutrition-today.logic.ts:50-52
- *  - `unitOptionsFor`      ← apps/web .../nutrition-v2/_components/TodayExperience.tsx:758-761
+ *  - `unitOptionsFor` / `catalogIntakeDefaults` / `catalogIntakeSubmission`
+ *    ← apps/web .../nutrition-v2/_components/nutrition-today.logic.ts (mismos helpers puros
+ *      del `RegisterFoodDialog`; la medida casera se traduce a gramos ANTES de enviar, §5.3)
  *  - `foodGroupCodeMap`    ← apps/web .../nutrition-v2/_components/portion-marks.logic.ts:381-387
  *  - `portionsCountLabelEs`← apps/web .../nutrition-v2/_components/portion-marks.logic.ts:33-35
  *  - `dupPortionInfo`      ← apps/web .../nutrition-v2/_components/portion-marks.logic.ts:440-457
@@ -16,14 +18,17 @@
  * marcas aún encoladas offline no se cuentan — con la conexión caída este fetch
  * tampoco resuelve, así que el aviso opera igual que web en el caso online.
  */
-import {
-  catalogUnitOptions,
-  type FoodCatalogItem,
-  type NutritionCatalogUnit,
-  type NutritionExchangeFoodRead,
-  type NutritionTodayReadModel,
-} from '@eva/nutrition-v2'
+import type { NutritionExchangeFoodRead, NutritionTodayReadModel, UnitSelectOption } from '@eva/nutrition-v2'
+import { catalogUnitSelectOptions, type CatalogUnitFood } from './nutrition-v2-catalog-units'
 import { formatPortionsCl } from './nutrition-v2-portions'
+
+// Unidades del registro libre: una sola casa RN (`nutrition-v2-catalog-units`), compartida con el
+// scanner. Se re-exportan para que la pantalla del buscador siga importando de aquí.
+export {
+  catalogIntakeDefaults,
+  catalogIntakeSubmission,
+  type CatalogUnitFood,
+} from './nutrition-v2-catalog-units'
 
 /** Todas las franjas del día como opciones {code,label} (sin franjas hardcodeadas). */
 export function mealSlotOptions(
@@ -33,16 +38,15 @@ export function mealSlotOptions(
 }
 
 /**
- * Unidades ofrecidas para el alimento elegido: códigos CANÓNICOS (`g`|`ml` según la magnitud del
- * alimento + `un`), no el texto libre del catálogo. Antes eran
- * `[servingUnit, 'g', 'ml', 'porción', 'unidad']`: `'unidad'` caía a la rama contable del factor
- * y dejar 100 en el campo persistía `100 x macros` (NUT-017). Espejo exacto de la web
- * (`catalogUnitOptions`, paquete compartido — la lista ya NO se duplica aquí).
+ * Unidades ofrecidas para el alimento elegido (W2.1, SPEC §5.2): magnitud + medida casera
+ * rotulada con sus gramos + `un` solo si el alimento es realmente contable, más la unidad
+ * VIGENTE si quedó fuera del set. Alias del helper compartido con el scanner.
  */
 export function unitOptionsFor(
-  food: Pick<FoodCatalogItem, 'servingUnit'>,
-): readonly NutritionCatalogUnit[] {
-  return catalogUnitOptions(food.servingUnit)
+  food: CatalogUnitFood,
+  currentUnit?: string | null,
+): readonly UnitSelectOption[] {
+  return catalogUnitSelectOptions(food, currentUnit)
 }
 
 /**

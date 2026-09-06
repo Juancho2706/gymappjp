@@ -55,6 +55,8 @@ const POSTA: BuilderFood = {
   category: 'proteina',
   media: null,
   macrosBasis: 'per_100',
+  householdGrams: null,
+  householdLabel: null,
 }
 
 /** Item prescrito hidratado del read model: 120 g de lomo liso = 240 kcal congeladas. */

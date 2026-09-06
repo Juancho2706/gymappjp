@@ -94,6 +94,8 @@ const FOOD: BuilderFood = {
   servingUnit: 'g',
   category: null,
   media: null,
+  householdGrams: null,
+  householdLabel: null,
 }
 
 function foodItem(): BuilderItem {

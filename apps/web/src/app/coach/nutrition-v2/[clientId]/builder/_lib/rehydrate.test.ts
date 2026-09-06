@@ -24,6 +24,8 @@ const FOOD: BuilderFood = {
   servingUnit: 'g',
   category: null,
   media: null,
+  householdGrams: null,
+  householdLabel: null,
 }
 
 const SUB_FOOD: BuilderFood = { ...FOOD, id: SUB_FOOD_ID, name: 'Pavo' }

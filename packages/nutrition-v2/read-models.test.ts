@@ -7,6 +7,7 @@ import {
   NutritionHistoryDaySchema,
   NutritionIntakeReadItemSchema,
   NutritionPlanReadModelSchema,
+  NutritionPrescriptionItemReadSchema,
   NutritionSlotExchangeTargetReadSchema,
   NutritionTodayReadModelSchema,
   computePortionCoverage,
@@ -741,5 +742,207 @@ describe('nutrition V2 catalog contracts', () => {
       missingReportId: null,
     })
     expect(parsed.status).toBe('not_found')
+  })
+})
+
+describe('nutrition V2 medida casera — householdLabel/householdGrams (W2 «Cantidades honestas»)', () => {
+  // Caso Jean: «2 huevos (122 g)». La cantidad SIEMPRE viaja en g/ml (SPEC §5.1); el par
+  // casero es display congelado en el ítem al publicar (migración
+  // `20260906202957_nutrition_v2_household_units`).
+  const prescribedItem = {
+    id: '11111111-1111-4111-8111-111111111111',
+    foodId: '22222222-2222-4222-8222-222222222222',
+    recipeId: null,
+    name: 'Huevo',
+    brand: null,
+    quantity: 122,
+    unit: 'g',
+    minimumQuantity: null,
+    maximumQuantity: null,
+    optional: false,
+    substitutionGroupId: null,
+    notes: null,
+    macros: { calories: 189, proteinG: 16, carbsG: 1, fatsG: 13, fiberG: 0 },
+  }
+
+  const intakeItem = {
+    id: '33333333-3333-4333-8333-333333333333',
+    foodId: '22222222-2222-4222-8222-222222222222',
+    customName: null,
+    quantity: 122,
+    unit: 'g',
+    mealSlot: 'slot-1',
+    source: 'prescription',
+    captureMethod: 'prescription',
+    occurredAt: '2026-09-06T08:30:00-04:00',
+    status: 'active' as const,
+    revision: 1,
+    correctsEntryId: null,
+    prescriptionItemId: '11111111-1111-4111-8111-111111111111',
+    snapshot: {
+      name: 'Huevo',
+      brand: null,
+      calories: 1.549,
+      proteinG: 0.131,
+      carbsG: 0.008,
+      fatsG: 0.107,
+      fiberG: 0,
+      servingSize: 1,
+      servingUnit: 'g',
+      macrosBasis: 'per_serving' as const,
+    },
+    totals: { calories: 189, proteinG: 16, carbsG: 1, fatsG: 13, fiberG: 0 },
+  }
+
+  it('parses a prescribed item WITH the frozen household pair', () => {
+    const parsed = NutritionPrescriptionItemReadSchema.parse({
+      ...prescribedItem,
+      householdLabel: 'huevo',
+      householdGrams: 61,
+    })
+    expect(parsed.householdLabel).toBe('huevo')
+    expect(parsed.householdGrams).toBe(61)
+    // La verdad sigue siendo el gramaje: el par NO reemplaza quantity/unit.
+    expect(parsed.quantity).toBe(122)
+    expect(parsed.unit).toBe('g')
+  })
+
+  it('parses a prescribed item that OMITS the pair (plan anterior a W2 / RPC viejo)', () => {
+    const parsed = NutritionPrescriptionItemReadSchema.parse(prescribedItem)
+    expect(parsed.householdLabel).toBeUndefined()
+    expect(parsed.householdGrams).toBeUndefined()
+  })
+
+  it('keeps the pair null on an item without household measure (el RPC nuevo emite null)', () => {
+    const parsed = NutritionPrescriptionItemReadSchema.parse({
+      ...prescribedItem,
+      householdLabel: null,
+      householdGrams: null,
+    })
+    expect(parsed.householdLabel).toBeNull()
+    expect(parsed.householdGrams).toBeNull()
+  })
+
+  it('parses an intake item WITH the pair resolved from its prescribed item', () => {
+    const parsed = NutritionIntakeReadItemSchema.parse({
+      ...intakeItem,
+      householdLabel: 'huevo',
+      householdGrams: 61,
+    })
+    expect(parsed.householdLabel).toBe('huevo')
+    expect(parsed.householdGrams).toBe(61)
+  })
+
+  it('parses an intake item that OMITS the pair (caché anterior / RPC viejo)', () => {
+    const parsed = NutritionIntakeReadItemSchema.parse(intakeItem)
+    expect(parsed.householdLabel).toBeUndefined()
+    expect(parsed.householdGrams).toBeUndefined()
+  })
+
+  it('keeps the pair null on a FREE intake (sin prescriptionItemId no hay de dónde resolverlo)', () => {
+    const parsed = NutritionIntakeReadItemSchema.parse({
+      ...intakeItem,
+      prescriptionItemId: null,
+      source: 'offplan',
+      captureMethod: 'search',
+      householdLabel: null,
+      householdGrams: null,
+    })
+    expect(parsed.householdLabel).toBeNull()
+    expect(parsed.householdGrams).toBeNull()
+  })
+
+  it('rejects a non-positive householdGrams (el rango real lo cierra el CHECK SQL [1, 1000])', () => {
+    expect(() =>
+      NutritionPrescriptionItemReadSchema.parse({
+        ...prescribedItem,
+        householdLabel: 'huevo',
+        householdGrams: 0,
+      }),
+    ).toThrow()
+  })
+})
+
+describe('nutrition V2 linaje de ítems — originalPrescriptionItemId (W3.1 «Cantidades honestas»)', () => {
+  // Republicar el mismo día genera ids nuevos por ítem (SPEC §1 Causa 2). El read model del
+  // Hoy resuelve el registro contra el linaje de la versión vigente
+  // (`private.nutrition_v2_item_alias_map`, migración `20260906210308_nutrition_v2_item_lineage`):
+  // `prescriptionItemId` pasa a ser el id VIGENTE y `originalPrescriptionItemId` conserva el id
+  // con el que se grabó el evento. La fila de `nutrition_intake_entries` no se toca nunca.
+  const ITEM_V1 = '11111111-1111-4111-8111-111111111111'
+  const ITEM_V2 = '44444444-4444-4444-8444-444444444444'
+
+  const intakeItem = {
+    id: '33333333-3333-4333-8333-333333333333',
+    foodId: '22222222-2222-4222-8222-222222222222',
+    customName: null,
+    quantity: 100,
+    unit: 'g',
+    mealSlot: 'slot-1',
+    source: 'prescription',
+    captureMethod: 'prescription',
+    occurredAt: '2026-09-06T08:30:00-04:00',
+    status: 'active' as const,
+    revision: 1,
+    correctsEntryId: null,
+    prescriptionItemId: ITEM_V1,
+    snapshot: {
+      name: 'Huevo',
+      brand: null,
+      calories: 1,
+      proteinG: 0.1,
+      carbsG: 0.05,
+      fatsG: 0.03,
+      fiberG: 0,
+      servingSize: 1,
+      servingUnit: 'g',
+      macrosBasis: 'per_serving' as const,
+    },
+    totals: { calories: 100, proteinG: 10, carbsG: 5, fatsG: 3, fiberG: 0 },
+  }
+
+  it('parses a resolved entry: prescriptionItemId es el id VIGENTE y el original viaja aparte', () => {
+    const parsed = NutritionIntakeReadItemSchema.parse({
+      ...intakeItem,
+      prescriptionItemId: ITEM_V2,
+      originalPrescriptionItemId: ITEM_V1,
+    })
+    expect(parsed.prescriptionItemId).toBe(ITEM_V2)
+    expect(parsed.originalPrescriptionItemId).toBe(ITEM_V1)
+  })
+
+  it('keeps originalPrescriptionItemId null when no alias applied (ítem sin republicar o huérfano)', () => {
+    const parsed = NutritionIntakeReadItemSchema.parse({
+      ...intakeItem,
+      originalPrescriptionItemId: null,
+    })
+    expect(parsed.prescriptionItemId).toBe(ITEM_V1)
+    expect(parsed.originalPrescriptionItemId).toBeNull()
+  })
+
+  it('parses an entry that OMITS the key (RPC o caché anteriores a W3.1)', () => {
+    const parsed = NutritionIntakeReadItemSchema.parse(intakeItem)
+    expect(parsed.originalPrescriptionItemId).toBeUndefined()
+  })
+
+  it('parses a FREE entry: sin prescriptionItemId tampoco hay original', () => {
+    const parsed = NutritionIntakeReadItemSchema.parse({
+      ...intakeItem,
+      prescriptionItemId: null,
+      source: 'offplan',
+      captureMethod: 'search',
+      originalPrescriptionItemId: null,
+    })
+    expect(parsed.prescriptionItemId).toBeNull()
+    expect(parsed.originalPrescriptionItemId).toBeNull()
+  })
+
+  it('rejects a non-uuid originalPrescriptionItemId', () => {
+    expect(() =>
+      NutritionIntakeReadItemSchema.parse({
+        ...intakeItem,
+        originalPrescriptionItemId: 'item-anterior',
+      }),
+    ).toThrow()
   })
 })

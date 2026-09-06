@@ -199,6 +199,10 @@ export async function resolveFoods(db: DB, refs: readonly FoodRef[]): Promise<{
             category: row.category,
             media: null,
             macrosBasis: (row.macros_basis as NutritionMacrosBasis | null) ?? null,
+            // El plan DEMO se escribe siempre en gramos: no ofrece medidas caseras (W2) y por
+            // eso tampoco las lee del catálogo — `computeItemMacros` no las mira sin `casera`.
+            householdGrams: null,
+            householdLabel: null,
         })
     }
 

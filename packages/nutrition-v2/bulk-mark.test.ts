@@ -156,4 +156,22 @@ describe('consumedPrescriptionItemIds', () => {
     expect(state.status).toBe('all-open')
     expect(state.eligible.map((i) => i.id)).toEqual(['a'])
   })
+
+  // Cantidades honestas W3.1 (SPEC §6.1): con el LINAJE, republicar sin tocar el item ya no lo
+  // deja huerfano — `get_nutrition_today_v2` resuelve el registro al item VIGENTE (`a'`) y solo
+  // deja el id original en `originalPrescriptionItemId`. Este helper es puro y no sabe nada de
+  // linaje a proposito: recibe el `prescriptionItemId` YA resuelto por el servidor y por eso el
+  // «Registrado» sobrevive a la republicacion. El fixture es exactamente eso.
+  it('un registro YA RESUELTO por el servidor al item vigente cuenta como consumido', () => {
+    const resuelto = {
+      ...intake("a'"),
+      // Solo viaja cuando difiere del vigente: es el «plan anterior» que W4.1 rotula en la ficha.
+      originalPrescriptionItemId: 'viejo-a',
+    } as ReturnType<typeof intake>
+    const s = slot('s1', [item("a'")], [resuelto])
+    expect([...consumedPrescriptionItemIds(today([s]))]).toEqual(["a'"])
+    const state = bulkMarkSlotState(today([s]), s)
+    expect(state.status).toBe('complete')
+    expect(state.eligible).toEqual([])
+  })
 })

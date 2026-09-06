@@ -60,6 +60,8 @@ const FOOD: RnBuilderFood & WebBuilderFood = {
   servingUnit: 'g',
   category: null,
   media: null,
+  householdGrams: null,
+  householdLabel: null,
 }
 
 const SUB_FOOD: RnBuilderFood & WebBuilderFood = { ...FOOD, id: SUB_FOOD_ID, name: 'Pavo' }

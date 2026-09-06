@@ -9,6 +9,7 @@
 import { z } from 'zod'
 import {
   BUILDER_UNITS,
+  HOUSEHOLD_UNIT,
   MAX_DAY_VARIANTS,
   MAX_ITEM_SUBSTITUTIONS,
   NUTRITION_DAY_LABELS,
@@ -18,7 +19,9 @@ import {
   assessItemPlausibility,
   computeItemMacros,
   convertQuantityTextOnUnitChange,
+  defaultFoodUnit,
   formatNutritionDayOfWeek,
+  isHouseholdUnit,
   slotMergeName,
   nutritionDayOfWeekFromIso,
   resolveNutritionDayVariantForDow,
@@ -59,7 +62,9 @@ export type DraftExchangeTarget = NutritionExchangeTarget
 export type DraftItemSubstitution = NutritionItemSubstitution
 
 // `BUILDER_UNITS` y `MAX_DAY_VARIANTS` se mudaron al paquete (retiro del par viejo).
-export type BuilderUnit = (typeof BUILDER_UNITS)[number]
+// `casera` (W2 «Cantidades honestas») es del dominio del EDITOR, no del persistible: nunca se
+// escribe en `unit` — `buildItemInsertRow` la traduce a g/ml con la medida congelada aparte.
+export type BuilderUnit = (typeof BUILDER_UNITS)[number] | typeof HOUSEHOLD_UNIT
 
 /**
  * Tope del contrato (`NutritionPlanDraftSchema.visibleNotes`: max 8000 tras trim). Mismo valor
@@ -675,7 +680,9 @@ function applyItemPatch(item: BuilderItem, patch: Partial<Omit<BuilderItem, 'key
       quantity: item.quantity,
       fromUnit: item.unit,
       toUnit: patch.unit,
-      food: item.food,
+      // W2 (b8/b14): el gramaje casero es lo que permite convertir «122 g» en «2 huevos». Sin
+      // el, el salto a `casera` dejaba los gramos escritos y la fila decia 122 huevos.
+      food: { servingSize: item.food.servingSize, householdGrams: item.food.householdGrams },
     }),
   }
 }
@@ -918,8 +925,16 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
         ...createEmptyItem(action.key),
         food: action.food,
         customName: action.food ? null : '',
-        quantity: remembered?.quantity ?? (action.food ? String(action.food.servingSize || '') : ''),
-        unit: remembered?.unit ?? (action.food ? toBuilderUnit(action.food.servingUnit) : 'g'),
+        // W2 (b13): con medida casera el alta arranca en «1 huevo» y no en «61 g». La memoria de
+        // cantidad del coach (que vive en g/ml/un) sigue teniendo prioridad cuando existe.
+        quantity:
+          remembered?.quantity ??
+          (action.food
+            ? defaultFoodUnit(action.food) === HOUSEHOLD_UNIT
+              ? '1'
+              : String(action.food.servingSize || '')
+            : ''),
+        unit: remembered?.unit ?? (action.food ? (defaultFoodUnit(action.food) as BuilderUnit) : 'g'),
       }
       return mapSlot(state, action.variantKey, action.slotKey, (slot) => ({ ...slot, items: [...slot.items, item] }))
     }
@@ -1170,15 +1185,15 @@ export function itemMacros(item: BuilderItem): ItemMacros {
 /**
  * ¿La cantidad de este item del wizard es plausible? (W1.3 «Cantidades honestas»). Espejo de
  * `qeItemPlausibility` del editor unico: mismas kcal que la fila YA muestra (`itemMacros`) y
- * misma porcion del catalogo, para que las dos superficies avisen por lo mismo. La medida
- * casera (`householdGrams`) llega en W2 junto con el campo en `BuilderFood`.
+ * misma porcion del catalogo y misma medida casera (W2), para que las dos superficies avisen
+ * por lo mismo.
  */
 export function builderItemPlausibility(item: BuilderItem): ItemPlausibility {
   return assessItemPlausibility({
     quantity: Number(item.quantity),
     unit: item.unit,
     servingSize: item.food?.servingSize ?? null,
-    householdGrams: null,
+    householdGrams: item.food?.householdGrams ?? null,
     calories: itemMacros(item).calories,
   })
 }
@@ -1407,6 +1422,14 @@ function assembleSlots(slots: BuilderSlot[], usesSlots: boolean): DraftMealSlot[
             substitutionGroupId: null,
             notes: item.notes && item.notes.trim() !== '' ? item.notes.trim() : null,
             orderIndex: itemIndex,
+            // Medida casera (W2): el par se congela SOLO cuando el coach publica el item EN
+            // `casera` — es el gesto con el que la autoriza. En cualquier otra unidad viaja en
+            // null y la fila queda en gramos honestos, sin rotulo que nadie eligio.
+            householdLabel: isHouseholdUnit(item.unit) ? (item.food?.householdLabel ?? null) : null,
+            householdGrams: isHouseholdUnit(item.unit) ? (item.food?.householdGrams ?? null) : null,
+            // Linaje W3.1: el WIZARD no lo emite (SPEC §6.1). Arma un plan desde cero, no una
+            // copia de la version vigente: no hay ancestro del que colgar los registros de hoy.
+            sourceItemId: null,
             ...(substitutions.length > 0
               ? {
                   substitutions: substitutions.map((sub, subIndex): DraftItemSubstitution => ({

@@ -80,7 +80,7 @@ async function gateCoach(request: NextRequest, scope: unknown) {
 // escribiria ese plan mutilado.
 
 const FOOD_SELECT =
-  'id, name, brand, calories, protein_g, carbs_g, fats_g, fiber_g, serving_size, serving_unit, category, macros_basis'
+  'id, name, brand, calories, protein_g, carbs_g, fats_g, fiber_g, serving_size, serving_unit, category, macros_basis, household_label, household_grams'
 
 /** Override del coach (T2.1). Mismas columnas que la rehidratacion web: una sola definicion. */
 const OVERRIDE_SELECT =
@@ -99,6 +99,9 @@ interface FoodRow {
   serving_unit: string | null
   category: string | null
   macros_basis: string | null
+  /** Medida casera del catalogo (W2). El override del coach la pisa en el merge (R5). */
+  household_label: string | null
+  household_grams: number | null
 }
 
 type FoodQueryResult = { data: FoodRow[] | null; error: { message: string } | null }
@@ -137,6 +140,12 @@ interface TemplateFoodPayload {
   category: string | null
   /** Base declarada de los macros de arriba (T2.1). El port RN la respeta al recalcular. */
   macrosBasis: NutritionMacrosBasis | null
+  /**
+   * Medida casera (W2 «Cantidades honestas»). Viaja en el cable porque una plantilla puede tener
+   * items en unidad `casera`: sin el par, el wizard RN no tendria con que traducirlos a gramos.
+   */
+  householdLabel: string | null
+  householdGrams: number | null
 }
 
 async function templateFoods(
@@ -186,6 +195,10 @@ async function templateFoods(
           fiberG: row.fiber_g,
           macrosBasis:
             row.macros_basis === 'per_100' || row.macros_basis === 'per_serving' ? row.macros_basis : null,
+          // Medida casera (W2): entra al merge para que gane la del OVERRIDE del coach, igual
+          // que los macros (R5).
+          householdLabel: row.household_label,
+          householdGrams: row.household_grams == null ? null : Number(row.household_grams),
         },
         overrides.get(row.id) ?? null,
       )
@@ -202,6 +215,8 @@ async function templateFoods(
         servingUnit: row.serving_unit ?? 'g',
         category: row.category ?? null,
         macrosBasis: macros.macrosBasis,
+        householdLabel: macros.householdLabel,
+        householdGrams: macros.householdGrams,
       }
     }
     // Un alimento que ya no se puede leer (borrado / fuera de scope) NO es un fallo: el adaptador

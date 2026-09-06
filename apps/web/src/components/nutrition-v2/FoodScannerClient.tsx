@@ -5,11 +5,9 @@ import Link from 'next/link'
 import { AlertTriangle, CheckCircle2, Flashlight, FlashlightOff, ScanBarcode } from 'lucide-react'
 import {
   FoodBarcodeLookupReadModelSchema,
-  catalogUnitOptions,
-  convertIntakeQuantity,
-  defaultCatalogUnit,
-  intakeUnitLabel,
-  normalizeIntakeUnit,
+  convertQuantityBetweenUnits,
+  foodUnitOptionsWithCurrent,
+  formatItemQuantity,
   type FoodBarcodeLookupReadModel,
   type FoodCatalogItem,
 } from '@eva/nutrition-v2'
@@ -34,6 +32,8 @@ import {
 // no tenia forma de registrar): TodayModal + newIdempotencyKey + recordIntakeAction.
 import { TodayModal } from '@/app/c/[coach_slug]/nutrition-v2/_components/TodayModal'
 import {
+  catalogIntakeDefaults,
+  catalogIntakeSubmission,
   estimateCatalogIntakeTotals,
   newIdempotencyKey,
 } from '@/app/c/[coach_slug]/nutrition-v2/_components/nutrition-today.logic'
@@ -453,34 +453,47 @@ function RegisterScannedFoodDialog({
   onClose: () => void
   onRegistered: () => void
 }) {
-  const [quantity, setQuantity] = useState(String(food.servingSize))
-  const [unit, setUnit] = useState<string>(defaultCatalogUnit(food.servingUnit))
+  // Cantidad y unidad iniciales del alimento (W2.1): medida casera cuando la tiene, y la cantidad
+  // acompaña (1 medida, no la porcion del catalogo). Mismo helper que el buscador del Today.
+  const defaults = useMemo(() => catalogIntakeDefaults(food), [food])
+  const [quantity, setQuantity] = useState(String(defaults.quantity))
+  const [unit, setUnit] = useState<string>(defaults.unit)
   const [mealSlot, setMealSlot] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Mismas opciones de unidad que el dialogo de busqueda (RegisterFoodDialog del Today):
-  // codigos canonicos g|ml|un, sin 'unidad' libre ni 'porción' (NUT-017).
-  const unitOptions = useMemo(() => catalogUnitOptions(food.servingUnit), [food.servingUnit])
+  // magnitud + medida casera rotulada con sus gramos + contable solo si el alimento lo es (W2.1).
+  const unitOptions = useMemo(() => foodUnitOptionsWithCurrent(food, unit), [food, unit])
 
-  /** Cambio de unidad: convierte la cantidad (o la limpia si no es convertible). NUT-017. */
+  /**
+   * Cambio de unidad: convierte la cantidad (o la limpia si no es convertible). NUT-017.
+   * `convertQuantityBetweenUnits` entiende ademas `casera` (2 huevos ⇔ 122 g).
+   */
   const changeUnit = (nextUnit: string) => {
-    const from = normalizeIntakeUnit(unit)
-    const to = normalizeIntakeUnit(nextUnit)
     setUnit(nextUnit)
-    if (!from || !to || from === to) return
-    const converted = convertIntakeQuantity({
+    if (unit === nextUnit) return
+    const converted = convertQuantityBetweenUnits({
       quantity: Number(quantity),
-      from,
-      to,
+      from: unit,
+      to: nextUnit,
       servingSize: food.servingSize,
+      householdGrams: food.householdGrams,
     })
     setQuantity(converted === null ? '' : String(converted))
   }
 
   const quantityNumber = Number(quantity)
-  const canSubmit =
-    Number.isFinite(quantityNumber) && quantityNumber > 0 && unit.trim().length > 0 && !submitting
+  // Lo que realmente se persiste: `casera` se traduce a gramos + magnitud antes de salir de la
+  // pantalla (SPEC §5.3); `null` = sin gramaje casero con que traducir ⇒ no se puede registrar.
+  const submission = useMemo(
+    () =>
+      Number.isFinite(quantityNumber) && quantityNumber > 0
+        ? catalogIntakeSubmission({ food, quantity: quantityNumber, unit })
+        : null,
+    [food, quantityNumber, unit],
+  )
+  const canSubmit = submission !== null && submission.unit.trim().length > 0 && !submitting
 
   // Total ESTIMADO con la MISMA formula del servidor (misma funcion pura que el Today).
   const estimatedTotals = useMemo(() => {
@@ -489,7 +502,7 @@ function RegisterScannedFoodDialog({
   }, [food, quantityNumber, unit])
 
   const submit = async () => {
-    if (!canSubmit) return
+    if (!canSubmit || !submission) return
     setSubmitting(true)
     setError(null)
     try {
@@ -503,8 +516,9 @@ function RegisterScannedFoodDialog({
             snapshotId: registration.snapshotId,
           },
           food,
-          quantity: quantityNumber,
-          unit: unit.trim(),
+          // Sale en g/ml: la medida casera es interfaz, la verdad persistida son gramos (§5.3).
+          quantity: submission.quantity,
+          unit: submission.unit.trim(),
           mealSlotCode: mealSlot === '' ? null : mealSlot,
           idempotencyKey: newIdempotencyKey('intake'),
         }),
@@ -590,14 +604,14 @@ function RegisterScannedFoodDialog({
               className="min-h-12 w-full rounded-control border border-border-default bg-surface-app px-3 text-base text-strong outline-none focus:ring-2 focus:ring-ring"
             >
               {unitOptions.map((option) => (
-                <option key={option} value={option}>
-                  {intakeUnitLabel(option)}
+                <option key={option.code} value={option.code}>
+                  {option.label}
                 </option>
               ))}
             </select>
           </label>
         </div>
-        {estimatedTotals ? (
+        {estimatedTotals && submission ? (
           <div aria-live="polite" className="rounded-control border border-border-subtle bg-surface-sunken px-3 py-2">
             <p className="text-xs font-semibold text-muted">Total estimado</p>
             <span className="mt-1 block">
@@ -606,7 +620,13 @@ function RegisterScannedFoodDialog({
                 proteinG={estimatedTotals.proteinG}
                 carbsG={estimatedTotals.carbsG}
                 fatsG={estimatedTotals.fatsG}
-                per={`por ${quantity} ${intakeUnitLabel(normalizeIntakeUnit(unit) ?? 'g')}`}
+                // El rotulo dice lo que se va a GUARDAR: «por 2 huevos (122 g)» con medida casera.
+                per={`por ${formatItemQuantity({
+                  quantity: submission.quantity,
+                  unit: submission.unit,
+                  householdLabel: food.householdLabel,
+                  householdGrams: food.householdGrams,
+                })}`}
                 size="sm"
               />
             </span>

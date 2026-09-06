@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { convertQuantityTextOnUnitChange, formatQuantityText } from './unit-change'
+import { convertQuantityTextOnUnitChange, formatQuantityText, householdRowShape } from './unit-change'
 
 /**
  * W1.1 «Cantidades honestas»: el coach cambiaba la unidad y la cantidad se quedaba quieta. Con
@@ -97,15 +97,25 @@ describe('convertQuantityTextOnUnitChange', () => {
     ).toBe('100.5')
   })
 
-  it('la unidad `casera` de W2 todavia no convierte: conserva el numero', () => {
+  it('W2: `casera` ↔ g convierte por el gramaje de la medida (b8, ya cableado)', () => {
+    const huevo = { servingSize: 100, householdGrams: 61 }
+    expect(
+      convertQuantityTextOnUnitChange({ quantity: '2', fromUnit: 'casera', toUnit: 'g', food: huevo }),
+    ).toBe('122')
+    expect(
+      convertQuantityTextOnUnitChange({ quantity: '122', fromUnit: 'g', toUnit: 'casera', food: huevo }),
+    ).toBe('2')
+  })
+
+  it('W2: sin gramaje casero el numero vuelve intacto (nunca se inventa la medida)', () => {
     expect(
       convertQuantityTextOnUnitChange({
-        quantity: '2',
-        fromUnit: 'casera',
-        toUnit: 'g',
-        food: { servingSize: 100, householdGrams: 61 },
+        quantity: '122',
+        fromUnit: 'g',
+        toUnit: 'casera',
+        food: { servingSize: 100, householdGrams: null },
       }),
-    ).toBe('2')
+    ).toBe('122')
   })
 
   it('una conversion que redondearia a 0 conserva el numero (nunca borra el item)', () => {
@@ -126,5 +136,72 @@ describe('formatQuantityText', () => {
     expect(formatQuantityText(1.666)).toBe('1.7')
     expect(formatQuantityText(60)).toBe('60')
     expect(formatQuantityText(0.5)).toBe('0.5')
+  })
+})
+
+/**
+ * W2 — hidratacion de una fila de los WIZARDS (que no tienen par propio en el item): el plan
+ * guarda «122 g» + la medida congelada y el coach tiene que ver «2 huevos».
+ */
+describe('householdRowShape', () => {
+  const huevo = { householdGrams: 61, householdLabel: 'huevo', servingUnit: 'g', hasFood: true }
+
+  it('rehidrata la cuenta desde los gramos, redondeada al medio', () => {
+    expect(householdRowShape({ ...huevo, unit: 'g', quantity: 122 })).toEqual({
+      unit: 'casera',
+      quantity: '2',
+      pair: { grams: 61, label: 'huevo' },
+    })
+    // 92 g / 61 = 1,508… ⇒ 1,5 huevos (el paso del stepper en casera).
+    expect(householdRowShape({ ...huevo, unit: 'g', quantity: 92 }).quantity).toBe('1.5')
+  })
+
+  it('una fila que YA viene en casera no se vuelve a dividir', () => {
+    expect(householdRowShape({ ...huevo, unit: 'casera', quantity: 2 })).toEqual({
+      unit: 'casera',
+      quantity: '2',
+      pair: { grams: 61, label: 'huevo' },
+    })
+  })
+
+  it('sin par utilizable la fila se queda en su magnitud, con el numero intacto', () => {
+    expect(householdRowShape({ ...huevo, householdGrams: null, unit: 'g', quantity: 122 })).toEqual({
+      unit: 'g',
+      quantity: '122',
+      pair: null,
+    })
+    expect(householdRowShape({ ...huevo, householdLabel: ' ', unit: 'casera', quantity: 2 })).toEqual({
+      unit: 'g',
+      quantity: '2',
+      pair: null,
+    })
+  })
+
+  it('sin alimento resuelto una fila casera baja a gramos honestos (no queda irresoluble)', () => {
+    expect(householdRowShape({ ...huevo, hasFood: false, unit: 'casera', quantity: 2 })).toEqual({
+      unit: 'g',
+      quantity: '122',
+      pair: null,
+    })
+  })
+
+  it('un gramaje mayor que la cantidad no borra el item: se queda en gramos', () => {
+    // 20 g con una medida de 240 g ⇒ 0,08 ⇒ redondeo a 0: mejor «20 g» que un item en cero.
+    expect(
+      householdRowShape({ householdGrams: 240, householdLabel: 'taza', servingUnit: 'g', hasFood: true, unit: 'g', quantity: 20 }),
+    ).toEqual({ unit: 'g', quantity: '20', pair: { grams: 240, label: 'taza' } })
+  })
+
+  it('la magnitud de un liquido es ml (no se baja a gramos un jugo)', () => {
+    expect(
+      householdRowShape({
+        householdGrams: null,
+        householdLabel: null,
+        servingUnit: 'ml',
+        hasFood: true,
+        unit: 'casera',
+        quantity: 2,
+      }).unit,
+    ).toBe('ml')
   })
 })

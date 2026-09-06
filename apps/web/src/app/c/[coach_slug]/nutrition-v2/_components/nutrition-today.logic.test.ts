@@ -20,7 +20,10 @@ import {
   buildOptimisticSubstitutionEntry,
   buildPrescribedIntakePayload,
   buildVoidPayload,
+  catalogIntakeDefaults,
+  catalogIntakeSubmission,
   consumedEntryForItem,
+  entryToFoodRow,
   estimateCatalogIntakeTotals,
   formatIntakeClock,
   groupSubstitutionsByPrescriptionItem,
@@ -762,5 +765,124 @@ describe('buildOptimisticIntakeEntry / buildOptimisticSubstitutionEntry', () => 
     expect(entry.quantity).toBe(715)
     expect(entry.mealSlot).toBeNull()
     expect(entry.totals.calories).toBe(165)
+  })
+})
+
+/**
+ * W2 «Cantidades honestas» (SPEC §5.2/§5.3, AUDIT W2.0 c1/c5): la medida casera es INTERFAZ.
+ * El caso del 06-09 (huevo revuelto «30 un» = 4.470 kcal) nace de ofrecer `un` a un alimento de
+ * 100 g sin decir cuanto pesa; aca se fija que la UI arranca en la medida casera, que lo que sale
+ * al servidor son gramos y que el preview jamas vuelve a caer en la rama contable.
+ */
+describe('W2 — medida casera en el registro libre del alumno', () => {
+  const HUEVO = {
+    id: '44444444-4444-4444-8444-444444444444',
+    catalogKey: null,
+    gtin: null,
+    name: 'Huevo revuelto',
+    brand: null,
+    category: null,
+    countryCode: 'CL',
+    servingSize: 100,
+    servingUnit: 'g',
+    calories: 149,
+    proteinG: 10,
+    carbsG: 1.6,
+    fatsG: 11,
+    fiberG: 0,
+    sodiumMg: null,
+    sugarG: null,
+    saturatedFatG: null,
+    packageQuantity: null,
+    packageUnit: null,
+    source: 'eva',
+    sourceRef: null,
+    verificationStatus: 'eva_verified',
+    householdLabel: 'huevo',
+    householdGrams: 61,
+    media: null,
+  } satisfies FoodCatalogItem
+
+  it('el default es "1 medida casera", no la porcion del catalogo ("100 huevos")', () => {
+    expect(catalogIntakeDefaults(HUEVO)).toEqual({ quantity: 1, unit: 'casera' })
+    // Sin medida casera la porcion del catalogo si es una cantidad honesta.
+    expect(catalogIntakeDefaults({ ...HUEVO, householdGrams: null, householdLabel: null })).toEqual({
+      quantity: 100,
+      unit: 'g',
+    })
+  })
+
+  it('al enviar, "2 huevos" son 122 g: `casera` nunca sale de la pantalla (c6)', () => {
+    expect(catalogIntakeSubmission({ food: HUEVO, quantity: 2, unit: 'casera' })).toEqual({
+      quantity: 122,
+      unit: 'g',
+    })
+    // Sin gramaje casero no hay traduccion posible ⇒ la UI no deja registrar.
+    expect(
+      catalogIntakeSubmission({ food: { ...HUEVO, householdGrams: null }, quantity: 2, unit: 'casera' }),
+    ).toBeNull()
+    // g, ml y `un` pasan tal cual: el camino existente queda byte-identico.
+    expect(catalogIntakeSubmission({ food: HUEVO, quantity: 150, unit: 'g' })).toEqual({
+      quantity: 150,
+      unit: 'g',
+    })
+  })
+
+  it('el preview convierte a gramos antes de estimar (R9/c5), NUNCA a la rama contable', () => {
+    // 2 huevos = 122 g ⇒ 149 kcal/100 g x 1,22. La rama contable habria dado 2 x 149 = 298 kcal.
+    expect(estimateCatalogIntakeTotals({ food: HUEVO, quantity: 2, unit: 'casera' }).calories).toBe(181.8)
+    expect(estimateCatalogIntakeTotals({ food: HUEVO, quantity: 122, unit: 'g' }).calories).toBe(181.8)
+  })
+
+  it('sin gramaje casero el preview es CERO, no un numero inventado', () => {
+    const sinMedida = { ...HUEVO, householdGrams: null }
+    expect(estimateCatalogIntakeTotals({ food: sinMedida, quantity: 2, unit: 'casera' })).toEqual({
+      calories: 0,
+      proteinG: 0,
+      carbsG: 0,
+      fatsG: 0,
+      fiberG: 0,
+    })
+  })
+})
+
+/** W2.3: el rotulo de un registro dice «2 huevos (122 g)» cuando el item trae el par congelado. */
+describe('entryToFoodRow — rotulo honesto de la cantidad', () => {
+  const ENTRY_BASE: NutritionIntakeReadItem = {
+    id: '66666666-6666-4666-8666-666666666666',
+    foodId: '44444444-4444-4444-8444-444444444444',
+    customName: null,
+    quantity: 122,
+    unit: 'g',
+    mealSlot: 'lunch',
+    source: 'prescription',
+    captureMethod: 'prescription',
+    occurredAt: '2026-09-06T12:00:00.000Z',
+    status: 'active',
+    revision: 1,
+    correctsEntryId: null,
+    prescriptionItemId: '44444444-4444-4444-8444-444444444444',
+    snapshot: {
+      name: 'Huevo revuelto',
+      brand: null,
+      calories: 149,
+      proteinG: 10,
+      carbsG: 1.6,
+      fatsG: 11,
+      fiberG: 0,
+      servingSize: 100,
+      servingUnit: 'g',
+    },
+    totals: { calories: 181.8, proteinG: 12.2, carbsG: 2, fatsG: 13.4, fiberG: 0 },
+  }
+
+  it('con el par casero congelado muestra la cuenta y los gramos reales', () => {
+    expect(
+      entryToFoodRow({ ...ENTRY_BASE, householdLabel: 'huevo', householdGrams: 61 }).quantityLabel,
+    ).toBe('2 huevos (122 g)')
+  })
+
+  it('sin par casero queda "{cantidad} {unidad}", como siempre', () => {
+    expect(entryToFoodRow(ENTRY_BASE).quantityLabel).toBe('122 g')
   })
 })

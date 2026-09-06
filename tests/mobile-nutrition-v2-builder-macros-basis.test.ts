@@ -30,6 +30,8 @@ const PER_SERVING: BuilderFood = {
   servingUnit: 'g',
   category: null,
   media: null,
+  householdGrams: null,
+  householdLabel: null,
   macrosBasis: 'per_serving',
 }
 
@@ -47,6 +49,9 @@ const ITEM: DraftPrescriptionItem = {
   substitutionGroupId: null,
   notes: null,
   orderIndex: 0,
+  householdLabel: null,
+  householdGrams: null,
+  sourceItemId: null,
 }
 
 describe('builder RN — base declarada de macros', () => {

@@ -132,6 +132,9 @@ export function assignmentKeyForClient(input: {
 // -- Construcción del draft destino desde la estructura del plan FUENTE (read model) --
 
 export interface AssignSourceItem {
+  /** Par casero congelado del ítem (W2): viaja al plan asignado para no perder «2 huevos (122 g)». */
+  householdLabel?: string | null
+  householdGrams?: number | null
   foodId: string | null
   recipeId: string | null
   name: string | null
@@ -268,6 +271,13 @@ export function buildDraftForTarget(input: {
           substitutionGroupId: null,
           notes: item.notes,
           orderIndex: itemIndex,
+          // Medida casera congelada (W2): se copia tal cual al alumno destino. La cantidad ya
+          // viene en g/ml, asi que el par solo viaja para que el rotulo sobreviva a la copia.
+          householdLabel: item.householdLabel ?? null,
+          householdGrams: item.householdGrams ?? null,
+          // Linaje W3.1: asignar el plan a OTRO alumno crea filas de otro plan. El ancestro
+          // no viaja (el servidor lo descartaria igual: valida `plan_id`).
+          sourceItemId: null,
         }
       }),
     })),

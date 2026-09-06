@@ -138,6 +138,10 @@ export async function insertCoachFood(input: {
     servingUnit: unit,
     category: 'otro',
     media: null,
+    // Un alimento recién creado por el coach no declara medida casera (W2): el formulario de
+    // alta no la pide, y el catálogo puede ganarla después por el backfill de W2.4.
+    householdGrams: null,
+    householdLabel: null,
   }
   return { ok: true, food }
 }

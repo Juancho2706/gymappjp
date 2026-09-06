@@ -24,16 +24,14 @@ import {
   buildNutritionDayShareText,
   bulkMarkCtaLabel,
   bulkMarkSlotState,
-  catalogUnitOptions,
   computeSubstitutionEquivalence,
   consumedPrescriptionItemIds,
-  convertIntakeQuantity,
-  defaultCatalogUnit,
+  convertQuantityBetweenUnits,
   firstNameFromFullName,
+  foodUnitOptionsWithCurrent,
+  formatItemQuantity,
   formatNutritionCalories,
-  intakeUnitLabel,
   kcalBucket,
-  normalizeIntakeUnit,
   prescribedItemImplausibleCopy,
   prescribedItemPlausibility,
   sortFoodsByFavoriteFirst,
@@ -70,6 +68,8 @@ import {
   buildPrescribedIntakePayload,
   buildVoidPayload,
   bumpPrescribedAttempt,
+  catalogIntakeDefaults,
+  catalogIntakeSubmission,
   consumedEntries,
   consumedEntryForItem,
   contextFromToday,
@@ -704,7 +704,9 @@ export function TodayExperience({
         setExchange(null)
         captureIntake('substitution')
         await syncTodayFromServer([substituteDelta])
-        const label = `${res.quantity} ${res.unit}`
+        // El reemplazo no viaja con medida casera (la resuelve `substituteNaturalUnit`), asi que
+        // `formatItemQuantity` sin par es «{cantidad} {unidad}» — pero con el plural de «porción».
+        const label = formatItemQuantity({ quantity: res.quantity, unit: res.unit })
         toast.success(
           res.mode === 'correct'
             ? `Cambiamos tu registro por el reemplazo · ${label}`
@@ -937,7 +939,12 @@ export function TodayExperience({
                   key={entry.id}
                   name={entry.snapshot.name}
                   detail={entry.snapshot.brand}
-                  quantityLabel={`${entry.quantity} ${entry.unit}`}
+                  quantityLabel={formatItemQuantity({
+                    quantity: entry.quantity,
+                    unit: entry.unit,
+                    householdLabel: entry.householdLabel,
+                    householdGrams: entry.householdGrams,
+                  })}
                   calories={entry.totals.calories}
                   proteinG={entry.totals.proteinG}
                   carbsG={entry.totals.carbsG}
@@ -1458,7 +1465,13 @@ function PrescribedSection({
                   ? {
                       name: consumedEntry.snapshot.name,
                       detail: consumedEntry.snapshot.brand,
-                      quantityLabel: `${consumedEntry.quantity} ${consumedEntry.unit}`,
+                      // W2.3: el par casero viaja congelado en el registro (join al item prescrito).
+                      quantityLabel: formatItemQuantity({
+                        quantity: consumedEntry.quantity,
+                        unit: consumedEntry.unit,
+                        householdLabel: consumedEntry.householdLabel,
+                        householdGrams: consumedEntry.householdGrams,
+                      }),
                       calories: consumedEntry.totals.calories,
                       proteinG: consumedEntry.totals.proteinG,
                       carbsG: consumedEntry.totals.carbsG,
@@ -1469,7 +1482,12 @@ function PrescribedSection({
                   : {
                       name: item.name ?? 'Alimento prescrito',
                       detail: item.brand,
-                      quantityLabel: `${item.quantity} ${item.unit}${item.optional ? ' · opcional' : ''}`,
+                      quantityLabel: `${formatItemQuantity({
+                        quantity: item.quantity,
+                        unit: item.unit,
+                        householdLabel: item.householdLabel,
+                        householdGrams: item.householdGrams,
+                      })}${item.optional ? ' · opcional' : ''}`,
                       calories: item.macros.calories,
                       proteinG: item.macros.proteinG,
                       carbsG: item.macros.carbsG,
@@ -1499,7 +1517,14 @@ function PrescribedSection({
                       category={row.category}
                       statusLabel={isSubstituted ? '⇄ Sustituido' : null}
                       replacedLabel={
-                        isSubstituted ? `${item.name ?? 'Alimento prescrito'} · ${item.quantity} ${item.unit}` : null
+                        isSubstituted
+                          ? `${item.name ?? 'Alimento prescrito'} · ${formatItemQuantity({
+                              quantity: item.quantity,
+                              unit: item.unit,
+                              householdLabel: item.householdLabel,
+                              householdGrams: item.householdGrams,
+                            })}`
+                          : null
                       }
                       note={resolveItemDisplayNote(item.notes, substitutionCount > 0)}
                       // T2.7 F2 (D-C): el CHECK es el registro — muere el botón "Lo comí". Tap en
@@ -1557,7 +1582,12 @@ function PrescribedSection({
                   key={entry.id}
                   name={entry.snapshot.name}
                   detail={entry.snapshot.brand}
-                  quantityLabel={`${entry.quantity} ${entry.unit}`}
+                  quantityLabel={formatItemQuantity({
+                    quantity: entry.quantity,
+                    unit: entry.unit,
+                    householdLabel: entry.householdLabel,
+                    householdGrams: entry.householdGrams,
+                  })}
                   calories={entry.totals.calories}
                   proteinG={entry.totals.proteinG}
                   carbsG={entry.totals.carbsG}
@@ -1695,7 +1725,10 @@ function SubstitutionConfirmDialog({
   return (
     <TodayModal
       title="Confirma la cantidad"
-      description={`${name} en lugar de ${itemEntry.item.name ?? 'tu alimento'} (${itemEntry.item.quantity} ${itemEntry.item.unit})`}
+      description={`${name} en lugar de ${itemEntry.item.name ?? 'tu alimento'} (${formatItemQuantity({
+        quantity: itemEntry.item.quantity,
+        unit: itemEntry.item.unit,
+      })})`}
       open
       onClose={onClose}
       footer={
@@ -2001,41 +2034,53 @@ function RegisterFoodDialog({
 
   const selectFood = (food: FoodCatalogItem) => {
     setSelected(food)
-    setQuantity(String(food.servingSize))
-    // Unidad CANONICA del alimento (g|ml|un): la UI ya no propaga 'unidad' ni el texto libre
-    // del catalogo, que se leia con una formula en V2 y con otra en V1 (NUT-017).
-    setUnit(defaultCatalogUnit(food.servingUnit))
+    // Unidad y cantidad iniciales del alimento (W2.1): la medida casera gana cuando existe
+    // («1 huevo»), y la cantidad acompaña — precargar la porcion con `casera` o `un` escribiria
+    // «100 huevos». La UI ya no propaga 'unidad' ni el texto libre del catalogo (NUT-017).
+    const defaults = catalogIntakeDefaults(food)
+    setQuantity(String(defaults.quantity))
+    setUnit(defaults.unit)
   }
 
+  // Opciones del alimento + la unidad vigente si quedo fuera del set: cada una rotulada con sus
+  // gramos («huevo · 61 g»), que es lo que vuelve imposible confundir una medida con una porcion.
   const unitOptions = useMemo(
-    () => (selected ? catalogUnitOptions(selected.servingUnit) : []),
-    [selected],
+    () => (selected ? foodUnitOptionsWithCurrent(selected, unit) : []),
+    [selected, unit],
   )
 
   /**
    * Cambio de unidad: CONVIERTE la cantidad en vez de conservar el numero (NUT-017). Dejar "100"
    * y pasar de g a unidad persistia 100 x macros — hasta 15.500 kcal en un solo registro. Si la
    * conversion no es representable (alimento sin porcion), se limpia el campo para que el alumno
-   * vuelva a indicar cuanto comio.
+   * vuelva a indicar cuanto comio. `convertQuantityBetweenUnits` entiende ademas `casera`
+   * (2 huevos ⇔ 122 g), que `convertIntakeQuantity` no conoce por no ser persistible.
    */
   const changeUnit = (nextUnit: string) => {
-    const from = normalizeIntakeUnit(unit)
-    const to = normalizeIntakeUnit(nextUnit)
     setUnit(nextUnit)
-    if (!selected || !from || !to || from === to) return
-    const current = Number(quantity)
-    const converted = convertIntakeQuantity({
-      quantity: current,
-      from,
-      to,
+    if (!selected || unit === nextUnit) return
+    const converted = convertQuantityBetweenUnits({
+      quantity: Number(quantity),
+      from: unit,
+      to: nextUnit,
       servingSize: selected.servingSize,
+      householdGrams: selected.householdGrams,
     })
     setQuantity(converted === null ? '' : String(converted))
   }
 
   const quantityNumber = Number(quantity)
-  const canSubmit =
-    selected !== null && Number.isFinite(quantityNumber) && quantityNumber > 0 && unit.trim().length > 0
+  // Lo que realmente se persiste: `casera` se traduce a gramos + magnitud ANTES de salir de la
+  // pantalla (SPEC §5.3), porque el contrato de intake no la acepta. `null` = no hay gramaje
+  // casero con que traducir ⇒ no se puede registrar.
+  const submission = useMemo(
+    () =>
+      selected && Number.isFinite(quantityNumber) && quantityNumber > 0
+        ? catalogIntakeSubmission({ food: selected, quantity: quantityNumber, unit })
+        : null,
+    [quantityNumber, selected, unit],
+  )
+  const canSubmit = selected !== null && submission !== null && submission.unit.trim().length > 0
 
   // Total ESTIMADO con la MISMA formula del servidor: un x100 se vuelve obvio ANTES de guardar.
   const estimatedTotals = useMemo(() => {
@@ -2067,8 +2112,9 @@ function RegisterFoodDialog({
               disabled={!canSubmit}
               pending={submitting}
               onClick={() => {
-                if (selected && canSubmit) {
-                  onSubmit(selected, quantityNumber, unit.trim(), mealSlot === '' ? null : mealSlot)
+                if (selected && submission) {
+                  // Sale en g/ml: la medida casera es interfaz, la verdad persistida son gramos.
+                  onSubmit(selected, submission.quantity, submission.unit.trim(), mealSlot === '' ? null : mealSlot)
                 }
               }}
             >
@@ -2121,14 +2167,14 @@ function RegisterFoodDialog({
                 className="min-h-12 w-full rounded-control border border-border-default bg-surface-app px-3 text-base text-strong outline-none focus:ring-2 focus:ring-ring"
               >
                 {unitOptions.map((option) => (
-                  <option key={option} value={option}>
-                    {intakeUnitLabel(option)}
+                  <option key={option.code} value={option.code}>
+                    {option.label}
                   </option>
                 ))}
               </select>
             </label>
           </div>
-          {estimatedTotals ? (
+          {estimatedTotals && submission ? (
             <div aria-live="polite" className="rounded-control border border-border-subtle bg-surface-sunken px-3 py-2">
               <p className="text-xs font-semibold text-muted">Total estimado</p>
               <span className="mt-1 block">
@@ -2137,7 +2183,14 @@ function RegisterFoodDialog({
                   proteinG={estimatedTotals.proteinG}
                   carbsG={estimatedTotals.carbsG}
                   fatsG={estimatedTotals.fatsG}
-                  per={`por ${quantity} ${intakeUnitLabel(normalizeIntakeUnit(unit) ?? 'g')}`}
+                  // El rotulo dice lo que se va a GUARDAR: «por 2 huevos (122 g)» con medida
+                  // casera, «por 122 g» sin ella (W2.3, `formatItemQuantity`).
+                  per={`por ${formatItemQuantity({
+                    quantity: submission.quantity,
+                    unit: submission.unit,
+                    householdLabel: selected.householdLabel,
+                    householdGrams: selected.householdGrams,
+                  })}`}
                   size="sm"
                 />
               </span>
@@ -2328,7 +2381,12 @@ function EditQuantityDialog({
   return (
     <TodayModal
       title="Editar cantidad"
-      description={`${entry.snapshot.name} · registrado como ${entry.quantity} ${entry.unit}`}
+      description={`${entry.snapshot.name} · registrado como ${formatItemQuantity({
+        quantity: entry.quantity,
+        unit: entry.unit,
+        householdLabel: entry.householdLabel,
+        householdGrams: entry.householdGrams,
+      })}`}
       open
       onClose={onClose}
       footer={
@@ -2411,7 +2469,12 @@ function VoidEntryDialog({
   return (
     <TodayModal
       title="Retirar registro"
-      description={`${entry.snapshot.name} · ${entry.quantity} ${entry.unit}`}
+      description={`${entry.snapshot.name} · ${formatItemQuantity({
+        quantity: entry.quantity,
+        unit: entry.unit,
+        householdLabel: entry.householdLabel,
+        householdGrams: entry.householdGrams,
+      })}`}
       open
       onClose={onClose}
       footer={

@@ -18,19 +18,25 @@ import {
 } from '@/components/ui/dropdown-menu'
 import type { FoodCatalogItem } from '@eva/nutrition-v2'
 import {
-  BUILDER_UNITS,
   builderItemPlausibility,
   itemMacros,
   type BuilderItem,
   type BuilderSlot,
 } from '../_lib/draft-builder'
 import {
+  HOUSEHOLD_UNIT,
+  UNIT_REVIEW_BADGE_LABEL,
   foodMagnitudeUnit,
+  foodUnitOptionsWithCurrent,
+  householdUnitActionLabel,
   implausibleItemCopy,
+  isHouseholdUnit,
   kcalBucket,
   normalizeIntakeUnit,
   reinterpretUnitActionLabel,
+  shouldFlagUnitReview,
   unitEquivalenceCaption,
+  unitReviewHint,
 } from '@eva/nutrition-v2'
 import { useCaptureNutritionItemImplausible } from '@/lib/posthog/events'
 import { ImplausibleNotice } from '@/components/nutrition-v2/ImplausibleNotice'
@@ -107,8 +113,39 @@ export function ItemRow({
   dispatch: Dispatch
   error?: { food?: string; quantity?: string }
 }) {
-  const unitOptions = item.food ? BUILDER_UNITS : (['g', 'ml'] as const)
+  // W2.1 — las unidades salen del ALIMENTO y no de una lista fija: `un` sólo si es realmente
+  // contable, y la medida casera con sus gramos a la vista («huevo · 61 g»). Un alimento libre
+  // (sin catálogo) sigue limitado a las dos magnitudes: no hay porción ni medida que ofrecer.
+  const unitOptions = item.food
+    ? foodUnitOptionsWithCurrent(item.food, item.unit)
+    : ([
+        { code: 'g', label: 'g', grams: null },
+        { code: 'ml', label: 'ml', grams: null },
+      ] as const)
   const displayName = item.food ? item.food.name : item.customName
+  const householdGrams = item.food?.householdGrams ?? null
+  const householdLabel = item.food?.householdLabel ?? null
+  // W2.5 «Usar huevos»: segunda acción del aviso, sólo si el ítem NO está ya en medida casera.
+  const householdAction =
+    !isHouseholdUnit(item.unit) && householdGrams != null ? householdUnitActionLabel(householdLabel) : null
+  // W2.5 badge «Revisar unidad»: `un` sobre un alimento NO contable con medida casera divergente.
+  const unitReviewTitle =
+    item.food &&
+    householdGrams != null &&
+    householdLabel != null &&
+    shouldFlagUnitReview({
+      unit: item.unit,
+      servingUnit: item.food.servingUnit,
+      servingSize: item.food.servingSize,
+      householdGrams,
+    })
+      ? unitReviewHint({
+          servingSize: item.food.servingSize,
+          householdGrams,
+          householdLabel,
+          servingUnit: item.food.servingUnit,
+        })
+      : null
   // ── Cantidades honestas (W1.2 + W1.3) en el wizard: mismo rótulo y mismo aviso que el editor
   // único, resueltos por los módulos puros del paquete.
   const plausibility = builderItemPlausibility(item)
@@ -208,6 +245,17 @@ export function ItemRow({
                     <span className="sr-only">Macros corregidos por ti</span>
                   </span>
                 ) : null}
+                {/* W2.5 — «Revisar unidad»: acá «1 un» son los gramos de la porción, y el catálogo
+                    dice que una pieza de verdad pesa bastante otra cosa. Avisa, no reescribe. */}
+                {unitReviewTitle ? (
+                  <span
+                    title={unitReviewTitle}
+                    aria-label={unitReviewTitle}
+                    className="ml-1.5 inline-flex shrink-0 items-center rounded-pill border border-warning-500/30 bg-warning-100 px-1.5 py-px align-middle text-[9.5px] font-semibold leading-4 text-warning-700"
+                  >
+                    {UNIT_REVIEW_BADGE_LABEL}
+                  </span>
+                ) : null}
               </p>
               {item.food.brand ? <p className="mt-0.5 truncate text-xs text-muted">{item.food.brand}</p> : null}
             </>
@@ -294,6 +342,9 @@ export function ItemRow({
                 foodId: item.food.id,
                 quantity: item.quantity,
                 unit: item.unit,
+                // R10: la memoria vive en g/ml/un; en casera la action convierte con estos dos.
+                servingUnit: item.food.servingUnit,
+                householdGrams,
               }).catch(() => {
                 // best-effort: sin red o respuesta no-RSC no rompe nada (EVA-NEXTJS-19)
               })
@@ -312,7 +363,11 @@ export function ItemRow({
         {/* Clases propias (no `inputClass`): ese preset trae `w-full` y pelearia con el ancho
             fijo de la unidad dentro de la fila flex. */}
         <select
-          className="h-11 w-20 shrink-0 rounded-control border border-border-default bg-surface-card px-2 text-sm font-semibold text-strong outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25"
+          /* W2: la etiqueta casera («huevo · 61 g») no entra en los 80 px del cajón corto. */
+          className={
+            'h-11 shrink-0 rounded-control border border-border-default bg-surface-card px-2 text-sm font-semibold text-strong outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25 ' +
+            (isHouseholdUnit(item.unit) ? 'max-w-40' : 'w-20')
+          }
           aria-label="Unidad"
           value={item.unit}
           onChange={(e) =>
@@ -325,9 +380,9 @@ export function ItemRow({
             })
           }
         >
-          {unitOptions.map((u) => (
-            <option key={u} value={u}>
-              {u}
+          {unitOptions.map((option) => (
+            <option key={option.code} value={option.code}>
+              {option.label}
             </option>
           ))}
         </select>
@@ -352,9 +407,10 @@ export function ItemRow({
             calories: plausibility.calories,
             servingSize: item.food?.servingSize ?? null,
             servingUnit: item.food?.servingUnit ?? null,
+            householdLabel,
           })}
-          actions={
-            item.food && normalizeIntakeUnit(item.unit) === 'un'
+          actions={[
+            ...(item.food && normalizeIntakeUnit(item.unit) === 'un'
               ? [
                   {
                     label: reinterpretUnitActionLabel({
@@ -371,8 +427,26 @@ export function ItemRow({
                       }),
                   },
                 ]
-              : []
-          }
+              : []),
+            /* W2.5 — «Usar huevos»: la cifra estaba bien y lo que faltaba era la medida. Va con
+               la cantidad EXPLÍCITA para que `applyItemPatch` no convierta: «2 un» que el coach
+               quería decir «2 huevos» tiene que quedar en 2, no en 3,3. */
+            ...(item.food && householdAction
+              ? [
+                  {
+                    label: householdAction,
+                    onClick: () =>
+                      dispatch({
+                        type: 'UPDATE_ITEM',
+                        variantKey,
+                        slotKey,
+                        itemKey: item.key,
+                        patch: { unit: HOUSEHOLD_UNIT, quantity: item.quantity },
+                      }),
+                  },
+                ]
+              : []),
+          ]}
         />
       ) : null}
 

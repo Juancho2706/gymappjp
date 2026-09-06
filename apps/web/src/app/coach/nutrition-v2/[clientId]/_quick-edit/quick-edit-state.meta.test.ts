@@ -257,6 +257,8 @@ const TEMPLATE_FOOD: BuilderFood = {
   servingUnit: 'g',
   category: 'cereal',
   media: null,
+  householdGrams: null,
+  householdLabel: null,
 }
 
 const GROUP_ID = '99999999-9999-4999-8999-999999999999'
@@ -323,6 +325,9 @@ function makeTemplateDraft(): NutritionPlanDraft {
                 customName: null,
                 quantity: 150,
                 unit: 'g',
+                householdLabel: null,
+                householdGrams: null,
+                sourceItemId: null,
                 minimumQuantity: null,
                 maximumQuantity: null,
                 optional: false,
@@ -336,6 +341,9 @@ function makeTemplateDraft(): NutritionPlanDraft {
                 customName: 'Ensalada libre',
                 quantity: 1,
                 unit: 'un',
+                householdLabel: null,
+                householdGrams: null,
+                sourceItemId: null,
                 minimumQuantity: null,
                 maximumQuantity: null,
                 optional: true,

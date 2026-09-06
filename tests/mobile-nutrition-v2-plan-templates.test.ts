@@ -33,6 +33,8 @@ function food(overrides: Partial<BuilderFood> = {}): BuilderFood {
     servingUnit: 'g',
     category: null,
     media: null,
+    householdGrams: null,
+    householdLabel: null,
     ...overrides,
   }
 }

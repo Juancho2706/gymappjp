@@ -33,9 +33,8 @@ import { useAlumnoScrollHandler } from '../../../../lib/alumno-chrome-scroll'
 import {
   CATALOG_MACROS_BASIS,
   NutritionTodayReadModelSchema,
-  convertIntakeQuantity,
-  defaultCatalogUnit,
-  intakeUnitLabel,
+  convertQuantityBetweenUnits,
+  formatItemQuantity,
   normalizeIntakeUnit,
   scaleSnapshotMacros,
   sortFoodsByFavoriteFirst,
@@ -66,6 +65,8 @@ import {
   submitRecordIntake,
 } from '../../../../lib/nutrition-v2-intake-runner'
 import {
+  catalogIntakeDefaults,
+  catalogIntakeSubmission,
   dupPortionInfo,
   mealSlotOptions,
   portionsCountLabelEs,
@@ -276,11 +277,12 @@ export default function NutritionV2AddFoodScreen() {
     void Haptics.selectionAsync()
     setSelected(food)
     setSaveError(null)
-    // Defaults web (TodayExperience.tsx:752-756): cantidad = porción del
-    // catálogo, unidad = servingUnit del alimento.
-    setQuantity(String(food.servingSize))
-    // Unidad CANÓNICA (g|ml|un), no el texto libre del catálogo (NUT-017).
-    setUnit(defaultCatalogUnit(food.servingUnit))
+    // Defaults del alimento (W2.1, mismo helper puro que la web): unidad = medida casera cuando
+    // existe («1 huevo»), si no la contable nativa o la magnitud; y la cantidad ACOMPAÑA — la
+    // porción del catálogo solo es honesta en g/ml (con `casera` diría «100 huevos»).
+    const defaults = catalogIntakeDefaults(food)
+    setQuantity(String(defaults.quantity))
+    setUnit(defaults.unit)
   }, [])
 
   // Toggle optimista con rollback: la estrella cambia al instante; si el server falla, revierte
@@ -344,25 +346,34 @@ export default function NutritionV2AddFoodScreen() {
 
   const parsedQuantity = Number(quantity.replace(',', '.'))
   const validQuantity = Number.isFinite(parsedQuantity) && parsedQuantity > 0
-  // canSubmit web (TodayExperience.tsx:764-765): cantidad válida + unidad no vacía.
-  const canSubmit = selected !== null && validQuantity && unit.trim().length > 0
+  /**
+   * Lo que realmente se persiste: `casera` se traduce a gramos + magnitud ANTES de salir de la
+   * pantalla (SPEC §5.3), porque el contrato de intake no la acepta. `null` = no hay gramaje
+   * casero con que traducir ⇒ no se puede registrar.
+   */
+  const submission = useMemo(
+    () => (selected && validQuantity ? catalogIntakeSubmission({ food: selected, quantity: parsedQuantity, unit }) : null),
+    [parsedQuantity, selected, unit, validQuantity],
+  )
+  // canSubmit web: cantidad válida + unidad traducible a la que se persiste.
+  const canSubmit = selected !== null && submission !== null && submission.unit.trim().length > 0
 
   /**
    * Cambio de unidad: CONVIERTE la cantidad (NUT-017). 100 g de un alimento con porción 60 g
    * pasan a 1,7 un; si la conversión no es representable se limpia el campo en vez de arrastrar
-   * un número que ya no significa lo mismo. Espejo del `changeUnit` web.
+   * un número que ya no significa lo mismo. Espejo del `changeUnit` web —
+   * `convertQuantityBetweenUnits` entiende además `casera` (2 huevos ⇔ 122 g).
    */
   const changeUnit = useCallback((nextUnit: string) => {
     void Haptics.selectionAsync()
     setUnit((currentUnit) => {
-      const from = normalizeIntakeUnit(currentUnit)
-      const to = normalizeIntakeUnit(nextUnit)
-      if (selected && from && to && from !== to) {
-        const converted = convertIntakeQuantity({
+      if (selected && currentUnit !== nextUnit) {
+        const converted = convertQuantityBetweenUnits({
           quantity: Number(quantity.replace(',', '.')),
-          from,
-          to,
+          from: currentUnit,
+          to: nextUnit,
           servingSize: selected.servingSize,
+          householdGrams: selected.householdGrams,
         })
         setQuantity(converted === null ? '' : String(converted))
       }
@@ -374,16 +385,18 @@ export default function NutritionV2AddFoodScreen() {
    * Total ESTIMADO con la MISMA función pura que usa el servidor: el x100 de un cambio de unidad
    * mal hecho se ve ANTES de registrar. RN había retirado el preview por paridad con la web; ahora
    * la web también lo muestra, así que vuelve por paridad (y por seguridad del dato).
+   * Se escala con la cantidad YA traducida (`submission`): `casera` no es una unidad del factor y
+   * caía a la rama contable si se la dejaba pasar (SPEC R9).
    */
   const estimatedTotals = useMemo(() => {
-    if (!selected || !validQuantity) return null
+    if (!selected || !submission) return null
     return scaleSnapshotMacros(selected, {
-      quantity: parsedQuantity,
-      unit: normalizeIntakeUnit(unit) ?? unit,
+      quantity: submission.quantity,
+      unit: normalizeIntakeUnit(submission.unit) ?? submission.unit,
       servingSize: selected.servingSize,
       basis: CATALOG_MACROS_BASIS,
     })
-  }, [parsedQuantity, selected, unit, validQuantity])
+  }, [selected, submission])
 
   // Aviso anti-duplicado (no bloqueante, web TodayExperience.tsx:769-772,866-873):
   // el alimento elegido pertenece a un grupo con porciones YA marcadas en la
@@ -400,7 +413,7 @@ export default function NutritionV2AddFoodScreen() {
   }, [mealSlot, selected, todayModel])
 
   const save = useCallback(async () => {
-    if (!userId || !deviceId || !selected || saving || !canSubmit) return
+    if (!userId || !deviceId || !selected || saving || !canSubmit || !submission) return
     setSaving(true)
     setSaveError(null)
     try {
@@ -412,8 +425,9 @@ export default function NutritionV2AddFoodScreen() {
         occurredAt: new Date().toISOString(),
         timezone: 'America/Santiago',
         foodId: selected.id,
-        quantity: parsedQuantity,
-        unit: normalizeIntakeUnit(unit) ?? unit.trim(),
+        // Sale en g/ml: la medida casera es interfaz, la verdad persistida son gramos (§5.3).
+        quantity: submission.quantity,
+        unit: normalizeIntakeUnit(submission.unit) ?? submission.unit.trim(),
         mealSlot: mealSlot === '' ? null : mealSlot,
         source: 'offplan',
         captureMethod: 'search',
@@ -468,7 +482,7 @@ export default function NutritionV2AddFoodScreen() {
     } finally {
       if (mountedRef.current) setSaving(false)
     }
-  }, [canSubmit, date, deviceId, fireCelebration, mealSlot, parsedQuantity, router, saving, selected, unit, userId])
+  }, [canSubmit, date, deviceId, fireCelebration, mealSlot, router, saving, selected, submission, userId])
 
   if (!entitlements.ready) {
     return <View className="flex-1 bg-surface-app" />
@@ -711,13 +725,15 @@ export default function NutritionV2AddFoodScreen() {
             <View className="mt-3">
               <Text className="mb-1 text-xs font-semibold text-muted">Unidad</Text>
               <View className="flex-row flex-wrap gap-2">
-                {unitOptionsFor(selected).map((value) => (
+                {/* Cada chip lleva SU rótulo con gramos («huevo · 61 g»): así una medida casera
+                    no se confunde con una porción, que es la causa 1 del tren (SPEC §5.2). */}
+                {unitOptionsFor(selected, unit).map((option) => (
                   <SelectChip
-                    key={value}
-                    accessibilityLabel={`Unidad ${intakeUnitLabel(value)}`}
-                    active={unit === value}
-                    label={intakeUnitLabel(value)}
-                    onPress={() => changeUnit(value)}
+                    key={option.code}
+                    accessibilityLabel={`Unidad ${option.label}`}
+                    active={unit === option.code}
+                    label={option.label}
+                    onPress={() => changeUnit(option.code)}
                   />
                 ))}
               </View>
@@ -725,7 +741,7 @@ export default function NutritionV2AddFoodScreen() {
 
             {/* Total ESTIMADO (NUT-017): misma función pura que el servidor, así un cambio de
                 unidad mal hecho se ve ANTES de registrar. Paridad con el web. */}
-            {estimatedTotals ? (
+            {estimatedTotals && submission ? (
               <View
                 accessibilityLiveRegion="polite"
                 className="mt-3 rounded-control border border-subtle bg-surface-sunken px-3 py-2"
@@ -737,7 +753,14 @@ export default function NutritionV2AddFoodScreen() {
                     proteinG={estimatedTotals.proteinG}
                     carbsG={estimatedTotals.carbsG}
                     fatsG={estimatedTotals.fatsG}
-                    per={`por ${quantity} ${intakeUnitLabel(normalizeIntakeUnit(unit) ?? 'g')}`}
+                    // El rótulo dice lo que se va a GUARDAR: «por 2 huevos (122 g)» con medida
+                    // casera, «por 122 g» sin ella (W2.3, `formatItemQuantity`).
+                    per={`por ${formatItemQuantity({
+                      quantity: submission.quantity,
+                      unit: submission.unit,
+                      householdLabel: selected.householdLabel,
+                      householdGrams: selected.householdGrams,
+                    })}`}
                     size="sm"
                   />
                 </View>

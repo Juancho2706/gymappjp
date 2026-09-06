@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   calculateFoodItemMicros,
   sumMealMicros,
+  formatHouseholdCount,
   gramsToHousehold,
   type FoodItemForMicros,
 } from './index'
@@ -104,5 +105,34 @@ describe('gramsToHousehold', () => {
   it('sin household devuelve solo masa', () => {
     expect(gramsToHousehold({ household_grams: null, household_label: null }, 75)).toBe('75 g')
     expect(gramsToHousehold({}, 75)).toBe('75 g')
+  })
+
+  it('decimal sin fracción común: coma es-CL, no punto (mejora del jefe 06-09)', () => {
+    expect(gramsToHousehold({ household_grams: 61, household_label: 'huevo' }, 91.5)).toBe(
+      '92 g (1,5 huevos)'
+    )
+  })
+})
+
+describe('formatHouseholdCount', () => {
+  it('decimal >= 1 sin fracción común: coma es-CL, 1 decimal', () => {
+    expect(formatHouseholdCount(1.5, 'huevo')).toBe('1,5 huevos')
+    expect(formatHouseholdCount(2.3, 'taza')).toBe('2,3 tazas')
+  })
+
+  it('entero: sin decimales de más', () => {
+    expect(formatHouseholdCount(2, 'huevo')).toBe('2 huevos')
+  })
+
+  it('fracción común < 1: glifo tal cual, sin pasar por el formateador de número', () => {
+    expect(formatHouseholdCount(0.5, 'taza')).toBe('½ taza')
+    expect(formatHouseholdCount(0.25, 'taza')).toBe('¼ taza')
+    expect(formatHouseholdCount(0.333, 'taza')).toBe('⅓ taza')
+    expect(formatHouseholdCount(0.667, 'taza')).toBe('⅔ taza')
+    expect(formatHouseholdCount(0.75, 'taza')).toBe('¾ taza')
+  })
+
+  it('decimal < 1 sin fracción cercana: coma es-CL (singular, count <= 1)', () => {
+    expect(formatHouseholdCount(0.4, 'taza')).toBe('0,4 taza')
   })
 })

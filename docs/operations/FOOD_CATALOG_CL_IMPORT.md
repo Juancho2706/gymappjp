@@ -189,3 +189,12 @@ Probar al menos web y un build móvil contra el mismo entorno.
 8. Repetir validación funcional y de aislamiento.
 
 Una importación aplicada no se revierte volviendo a ejecutar el archivo anterior: el upsert por `catalog_key` no restaura referencias, media ni historial.
+
+## Medidas caseras (2026-09)
+
+Tren «Cantidades honestas» (Nutrición V2, SPEC §5.6, W2.4): `scripts/nutrition-household/backfill-usda-household.mjs`
+propone `household_label`/`household_grams` para el catálogo `usda` consultando USDA FoodData Central,
+y `scripts/nutrition-household/suggest-eva-household.mjs` hace lo mismo para `eva` por diccionario de
+palabras clave del nombre. Ninguno de los dos escribe en la base ni se aplicó en LIVE; ambos solo leen
+y generan archivos de revisión. Detalle de uso, flags y variables de entorno en
+[`scripts/nutrition-household/README.md`](../../scripts/nutrition-household/README.md).

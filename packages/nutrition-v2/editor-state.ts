@@ -48,7 +48,13 @@ import {
   computeSubstitutionEquivalence,
   describeSubstitutionDelta,
 } from './substitution-intake'
-import type { NutritionIntakeUnit } from './intake-units'
+import {
+  HOUSEHOLD_UNIT,
+  defaultFoodUnit,
+  foodMagnitudeUnit,
+  isHouseholdUnit,
+  type NutritionIntakeUnit,
+} from './intake-units'
 // W1.1/W1.3 («Cantidades honestas»): cambiar la unidad CONVIERTE la cantidad y el editor sabe
 // decir cuando un item es poco plausible. Los dos son modulos puros del paquete para que el
 // wizard web, el wizard RN y este reductor usen exactamente la misma regla.
@@ -163,6 +169,33 @@ export interface QeItem {
    * exacto (computeItemMacros) y el cambio de unidad completo (BUILDER_UNITS).
    */
   food: BuilderFood | null
+  /**
+   * Medida casera del ITEM (W2 «Cantidades honestas», hallazgo b9/R1 de la auditoria W2.0).
+   * Vive en el item y NO solo en `item.food` porque los items hidratados del read model traen
+   * `food: null` (ver `hydrateItem`): sin esto, una fila rehidratada en modo `casera` no sabria
+   * ni cuanto pesa su medida ni como se llama.
+   *
+   * Par indivisible (`null` los dos = el item no tiene medida casera). Se copia del alimento al
+   * pasar a `casera` y se congela tal cual al publicar; el drift del catalogo no lo mueve.
+   */
+  householdGrams: number | null
+  householdLabel: string | null
+  /**
+   * LINAJE (W3.1, «Cantidades honestas» SPEC §6.1): de que item de la version VIGENTE es copia
+   * este item. Existe porque cada publicacion inserta filas NUEVAS con `crypto.randomUUID()`
+   * (plan-persistence.ts:489) y los registros del alumno de HOY quedan apuntando a un id que ya
+   * no esta en el snapshot: republicar sin tocar nada le borraba el «Registrado» (Causa 2).
+   *
+   * `null` = item sin ancestro (alta nueva, copia a otro dia/plantilla, o item CAMBIADO). La
+   * regla del reductor es dura y conservadora: conserva el linaje SOLO si sigue siendo la misma
+   * comida —misma franja, mismo alimento/nombre, misma cantidad y misma unidad—; cualquier
+   * cambio de contenido lo anula. Un item modificado (30 un → 3 un) queda huerfano A PROPOSITO:
+   * es otra comida, y W1.4 lo deja visible y retirable.
+   *
+   * Es una AYUDA de lectura, nunca un requisito: el servidor lo revalida (mismo plan, ≠ id) y
+   * lo baja a NULL sin fallar la publicacion (`persist_and_publish_nutrition_plan_v2`).
+   */
+  sourceItemId: string | null
   /**
    * Base de escalado lineal para items hidratados del read model (solo traen macros de
    * la cantidad prescrita, no por-100): macros nuevas = base * (qty / base.quantity).
@@ -373,8 +406,66 @@ export function buildSubstitutionMap(
   return map
 }
 
+/**
+ * Cuenta de medidas caseras a partir de los gramos persistidos, redondeada al medio (el paso del
+ * stepper en modo casera): 122 g con `hg = 61` ⇒ «2 huevos». `null` cuando el par no alcanza o el
+ * redondeo dejaria el item en cero — ahi la fila se queda en gramos, que es la verdad igual.
+ */
+/** ¿El item tiene una medida casera con la que traducir a gramos? Par completo y gramaje > 0. */
+function hasUsableHouseholdPair(item: QeItem): boolean {
+  const grams = item.householdGrams ?? item.food?.householdGrams ?? null
+  const label = (item.householdLabel ?? item.food?.householdLabel ?? '').trim()
+  return typeof grams === 'number' && Number.isFinite(grams) && grams > 0 && label.length > 0
+}
+
+function householdCountFromGrams(grams: number, householdGrams: number | null | undefined): number | null {
+  if (typeof householdGrams !== 'number' || !Number.isFinite(householdGrams) || householdGrams <= 0) return null
+  if (!Number.isFinite(grams) || grams <= 0) return null
+  const count = Math.round((grams / householdGrams) * 2) / 2
+  return count > 0 ? count : null
+}
+
+/**
+ * Rehidratacion de la MEDIDA CASERA (W2, R1 de la auditoria W2.0). Un item publicado siempre vive
+ * en gramos; si trae el par congelado, el editor lo muestra como lo escribio el coach («2 huevos»).
+ *
+ * ⚠️ La trampa que documenta R1: `macroBase.quantity` tiene que quedar en la MISMA unidad que
+ * `quantity`. Los items hidratados no tienen `food`, asi que `qeItemMacros` escala por
+ * `qty / macroBase.quantity`: con `quantity = 2` (huevos) y `macroBase.quantity = 122` (gramos)
+ * el editor mostraria 1/61 de las kcal reales… y republicar congelaria ESE numero.
+ */
+function hydrateHouseholdItem(item: ReadItem): {
+  unit: string
+  quantity: string
+  macroBaseQuantity: number
+  householdGrams: number | null
+  householdLabel: string | null
+} {
+  const label = (item.householdLabel ?? '').trim()
+  const count = label.length === 0 ? null : householdCountFromGrams(item.quantity, item.householdGrams)
+  if (count === null) {
+    return {
+      unit: item.unit,
+      quantity: String(item.quantity),
+      macroBaseQuantity: item.quantity,
+      // El par se conserva aunque la fila quede en gramos: rotula igual («122 g de huevo») y el
+      // coach puede volver a la medida casera desde el selector sin ir a buscar el alimento.
+      householdGrams: item.householdGrams ?? null,
+      householdLabel: item.householdLabel ?? null,
+    }
+  }
+  return {
+    unit: HOUSEHOLD_UNIT,
+    quantity: formatQuantityText(count),
+    macroBaseQuantity: count,
+    householdGrams: item.householdGrams ?? null,
+    householdLabel: item.householdLabel ?? null,
+  }
+}
+
 function hydrateItem(item: ReadItem, subsByItemId: SubstitutionsByItemId): QeItem {
   const isCustom = item.foodId === null && item.recipeId === null
+  const household = hydrateHouseholdItem(item)
   return {
     key: item.id,
     id: item.id,
@@ -382,18 +473,23 @@ function hydrateItem(item: ReadItem, subsByItemId: SubstitutionsByItemId): QeIte
     recipeId: item.recipeId,
     displayName: item.name ?? 'Alimento',
     brand: item.brand,
-    quantity: String(item.quantity),
-    unit: item.unit,
+    quantity: household.quantity,
+    unit: household.unit,
     minimumQuantity: item.minimumQuantity,
     maximumQuantity: item.maximumQuantity,
     optional: item.optional,
     substitutionGroupId: item.substitutionGroupId,
     notes: item.notes,
     food: null,
+    householdGrams: household.householdGrams,
+    householdLabel: household.householdLabel,
+    // Linaje W3.1: el ancestro es el item de la version VIGENTE del que sale esta fila. Se
+    // carga aca —y no al publicar— porque solo el reductor sabe si el coach lo toco.
+    sourceItemId: item.id,
     macroBase:
       item.quantity > 0
         ? {
-            quantity: item.quantity,
+            quantity: household.macroBaseQuantity,
             macros: {
               calories: item.macros.calories ?? 0,
               proteinG: item.macros.proteinG ?? 0,
@@ -634,6 +730,17 @@ function draftItemToQe(
 ): QeItem {
   const food = item.foodId ? (foodsById[item.foodId] ?? null) : null
   const isCustom = item.foodId === null && item.recipeId === null
+  // Medida casera (W2, b11): el draft puede venir de dos lados. De `projectItem` llega YA en
+  // `casera` con la cuenta escrita (no hay nada que convertir); de `readModelToDraft` —o de un
+  // respaldo local viejo— llega en gramos con el par congelado, y ahi se rehidrata la cuenta,
+  // igual que `hydrateItem`. `macroBase` es null en este camino (el alimento resuelto manda), asi
+  // que la trampa de R1 no aplica aca.
+  const householdGrams = item.householdGrams ?? null
+  const householdLabel = item.householdLabel ?? null
+  const householdCount =
+    isHouseholdUnit(item.unit) || (householdLabel ?? '').trim().length === 0
+      ? null
+      : householdCountFromGrams(item.quantity, householdGrams)
   return {
     key,
     id: item.id ?? null,
@@ -641,14 +748,19 @@ function draftItemToQe(
     recipeId: item.recipeId,
     displayName: food?.name ?? item.customName ?? (item.recipeId ? 'Receta' : 'Alimento'),
     brand: food?.brand ?? null,
-    quantity: String(item.quantity),
-    unit: item.unit,
+    quantity: householdCount === null ? String(item.quantity) : formatQuantityText(householdCount),
+    unit: householdCount === null ? item.unit : HOUSEHOLD_UNIT,
     minimumQuantity: item.minimumQuantity,
     maximumQuantity: item.maximumQuantity,
     optional: item.optional,
     substitutionGroupId: item.substitutionGroupId,
     notes: item.notes,
     food,
+    householdGrams,
+    householdLabel,
+    // Linaje W3.1: viaja EN el borrador (respaldo local, ida y vuelta de `projectItem`), asi que
+    // restaurar un respaldo no pierde el ancestro. Un draft viejo (pre-W3) no trae la clave => null.
+    sourceItemId: item.sourceItemId ?? null,
     macroBase: null,
     isCustom,
     media: food?.media ?? null,
@@ -985,8 +1097,12 @@ export type QuickEditAction =
   | { type: 'RESET'; state: QuickEditState }
   | { type: 'RESTORE_DRAFT'; state: QuickEditState }
 
-/** Paso del stepper de cantidad: 5 para g/ml, 0.5 para unidad/porcion (NN/g, nunca slider). */
+/**
+ * Paso del stepper de cantidad: 5 para g/ml, 0.5 para unidad/porcion y para la medida casera
+ * (NN/g, nunca slider). «Medio huevo» y «media taza» existen; «+5 huevos» por tap, no (b12).
+ */
 export function quantityStep(unit: string): number {
+  if (isHouseholdUnit(unit)) return 0.5
   return unit.toLowerCase() === 'un' ? 0.5 : 5
 }
 
@@ -1088,6 +1204,10 @@ function insertAt<T>(list: T[], index: number, value: T): T[] {
 }
 
 export function createCatalogItem(key: string, food: BuilderFood): QeItem {
+  // W2 (b13): con medida casera el alta arranca en «1 huevo», no en «61 g». Es la unidad que el
+  // coach entiende y la que evita el «1 un = 100 g» que nadie leia. Sin medida, todo igual que antes.
+  const unit = normalizeBuilderUnit(food)
+  const isHousehold = unit === HOUSEHOLD_UNIT
   return {
     key,
     id: null,
@@ -1095,14 +1215,18 @@ export function createCatalogItem(key: string, food: BuilderFood): QeItem {
     recipeId: null,
     displayName: food.name,
     brand: food.brand,
-    quantity: String(food.servingSize || 100),
-    unit: normalizeBuilderUnit(food.servingUnit),
+    quantity: isHousehold ? '1' : String(food.servingSize || 100),
+    unit,
     minimumQuantity: null,
     maximumQuantity: null,
     optional: false,
     substitutionGroupId: null,
     notes: null,
     food,
+    householdGrams: isHousehold ? food.householdGrams : null,
+    householdLabel: isHousehold ? food.householdLabel : null,
+    // Item NUEVO: no es copia de nada (W3.1). El alumno no puede tener un registro sobre el.
+    sourceItemId: null,
     macroBase: null,
     isCustom: false,
     media: food.media ?? null,
@@ -1128,6 +1252,11 @@ export function createCustomItem(key: string): QeItem {
     substitutionGroupId: null,
     notes: null,
     food: null,
+    // Un alimento LIBRE no tiene catalogo del que copiar una medida casera.
+    householdGrams: null,
+    householdLabel: null,
+    // Item NUEVO: no es copia de nada (W3.1).
+    sourceItemId: null,
     macroBase: null,
     isCustom: true,
     media: null,
@@ -1229,6 +1358,10 @@ function cloneQeItem(item: QeItem, keyPrefix: string): QeItem {
   return {
     ...item,
     key: `${keyPrefix}:${item.key}`,
+    // Linaje W3.1: una copia a OTRO dia (o a otra franja) no es el mismo item del alumno —
+    // los registros de hoy cuelgan de la franja original. Copiar dia / copiar plan / plantilla
+    // arrancan siempre sin ancestro.
+    sourceItemId: null,
     food: item.food ? { ...item.food } : null,
     macroBase: item.macroBase ? { quantity: item.macroBase.quantity, macros: { ...item.macroBase.macros } } : null,
     substitutions: item.substitutions.map((sub) => ({ ...sub })),
@@ -1529,53 +1662,138 @@ function applyBasePortions(state: QuickEditState): QuickEditState {
   return touched ? { ...state, variants } : state
 }
 
-function normalizeBuilderUnit(servingUnit: string | null | undefined): string {
-  const u = String(servingUnit ?? '').toLowerCase()
-  if (u === 'ml') return 'ml'
-  if (u === 'un' || u === 'unit' || u === 'unidad') return 'un'
-  return 'g'
+/**
+ * Unidad inicial de un alimento recien agregado (b13). Delega en `defaultFoodUnit` (paquete),
+ * que prefiere la medida casera cuando existe —incluso en un alimento nativo `un` (R7)— y si no
+ * cae en la unidad del alimento o su magnitud, exactamente como antes.
+ */
+function normalizeBuilderUnit(food: BuilderFood): string {
+  return defaultFoodUnit(food)
+}
+
+/**
+ * Par casero que debe quedar en el item al MOVERSE a `unit` (b14, W2).
+ *
+ * Al ENTRAR en `casera` se copia del alimento: es el gesto por el que el coach autoriza la
+ * medida, y desde ahi la fila deja de depender del catalogo vivo.
+ *
+ * Al SALIR el par se CONSERVA (decision de esta implementacion, la SPEC no la fija). Dos razones:
+ * el rotulo «122 g (2 huevos)» sigue siendo cierto, y volver a la medida casera desde el selector
+ * no obliga a re-resolver el alimento. Lo que decide si el par se persiste NO es esto sino la
+ * unidad final: `buildItemInsertRow` congela el par SOLO cuando el item se publica en `casera`.
+ */
+function householdPairForUnit(
+  item: QeItem,
+  unit: string,
+): Pick<QeItem, 'householdGrams' | 'householdLabel'> {
+  if (!isHouseholdUnit(unit)) {
+    return { householdGrams: item.householdGrams, householdLabel: item.householdLabel }
+  }
+  return {
+    householdGrams: item.food?.householdGrams ?? item.householdGrams,
+    householdLabel: item.food?.householdLabel ?? item.householdLabel,
+  }
+}
+
+/** Par casero tras un swap de alimento: el del alimento NUEVO, o baja a gramos si no tiene. */
+function swapHouseholdPair(
+  item: QeItem,
+  food: BuilderFood,
+): Pick<QeItem, 'householdGrams' | 'householdLabel' | 'unit' | 'quantity'> {
+  const hasPair =
+    typeof food.householdGrams === 'number' && food.householdGrams > 0 && (food.householdLabel ?? '').trim().length > 0
+  if (hasPair) {
+    return {
+      householdGrams: food.householdGrams,
+      householdLabel: food.householdLabel,
+      unit: item.unit,
+      // En `casera` la CUENTA se conserva («2 huevos» ⇒ «2 rebanadas»): es la misma decision
+      // que toma el swap con el resto de las unidades, que tampoco recalcula la cantidad.
+      quantity: item.quantity,
+    }
+  }
+  if (!isHouseholdUnit(item.unit)) {
+    return { householdGrams: null, householdLabel: null, unit: item.unit, quantity: item.quantity }
+  }
+  const grams = convertQuantityTextOnUnitChange({
+    quantity: item.quantity,
+    fromUnit: item.unit,
+    toUnit: foodMagnitudeUnit(food.servingUnit),
+    food: { servingSize: item.food?.servingSize ?? food.servingSize, householdGrams: item.householdGrams },
+  })
+  return {
+    householdGrams: null,
+    householdLabel: null,
+    unit: foodMagnitudeUnit(food.servingUnit),
+    quantity: grams,
+  }
 }
 
 export function quickEditReducer(state: QuickEditState, action: QuickEditAction): QuickEditState {
   switch (action.type) {
     case 'SET_ITEM_QUANTITY':
-      return mapItem(state, action.variantKey, action.slotKey, action.itemKey, (item) => ({
-        ...item,
-        quantity: action.value,
-      }))
+      return mapItem(state, action.variantKey, action.slotKey, action.itemKey, (item) =>
+        // W3.1: otra cantidad = otra comida => el linaje se ANULA (el registro de hoy sobre el
+        // item viejo queda huerfano a proposito). Escribir el MISMO texto no es una edicion:
+        // sin este guard, un re-dispatch del tap-to-edit (foco/blur) mataria el linaje en silencio.
+        action.value === item.quantity
+          ? item
+          : { ...item, quantity: action.value, sourceItemId: null },
+      )
     case 'STEP_ITEM_QUANTITY':
-      return mapItem(state, action.variantKey, action.slotKey, action.itemKey, (item) => ({
-        ...item,
-        quantity: stepQuantityText(item.quantity, quantityStep(item.unit), action.direction),
-      }))
+      return mapItem(state, action.variantKey, action.slotKey, action.itemKey, (item) => {
+        const quantity = stepQuantityText(item.quantity, quantityStep(item.unit), action.direction)
+        // Mismo criterio que SET_ITEM_QUANTITY: el stepper topado (clamp al minimo) no cambia
+        // nada, y lo que no cambia no rompe el linaje.
+        return quantity === item.quantity ? item : { ...item, quantity, sourceItemId: null }
+      })
     case 'SET_ITEM_UNIT':
       return mapItem(state, action.variantKey, action.slotKey, action.itemKey, (item) =>
         // El cambio de unidad solo es confiable con macros por 100 en mano (food del catalogo).
         // Con alimento, la cantidad SE CONVIERTE (W1.1): dejar "30" y pasar de g a `un` publicaba
         // 30 porciones de 100 g. Si la conversion no es representable el numero queda intacto
         // (SPEC §4.1) y el aviso de plausibilidad se ocupa.
-        item.food
+        item.food && action.unit !== item.unit
           ? {
               ...item,
               unit: action.unit,
+              // W3.1: cambiar de unidad CONVIERTE la cantidad (W1.1) => el item deja de ser el
+              // mismo y pierde el linaje. Elegir la unidad que ya tenia no es un cambio: el
+              // guard de arriba deja la fila intacta, linaje incluido.
+              sourceItemId: null,
               quantity: convertQuantityTextOnUnitChange({
                 quantity: item.quantity,
                 fromUnit: item.unit,
                 toUnit: action.unit,
-                food: item.food,
+                // El gramaje casero sale del PAR del item si ya lo tiene, y si no del alimento
+                // (b14): sin el, pasar de g a `casera` dejaba el numero de gramos escrito.
+                food: {
+                  servingSize: item.food.servingSize,
+                  householdGrams: item.householdGrams ?? item.food.householdGrams,
+                },
               }),
+              ...householdPairForUnit(item, action.unit),
             }
           : item,
       )
     case 'REINTERPRET_ITEM_UNIT':
       return mapItem(state, action.variantKey, action.slotKey, action.itemKey, (item) =>
         // Mismo guard que `SET_ITEM_UNIT` (sin alimento la unidad no se toca), pero la cantidad
-        // se DEJA COMO ESTA: es el "quise decir 30 gramos" del aviso de plausibilidad.
-        item.food ? { ...item, unit: action.unit } : item,
+        // se DEJA COMO ESTA: es el "quise decir 30 gramos" del aviso de plausibilidad. Con
+        // destino `casera` es el «Usar huevos» de W2.5, y ahi el par SI se copia del alimento.
+        // W3.1: reinterpretar es declarar que el item prescrito decia OTRA cosa (30 un que eran
+        // 30 g) => el registro de hoy no describe esta fila y el linaje se anula.
+        item.food && action.unit !== item.unit
+          ? { ...item, unit: action.unit, sourceItemId: null, ...householdPairForUnit(item, action.unit) }
+          : item,
       )
     case 'SET_ITEM_NAME':
       return mapItem(state, action.variantKey, action.slotKey, action.itemKey, (item) =>
-        item.isCustom ? { ...item, displayName: action.value } : item,
+        // W3.1: renombrar un alimento libre cambia lo que el alumno lee => otro item. Reescribir
+        // el mismo texto no (mismo guard que la cantidad, por el re-dispatch del input).
+        item.isCustom && action.value !== item.displayName
+          ? { ...item, displayName: action.value, sourceItemId: null }
+          : item,
       )
     case 'SWAP_ITEM_FOOD':
       // Swap conserva cantidad y unidad (diseno §1.2.B.1); reemplaza foodId/nombre/macros.
@@ -1586,6 +1804,13 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
         displayName: action.food.name,
         brand: action.food.brand,
         food: action.food,
+        // La medida casera es del ALIMENTO: al cambiarlo, el par viejo caduca (W2). Si el item
+        // estaba en `casera` y el alimento nuevo no tiene medida, la fila baja a gramos con la
+        // medida VIEJA (la equivalencia que el coach ya habia aceptado) en vez de quedar en una
+        // unidad que ese alimento no sabe resolver: sin esto `qeItemMacros` daria cero.
+        ...swapHouseholdPair(item, action.food),
+        // W3.1: otro alimento es, por definicion, otra comida => sin linaje.
+        sourceItemId: null,
         macroBase: null,
         isCustom: false,
         media: action.food.media ?? null,
@@ -1609,6 +1834,10 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
       const moved = source?.items.find((item) => item.key === action.itemKey)
       // Destino inexistente => no-op TOTAL (jamas se pierde el item).
       if (!moved || !variant.slots.some((slot) => slot.key === action.toSlotKey)) return state
+      // W3.1: los registros del alumno cuelgan de la FRANJA ademas del item; mudar el item de
+      // franja lo vuelve otra comida del dia => sin linaje. Reordenar DENTRO de la franja
+      // (`REORDER_ITEM`) no toca nada y lo conserva.
+      const movedItem: QeItem = { ...moved, sourceItemId: null }
       return mapVariant(state, action.variantKey, (current) => ({
         ...current,
         slots: current.slots.map((slot) => {
@@ -1616,7 +1845,7 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
             return { ...slot, items: slot.items.filter((item) => item.key !== action.itemKey) }
           }
           if (slot.key !== action.toSlotKey) return slot
-          return { ...slot, items: insertAt(slot.items, action.toIndex ?? slot.items.length, moved) }
+          return { ...slot, items: insertAt(slot.items, action.toIndex ?? slot.items.length, movedItem) }
         }),
       }))
     }
@@ -1994,8 +2223,18 @@ function scaleMacros(macros: ItemMacros, factor: number): ItemMacros {
 export function qeItemMacros(item: QeItem): ItemMacros {
   const qty = Number(item.quantity.trim())
   if (!Number.isFinite(qty) || qty <= 0) return ZERO_ITEM_MACROS
-  if (item.food) return computeItemMacros(item.food, qty, item.unit)
+  if (item.food) {
+    // Modo casera con el par en el ITEM y no en el alimento (item hidratado al que se le hizo un
+    // swap, o alimento cuyo catalogo ya no trae la medida): el par del item manda, porque es el
+    // que el coach autorizo y el que se va a congelar.
+    if (isHouseholdUnit(item.unit) && item.householdGrams != null) {
+      return computeItemMacros({ ...item.food, householdGrams: item.householdGrams }, qty, item.unit)
+    }
+    return computeItemMacros(item.food, qty, item.unit)
+  }
   if (item.macroBase && item.macroBase.quantity > 0) {
+    // R1: `macroBase.quantity` esta rehidratado en la MISMA unidad que `quantity` (2 huevos, no
+    // 122 g), asi que la razon es 1 en la carga y el escalado sigue siendo lineal y exacto.
     return scaleMacros(item.macroBase.macros, qty / item.macroBase.quantity)
   }
   return ZERO_ITEM_MACROS
@@ -2006,15 +2245,16 @@ export function qeItemMacros(item: QeItem): ItemMacros {
  * porque usa exactamente las kcal que el editor ya muestra: si la fila dice 4.470 kcal, el
  * aviso habla de esas 4.470 y no de un numero recalculado por otro camino.
  *
- * Los gramos salen de la unidad + la porcion del catalogo. La medida casera (`householdGrams`)
- * llega en W2 junto con el campo en `BuilderFood`: hasta entonces viaja `null` a proposito.
+ * Los gramos salen de la unidad + la porcion del catalogo. En modo casera manda el par del ITEM
+ * (b15): los items hidratados no tienen `food`, y sin ese gramaje el aviso no podria decir
+ * «2 huevos = 122 g».
  */
 export function qeItemPlausibility(item: QeItem): ItemPlausibility {
   return assessItemPlausibility({
     quantity: Number(item.quantity.trim()),
     unit: item.unit,
     servingSize: item.food?.servingSize ?? null,
-    householdGrams: null,
+    householdGrams: item.householdGrams ?? item.food?.householdGrams ?? null,
     calories: qeItemMacros(item).calories,
   })
 }
@@ -2464,6 +2704,12 @@ export function validateQuickEdit(
         if (item.isCustom && item.displayName.trim().length === 0) {
           errors[`item.${item.key}.name`] = 'Escribe un nombre para el alimento.'
         }
+        // W2: `casera` sin par no se puede traducir a gramos — `computeItemMacros` da cero y
+        // `buildItemInsertRow` tira. Se corta ACA, con el item señalado, y no con un error
+        // generico de publicacion.
+        if (isHouseholdUnit(item.unit) && !hasUsableHouseholdPair(item)) {
+          errors[`item.${item.key}.unit`] = 'Este alimento no tiene medida casera.'
+        }
       }
       for (const target of slot.portionTargets) {
         if (!isValidPortionsText(target.portions)) {
@@ -2540,6 +2786,7 @@ export function qeDayErrorSummaries(
       for (const item of slot.items) {
         if (errors[`item.${item.key}.quantity`]) quantity += 1
         if (errors[`item.${item.key}.name`]) other += 1
+        if (errors[`item.${item.key}.unit`]) other += 1
       }
       for (const target of slot.portionTargets) {
         if (errors[`portion.${target.key}.portions`]) other += 1
@@ -2673,6 +2920,9 @@ function projectItem(item: QeItem, orderIndex: number): DraftItem {
     recipeId: item.recipeId,
     customName: item.isCustom ? item.displayName.trim() || null : null,
     quantity: Number(item.quantity.trim()) || 0,
+    // `casera` viaja TAL CUAL en el borrador (b16): traducirla aca escondería la eleccion del
+    // coach del contador de cambios y del respaldo local. La traduccion a g/ml + par congelado
+    // ocurre en la ultima milla, `buildItemInsertRow` (apps/web/.../_lib/plan-draft-rows.ts).
     unit: item.unit,
     minimumQuantity: item.minimumQuantity,
     maximumQuantity: item.maximumQuantity,
@@ -2680,6 +2930,12 @@ function projectItem(item: QeItem, orderIndex: number): DraftItem {
     substitutionGroupId: item.substitutionGroupId,
     notes: item.notes,
     orderIndex,
+    householdLabel: item.householdLabel,
+    householdGrams: item.householdGrams,
+    // Linaje W3.1: viaja SIEMPRE (clave presente, valor `null` cuando no hay ancestro) para que
+    // baseline y current pasen por la misma proyeccion. `countDraftChanges` NO lo mira a
+    // proposito: perder el linaje es la CONSECUENCIA de una edicion, no una edicion en si.
+    sourceItemId: item.sourceItemId,
     ...(substitutions.length > 0
       ? {
           substitutions: substitutions.map((sub, subIndex): NutritionItemSubstitution => ({

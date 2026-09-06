@@ -37,7 +37,7 @@ import { AddActionButton } from '@/components/nutrition-v2/AddActionButton'
 import { useBrandPrimaryHex } from '@/components/nutrition-v2/useBrandPrimaryHex'
 import type { FoodCatalogItem } from '@eva/nutrition-v2'
 import { foodCategoryIconUrl } from '@/lib/food-image'
-import { BUILDER_UNITS, MAX_ITEM_SUBSTITUTIONS } from '@eva/nutrition-v2'
+import { MAX_ITEM_SUBSTITUTIONS } from '@eva/nutrition-v2'
 import { stepCountedQuantity } from '@/app/coach/nutrition-v2/_lib/quantity-format'
 import { foodCategoryIconUrlFromName, resolveFoodImageUrl } from '@/app/coach/nutrition-v2/_components/food-card-presentation'
 import { FoodThumb } from '@/app/coach/nutrition-v2/_components/FoodImage'
@@ -47,8 +47,13 @@ import { FoodMacrosOverrideDialog } from '@/app/coach/nutrition-v2/_components/F
 import { createCoachFoodAction } from '@/app/coach/nutrition-v2/_actions/plan-publish.actions'
 import { rememberFoodQuantityAction } from '@/app/coach/nutrition-v2/_actions/last-quantity.actions'
 import {
+  HOUSEHOLD_UNIT,
+  UNIT_REVIEW_BADGE_LABEL,
   foodMagnitudeUnit,
+  foodUnitOptionsWithCurrent,
+  householdUnitActionLabel,
   implausibleItemCopy,
+  isHouseholdUnit,
   kcalBucket,
   normalizeIntakeUnit,
   qeCoachFoodCandidate,
@@ -56,7 +61,9 @@ import {
   qeItemPlausibility,
   qeSubstitutionEquivalence,
   reinterpretUnitActionLabel,
+  shouldFlagUnitReview,
   unitEquivalenceCaption,
+  unitReviewHint,
   type QeItem,
   type QeItemSubstitution,
   type QeSlot,
@@ -189,6 +196,35 @@ export function EditableItemRow({
         servingUnit: item.food.servingUnit,
       })
     : null
+  // ── W2 «Cantidades honestas»: la medida casera del ÍTEM manda sobre la del catálogo (es la que
+  // el coach autorizó y la que se congela al publicar); el alimento sólo la respalda.
+  const householdGrams = item.householdGrams ?? item.food?.householdGrams ?? null
+  const householdLabel = item.householdLabel ?? item.food?.householdLabel ?? null
+  const unitOptions = item.food
+    ? foodUnitOptionsWithCurrent({ ...item.food, householdGrams, householdLabel }, item.unit)
+    : []
+  // W2.5 «Usar huevos»: segunda acción del aviso, sólo si el ítem NO está ya en medida casera.
+  const householdAction =
+    !isHouseholdUnit(item.unit) && householdGrams != null ? householdUnitActionLabel(householdLabel) : null
+  // W2.5 badge «Revisar unidad»: `un` sobre un alimento que NO es contable y cuya medida casera
+  // real difiere > 30 % de su porción. AVISA, no reescribe (regla dura del tren, SPEC §2).
+  const unitReviewTitle =
+    item.food &&
+    householdGrams != null &&
+    householdLabel != null &&
+    shouldFlagUnitReview({
+      unit: item.unit,
+      servingUnit: item.food.servingUnit,
+      servingSize: item.food.servingSize,
+      householdGrams,
+    })
+      ? unitReviewHint({
+          servingSize: item.food.servingSize,
+          householdGrams,
+          householdLabel,
+          servingUnit: item.food.servingUnit,
+        })
+      : null
   const captureImplausible = useCaptureNutritionItemImplausible()
   useEffect(() => {
     if (implausibleReason === null) return
@@ -461,6 +497,18 @@ export function EditableItemRow({
                   {QE_COPY.itemBadgeMacrosEdited}
                 </span>
               ) : null}
+              {/* W2.5 — «Revisar unidad»: acá «1 un» son los gramos de la porción, y el catálogo
+                  dice que una pieza de verdad pesa bastante otra cosa. Es el «pan pita 60 un»
+                  del caso real. Ningún plan se reescribe: la acción la ofrece el aviso de abajo. */}
+              {unitReviewTitle ? (
+                <span
+                  title={unitReviewTitle}
+                  aria-label={unitReviewTitle}
+                  className={badgeClass + ' border-warning-500/30 bg-warning-100 text-warning-700'}
+                >
+                  {UNIT_REVIEW_BADGE_LABEL}
+                </span>
+              ) : null}
             </div>
             {subtitle ? (
               <p className="mt-0.5 truncate text-[10.5px] leading-4 text-muted">{subtitle}</p>
@@ -503,6 +551,9 @@ export function EditableItemRow({
                   foodId: item.food.id,
                   quantity: item.quantity,
                   unit: item.unit,
+                  // R10: la memoria vive en g/ml/un; en casera la action convierte con estos dos.
+                  servingUnit: item.food.servingUnit,
+                  householdGrams,
                 }).catch(() => {
                   // best-effort: sin red o respuesta no-RSC no rompe nada (EVA-NEXTJS-19)
                 })
@@ -527,12 +578,20 @@ export function EditableItemRow({
                 dispatch({ type: 'SET_ITEM_UNIT', variantKey, slotKey, itemKey: item.key, unit: event.target.value })
               }
               /* 44×64 — el mismo cajón que la caja de solo lectura de abajo (las unidades son de dos
-                 letras: g · ml · un), para que la columna no se corra entre filas con y sin catálogo. */
-              className="h-11 w-16 shrink-0 rounded-control border border-border-default bg-surface-card px-2 text-sm font-semibold text-strong outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25"
+                 letras: g · ml · un), para que la columna no se corra entre filas con y sin catálogo.
+                 W2: la etiqueta casera («huevo · 61 g») no entra en 64 px, así que el ancho fijo
+                 rige sólo mientras el ítem esté en una unidad corta. */
+              className={
+                'h-11 shrink-0 rounded-control border border-border-default bg-surface-card px-2 text-sm font-semibold text-strong outline-none transition-colors focus:border-primary focus:ring-2 focus:ring-primary/25 ' +
+                (isHouseholdUnit(item.unit) ? 'max-w-36' : 'w-16')
+              }
             >
-              {BUILDER_UNITS.map((unit) => (
-                <option key={unit} value={unit}>
-                  {unit}
+              {/* W2.1 — las unidades salen del ALIMENTO (`foodUnitOptions`) y no de una lista fija:
+                  `un` sólo si es realmente contable, y la medida casera con sus gramos a la vista
+                  («huevo · 61 g»). La unidad vigente se conserva aunque ya no se ofrezca. */}
+              {unitOptions.map((option) => (
+                <option key={option.code} value={option.code}>
+                  {option.label}
                 </option>
               ))}
             </select>
@@ -611,9 +670,10 @@ export function EditableItemRow({
             calories: plausibility.calories,
             servingSize: item.food?.servingSize ?? null,
             servingUnit: item.food?.servingUnit ?? null,
+            householdLabel,
           })}
-          actions={
-            item.food && normalizeIntakeUnit(item.unit) === 'un'
+          actions={[
+            ...(item.food && normalizeIntakeUnit(item.unit) === 'un'
               ? [
                   {
                     label: reinterpretUnitActionLabel({
@@ -631,8 +691,27 @@ export function EditableItemRow({
                       }),
                   },
                 ]
-              : []
-          }
+              : []),
+            /* W2.5 — «Usar huevos»: el número seguía estando bien y lo que faltaba era la medida
+               que el coach tenía en la cabeza. Reinterpreta la unidad SIN convertir (igual que la
+               acción de W1) y copia el par casero al ítem, que es la autorización explícita. */
+            ...(item.food && householdAction
+              ? [
+                  {
+                    label: householdAction,
+                    disabled: isPending,
+                    onClick: () =>
+                      dispatch({
+                        type: 'REINTERPRET_ITEM_UNIT',
+                        variantKey,
+                        slotKey,
+                        itemKey: item.key,
+                        unit: HOUSEHOLD_UNIT,
+                      }),
+                  },
+                ]
+              : []),
+          ]}
         />
       ) : null}
 

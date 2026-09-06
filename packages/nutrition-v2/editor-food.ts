@@ -9,6 +9,7 @@
 
 import { calculateFoodItemMacros, type FoodMacrosRow } from '@eva/nutrition-engine'
 import { intakeEntryFactor, type NutritionMacrosBasis } from './intake-normalize'
+import { foodMagnitudeUnit, isHouseholdUnit } from './intake-units'
 import type { FoodMacroSet } from './food-overrides'
 
 /** Tope de reemplazos autorizados por item prescrito (F-02, limite legado V1 = 8). */
@@ -41,6 +42,17 @@ export interface BuilderFood {
    */
   hasOverride?: boolean
   originalMacros?: FoodMacroSet | null
+  /**
+   * Medida casera del alimento (W2 «Cantidades honestas»): cuantos gramos pesa UNA («huevo» = 61 g)
+   * y como se llama. Viajan SIEMPRE juntas (`null` las dos = el alimento no tiene medida) y ganan
+   * las del override del coach sobre las del catalogo, igual que los macros (R5, `resolveFoodMacros`).
+   *
+   * Son la INTERFAZ, no la verdad: habilitan la unidad `casera` del editor
+   * (`foodUnitOptions`, ./intake-units) y se congelan en el item al publicar
+   * (`buildItemInsertRow`), pero la cantidad persistida sigue siendo g/ml.
+   */
+  householdGrams: number | null
+  householdLabel: string | null
 }
 
 /**
@@ -95,6 +107,24 @@ function round1(value: number): number {
  */
 export function computeItemMacros(food: BuilderFood, quantity: number, unit: string): ItemMacros {
   if (!Number.isFinite(quantity) || quantity <= 0) return ZERO_MACROS
+  /**
+   * Rama `casera` (W2, SPEC §5.1): la medida casera es INTERFAZ y los gramos son la verdad, asi
+   * que se traduce a gramos y se re-entra por el camino de siempre. La recursion —y no un factor
+   * propio— es lo que garantiza R6: un alimento `per_serving` entra por SU rama con gramos
+   * (`qty × hg / servingSize`) y no por el `factor = quantity` de las unidades contadas, que
+   * daria «2 × macros de la porcion» en vez de los 122 g reales.
+   *
+   * Sin medida casera utilizable no hay traduccion posible: macros CERO. El borrador no se
+   * publica asi — `validateQuickEdit` marca el item con «Este alimento no tiene medida casera» y
+   * `buildItemInsertRow` tira antes de escribir.
+   */
+  if (isHouseholdUnit(unit)) {
+    const householdGrams = food.householdGrams
+    if (typeof householdGrams !== 'number' || !Number.isFinite(householdGrams) || householdGrams <= 0) {
+      return ZERO_MACROS
+    }
+    return computeItemMacros(food, quantity * householdGrams, foodMagnitudeUnit(food.servingUnit))
+  }
   if (food.macrosBasis === 'per_serving') {
     const factor = intakeEntryFactor({
       quantity,

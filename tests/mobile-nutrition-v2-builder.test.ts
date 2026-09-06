@@ -65,6 +65,8 @@ const FOOD: BuilderFood = {
   servingUnit: 'g',
   category: null,
   media: null,
+  householdGrams: null,
+  householdLabel: null,
 }
 
 function foodItem(overrides: Partial<BuilderItem> = {}): BuilderItem {
@@ -871,6 +873,9 @@ describe('insert row builders', () => {
   const item: DraftPrescriptionItem = {
     foodId: FOOD_ID, recipeId: null, customName: null, quantity: 200, unit: 'g',
     minimumQuantity: null, maximumQuantity: null, optional: false, substitutionGroupId: null, notes: null, orderIndex: 0,
+    householdLabel: null,
+    householdGrams: null,
+    sourceItemId: null,
   }
   it('buildItemInsertRow re-deriva snapshot desde el alimento', () => {
     const row = buildItemInsertRow({ versionId: 'v1', mealSlotId: 's1', orderIndex: 0, item, food: FOOD })

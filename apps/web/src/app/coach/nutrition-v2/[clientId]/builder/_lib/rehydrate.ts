@@ -12,18 +12,19 @@
  * server-side (`foods`, RLS-scoped) y el mapa de reemplazos congelados. Se testea directo.
  */
 
+import { householdRowShape } from '@eva/nutrition-v2'
 import type { NutritionItemSubstitutionRead, NutritionPlanReadModel } from '@eva/nutrition-v2'
 import {
   BASE_VARIANT_LABEL,
   autoVariantLabel,
   createEmptyItem,
   normalizeBuilderVariants,
-  toBuilderUnit,
   type BuilderFood,
   type BuilderItem,
   type BuilderSlot,
   type BuilderState,
   type BuilderTargets,
+  type BuilderUnit,
   type BuilderVariant,
 } from './draft-builder'
 
@@ -92,6 +93,10 @@ function foodFromSnapshot(item: ReadPrescriptionItem): BuilderFood {
     servingUnit: item.unit,
     category: item.category ?? null,
     media: item.media ?? null,
+    // Medida casera CONGELADA en el ítem (W2): sin catálogo que leer, la del ítem es la única
+    // verdad que queda — y es la que hay que re-emitir al republicar para no perder el rótulo.
+    householdGrams: item.householdGrams ?? null,
+    householdLabel: item.householdLabel ?? null,
   }
 }
 
@@ -109,13 +114,30 @@ function itemFromRead(
 ): BuilderItem {
   const quantity = Number(item.quantity)
   const catalogFood = item.foodId ? foods[item.foodId] ?? null : null
-  const food: BuilderFood | null = item.foodId
+  const baseFood: BuilderFood | null = item.foodId
     ? catalogFood
       ? // El icono/categoria vienen resueltos en el read-model (mas frescos que el select de
         // `foods` del loader), asi que se prefieren cuando existen.
         { ...catalogFood, media: item.media ?? catalogFood.media, category: item.category ?? catalogFood.category }
       : foodFromSnapshot(item)
     : null
+  /**
+   * Medida casera CONGELADA en el ítem (W2 «Cantidades honestas»). Gana sobre la del catálogo
+   * vigente: el plan dice «2 huevos de 61 g» y eso no se mueve porque alguien editó el alimento.
+   * Sin esto, republicar desde el asistente perdía el rótulo (el agujero que describe R2).
+   */
+  const shown = householdRowShape({
+    unit: item.unit,
+    quantity,
+    householdGrams: item.householdGrams,
+    householdLabel: item.householdLabel,
+    servingUnit: baseFood?.servingUnit ?? item.unit,
+    hasFood: baseFood !== null,
+  })
+  const food: BuilderFood | null =
+    baseFood && shown.pair !== null
+      ? { ...baseFood, householdGrams: shown.pair.grams, householdLabel: shown.pair.label }
+      : baseFood
 
   const subs = (substitutionsByItemId[item.id] ?? [])
     // El builder solo sabe representar reemplazos de CATALOGO (chip con alimento). Un
@@ -136,6 +158,10 @@ function itemFromRead(
         servingUnit: sub.unit ?? 'g',
         category: null,
         media: null,
+        // Un reemplazo sin catálogo no tiene medida casera que ofrecer (ni la necesita: la
+        // equivalencia del reemplazo se resuelve por kcal, nunca por unidad).
+        householdGrams: null,
+        householdLabel: null,
       },
     }))
 
@@ -143,8 +169,8 @@ function itemFromRead(
     ...createEmptyItem(item.id),
     food,
     customName: food ? null : item.name,
-    quantity: Number.isFinite(quantity) ? String(quantity) : '',
-    unit: toBuilderUnit(item.unit),
+    quantity: shown.quantity,
+    unit: shown.unit as BuilderUnit,
     optional: item.optional,
     notes: item.notes,
     customCalories: food ? '' : customMacroText(item.macros.calories, quantity),
@@ -294,6 +320,9 @@ type TemplateDraftLike = {
         unit: string
         optional?: boolean
         notes?: string | null
+        /** Medida casera del ítem de la plantilla (W2): la emite `projectItem`. */
+        householdLabel?: string | null
+        householdGrams?: number | null
       }>
       exchangeTargets?: Array<{ exchangeGroupId: string; portions: number }>
     }>
@@ -337,14 +366,29 @@ export function builderStateFromTemplateDraft(input: {
         name: slot.name,
         startTime: startTimeFromRead(slot.startTime ?? null),
         items: (slot.items ?? []).map((item, itemIndex) => {
-          const food = item.foodId ? foods[item.foodId] ?? null : null
+          const baseFood = item.foodId ? foods[item.foodId] ?? null : null
+          // W2: la plantilla puede traer un ítem YA en medida casera (`projectItem` la emite tal
+          // cual). El par de la plantilla gana sobre el del catálogo, y si el alimento no se
+          // resolvió la fila baja a gramos en vez de quedar en una unidad irresoluble.
+          const shown = householdRowShape({
+            unit: item.unit,
+            quantity: item.quantity,
+            householdGrams: item.householdGrams,
+            householdLabel: item.householdLabel,
+            servingUnit: baseFood?.servingUnit ?? item.unit,
+            hasFood: baseFood !== null,
+          })
+          const food =
+            baseFood && shown.pair !== null
+              ? { ...baseFood, householdGrams: shown.pair.grams, householdLabel: shown.pair.label }
+              : baseFood
           return {
             ...createEmptyItem(`${slotKey}-i${itemIndex}`),
             food,
             // Alimento borrado o fuera de scope: se conserva como item libre con su nombre.
             customName: food ? null : item.customName ?? 'Alimento',
-            quantity: Number.isFinite(item.quantity) ? String(item.quantity) : '',
-            unit: toBuilderUnit(item.unit),
+            quantity: shown.quantity,
+            unit: shown.unit as BuilderUnit,
             optional: item.optional ?? false,
             notes: item.notes ?? null,
           } satisfies BuilderItem

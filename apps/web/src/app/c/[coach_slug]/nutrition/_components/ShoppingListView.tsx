@@ -55,7 +55,17 @@ function InfoTooltip({ text }: { text: string }) {
   )
 }
 
-/** Texto legible de la cantidad agregada de una línea (tabular-friendly). */
+/**
+ * Texto legible de la cantidad agregada de una línea (tabular-friendly).
+ *
+ * NO usa `formatItemQuantity`/`gramsToHousehold` a propósito (tren «Cantidades honestas»,
+ * W2.3): `ShoppingQuantity` (`nutrition-shopping.service.ts`) es una SUMA de gramos/ml/un de
+ * varios ítems del plan agrupados por alimento y unidad, no la cantidad congelada de un ítem
+ * individual — no trae `householdLabel`/`householdGrams` (esta lista se deriva sin tocar el
+ * catálogo) y "2 huevos" de una suma de gramos entre comidas distintas sería una cuenta
+ * inventada, no honesta. Queda en gramos/ml/un planos hasta que la lista sepa sumar por CONTEO
+ * casero en vez de por gramos (fuera de este tren).
+ */
 function quantityLabel(item: ShoppingItemView): string {
   if (item.quantities.length === 0) return ''
   return item.quantities

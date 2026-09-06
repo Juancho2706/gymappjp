@@ -75,7 +75,10 @@ export function stripDraftIdentity(
       ...withoutId(variant),
       mealSlots: (variant.mealSlots ?? []).map((slot) => ({
         ...withoutId(slot),
-        items: (slot.items ?? []).map((item) => withoutId(item)),
+        // El linaje W3.1 tambien es IDENTIDAD de otro plan: `source_item_id` apunta a un item de
+        // un plan concreto y una plantilla se aplica a cualquier alumno. Se anula aca (igual que
+        // `effectiveFrom`, que el schema de plantilla omite) para que jamas viaje en la libreria.
+        items: (slot.items ?? []).map((item) => ({ ...withoutId(item), sourceItemId: null })),
         exchangeTargets: slot.exchangeTargets?.map((target) => withoutId(target)),
       })),
     })),

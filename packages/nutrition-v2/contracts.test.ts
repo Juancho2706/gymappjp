@@ -4,6 +4,7 @@ import {
   NutritionIntakeMutationSchema,
   NutritionMealSlotSchema,
   NutritionPlanDraftSchema,
+  NutritionPrescriptionItemSchema,
   buildNutritionIdempotencyKey,
   buildNutritionPortionIntakeKey,
   clampNutritionProgress,
@@ -201,5 +202,106 @@ describe('nutrition V2 portion idempotency key (SPEC R4; Q5)', () => {
     expect(buildNutritionPortionIntakeKey({ ...base, ordinal: 0, attempt: 1 })).not.toBe(
       buildNutritionPortionIntakeKey({ ...base, ordinal: 1, attempt: 1 }),
     )
+  })
+})
+
+/**
+ * W2 «Cantidades honestas» — la medida casera en el CONTRATO del borrador (b17).
+ * `unit` sigue permisiva a proposito: `casera` es valida en el borrador y `buildItemInsertRow`
+ * la traduce a g/ml antes del insert; el CHECK `unit <> 'casera'` de la tabla es el cierre real.
+ */
+describe('NutritionPrescriptionItemSchema — medida casera', () => {
+  const base = {
+    foodId: '11111111-1111-4111-8111-111111111111',
+    quantity: 2,
+    unit: 'casera',
+  }
+
+  it('acepta el par completo y deja `casera` pasar en el borrador', () => {
+    const res = NutritionPrescriptionItemSchema.safeParse({
+      ...base,
+      householdLabel: 'huevo',
+      householdGrams: 61,
+    })
+    expect(res.success).toBe(true)
+    if (res.success) {
+      expect(res.data.unit).toBe('casera')
+      expect(res.data.householdLabel).toBe('huevo')
+      expect(res.data.householdGrams).toBe(61)
+    }
+  })
+
+  it('sin las claves el par queda en null (item anterior a W2, cero migracion de payloads)', () => {
+    const res = NutritionPrescriptionItemSchema.safeParse({ ...base, unit: 'g', quantity: 122 })
+    expect(res.success).toBe(true)
+    if (res.success) {
+      expect(res.data.householdLabel).toBeNull()
+      expect(res.data.householdGrams).toBeNull()
+    }
+  })
+
+  it('rechaza medio par: etiqueta sin gramos y gramos sin etiqueta', () => {
+    const soloLabel = NutritionPrescriptionItemSchema.safeParse({ ...base, householdLabel: 'huevo' })
+    expect(soloLabel.success).toBe(false)
+    if (!soloLabel.success) {
+      expect(soloLabel.error.issues[0]?.path).toEqual(['householdGrams'])
+    }
+    const soloGramos = NutritionPrescriptionItemSchema.safeParse({ ...base, householdGrams: 61 })
+    expect(soloGramos.success).toBe(false)
+    if (!soloGramos.success) {
+      expect(soloGramos.error.issues[0]?.path).toEqual(['householdLabel'])
+    }
+  })
+
+  it('rechaza gramajes fuera del rango del CHECK y etiquetas larguisimas', () => {
+    expect(
+      NutritionPrescriptionItemSchema.safeParse({ ...base, householdLabel: 'huevo', householdGrams: 5000 }).success,
+    ).toBe(false)
+    expect(
+      NutritionPrescriptionItemSchema.safeParse({ ...base, householdLabel: 'huevo', householdGrams: 0 }).success,
+    ).toBe(false)
+    expect(
+      NutritionPrescriptionItemSchema.safeParse({ ...base, householdLabel: 'x'.repeat(41), householdGrams: 61 })
+        .success,
+    ).toBe(false)
+  })
+})
+
+/**
+ * W3.1 «Cantidades honestas» — LINAJE en el CONTRATO del borrador (SPEC §6.1).
+ *
+ * Clave OPCIONAL con default `null`: una build RN vieja (o un respaldo local pre-deploy) publica
+ * exactamente igual que hoy. El servidor la revalida (mismo plan, ≠ id) y la baja a NULL sin
+ * fallar la publicación: el linaje es una ayuda de lectura, jamás un requisito.
+ */
+describe('NutritionPrescriptionItemSchema — linaje del ítem', () => {
+  const base = {
+    foodId: '11111111-1111-4111-8111-111111111111',
+    quantity: 100,
+    unit: 'g',
+  }
+  const ANCESTRO = '22222222-2222-4222-8222-222222222222'
+
+  it('acepta el id del ítem del que es copia', () => {
+    const res = NutritionPrescriptionItemSchema.safeParse({ ...base, sourceItemId: ANCESTRO })
+    expect(res.success).toBe(true)
+    if (res.success) expect(res.data.sourceItemId).toBe(ANCESTRO)
+  })
+
+  it('sin la clave queda en null (cliente anterior a W3, cero migración de payloads)', () => {
+    const res = NutritionPrescriptionItemSchema.safeParse(base)
+    expect(res.success).toBe(true)
+    if (res.success) expect(res.data.sourceItemId).toBeNull()
+  })
+
+  it('acepta null explícito (ítem nuevo, copiado a otro día o modificado)', () => {
+    const res = NutritionPrescriptionItemSchema.safeParse({ ...base, sourceItemId: null })
+    expect(res.success).toBe(true)
+    if (res.success) expect(res.data.sourceItemId).toBeNull()
+  })
+
+  it('rechaza un id que no es uuid (nunca llega un 22P02 opaco al RPC)', () => {
+    expect(NutritionPrescriptionItemSchema.safeParse({ ...base, sourceItemId: 'no-soy-uuid' }).success).toBe(false)
+    expect(NutritionPrescriptionItemSchema.safeParse({ ...base, sourceItemId: '' }).success).toBe(false)
   })
 })

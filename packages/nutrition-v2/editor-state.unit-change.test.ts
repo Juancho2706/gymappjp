@@ -33,6 +33,8 @@ const HUEVO_REVUELTO: BuilderFood = {
   servingUnit: 'g',
   category: 'proteina',
   media: null,
+  householdGrams: null,
+  householdLabel: null,
 }
 
 function item(overrides: Partial<QeItem> = {}): QeItem {
@@ -51,6 +53,8 @@ function item(overrides: Partial<QeItem> = {}): QeItem {
     substitutionGroupId: null,
     notes: null,
     food: HUEVO_REVUELTO,
+    householdGrams: null,
+    householdLabel: null,
     macroBase: null,
     isCustom: false,
     media: null,

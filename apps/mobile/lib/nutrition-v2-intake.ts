@@ -17,6 +17,7 @@ import {
   NutritionIntakeMutationSchema,
   NutritionIntakeSourceSchema,
   buildNutritionIdempotencyKey,
+  formatItemQuantity,
   intakeEntryFactor,
   prescribedSnapshotMacros,
   scaleSnapshotMacros,
@@ -544,7 +545,14 @@ export function optimisticIntakeRow(input: {
     detail: input.brand ?? null,
     shareQuantity: input.quantity,
     shareUnit: input.unit,
-    quantityLabel: `${new Intl.NumberFormat('es-CL', { maximumFractionDigits: 1 }).format(input.quantity)} ${input.unit}`,
+    // Registro LIBRE (buscador/scanner): sin item prescrito no hay medida casera que congelar
+    // (SPEC §5.3), asi que el rotulo cae siempre a "cantidad + unidad" plano.
+    quantityLabel: formatItemQuantity({
+      quantity: input.quantity,
+      unit: input.unit,
+      householdLabel: null,
+      householdGrams: null,
+    }),
     calories: input.totals.calories,
     proteinG: input.totals.proteinG,
     carbsG: input.totals.carbsG,

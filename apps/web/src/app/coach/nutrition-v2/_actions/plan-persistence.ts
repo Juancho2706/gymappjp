@@ -29,6 +29,7 @@ import {
   collectExchangeGroupIds,
   collectSubstitutionFoodIds,
   ExchangeGroupSnapshotError,
+  HOUSEHOLD_GRAMS_ERROR,
   type BuilderExchangeGroup,
 } from '@/app/coach/nutrition-v2/_lib/plan-draft-rows'
 import type { BuilderFood } from '@eva/nutrition-v2'
@@ -100,6 +101,14 @@ export function zodFields(error: z.ZodError): ActionFailure['fields'] {
   return error.issues.map((issue) => ({ path: issue.path.join('.'), message: issue.message }))
 }
 
+/**
+ * Copy unico del fallo de medida casera: lo comparten el corte de cliente (`buildItemInsertRow`
+ * tira antes del INSERT) y la traduccion del CHECK SQL, para que el coach lea LO MISMO llegue
+ * por donde llegue.
+ */
+const HOUSEHOLD_GRAMS_MESSAGE =
+  'Un alimento del plan quedo en medida casera sin un gramaje valido (debe estar entre 1 y 1.000 g). Cambia ese item a gramos o vuelve a elegir el alimento.'
+
 export function mapWriteError(error: DbError, phase: string): ActionFailure {
   const code = error.code ?? 'DB_ERROR'
   const message = error.message ?? ''
@@ -138,6 +147,18 @@ export function mapWriteError(error: DbError, phase: string): ActionFailure {
   }
   if (message.includes('nutrition_v2_persist_plan_not_found')) {
     return fail('PLAN_NOT_FOUND', 'El plan indicado no pertenece a este alumno.')
+  }
+  // W2 «Cantidades honestas» (R13): los CHECK de la medida casera. La traduccion vive en
+  // `buildItemInsertRow`, asi que llegar aca significa que un cliente viejo (o un camino nuevo)
+  // mando `casera` o un gramaje fuera de rango: el copy tiene que decir QUE pasa, no "23514".
+  if (message.includes('unit_not_casera')) {
+    return fail(
+      'UNIT_NOT_PERSISTABLE',
+      'La medida casera se guarda en gramos y esta version de la app todavia no sabe traducirla. Actualiza la app y vuelve a publicar.',
+    )
+  }
+  if (message.includes('household_grams_range')) {
+    return fail('HOUSEHOLD_GRAMS_INVALID', HOUSEHOLD_GRAMS_MESSAGE)
   }
   if (code === '22023') {
     return fail('INVALID_DRAFT', 'El plan tiene datos invalidos y no se pudo publicar.')
@@ -208,10 +229,13 @@ interface FoodRow {
   serving_size: number
   serving_unit: string | null
   macros_basis: string | null
+  /** Medida casera del catalogo (W2). El override del coach la pisa en `toBuilderFood` (R5). */
+  household_label: string | null
+  household_grams: number | null
 }
 
 const FREEZE_FOOD_SELECT =
-  'id, name, brand, calories, protein_g, carbs_g, fats_g, fiber_g, serving_size, serving_unit, macros_basis'
+  'id, name, brand, calories, protein_g, carbs_g, fats_g, fiber_g, serving_size, serving_unit, macros_basis, household_label, household_grams'
 
 /** Override del coach (T2.1): mismas columnas que lee la rehidratacion del builder. */
 const FREEZE_OVERRIDE_SELECT =
@@ -234,6 +258,11 @@ function toBuilderFood(row: FoodRow, override: CoachFoodOverrideValues | null): 
       fatsG: row.fats_g,
       fiberG: row.fiber_g,
       macrosBasis: toFreezeMacrosBasis(row.macros_basis),
+      // Medida casera (W2, b20/R5): entra al merge para que gane la del OVERRIDE del coach
+      // sobre la del catalogo, exactamente igual que los macros. Hasta W2 se descartaba, y el
+      // par que el editor ofrecia no era el que se congelaba.
+      householdLabel: row.household_label,
+      householdGrams: row.household_grams == null ? null : Number(row.household_grams),
     },
     override,
   )
@@ -251,6 +280,8 @@ function toBuilderFood(row: FoodRow, override: CoachFoodOverrideValues | null): 
     servingUnit: row.serving_unit ?? 'g',
     category: null,
     media: null,
+    householdLabel: macros.householdLabel,
+    householdGrams: macros.householdGrams,
   }
 }
 
@@ -544,6 +575,11 @@ export function buildPersistDraftPayload(input: {
           : 'EXCHANGE_GROUP_NOT_FOUND',
         'No se pudo congelar un grupo de porciones del plan. Recarga el builder e intenta de nuevo.',
       )
+    }
+    // W2 (R13): un item en medida casera sin gramaje utilizable. Se corta ANTES del INSERT para
+    // no gastar la publicacion entera en un `23514` que no nombra al item.
+    if (err instanceof Error && err.message === HOUSEHOLD_GRAMS_ERROR) {
+      return fail('HOUSEHOLD_GRAMS_INVALID', HOUSEHOLD_GRAMS_MESSAGE)
     }
     throw err
   }

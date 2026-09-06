@@ -401,6 +401,8 @@ const HARNESS_SUBSTITUTION_FOODS: Record<string, BuilderFood> = {
     servingUnit: 'g',
     category: 'cereal',
     media: null,
+    householdGrams: null,
+    householdLabel: null,
   },
   '88888888-8888-4888-8888-00000000000a': {
     id: '88888888-8888-4888-8888-00000000000a',
@@ -415,6 +417,8 @@ const HARNESS_SUBSTITUTION_FOODS: Record<string, BuilderFood> = {
     servingUnit: 'g',
     category: 'proteina',
     media: null,
+    householdGrams: null,
+    householdLabel: null,
   },
 }
 
@@ -436,6 +440,9 @@ const HARNESS_FOOD: BuilderFood = {
   servingUnit: 'g',
   category: 'cereal',
   media: null,
+  // El harness no ejercita la medida casera (W2): `null` deja el selector como estaba.
+  householdGrams: null,
+  householdLabel: null,
 }
 
 /** Draft estilo plantilla (contrato) para el modo creacion: 1 dia, 1 franja, 1 item. */
@@ -497,6 +504,11 @@ function buildCreationInput(): EditorCreationInput {
                 substitutionGroupId: null,
                 notes: null,
                 orderIndex: 0,
+                // El contrato del item pide el par casero (W2) y el linaje (W3.1) explicitos:
+                // este draft es una PLANTILLA de harness, sin medida casera y sin ancestro.
+                householdLabel: null,
+                householdGrams: null,
+                sourceItemId: null,
               },
             ],
           },

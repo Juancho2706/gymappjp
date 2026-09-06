@@ -99,7 +99,17 @@ export function buildShoppingShareText(list: ShoppingListView): string {
   return lines.join('\n')
 }
 
-/** Cantidad agregada legible de una línea (una por unidad, redondeada). */
+/**
+ * Cantidad agregada legible de una línea (una por unidad, redondeada). Espejo EXACTO de la web
+ * (`ShoppingListView.tsx`).
+ *
+ * NO usa `formatItemQuantity`/`gramsToHousehold` a propósito (tren «Cantidades honestas»,
+ * W2.3): `ShoppingQuantity` es una SUMA de gramos/ml/un de varios ítems del plan agrupados por
+ * alimento y unidad, no la cantidad congelada de un ítem individual — sin
+ * `householdLabel`/`householdGrams`, y "2 huevos" de una suma entre comidas distintas sería una
+ * cuenta inventada. Queda en gramos/ml/un planos hasta que la lista sume por CONTEO casero
+ * (fuera de este tren).
+ */
 export function quantityLabel(item: ShoppingItemView): string {
   if (item.quantities.length === 0) return ''
   return item.quantities.map((q) => `${roundish(q.quantity)} ${q.unit}`).join(' + ')

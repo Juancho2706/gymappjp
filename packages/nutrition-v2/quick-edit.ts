@@ -54,6 +54,16 @@ function itemFromRead(item: ReadPrescriptionItem, orderIndex: number): DraftPres
     substitutionGroupId: item.substitutionGroupId,
     notes: item.notes,
     orderIndex,
+    // Medida casera congelada (W2): viaja tal cual del read model. El item se persiste SIEMPRE
+    // en g/ml —`unit` no cambia aca— y este par solo permite rotularlo y rehidratar el editor.
+    householdLabel: item.householdLabel ?? null,
+    householdGrams: item.householdGrams ?? null,
+    // Linaje W3.1: SIEMPRE null en este camino. Este draft es el BASELINE del contador de
+    // cambios (y el `base` sobre el que `applyQuickEditToDraft` pisa `dayVariants` enteras), no
+    // lo que se publica; el ancestro lo pone el arbol editable (`hydrateItem` → `projectItem`).
+    // Ademas `readModelToDraft` se usa para COPIAR el plan de OTRO alumno (editor/page.tsx:251):
+    // ahi el id de origen pertenece a otro plan y el servidor lo descartaria igual.
+    sourceItemId: null,
   }
 }
 
@@ -187,7 +197,11 @@ function itemChanged(a: DraftPrescriptionItem, b: DraftPrescriptionItem): boolea
     (a.notes ?? null) !== (b.notes ?? null) ||
     (a.minimumQuantity ?? null) !== (b.minimumQuantity ?? null) ||
     (a.maximumQuantity ?? null) !== (b.maximumQuantity ?? null) ||
-    (a.substitutionGroupId ?? null) !== (b.substitutionGroupId ?? null)
+    (a.substitutionGroupId ?? null) !== (b.substitutionGroupId ?? null) ||
+    // Medida casera (W2): cambiar «122 g» por «2 huevos» no mueve los gramos pero SI cambia lo
+    // que el alumno lee, y por eso cuenta como edicion del item.
+    (a.householdLabel ?? null) !== (b.householdLabel ?? null) ||
+    (a.householdGrams ?? null) !== (b.householdGrams ?? null)
   )
 }
 

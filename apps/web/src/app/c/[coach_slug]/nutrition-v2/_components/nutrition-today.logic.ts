@@ -1,7 +1,11 @@
 import {
   CATALOG_MACROS_BASIS,
   consumedEntryForItem,
+  defaultFoodUnit,
+  foodMagnitudeUnit,
   formatIntakeClock,
+  formatItemQuantity,
+  isHouseholdUnit,
   isPortionMarkEntry,
   normalizeIntakeUnit,
   outOfPlanEntries,
@@ -192,7 +196,14 @@ export function entryToFoodRow(entry: NutritionIntakeReadItem): NutritionFoodRow
     id: entry.id,
     name: entry.snapshot.name,
     detail: entry.snapshot.brand,
-    quantityLabel: `${entry.quantity} ${entry.unit}`,
+    // W2.3: el rotulo honesto vive en `formatItemQuantity` (packages/nutrition-v2/quantity-format.ts).
+    // Con el par casero congelado en el registro dice «2 huevos (122 g)»; sin el, «122 g» como siempre.
+    quantityLabel: formatItemQuantity({
+      quantity: entry.quantity,
+      unit: entry.unit,
+      householdLabel: entry.householdLabel,
+      householdGrams: entry.householdGrams,
+    }),
     calories: entry.totals.calories,
     proteinG: entry.totals.proteinG,
     carbsG: entry.totals.carbsG,
@@ -260,20 +271,77 @@ export function buildPrescribedIntakePayload(input: {
   }
 }
 
+/** Lo minimo del alimento para decidir la unidad del registro libre (medida casera incluida). */
+type CatalogUnitFood = Pick<FoodCatalogItem, 'servingUnit' | 'servingSize'> & {
+  householdGrams?: number | null
+  householdLabel?: string | null
+}
+
+/**
+ * Cantidad y unidad iniciales al elegir un alimento en el buscador/scanner del alumno (W2.1).
+ * La unidad la manda `defaultFoodUnit` (medida casera > contable > magnitud) y la cantidad tiene
+ * que ser COHERENTE con ella: precargar `servingSize` con la unidad `casera` o `un` escribiria
+ * «100 huevos» de entrada — exactamente el numero que nadie sabia leer (SPEC §1, causa 1). Solo
+ * en g/ml la porcion del catalogo es una cantidad honesta.
+ */
+export function catalogIntakeDefaults(food: CatalogUnitFood): { quantity: number; unit: string } {
+  const unit = defaultFoodUnit(food)
+  return { quantity: unit === 'g' || unit === 'ml' ? food.servingSize : 1, unit }
+}
+
+/**
+ * Traduce la cantidad/unidad ELEGIDA en la UI a la que se PERSISTE (SPEC §5.3, AUDIT W2.0 c1-c4).
+ * `casera` vive solo en la pantalla: al enviar, «2 huevos» son `2 x householdGrams` gramos con la
+ * magnitud real del alimento, porque `NutritionIntakeUnitSchema` no la acepta (c6, y no cambia) y
+ * el factor la leeria como contable. `null` = el alimento no tiene gramaje casero usable: no hay
+ * nada honesto que persistir ni que estimar, y la UI no deja registrar.
+ */
+export function catalogIntakeSubmission(input: {
+  food: CatalogUnitFood
+  quantity: number
+  unit: string
+}): { quantity: number; unit: string } | null {
+  if (!isHouseholdUnit(input.unit)) return { quantity: input.quantity, unit: input.unit }
+  const householdGrams = input.food.householdGrams
+  if (typeof householdGrams !== 'number' || !Number.isFinite(householdGrams) || householdGrams <= 0) {
+    return null
+  }
+  return {
+    quantity: Math.round(input.quantity * householdGrams * 10) / 10,
+    unit: foodMagnitudeUnit(input.food.servingUnit),
+  }
+}
+
+/** Total en cero: lo que muestra el preview cuando la unidad elegida no es estimable (casera sin gramaje). */
+const ZERO_TOTALS: NutritionMacroTotalsLike = {
+  calories: 0,
+  proteinG: 0,
+  carbsG: 0,
+  fatsG: 0,
+  fiberG: 0,
+}
+
 /**
  * Total ESTIMADO de un alimento del catalogo para la cantidad/unidad elegidas. Usa la MISMA
  * funcion pura que el servidor (`scaleSnapshotMacros` ⇒ `intakeEntryFactor`) con la base
  * declarada del catalogo, de modo que el numero del formulario y el que persiste el RPC son el
  * mismo. Es lo que vuelve OBVIO un cambio de unidad mal hecho antes de guardar (NUT-017).
+ *
+ * `casera` se convierte a gramos ANTES de estimar (SPEC R9 / AUDIT c5): hasta W2 el
+ * `normalizeIntakeUnit(unit) ?? unit` la dejaba pasar tal cual a `intakeEntryFactor`, que sin
+ * reconocerla caia a la rama contable (x servingSize / 100) — el preview mentia antes de que el
+ * contrato rechazara la escritura. Sin gramaje casero el total es CERO, jamas esa rama.
  */
 export function estimateCatalogIntakeTotals(input: {
-  food: Pick<FoodCatalogItem, 'calories' | 'proteinG' | 'carbsG' | 'fatsG' | 'fiberG' | 'servingSize'>
+  food: Pick<FoodCatalogItem, 'calories' | 'proteinG' | 'carbsG' | 'fatsG' | 'fiberG'> & CatalogUnitFood
   quantity: number
   unit: string
 }): NutritionMacroTotalsLike {
+  const submission = catalogIntakeSubmission(input)
+  if (submission === null) return ZERO_TOTALS
   return scaleSnapshotMacros(input.food, {
-    quantity: input.quantity,
-    unit: normalizeIntakeUnit(input.unit) ?? input.unit,
+    quantity: submission.quantity,
+    unit: normalizeIntakeUnit(submission.unit) ?? submission.unit,
     servingSize: input.food.servingSize,
     basis: CATALOG_MACROS_BASIS,
   })

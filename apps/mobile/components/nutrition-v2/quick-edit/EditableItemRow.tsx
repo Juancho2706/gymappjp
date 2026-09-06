@@ -2,17 +2,25 @@ import { useEffect, useState } from 'react'
 import { Pressable, Text, TextInput, View } from 'react-native'
 import { ArrowLeftRight, MoreVertical, Pencil, Trash2 } from 'lucide-react-native'
 import {
+  HOUSEHOLD_UNIT,
+  UNIT_REVIEW_BADGE_LABEL,
   foodCategoryFromName,
   foodMagnitudeUnit,
+  foodUnitOptionsWithCurrent,
+  householdUnitActionLabel,
   implausibleItemCopy,
+  isHouseholdUnit,
   kcalBucket,
   normalizeIntakeUnit,
   qeItemPlausibility,
   quantityStep,
   reinterpretUnitActionLabel,
+  shouldFlagUnitReview,
   unitEquivalenceCaption,
+  unitReviewHint,
   type NutritionV2CoachScope,
   type QeItem,
+  type UnitSelectOption,
 } from '@eva/nutrition-v2'
 import { captureNutritionItemImplausible } from '../../../lib/analytics'
 import { ImplausibleNotice } from './ImplausibleNotice'
@@ -20,11 +28,7 @@ import { MacroSparkPopover } from '../MacroSparkPopover'
 import { FoodThumbnail } from '../NutritionV2Kit'
 import { FoodMacrosOverrideSheet } from '../FoodMacrosOverrideSheet'
 import { useTheme } from '../../../context/ThemeContext'
-import {
-  BUILDER_UNITS,
-  type BuilderFoodMacrosPatch,
-  type ItemMacros,
-} from '../../../lib/nutrition-v2-builder'
+import { type BuilderFoodMacrosPatch, type ItemMacros } from '../../../lib/nutrition-v2-builder'
 import { foodMediaThumbnailUrl } from '../../../lib/nutrition-v2-food-media'
 import {
   QUANTITY_CONTROL_HEIGHT_CLASS,
@@ -66,35 +70,44 @@ import { QUICK_EDIT_COPY } from './microcopy'
 
 function UnitToggle({
   unit,
+  options,
   onChange,
   disabled,
 }: {
   unit: string
+  /**
+   * Unidades del ALIMENTO (W2.1, `foodUnitOptionsWithCurrent`): `un` solo si es realmente
+   * contable, la medida casera con sus gramos («huevo · 61 g»), y SIEMPRE la unidad vigente
+   * aunque ya no se ofrezca (una `porción` heredada de la conversion V1→V2) — el coach nunca
+   * queda atrapado fuera de su unidad original.
+   */
+  options: readonly UnitSelectOption[]
   onChange: (unit: string) => void
   disabled?: boolean
 }) {
-  // Cicla las unidades del builder; si la fila trae una unidad fuera del set (p.ej.
-  // 'porcion' heredada de la conversion V1→V2), se conserva en el ciclo para que el
-  // coach pueda VOLVER a ella (nunca quedar atrapado fuera de su unidad original).
-  const cycle: string[] = BUILDER_UNITS.includes(unit as (typeof BUILDER_UNITS)[number])
-    ? [...BUILDER_UNITS]
-    : [unit, ...BUILDER_UNITS]
+  const cycle = options.length > 0 ? options : [{ code: unit, label: unit, grams: null }]
+  const current = cycle.find((option) => option.code === unit) ?? cycle[0]!
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Unidad: ${unit}. Toca para cambiar.`}
+      accessibilityLabel={`Unidad: ${current.label}. Toca para cambiar.`}
       disabled={disabled}
       onPress={() => {
-        const index = cycle.indexOf(unit)
-        onChange(cycle[(index + 1) % cycle.length])
+        const index = cycle.findIndex((option) => option.code === unit)
+        onChange(cycle[(index + 1) % cycle.length]!.code)
       }}
       // Misma altura declarada que el stepper (constante compartida) y mismo centrado:
       // el flexbox centra la etiqueta y las metricas de texto son las del numero, asi que
       // «180» y «g» quedan a la misma altura optica dentro de las dos cajas de 44 pt.
-      className={`${QUANTITY_CONTROL_HEIGHT_CLASS} min-w-14 shrink-0 items-center justify-center rounded-control border border-default bg-surface-sunken px-2`}
+      // `max-w-40` porque la pastilla casera («huevo · 61 g») no cabe en el ancho minimo.
+      className={`${QUANTITY_CONTROL_HEIGHT_CLASS} min-w-14 max-w-40 shrink-0 items-center justify-center rounded-control border border-default bg-surface-sunken px-2`}
     >
-      <Text className="text-sm font-semibold text-strong" style={QUANTITY_TEXT_METRICS}>
-        {unit}
+      <Text
+        numberOfLines={1}
+        className="text-sm font-semibold text-strong"
+        style={QUANTITY_TEXT_METRICS}
+      >
+        {current.label}
       </Text>
     </Pressable>
   )
@@ -107,8 +120,20 @@ function UnitToggle({
  */
 const REPORTED_IMPLAUSIBLE_ITEMS = new Set<string>()
 
-/** Pill chica de badge inline del nombre (⇄ n / macros editadas / libre). Solo tokens. */
-function ItemBadge({ label, tone }: { label: string; tone: 'sport' | 'warning' | 'muted' }) {
+/**
+ * Pill chica de badge inline del nombre (⇄ n / macros editadas / libre / Revisar unidad).
+ * Solo tokens. `hint` es la explicacion larga: en el telefono no hay tooltip, asi que viaja como
+ * `accessibilityHint` (el texto corto de la pill sigue siendo el `accessibilityLabel`).
+ */
+function ItemBadge({
+  label,
+  tone,
+  hint,
+}: {
+  label: string
+  tone: 'sport' | 'warning' | 'muted'
+  hint?: string
+}) {
   const toneClass =
     tone === 'sport'
       ? 'border-sport-500/30 bg-sport-100'
@@ -118,7 +143,12 @@ function ItemBadge({ label, tone }: { label: string; tone: 'sport' | 'warning' |
   const textClass =
     tone === 'sport' ? 'text-sport-700' : tone === 'warning' ? 'text-warning-700' : 'text-muted'
   return (
-    <View className={`shrink-0 rounded-pill border px-1.5 py-px ${toneClass}`}>
+    <View
+      className={`shrink-0 rounded-pill border px-1.5 py-px ${toneClass}`}
+      accessible={hint !== undefined}
+      accessibilityLabel={hint === undefined ? undefined : label}
+      accessibilityHint={hint}
+    >
       <Text className={`text-[10px] font-semibold ${textClass}`}>{label}</Text>
     </View>
   )
@@ -215,6 +245,34 @@ export function EditableItemRow({
   const unitCaption = food
     ? unitEquivalenceCaption({ unit: item.unit, servingSize: food.servingSize, servingUnit: food.servingUnit })
     : null
+  // ── W2 «Cantidades honestas»: la medida casera del ITEM manda sobre la del catalogo (es la que
+  // el coach autorizo y la que se congela al publicar); el alimento solo la respalda.
+  const householdGrams = item.householdGrams ?? food?.householdGrams ?? null
+  const householdLabel = item.householdLabel ?? food?.householdLabel ?? null
+  const unitOptions = food
+    ? foodUnitOptionsWithCurrent({ ...food, householdGrams, householdLabel }, item.unit)
+    : []
+  // W2.5 «Usar huevos»: segunda accion del aviso, solo si el item NO esta ya en medida casera.
+  const householdAction =
+    !isHouseholdUnit(item.unit) && householdGrams != null ? householdUnitActionLabel(householdLabel) : null
+  // W2.5 badge «Revisar unidad»: `un` sobre un alimento NO contable con medida casera divergente.
+  const unitReviewTitle =
+    food &&
+    householdGrams != null &&
+    householdLabel != null &&
+    shouldFlagUnitReview({
+      unit: item.unit,
+      servingUnit: food.servingUnit,
+      servingSize: food.servingSize,
+      householdGrams,
+    })
+      ? unitReviewHint({
+          servingSize: food.servingSize,
+          householdGrams,
+          householdLabel,
+          servingUnit: food.servingUnit,
+        })
+      : null
   useEffect(() => {
     if (implausibleReason === null) return
     const key = item.key + '|' + implausibleReason
@@ -290,6 +348,11 @@ export function EditableItemRow({
               {/* Badge ✎: este alimento lleva TUS macros, no los del catalogo. */}
               {food?.hasOverride ? (
                 <ItemBadge tone="warning" label={QUICK_EDIT_COPY.itemBadgeMacrosEdited} />
+              ) : null}
+              {/* W2.5 — «Revisar unidad»: aca «1 un» son los gramos de la porcion y el catalogo
+                  dice que una pieza de verdad pesa otra cosa. Avisa, no reescribe. */}
+              {unitReviewTitle ? (
+                <ItemBadge tone="warning" label={UNIT_REVIEW_BADGE_LABEL} hint={unitReviewTitle} />
               ) : null}
             </View>
           )}
@@ -367,7 +430,7 @@ export function EditableItemRow({
           accessibilityLabel={`Cantidad de ${itemLabel}`}
           disabled={disabled}
         />
-        <UnitToggle unit={item.unit} onChange={onUnitChange} disabled={disabled} />
+        <UnitToggle unit={item.unit} options={unitOptions} onChange={onUnitChange} disabled={disabled} />
         <MacroSparkPopover
           size="sm"
           className="ml-auto shrink-0"
@@ -403,9 +466,10 @@ export function EditableItemRow({
               calories: plausibility.calories,
               servingSize: food?.servingSize ?? null,
               servingUnit: food?.servingUnit ?? null,
+              householdLabel,
             })}
-            actions={
-              food && onReinterpretUnit && normalizeIntakeUnit(item.unit) === 'un'
+            actions={[
+              ...(food && onReinterpretUnit && normalizeIntakeUnit(item.unit) === 'un'
                 ? [
                     {
                       label: reinterpretUnitActionLabel({
@@ -416,8 +480,20 @@ export function EditableItemRow({
                       onPress: () => onReinterpretUnit(foodMagnitudeUnit(food.servingUnit)),
                     },
                   ]
-                : []
-            }
+                : []),
+              /* W2.5 — «Usar huevos»: la cifra estaba bien y lo que faltaba era la medida.
+                 Reinterpreta la unidad SIN convertir y copia el par casero al item (esa es la
+                 autorizacion explicita del coach). */
+              ...(food && onReinterpretUnit && householdAction
+                ? [
+                    {
+                      label: householdAction,
+                      disabled,
+                      onPress: () => onReinterpretUnit(HOUSEHOLD_UNIT),
+                    },
+                  ]
+                : []),
+            ]}
           />
         </View>
       ) : null}

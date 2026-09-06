@@ -20,13 +20,19 @@
  */
 import {
   CATALOG_MACROS_BASIS,
-  catalogUnitOptions,
   normalizeIntakeUnit,
   type FoodCatalogItem,
-  type NutritionCatalogUnit,
   type NutritionIntakeMutation,
   type NutritionTodayReadModel,
+  type UnitSelectOption,
 } from '@eva/nutrition-v2'
+// Los helpers de unidad del registro libre viven en UNA sola casa RN (espejo de la web, donde
+// `FoodScannerClient` importa los del `RegisterFoodDialog` desde `nutrition-today.logic`).
+import {
+  catalogIntakeSubmission,
+  catalogUnitSelectOptions,
+  type CatalogUnitFood,
+} from './nutrition-v2-catalog-units'
 import { buildRecordIntakeMutation } from './nutrition-v2-intake'
 
 /**
@@ -89,13 +95,16 @@ export function registrationContextFromToday(
 }
 
 /**
- * Opciones de unidad del diálogo de registro: códigos CANÓNICOS (g|ml según la magnitud del
- * alimento + un), espejo de la web vía el helper compartido `catalogUnitOptions` (NUT-017).
+ * Opciones de unidad del diálogo de registro (W2.1): la magnitud del alimento (g|ml), su medida
+ * casera rotulada con los gramos que vale («huevo · 61 g») y `un` solo si el alimento es
+ * realmente contable, más la unidad VIGENTE si quedó fuera del set. Espejo de la web vía el
+ * helper compartido `foodUnitOptionsWithCurrent` (NUT-017 + SPEC §5.2).
  */
 export function scannedFoodUnitOptions(
-  food: Pick<FoodCatalogItem, 'servingUnit'>,
-): readonly NutritionCatalogUnit[] {
-  return catalogUnitOptions(food.servingUnit)
+  food: CatalogUnitFood,
+  currentUnit?: string | null,
+): readonly UnitSelectOption[] {
+  return catalogUnitSelectOptions(food, currentUnit)
 }
 
 /**
@@ -116,6 +125,10 @@ export function buildScannedFoodIntakeMutation(input: {
   mealSlotCode: string | null
 }): NutritionIntakeMutation {
   const { food, registration } = input
+  // `casera` es de la UI y nunca se persiste (SPEC §5.3): «2 huevos» salen como 122 g con la
+  // magnitud real del alimento. Sin gramaje casero no hay traducción y la unidad cruda cae en el
+  // rechazo de `NutritionIntakeUnitSchema` — la barrera de c6, que NO se toca.
+  const submission = catalogIntakeSubmission({ food, quantity: input.quantity, unit: input.unit })
   return buildRecordIntakeMutation({
     clientId: input.clientId,
     deviceId: input.deviceId,
@@ -124,8 +137,8 @@ export function buildScannedFoodIntakeMutation(input: {
     occurredAt: input.occurredAt,
     timezone: registration.timezone,
     foodId: food.id,
-    quantity: input.quantity,
-    unit: normalizeIntakeUnit(input.unit) ?? input.unit,
+    quantity: submission?.quantity ?? input.quantity,
+    unit: normalizeIntakeUnit(submission?.unit ?? input.unit) ?? input.unit,
     mealSlot: input.mealSlotCode,
     source: 'offplan',
     captureMethod: 'barcode',

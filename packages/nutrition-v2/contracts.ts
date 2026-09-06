@@ -110,8 +110,38 @@ export const NutritionPrescriptionItemSchema = z
     substitutions: z.array(NutritionItemSubstitutionSchema).max(8).optional(),
     notes: z.string().trim().max(1000).nullable().default(null),
     orderIndex: z.number().int().nonnegative().default(0),
+    /**
+     * Medida casera del item (W2 «Cantidades honestas»). Se CONGELA desde el alimento al publicar,
+     * igual que los macros: el drift del catalogo no mueve un plan ya escrito. `unit` sigue
+     * permisiva a proposito — `casera` es valida SOLO en el borrador y `buildItemInsertRow` la
+     * traduce a g/ml antes del insert; el CHECK `unit <> 'casera'` de la tabla es el cierre real.
+     * El rango [1, 1000] espeja los CHECK de `foods`, `coach_food_overrides` y del propio item.
+     */
+    householdLabel: z.string().trim().max(40).nullable().default(null),
+    householdGrams: z.number().positive().max(1000).nullable().default(null),
+    /**
+     * LINAJE del item (W3.1 «Cantidades honestas», SPEC §6.1): id del item de una version
+     * ANTERIOR del MISMO plan del que este es copia sin cambios. Lo emite el editor
+     * (`projectItem`) y `buildItemInsertRow` lo baja a `source_item_id`; la lectura resuelve con
+     * el los registros de hoy al item vigente, asi que republicar sin tocar un item no borra su
+     * «Registrado».
+     *
+     * Opcional con default `null` para que un cliente viejo (build RN anterior a W3, respaldo
+     * local pre-deploy) siga publicando igual. El servidor lo REVALIDA (mismo plan, ≠ id) y lo
+     * baja a NULL sin fallar: el linaje es una ayuda, no un requisito.
+     */
+    sourceItemId: z.string().uuid().nullable().default(null),
   })
   .superRefine((value, ctx) => {
+    // El par es INDIVISIBLE (mismo CHECK que la tabla): media medida casera no rotula nada y
+    // dejaria un item que dice «huevo» sin saber cuanto pesa.
+    if ((value.householdLabel === null) !== (value.householdGrams === null)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: [value.householdLabel === null ? 'householdLabel' : 'householdGrams'],
+        message: 'La medida casera necesita etiqueta y gramos juntos.',
+      })
+    }
     if (!value.foodId && !value.recipeId && !value.customName) {
       ctx.addIssue({
         code: 'custom',

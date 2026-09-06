@@ -55,7 +55,19 @@ export const NutritionIntakeReadItemSchema = z.object({
   status: z.enum(['active', 'corrected', 'voided']),
   revision: z.number().int().positive(),
   correctsEntryId: NullableUuidSchema,
+  // Ítem prescrito al que apunta el registro, YA RESUELTO contra el linaje de la versión
+  // del día (W3.1 «Cantidades honestas», migración `20260906210308_nutrition_v2_item_lineage`):
+  // si el registro se hizo sobre un ítem de una versión anterior y el ítem vigente declara
+  // ser su copia (`source_item_id`), acá viaja el id VIGENTE. La fila de
+  // `nutrition_intake_entries` no se toca nunca (regla dura: cero UPDATE de eventos V2).
   prescriptionItemId: NullableUuidSchema,
+  // Id ORIGINAL del ítem prescrito, presente solo cuando el registro apunta a un ancestro
+  // y el alias lo movió (id original ≠ id vigente); en cualquier otro caso viaja `null`.
+  // Lo usan el chip «de una versión anterior del plan» del alumno y el «plan anterior» de la
+  // ficha del coach (W4.1). `.optional()` además de nullable: misma regla de tolerancia que
+  // `media`/`macrosBasis` — un RPC o una caché anteriores a W3.1 no traen la clave y siguen
+  // parseando, y las builds RN viejas la ignoran.
+  originalPrescriptionItemId: NullableUuidSchema.optional(),
   snapshot: NutritionFoodSnapshotSchema,
   totals: NutritionTotalsSchema.omit({ entryCount: true }),
   // Icono del alimento (aditivo). Van A NIVEL DE ITEM, NO dentro del `snapshot`
@@ -68,6 +80,15 @@ export const NutritionIntakeReadItemSchema = z.object({
   // parseando (mismo criterio de tolerancia que las porciones).
   media: FoodMediaReadSchema.nullable().optional(),
   category: z.string().nullable().optional(),
+  // Medida casera del ÍTEM PRESCRITO al que apunta el registro (W2 «Cantidades honestas»).
+  // La resuelve el read model en LECTURA (`private.nutrition_v2_intake_item_json`, migración
+  // `20260906202957_nutrition_v2_household_units`), no el snapshot congelado de la entry: así
+  // una corrección o un re-congelado no la tocan. Un registro LIBRE (sin `prescriptionItemId`)
+  // queda con el par en null — limitación declarada en SPEC §5.3. `.nullable().optional()`:
+  // misma regla de tolerancia que `media`/`macrosBasis` (RPC o caché anterior sin la clave
+  // sigue parseando, y builds RN viejas la ignoran).
+  householdLabel: z.string().nullable().optional(),
+  householdGrams: z.number().positive().nullable().optional(),
   // Porciones (SPEC R4, aditivo): pobladas SOLO en intakes sintéticos de marcar-porción
   // emitidos tras la migración de porciones. `.optional().nullable()`: caches y cuerpos
   // de RPC previos siguen parseando (criterio 8). La UI las usa para identificar el
@@ -165,6 +186,15 @@ export const NutritionPrescriptionItemReadSchema = z.object({
   // resueltos en lectura desde `food_id`, no congelados. `.nullable().optional()` para
   // que el deploy web salga antes o después de la migración SQL sin romper el parse.
   media: FoodMediaReadSchema.nullable().optional(),
+  // Medida casera CONGELADA en el ítem al publicar (W2 «Cantidades honestas», migración
+  // `20260906202957_nutrition_v2_household_units`). La cantidad del ítem SIEMPRE viaja en
+  // g/ml — «gramos como verdad, medida casera como interfaz» (SPEC §5.1) —; este par sólo
+  // permite rotular «2 huevos (122 g)» sin volver al catálogo y rehidratar el editor en modo
+  // casera. `.nullable().optional()`: misma regla que `media`/`macrosBasis` — el deploy web
+  // puede salir antes o después de la migración, y una caché o build RN previa sigue
+  // parseando (los ítems anteriores a W2 no tienen el par).
+  householdLabel: z.string().nullable().optional(),
+  householdGrams: z.number().positive().nullable().optional(),
   // Reemplazos autorizados (F-02) en la MISMA lectura del plan (migración
   // `nutrition_v2_plan_read_substitutions`). `optional()`: clave ausente = RPC viejo ⇒ el
   // cliente cae al select directo RLS-scoped; `[]` = RPC nuevo sin reemplazos.

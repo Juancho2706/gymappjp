@@ -36,5 +36,12 @@ export function mapCatalogItemToFood(item: FoodCatalogItem): BuilderFood {
     hasOverride: item.hasOverride ?? false,
     originalMacros: item.original ?? null,
     media: item.media,
+    /**
+     * Medida casera (W2 «Cantidades honestas»): el RPC `search_food_catalog_v2` ya la emite con
+     * la precedencia override-del-coach > catálogo. Es lo que habilita la unidad `casera` del
+     * selector («huevo · 61 g») y lo que se congela en el ítem al publicar.
+     */
+    householdGrams: item.householdGrams ?? null,
+    householdLabel: item.householdLabel ?? null,
   }
 }

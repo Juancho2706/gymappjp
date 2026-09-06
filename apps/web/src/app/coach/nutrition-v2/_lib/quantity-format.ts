@@ -8,12 +8,15 @@
  * tipear "1.5" es peor que tocar un +. De ahi el hibrido:
  *
  *  - g / ml  -> input libre `inputmode="decimal"`, sin steppers;
- *  - un      -> steppers ±0,5 con el valor en fracciones (½, 1, 1½, 2), minimo media porcion.
+ *  - un      -> steppers ±0,5 con el valor en fracciones (½, 1, 1½, 2), minimo media porcion;
+ *  - casera  -> idem `un` (W2): «2 huevos», «1½ tazas» se cuentan, no se tipean.
  *
  * El minimo es 0,5 y no 0: "cero porciones" no es una cantidad, es quitar el alimento (y eso ya
  * tiene su propia accion con Deshacer). El boton `−` se DESHABILITA visible en el minimo en vez
  * de desaparecer: el limite tiene que ser legible antes de tocarlo.
  */
+
+import { HOUSEHOLD_UNIT } from '@eva/nutrition-v2'
 
 /** Paso y piso de las cantidades contadas en porciones/unidades. */
 export const PORTION_QUANTITY_STEP = 0.5
@@ -28,6 +31,9 @@ export const PORTION_QUANTITY_MAX = 99
 export function isCountedUnit(unit: string | null | undefined): boolean {
   const normalized = String(unit ?? '').trim().toLowerCase()
   return (
+    // Medida casera (W2 «Cantidades honestas»): «2 huevos», «1½ tazas». Se CUENTA, y con el
+    // mismo paso de 0,5 que las porciones — es el espejo web de `quantityStep` (paquete).
+    normalized === HOUSEHOLD_UNIT ||
     normalized === 'un' ||
     normalized === 'unit' ||
     normalized === 'unidad' ||

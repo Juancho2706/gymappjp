@@ -9,10 +9,13 @@ import {
   dayWarningCopy,
   implausibleDayCopy,
   implausibleItemCopy,
+  householdUnitActionLabel,
   itemResultingGrams,
   kcalBucket,
   reinterpretUnitActionLabel,
+  shouldFlagUnitReview,
   unitEquivalenceCaption,
+  unitReviewHint,
 } from './plausibility'
 
 /**
@@ -390,5 +393,65 @@ describe('kcalBucket', () => {
   it('por debajo del umbral (no hay aviso que medir) cae al tramo del piso', () => {
     expect(kcalBucket(0)).toBe('700-1000')
     expect(kcalBucket(Number.NaN)).toBe('700-1000')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// W2.5 — «Usar huevos» y el badge «Revisar unidad»
+// ---------------------------------------------------------------------------
+
+describe('householdUnitActionLabel', () => {
+  it('arma la accion con la etiqueta del alimento', () => {
+    expect(householdUnitActionLabel('huevos')).toBe('Usar huevos')
+    expect(householdUnitActionLabel('  taza  ')).toBe('Usar taza')
+  })
+
+  it('sin etiqueta no hay boton que ofrecer', () => {
+    expect(householdUnitActionLabel(null)).toBeNull()
+    expect(householdUnitActionLabel('   ')).toBeNull()
+  })
+})
+
+describe('shouldFlagUnitReview', () => {
+  /** El caso del tren: alimento de 100 g prescrito en `un`, con una pieza real de 61 g. */
+  const huevoEnUn = { unit: 'un', servingUnit: 'g', servingSize: 100, householdGrams: 61 }
+
+  it('marca `un` sobre un alimento NO contable cuya pieza real difiere > 30 %', () => {
+    expect(shouldFlagUnitReview(huevoEnUn)).toBe(true)
+    // «pan pita 60 un»: 1 un = 100 g pero una pita pesa 45 g.
+    expect(shouldFlagUnitReview({ ...huevoEnUn, householdGrams: 45 })).toBe(true)
+  })
+
+  it('no marca cuando la medida casera se parece a la porcion (nada que revisar)', () => {
+    expect(shouldFlagUnitReview({ ...huevoEnUn, householdGrams: 90 })).toBe(false)
+    // El umbral es estricto: exactamente 30 % NO marca.
+    expect(shouldFlagUnitReview({ ...huevoEnUn, householdGrams: 70 })).toBe(false)
+    expect(shouldFlagUnitReview({ ...huevoEnUn, householdGrams: 69 })).toBe(true)
+  })
+
+  it('no marca un alimento REALMENTE contable: ahi «1 un» ya es una pieza', () => {
+    expect(shouldFlagUnitReview({ ...huevoEnUn, servingUnit: 'un' })).toBe(false)
+    expect(shouldFlagUnitReview({ ...huevoEnUn, servingUnit: 'unidad' })).toBe(false)
+  })
+
+  it('no marca fuera de `un`, ni sin los datos con que comparar', () => {
+    expect(shouldFlagUnitReview({ ...huevoEnUn, unit: 'g' })).toBe(false)
+    expect(shouldFlagUnitReview({ ...huevoEnUn, unit: 'casera' })).toBe(false)
+    expect(shouldFlagUnitReview({ ...huevoEnUn, householdGrams: null })).toBe(false)
+    expect(shouldFlagUnitReview({ ...huevoEnUn, servingSize: null })).toBe(false)
+  })
+})
+
+describe('unitReviewHint', () => {
+  it('dice las DOS cifras, que es justo el punto (no coinciden)', () => {
+    expect(
+      unitReviewHint({ servingSize: 100, householdGrams: 61, householdLabel: 'huevo', servingUnit: 'g' }),
+    ).toBe('Acá 1 un = 100 g; 1 huevo del catálogo = 61 g')
+  })
+
+  it('un liquido se rotula en ml', () => {
+    expect(
+      unitReviewHint({ servingSize: 100, householdGrams: 240, householdLabel: 'taza', servingUnit: 'ml' }),
+    ).toBe('Acá 1 un = 100 ml; 1 taza del catálogo = 240 ml')
   })
 })

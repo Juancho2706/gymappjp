@@ -270,6 +270,78 @@ export function reinterpretUnitActionLabel(input: {
   return `Cambiar a ${formatEsClNumber(input.quantity, 1)} ${foodMagnitudeUnit(input.servingUnit)}`
 }
 
+/**
+ * Etiqueta de la SEGUNDA accion del aviso, la de W2.5: «Usar huevos». La premisa es la opuesta a
+ * `reinterpretUnitActionLabel` — no es que la unidad estuviera mal escrita, es que el coach
+ * queria hablar en medidas caseras y el catalogo por fin sabe cuanto pesa una.
+ *
+ * `null` cuando el alimento no tiene etiqueta casera: sin nombre no hay boton que ofrecer.
+ *
+ * ⚠️ Se llama `householdUnitActionLabel` y no `useHousehold…` (que seria el nombre natural del
+ * copy «Usar…»): el prefijo `use` lo convierte en un HOOK para `react-hooks/rules-of-hooks`, y
+ * las filas del editor lo invocan dentro de condicionales.
+ */
+export function householdUnitActionLabel(householdLabel: string | null | undefined): string | null {
+  const label = (householdLabel ?? '').trim()
+  return label.length === 0 ? null : `Usar ${label}`
+}
+
+/**
+ * Diferencia relativa a partir de la cual «1 un» y la medida casera cuentan como DOS cosas
+ * distintas (SPEC §5.5, decision D3 a). 30 %: «1 un = 100 g» contra «1 huevo = 61 g» entra;
+ * «1 un = 100 g» contra «1 taza = 90 g» no vale la pena marcarla.
+ */
+export const UNIT_REVIEW_DRIFT_RATIO = 0.3
+
+export interface UnitReviewInput {
+  /** Unidad VIGENTE del item del plan. */
+  unit: string | null | undefined
+  /** `serving_unit` del alimento: decide si el alimento es REALMENTE contable. */
+  servingUnit: string | null | undefined
+  /** `serving_size` del catalogo, SIEMPRE en g/ml: cuanto pesa «1 un» aca. */
+  servingSize: number | null | undefined
+  /** Gramos de la medida casera del alimento (o del par congelado en el item). */
+  householdGrams: number | null | undefined
+}
+
+/**
+ * ¿Este item merece el badge «Revisar unidad»? (W2.5, SPEC §5.5). Marca el caso exacto del tren:
+ * el coach escribio `un` creyendo «una pieza», el alimento NO es contable (su «1 un» son en
+ * realidad `servingSize` gramos) y el catalogo sabe que una pieza de verdad pesa bastante otra
+ * cosa. Es el «pan pita 60 un = 9.576 kcal» y el «huevo revuelto 30 un».
+ *
+ * AVISA, no reescribe: ningun plan se toca por esto (regla dura del tren, SPEC §2). Lo que
+ * ofrece la fila al lado del badge es la accion «Usar {medida}», que decide el coach.
+ */
+export function shouldFlagUnitReview(input: UnitReviewInput): boolean {
+  if (normalizeIntakeUnit(input.unit) !== 'un') return false
+  // Alimento nativo `un` (huevo vendido por pieza): ahi «1 un» YA es una pieza y no hay nada raro.
+  if (normalizeIntakeUnit(input.servingUnit) === 'un') return false
+  const servingSize = positiveOrNull(input.servingSize)
+  const householdGrams = positiveOrNull(input.householdGrams)
+  if (servingSize === null || householdGrams === null) return false
+  return Math.abs(householdGrams - servingSize) / servingSize > UNIT_REVIEW_DRIFT_RATIO
+}
+
+/**
+ * Tooltip del badge: «Acá 1 un = 100 g; 1 huevo del catálogo = 61 g». Dice las DOS cifras porque
+ * el punto es que no coinciden — nombrar solo una deja al coach adivinando cual es cual.
+ */
+export function unitReviewHint(input: {
+  servingSize: number
+  householdGrams: number
+  householdLabel: string
+  servingUnit?: string | null
+}): string {
+  const { small } = magnitudeLabels(input.servingUnit)
+  const here = formatNutritionAmount(input.servingSize, small, 0)
+  const catalog = formatNutritionAmount(input.householdGrams, small, 0)
+  return `Acá 1 un = ${here}; 1 ${input.householdLabel.trim()} del catálogo = ${catalog}`
+}
+
+/** Texto del badge de W2.5, en una sola casa para que web y RN digan lo mismo. */
+export const UNIT_REVIEW_BADGE_LABEL = 'Revisar unidad'
+
 /** «2 ítems con cantidades poco plausibles» — el resumen del dia en la barra de publicar. */
 export function implausibleItemCountCopy(count: number): string {
   return count === 1 ? '1 ítem con una cantidad poco plausible' : `${count} ítems con cantidades poco plausibles`

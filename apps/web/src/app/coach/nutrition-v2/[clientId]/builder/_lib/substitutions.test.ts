@@ -19,6 +19,8 @@ const FOOD: BuilderFood = {
   servingUnit: 'g',
   category: null,
   media: null,
+  householdGrams: null,
+  householdLabel: null,
 }
 
 const V = '55555555-5555-4555-8555-555555555555'

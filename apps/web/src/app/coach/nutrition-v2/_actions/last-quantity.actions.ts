@@ -1,6 +1,7 @@
 'use server'
 
 import { z } from 'zod'
+import { convertQuantityBetweenUnits, foodMagnitudeUnit, isHouseholdUnit } from '@eva/nutrition-v2'
 import { authorizeCoach } from '@/app/coach/nutrition-v2/_actions/plan-persistence'
 
 /**
@@ -25,13 +26,44 @@ const RememberInputSchema = z.object({
   unit: z.enum(['g', 'ml', 'un']),
 })
 
+/**
+ * La memoria vive en g/ml/un: el CHECK de `coach_food_last_qty` no admite `casera` y ampliarlo
+ * obligaria a guardar tambien los gramos de la medida (o la memoria seria ambigua). Decision
+ * R10/a10 de la auditoria W2.0: NO se amplia el dominio — se convierte a gramos aca, que es lo
+ * unico que el proximo alta necesita. Sin gramaje utilizable no hay nada que recordar.
+ * Espejo RN: `apps/mobile/lib/nutrition-v2-last-quantity.ts`.
+ */
+function toRememberableQuantity(input: {
+  quantity: string
+  unit: string
+  servingUnit?: string | null
+  householdGrams?: number | null
+}): { quantity: string; unit: string } | null {
+  if (!isHouseholdUnit(input.unit)) return { quantity: input.quantity, unit: input.unit }
+  const grams = convertQuantityBetweenUnits({
+    quantity: Number(String(input.quantity).trim()),
+    from: input.unit,
+    to: foodMagnitudeUnit(input.servingUnit),
+    servingSize: null,
+    householdGrams: input.householdGrams ?? null,
+  })
+  if (grams === null) return null
+  return { quantity: String(grams), unit: foodMagnitudeUnit(input.servingUnit) }
+}
+
 export async function rememberFoodQuantityAction(input: {
   clientId: string
   foodId: string
   quantity: string
   unit: string
+  /** `serving_unit` del alimento: decide si la medida casera se recuerda en g o en ml. */
+  servingUnit?: string | null
+  /** Gramos de la medida casera, para traducir `casera` antes de tocar el RPC (R10). */
+  householdGrams?: number | null
 }): Promise<void> {
-  const parsed = RememberInputSchema.safeParse(input)
+  const rememberable = toRememberableQuantity(input)
+  if (rememberable === null) return
+  const parsed = RememberInputSchema.safeParse({ ...input, ...rememberable })
   if (!parsed.success) return
 
   /**

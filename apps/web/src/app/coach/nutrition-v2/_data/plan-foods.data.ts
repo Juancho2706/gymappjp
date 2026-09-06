@@ -36,10 +36,13 @@ interface FoodRow {
   serving_unit: string | null
   category: string | null
   macros_basis: string | null
+  /** Medida casera del catálogo (W2). El override del coach la pisa en `toBuilderFood` (R5). */
+  household_label: string | null
+  household_grams: number | null
 }
 
 const FOOD_SELECT =
-  'id, name, brand, calories, protein_g, carbs_g, fats_g, fiber_g, serving_size, serving_unit, category, macros_basis'
+  'id, name, brand, calories, protein_g, carbs_g, fats_g, fiber_g, serving_size, serving_unit, category, macros_basis, household_label, household_grams'
 
 /** Override del coach sobre el alimento (T2.1). RLS acota las filas al actor. */
 const OVERRIDE_SELECT =
@@ -78,6 +81,10 @@ function toBuilderFood(row: FoodRow, override: CoachFoodOverrideValues | null): 
       fatsG: row.fats_g,
       fiberG: row.fiber_g,
       macrosBasis: toMacrosBasis(row.macros_basis),
+      // Medida casera (W2): entra al merge para que gane la del OVERRIDE del coach sobre la del
+      // catalogo, igual que los macros. Es lo que habilita la unidad `casera` al reabrir un plan.
+      householdLabel: row.household_label,
+      householdGrams: row.household_grams == null ? null : Number(row.household_grams),
     },
     override,
   )
@@ -102,6 +109,8 @@ function toBuilderFood(row: FoodRow, override: CoachFoodOverrideValues | null): 
     // La foto del producto si la aporta solo el read-model (join a food_media): aca queda
     // null y la card muestra el icono de categoria.
     media: null,
+    householdLabel: macros.householdLabel,
+    householdGrams: macros.householdGrams,
   }
 }
 

@@ -89,6 +89,7 @@ import {
   energyTrendDirection,
   firstNameFromFullName,
   formatIntakeClock,
+  formatItemQuantity,
   formatNutritionAmount,
   formatNutritionCalories,
   formatNutritionTodayVariantBadge,
@@ -2295,7 +2296,14 @@ function intakeToRow(entry: NutritionIntakeReadItem): NutritionFoodRowModel {
     name: entry.snapshot.name,
     detail: entry.snapshot.brand,
     thumbnailUrl: foodMediaThumbnailUrl(entry.media),
-    quantityLabel: `${entry.quantity} ${entry.unit}`,
+    // W2.3: el rótulo honesto vive en `formatItemQuantity` (packages/nutrition-v2). Con el par
+    // casero congelado en el registro dice «2 huevos (122 g)»; sin él, «122 g» como siempre.
+    quantityLabel: formatItemQuantity({
+      quantity: entry.quantity,
+      unit: entry.unit,
+      householdLabel: entry.householdLabel,
+      householdGrams: entry.householdGrams,
+    }),
     calories: entry.totals.calories,
     proteinG: entry.totals.proteinG,
     carbsG: entry.totals.carbsG,
@@ -2581,8 +2589,18 @@ const TodaySlotCard = memo(function TodaySlotCard({
                     thumbnailUrl: foodMediaThumbnailUrl(isSubstituted && activeEntry ? activeEntry.media ?? item.media : item.media),
                     quantityLabel:
                       isSubstituted && activeEntry
-                        ? `${activeEntry.quantity} ${activeEntry.unit}`
-                        : `${item.quantity} ${item.unit}${item.optional ? ' · opcional' : ''}`,
+                        ? formatItemQuantity({
+                            quantity: activeEntry.quantity,
+                            unit: activeEntry.unit,
+                            householdLabel: activeEntry.householdLabel,
+                            householdGrams: activeEntry.householdGrams,
+                          })
+                        : `${formatItemQuantity({
+                            quantity: item.quantity,
+                            unit: item.unit,
+                            householdLabel: item.householdLabel,
+                            householdGrams: item.householdGrams,
+                          })}${item.optional ? ' · opcional' : ''}`,
                     calories: isSubstituted && activeEntry ? activeEntry.totals.calories : item.macros.calories,
                     proteinG: isSubstituted && activeEntry ? activeEntry.totals.proteinG : item.macros.proteinG,
                     carbsG: isSubstituted && activeEntry ? activeEntry.totals.carbsG : item.macros.carbsG,
@@ -2591,7 +2609,12 @@ const TodaySlotCard = memo(function TodaySlotCard({
                   fallbackCategory={item.category}
                   note={
                     isSubstituted
-                      ? `sustituyó a ${item.name ?? 'tu alimento'} · ${item.quantity} ${item.unit}`
+                      ? `sustituyó a ${item.name ?? 'tu alimento'} · ${formatItemQuantity({
+                          quantity: item.quantity,
+                          unit: item.unit,
+                          householdLabel: item.householdLabel,
+                          householdGrams: item.householdGrams,
+                        })}`
                       : displayNote
                   }
                   // T2.7 F2 (D-C): el CHECK es el registro — muere el botón "Lo comí". Tap en
@@ -3072,10 +3095,18 @@ function EntryCorrectionSheet({
   const reason = resolveCorrectionReason(reasonChoice, customReason)
   const canSubmit = reason !== null && (action?.kind === 'void' || validQuantity)
   const title = action?.kind === 'edit' ? 'Editar cantidad' : 'Retirar registro'
+  const entryLabel = entry
+    ? formatItemQuantity({
+        quantity: entry.quantity,
+        unit: entry.unit,
+        householdLabel: entry.householdLabel,
+        householdGrams: entry.householdGrams,
+      })
+    : ''
   const description = entry
     ? action?.kind === 'edit'
-      ? `${entry.snapshot.name} · registrado como ${entry.quantity} ${entry.unit}`
-      : `${entry.snapshot.name} · ${entry.quantity} ${entry.unit}`
+      ? `${entry.snapshot.name} · registrado como ${entryLabel}`
+      : `${entry.snapshot.name} · ${entryLabel}`
     : undefined
   const footer = action && entry ? (
     <View className="flex-row gap-2">
@@ -3283,7 +3314,12 @@ function SubstitutionConfirmSheet({
       nativeModal
       title="Confirma la cantidad"
       description={
-        item ? `${name} en lugar de ${item.name ?? 'tu alimento'} (${item.quantity} ${item.unit})` : undefined
+        item
+          ? `${name} en lugar de ${item.name ?? 'tu alimento'} (${formatItemQuantity({
+              quantity: item.quantity,
+              unit: item.unit,
+            })})`
+          : undefined
       }
       footer={footer}
       showCloseButton={!pending}
@@ -4057,7 +4093,12 @@ function PlanSlotBlock({
                     name: item.name ?? 'Alimento prescrito',
                     detail: item.brand,
                     thumbnailUrl: foodMediaThumbnailUrl(item.media),
-                    quantityLabel: `${item.quantity} ${item.unit}${item.optional ? ' · opcional' : ''}`,
+                    quantityLabel: `${formatItemQuantity({
+                      quantity: item.quantity,
+                      unit: item.unit,
+                      householdLabel: item.householdLabel,
+                      householdGrams: item.householdGrams,
+                    })}${item.optional ? ' · opcional' : ''}`,
                     calories: item.macros.calories,
                     proteinG: item.macros.proteinG,
                     carbsG: item.macros.carbsG,

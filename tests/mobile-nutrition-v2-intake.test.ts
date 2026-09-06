@@ -351,9 +351,64 @@ describe('NUT-001 (RN) - matriz de escala del catalogo (base per_100)', () => {
     expect(computeIntakeTotals(mutation.quantity, mutation.unit, mutation.snapshot).calories).toBe(93)
   })
 
-  it('las unidades ofrecidas por el scanner son canonicas (g|ml segun magnitud + un)', () => {
-    expect(scannedFoodUnitOptions({ servingUnit: 'g' })).toEqual(['g', 'un'])
-    expect(scannedFoodUnitOptions({ servingUnit: 'ml' })).toEqual(['ml', 'un'])
+  it('las unidades ofrecidas por el scanner salen del ALIMENTO (W2.1): magnitud + medida casera', () => {
+    expect(scannedFoodUnitOptions({ servingUnit: 'g', servingSize: 100 }).map((o) => o.code)).toEqual(['g'])
+    expect(scannedFoodUnitOptions({ servingUnit: 'ml', servingSize: 100 }).map((o) => o.code)).toEqual(['ml'])
+    expect(
+      scannedFoodUnitOptions({ servingUnit: 'g', servingSize: 100, householdGrams: 61, householdLabel: 'huevo' }),
+    ).toEqual([
+      { code: 'g', label: 'g', grams: null },
+      { code: 'casera', label: 'huevo · 61 g', grams: 61 },
+    ])
+  })
+
+  // SPEC §5.3 / AUDIT c4: `casera` es de la UI y jamas llega a `nutrition_intake_entries`.
+  it('el scanner traduce la medida casera a gramos antes de armar el payload', () => {
+    const mutation = buildScannedFoodIntakeMutation({
+      clientId: CLIENT,
+      deviceId: DEVICE,
+      operationId: OP_A,
+      occurredAt: NOW,
+      registration: {
+        localDate: '2026-07-15',
+        timezone: 'America/Santiago',
+        planVersionId: null,
+        snapshotId: null,
+        slotOptions: [],
+      },
+      food: {
+        id: FOOD,
+        catalogKey: null,
+        gtin: '7801234567894',
+        name: 'Huevo',
+        brand: null,
+        category: null,
+        countryCode: 'CL',
+        servingSize: 100,
+        servingUnit: 'g',
+        calories: CAL,
+        proteinG: 10,
+        carbsG: 20,
+        fatsG: 5,
+        fiberG: 1,
+        sodiumMg: null,
+        sugarG: null,
+        saturatedFatG: null,
+        packageQuantity: null,
+        packageUnit: null,
+        source: 'eva',
+        sourceRef: null,
+        verificationStatus: 'eva_verified',
+        householdLabel: 'huevo',
+        householdGrams: 61,
+        media: null,
+      },
+      quantity: 2,
+      unit: 'casera',
+      mealSlotCode: null,
+    })
+    expect(mutation.unit).toBe('g')
+    expect(mutation.quantity).toBe(122)
   })
 })
 
