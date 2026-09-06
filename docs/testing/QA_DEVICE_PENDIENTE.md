@@ -1,7 +1,7 @@
 ---
 status: active
 owner: quality-engineering
-last_verified: "2026-09-05"
+last_verified: "2026-09-06"
 canonical: false
 ---
 
@@ -21,6 +21,9 @@ Convención: `[ ]` pendiente · `[x]` verificado con evidencia (fecha + quién).
 > iOS 1.1.2 build 59 con el OTA del 04-09 android `d8220490` / ios `54487ddd`, web
 > `www.eva-app.cl` deploy `dpl_ASZExsTB…` = `f9ba8a3f`)**, guion de 102 verificaciones en 11 áreas.
 > Abajo se abrevia «QA owner VERDE 05-09, artifact `6bd32370`».
+
+> **Nuevo pendiente desde 2026-09-06**: el rediseño «bloque único» de Share Entreno (ver sección
+> abajo) todavía no tiene OTA ni QA del owner — el resto de este archivo sigue sin pendientes.
 
 ## Checklist — cerrado (0 pendientes)
 
@@ -144,9 +147,28 @@ OTA 1.1.2 android `01a063b0-6a6a…` / ios `01a063b0-86f0…`), QA del owner en 
       sigue vivo detrás del aviso «Sin conexión» (`619b881f`) —
       [`qa-ejecutor-share-0209` § P6 B2](../specs/qa-ejecutor-share-0209/TASKS.md)
 
+## Share Entreno · bloque único (06-09)
+
+Rediseño aprobado por el owner el 2026-09-06: se retiran los 6 presets, los toggles y los 9
+stickers sueltos; queda un solo bloque de texto en Inter movible por drag y escalable por
+pellizco. En código en el worktree `share-bloque-strava`, sin push ni OTA. Checklist completo en
+[`share-bloque/TASKS.md` § QA en device](../specs/share-bloque/TASKS.md):
+
+- [ ] Bloque legible sobre foto clara y sobre foto oscura.
+- [ ] Drag sin parpadeo y clamp correcto en los cuatro bordes del canvas.
+- [ ] Pellizco hasta el tope (`maxScaleFor`) sin que el bloque desaparezca ni se corte.
+- [ ] Stories en Instagram y Facebook, con foto y con «Sin foto».
+- [ ] WhatsApp.
+- [ ] «Guardar» a la galería.
+- [ ] PNG capturado sin marco punteado ni recorte del bloque.
+- [ ] Coach sin logo propio (inicial en el círculo) y sin branding «EVA» visible más allá de «vía EVA».
+- [ ] Reduced-motion respetado.
+- [ ] TalkBack/VoiceOver anuncia el bloque como unidad legible.
+
 ## Pendientes
 
-**Ninguno al 2026-09-05.** Lo único que este archivo deja anotado como no-certificable por OTA es la
-**experiencia de entrada** con binario nuevo (1.1.3), registrada en
+**Share Entreno · bloque único** (arriba) queda pendiente desde el 2026-09-06, a la espera de la
+OTA. Lo demás sigue **sin pendientes desde 2026-09-05**. Lo único que este archivo deja anotado como
+no-certificable por OTA es la **experiencia de entrada** con binario nuevo (1.1.3), registrada en
 [`MOBILE_PARITY.md`](../status/MOBILE_PARITY.md) y en
 [`docs/operations/MANUAL_TASKS.md` § MOB-02](../operations/MANUAL_TASKS.md).

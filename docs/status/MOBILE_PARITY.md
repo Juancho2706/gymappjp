@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-09-05"
+last_verified: "2026-09-06"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -603,6 +603,13 @@ morph en gama baja, TalkBack básico) sobre 1.1.2 + OTA; el splash nativo se cer
 (Stories directo, sticker transparente, «Guardar» con permiso, reduced-motion) quedó **VERDE 05-09**
 (artifact `6bd32370`, iPhone 1.1.2 build 59). Canal y grupos del OTA en
 [`MOBILE_RELEASES_OTA.md`](../operations/MOBILE_RELEASES_OTA.md).
+
+**Rediseño «bloque único» (2026-09-06, EN CÓDIGO, sin push ni OTA).** Se retiran los 6 presets, los
+9 toggles y los stickers sueltos: queda **un solo bloque de texto blanco en Inter** (mover con drag,
+tamaño con pellizco, tope `maxScaleFor` sin cambios), sin fecha/racha/récords/set-list/QR/`@handle`.
+Sale por OTA sobre 1.1.2 (Inter ya viaja en el binario vía `brand-fonts.ts`), sin build nativa. QA
+en device pendiente del owner tras la OTA. Detalle en
+[`specs/share-bloque/SPEC.md`](../specs/share-bloque/SPEC.md).
 
 > **2026-07-31 (corte compliance stores + timers lockscreen)**: (a) **Purga anti-steering completa**
 > (informe `docs/research/cta-pagos-externos-stores-2026-07-31.md`; Apple 3.1.1 + política de pagos de

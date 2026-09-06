@@ -7,6 +7,9 @@ canonical: false
 
 # TASKS — Compartir Entreno
 
+> **Superado el 2026-09-06 por [share-bloque](../share-bloque/SPEC.md):** presets, toggles y
+> stickers sueltos se retiran; queda un bloque único en Inter.
+
 Orden ejecutable. Contexto en [SPEC.md](./SPEC.md) y [PLAN.md](./PLAN.md).
 Convención: `[ ]` pendiente · `[x]` hecho con evidencia real · `[~]` parcial (anotar qué falta).
 
