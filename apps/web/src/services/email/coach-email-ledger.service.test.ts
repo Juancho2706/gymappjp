@@ -434,7 +434,9 @@ describe('cancelCoachEmails', () => {
         })
     })
 
-    it('DRIP_SALES_KEYS son exactamente las dos del drip de venta', () => {
-        expect(DRIP_SALES_KEYS).toEqual(['day2_pro', 'day14_last_call'])
+    // El reenvío único del día 2 (`day2_pro_catchup`, D2 del owner 05-09) es el mismo correo de venta
+    // con otra key: si el coach paga antes de que salga, el webhook lo cancela junto con los otros dos.
+    it('DRIP_SALES_KEYS son las dos del drip de venta más el reenvío único del día 2', () => {
+        expect(DRIP_SALES_KEYS).toEqual(['day2_pro', 'day14_last_call', 'day2_pro_catchup'])
     })
 })

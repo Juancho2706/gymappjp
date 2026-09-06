@@ -77,7 +77,13 @@ export type ScheduleCoachEmailResult =
  * módulo de plantillas (`lib/email/drip-templates.ts`); se exportan acá para que el webhook de pagos
  * y el drip compartan una sola fuente y no se desincronicen por un typo.
  */
-export const DRIP_SALES_KEYS = ['day2_pro', 'day14_last_call'] as const
+export const DRIP_SALES_KEYS = [
+    'day2_pro',
+    'day14_last_call',
+    // Reenvío único del día 2 (`scripts/day2-pro-catchup.ts`, D2 del owner 05-09): es el mismo
+    // correo de venta con otra key, así que si el coach paga antes de que salga se cancela igual.
+    'day2_pro_catchup',
+] as const
 
 /** Endpoint de cancelación de Resend. PURO (testeable sin red). */
 export function resendCancelUrl(id: string): string {
