@@ -9,7 +9,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  *  · **el dry-run**: barre, decide y devuelve `wouldSend`, sin tocar Resend ni el ledger;
  *  · la corrida real: un coach de 3 h sin alumnos recibe UN correo con `trigger: 'behavior'` y la
  *    key `behavior_no_client_2h`;
- *  · la exclusión de cuentas de prueba con el bypass de `qa-free-v3@evatest.cl`.
+ *  · la exclusión de cuentas de prueba con el bypass de `qa-free-v3@evatest.cl`;
+ *  · el LOG del ensayo: `wouldSendByKey` y `beforeLaunch` en la línea final, que es como el owner
+ *    audita el reparto desde Vercel sin llamar al endpoint.
+ *
+ * ⏱️ RELOJ CONGELADO DESPUÉS DEL CORTE DE LANZAMIENTO: los coaches de estos tests se arman con
+ * `hoursAgo(...)` sobre el reloj del sistema, y con la fecha real (anterior al 06-09) todos nacerían
+ * antes de `BEHAVIOR_LAUNCH_CUTOVER` y saldrían por `before_launch`. Se fija el 20-09 y listo.
  */
 
 type CoachRow = {
@@ -101,6 +107,8 @@ import { GET } from './route'
 
 const SECRET = 'cron-sekret'
 const HOUR = 60 * 60 * 1000
+/** Dos semanas después del encendido de W6 (`BEHAVIOR_LAUNCH_CUTOVER` = 06-09). */
+const NOW = new Date('2026-09-20T09:00:00.000Z')
 const hoursAgo = (h: number) => new Date(Date.now() - h * HOUR).toISOString()
 
 const req = (query = '') =>
@@ -124,6 +132,10 @@ function coach(overrides: Partial<CoachRow> & { id: string }): CoachRow {
 
 beforeEach(() => {
     vi.clearAllMocks()
+    // Solo `Date`: el barrido no usa timers (el espaciado de Resend va en 0 por env) y fingir
+    // `setTimeout` acá solo agregaría formas de colgar el test.
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(NOW)
     coaches = []
     clientsByCoach = {}
     emailByCoachId = {}
@@ -145,6 +157,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+    vi.useRealTimers()
     vi.unstubAllEnvs()
     vi.restoreAllMocks()
 })
@@ -251,5 +264,33 @@ describe('dry run', () => {
         expect(json).toMatchObject({ dry: true, sent: 0 })
         expect(json.wouldSend).toHaveLength(1)
         expect(scheduleCoachEmailMock).not.toHaveBeenCalled()
+    })
+
+    // El ensayo del 06-09 se auditó leyendo el log del cron en Vercel. Sin el reparto por key en esa
+    // línea hay que llamar al endpoint a mano para saber QUÉ correo saldría y cuántas veces.
+    it('el resumen y el log traen `wouldSendByKey` y los frenados por el corte de lanzamiento', async () => {
+        coaches = [
+            coach({ id: 'c1', slug: 'ana-fit' }),
+            coach({ id: 'c2', slug: 'beto-fit' }),
+            // Coach de agosto, anterior a `BEHAVIOR_LAUNCH_CUTOVER`. En producción el barrido ni lo
+            // lee (el `since` de `listBehaviorCandidates` ya lo filtra); el contador existe por el
+            // disparo EN LÍNEA, que carga al coach por id y no pasa por esa ventana.
+            coach({ id: 'c3', slug: 'viejo-fit', created_at: '2026-08-20T10:00:00.000Z' }),
+        ]
+        emailByCoachId = { c1: 'ana@gym.cl', c2: 'beto@gym.cl', c3: 'viejo@gym.cl' }
+
+        const json = await (await GET(req('?dry=1'))).json()
+
+        expect(json.wouldSendByKey).toEqual({ behavior_no_client_2h: 2 })
+        expect(json.skipped.before_launch).toBe(1)
+
+        // `spyOn` sobre un método ya espiado devuelve el MISMO spy que armó el `beforeEach`, así que
+        // esto lee sus llamadas sin tocar `console.info` de frente (que la regla `no-console` marca).
+        const line = vi
+            .spyOn(console, 'info')
+            .mock.calls.map((args) => String(args[0]))
+            .find((msg) => msg.includes('[cron/onboarding-behavior] done'))
+        expect(line).toContain('wouldSendByKey={"behavior_no_client_2h":2}')
+        expect(line).toContain('beforeLaunch=1')
     })
 })

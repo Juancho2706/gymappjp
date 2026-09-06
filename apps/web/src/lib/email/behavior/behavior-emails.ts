@@ -3,10 +3,14 @@ import { PersonaSchema, type Persona } from '@eva/schemas'
 import type { Database } from '@/lib/database.types'
 import { isTestCoachEmail } from '@/lib/test-accounts'
 import { scheduleCoachEmail } from '@/services/email/coach-email-ledger.service'
-import { findActiveByCoachAndKeys } from '@/infrastructure/db/coach-email-ledger.repository'
+import {
+    findActiveByCoachAndKeys,
+    type CoachEmailLedgerRow,
+} from '@/infrastructure/db/coach-email-ledger.repository'
 import { siteBaseUrl } from '../subscription-url'
 import { buildBehaviorEmail } from './behavior-templates'
 import {
+    BEHAVIOR_LAUNCH_CUTOVER,
     BEHAVIOR_TEMPLATE_KEYS,
     FIRST_LOGIN_SIGNAL_CUTOVER,
     ONBOARDING_CUTOFF_MS,
@@ -133,9 +137,19 @@ async function fetchAllPages<T>(
     return out
 }
 
-/** Coaches dentro de la ventana de onboarding (alta en los últimos 90 d). */
+/**
+ * Coaches dentro de la ventana de onboarding: alta en los últimos 90 d **y** posterior al corte de
+ * lanzamiento.
+ *
+ * El `since` es el MÁXIMO de los dos para que el padrón anterior a W6 ni se lea: el motor igual lo
+ * rebotaría con `before_launch`, pero eso son 85 lecturas de `auth.users` + roster + ledger por
+ * corrida horaria para descartar a todos menos a un puñado. Mientras el cutover sea más reciente que
+ * `now - 90 d` manda el cutover; después manda la ventana y esto vuelve a ser el corte de siempre.
+ */
 export async function listBehaviorCandidates(admin: Db, now: Date): Promise<BehaviorCoachRow[]> {
-    const since = new Date(now.getTime() - ONBOARDING_CUTOFF_MS).toISOString()
+    const windowStart = now.getTime() - ONBOARDING_CUTOFF_MS
+    const launch = new Date(BEHAVIOR_LAUNCH_CUTOVER).getTime()
+    const since = new Date(Math.max(windowStart, launch)).toISOString()
     return await fetchAllPages<BehaviorCoachRow>(
         (from, to) =>
             admin
@@ -165,6 +179,39 @@ async function resolveCoachEmail(admin: Db, coachId: string): Promise<string | n
         })
         return null
     }
+}
+
+/**
+ * Estados del ledger que cuentan como «a este coach ya le escribimos» para el espaciado de W6.
+ *
+ * NO es la lista del dedupe (`ACTIVE_LEDGER_STATUSES`): `bounced`, `complained` y `cancelled` quedan
+ * afuera porque ese correo no está en la bandeja del coach —rebotó, lo marcó como spam o lo dimos de
+ * baja nosotros—, así que no hay nada que espaciar. `scheduled` sí entra: todavía no salió, pero va
+ * a salir, y amontonarle otro encima es justo lo que el piso de 24 h viene a evitar.
+ */
+const DELIVERABLE_LEDGER_STATUSES: readonly string[] = ['sent', 'delivered', 'scheduled']
+
+/**
+ * Cuándo salió (o va a salir) el último correo de comportamiento del coach, sobre las mismas filas
+ * que ya trajo el dedupe.
+ *
+ * `sent_at` es el dato bueno; `scheduled_at` cubre la fila que espera su turno y `created_at` es el
+ * piso cuando el webhook de Resend nunca movió la fila (sin ese respaldo, un webhook no registrado
+ * apagaría el espaciado entero: todo `sent_at` en `null` se leería como «nunca le escribimos»).
+ */
+function latestBehaviorSentAt(rows: readonly CoachEmailLedgerRow[]): string | null {
+    let latestAt: string | null = null
+    let latestMs = -Infinity
+    for (const row of rows) {
+        if (!DELIVERABLE_LEDGER_STATUSES.includes(row.status)) continue
+        const at = row.sent_at ?? row.scheduled_at ?? row.created_at ?? null
+        if (!at) continue
+        const ms = new Date(at).getTime()
+        if (!Number.isFinite(ms) || ms <= latestMs) continue
+        latestMs = ms
+        latestAt = at
+    }
+    return latestAt
 }
 
 /**
@@ -226,10 +273,13 @@ export async function loadCoachBehaviorSnapshot(
 
     // Dedupe por `(coach_id, template_key)`: las keys VIVAS del ledger. Fail-open como el resto del
     // ledger — si no se puede leer, el dedupe atómico de `scheduleCoachEmail` sigue siendo la red.
+    // La MISMA lectura alimenta el espaciado por coach: no cuesta una consulta extra.
     let alreadySent: string[] = []
+    let lastBehaviorSentAt: string | null = null
     try {
         const rows = await findActiveByCoachAndKeys(admin, coach.id, BEHAVIOR_TEMPLATE_KEYS)
         alreadySent = rows.map((r) => r.template_key)
+        lastBehaviorSentAt = latestBehaviorSentAt(rows)
     } catch (err) {
         console.warn('[behavior-emails] ledger ilegible — se cae al dedupe de la base (fail-open)', {
             coachId: coach.id,
@@ -249,6 +299,7 @@ export async function loadCoachBehaviorSnapshot(
         hasRealStudentActivity:
             (workoutActivity.data?.length ?? 0) > 0 || (intakeActivity.data?.length ?? 0) > 0,
         alreadySent,
+        lastBehaviorSentAt,
         isTestAccount: isTestCoachEmail(email),
         isOrgManaged: Boolean(coach.active_org_id),
     }
@@ -316,6 +367,14 @@ export interface BehaviorSweepSummary {
     /** Slug + key, sin PII: es lo que se mira en los logs para auditar una corrida. */
     sentTo: Array<{ slug: string; key: BehaviorTemplateKey; reason: string }>
     wouldSend: Array<{ slug: string; key: BehaviorTemplateKey; reason: string }>
+    /**
+     * Reparto del ensayo POR TEMPLATE: `{ behavior_no_client_2h: 41, behavior_help_7d: 12 }`. Solo
+     * las keys con al menos uno, para que entre en una línea de log de Vercel. Es el número que el
+     * owner necesita ANTES de encender —cuántos correos de cada tipo saldrían y de qué señal— y así
+     * se lee del log del cron sin llamar al endpoint ni parsear el `wouldSend` completo. En una
+     * corrida real queda vacío por construcción: ahí el reparto se lee en `sentTo`.
+     */
+    wouldSendByKey: Partial<Record<BehaviorTemplateKey, number>>
     skipped: Record<BehaviorSkipReason | 'no_trigger' | 'deduped' | 'send_failed', number>
     errors: number
 }
@@ -327,6 +386,8 @@ function emptySkipped(): BehaviorSweepSummary['skipped'] {
         org_managed: 0,
         no_created_at: 0,
         past_cutoff: 0,
+        before_launch: 0,
+        cooldown: 0,
         no_trigger: 0,
         deduped: 0,
         send_failed: 0,
@@ -350,6 +411,7 @@ export async function sweepBehaviorEmails(
         sent: 0,
         sentTo: [],
         wouldSend: [],
+        wouldSendByKey: {},
         skipped: emptySkipped(),
         errors: 0,
     }
@@ -377,13 +439,16 @@ export async function sweepBehaviorEmails(
                 case 'no_trigger':
                     summary.skipped.no_trigger += 1
                     break
-                case 'would_send':
+                case 'would_send': {
+                    const key = result.trigger.template_key
                     summary.wouldSend.push({
                         slug: coach.slug,
-                        key: result.trigger.template_key,
+                        key,
                         reason: result.trigger.reason,
                     })
+                    summary.wouldSendByKey[key] = (summary.wouldSendByKey[key] ?? 0) + 1
                     break
+                }
                 case 'deduped':
                     summary.skipped.deduped += 1
                     break

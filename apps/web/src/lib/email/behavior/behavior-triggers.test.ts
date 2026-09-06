@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
+    BEHAVIOR_LAUNCH_CUTOVER,
+    BEHAVIOR_MIN_GAP_MS,
     BEHAVIOR_TEMPLATE_KEYS,
     BEHAVIOR_TEMPLATE_KEY_PREFIX,
     BEHAVIOR_TEST_ACCOUNT_BYPASS,
@@ -20,10 +22,18 @@ import {
  *  · la exclusión de cuentas de prueba CON el bypass explícito de `qa-free-v3@evatest.cl` (W8.4.4):
  *    sin ese bypass W6 no se puede probar de punta a punta ni una sola vez;
  *  · «uno por corrida»: un coach de 8 días sin alumnos matchea tres señales y sale UN correo;
- *  · el corte a 90 d medido contra `created_at`, no contra `persona_set_at`.
+ *  · el corte a 90 d medido contra `created_at`, no contra `persona_set_at`;
+ *  · el corte de LANZAMIENTO: el padrón anterior al 06-09 no entra a W6;
+ *  · el espaciado de 24 h por coach, con el aha como única excepción.
  */
 
-const NOW = new Date('2026-09-05T12:00:00.000Z')
+/**
+ * `NOW` está DESPUÉS del corte de lanzamiento + 90 d a propósito (era el 05-09, o sea el día
+ * anterior al cutover, y con eso todos los coaches de estos tests eran `before_launch`). Corrido al
+ * 10-12, un coach de 89 d nace el 12-09 —ya adentro de W6— y las pruebas del corte de 90 d siguen
+ * midiendo lo que dicen medir.
+ */
+const NOW = new Date('2026-12-10T12:00:00.000Z')
 const HOUR = 60 * 60 * 1000
 const DAY = 24 * HOUR
 
@@ -44,6 +54,7 @@ function snapshot(overrides: Partial<CoachBehaviorSnapshot> = {}): CoachBehavior
         oldestPendingInviteAt: null,
         hasRealStudentActivity: false,
         alreadySent: [],
+        lastBehaviorSentAt: null,
         isTestAccount: false,
         isOrgManaged: false,
         ...overrides,
@@ -206,9 +217,12 @@ describe('corte a 90 d', () => {
 
     // El corte mide la EDAD DE LA CUENTA. Anclarlo a `persona_set_at` haría que un coach de dos años
     // que elige especialidad hoy reciba «invitá a tu primer alumno»: el peor correo posible.
+    // 95 d y no 120: con el corte de lanzamiento una cuenta de 120 d sale por `before_launch` y el
+    // test dejaría de probar el corte de 90 d (que es lo que le importa a este bloque).
     it('ni siquiera el aha atraviesa el corte', () => {
-        const snap = snapshot({ createdAt: iso(120 * DAY), hasRealStudentActivity: true })
+        const snap = snapshot({ createdAt: iso(95 * DAY), hasRealStudentActivity: true })
         expect(keys(snap)).toEqual([])
+        expect(computeBehaviorTriggers(snap, NOW)).toEqual({ eligible: false, skipped: 'past_cutoff' })
     })
 
     it('sin `created_at` legible no se manda nada (fail-closed)', () => {
@@ -220,6 +234,45 @@ describe('corte a 90 d', () => {
             eligible: false,
             skipped: 'no_created_at',
         })
+    })
+})
+
+describe('corte de lanzamiento (W6 arranca el 06-09)', () => {
+    const LAUNCH_MS = new Date(BEHAVIOR_LAUNCH_CUTOVER).getTime()
+    /** Tres horas después del encendido: la ventana de +2 h ya se cumple para quien nació ahí. */
+    const JUST_AFTER_LAUNCH = new Date(LAUNCH_MS + 3 * HOUR)
+
+    it('el corte es el 06-09 a las 00:00Z', () => {
+        expect(BEHAVIOR_LAUNCH_CUTOVER).toBe('2026-09-06T00:00:00Z')
+    })
+
+    // El ensayo del 06-09 03:00Z dio `candidates=85 wouldSend=83`: el barrido cubre a TODOS los
+    // coaches de los últimos 90 d, así que encenderlo sin este corte le escribía a coaches de julio
+    // con un aha o una «ayuda a los 7 d» dos meses tarde. Ese padrón ya recibió el drip por
+    // calendario y no hay nada nuevo que decirle.
+    it('una cuenta anterior al corte queda fuera, incluso con el aha ya ocurrido', () => {
+        const snap = snapshot({
+            createdAt: '2026-07-20T10:00:00.000Z',
+            hasRealStudentActivity: true,
+        })
+        expect(computeBehaviorTriggers(snap, NOW)).toEqual({
+            eligible: false,
+            skipped: 'before_launch',
+        })
+    })
+
+    it('un minuto antes del corte todavía es padrón viejo', () => {
+        const snap = snapshot({ createdAt: new Date(LAUNCH_MS - 60_000).toISOString() })
+        expect(evaluateBehaviorEligibility(snap, JUST_AFTER_LAUNCH)).toBe('before_launch')
+    })
+
+    it('creada JUSTO en el corte ya entra (es «en o después»)', () => {
+        const snap = snapshot({
+            createdAt: BEHAVIOR_LAUNCH_CUTOVER,
+            lastActiveAt: BEHAVIOR_LAUNCH_CUTOVER,
+        })
+        expect(evaluateBehaviorEligibility(snap, JUST_AFTER_LAUNCH)).toBeNull()
+        expect(keys(snap, JUST_AFTER_LAUNCH)).toEqual(['behavior_no_client_2h'])
     })
 })
 
@@ -248,6 +301,74 @@ describe('dedupe por (coach_id, template_key)', () => {
         })
         expect(keys(snap)).toEqual([])
         expect(pickBehaviorTrigger(computeBehaviorTriggers(snap, NOW))).toBeNull()
+    })
+})
+
+describe('espaciado por coach (24 h entre correos)', () => {
+    it('el piso es de 24 h', () => {
+        expect(BEHAVIOR_MIN_GAP_MS).toBe(24 * HOUR)
+    })
+
+    // El dedupe es por CORREO, no por persona: sin este piso el mismo coach recibía
+    // `no_client_2h` en la hora 1, `no_return_24h` en la hora 2 y `help_7d` en la hora 3.
+    it('con un correo de hace 3 h no sale nada y se cuenta como `cooldown`', () => {
+        const snap = snapshot({
+            createdAt: iso(8 * DAY),
+            lastActiveAt: null,
+            lastBehaviorSentAt: iso(3 * HOUR),
+        })
+        expect(computeBehaviorTriggers(snap, NOW)).toEqual({ eligible: false, skipped: 'cooldown' })
+    })
+
+    // La felicitación la dispara el ALUMNO y no el reloj: llegar un día tarde la vuelve ruido.
+    it('el aha ATRAVIESA el espaciado; el resto de las señales no', () => {
+        const snap = snapshot({
+            createdAt: iso(8 * DAY),
+            lastActiveAt: null,
+            hasRealStudentActivity: true,
+            lastBehaviorSentAt: iso(3 * HOUR),
+        })
+        expect(keys(snap)).toEqual(['behavior_aha'])
+    })
+
+    it('a las 25 h el motor vuelve a proponer todo', () => {
+        const snap = snapshot({
+            createdAt: iso(8 * DAY),
+            lastActiveAt: null,
+            lastBehaviorSentAt: iso(25 * HOUR),
+        })
+        expect(keys(snap)).toEqual([
+            'behavior_no_client_2h',
+            'behavior_no_return_24h',
+            'behavior_help_7d',
+        ])
+    })
+
+    it('a las 24 h exactas el piso ya se cumplió', () => {
+        const snap = snapshot({
+            createdAt: iso(3 * DAY),
+            lastActiveAt: iso(3 * DAY),
+            lastBehaviorSentAt: iso(24 * HOUR),
+        })
+        expect(keys(snap)).toContain('behavior_no_client_2h')
+    })
+
+    // Una fila `scheduled` a futuro es un correo que TODAVÍA no llegó a la casilla: amontonarle otro
+    // encima es justo lo que el piso viene a evitar.
+    it('un correo agendado a futuro también frena la corrida', () => {
+        const snap = snapshot({
+            createdAt: iso(3 * HOUR),
+            lastBehaviorSentAt: new Date(NOW.getTime() + 2 * HOUR).toISOString(),
+        })
+        expect(computeBehaviorTriggers(snap, NOW)).toEqual({ eligible: false, skipped: 'cooldown' })
+    })
+
+    // `cooldown` y `no_trigger` no son lo mismo en el resumen del cron: el primero vuelve a
+    // intentarse solo en la corrida siguiente, el segundo no tenía nada que mandar.
+    it('un coach sin ninguna señal sigue siendo `no_trigger`, no `cooldown`', () => {
+        // Cuenta de 1 h que ya recibió el aha (disparo en línea): ninguna otra ventana se cumple.
+        const snap = snapshot({ createdAt: iso(1 * HOUR), lastBehaviorSentAt: iso(50 * 60 * 1000) })
+        expect(computeBehaviorTriggers(snap, NOW)).toEqual({ eligible: true, triggers: [] })
     })
 })
 

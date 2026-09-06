@@ -16,6 +16,10 @@ import {
  * activar) y manda como máximo UN correo por coach y por corrida, deduplicado por
  * `(coach_id, template_key)` contra `coach_email_ledger`.
  *
+ * DOS FRENOS AL ENCENDIDO (06-09, tras el ensayo que dio 83 envíos en la primera hora): solo entran
+ * las cuentas creadas desde `BEHAVIOR_LAUNCH_CUTOVER`, y entre dos correos del mismo coach hay un
+ * piso de `BEHAVIOR_MIN_GAP_MS` (24 h) que solo el aha atraviesa.
+ *
  * POR QUÉ HORARIO Y NO DIARIO: `vercel.json` solo tenía crons diarios/semanales, así que un «+2 h»
  * agendado ahí sería en realidad «hasta +26 h» y el correo del día 1 llegaría al día 2 (hallazgo
  * w6-w7-08 de la auditoría 22-08). El disparo EN LÍNEA (`enqueueBehaviorCheck`, D12 = B) cubre lo
@@ -64,9 +68,15 @@ export async function GET(req: Request) {
     const admin = createServiceRoleClient()
     const summary = await sweepBehaviorEmails(admin, { now: new Date(), dry })
 
+    // `wouldSendByKey` y `beforeLaunch` van SUELTOS aunque el segundo ya viaje dentro de `skipped`:
+    // el ensayo se audita leyendo el log del cron en Vercel, y ahí lo que se necesita a simple vista
+    // es el reparto por template (cuántos correos de cada tipo saldrían) y cuántos coaches frenó el
+    // corte de lanzamiento. Sin esto hay que llamar al endpoint a mano para verlo.
     console.info(
         `[cron/onboarding-behavior] done — dry=${dry} candidates=${summary.candidates} ` +
             `sent=${summary.sent} wouldSend=${summary.wouldSend.length} ` +
+            `wouldSendByKey=${JSON.stringify(summary.wouldSendByKey)} ` +
+            `beforeLaunch=${summary.skipped.before_launch} cooldown=${summary.skipped.cooldown} ` +
             `skipped=${JSON.stringify(summary.skipped)} errors=${summary.errors}`
     )
 
