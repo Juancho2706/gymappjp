@@ -23,7 +23,7 @@ import { ShareCanvas } from './ShareCanvas'
 // Los cuatro logos de red viven en `brand-glyphs` y no acá: los comparte con los botones de destino
 // del composer (F5), y duplicar los `Path` garantizaba que un ajuste quedara en una sola superficie.
 import { FacebookGlyph, InstagramGlyph, TiktokGlyph, WhatsappGlyph } from './brand-glyphs'
-import { cloneStickerLayout, DEFAULT_SHARE_PRESET_ID, SHARE_PRESET_BY_ID } from './share-presets'
+import { cloneStickerLayout, SHARE_LAYOUT } from './share-layout'
 import { withAlpha } from './stickers'
 import { SHARE_CANVAS_H, SHARE_CANVAS_W, type WorkoutShareData } from './share-types'
 
@@ -64,10 +64,10 @@ const PILL_RADIUS = 18
 
 /**
  * Mini-card: 9:16 EXACTO como el canvas real (`ShareCanvas` deriva el alto del ancho). El mockup
- * pide ~54 px, que es el ALTO; a 9:16 eso daría 30 px de ancho y los stickers se vuelven ruido
+ * pide ~54 px, que es el ALTO; a 9:16 eso daría 30 px de ancho y el bloque se vuelve ruido
  * ilegible. 36×64 es lo más grande que entra CON AIRE en la pastilla (78 − 4 de borde = 74 de caja)
- * y todavía deja distinguir las tres masas que hacen reconocible al card: el fondo de marca, el
- * número del volumen y la silueta.
+ * y todavía deja distinguir las dos masas que hacen reconocible al card: el fondo de marca y el
+ * número del volumen.
  */
 const THUMB_W = 36
 const THUMB_H = Math.round((THUMB_W * SHARE_CANVAS_H) / SHARE_CANVAS_W)
@@ -84,13 +84,12 @@ const SHIMMER_START_MS = 240
 export const SHARE_CTA_ENTER_DELAY_MS = 320
 
 /**
- * Layout del mini: el de FÁBRICA del preset default (`placa`), nunca el vivo del composer. El chip
- * promete "así se ve tu card recién abierto", que es exactamente con lo que arranca el editor.
- * Constante de módulo y no `useMemo`: es de solo lectura (el canvas jamás muta el layout) y así la
- * referencia es estable para TODAS las instancias.
+ * Layout del mini: el de FÁBRICA, nunca el vivo del composer. El chip promete "así se ve tu card
+ * recién abierto", que es exactamente con lo que arranca el composer. Constante de módulo y no
+ * `useMemo`: es de solo lectura (el canvas jamás muta el layout) y así la referencia es estable para
+ * TODAS las instancias.
  */
-const MINI_PRESET = SHARE_PRESET_BY_ID[DEFAULT_SHARE_PRESET_ID]
-const MINI_STICKERS = cloneStickerLayout(MINI_PRESET)
+const MINI_STICKERS = cloneStickerLayout(SHARE_LAYOUT)
 
 // ── Contrato ─────────────────────────────────────────────────────────────────────────────────────
 
@@ -98,7 +97,7 @@ export interface ShareWorkoutCtaProps {
     /**
      * Los MISMOS datos que va a recibir el composer. Tiene que venir de un `useMemo` del host: el
      * mini es un `ShareCanvas` real memoizado por referencia y un `data` nuevo en cada render lo
-     * repinta entero (9 stickers + silueta SVG) — el mismo contrato que documenta `PresetChip`.
+     * repinta entero (el bloque son ~10 `Text` por el anillo de contorno de cada línea).
      */
     data: WorkoutShareData
     /** Acento del ejecutor (`exec.accent`): el CTA es chrome de la pantalla, no del card. */
@@ -324,8 +323,9 @@ export function ShareWorkoutCta({
 /**
  * Mini del card REAL, memoizado por referencia de `data`.
  *
- * Es el nodo más caro del CTA (9 stickers + una silueta SVG de ~150 paths a 40 px) y vive dentro de
- * un botón que late y brilla: sin `memo` se repintaría en cada tick de presión. El `pointerEvents`
+ * Es el nodo más caro del CTA (el bloque entero, aunque a 36 px `StrokedText` ya pinta «plano» y se
+ * ahorra el anillo) y vive dentro de un botón que late y brilla: sin `memo` se repintaría en cada
+ * tick de presión. El `pointerEvents`
  * en 'none' es obligatorio — el mini es decorativo y el tap tiene que llegar entero al Pressable.
  */
 const MiniCard = memo(function MiniCard({
@@ -352,10 +352,9 @@ const MiniCard = memo(function MiniCard({
             <ShareCanvas
                 data={data}
                 stickers={MINI_STICKERS}
-                muscleView={MINI_PRESET.muscleView}
                 // `photoUri` null con `background:'photo'` cae al fondo de marca (el canvas lo
-                // resuelve solo): acá todavía no hay foto porque el alumno no abrió el editor.
-                background={MINI_PRESET.background}
+                // resuelve solo): acá todavía no hay foto porque el alumno no abrió el composer.
+                background={SHARE_LAYOUT.background}
                 photoUri={null}
                 width={THUMB_W}
                 tokens={tokens}

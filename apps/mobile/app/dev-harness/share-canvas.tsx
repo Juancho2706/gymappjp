@@ -5,26 +5,24 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { deriveSportTokens } from '@eva/brand-kit'
 import {
     cloneStickerLayout,
-    DEFAULT_SHARE_PRESET_ID,
-    SHARE_PRESET_BY_ID,
-    SHARE_PRESETS,
+    SHARE_LAYOUT,
     ShareCanvas,
     WorkoutShareComposer,
-    type ShareBackground,
-    type SharePresetId,
     type WorkoutShareData,
 } from '../../components/alumno/share'
 
 /**
- * Harness de QA del `ShareCanvas` (Share Entreno F2). HERRAMIENTA INTERNA, no producto.
+ * Harness de QA del `ShareCanvas` (Share Entreno). HERRAMIENTA INTERNA, no producto.
  *
- * Existe porque el canvas solo se puede juzgar en un device real: el centrado por medición, los
- * rieles rotados de `marcador`/`poster` y sobre todo el alpha del modo sticker no se ven en un
- * `tsc --noEmit` ni en un export. Acá se cambia de preset y de fondo sin tener que terminar un
- * entreno de verdad para llegar al composer.
+ * Existe porque el canvas solo se puede juzgar en un device real: el centrado por medición, el
+ * contorno sub-píxel del texto y el ancho del bloque con una marca larga no se ven en un
+ * `tsc --noEmit` ni en un export. Acá se mira el card sin tener que terminar un entreno de verdad
+ * para llegar al composer.
  *
- * Datos MOCK y ricos a propósito (récords, set-list de 6, racha, handle, QR): un mock pobre esconde
- * exactamente los bugs que importan — colisiones entre stickers y textos que desbordan.
+ * Datos MOCK y ricos a propósito (volumen de 4 cifras, marca con nombre largo, varios grupos): un
+ * mock pobre esconde exactamente los bugs que importan — textos que desbordan y líneas que se
+ * pisan. `records` / `exercises` / `streakCopy` siguen poblados aunque el bloque no los pinte: el
+ * tipo `WorkoutShareData` no cambió y el harness tiene que seguir siendo un mock realista.
  */
 
 /** Hoy en LOCAL (`YYYY-MM-DD`). `toISOString()` es UTC y en Chile devolvía el día anterior. */
@@ -46,8 +44,8 @@ const MOCK: WorkoutShareData = {
         { exerciseId: 'ex-press-banca', exerciseName: 'Press banca', weightKg: 82.5, pct: 3.1, oneRmEstKg: 96.3 },
         { exerciseId: 'ex-press-militar', exerciseName: 'Press militar', weightKg: 47.5, pct: 5.6, oneRmEstKg: 55.4 },
     ],
-    // Orden DESC por volumen: los chips (`MuscleFigureSticker` view `chips`) asumen que el primero es
-    // el grupo top, igual que el `muscleWork` real del motor.
+    // Orden DESC por volumen: el bloque asume que el primero con volumen es el grupo top, igual que
+    // el `muscleWork` real del motor.
     muscles: [
         { group: 'pecho', vol: 2480 },
         { group: 'hombros', vol: 1520 },
@@ -71,33 +69,6 @@ const MOCK: WorkoutShareData = {
         instagramHandle: 'costa.fitness',
     },
     inviteUrl: 'https://www.eva-app.cl/join/EVADEMO',
-}
-
-/** Damero detrás del canvas: la ÚNICA forma de ver que el modo sticker es alpha real y no negro. */
-function Checkerboard({ width, height }: { width: number; height: number }) {
-    const cell = 32
-    const cols = Math.ceil(width / cell)
-    const rows = Math.ceil(height / cell)
-    return (
-        <View style={{ position: 'absolute', width, height, overflow: 'hidden' }}>
-            <View style={{ width: cols * cell, flexDirection: 'row', flexWrap: 'wrap' }}>
-                {Array.from({ length: cols * rows }).map((_, i) => {
-                    const r = Math.floor(i / cols)
-                    const c = i % cols
-                    return (
-                        <View
-                            key={i}
-                            style={{
-                                width: cell,
-                                height: cell,
-                                backgroundColor: (r + c) % 2 === 0 ? '#F4F4F5' : '#D4D4D8',
-                            }}
-                        />
-                    )
-                })}
-            </View>
-        </View>
-    )
 }
 
 function Chip({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
@@ -132,14 +103,11 @@ export default function ShareCanvasHarness() {
 function ShareCanvasHarnessBody() {
     const insets = useSafeAreaInsets()
     const { width: screenW } = useWindowDimensions()
-    const [presetId, setPresetId] = useState<SharePresetId>(DEFAULT_SHARE_PRESET_ID)
-    const [background, setBackground] = useState<ShareBackground>('brand')
     const [composerOpen, setComposerOpen] = useState(false)
 
-    const preset = SHARE_PRESET_BY_ID[presetId]
-    // Copia por preset: `ShareCanvas` no muta el layout, pero así el harness se comporta igual que el
-    // composer real (que sí lo muta al arrastrar) y no comparte referencia con el catálogo.
-    const stickers = useMemo(() => cloneStickerLayout(preset), [preset])
+    // Copia del layout de fábrica: `ShareCanvas` no lo muta, pero así el harness se comporta igual
+    // que el composer real (que sí lo muta al arrastrar) y no comparte referencia con el catálogo.
+    const stickers = useMemo(() => cloneStickerLayout(SHARE_LAYOUT), [])
     const tokens = useMemo(() => deriveSportTokens(MOCK.brand.accent), [])
 
     const canvasW = screenW - 32
@@ -154,12 +122,12 @@ function ShareCanvasHarnessBody() {
                     ShareCanvas · harness
                 </Text>
                 <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>
-                    Preset {preset.label} · fondo {background} · músculos {preset.muscleView}
+                    Layout único · bloque en {stickers.bloque.x} / {stickers.bloque.y}
                 </Text>
 
-                {/* Composer completo (F3). `embedded={false}`: acá el harness es una ruta normal, no
-                    hay Modal host, así que el composer abre su PROPIA ventana nativa — que es el
-                    camino que hay que probar en device (el `embedded` se ejercita desde el resumen
+                {/* Composer completo. `embedded={false}`: acá el harness es una ruta normal, no hay
+                    Modal host, así que el composer abre su PROPIA ventana nativa — que es el camino
+                    que hay que probar en device (el `embedded` se ejercita desde el resumen
                     post-entreno, que sí es un Modal). */}
                 <Pressable
                     onPress={() => setComposerOpen(true)}
@@ -174,39 +142,21 @@ function ShareCanvasHarnessBody() {
                     <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700' }}>Abrir composer</Text>
                 </Pressable>
 
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-                    {SHARE_PRESETS.map((p) => (
-                        <Chip
-                            key={p.id}
-                            label={p.label}
-                            active={p.id === presetId}
-                            onPress={() => setPresetId(p.id)}
-                        />
-                    ))}
-                </ScrollView>
-
-                {/* Sin 'photo': el harness no pide permisos de cámara ni galería (eso se prueba en el
-                    composer). Con `photoUri: null` el canvas ya cae a marca de todos modos. */}
+                {/* El harness pinta SIEMPRE sobre fondo de marca: no pide permisos de cámara ni
+                    galería (eso se prueba en el composer) y con `photoUri: null` el canvas ya cae a
+                    marca de todos modos. El chip está para dejarlo dicho, no para elegir. */}
                 <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <Chip label="Marca" active={background === 'brand'} onPress={() => setBackground('brand')} />
-                    <Chip
-                        label="Transparente"
-                        active={background === 'transparent'}
-                        onPress={() => setBackground('transparent')}
-                    />
+                    <Chip label="Marca" active onPress={() => {}} />
                 </View>
 
                 <View style={{ width: canvasW, height: canvasH, alignSelf: 'center' }}>
-                    {background === 'transparent' ? <Checkerboard width={canvasW} height={canvasH} /> : null}
                     <ShareCanvas
                         data={MOCK}
                         stickers={stickers}
-                        muscleView={preset.muscleView}
-                        background={background}
+                        background="brand"
                         photoUri={null}
                         width={canvasW}
                         tokens={tokens}
-                        posterGhost={presetId === 'poster'}
                     />
                 </View>
             </ScrollView>

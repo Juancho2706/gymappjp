@@ -1,27 +1,23 @@
 /**
- * Share Entreno (F2) — contratos PUROS de la capa visual del composer.
+ * Share Entreno — contratos PUROS de la capa visual del composer.
  *
- * Sin React ni React Native a propósito: estos tipos los consumen tanto los stickers (RN) como el
- * adaptador de datos (`build-share-data.ts`, lógica pura) y los presets (`share-presets.ts`, datos).
- * Mantenerlo libre de RN permite testear presets/adaptador en Node sin montar el runtime nativo.
+ * Sin React ni React Native a propósito: estos tipos los consumen tanto el sticker (RN) como el
+ * adaptador de datos (`build-share-data.ts`, lógica pura), el layout (`share-layout.ts`, datos) y el
+ * helper del bloque (`share-block.ts`). Mantenerlo libre de RN permite testear layout/adaptador en
+ * Node sin montar el runtime nativo.
  *
  * El QUÉ está en `docs/specs/workout-share/SPEC.md`; la arquitectura por capas en `PLAN.md`.
  */
 
 /**
- * Elementos posicionables del canvas. CADA cosa visible del card es un sticker — no hay "layout
- * fijo": el preset solo aporta posiciones/escala/visibilidad por defecto y el alumno las mueve.
+ * El ÚNICO elemento posicionable del canvas (decisión del owner, 06-09-2026): un solo bloque de
+ * texto con volumen + fila de stats + grupo top + firma del coach.
+ *
+ * Sigue siendo una unión y no un literal suelto porque todo el motor (canvas, capa de gestos,
+ * `liveDeltaFor`) está escrito contra un `Record<StickerId, …>` y las medidas se reportan por id:
+ * degradarlo a `string` perdería el chequeo de exhaustividad y no ahorraría una línea.
  */
-export type StickerId =
-    | 'volumen'
-    | 'stats'
-    | 'musculos'
-    | 'records'
-    | 'setlist'
-    | 'marca'
-    | 'fecha'
-    | 'racha'
-    | 'qr'
+export type StickerId = 'bloque'
 
 export interface StickerState {
     /**
@@ -34,28 +30,15 @@ export interface StickerState {
     /** Multiplicador de tamaño sobre el diseño base del sticker (1 = tamaño de diseño). */
     scale: number
     visible: boolean
-    /**
-     * Rotación en GRADOS (horario), alrededor del CENTRO del sticker. `undefined`/0 = sin rotar.
-     *
-     * El canvas la aplica como `transform: [{ rotate: '<n>deg' }]` sobre el wrapper posicionado —
-     * y como ese wrapper ya se ancla por su centro, el giro sale centrado sin `transformOrigin`
-     * (que RN no soporta). Existe para los rieles laterales del mockup: los chips de fecha/racha
-     * pegados al borde derecho (`marcador`, +90°) y el título/fecha vertical del borde izquierdo
-     * (`poster`, -90°) — horizontales no caben, se salen del canvas.
-     *
-     * Ojo al implementarla: el `transform` NO cambia la caja de layout, así que el clamp de bordes
-     * del modo Acomodar tiene que medir contra la caja ROTADA (ancho y alto se intercambian en
-     * ±90°), no contra la original.
-     */
-    rotation?: number
 }
 
 /**
- * Medida REAL de un sticker ya montado, en px de PANTALLA (no de diseño-1080).
+ * Medida REAL del sticker ya montado, en px de PANTALLA (no de diseño-1080).
  *
- * La emite el canvas (`ShareCanvas.reportSizes`) porque es el único que la conoce: los stickers son
- * cajas de contenido y su tamaño depende de la copy (el chip de racha mide distinto según el texto).
- * El modo Acomodar (F4) la necesita para poner su zona de gesto EXACTAMENTE encima del sticker.
+ * La emite el canvas (`ShareCanvas.reportSizes`) porque es el único que la conoce: el bloque es una
+ * caja de contenido y su tamaño depende de la copy (un volumen de 5 cifras y un nombre de marca
+ * largo lo ensanchan). La capa de gestos la necesita para poner su zona de arrastre EXACTAMENTE
+ * encima del bloque, y el pellizco para calcular su tope real (`maxScaleFor`).
  */
 export interface StickerSize {
     w: number
@@ -63,8 +46,7 @@ export interface StickerSize {
 }
 
 /**
- * Escala mínima y máxima ABSOLUTAS de un sticker. Las comparten el pellizco del lienzo y el stepper
- * del panel: una sola verdad.
+ * Escala mínima y máxima ABSOLUTAS del sticker: el rango del pellizco.
  *
  * Viven en los contratos y no en la capa de gestos porque el tope que de verdad se aplica no es este
  * número sino `maxScaleFor` — aritmética pura que se testea sin montar RN.
@@ -87,23 +69,23 @@ const SCALE_ROOM_EPSILON = 1.05
  * que entra en el lienzo.
  *
  * ── POR QUÉ NO ALCANZA UN TOPE FIJO ──
- * `3` es un número sensato para la pastilla de la fecha ("19 ago" ocupa el 12 % del ancho de diseño:
- * ×3 sigue entrando) y absurdo para los bloques grandes. Desde el rediseño de F los datos perdieron
- * sus pills, pero NO su ancho: la cifra héroe con 4 dígitos mide ~540 px de diseño ⇒ a escala 3 pide
- * 1620 sobre un canvas de 1080. Como Yoga acota la caja al ancho del lienzo y los textos van con
- * `numberOfLines={1}`, el resultado no es un sticker gigante sino un "375…" recortado con la unidad
- * `kg` empujada fuera del canvas — el alumno lo lee como que el elemento DESAPARECIÓ.
+ * `3` es un número sensato para una caja chica y absurdo para el bloque: su cifra héroe con 4
+ * dígitos mide ~540 px de diseño ⇒ a escala 3 pide 1620 sobre un canvas de 1080. Como Yoga acota la
+ * caja al ancho del lienzo y los textos van con `numberOfLines={1}`, el resultado no es un bloque
+ * gigante sino un "375…" recortado con la unidad `kg` empujada fuera del canvas — el alumno lo lee
+ * como que el elemento DESAPARECIÓ. Fue el bug que reportó el owner en el QA de Android (02-09).
  *
- * La regla es entonces por sticker y por medida real: nadie puede crecer más allá de la caja del
- * lienzo. Un elemento chico sigue llegando al 300 %; el héroe se planta cuando llena el ancho.
+ * La regla es por medida real: nadie puede crecer más allá de la caja del lienzo.
  *
- * NUNCA devuelve menos que `current`: un preset puede venir de fábrica más grande que el lienzo
- * (`poster` ancla la cifra en 2,4) y forzar un achique al primer pellizco sería mover algo que el
+ * NUNCA devuelve menos que `current`: forzar un achique al primer pellizco sería mover algo que el
  * alumno no pidió mover. Lo que se corta es el CRECIMIENTO, no lo ya elegido.
  *
  * @param current  Escala ya commiteada, la que corresponde a `size`.
  * @param size     Medida real del sticker a `current` (px de pantalla). Sin ella no hay tope fino.
- * @param rotation Grados del sticker: a ±90 la caja intercambia ancho y alto (rieles laterales).
+ * @param rotation Grados del sticker: a ±90 la caja intercambia ancho y alto. El layout único ya
+ *                 no rota nada (los rieles laterales eran de los presets, que se retiraron), pero
+ *                 el parámetro se queda: es aritmética pura ya testeada y su default `0` es
+ *                 exactamente el caso vigente. Borrarlo solo rompería el test que la fija.
  */
 export function maxScaleFor(
     current: number,
@@ -115,7 +97,7 @@ export function maxScaleFor(
     if (!(current > 0) || !size || size.w <= 0 || size.h <= 0 || canvasW <= 0 || canvasH <= 0) {
         return STICKER_SCALE_MAX
     }
-    // Rotado ±90 el sticker ocupa de ancho lo que mide de alto (contrato de `StickerState.rotation`).
+    // Rotado ±90 el sticker ocuparía de ancho lo que mide de alto. Hoy `rotation` siempre llega 0.
     const onEdge = Math.abs(Math.round(rotation / 90)) % 2 === 1
     const boxW = onEdge ? size.h : size.w
     const boxH = onEdge ? size.w : size.h
@@ -154,8 +136,8 @@ export function idleStickerTransform(): StickerLiveTransform {
  *
  * WORKLET: corre en el UI thread (lo consumen los `useAnimatedStyle` del canvas y de la capa de
  * gestos). Vive acá, en los contratos, porque las DOS capas tienen que calcular exactamente el
- * mismo desplazamiento — si se desincronizan, el marco de selección deja de coincidir con el
- * sticker y el alumno arrastra "al lado" de lo que ve.
+ * mismo desplazamiento — si se desincronizan, el marco punteado deja de coincidir con el bloque y
+ * el alumno arrastra "al lado" de lo que ve.
  */
 export function liveDeltaFor(
     live: StickerLiveTransform,
@@ -174,27 +156,15 @@ export function liveDeltaFor(
 }
 
 /**
- * Cómo se dibuja el trabajo muscular: silueta anatómica (frente / espalda / ambas) o chips con los
- * grupos top. `chips` existe para los presets con poco espacio vertical (sello, set-list).
- */
-export type MuscleView = 'front' | 'back' | 'both' | 'chips'
-
-/**
- * Fondo del canvas. `transparent` = sticker mode (PNG con alpha para pegar DENTRO de Instagram
- * sobre la foto del propio usuario, ver SPEC §Editor).
+ * Fondo del canvas.
+ *
+ * `transparent` = sticker mode (PNG con alpha). El composer ya NO lo ofrece (decisión del owner
+ * 06-09-2026: la única edición es mover y escalar el bloque), pero el MOTOR lo conserva: el canvas
+ * lo resuelve en una línea y `share-targets.ts` lo usa para decidir `stickerImage` vs
+ * `backgroundImage` en el payload de Stories. Sacarlo del tipo obligaría a tocar los destinos y sus
+ * tests para no ganar nada — la regla del tren es diff mínimo en el motor.
  */
 export type ShareBackground = 'photo' | 'brand' | 'transparent'
-
-export type SharePresetId = 'placa' | 'heatmap' | 'sello' | 'marcador' | 'poster' | 'setlist'
-
-export interface SharePreset {
-    id: SharePresetId
-    label: string
-    /** Fondo por defecto (el usuario puede cambiarlo; 'photo' cae a 'brand' si no hay foto). */
-    background: ShareBackground
-    muscleView: MuscleView
-    stickers: Record<StickerId, StickerState>
-}
 
 /** Récord del día ya formateado para el card (detección idéntica al resumen post-entreno). */
 export interface ShareRecord {
@@ -231,14 +201,22 @@ export interface WorkoutShareBrand {
 export interface WorkoutShareData {
     title: string
     contextLine: string | null
-    /** Fecha del entreno en `YYYY-MM-DD` (día local, no UTC — ver `DateChipSticker`). */
+    /**
+     * Fecha del entreno en `YYYY-MM-DD`, día LOCAL y no UTC. El bloque no la imprime, pero viaja en
+     * el nombre del PNG (`eva-entreno-<fecha>`): armada con `toISOString()` en Chile (UTC-4) el
+     * archivo saldría fechado el día anterior.
+     */
     dateISO: string
     durationSec: number | null
     totalVolumeKg: number
     completedSets: number
     totalReps: number
     records: ShareRecord[]
-    /** `session.muscleWork` CRUDO — es el input de `muscleGroupsToRegionIntensity`, no un derivado. */
+    /**
+     * `session.muscleWork` CRUDO, ya ordenado DESC por volumen. El bloque imprime solo el nombre del
+     * primero (`share-block.ts`); se guarda crudo y no como `topMuscle` ya resuelto porque el
+     * adaptador no tiene por qué saber cuántos grupos pinta la capa visual.
+     */
     muscles: { group: string; vol: number }[]
     exercises: ShareExercise[]
     streakCopy: string | null

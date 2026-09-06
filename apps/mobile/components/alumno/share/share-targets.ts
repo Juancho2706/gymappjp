@@ -14,7 +14,6 @@ import {
     type ShareAppName,
     type ShareNotice,
 } from './share-notices'
-import type { SharePresetId } from './share-types'
 
 /**
  * Share Entreno (F5) — los DESTINOS del card ya rasterizado.
@@ -79,8 +78,6 @@ export interface ShareTargetInput {
     accent: string
     /** Link de invitación del coach con `?ref=` (o `null` si el coach no tiene código). */
     inviteUrl: string | null
-    /** Preset final elegido por el alumno; viaja como `k=` en el link del portapapeles. */
-    presetId: SharePresetId
 }
 
 // ── Config ───────────────────────────────────────────────────────────────────────────────────────
@@ -157,18 +154,21 @@ async function fallbackToSheet(input: ShareTargetInput, target: ShareTarget, app
  * `attributionURL`/swipe-up no existen para apps normales). Lo único que funciona es dejarle el link
  * copiado y decírselo, para que lo pegue en el sticker.
  *
- * El `k={preset}` se agrega ACÁ y no en `build-share-data`: esa URL es la que se hornea en el QR
- * cuando el canvas se pinta, y el alumno todavía puede cambiar de estilo después. Este momento —el
- * tap en el destino— es el único que conoce el preset FINAL.
+ * El `k=` marca de qué card salió el link. Era el preset elegido cuando había seis; desde la
+ * simplificación del 06-09-2026 hay un solo card, así que la constante es `bloque` — se conserva el
+ * parámetro (no se borra) para que las URLs viejas ya repartidas y las nuevas sigan hablando el
+ * mismo idioma en la atribución.
  *
  * El separador se calcula: `inviteUrl` trae `?ref=…` solo cuando hay `clientId`; sin él la URL viene
  * limpia y un `&k=` a secas la rompería.
  */
-async function copyInviteLink(inviteUrl: string | null, presetId: SharePresetId): Promise<boolean> {
+const SHARE_LINK_KIND = 'bloque'
+
+async function copyInviteLink(inviteUrl: string | null): Promise<boolean> {
     if (!inviteUrl) return false
     const separator = inviteUrl.includes('?') ? '&' : '?'
     try {
-        await Clipboard.setStringAsync(`${inviteUrl}${separator}k=${encodeURIComponent(presetId)}`)
+        await Clipboard.setStringAsync(`${inviteUrl}${separator}k=${SHARE_LINK_KIND}`)
         return true
     } catch {
         return false
@@ -236,7 +236,7 @@ export async function shareToInstagramStories(input: ShareTargetInput): Promise<
     // background y el usuario necesita el link YA para pegarlo en el sticker. El AVISO en cambio
     // viaja en el resultado y se pinta al volver — mostrarlo ahora sería un cartel de 4 s que nadie
     // llega a leer porque la pantalla ya cambió de app.
-    const copied = await copyInviteLink(input.inviteUrl, input.presetId)
+    const copied = await copyInviteLink(input.inviteUrl)
 
     try {
         await RNShare.shareSingle({
@@ -266,7 +266,7 @@ export async function shareToFacebookStories(input: ShareTargetInput): Promise<S
     if (!FACEBOOK_APP_ID) return fallbackToSheet(input, target, 'Facebook')
 
     // Facebook tiene la misma limitación de links que Instagram: el sticker lo pone el usuario.
-    const copied = await copyInviteLink(input.inviteUrl, input.presetId)
+    const copied = await copyInviteLink(input.inviteUrl)
 
     try {
         await RNShare.shareSingle({

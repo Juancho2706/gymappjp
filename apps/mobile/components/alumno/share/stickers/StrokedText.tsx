@@ -28,10 +28,10 @@ import { OUTLINE_COLOR, PLAIN_CANVAS_SCALE, STROKE, strokeShadow, type StrokeSiz
  * cuanto el texto trunca.
  *
  * ── EL CAMINO «PLANO» ──
- * Bajo `PLAIN_CANVAS_SCALE` (miniaturas de preset del paso «Editar») no hay anillo: un solo `Text`
- * blanco con la sombra. A `k ≈ 0,063` el contorno vale ~0,06 px sobre una letra de ~2 px — las
- * copias no dibujan un borde, embarran el glifo — y montar 6 minis a 10 nodos por texto castiga el
- * tiempo de montaje y de `captureRef` sin que se vea nada a cambio.
+ * Bajo `PLAIN_CANVAS_SCALE` (el mini-card del CTA del resumen, 36 px de ancho) no hay anillo: un
+ * solo `Text` blanco con la sombra. A esa escala el contorno vale centésimas de píxel sobre una
+ * letra de ~2 px — las copias no dibujan un borde, embarran el glifo — y montar 10 nodos por texto
+ * castiga el tiempo de montaje sin que se vea nada a cambio.
  */
 
 /** Anillo cerrado: 4 rectas + 4 diagonales. */
@@ -96,9 +96,9 @@ export function StrokedText({
     // desbordaría el sticker. Nunca escala, en ninguna copia.
     const shared = { ...rest, allowFontScaling: false }
 
-    // Miniatura de preset: el anillo no se ve como contorno sino como suciedad, y son 6 canvases
-    // montados a la vez. Un solo `Text` blanco con la sombra — que a esta escala es lo único que
-    // aporta legibilidad — y listo. Sigue siendo el que define la caja que mide `ShareCanvas`.
+    // Miniatura: el anillo no se ve como contorno sino como suciedad. Un solo `Text` blanco con la
+    // sombra — que a esta escala es lo único que aporta legibilidad — y listo. Sigue siendo el que
+    // define la caja que mide `ShareCanvas`.
     if (sw.canvasScale < PLAIN_CANVAS_SCALE) {
         return (
             <View style={[{ position: 'relative' }, containerStyle]}>

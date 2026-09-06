@@ -4,12 +4,11 @@ import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reani
 import { Image } from 'expo-image'
 import { LinearGradient } from 'expo-linear-gradient'
 import type { SportTokens } from '@eva/brand-kit'
-import { STICKER_PAINT_ORDER } from './share-presets'
+import { STICKER_PAINT_ORDER } from './share-layout'
 import {
     liveDeltaFor,
     SHARE_CANVAS_H,
     SHARE_CANVAS_W,
-    type MuscleView,
     type ShareBackground,
     type StickerId,
     type StickerLiveTransform,
@@ -17,105 +16,63 @@ import {
     type StickerState,
     type WorkoutShareData,
 } from './share-types'
-import {
-    BrandFooterSticker,
-    DateChipSticker,
-    INK_900,
-    INK_950,
-    MuscleFigureSticker,
-    QrSticker,
-    RecordsBandSticker,
-    SetlistSticker,
-    StatsRowSticker,
-    StreakChipSticker,
-    VolumenHeroSticker,
-} from './stickers'
+import { INK_900, INK_950, StatsBlockSticker } from './stickers'
 
 /**
- * Share Entreno (F2) — el LIENZO. Es exactamente el nodo que `captureRef` rasteriza a 1080×1920.
+ * Share Entreno — el LIENZO. Es exactamente el nodo que `captureRef` rasteriza a 1080×1920.
  *
  * Componente PURO por contrato: sin queries, sin ThemeContext (el acento llega en `tokens`), sin
- * gestos y sin chrome de edición. Todo lo que se vea acá sale en el PNG — por eso el modo Acomodar
- * (F4) envuelve los stickers POR FUERA con `GestureDetector` en vez de meter handles adentro: un
- * borde de selección capturado sería un bug imposible de explicarle al alumno.
+ * gestos y sin chrome de edición. Todo lo que se vea acá sale en el PNG — por eso la edición
+ * envuelve al bloque POR FUERA con `GestureDetector` en vez de meter handles adentro: un borde
+ * punteado capturado sería un bug imposible de explicarle al alumno.
  *
- * Lo ÚNICO que F4 mete adentro es el desplazamiento vivo del arrastre (`liveTransform`): es un
- * transform, no un adorno, así que no pinta nada nuevo y al soltar vuelve a cero. Los handles, las
- * guías de alineación y el marco de selección se quedan afuera, en `StickerGestureLayer`.
+ * Lo ÚNICO que la capa de gestos mete adentro es el desplazamiento vivo del arrastre
+ * (`liveTransform`): es un transform, no un adorno, así que no pinta nada nuevo y al soltar vuelve a
+ * cero. El marco punteado y las guías de alineación se quedan afuera, en `StickerGestureLayer`.
  *
  * El canvas NO redondea sus esquinas (`borderRadius: 0`): el PNG va full-bleed a la story. El
  * preview de la pantalla puede redondearlo envolviéndolo en un View con `overflow:'hidden'`.
  */
 export interface ShareCanvasProps {
     data: WorkoutShareData
-    /** Layout vivo del composer (arranca en los defaults del preset, el alumno lo mueve). */
+    /** Layout vivo del composer (arranca en el de fábrica, el alumno lo mueve y lo escala). */
     stickers: Record<StickerId, StickerState>
-    muscleView: MuscleView
     background: ShareBackground
     /** `file://` de cámara/galería. `null` con `background: 'photo'` ⇒ cae a fondo de marca. */
     photoUri: string | null
     /** Ancho de render en px. El alto sale de él: el canvas es 9:16 SIEMPRE. */
     width: number
     tokens: SportTokens
-    /** Preset Póster: la cifra gigante va delante del sujeto con alpha bajo (PLAN §Póster). */
-    posterGhost?: boolean
     /**
-     * Sub-toggle del editor (F3): el `@handle` del coach vive DENTRO del sticker de marca, así que
-     * no tiene `visible` propio en el layout — viaja como prop hasta `BrandFooterSticker`.
-     * Default `true` (el handle es el mecanismo de growth del feature).
-     */
-    showHandle?: boolean
-    /**
-     * Emite las medidas vivas de los stickers montados (F4). El canvas ya las tiene — las necesita
-     * para anclar por el centro — y la capa de gestos las necesita para poner su zona de arrastre
-     * EXACTAMENTE encima de cada sticker; duplicar la medición en la capa (con hijos fantasma)
-     * daría dos verdades que se desincronizan en el primer texto que cambie de largo.
+     * Emite la medida viva del bloque montado. El canvas ya la tiene — la necesita para anclar por
+     * el centro — y la capa de gestos la necesita para poner su zona de arrastre EXACTAMENTE
+     * encima; duplicar la medición en la capa (con un hijo fantasma) daría dos verdades que se
+     * desincronizan en el primer texto que cambie de largo.
      */
     reportSizes?: (sizes: Partial<Record<StickerId, StickerSize>>) => void
     /**
-     * Arrastre/pellizco VIVO del modo Acomodar (F4). Cuando llega, los stickers se envuelven en
-     * `Animated.View` y siguen el dedo en el UI thread; el commit a `stickers` ocurre al soltar.
+     * Arrastre/pellizco VIVO. Cuando llega, el bloque se envuelve en `Animated.View` y sigue el dedo
+     * en el UI thread; el commit a `stickers` ocurre al soltar.
      *
      * NO lo pases y lo saques en caliente: cambiar el tipo de elemento (View ⇄ Animated.View)
-     * REMONTA el sticker — y la silueta anatómica son ~150 paths SVG. El composer lo pasa desde el
-     * montaje y en los tres pasos; los minis de la fila de presets NUNCA lo pasan (no se arrastran,
-     * y así se ahorran 6×9 nodos animados en el nodo más caro del editor).
+     * REMONTA el sticker. El composer lo pasa desde el montaje; los minis decorativos (el CTA del
+     * resumen, el harness) NUNCA lo pasan — no se arrastran.
      */
     liveTransform?: SharedValue<StickerLiveTransform>
 }
 
-/**
- * Auto-ocultado POR DATOS, además del `visible` del preset.
- *
- * Los stickers ya devuelven `null` sin contenido, pero un wrapper vacío igual se monta, se mide y
- * ocupa un turno de layout. Filtrarlo acá deja el árbol capturado limpio y evita que el modo
- * Acomodar (F4) ofrezca arrastrar una caja de 0×0 invisible.
- */
-function hasContentFor(id: StickerId, data: WorkoutShareData): boolean {
-    switch (id) {
-        case 'records':
-            return data.records.length > 0
-        case 'qr':
-            return !!data.inviteUrl
-        case 'racha':
-            return !!data.streakCopy
-        case 'setlist':
-            return data.exercises.length > 0
-        default:
-            return true
-    }
-}
+// El filtro `hasContentFor` (auto-ocultado por datos) se retiró junto con los 9 stickers: el bloque
+// SIEMPRE tiene algo que decir. Sin volumen cae al fallback de series (`share-block.ts`) y sin
+// músculos identificados solo se saltea esa línea — nunca mide 0×0 ni deja una caja vacía que
+// arrastrar.
 
 export function ShareCanvas({
     data,
     stickers,
-    muscleView,
     background,
     photoUri,
     width,
     tokens,
-    posterGhost = false,
-    showHandle = true,
     reportSizes,
     liveTransform,
 }: ShareCanvasProps) {
@@ -154,24 +111,8 @@ export function ShareCanvas({
     function renderSticker(id: StickerId, state: StickerState) {
         const props = { data, k, stickerScale: state.scale, tokens }
         switch (id) {
-            case 'volumen':
-                return <VolumenHeroSticker {...props} ghost={posterGhost} />
-            case 'stats':
-                return <StatsRowSticker {...props} />
-            case 'musculos':
-                return <MuscleFigureSticker {...props} view={muscleView} />
-            case 'records':
-                return <RecordsBandSticker {...props} />
-            case 'setlist':
-                return <SetlistSticker {...props} />
-            case 'marca':
-                return <BrandFooterSticker {...props} showHandle={showHandle} />
-            case 'fecha':
-                return <DateChipSticker {...props} />
-            case 'racha':
-                return <StreakChipSticker {...props} />
-            case 'qr':
-                return <QrSticker {...props} />
+            case 'bloque':
+                return <StatsBlockSticker {...props} />
         }
     }
 
@@ -228,7 +169,6 @@ export function ShareCanvas({
             {STICKER_PAINT_ORDER.map((id) => {
                 const state = stickers[id]
                 if (!state || !state.visible) return null
-                if (!hasContentFor(id, data)) return null
 
                 const size = sizes[id]
                 const slot = {
@@ -261,12 +201,11 @@ interface SlotProps {
 }
 
 /**
- * Camino por defecto (captura, minis de presets): un `View` pelado, sin Reanimated.
+ * Camino por defecto (minis decorativos): un `View` pelado, sin Reanimated.
  *
  * Ancla en la esquina superior-izquierda; el centrado real lo hace el transform. OJO: Yoga mide al
  * hijo absoluto contra el ANCHO COMPLETO del canvas (no contra el resto a la derecha de `left`), así
- * que un sticker anclado en x=0.93 se mide entero y luego desborda — que es justo lo que necesitan
- * los rieles laterales rotados.
+ * que un bloque anclado cerca del borde se mide entero y después desborda.
  */
 function StaticStickerSlot({ state, size, width, height, onLayout, children }: SlotProps) {
     return (
@@ -283,10 +222,6 @@ function StaticStickerSlot({ state, size, width, height, onLayout, children }: S
                 transform: [
                     { translateX: size ? -size.w / 2 : 0 },
                     { translateY: size ? -size.h / 2 : 0 },
-                    // La rotación va DESPUÉS del centrado: RN no tiene `transformOrigin` y gira sobre
-                    // el centro de la caja, así que con el sticker ya anclado por su centro el giro
-                    // sale donde corresponde (contrato documentado en `StickerState.rotation`).
-                    ...(state.rotation ? [{ rotate: `${state.rotation}deg` }] : []),
                 ],
             }}
         >
@@ -296,20 +231,19 @@ function StaticStickerSlot({ state, size, width, height, onLayout, children }: S
 }
 
 /**
- * Mismo anclaje, pero con el desplazamiento vivo del modo Acomodar sumado en el UI thread.
+ * Mismo anclaje, pero con el desplazamiento vivo del arrastre sumado en el UI thread.
  *
  * El sticker REAL es el que se mueve — no una copia dibujada en la capa de gestos. Se probó lo
  * contrario (ocultar el original y arrastrar un clon) y sale caro por dos lados: duplica el camino
- * de render y obliga a desmontar/remontar el sticker en cada toque, que con la silueta anatómica
- * (~150 paths) se siente como un tirón justo al empezar a arrastrar.
+ * de render y obliga a desmontar/remontar el bloque en cada toque, que se siente como un tirón justo
+ * al empezar a arrastrar.
  *
  * `left`/`top` siguen siendo layout normal (posición YA commiteada) y el delta viaja por transform:
  * al soltar, React re-renderiza con la posición nueva y `liveDeltaFor` devuelve 0 en ese MISMO
  * render, así que no hay ni un frame con las dos cosas aplicadas ni con ninguna.
  *
- * El orden del transform es el mismo que el estático: RN compone la lista de derecha a izquierda, o
- * sea escala → rota → corre. El delta va en la traslación (izquierda del todo) para que el sticker
- * siga al dedo en coordenadas de PANTALLA aunque esté rotado ±90.
+ * El orden del transform (`translate → scale`) tiene que ser EL MISMO que el de la zona de gesto en
+ * `StickerGestureLayer`: si se separan, el marco punteado deja de calzar con el bloque al pellizcar.
  */
 function LiveStickerSlot({
     id,
@@ -324,7 +258,6 @@ function LiveStickerSlot({
     const baseX = state.x * width
     const baseY = state.y * height
     const baseScale = state.scale
-    const rotation = state.rotation ?? 0
     const w = size ? size.w : 0
     const h = size ? size.h : 0
 
@@ -334,7 +267,6 @@ function LiveStickerSlot({
             transform: [
                 { translateX: -w / 2 + d.dx },
                 { translateY: -h / 2 + d.dy },
-                { rotate: `${rotation}deg` },
                 { scale: d.k },
             ],
         }

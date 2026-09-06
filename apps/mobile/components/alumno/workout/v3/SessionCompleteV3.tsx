@@ -30,7 +30,7 @@ import { WeekStreakDots } from './WeekStreakDots'
 import { NumberTicker, formatThousandsEsCl } from './NumberTicker'
 import type { ExecTheme } from './exec-theme'
 import type { WeeklyStreak } from './weekly-streak'
-import { buildWorkoutShareData, DEFAULT_SHARE_PRESET_ID, ShareWorkoutCta, WorkoutShareComposer } from '../../share'
+import { buildWorkoutShareData, ShareWorkoutCta, WorkoutShareComposer } from '../../share'
 import { captureAppEvent } from '../../../../lib/analytics'
 import {
   ShareCardDate,
@@ -658,12 +658,13 @@ export function SessionCompleteV3({
               reducedMotion={reducedMotion}
               play={showStats}
               onPress={() => {
-                // F7.2 — boca del funnel de Compartir Entreno. `card_kind` es el estilo con el que
-                // ABRE el composer (siempre el de fábrica); el estilo que el alumno termine eligiendo
-                // lo reporta `student_share_style_selected`. Sin datos de salud en las props (21.719):
-                // nada de kg, músculos ni ejercicios, solo metadatos de la interacción.
+                // F7.2 — boca del funnel de Compartir Entreno. `card_kind` es qué card se abrió:
+                // desde la simplificación del 06-09-2026 hay uno solo, `bloque` (antes viajaba el
+                // preset de fábrica). La prop se queda para que la serie histórica no se corte. Sin
+                // datos de salud (21.719): nada de kg, músculos ni ejercicios, solo metadatos de la
+                // interacción.
                 captureAppEvent('student_share_card_opened', {
-                  card_kind: DEFAULT_SHARE_PRESET_ID,
+                  card_kind: 'bloque',
                   surface: 'workout_summary',
                 })
                 setComposerOpen(true)

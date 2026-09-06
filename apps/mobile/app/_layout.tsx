@@ -32,6 +32,9 @@ import {
   JetBrainsMono_600SemiBold,
   JetBrainsMono_700Bold,
 } from '@expo-google-fonts/jetbrains-mono'
+// Share Entreno: Inter FIJA (FONT.share*). Los assets ya viajaban en el bundle por el catálogo
+// white-label (`lib/brand-fonts.ts`), pero solo se registraban cuando el coach elegía Inter.
+import { Inter_600SemiBold, Inter_700Bold, Inter_800ExtraBold } from '@expo-google-fonts/inter'
 import type { Session } from '@supabase/supabase-js'
 import { ReducedMotionConfig, ReduceMotion } from 'react-native-reanimated'
 import * as Sentry from '@sentry/react-native'
@@ -309,6 +312,11 @@ function RootLayoutWithFonts({ branding }: { branding: CoachBranding | null }) {
     JetBrainsMono_500Medium,
     JetBrainsMono_600SemiBold,
     JetBrainsMono_700Bold,
+    // Share Entreno (bloque del card): Inter fija, NUNCA la fuente de marca. Va ANTES del spread
+    // de slots porque no colisiona con ninguno ('Inter_*' no es un nombre de slot display).
+    Inter_600SemiBold,
+    Inter_700Bold,
+    Inter_800ExtraBold,
     // Slots display 600-900 ('Archivo_600SemiBold'..'Archivo_900Black'): brand font
     // resuelta (gate Pro+ + preset + catálogo cerrado) o Archivo real. Va AL FINAL
     // para que gane sobre cualquier entrada estática homónima.

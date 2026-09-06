@@ -86,7 +86,6 @@ const INPUT: ShareTargetInput = {
     transparent: false,
     accent: '#1462DC',
     inviteUrl: 'https://eva-app.cl/u/coach?ref=abc',
-    presetId: 'heatmap',
 }
 
 beforeEach(() => {
@@ -128,8 +127,10 @@ describe('destino directo que no abre', () => {
 
         const result = await shareToInstagramStories(INPUT)
 
-        // El link igual quedó copiado ANTES del salto (patrón Strava), con el preset final en `k=`.
-        expect(native.setStringAsync).toHaveBeenCalledWith('https://eva-app.cl/u/coach?ref=abc&k=heatmap')
+        // El link igual quedó copiado ANTES del salto (patrón Strava). El `k=` marca de qué card
+        // salió: desde la simplificación del 06-09-2026 hay uno solo, `bloque` (antes viajaba el
+        // preset elegido).
+        expect(native.setStringAsync).toHaveBeenCalledWith('https://eva-app.cl/u/coach?ref=abc&k=bloque')
         expect(result.outcome).toBe('fallback')
         expect(result.notice?.text).toContain('Instagram')
     })

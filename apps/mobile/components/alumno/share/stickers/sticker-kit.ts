@@ -1,10 +1,10 @@
 /**
- * Share Entreno (F2) — vocabulario compartido de los stickers.
+ * Share Entreno — vocabulario visual del canvas.
  *
- * Los 9 stickers son componentes visuales PUROS: no se posicionan (eso lo hace el canvas), no leen
- * ThemeContext (el acento llega resuelto por props) y no tienen estado. Este módulo concentra lo
- * único que sí comparten: la paleta fija del canvas oscuro, el escalado proporcional y el contrato
- * de props — para que un cambio de tono no haya que cazarlo en nueve archivos.
+ * El sticker del bloque es un componente PURO: no se posiciona (eso lo hace el canvas), no lee
+ * ThemeContext (el acento llega resuelto por props) y no tiene estado. Este módulo concentra lo que
+ * comparte con el lienzo: la paleta fija del canvas oscuro, el escalado proporcional y el contrato
+ * de props — un cambio de tono se hace en un solo lugar.
  *
  * Paleta: mismos literales que `ShareCard.tsx` (canvas SIEMPRE oscuro en ambos temas de la app, la
  * marca entra solo por el acento) — ver su cabecera "ALWAYS-DARK CANVAS".
@@ -56,28 +56,27 @@ export const STROKE = {
 /**
  * Umbral de MINIATURA, medido sobre `k` (la escala del CANVAS) y no sobre `k × stickerScale`.
  *
- * Debajo de esto el anillo de copias deja de ser un contorno y pasa a ser un borrón: en las minis de
- * preset del paso «Editar» (68 px de ancho ⇒ `k ≈ 0,063`) el contorno vale ~0,06 px sobre un texto
- * de ~2 px, o sea que las 8 copias se apilan encima del glifo y lo ensucian — además de multiplicar
- * ×10 los nodos de cada mini (el set-list pasa de ~26 `Text` a ~170, y hay 6 minis + el grande
- * montados a la vez). A esa escala `StrokedText` pinta «plano»: texto blanco + sombra.
+ * Debajo de esto el anillo de copias deja de ser un contorno y pasa a ser un borrón: en el mini-card
+ * del CTA del resumen (36 px de ancho ⇒ `k ≈ 0,033`) el contorno vale centésimas de píxel sobre un
+ * texto de ~2 px, o sea que las 8 copias se apilan encima del glifo y lo ensucian — además de
+ * multiplicar ×10 los nodos de un elemento decorativo. A esa escala `StrokedText` pinta «plano»:
+ * texto blanco + sombra.
  *
  * ── POR QUÉ CONTRA `k` Y NO CONTRA EL FACTOR COMPLETO ──
- * Los `stickerScale` del catálogo van de 0,8 a 1,5, así que con el factor completo los rangos se
- * PISAN: una mini con la silueta (0,063 × 1,5 = 0,094) queda por encima del QR del canvas grande en
- * un teléfono corto (0,12 × 0,8 = 0,096). El resultado sería una card con la mitad de los datos
- * contorneados y la otra mitad no — y como `captureRef` rasteriza lo que hay EN PANTALLA, ese
- * desparejo viajaría al PNG exportado. Contra `k`, la decisión es del canvas entero.
+ * Con el factor completo, un mini con el bloque agrandado y un lienzo grande con el bloque achicado
+ * podrían caer del mismo lado del umbral y la decisión dejaría de ser del canvas: saldría una card
+ * con la mitad de los datos contorneados y la otra mitad no. Y como `captureRef` rasteriza lo que
+ * hay EN PANTALLA, ese desparejo viajaría al PNG exportado. Contra `k`, decide el canvas entero.
  *
- * 0,09 separa la mini (0,063) del lienzo del editor en el teléfono más chico que soportamos
- * (~133 px ⇒ `k ≈ 0,12`). Si `THUMB_W` sube, este número sube con él.
+ * 0,09 separa el mini del CTA (0,033) del lienzo del composer en el teléfono más chico que
+ * soportamos (~133 px ⇒ `k ≈ 0,12`).
  */
 export const PLAIN_CANVAS_SCALE = 0.09
 
 // Los neutros blancos del canvas oscuro (`W88`…`W08`) y los colores de sistema `EMBER_500` /
-// `AMBER_200` se borraron: ningún sticker los usaba desde el rediseño de F (los datos son todos
-// `#FFFFFF` + contorno). Volver atrás en cualquiera de las decisiones F.6 es un `git revert`, no
-// ocho constantes muertas esperando.
+// `AMBER_200` se borraron: nadie los usaba desde el rediseño de F (los datos son todos `#FFFFFF` +
+// contorno). Volver atrás en cualquiera de esas decisiones es un `git revert`, no ocho constantes
+// muertas esperando.
 
 /** "#rrggbb" + alfa → "rgba(r,g,b,a)". Espejo de ShareCard.tsx:702. */
 export function withAlpha(hex: string, alpha: number): string {
@@ -90,7 +89,7 @@ export function withAlpha(hex: string, alpha: number): string {
 }
 
 /**
- * Contrato de TODO sticker.
+ * Contrato del sticker.
  *
  * `k` = anchoPantalla / 1080 y `stickerScale` = escala del sticker en el layout. Todo tamaño se
  * diseña contra el canvas de 1080 y se emite como `diseño × k × stickerScale`: es la misma regla que
@@ -164,18 +163,12 @@ export function accentOf(tokens: SportTokens): string {
 }
 
 // `accentTint` (tinte de superficie del acento para pills/paneles) se borró con el rediseño de F: la
-// regla del owner es que el color del coach vive SOLO en la silueta (`MuscleBodySvg`). Dejarlo
-// exportado era una invitación a que el acento volviera a aparecer detrás de un dato.
+// regla del owner es que el color del coach NO aparece detrás de un dato. Hoy el acento pinta un
+// solo elemento del card — el círculo con la inicial cuando el coach no tiene logo.
 
-/**
- * `YYYY-MM-DD` → `Date` LOCAL. `new Date('2026-08-19')` se interpreta como UTC y en Chile (UTC-4)
- * retrocede al día anterior: el card diría "18 ago" para un entreno del 19. Se arma a mano.
- */
-export function localDateFromISO(iso: string): Date {
-    const [y, m, d] = iso.split('-').map((n) => parseInt(n, 10))
-    if (!y || !m || !d) return new Date()
-    return new Date(y, m - 1, d)
-}
+// `localDateFromISO` se fue con el chip de fecha: el bloque no imprime la fecha. Si vuelve, el
+// gotcha que resolvía sigue vigente y está anotado en `WorkoutShareData.dateISO`: `new Date('…')`
+// se interpreta como UTC y en Chile (UTC-4) retrocede al día anterior.
 
 /**
  * kg legibles (60 → '60', 62.5 → '62,5'). Reexportado desde el adaptador: es la MISMA regla de
@@ -183,7 +176,10 @@ export function localDateFromISO(iso: string): Date {
  */
 export { formatKg } from '../build-share-data'
 
-/** Primera letra en mayúscula (los `muscle_group` del catálogo vienen en formatos mixtos). */
+/**
+ * Primera letra en mayúscula (los `muscle_group` del catálogo vienen en formatos mixtos). Lo consume
+ * `share-block.ts` para el grupo top del bloque.
+ */
 export function capitalize(raw: string): string {
     if (!raw) return raw
     return raw.charAt(0).toUpperCase() + raw.slice(1)

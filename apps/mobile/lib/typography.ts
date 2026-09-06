@@ -37,6 +37,13 @@ export const FONT = {
   display: 'Archivo_700Bold',
   displayBold: 'Archivo_800ExtraBold',
   displayBlack: 'Archivo_900Black',
+  // Share Entreno: Inter FIJA (decisión owner 06-09-2026, tipografía de Strava); no pasa por los
+  // slots white-label. Los nombres `Archivo_600SemiBold`..`Archivo_900Black` de arriba SON slots:
+  // `brandDisplayFontMap` los reapunta al asset de la fuente de marca del coach, así que el bloque
+  // del card cambiaría de tipografía según el coach. El share tiene una sola cara, siempre la misma.
+  shareLabel: 'Inter_600SemiBold',
+  shareBold: 'Inter_700Bold',
+  shareValue: 'Inter_800ExtraBold',
   // Mono / metrics / timers — JetBrains Mono
   mono: 'JetBrainsMono_400Regular',
   monoMedium: 'JetBrainsMono_500Medium',
