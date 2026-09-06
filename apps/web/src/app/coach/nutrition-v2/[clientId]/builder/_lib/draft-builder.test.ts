@@ -1338,3 +1338,58 @@ describe('assembleDraft — N variantes de dia', () => {
     expect(result.errors['item.i1.quantity']).toBeTruthy()
   })
 })
+
+/**
+ * W1.1 «Cantidades honestas»: el wizard tiene reductor propio y `UPDATE_ITEM` era un merge
+ * ciego del patch. Cambiar la unidad dejaba la cantidad quieta, asi que "200" pasaba de 200 g a
+ * 200 PORCIONES. La conversion sale del mismo helper puro del paquete que usan el editor unico
+ * (`SET_ITEM_UNIT`) y el wizard RN.
+ */
+describe('builderReducer UPDATE_ITEM · cambio de unidad', () => {
+  function itemAfter(patch: Partial<Omit<BuilderItem, 'key'>>, item: BuilderItem = foodItem()): BuilderItem {
+    const state: BuilderState = {
+      ...structuredState(),
+      variants: [{ ...createBaseVariant(), slots: [{ ...baseSlot(), items: [item] }] }],
+    }
+    const next = builderReducer(state, {
+      type: 'UPDATE_ITEM',
+      variantKey: BASE_VARIANT_KEY,
+      slotKey: 'slot-a',
+      itemKey: item.key,
+      patch,
+    })
+    return next.variants[0].slots[0].items[0]
+  }
+
+  it('g → un divide por la porcion del alimento (200 g con porcion 50 ⇒ 4 un)', () => {
+    const item = itemAfter({ unit: 'un' })
+    expect(item.unit).toBe('un')
+    expect(item.quantity).toBe('4')
+  })
+
+  it('un → g multiplica por la porcion (4 un con porcion 50 ⇒ 200 g)', () => {
+    const item = itemAfter({ unit: 'g' }, foodItem({ quantity: '4', unit: 'un' }))
+    expect(item.quantity).toBe('200')
+  })
+
+  it('g → ml conserva el numero (misma base per-100)', () => {
+    expect(itemAfter({ unit: 'ml' }).quantity).toBe('200')
+  })
+
+  it('un patch con cantidad propia manda: ahi el coach escribio el numero', () => {
+    const item = itemAfter({ unit: 'un', quantity: '3' })
+    expect(item.unit).toBe('un')
+    expect(item.quantity).toBe('3')
+  })
+
+  it('un alimento libre no tiene porcion con que convertir: la cantidad no se toca', () => {
+    const item = itemAfter({ unit: 'un' }, customItem({ quantity: '200', unit: 'g' }))
+    expect(item.unit).toBe('un')
+    expect(item.quantity).toBe('200')
+  })
+
+  it('un patch que no cambia la unidad deja la cantidad intacta', () => {
+    expect(itemAfter({ notes: 'Sin sal' }).quantity).toBe('200')
+    expect(itemAfter({ unit: 'g' }).quantity).toBe('200')
+  })
+})

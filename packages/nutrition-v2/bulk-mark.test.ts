@@ -128,8 +128,32 @@ describe('bulkMarkSlotState', () => {
 describe('consumedPrescriptionItemIds', () => {
   it('junta ids de franjas y sin franja, ignora null', () => {
     const s1 = slot('s1', [item('a')], [intake('a'), intake(null)])
-    const s2 = slot('s2', [item('b')], [])
+    const s2 = slot('s2', [item('b'), item('z')], [])
     const ids = consumedPrescriptionItemIds(today([s1, s2], [intake('z')]))
     expect([...ids].sort()).toEqual(['a', 'z'])
+  })
+
+  // Cantidades honestas §4.4: republicar el mismo día renumera los items y los registros previos
+  // quedan apuntando a un id que ya no está en el snapshot.
+  it('un registro huérfano (id de una versión anterior) NO cuenta como consumido', () => {
+    const s = slot('s1', [item('a')], [intake('viejo-a')])
+    expect([...consumedPrescriptionItemIds(today([s]))]).toEqual([])
+  })
+
+  it('un registro huérfano sin franja tampoco cuenta', () => {
+    const s = slot('s1', [item('a')], [])
+    expect([...consumedPrescriptionItemIds(today([s], [intake('viejo-a')]))]).toEqual([])
+  })
+
+  it('un registro sobre un item VIGENTE sí cuenta', () => {
+    const s = slot('s1', [item('a')], [intake('a')])
+    expect([...consumedPrescriptionItemIds(today([s]))]).toEqual(['a'])
+  })
+
+  it('el huérfano no deja la franja "completa": el bulk sigue ofreciendo el item vigente', () => {
+    const s = slot('s1', [item('a')], [intake('viejo-a')])
+    const state = bulkMarkSlotState(today([s]), s)
+    expect(state.status).toBe('all-open')
+    expect(state.eligible.map((i) => i.id)).toEqual(['a'])
   })
 })

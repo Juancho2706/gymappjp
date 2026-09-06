@@ -15,7 +15,9 @@ import {
   NUTRITION_DAY_SHORT_LABELS,
   NUTRITION_WEEK_ORDER,
   NutritionPlanDraftSchema,
+  assessItemPlausibility,
   computeItemMacros,
+  convertQuantityTextOnUnitChange,
   formatNutritionDayOfWeek,
   slotMergeName,
   nutritionDayOfWeekFromIso,
@@ -23,6 +25,7 @@ import {
   type BuilderFood,
   type BuilderFoodMacrosPatch,
   type ItemMacros,
+  type ItemPlausibility,
   type NutritionPlanDowCell,
   type NutritionPlanDraft,
   type NutritionStrategy,
@@ -654,6 +657,29 @@ function insertSlotAt(slots: BuilderSlot[], index: number, slot: BuilderSlot): B
   return [...slots.slice(0, safe), slot, ...slots.slice(safe)]
 }
 
+/**
+ * Aplica el patch de `UPDATE_ITEM`. Cuando lo que cambia es la UNIDAD y el item tiene alimento
+ * del catalogo, la cantidad SE CONVIERTE con el mismo helper puro que usan el editor unico
+ * (`quickEditReducer` `SET_ITEM_UNIT`) y el wizard RN: dejar "30" y pasar de g a `un` publicaba
+ * 30 porciones de 100 g (W1.1 del tren «Cantidades honestas»).
+ *
+ * Un patch que trae `quantity` propia manda: ahi el coach escribio el numero a mano.
+ */
+function applyItemPatch(item: BuilderItem, patch: Partial<Omit<BuilderItem, 'key'>>): BuilderItem {
+  const next = { ...item, ...patch }
+  if (patch.unit === undefined || patch.quantity !== undefined) return next
+  if (patch.unit === item.unit || !item.food) return next
+  return {
+    ...next,
+    quantity: convertQuantityTextOnUnitChange({
+      quantity: item.quantity,
+      fromUnit: item.unit,
+      toUnit: patch.unit,
+      food: item.food,
+    }),
+  }
+}
+
 export function builderReducer(state: BuilderState, action: BuilderAction): BuilderState {
   switch (action.type) {
     case 'SET_STEP':
@@ -950,7 +976,7 @@ export function builderReducer(state: BuilderState, action: BuilderAction): Buil
     case 'UPDATE_ITEM':
       return mapSlot(state, action.variantKey, action.slotKey, (slot) => ({
         ...slot,
-        items: slot.items.map((item) => (item.key === action.itemKey ? { ...item, ...action.patch } : item)),
+        items: slot.items.map((item) => (item.key === action.itemKey ? applyItemPatch(item, action.patch) : item)),
       }))
     case 'ADD_ITEM_SUBSTITUTION':
       return mapSlot(state, action.variantKey, action.slotKey, (slot) => ({
@@ -1139,6 +1165,22 @@ export function computeCustomItemMacros(item: BuilderItem, quantity: number): It
 export function itemMacros(item: BuilderItem): ItemMacros {
   if (item.food) return computeItemMacros(item.food, Number(item.quantity), item.unit)
   return computeCustomItemMacros(item, Number(item.quantity))
+}
+
+/**
+ * ¿La cantidad de este item del wizard es plausible? (W1.3 «Cantidades honestas»). Espejo de
+ * `qeItemPlausibility` del editor unico: mismas kcal que la fila YA muestra (`itemMacros`) y
+ * misma porcion del catalogo, para que las dos superficies avisen por lo mismo. La medida
+ * casera (`householdGrams`) llega en W2 junto con el campo en `BuilderFood`.
+ */
+export function builderItemPlausibility(item: BuilderItem): ItemPlausibility {
+  return assessItemPlausibility({
+    quantity: Number(item.quantity),
+    unit: item.unit,
+    servingSize: item.food?.servingSize ?? null,
+    householdGrams: null,
+    calories: itemMacros(item).calories,
+  })
 }
 
 function addMacros(a: ItemMacros, b: ItemMacros): ItemMacros {

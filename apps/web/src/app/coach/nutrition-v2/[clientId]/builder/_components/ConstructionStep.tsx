@@ -1,11 +1,14 @@
 'use client'
 
+import { useEffect } from 'react'
 import { Plus } from 'lucide-react'
 import { NutritionCard } from '@/components/nutrition-v2'
-import { sortNutritionDayVariantsForDisplay } from '@eva/nutrition-v2'
+import { dayWarningCopy, kcalBucket, sortNutritionDayVariantsForDisplay } from '@eva/nutrition-v2'
 import type { ExchangeMacroTotals } from '@eva/nutrition-engine'
+import { useCaptureNutritionItemImplausible } from '@/lib/posthog/events'
 import {
   builderDayCells,
+  builderItemPlausibility,
   builderVariantForDayOfWeek,
   inheritedDayOfWeeks,
   strategyUsesSlots,
@@ -25,6 +28,12 @@ import { DayTotalsBar } from './DayTotalsBar'
 import { DaySummary } from './DaySummary'
 import { SlotEditor } from './SlotEditor'
 import { useIsTemplateMode } from './TemplateModeContext'
+
+/**
+ * Días cuyo aviso de plausibilidad ya se reportó a PostHog desde el WIZARD (W1.6). Set de módulo
+ * ⇒ una vez por día mientras viva la pestaña; sin esto cada tecla de una meta lo re-emitiría.
+ */
+const REPORTED_IMPLAUSIBLE_DAYS = new Set<string>()
 
 /**
  * Paso 2 — "Los dias" (SPEC nutrition-ui-poda, puntos 10-11): el selector de dia + las franjas
@@ -114,6 +123,26 @@ export function ConstructionStep({
     (candidate) => dayErrors[candidate.key],
   )
   const showDayErrorNav = state.variants.length > 1 && daysWithErrors.length > 0
+  // ── Aviso de plausibilidad del día (W1.3 «Cantidades honestas») ─────────────────────────
+  // Se arma acá (el paso sabe qué día está en pantalla y qué ítems tiene) y se pasa redactado a
+  // la barra de totales. Mismo copy puro que el editor único y que RN. Avisa, no bloquea.
+  const dayWarning = dayWarningCopy({
+    prescribedCalories: totals.calories,
+    targetCalories: Number.isFinite(targetCalories) && targetCalories > 0 ? targetCalories : null,
+    implausibleItemCount: variant.slots.reduce(
+      (count, slot) => count + slot.items.filter((item) => builderItemPlausibility(item).implausible).length,
+      0,
+    ),
+  })
+  const captureImplausible = useCaptureNutritionItemImplausible()
+  useEffect(() => {
+    if (dayWarning === null) return
+    const key = `${variant.key}|day`
+    if (REPORTED_IMPLAUSIBLE_DAYS.has(key)) return
+    REPORTED_IMPLAUSIBLE_DAYS.add(key)
+    // `unit: null`: el aviso del día no acusa a ninguna unidad. Sin kcal exactas (Ley 21.719).
+    captureImplausible({ surface: 'wizard', unit: null, reason: 'day', kcalBucket: kcalBucket(totals.calories) })
+  }, [captureImplausible, dayWarning, totals.calories, variant.key])
   if (!strategyUsesSlots(state.strategy)) {
     return (
       <NutritionCard tone="neutral">
@@ -212,6 +241,7 @@ export function ConstructionStep({
           totals={totals}
           targets={effectiveTargets}
           portionCalories={portionDay ? portionDay.calories : null}
+          warning={dayWarning}
         />
       </div>
 

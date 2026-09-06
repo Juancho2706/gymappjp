@@ -11,6 +11,10 @@ export * from './plan-dow-strip'
 export * from './week-view'
 export * from './intake-normalize'
 export * from './intake-units'
+// Tren «Cantidades honestas» (W1): cambiar la unidad convierte la cantidad, y los umbrales del
+// aviso de cantidad poco plausible viven en UN solo lugar (como `substitution-intake`).
+export * from './unit-change'
+export * from './plausibility'
 export * from './substitution-intake'
 // SUB-T10: como se leen los reemplazos autorizados del coach en la tarjeta del PLAN del alumno
 // (web + RN). Puro y sin equivalencias caloricas — el calculo vive en `substitution-intake`.
@@ -24,6 +28,10 @@ export * from './edited-foods'
 export * from './exchange-lists'
 export * from './plan-templates'
 export * from './bulk-mark'
+// Tren «Cantidades honestas» (W1.4): el reparto de los registros del día entre franjas y «Fuera
+// del plan» (extraído VERBATIM del Hoy web) + los registros de una versión anterior del plan.
+// RN los escondía y la web los mostraba: una sola copia para las dos superficies.
+export * from './today-entries'
 export * from './quick-edit'
 export * from './catalog'
 export * from './food-overrides'

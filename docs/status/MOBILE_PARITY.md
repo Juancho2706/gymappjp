@@ -12,6 +12,19 @@ source_of_truth: apps/web responsive + apps/mobile
 
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
 
+> **2026-09-06 (tren «Cantidades honestas», Nutrición V2 — W1 EN CÓDIGO en el worktree `nutrition-cantidades-honestas`, sin push ni OTA)**
+> ([SDD](../specs/nutrition-cantidades-honestas/SPEC.md), mockups M1–M4 aprobados por el owner el 06-09). Paridad web + RN:
+> **editor único y wizards** convierten la cantidad al cambiar de unidad (`convertQuantityTextOnUnitChange`, un solo helper para
+> el reductor compartido, el wizard web y el wizard RN), caption «1 un = {porción} g» bajo el selector, aviso ámbar
+> `ImplausibleNotice` por ítem (> 600 g resultantes o > 700 kcal, D7) con «Cambiar a N g» (`REINTERPRET_ITEM_UNIT`, sin
+> convertir) y aviso del día (> 1,5× la meta) en `PublishBar`/`PublishConfirmSheet` y en las barras de totales del wizard —
+> avisa, no bloquea; **Hoy del alumno**: los registros de una versión anterior del plan se ven DENTRO de su franja con chip
+> «De una versión anterior del plan», retirar por fila y «Retirar los N» (RN, antes los escondía y los sumaba), nota bajo el
+> anillo con las kcal que vienen de ahí, `consumedPrescriptionItemIds` deja de contar ids no vigentes; **«Lo comí» y «Comí
+> toda esta comida»** piden confirmación sobre umbral (`ImplausibleIntakeSheet` RN / `ImplausibleIntakeDialog` web);
+> evento PostHog `nutrition_item_implausible` (bucket de kcal, sin cifras exactas). Lógica pura en `packages/nutrition-v2/`
+> (`unit-change`, `plausibility`, `today-entries`). Queda W2 (medida casera), W3 (linaje al republicar), W4 (ficha del coach).
+>
 > **2026-09-04 (tren «Ciclo real y por lado», feedback Movens — EN PRODUCCIÓN, QA del owner VERDE 04-09 ⇒ SDD `done`)**: `master` =
 > `rnmobiledenuevo` = `b1bad0a3` (commits `591ea8cd`…`b1bad0a3` + los 9 de «ola 2 chica» en el mismo push), deploy
 > `dpl_DZ76aJq5WfZ7SbKXaSJ4p1TtTkj1` READY, 4 migraciones en LIVE (`20260904022120`…`022257`), OTA 1.1.2 `production`

@@ -1,6 +1,10 @@
 import { PostHog } from 'posthog-react-native'
 import Constants from 'expo-constants'
 import * as Updates from 'expo-updates'
+// Vocabulario del aviso de cantidad poco plausible (tren «Cantidades honestas», W1.6). Solo
+// tipos: se borran en compilación, no suman nada al bundle, y garantizan que RN y web manden
+// EL MISMO enum en `nutrition_item_implausible`.
+import type { ImplausibleEventReason, ImplausibleSurface, KcalBucket } from '@eva/nutrition-v2'
 
 /**
  * Analytics de producto del binario (Share Entreno F7.1).
@@ -136,4 +140,30 @@ export function captureAppEvent(event: string, props?: AppEventProps): void {
     } catch {
         // swallow — ver §fail-open.
     }
+}
+
+/**
+ * `nutrition_item_implausible` — se MOSTRÓ el aviso de cantidad poco plausible (tren «Cantidades
+ * honestas», W1.6). Espejo exacto del helper web (`apps/web/src/lib/posthog/events.ts`), con
+ * `platform: 'rn'`: el mismo nombre de evento y las mismas props, o el insight no se puede leer
+ * junto. Una vez por ítem y sesión; la decide el consumidor, no este helper.
+ *
+ * LEY 21.719: viajan METADATOS de la interacción (superficie, unidad, motivo, TRAMO de kcal).
+ * Nunca kcal exactas, nombre del alimento ni ningún id — las kcal de un plan son dato de salud.
+ *
+ * `unit` es `null` en el aviso del DÍA (`reason: 'day'`): ahí no hay una unidad sospechosa.
+ */
+export function captureNutritionItemImplausible(props: {
+    surface: ImplausibleSurface
+    unit: string | null
+    reason: ImplausibleEventReason
+    kcalBucket: KcalBucket
+}): void {
+    captureAppEvent('nutrition_item_implausible', {
+        platform: 'rn',
+        surface: props.surface,
+        unit: props.unit,
+        reason: props.reason,
+        kcal_bucket: props.kcalBucket,
+    })
 }

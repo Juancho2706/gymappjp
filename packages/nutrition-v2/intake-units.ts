@@ -35,6 +35,17 @@ export const NUTRITION_CATALOG_UNITS = ['g', 'ml', 'un'] as const
 export type NutritionCatalogUnit = (typeof NUTRITION_CATALOG_UNITS)[number]
 
 /**
+ * Codigo de la MEDIDA CASERA ("2 huevos", "1 taza") dentro del editor y del borrador
+ * (tren «Cantidades honestas», SPEC §5.1). Vive FUERA de `NUTRITION_INTAKE_UNITS` a proposito:
+ * jamas se persiste en `unit` ni viaja a una escritura de intake — al publicar se traduce a
+ * `quantity = count x household_grams` con `unit = 'g' | 'ml'` y la medida congelada aparte.
+ * Por eso tampoco entra en `UNIT_SYNONYMS`: `normalizeIntakeUnit('casera')` es `null`, y quien
+ * necesite reconocerla compara contra ESTA constante (hoy `itemResultingGrams`, ./plausibility).
+ * Se declara en W1 aunque el modelo casero llegue en W2: un solo literal, una sola casa.
+ */
+export const HOUSEHOLD_UNIT = 'casera'
+
+/**
  * Sinonimos aceptados en la entrada (UI historica, planes convertidos de V1, unidades tipeadas
  * por el coach). Todo lo que no este aqui NO es una unidad valida para una escritura nueva.
  */
@@ -115,6 +126,16 @@ export function catalogUnitOptions(
   servingUnit: string | null | undefined,
 ): readonly NutritionCatalogUnit[] {
   return normalizeIntakeUnit(servingUnit) === 'ml' ? (['ml', 'un'] as const) : (['g', 'un'] as const)
+}
+
+/**
+ * Magnitud REAL de un alimento a partir de su `serving_unit`: un liquido se mide en ml y todo
+ * lo demas en g. Un `serving_unit` contable (`un`) no es una magnitud — su `serving_size` igual
+ * esta en gramos —, asi que cae al lado solido, mismo criterio que `catalogUnitOptions`.
+ * La usan el rotulo «1 un = 100 g» y el aviso de plausibilidad (./plausibility.ts).
+ */
+export function foodMagnitudeUnit(servingUnit: string | null | undefined): 'g' | 'ml' {
+  return normalizeIntakeUnit(servingUnit) === 'ml' ? 'ml' : 'g'
 }
 
 /** Unidad inicial de un alimento del catalogo: la suya si es ofrecible, si no la de su magnitud. */

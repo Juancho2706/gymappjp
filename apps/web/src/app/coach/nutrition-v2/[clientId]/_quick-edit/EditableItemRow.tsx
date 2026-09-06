@@ -13,7 +13,7 @@
  * Quitar y mover son optimistas con snackbar "Deshacer" (8s): cero confirms.
  */
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   AlertTriangle,
   ArrowDown,
@@ -47,13 +47,22 @@ import { FoodMacrosOverrideDialog } from '@/app/coach/nutrition-v2/_components/F
 import { createCoachFoodAction } from '@/app/coach/nutrition-v2/_actions/plan-publish.actions'
 import { rememberFoodQuantityAction } from '@/app/coach/nutrition-v2/_actions/last-quantity.actions'
 import {
+  foodMagnitudeUnit,
+  implausibleItemCopy,
+  kcalBucket,
+  normalizeIntakeUnit,
   qeCoachFoodCandidate,
   qeItemMacros,
+  qeItemPlausibility,
   qeSubstitutionEquivalence,
+  reinterpretUnitActionLabel,
+  unitEquivalenceCaption,
   type QeItem,
   type QeItemSubstitution,
   type QeSlot,
 } from '@eva/nutrition-v2'
+import { useCaptureNutritionItemImplausible } from '@/lib/posthog/events'
+import { ImplausibleNotice } from '@/components/nutrition-v2/ImplausibleNotice'
 import { useQuickEdit } from './QuickEditProvider'
 import { FoodPickerSheet } from './FoodPickerSheet'
 import { QeBottomSheet } from './QeBottomSheet'
@@ -108,6 +117,14 @@ function itemDensityLabel(item: QeItem): string | null {
 const QE_ITEM_DRAG_MIME = 'application/x-eva-qe-item'
 
 /**
+ * Avisos de plausibilidad ya reportados a PostHog (W1.6): `<itemKey>|<motivo>`. El Set es de
+ * MODULO a proposito, asi que "una vez por sesion" significa una vez mientras viva la pestaña —
+ * abrir y cerrar el editor no vuelve a contar el mismo item. Sin esto cada tecla del stepper
+ * re-renderiza la fila y mandaria decenas de eventos del mismo aviso.
+ */
+const REPORTED_IMPLAUSIBLE_ITEMS = new Set<string>()
+
+/**
  * Monedas del botón «Agregar reemplazo» (Familia N): DOS íconos de categoría —proteína y
  * carbohidrato—, los mismos assets estáticos que ya usa la fila. Dos y no tres a propósito: un
  * reemplazo es un par (lo prescrito ⇄ lo que lo sustituye), no un surtido.
@@ -160,6 +177,32 @@ export function EditableItemRow({
   // pegarle al server en cada blur sin edicion — mismo guard que el wizard (ItemRow).
   const lastRememberedRef = useRef<string | null>(null)
   const macros = qeItemMacros(item)
+  // ── Cantidades honestas (W1.2 + W1.3): el rotulo «1 un = 100 g» y el aviso de plausibilidad.
+  // Los dos salen de modulos puros del paquete, asi que la fila RN dice exactamente lo mismo.
+  const plausibility = qeItemPlausibility(item)
+  // Un motivo por aviso: `grams` manda sobre `kcal` (es el que explica el absurdo).
+  const implausibleReason = plausibility.reasons[0] ?? null
+  const unitCaption = item.food
+    ? unitEquivalenceCaption({
+        unit: item.unit,
+        servingSize: item.food.servingSize,
+        servingUnit: item.food.servingUnit,
+      })
+    : null
+  const captureImplausible = useCaptureNutritionItemImplausible()
+  useEffect(() => {
+    if (implausibleReason === null) return
+    const key = `${item.key}|${implausibleReason}`
+    if (REPORTED_IMPLAUSIBLE_ITEMS.has(key)) return
+    REPORTED_IMPLAUSIBLE_ITEMS.add(key)
+    // Sin kcal exactas ni nombre del alimento (Ley 21.719): solo unidad, motivo y TRAMO.
+    captureImplausible({
+      surface: 'editor',
+      unit: item.unit,
+      reason: implausibleReason,
+      kcalBucket: kcalBucket(plausibility.calories),
+    })
+  }, [captureImplausible, implausibleReason, item.key, item.unit, plausibility.calories])
   const quantityError = showErrors ? errors[`item.${item.key}.quantity`] : undefined
   const nameError = showErrors ? errors[`item.${item.key}.name`] : undefined
   const itemLabel = item.displayName || 'alimento'
@@ -542,6 +585,55 @@ export function EditableItemRow({
 
       {quantityError ? (
         <p className="col-span-full text-xs text-rose-600 dark:text-rose-300">{quantityError}</p>
+      ) : null}
+
+      {/* W1.2 — «1 un = 100 g»: en el 96 % del catálogo «1 un» es una porción de 100 g y nadie lo
+          decía (SPEC §4.2). Va como línea completa BAJO los controles: meterla en la celda del
+          `<select>` correría la columna del spark y la fila dejaría de alinearse con sus vecinas. */}
+      {unitCaption ? (
+        <p className="col-span-full text-xs text-muted">{unitCaption}</p>
+      ) : null}
+
+      {/* W1.3 — aviso de plausibilidad (mockup M1). Avisa, NO bloquea. La única acción de W1 es
+          «keep the number»: la premisa es que el número estaba bien y la unidad no, así que
+          reinterpreta la unidad SIN convertir (`REINTERPRET_ITEM_UNIT`). «Usar {medida casera}»
+          llega en W2, cuando el alimento tenga esa medida. */}
+      {plausibility.implausible ? (
+        <ImplausibleNotice
+          variant="box"
+          className="col-span-full"
+          testId="qe-item-implausible"
+          message={implausibleItemCopy({
+            quantity: Number(item.quantity.trim()),
+            unit: item.unit,
+            foodName: itemLabel,
+            grams: plausibility.grams,
+            calories: plausibility.calories,
+            servingSize: item.food?.servingSize ?? null,
+            servingUnit: item.food?.servingUnit ?? null,
+          })}
+          actions={
+            item.food && normalizeIntakeUnit(item.unit) === 'un'
+              ? [
+                  {
+                    label: reinterpretUnitActionLabel({
+                      quantity: Number(item.quantity.trim()),
+                      servingUnit: item.food.servingUnit,
+                    }),
+                    disabled: isPending,
+                    onClick: () =>
+                      dispatch({
+                        type: 'REINTERPRET_ITEM_UNIT',
+                        variantKey,
+                        slotKey,
+                        itemKey: item.key,
+                        unit: foodMagnitudeUnit(item.food?.servingUnit),
+                      }),
+                  },
+                ]
+              : []
+          }
+        />
       ) : null}
 
       <QeBottomSheet open={menuOpen} onOpenChange={setMenuOpen} title={item.displayName || 'Alimento'} busy={saving}>

@@ -21,6 +21,7 @@ import {
   NUTRITION_DAY_SHORT_LABELS,
   NUTRITION_WEEK_ORDER,
   NutritionPlanDraftSchema,
+  assessItemPlausibility,
   buildNutritionIdempotencyKey,
   formatNutritionDayOfWeek,
   intakeEntryFactor,
@@ -28,6 +29,7 @@ import {
   resolveNutritionDayVariantForDow,
   type FoodCatalogItem,
   type FoodMacroSet,
+  type ItemPlausibility,
   type NutritionMacrosBasis,
   type NutritionItemSubstitution,
   type NutritionPlanDowCell,
@@ -1148,6 +1150,22 @@ export function computeCustomItemMacros(item: BuilderItem, quantity: number): It
 export function itemMacros(item: BuilderItem): ItemMacros {
   if (item.food) return computeItemMacros(item.food, Number(item.quantity), item.unit)
   return computeCustomItemMacros(item, Number(item.quantity))
+}
+
+/**
+ * ¿La cantidad de este item del wizard es plausible? (W1.3 «Cantidades honestas»). Espejo 1:1 de
+ * la web (`draft-builder.ts`) y hermano de `qeItemPlausibility` del editor unico: las MISMAS
+ * kcal que la fila ya muestra y la misma porcion del catalogo. La medida casera
+ * (`householdGrams`) llega en W2 junto con el campo en `BuilderFood`.
+ */
+export function builderItemPlausibility(item: BuilderItem): ItemPlausibility {
+  return assessItemPlausibility({
+    quantity: Number(item.quantity),
+    unit: item.unit,
+    servingSize: item.food?.servingSize ?? null,
+    householdGrams: null,
+    calories: itemMacros(item).calories,
+  })
 }
 
 function addMacros(a: ItemMacros, b: ItemMacros): ItemMacros {

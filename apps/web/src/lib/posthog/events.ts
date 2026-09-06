@@ -4,6 +4,10 @@ import { usePostHog } from 'posthog-js/react'
 import { useCallback } from 'react'
 import type { SubscriptionTier } from '@/lib/constants'
 import { PRICING_VERSION, type RegistrationMethod } from '@/lib/posthog/registration'
+// Vocabulario del aviso de cantidad poco plausible (tren «Cantidades honestas», W1.6). Se
+// importa del paquete —solo tipos, se borran en compilacion— para que web y RN manden EL MISMO
+// enum y no dos listas que driftan.
+import type { ImplausibleEventReason, ImplausibleSurface, KcalBucket } from '@eva/nutrition-v2'
 
 /**
  * Identify coach after login/registration (only when they opted in).
@@ -340,6 +344,46 @@ export function useCaptureCoachNutritionTemplateApplied() {
     return useCallback(
         (source: 'library' | 'picker') => {
             ph?.capture('coach_nutrition_template_applied', { source })
+        },
+        [ph]
+    )
+}
+
+/**
+ * `nutrition_item_implausible` — se MOSTRO el aviso de cantidad poco plausible (tren «Cantidades
+ * honestas», W1.6). Una vez por item y sesion; es la senal que decide si W2 (medida casera de
+ * verdad) hace falta o si con avisar alcanza.
+ *
+ *   surface     donde apareció: editor único, wizard, barra de publicar o el Hoy del alumno
+ *   unit        la unidad escrita ('un', 'g', 'ml', 'porción'): es el sospechoso principal.
+ *               `null` en el aviso del DÍA, que no habla de ninguna unidad en particular
+ *   reason      'grams' | 'kcal' por item, 'day' cuando el aviso es del día completo
+ *   kcal_bucket TRAMO de kcal, jamás la cifra
+ *
+ * LEY 21.719: nada de kcal exactas, nombre del alimento, id de alimento/item/plan ni del alumno.
+ * Las kcal de un plan son dato de salud y el interés legítimo no las cubre; el tramo alcanza
+ * para la decisión de producto. Misma regla que `apps/mobile/lib/analytics.ts`.
+ *
+ * El hook (y no una función suelta) es el patrón del módulo: `usePostHog` solo se puede leer
+ * dentro de un componente. `const captureNutritionItemImplausible = useCaptureNutritionItemImplausible()`
+ * en el consumidor.
+ */
+export function useCaptureNutritionItemImplausible() {
+    const ph = usePostHog()
+    return useCallback(
+        (props: {
+            surface: ImplausibleSurface
+            unit: string | null
+            reason: ImplausibleEventReason
+            kcalBucket: KcalBucket
+        }) => {
+            ph?.capture('nutrition_item_implausible', {
+                platform: 'web',
+                surface: props.surface,
+                unit: props.unit,
+                reason: props.reason,
+                kcal_bucket: props.kcalBucket,
+            })
         },
         [ph]
     )

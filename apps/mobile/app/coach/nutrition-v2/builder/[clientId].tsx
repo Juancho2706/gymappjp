@@ -117,6 +117,7 @@ import {
   buildPublishIdempotencyKey,
   builderDayCells,
   builderHasSignificantContent,
+  builderItemPlausibility,
   builderReducer,
   builderVariantForDayOfWeek,
   canProceedToPublishAfterArchive,
@@ -147,7 +148,19 @@ import {
 } from '../../../../lib/nutrition-v2-builder'
 // H-07: mismo paso del stepper que el quick-edit (5 para g/ml, 0,5 para unidad/porción). El
 // helper vive en la gramatica compartida (@eva/nutrition-v2) desde T3.3a.
-import { quantityStep } from '@eva/nutrition-v2'
+import {
+  convertQuantityTextOnUnitChange,
+  dayWarningCopy,
+  foodMagnitudeUnit,
+  implausibleItemCopy,
+  kcalBucket,
+  normalizeIntakeUnit,
+  quantityStep,
+  reinterpretUnitActionLabel,
+  unitEquivalenceCaption,
+} from '@eva/nutrition-v2'
+import { captureNutritionItemImplausible } from '../../../../lib/analytics'
+import { ImplausibleNotice } from '../../../../components/nutrition-v2/quick-edit/ImplausibleNotice'
 import { foodCategoryEmoji, foodMediaThumbnailUrl } from '../../../../lib/nutrition-v2-food-media'
 
 const STRATEGY_ORDER: NutritionStrategy[] = ['structured', 'flexible', 'hybrid']
@@ -169,6 +182,14 @@ function genKey(prefix: string): string {
   keySeq += 1
   return prefix + '-' + Date.now().toString(36) + '-' + keySeq
 }
+
+/**
+ * Avisos de plausibilidad ya reportados a PostHog desde el WIZARD RN (W1.6): `<clave>|<motivo>`.
+ * Sets de MODULO ⇒ una vez por ítem/día mientras viva el proceso de la app. Sin esto cada tap de
+ * un stepper re-renderiza la fila y mandaría decenas de eventos del mismo aviso.
+ */
+const REPORTED_IMPLAUSIBLE_ITEMS = new Set<string>()
+const REPORTED_IMPLAUSIBLE_DAYS = new Set<string>()
 
 // Target del buscador de catalogo (un solo modal reusado). 'item' = agregar alimento a una
 // franja (flujo original); 'substitution' = agregar un reemplazo autorizado a un item (F-02).
@@ -2528,6 +2549,28 @@ function ItemEditor({
   const [macrosSheetOpen, setMacrosSheetOpen] = useState(false)
   const patch = (p: Partial<Omit<BuilderItem, 'key'>>) =>
     dispatch({ type: 'UPDATE_ITEM', variantKey, slotKey, itemKey: item.key, patch: p })
+  // ── Cantidades honestas (W1.2 + W1.3) en el wizard RN: mismo rótulo y mismo aviso que la web.
+  const plausibility = builderItemPlausibility(item)
+  const implausibleReason = plausibility.reasons[0] ?? null
+  const unitCaption = item.food
+    ? unitEquivalenceCaption({
+        unit: item.unit,
+        servingSize: item.food.servingSize,
+        servingUnit: item.food.servingUnit,
+      })
+    : null
+  useEffect(() => {
+    if (implausibleReason === null) return
+    const key = item.key + '|' + implausibleReason
+    if (REPORTED_IMPLAUSIBLE_ITEMS.has(key)) return
+    REPORTED_IMPLAUSIBLE_ITEMS.add(key)
+    captureNutritionItemImplausible({
+      surface: 'wizard',
+      unit: item.unit,
+      reason: implausibleReason,
+      kcalBucket: kcalBucket(plausibility.calories),
+    })
+  }, [implausibleReason, item.key, item.unit, plausibility.calories])
   // "Guardar en mi catálogo" (sub-delta b): estado local del alta + aviso de mismatch de energia
   // (macroEnergyMismatch, umbral 40% Atwater). Solo aplica al bloque custom (isCustom).
   const [saving, setSaving] = useState(false)
@@ -2633,9 +2676,63 @@ function ItemEditor({
           step={quantityStep(item.unit)}
           accessibilityLabel={`Cantidad de ${item.food?.name ?? item.customName ?? 'alimento'}`}
         />
-        <UnitToggle unit={item.unit} onChange={(unit) => patch({ unit })} />
+        {/* W1.1 «Cantidades honestas»: cambiar la unidad CONVIERTE la cantidad con el mismo
+            helper puro que el editor único y el wizard web. Dejar "30" y pasar de g a `un`
+            publicaba 30 porciones de 100 g. Si la conversión no es representable el número
+            queda intacto (SPEC §4.1). */}
+        <UnitToggle
+          unit={item.unit}
+          onChange={(unit) =>
+            patch({
+              unit,
+              quantity: convertQuantityTextOnUnitChange({
+                quantity: item.quantity,
+                fromUnit: item.unit,
+                toUnit: unit,
+                food: item.food,
+              }),
+            })
+          }
+        />
       </View>
       <ErrorText message={errors['item.' + item.key + '.quantity'] ?? errors['item.' + item.key + '.food']} />
+
+      {/* W1.2 — «1 un = 100 g»: la equivalencia que nadie decía, bajo los controles. */}
+      {unitCaption ? <Text className="mt-1 text-xs text-muted">{unitCaption}</Text> : null}
+
+      {/* W1.3 — aviso de plausibilidad (mockup M1). Avisa, NO bloquea. La acción «keep the
+          number» patchea la unidad SIN tocar la cantidad (no pasa por el `onChange` del toggle,
+          que sí convierte). */}
+      {plausibility.implausible ? (
+        <View className="mt-2">
+          <ImplausibleNotice
+            variant="box"
+            testID="builder-item-implausible"
+            message={implausibleItemCopy({
+              quantity: Number(item.quantity),
+              unit: item.unit,
+              foodName: item.food?.name ?? item.customName ?? 'este alimento',
+              grams: plausibility.grams,
+              calories: plausibility.calories,
+              servingSize: item.food?.servingSize ?? null,
+              servingUnit: item.food?.servingUnit ?? null,
+            })}
+            actions={
+              item.food && normalizeIntakeUnit(item.unit) === 'un'
+                ? [
+                    {
+                      label: reinterpretUnitActionLabel({
+                        quantity: Number(item.quantity),
+                        servingUnit: item.food.servingUnit,
+                      }),
+                      onPress: () => patch({ unit: foodMagnitudeUnit(item.food?.servingUnit) }),
+                    },
+                  ]
+                : []
+            }
+          />
+        </View>
+      ) : null}
 
       {isCustom ? (
         <>
@@ -3333,6 +3430,37 @@ function DaysStep({
   onReplaceToday: () => void
   onCancelConflict: () => void
 }) {
+  // Total del día ACTIVO combinado (items + porciones a elección, 4B-11). Sin catálogo cargado el
+  // derivado es null y `combineSubtotals` devuelve los totales de items intactos (jamás NaN).
+  // Se calcula ANTES del corte del plan flexible porque el aviso de plausibilidad de abajo usa un
+  // hook, y un hook no puede vivir después de un `return` condicional.
+  const liveKeys = variant.slots.map((slot) => portionsKey(variant.key, slot.key))
+  const portionDay = portions.groups ? derivePortionTotals(liveKeys, portions.bySlot, portions.groups) : null
+  const totals = combineSubtotals(variantTotals(variant), portionDay)
+  // ── Aviso de plausibilidad del DÍA en el wizard (W1.3 «Cantidades honestas») ─────────────
+  // Mismo copy puro que el editor único y que la barra web: una sola voz para las cuatro barras.
+  const dayTargetCalories = Number(variantEffectiveTargets(state, variant).calories.trim())
+  const dayWarning = dayWarningCopy({
+    prescribedCalories: totals.calories,
+    targetCalories: Number.isFinite(dayTargetCalories) && dayTargetCalories > 0 ? dayTargetCalories : null,
+    implausibleItemCount: variant.slots.reduce(
+      (count, slot) => count + slot.items.filter((item) => builderItemPlausibility(item).implausible).length,
+      0,
+    ),
+  })
+  useEffect(() => {
+    if (dayWarning === null) return
+    const key = variant.key + '|day'
+    if (REPORTED_IMPLAUSIBLE_DAYS.has(key)) return
+    REPORTED_IMPLAUSIBLE_DAYS.add(key)
+    // `unit: null`: el aviso del día no acusa a ninguna unidad. Sin kcal exactas (Ley 21.719).
+    captureNutritionItemImplausible({
+      surface: 'wizard',
+      unit: null,
+      reason: 'day',
+      kcalBucket: kcalBucket(totals.calories),
+    })
+  }, [dayWarning, totals.calories, variant.key])
   const publishPanel = (
     <PublishPanel
       publishError={publishError}
@@ -3362,11 +3490,6 @@ function DaysStep({
     )
   }
 
-  // Total del día ACTIVO combinado (items + porciones a elección, 4B-11). Sin catálogo cargado el
-  // derivado es null y `combineSubtotals` devuelve los totales de items intactos (jamás NaN).
-  const liveKeys = variant.slots.map((slot) => portionsKey(variant.key, slot.key))
-  const portionDay = portions.groups ? derivePortionTotals(liveKeys, portions.bySlot, portions.groups) : null
-  const totals = combineSubtotals(variantTotals(variant), portionDay)
   // H-01: días con error que NO están montados. Tocarlos cambia de día (`onSelect`), que es donde
   // sí se pintan los errores por franja/item.
   const hiddenErrorVariants = state.variants.filter(
@@ -3437,6 +3560,12 @@ function DaysStep({
           {/* QW-2: con etiqueta personalizada el total tampoco decía a qué día pertenece. Es el
               ÚNICO bloque de totales del día: la barra sticky y el eco del paso "Revisar" que
               repetían la misma cifra se retiraron con la poda. */}
+          {/* W1.3 — aviso de plausibilidad del día, arriba de los totales que lo provocan. */}
+          {dayWarning ? (
+            <View className="mb-2">
+              <ImplausibleNotice variant="box" message={dayWarning} testID="builder-day-implausible" />
+            </View>
+          ) : null}
           <Text className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted">
             {variant.isDefault ? 'Total del Día base' : `Total de ${activeBadge ? `${variant.label} (${activeBadge.long})` : variant.label}`}
           </Text>

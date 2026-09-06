@@ -26,10 +26,14 @@ import {
 import { toast } from 'sonner'
 import {
   NUTRITION_WEEK_ORDER,
+  dayWarningCopy,
   formatNutritionDayOfWeek,
+  kcalBucket,
+  qeItemPlausibility,
   resolveNutritionDayVariantForDate,
   sortNutritionDayVariantsForDisplay,
 } from '@eva/nutrition-v2'
+import { useCaptureNutritionItemImplausible } from '@/lib/posthog/events'
 import {
   AddActionButton,
   DayVariantWeekStrip,
@@ -89,6 +93,13 @@ import { QE_COPY } from './microcopy'
 function qeDaySectionId(index: number): string {
   return `qe-day-section-${index}`
 }
+
+/**
+ * Días cuyo aviso de plausibilidad ya se reportó a PostHog (W1.6): `<variantKey>|day`. Set de
+ * MODULO, así que «una vez por sesión» es mientras viva la pestaña. Sin esto cada tecleo en una
+ * meta o una cantidad re-emitiría el mismo evento.
+ */
+const REPORTED_IMPLAUSIBLE_DAYS = new Set<string>()
 
 export function QuickEditPlanView() {
   const {
@@ -172,6 +183,37 @@ export function QuickEditPlanView() {
       targetFatsG: Number.isFinite(targetFats) && targetFats > 0 ? targetFats : null,
     }
   }, [activeVariant, exchangeGroups, multiDay])
+
+  // ── Aviso de plausibilidad del DIA activo (W1.3, tren «Cantidades honestas») ─────────────
+  // Se arma acá y no en la barra porque el lienzo es el único que sabe qué día se está viendo y
+  // qué ítems tiene. El copy sale del módulo puro (`dayWarningCopy`) para que la barra RN y las
+  // dos barras de los wizards digan LO MISMO. Avisa, no bloquea: no toca `count` ni el publish.
+  const dayWarning = useMemo(() => {
+    if (!activeVariant || !dayTotals) return null
+    const implausibleItemCount = activeVariant.slots.reduce(
+      (count, slot) => count + slot.items.filter((item) => qeItemPlausibility(item).implausible).length,
+      0,
+    )
+    return dayWarningCopy({
+      prescribedCalories: dayTotals.calories,
+      targetCalories: dayTotals.targetCalories,
+      implausibleItemCount,
+    })
+  }, [activeVariant, dayTotals])
+  const captureImplausible = useCaptureNutritionItemImplausible()
+  useEffect(() => {
+    if (dayWarning === null || !activeVariant) return
+    const key = `${activeVariant.key}|day`
+    if (REPORTED_IMPLAUSIBLE_DAYS.has(key)) return
+    REPORTED_IMPLAUSIBLE_DAYS.add(key)
+    // `unit: null` — el aviso del día no habla de una unidad. Sin kcal exactas (Ley 21.719).
+    captureImplausible({
+      surface: 'publish',
+      unit: null,
+      reason: 'day',
+      kcalBucket: kcalBucket(dayTotals?.calories ?? 0),
+    })
+  }, [activeVariant, captureImplausible, dayTotals?.calories, dayWarning])
 
   // ── Errores que viven en un día que NO está en pantalla (defecto del editor único).
   //
@@ -625,6 +667,7 @@ export function QuickEditPlanView() {
           mandan desde arriba (sin doble CTA). En <768 la barra sigue completa en la thumb-zone. */}
       <PublishBar
         dayTotals={dayTotals}
+        dayWarning={dayWarning}
         hideActions={desktopRibbon}
         validationMessage={validationBar?.message ?? null}
         validationAction={

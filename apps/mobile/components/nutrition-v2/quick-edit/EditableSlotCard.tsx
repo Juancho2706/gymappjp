@@ -111,6 +111,7 @@ export function EditableSlotCard({
   onItemQuantity,
   onItemQuantityCommit,
   onItemUnit,
+  onItemReinterpretUnit,
   onItemName,
   onSwapItem,
   onRemoveItem,
@@ -152,6 +153,8 @@ export function EditableSlotCard({
   /** Cantidad fijada (blur) — porcion pegajosa del editor. Ausente = no se recuerda nada. */
   onItemQuantityCommit?: (itemKey: string) => void
   onItemUnit: (itemKey: string, unit: string) => void
+  /** «Cambiar a 30 g» del aviso de plausibilidad (W1.3): unidad nueva, MISMA cantidad. */
+  onItemReinterpretUnit?: (itemKey: string, unit: string) => void
   onItemName: (itemKey: string, value: string) => void
   onSwapItem: (itemKey: string) => void
   onRemoveItem: (itemKey: string) => void
@@ -390,6 +393,9 @@ export function EditableSlotCard({
                     onItemQuantityCommit ? () => onItemQuantityCommit(item.key) : undefined
                   }
                   onUnitChange={(unit) => onItemUnit(item.key, unit)}
+                  onReinterpretUnit={
+                    onItemReinterpretUnit ? (unit) => onItemReinterpretUnit(item.key, unit) : undefined
+                  }
                   onNameChange={(value) => onItemName(item.key, value)}
                   onSwap={() => onSwapItem(item.key)}
                   onRemove={() => onRemoveItem(item.key)}

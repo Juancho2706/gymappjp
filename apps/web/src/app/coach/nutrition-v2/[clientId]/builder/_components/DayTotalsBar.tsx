@@ -21,6 +21,7 @@ import { useState } from 'react'
 // Import por ruta directa (no via el barrel index.ts): mismo criterio que el resto del paso.
 import { MacroChipRow } from '@/components/nutrition-v2/MacroChipRow'
 import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
+import { ImplausibleNotice } from '@/components/nutrition-v2/ImplausibleNotice'
 import type { BuilderTargets, ItemMacros } from '../_lib/draft-builder'
 import { numOr0 } from '../_lib/builder-view-model'
 
@@ -57,10 +58,16 @@ export function DayTotalsBar({
   totals,
   targets,
   portionCalories,
+  warning = null,
   className,
 }: {
   /** "Total del día base" / "Total de Sábado". */
   title: string
+  /**
+   * Aviso de plausibilidad del día, ya redactado (`dayWarningCopy`, W1.3 «Cantidades honestas»).
+   * La barra no lo deriva y NO bloquea nada: publicar sigue siendo un tap. `null` = sin aviso.
+   */
+  warning?: string | null
   /** Lo asignado hoy: items fijos + porciones a elección (mismo criterio que el strip). */
   totals: ItemMacros
   /** Metas EFECTIVAS del día en pantalla (propias o heredadas del día base). */
@@ -73,6 +80,10 @@ export function DayTotalsBar({
 
   return (
     <div className={className}>
+      {/* W1.3 — aviso de plausibilidad del día, arriba de los totales que lo provocan. */}
+      {warning ? (
+        <ImplausibleNotice variant="box" className="mb-2" testId="builder-day-implausible" message={warning} />
+      ) : null}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="text-xs font-semibold uppercase tracking-wide text-muted">{title}</span>
         <div

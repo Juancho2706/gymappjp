@@ -50,14 +50,17 @@ import {
   countItemOrderChanges,
   countItemSubstitutionChanges,
   countVariantHeaderChanges,
+  dayWarningCopy,
   daysForCopyPreset,
   formatNutritionDayOfWeek,
+  kcalBucket,
   mergePortionGroupChoices,
   nextDaysFrom,
   planCopy,
   qeErrorDayKeys,
   qeExchangeGroups,
   qeFirstErrorDayKey,
+  qeItemPlausibility,
   qePublishBlockedBar,
   qeSlotCopyTargets,
   qeSubstitutionEquivalence,
@@ -104,6 +107,7 @@ import {
   loadQuickEditSubstitutions,
 } from '../../../lib/nutrition-v2-quick-edit'
 import type { PortionPickerGroup, QuickEditGroupAdmin } from './EditablePortionsSection'
+import { captureNutritionItemImplausible } from '../../../lib/analytics'
 import { fetchNutritionV2ExchangeGroups } from '../../../lib/nutrition-v2-exchange-groups.api'
 import { toQuickEditPortionGroup } from '../../../lib/nutrition-v2-builder-portions'
 import { publishDraftRN, publishQuickEditRN, savePlanTemplateRN } from '../../../lib/nutrition-v2.api'
@@ -149,6 +153,13 @@ import {
   removeDayConfirmBody,
 } from './microcopy'
 import { PORTIONS_COPY } from '../../../lib/nutrition-portions-copy'
+
+/**
+ * Días cuyo aviso de plausibilidad ya se reportó a PostHog (W1.6): `<variantKey>|day`. Set de
+ * MODULO ⇒ una vez por día mientras viva el proceso de la app; sin esto cada tecla de una meta
+ * o de una cantidad re-emitiría el mismo evento.
+ */
+const REPORTED_IMPLAUSIBLE_DAYS = new Set<string>()
 
 let keySeq = 0
 function genKey(prefix: string): string {
@@ -1028,6 +1039,36 @@ export function QuickEditMode({
       targetFatsG: Number.isFinite(targetFatsG) && targetFatsG > 0 ? targetFatsG : null,
     }
   }, [activeVariant, exchangeGroups, showVariantHeader])
+
+  // ── Aviso de plausibilidad del DIA activo (W1.3 «Cantidades honestas») ───────────────────
+  // Se arma acá (el orquestador es el único que sabe qué día se está viendo y qué ítems tiene) y
+  // viaja redactado a la barra y al sheet de confirmación. Copy del módulo puro ⇒ dice EXACTAMENTE
+  // lo mismo que la barra web. Avisa, no bloquea: no toca `count` ni el flujo de publicar.
+  const dayWarning = useMemo(() => {
+    if (!activeVariant || !dayTotals) return null
+    const implausibleItemCount = activeVariant.slots.reduce(
+      (total, slot) => total + slot.items.filter((item) => qeItemPlausibility(item).implausible).length,
+      0,
+    )
+    return dayWarningCopy({
+      prescribedCalories: dayTotals.calories,
+      targetCalories: dayTotals.targetCalories,
+      implausibleItemCount,
+    })
+  }, [activeVariant, dayTotals])
+  useEffect(() => {
+    if (dayWarning === null || !activeVariant) return
+    const key = activeVariant.key + '|day'
+    if (REPORTED_IMPLAUSIBLE_DAYS.has(key)) return
+    REPORTED_IMPLAUSIBLE_DAYS.add(key)
+    // `unit: null`: el aviso del día no acusa a ninguna unidad. Sin kcal exactas (Ley 21.719).
+    captureNutritionItemImplausible({
+      surface: 'publish',
+      unit: null,
+      reason: 'day',
+      kcalBucket: kcalBucket(dayTotals?.calories ?? 0),
+    })
+  }, [activeVariant, dayTotals?.calories, dayWarning])
 
   const handleDayLayout = useCallback((variantKey: string, y: number) => {
     dayOffsetsRef.current[variantKey] = y
@@ -2016,6 +2057,17 @@ export function QuickEditMode({
                       onItemUnit={(itemKey, unit) =>
                         dispatch({ type: 'SET_ITEM_UNIT', variantKey: variant.key, slotKey: slot.key, itemKey, unit })
                       }
+                      // W1.3 «keep the number»: la cantidad estaba bien y la unidad no, así que
+                      // NO se convierte (a diferencia de `SET_ITEM_UNIT`, que sí convierte).
+                      onItemReinterpretUnit={(itemKey, unit) =>
+                        dispatch({
+                          type: 'REINTERPRET_ITEM_UNIT',
+                          variantKey: variant.key,
+                          slotKey: slot.key,
+                          itemKey,
+                          unit,
+                        })
+                      }
                       onItemName={(itemKey, value) =>
                         dispatch({ type: 'SET_ITEM_NAME', variantKey: variant.key, slotKey: slot.key, itemKey, value })
                       }
@@ -2200,6 +2252,7 @@ export function QuickEditMode({
                 : undefined
             }
             dayTotals={dayTotals}
+            dayWarning={dayWarning}
             template={template !== null}
             creation={creation !== null}
             onDiscard={handleDiscard}
@@ -2252,6 +2305,7 @@ export function QuickEditMode({
         futureDate={futureDate}
         template={template !== null}
         creation={creation ? { effectiveFrom: state.meta?.effectiveFrom ?? null } : null}
+        warning={dayWarning}
         onConfirm={() => void doPublish()}
         onClose={() => setConfirmOpen(false)}
       />

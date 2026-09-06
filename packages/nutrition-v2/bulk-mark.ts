@@ -39,16 +39,28 @@ function round1(n: number): number {
   return Math.round(n * 10) / 10
 }
 
-/** Ids de items prescritos con un registro de consumo ACTIVO hoy (franjas + sin franja). */
+/**
+ * Ids de items prescritos con un registro de consumo ACTIVO hoy (franjas + sin franja).
+ *
+ * Solo entran los ids que EXISTEN en el snapshot del día (unión de `mealSlots[].prescriptionItems`).
+ * Republicar el plan el mismo día crea ids nuevos por item y deja los registros previos apuntando a
+ * un item que ya no está (SPEC cantidades-honestas §1 Causa 2): esos huérfanos no describen ningún
+ * item vigente, así que no pueden marcarlo como consumido ni apagar "Comí toda esta comida". La
+ * franja quedaba "completa" sin que el alumno hubiera registrado nada de la versión nueva.
+ */
 export function consumedPrescriptionItemIds(today: NutritionTodayReadModel): Set<string> {
+  const prescribedIds = new Set<string>()
+  for (const slot of today.mealSlots) {
+    for (const item of slot.prescriptionItems) prescribedIds.add(item.id)
+  }
   const ids = new Set<string>()
   for (const slot of today.mealSlots) {
     for (const entry of slot.intakeItems) {
-      if (entry.prescriptionItemId) ids.add(entry.prescriptionItemId)
+      if (entry.prescriptionItemId && prescribedIds.has(entry.prescriptionItemId)) ids.add(entry.prescriptionItemId)
     }
   }
   for (const entry of today.unassignedIntake) {
-    if (entry.prescriptionItemId) ids.add(entry.prescriptionItemId)
+    if (entry.prescriptionItemId && prescribedIds.has(entry.prescriptionItemId)) ids.add(entry.prescriptionItemId)
   }
   return ids
 }

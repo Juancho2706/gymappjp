@@ -3,6 +3,7 @@ import { AlertTriangle, RefreshCw } from 'lucide-react-native'
 import { Sheet } from '../../Sheet'
 import { NutritionMotionButton } from '../NutritionV2Kit'
 import { useTheme } from '../../../context/ThemeContext'
+import { ImplausibleNotice } from './ImplausibleNotice'
 import { EDITOR_COPY, QUICK_EDIT_COPY, publishConfirmBody } from './microcopy'
 
 /**
@@ -19,6 +20,7 @@ export function PublishConfirmSheet({
   futureDate,
   template = false,
   creation = null,
+  warning = null,
   onConfirm,
   onClose,
 }: {
@@ -27,6 +29,12 @@ export function PublishConfirmSheet({
   studentName: string
   /** Fecha (YYYY-MM-DD) si la version vigente arranca en el futuro; null = hoy. */
   futureDate: string | null
+  /**
+   * Aviso de plausibilidad del dia, ya redactado (`dayWarningCopy`, W1.3 «Cantidades honestas»).
+   * Se repite aca —ya esta en la barra— porque este sheet es el ULTIMO momento antes de que el
+   * plan le llegue al alumno. Sigue sin bloquear: el CTA de publicar no cambia. `null` = sin aviso.
+   */
+  warning?: string | null
   /** Modo PLANTILLA: se guarda material del coach; nada le llega a un alumno. */
   template?: boolean
   /**
@@ -59,6 +67,12 @@ export function PublishConfirmSheet({
             ? EDITOR_COPY.createConfirmBody(studentName, creation.effectiveFrom)
             : publishConfirmBody(studentName, futureDate)}
       </Text>
+      {/* W1.3 — el aviso del día, arriba de los botones: publicar sigue siendo un tap. */}
+      {warning ? (
+        <View className="mt-3">
+          <ImplausibleNotice variant="box" message={warning} testID="qe-publish-implausible" />
+        </View>
+      ) : null}
       <View className="mt-2 gap-3">
         <NutritionMotionButton
           accessibilityLabel={cta}

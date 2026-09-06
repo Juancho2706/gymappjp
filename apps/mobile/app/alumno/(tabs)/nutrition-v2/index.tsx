@@ -37,6 +37,7 @@ import {
   SyncOfflineState,
   WeekDayNav,
   CelebrationOverlay,
+  ImplausibleIntakeSheet,
   type CelebrationInstance,
 } from '../../../../components/nutrition-v2'
 import { Sheet as ActionSheet } from '../../../../components/Sheet'
@@ -87,11 +88,21 @@ import {
   energyGoalReached,
   energyTrendDirection,
   firstNameFromFullName,
+  formatIntakeClock,
   formatNutritionAmount,
   formatNutritionCalories,
   formatNutritionTodayVariantBadge,
   formatNutritionWeekPlanLinkLabel,
   computeSubstitutionEquivalence,
+  isPortionMarkEntry,
+  isPriorVersionEntry,
+  kcalBucket,
+  outOfPlanEntries,
+  prescribedItemImplausibleCopy,
+  prescribedItemPlausibility,
+  priorVersionCalories,
+  priorVersionEntries,
+  slotFreeEntries,
   nutritionWeekStartIso,
   resolveNutritionDayVariantForDate,
   substituteFromOption,
@@ -110,9 +121,11 @@ import {
   type NutritionPlanReadModel,
   type NutritionTodayReadModel,
   type NutritionWeekCell,
+  type ItemPlausibility,
   type NutritionWeekTargetsLike,
   type NutritionWeekVariantLike,
 } from '@eva/nutrition-v2'
+import { captureNutritionItemImplausible } from '../../../../lib/analytics'
 import { supabase } from '../../../../lib/supabase'
 import { humanizeStudentWriteError } from '../../../../lib/student-access-copy'
 import { formatNutritionShortDate } from '../../../../lib/date-utils'
@@ -204,6 +217,28 @@ const EMPTY_DAY_VARIANTS: PlanVariant[] = []
 // SUB-T10: reemplazos autorizados del coach por item prescrito, en el tab "Plan".
 // `EMPTY_PLAN_SUBSTITUTIONS` es la referencia compartida de `@eva/nutrition-v2`.
 const EMPTY_ITEM_SUBSTITUTIONS: PlanItemSubstitutionLike[] = []
+// Motivo del "Retirar los N" de registros de una versión anterior del plan: el RPC exige un
+// motivo de 3+ caracteres y acá no hay sheet donde elegirlo (el gesto ya dice cuál es).
+const PRIOR_VERSION_VOID_REASON = 'Registro de una versión anterior del plan'
+
+/** Item prescrito tal como lo trae el read model del Hoy. */
+type PrescribedItem = NutritionMealSlotRead['prescriptionItems'][number]
+
+/**
+ * Confirmación de "Lo comí" sobre umbral (SPEC cantidades-honestas §4.5): el gesto queda
+ * congelado acá hasta que el alumno confirma. `item` = un tap en el check; `bulk` = "Comí toda
+ * esta comida" con al menos un elegible sospechoso.
+ */
+type ImplausibleIntakeConfirm =
+  | { kind: 'item'; slot: NutritionMealSlotRead; item: PrescribedItem; body: string }
+  | { kind: 'bulk'; slot: NutritionMealSlotRead; eligible: PrescribedItem[]; body: string; names: string[] }
+
+/**
+ * Ítems (por id + motivo) que ya emitieron `nutrition_item_implausible` en esta sesión. A nivel
+ * MÓDULO y no de estado: la métrica de W1.6 cuenta "cuántos avisos distintos vio un usuario", no
+ * cuántas veces volvió a tocar el mismo ítem, y la pantalla se monta y desmonta con cada tab.
+ */
+const IMPLAUSIBLE_EVENT_SENT = new Set<string>()
 
 /**
  * Tab "Hoy". Con la semana Lu-Do (SPEC nutrition-week-view) esta pantalla muestra UN día:
@@ -302,6 +337,10 @@ function TodayTab({
   // Bulk-mark de franja ("Comí toda esta comida"): franja en curso + snackbar propio (reusa el
   // componente PortionSnackbar) para el "Deshacer" transitorio, sin pisar el snackbar de porciones.
   const [bulkBusySlot, setBulkBusySlot] = useState<string | null>(null)
+  // Franja con un "Retirar los N" (registros de una versión anterior del plan) en curso.
+  const [priorVersionBusySlot, setPriorVersionBusySlot] = useState<string | null>(null)
+  // Confirmación de "Lo comí" sobre umbral (SPEC cantidades-honestas §4.5): gesto en pausa.
+  const [implausibleConfirm, setImplausibleConfirm] = useState<ImplausibleIntakeConfirm | null>(null)
   const [bulkSnackbar, setBulkSnackbar] = useState<PortionSnackbarState | null>(null)
   const bulkSnackbarNonce = useRef(0)
   const bulkSnackbarTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -699,7 +738,8 @@ function TodayTab({
     }))
   }, [])
 
-  const onAtePrescribed = useCallback(
+  /** El "Lo comí" de siempre, ya confirmado si hacía falta (§4.5: la hoja no toca el payload). */
+  const runAtePrescribed = useCallback(
     async (slot: NutritionMealSlotRead, item: NutritionMealSlotRead['prescriptionItems'][number]) => {
       if (!userId || !deviceId) return
       // Web limpia el error al iniciar cada mutación (runMutation, TodayExperience.tsx:109).
@@ -769,11 +809,67 @@ function TodayTab({
     [addRow, date, deviceId, fireCelebration, load, markRowOffline, model, refreshPending, removeRow, userId],
   )
 
-  const onVoidEntry = useCallback(
-    async (entry: NutritionIntakeReadItem, reason: string) => {
-      if (!userId || !deviceId) {
-        setEntryActionError('No pudimos preparar la corrección. Recarga e intenta de nuevo.')
+  /**
+   * `nutrition_item_implausible` (W1.6) al MOSTRAR la confirmación, una vez por (ítem, motivo) y
+   * sesión. Viajan metadatos: superficie, unidad, motivo y TRAMO de kcal — nunca la cifra ni el
+   * nombre del alimento (Ley 21.719, regla de `lib/analytics.ts`).
+   */
+  const captureImplausibleOnce = useCallback((item: PrescribedItem, assessment: ItemPlausibility) => {
+    const reason = assessment.reasons[0]
+    if (!reason) return
+    const key = `${item.id}:${reason}`
+    if (IMPLAUSIBLE_EVENT_SENT.has(key)) return
+    IMPLAUSIBLE_EVENT_SENT.add(key)
+    captureNutritionItemImplausible({
+      surface: 'today',
+      unit: item.unit,
+      reason,
+      kcalBucket: kcalBucket(assessment.calories),
+    })
+  }, [])
+
+  /**
+   * SPEC §4.5: entre el tap y las 4.470 kcal del "Huevo revuelto 30 un" no había nada. Si el ítem
+   * pasa el umbral se abre la confirmación; si no, el flujo corre igual que siempre. Avisa, no
+   * bloquea, y confirmar no cambia ni el payload ni la idempotency key.
+   */
+  const onAtePrescribed = useCallback(
+    (slot: NutritionMealSlotRead, item: PrescribedItem) => {
+      const assessment = prescribedItemPlausibility(item)
+      if (!assessment.implausible) {
+        void runAtePrescribed(slot, item)
         return
+      }
+      captureImplausibleOnce(item, assessment)
+      setImplausibleConfirm({
+        kind: 'item',
+        slot,
+        item,
+        body: prescribedItemImplausibleCopy(item, assessment),
+      })
+    },
+    [captureImplausibleOnce, runAtePrescribed],
+  )
+
+  /**
+   * Retira un registro. Devuelve el mensaje de error, o `null` si salió (o quedó encolado).
+   * El sheet ignora el valor —ya pinta `entryActionError`—; lo usa el "Retirar los N" de los
+   * registros de una versión anterior, que corre esta misma función en serie y necesita saber
+   * cuándo parar (SPEC cantidades-honestas §4.4).
+   *
+   * `skipReload` deja el refetch en manos del llamador: en el retiro en lote se hace UNO solo al
+   * final en vez de N `load(true)` encadenados.
+   */
+  const onVoidEntry = useCallback(
+    async (
+      entry: NutritionIntakeReadItem,
+      reason: string,
+      options?: { skipReload?: boolean },
+    ): Promise<string | null> => {
+      if (!userId || !deviceId) {
+        const message = 'No pudimos preparar la corrección. Recarga e intenta de nuevo.'
+        setEntryActionError(message)
+        return message
       }
       setEntryActionPending(true)
       setEntryActionError(null)
@@ -793,31 +889,63 @@ function TodayTab({
         })
         setHidden(entry.id, true)
         const outcome = await submitVoidIntake(userId, payload)
-        if (!mountedRef.current) return
+        if (!mountedRef.current) return null
         if (outcome.status === 'recorded') {
           setEntryAction(null)
           setEntryActionPending(false)
-          void load(true)
+          if (!options?.skipReload) void load(true)
+          return null
         } else if (outcome.status === 'queued') {
           setEntryAction(null)
           setEntryActionPending(false)
           void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)
           await refreshPending()
+          return null
         } else {
           setHidden(entry.id, false)
           setEntryActionPending(false)
-          setEntryActionError(humanizeStudentWriteError(outcome.error.message, 'No se pudo retirar el registro.'))
+          const message = humanizeStudentWriteError(outcome.error.message, 'No se pudo retirar el registro.')
+          setEntryActionError(message)
+          return message
         }
       } catch (error) {
         setHidden(entry.id, false)
-        if (!mountedRef.current) return
+        if (!mountedRef.current) return null
         setEntryActionPending(false)
-        setEntryActionError(
-          humanizeStudentWriteError(error instanceof Error ? error.message : '', 'No se pudo retirar el registro.'),
+        const message = humanizeStudentWriteError(
+          error instanceof Error ? error.message : '',
+          'No se pudo retirar el registro.',
         )
+        setEntryActionError(message)
+        return message
       }
     },
     [deviceId, load, refreshPending, setHidden, userId],
+  )
+
+  // "Retirar los N" de una franja con varios registros de una versión anterior del plan
+  // (SPEC cantidades-honestas §4.4): voids SECUENCIALES con el mismo runner —no hay RPC de
+  // lote y cada retiro es su propio evento auditado—. Al primer error se corta y el mensaje
+  // sube al banner de mutación, que es el único visible con el sheet cerrado. UN solo
+  // `load(true)` al final (`skipReload`): N refetch encadenados repintan la lista N veces.
+  const onVoidPriorVersionEntries = useCallback(
+    async (slotCode: string, entries: NutritionIntakeReadItem[]) => {
+      if (entries.length === 0) return
+      setPriorVersionBusySlot(slotCode)
+      setMutationError(null)
+      let failure: string | null = null
+      for (const entry of entries) {
+        failure = await onVoidEntry(entry, PRIOR_VERSION_VOID_REASON, { skipReload: true })
+        if (!mountedRef.current) return
+        if (failure) break
+      }
+      if (!mountedRef.current) return
+      if (failure) setMutationError(failure)
+      // También tras un fallo: lo que sí salió tiene que reconciliarse con el servidor.
+      void load(true)
+      setPriorVersionBusySlot(null)
+    },
+    [load, onVoidEntry],
   )
 
   // ── Snackbar del bulk-mark (mismo componente que porciones, estado propio) ──
@@ -947,7 +1075,7 @@ function TodayTab({
   // individual (`buildAteAsPrescribedMutation`, key propia por item) y la envía por
   // `submitRecordIntake`, heredando online + cola offline + idempotencia + optimismo sin superficie
   // nueva. UNA sola celebración por tanda; el "Deshacer" anula solo los registros recién creados.
-  const onBulkAte = useCallback(
+  const runBulkAte = useCallback(
     async (slot: NutritionMealSlotRead, eligible: NutritionMealSlotRead['prescriptionItems'][number][]) => {
       if (!userId || !deviceId || eligible.length === 0) return
       setMutationError(null)
@@ -1042,6 +1170,41 @@ function TodayTab({
       })
     },
     [addRow, date, deviceId, fireCelebration, load, markRowOffline, model, onBulkUndo, refreshPending, removeRow, showBulkSnackbar, userId],
+  )
+
+  /**
+   * Mismo guard que el "Lo comí" individual, pero para la franja entera: si ALGÚN elegible pasa
+   * el umbral se pregunta UNA sola vez por la comida (§4.5). Con un solo sospechoso el cuerpo es
+   * su propia explicación; con varios, el conteo + la lista corta de nombres.
+   */
+  const onBulkAte = useCallback(
+    (slot: NutritionMealSlotRead, eligible: PrescribedItem[]) => {
+      const flagged = eligible
+        .map((item) => ({ item, assessment: prescribedItemPlausibility(item) }))
+        .filter(({ assessment }) => assessment.implausible)
+      if (flagged.length === 0) {
+        void runBulkAte(slot, eligible)
+        return
+      }
+      for (const { item, assessment } of flagged) captureImplausibleOnce(item, assessment)
+      setImplausibleConfirm({
+        kind: 'bulk',
+        slot,
+        eligible,
+        body:
+          flagged.length === 1
+            ? prescribedItemImplausibleCopy(flagged[0].item, flagged[0].assessment)
+            : `${flagged.length} ítems de esta comida suman más de lo habitual.`,
+        names:
+          flagged.length === 1
+            ? []
+            : flagged.map(
+                ({ item, assessment }) =>
+                  `${item.name ?? 'Alimento prescrito'} · ${formatNutritionCalories(assessment.calories)}`,
+              ),
+      })
+    },
+    [captureImplausibleOnce, runBulkAte],
   )
 
   const onEditEntry = useCallback(
@@ -1671,21 +1834,39 @@ function TodayTab({
     (slot) => slot.prescriptionItems.length > 0 || (slot.exchangeTargets?.length ?? 0) > 0,
   )
 
+  // Franjas que efectivamente tienen card: el MISMO filtro con el que se dibujan (web
+  // TodayExperience.tsx:344), para que ningún registro desaparezca en silencio.
+  const renderedSlotCodes = new Set(slotsWithPrescription.map((slot) => slot.code))
+
+  // kcal del día que vienen de registros de una versión anterior del plan (M2). Se descuentan
+  // los ya retirados en la capa optimista, igual que `removeHidden` con el anillo: si la fila
+  // desapareció, su aporte no puede seguir declarándose abajo.
+  const priorVersionKcal =
+    hiddenSet.size === 0
+      ? priorVersionCalories(model)
+      : Math.round(
+          priorVersionEntries(model)
+            .filter((entry) => !hiddenSet.has(entry.id))
+            .reduce((sum, entry) => sum + entry.totals.calories, 0) * 10,
+        ) / 10
+
   // SPEC nutrition-ui-poda #1: "Fuera del plan" reemplaza a "Consumido hoy". Antes listaba TODOS
   // los registros del día, incluidos los prescritos — que ya se ven 300px más arriba en "Tu plan
-  // de hoy" con su chip "Registrado" (eco x2 confirmado en auditoría, hallazgo H4). Ahora solo
-  // entran los registros SIN prescriptionItemId (alimento libre). Las porciones marcadas
-  // (`exchangeGroupCode` no nulo) tampoco entran: ya viven colapsadas por franja en
-  // `PortionSlotSection`/`PortionDayCoverageRow` — una fila por marca sería el mismo eco de
-  // porciones que documentó la auditoría (4 marcas de "Cereales" = 4 filas idénticas).
+  // de hoy" con su chip "Registrado" (eco x2 confirmado en auditoría, hallazgo H4).
+  //
+  // Cantidades honestas W1.4: la semántica pasa a ser la de la web (`outOfPlanEntries`) — acá
+  // entra lo que NO cuelga de ninguna card: `unassignedIntake` más los registros de franjas sin
+  // card. Lo libre de una franja renderizada (incluidos los huérfanos de una versión anterior del
+  // plan, que RN escondía filtrando `prescriptionItemId === null`) se pinta BAJO su card. Las
+  // porciones marcadas siguen fuera: ya viven colapsadas en `PortionSlotSection`/
+  // `PortionDayCoverageRow` — una fila por marca sería el mismo eco de la auditoría (§2.2).
   const outOfPlanRows: Array<{
     row: NutritionFoodRowModel
     entry: NutritionIntakeReadItem | null
     queuedKey: string | null
   }> = [
-    ...[...model.mealSlots.flatMap((slot) => slot.intakeItems), ...model.unassignedIntake]
-      .filter((entry) => !hiddenSet.has(entry.id) && entry.prescriptionItemId === null && !entry.exchangeGroupCode)
-      .sort((a, b) => a.occurredAt.localeCompare(b.occurredAt))
+    ...outOfPlanEntries(model, renderedSlotCodes)
+      .filter((entry) => !hiddenSet.has(entry.id) && !isPortionMarkEntry(entry))
       .map((entry) => ({ row: intakeToRow(entry), entry, queuedKey: null })),
     // Filas encoladas: siempre vienen del flujo "Registrar alimento" (libre), nunca de marcar
     // porciones ni de "Lo comí" — esas dos rutas usan otros overlays (`portions`, `queuedItemIds`).
@@ -1784,16 +1965,29 @@ function TodayTab({
             memoria, cero fetch extra. */}
         {livePlan?.visibleNotes ? <CoachNoteCard note={livePlan.visibleNotes} /> : null}
 
-        <AuraHero
-          greetingName={firstNameFromFullName(clientName)}
-          weekInRangeCount={weekInRangeCount}
-          calories={{ consumed: consumed.calories, target: model.targets.calories }}
-          macros={{
-            protein: { consumed: consumed.proteinG, target: model.targets.proteinG },
-            carbs: { consumed: consumed.carbsG, target: model.targets.carbsG },
-            fats: { consumed: consumed.fatsG, target: model.targets.fatsG },
-          }}
-        />
+        {/* El anillo y su nota son UN bloque (gap-2 propio): así la nota queda pegada al número
+            que explica y el `gap-5` del scroll sigue separando secciones. */}
+        <View className="gap-2">
+          <AuraHero
+            greetingName={firstNameFromFullName(clientName)}
+            weekInRangeCount={weekInRangeCount}
+            calories={{ consumed: consumed.calories, target: model.targets.calories }}
+            macros={{
+              protein: { consumed: consumed.proteinG, target: model.targets.proteinG },
+              carbs: { consumed: consumed.carbsG, target: model.targets.carbsG },
+              fats: { consumed: consumed.fatsG, target: model.targets.fatsG },
+            }}
+          />
+
+          {/* Cantidades honestas §4.4 (M2): el anillo suma registros que apuntan a items que ya
+              no están en el plan de hoy (republicar el mismo día renumera los items). Sin esta
+              línea el alumno ve 5.637 kcal y no tiene cómo saber de dónde salieron. */}
+          {priorVersionKcal > 0 ? (
+            <Text accessibilityRole="text" className="px-1 text-xs text-warning-700">
+              {formatNutritionCalories(priorVersionKcal)} vienen de registros de una versión anterior del plan
+            </Text>
+          ) : null}
+        </View>
 
         {/* Citas de la información de salud (App Review 1.4.1): las calorías y macros del anillo son
             ESTIMACIONES calculadas con ecuaciones publicadas. El link a "Fuentes y método" tiene que
@@ -1898,6 +2092,12 @@ function TodayTab({
                 onSwipeExchange={onSwipeExchange}
                 onCorrect={onCorrectPrescribed}
                 highlighted={slot.code === focusSlotCode}
+                // Cantidades honestas W1.4 (M2): lo LIBRE de la franja vive DENTRO de su card,
+                // como en la web (TodayExperience.tsx:1440), incluidos los huérfanos de una
+                // versión anterior del plan que RN antes no dibujaba en ningún lado.
+                hiddenIds={hiddenSet}
+                priorVersionBusy={priorVersionBusySlot === slot.code}
+                onVoidPriorVersion={onVoidPriorVersionEntries}
               />
             ))}
           </View>
@@ -1988,6 +2188,22 @@ function TodayTab({
         }}
         onEdit={onEditEntry}
         onVoid={onVoidEntry}
+      />
+      {/* Cantidades honestas W1.5: confirmación de "Lo comí" cuando el ítem (o algún elegible del
+          bulk) pasa el umbral. Confirmar corre el flujo intacto; cancelar no registra nada. */}
+      <ImplausibleIntakeSheet
+        open={implausibleConfirm !== null}
+        title={implausibleConfirm?.kind === 'bulk' ? '¿Registrar la comida igual?' : '¿Registrar este ítem igual?'}
+        body={implausibleConfirm?.body ?? ''}
+        items={implausibleConfirm?.kind === 'bulk' ? implausibleConfirm.names : undefined}
+        onClose={() => setImplausibleConfirm(null)}
+        onConfirm={() => {
+          const confirm = implausibleConfirm
+          setImplausibleConfirm(null)
+          if (!confirm) return
+          if (confirm.kind === 'item') void runAtePrescribed(confirm.slot, confirm.item)
+          else void runBulkAte(confirm.slot, confirm.eligible)
+        }}
       />
       {/* T2.5: sheet de intercambio. Se cierra solo al registrar; si la opción exige confirmar la
           cantidad, el stepper se abre encima y cancelar devuelve a la lista. */}
@@ -2261,6 +2477,9 @@ const TodaySlotCard = memo(function TodaySlotCard({
   onSwipeExchange,
   onCorrect,
   highlighted = false,
+  hiddenIds,
+  priorVersionBusy,
+  onVoidPriorVersion,
 }: {
   slot: NutritionMealSlotRead
   today: NutritionTodayReadModel
@@ -2291,13 +2510,29 @@ const TodaySlotCard = memo(function TodaySlotCard({
   onCorrect: (kind: 'edit' | 'void', entry: NutritionIntakeReadItem) => void
   /** Franja apuntada por el deep-link de la card de Nutrición del Home (SPEC #8). */
   highlighted?: boolean
+  /** Ids ya retirados en la capa optimista: su fila desaparece antes de que llegue el refetch. */
+  hiddenIds: ReadonlySet<string>
+  /** "Retirar los N" (registros de una versión anterior) en curso para esta franja. */
+  priorVersionBusy: boolean
+  onVoidPriorVersion: (slotCode: string, entries: NutritionIntakeReadItem[]) => void
 }) {
   const { theme } = useTheme()
   const bulk = bulkMarkSlotState(today, slot, consumedIds)
+  // Cantidades honestas W1.4: registros LIBRES de la franja (los que no calzan con ningún item
+  // prescrito vigente) y, dentro de ellos, los huérfanos de una versión anterior del plan.
+  const freeEntries = slotFreeEntries(slot).filter((entry) => !hiddenIds.has(entry.id))
+  const priorVersionEntriesOfSlot = freeEntries.filter((entry) => isPriorVersionEntry(entry, slot))
   return (
     <NutritionCard tone={highlighted ? 'nutrition' : 'neutral'}>
       <View className="flex-row flex-wrap items-center justify-between gap-2">
-        <Text className="font-display text-base font-semibold text-strong">{slot.name}</Text>
+        <View className="min-w-0 shrink flex-row flex-wrap items-center gap-2">
+          <Text className="font-display text-base font-semibold text-strong">{slot.name}</Text>
+          {/* M2: el encabezado avisa ANTES de bajar la vista — la franja arrastra registros que
+              apuntan a items que ya no están en el plan de hoy. */}
+          {priorVersionEntriesOfSlot.length > 0 ? (
+            <PriorVersionBadge count={priorVersionEntriesOfSlot.length} slotName={slot.name} />
+          ) : null}
+        </View>
         {slot.startTime ? <Text className="font-mono text-xs text-muted">{slot.startTime}</Text> : null}
       </View>
 
@@ -2453,9 +2688,147 @@ const TodaySlotCard = memo(function TodaySlotCard({
           onOpenEquivalences={onOpenEquivalences}
         />
       ) : null}
+
+      {/* Última sección de la card: lo LIBRE de la franja (SPEC cantidades-honestas §4.4, M2). */}
+      <SlotFreeEntries
+        slot={slot}
+        entries={freeEntries}
+        priorVersionEntries={priorVersionEntriesOfSlot}
+        timezone={today.timezone}
+        canAdjustPrescribed={today.permissions.canAdjustPrescribedQuantity}
+        busy={priorVersionBusy}
+        onCorrect={onCorrect}
+        onVoidPriorVersion={onVoidPriorVersion}
+      />
     </NutritionCard>
   )
 })
+
+/**
+ * Chip ámbar «N registros de una versión anterior» del encabezado de la franja. Mismos tokens
+ * que el `ItemBadge` warning del editor (`components/nutrition-v2/quick-edit/EditableItemRow.tsx:95`).
+ */
+function PriorVersionBadge({ count, slotName }: { count: number; slotName: string }) {
+  const label = count === 1 ? '1 registro de una versión anterior' : `${count} registros de una versión anterior`
+  return (
+    <View className="shrink-0 rounded-pill border border-warning-500/30 bg-warning-500/10 px-2 py-px">
+      <Text
+        accessibilityLabel={`${slotName}: ${label} del plan`}
+        className="text-[10px] font-semibold text-warning-700"
+      >
+        {label}
+      </Text>
+    </View>
+  )
+}
+
+/**
+ * Registros LIBRES de una franja, ÚLTIMA sección DENTRO de su card (SPEC cantidades-honestas
+ * §4.4 / mockup M2, paridad con `TodayExperience.tsx:1440`). Antes RN solo listaba en "Fuera del
+ * plan" lo que NO tenía `prescriptionItemId`: los huérfanos —registros que apuntan a un item de
+ * una versión anterior del plan, que republicar el mismo día renumera— no se dibujaban en ninguna
+ * parte y sin embargo sumaban al anillo. Sin registros libres no pinta nada.
+ */
+function SlotFreeEntries({
+  slot,
+  entries,
+  priorVersionEntries: priorVersion,
+  timezone,
+  canAdjustPrescribed,
+  busy,
+  onCorrect,
+  onVoidPriorVersion,
+}: {
+  slot: NutritionMealSlotRead
+  /** Libres de la franja, ya sin los ocultos de la capa optimista (los calcula la card). */
+  entries: NutritionIntakeReadItem[]
+  /** Subconjunto huérfano de `entries` (mismo cálculo que el chip del encabezado). */
+  priorVersionEntries: NutritionIntakeReadItem[]
+  timezone: string
+  canAdjustPrescribed: boolean
+  /** "Retirar los N" en curso para esta franja. */
+  busy: boolean
+  /** El MISMO handler que las filas prescritas: abre el sheet de corrección (NUT-009). */
+  onCorrect: (kind: 'edit' | 'void', entry: NutritionIntakeReadItem) => void
+  onVoidPriorVersion: (slotCode: string, entries: NutritionIntakeReadItem[]) => void
+}) {
+  const { theme } = useTheme()
+  if (entries.length === 0) return null
+
+  return (
+    <View className="mt-3 border-t border-subtle pt-1">
+      {entries.map((entry) => {
+        const fromPriorVersion = isPriorVersionEntry(entry, slot)
+        const clock = formatIntakeClock(entry.occurredAt, timezone)
+        return (
+          <View key={entry.id}>
+            <FoodRow
+              food={intakeToRow(entry)}
+              fallbackCategory={entry.category}
+              note={fromPriorVersion ? (clock ? `registrado ${clock} · plan anterior` : 'plan anterior') : null}
+              actions={
+                // Mismas acciones que la fila de "Fuera del plan": lápiz solo con permiso de
+                // ajustar cantidades prescritas (NUT-009), "Retirar" nunca se esconde.
+                <View className="flex-row items-center gap-1">
+                  {entry.prescriptionItemId === null || canAdjustPrescribed ? (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={`Editar cantidad de ${entry.snapshot.name}`}
+                      hitSlop={8}
+                      disabled={busy}
+                      onPress={() => onCorrect('edit', entry)}
+                      className="h-10 w-10 items-center justify-center rounded-control"
+                    >
+                      <Pencil color={theme.textSecondary} size={16} />
+                    </Pressable>
+                  ) : null}
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Retirar registro de ${entry.snapshot.name}`}
+                    hitSlop={8}
+                    disabled={busy}
+                    onPress={() => onCorrect('void', entry)}
+                    className="h-10 w-10 items-center justify-center rounded-control"
+                  >
+                    <Trash2 color={theme.destructive} size={16} />
+                  </Pressable>
+                </View>
+              }
+            />
+            {fromPriorVersion ? (
+              // Chip ámbar con el mismo tono/tokens que `ItemBadge` del editor
+              // (`components/nutrition-v2/quick-edit/EditableItemRow.tsx:95`).
+              <View className="pb-3 pl-14">
+                <View className="self-start rounded-pill border border-warning-500/30 bg-warning-500/10 px-2 py-px">
+                  <Text
+                    accessibilityLabel={`${entry.snapshot.name}: registro de una versión anterior del plan`}
+                    className="text-[10px] font-semibold text-warning-700"
+                  >
+                    De una versión anterior del plan
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+          </View>
+        )
+      })}
+      {priorVersion.length >= 2 ? (
+        // Con un solo huérfano el botón por fila alcanza; con varios, retirarlos de a uno son N
+        // sheets con motivo. Los voids salen SECUENCIALES (§4.4), no hay RPC de lote.
+        <View className="mt-1">
+          <NutritionMotionButton
+            accessibilityLabel={`Retirar los ${priorVersion.length} registros de una versión anterior del plan`}
+            pending={busy}
+            tone="neutral"
+            onPress={() => onVoidPriorVersion(slot.code, priorVersion)}
+          >
+            {`Retirar los ${priorVersion.length}`}
+          </NutritionMotionButton>
+        </View>
+      ) : null}
+    </View>
+  )
+}
 
 /**
  * Medidor compacto de progreso de la franja (espeja el web): barra + "consumidos/total" de items

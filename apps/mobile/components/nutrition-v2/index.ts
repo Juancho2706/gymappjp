@@ -16,6 +16,8 @@ export * from './PrescribedPortionChips'
 export * from './CelebrationOverlay'
 export * from './AuraHero'
 export * from './NutritionDomainOff'
+// Cantidades honestas W1.5: confirmación de "Lo comí" cuando el ítem prescrito pasa el umbral.
+export * from './ImplausibleIntakeSheet'
 // T3.v Cabina «Familia N»: espejo RN de la pastilla única de alta, ya montada en todas las
 // superficies del quick-edit y el hub (contraste white-label vía readableInkOn).
 export * from './AddActionButton'

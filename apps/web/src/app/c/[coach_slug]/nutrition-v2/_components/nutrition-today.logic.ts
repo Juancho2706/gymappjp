@@ -1,9 +1,15 @@
 import {
   CATALOG_MACROS_BASIS,
+  consumedEntryForItem,
+  formatIntakeClock,
+  isPortionMarkEntry,
   normalizeIntakeUnit,
+  outOfPlanEntries,
   prescribedSnapshotMacros,
   resolveItemDisplayNote,
   scaleSnapshotMacros,
+  slotFreeEntries,
+  slotPortionMarksTotal,
   type NutritionMacroTotalsLike,
 } from '@eva/nutrition-v2'
 import type { StringStorageLike } from './portion-marks.logic'
@@ -486,66 +492,18 @@ export { resolveItemDisplayNote }
 // El registro de un item prescrito se pinta EN su fila (check + hora), no en una segunda lista.
 // Lo libre de la franja cuelga de la misma card; lo que no calza en ninguna franja va a "Fuera
 // del plan". Las marcas de porción (sintéticas) se colapsan en una sola línea por franja.
-
-/** True si el intake es una marca de porción sintética (SPEC R4), no un alimento real registrado. */
-export function isPortionMarkEntry(entry: NutritionIntakeReadItem): boolean {
-  return entry.exchangeGroupCode != null && (entry.exchangePortions ?? 0) > 0
-}
-
-/** Registro de consumo del item prescrito, si ya se marcó (para el check + hora de su fila). */
-export function consumedEntryForItem(
-  slot: NutritionMealSlotRead,
-  itemId: string,
-): NutritionIntakeReadItem | null {
-  return slot.intakeItems.find((entry) => entry.prescriptionItemId === itemId) ?? null
-}
-
-/**
- * Registros LIBRES de la franja: alimentos que el alumno registró bajo esta franja sin calzar con
- * NINGÚN item prescrito vigente — sin `prescriptionItemId`, o con uno que ya no existe en el plan
- * (huérfano). Excluye las marcas de porción, que se resumen aparte (una línea, no una fila por
- * marca — auditoría §2.2).
- */
-export function slotFreeEntries(slot: NutritionMealSlotRead): NutritionIntakeReadItem[] {
-  const validPrescriptionIds = new Set(slot.prescriptionItems.map((item) => item.id))
-  return slot.intakeItems.filter(
-    (entry) =>
-      !isPortionMarkEntry(entry) &&
-      (entry.prescriptionItemId === null || !validPrescriptionIds.has(entry.prescriptionItemId)),
-  )
-}
-
-/** Suma de porciones marcadas a mano en la franja (todos los grupos), para "Porciones marcadas: N". */
-export function slotPortionMarksTotal(slot: NutritionMealSlotRead): number {
-  return slot.intakeItems.filter(isPortionMarkEntry).reduce((sum, entry) => sum + (entry.exchangePortions ?? 0), 0)
-}
-
-/**
- * "Fuera del plan": lo que no calza en ninguna franja renderizada — `unassignedIntake` (sin
- * franja) MÁS los registros de franjas que no se muestran (sin prescripción ni porciones, podadas
- * por `slotsWithPrescribedContent`). Ningún registro desaparece en silencio: si su franja no tiene
- * card, cae acá.
- */
-export function outOfPlanEntries(
-  today: NutritionTodayReadModel,
-  renderedSlotCodes: ReadonlySet<string>,
-): NutritionIntakeReadItem[] {
-  const stranded = today.mealSlots
-    .filter((slot) => !renderedSlotCodes.has(slot.code))
-    .flatMap((slot) => slot.intakeItems)
-  return [...today.unassignedIntake, ...stranded].sort((a, b) => a.occurredAt.localeCompare(b.occurredAt))
-}
-
-/** Hora corta ("13:04") de un registro en la zona horaria del día; fecha inválida ⇒ cadena vacía. */
-export function formatIntakeClock(occurredAt: string, timezone: string): string {
-  const date = new Date(occurredAt)
-  if (Number.isNaN(date.getTime())) return ''
-  const options: Intl.DateTimeFormatOptions = { hour: '2-digit', minute: '2-digit', hour12: false }
-  try {
-    return new Intl.DateTimeFormat('es-CL', { ...options, timeZone: timezone }).format(date)
-  } catch {
-    return new Intl.DateTimeFormat('es-CL', options).format(date)
-  }
+//
+// La implementación se MUDÓ tal cual a `@eva/nutrition-v2` (`today-entries.ts`) en el tren
+// «Cantidades honestas» W1.4: RN escondía los registros huérfanos que la web sí mostraba (SPEC
+// §1 Causa 2) y no podía importar de `apps/web`. Este módulo las RE-EXPORTA con los mismos
+// nombres para no tocar a `TodayExperience` ni a `nutrition-today.logic.test.ts`.
+export {
+  consumedEntryForItem,
+  formatIntakeClock,
+  isPortionMarkEntry,
+  outOfPlanEntries,
+  slotFreeEntries,
+  slotPortionMarksTotal,
 }
 
 // ── Capa optimista del Hoy (F7 · hallazgo H2) ────────────────────────────────────

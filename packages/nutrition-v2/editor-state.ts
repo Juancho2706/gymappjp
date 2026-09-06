@@ -49,6 +49,11 @@ import {
   describeSubstitutionDelta,
 } from './substitution-intake'
 import type { NutritionIntakeUnit } from './intake-units'
+// W1.1/W1.3 («Cantidades honestas»): cambiar la unidad CONVIERTE la cantidad y el editor sabe
+// decir cuando un item es poco plausible. Los dos son modulos puros del paquete para que el
+// wizard web, el wizard RN y este reductor usen exactamente la misma regla.
+import { convertQuantityTextOnUnitChange, formatQuantityText } from './unit-change'
+import { assessItemPlausibility, type ItemPlausibility } from './plausibility'
 import type { NutritionMacrosBasis } from './intake-normalize'
 // Diagnostico de porciones huerfanas (defecto B4): logica pura compartida con el wizard web
 // (movida aca en R1; el wizard la re-exporta desde su ruta historica).
@@ -842,6 +847,13 @@ export type QuickEditAction =
   | { type: 'SET_ITEM_QUANTITY'; variantKey: string; slotKey: string; itemKey: string; value: string }
   | { type: 'STEP_ITEM_QUANTITY'; variantKey: string; slotKey: string; itemKey: string; direction: 1 | -1 }
   | { type: 'SET_ITEM_UNIT'; variantKey: string; slotKey: string; itemKey: string; unit: string }
+  /**
+   * Cambia la unidad SIN convertir la cantidad: el camino «keep the number» del aviso de
+   * plausibilidad (W1.3, mockup M1). La premisa del boton «Cambiar a 30 g» es que el numero
+   * estaba bien y la unidad no — convertir ahi (como hace `SET_ITEM_UNIT`) daria 0,3 g y
+   * volveria a equivocarse. Solo la despacha ese aviso, nunca el selector de unidad.
+   */
+  | { type: 'REINTERPRET_ITEM_UNIT'; variantKey: string; slotKey: string; itemKey: string; unit: string }
   | { type: 'SET_ITEM_NAME'; variantKey: string; slotKey: string; itemKey: string; value: string }
   | { type: 'SWAP_ITEM_FOOD'; variantKey: string; slotKey: string; itemKey: string; food: BuilderFood }
   | { type: 'REMOVE_ITEM'; variantKey: string; slotKey: string; itemKey: string }
@@ -987,13 +999,17 @@ function round1(value: number): number {
   return Math.round(value * 10) / 10
 }
 
-/** Suma `direction*step` sobre el texto actual; cantidades nunca bajan de un valor > 0. */
+/**
+ * Suma `direction*step` sobre el texto actual; cantidades nunca bajan de un valor > 0.
+ * El texto de salida lo formatea `formatQuantityText` (./unit-change.ts): es LA convencion de
+ * cantidad del editor y el cambio de unidad tiene que escribir igual que el stepper.
+ */
 export function stepQuantityText(current: string, step: number, direction: 1 | -1): string {
   const n = Number(current.trim())
   const base = Number.isFinite(n) && n > 0 ? n : 0
   const next = round1(base + direction * step)
   if (next <= 0) return current
-  return String(next)
+  return formatQuantityText(next)
 }
 
 export function stepTargetText(current: string, step: number, direction: 1 | -1): string {
@@ -1535,6 +1551,26 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
     case 'SET_ITEM_UNIT':
       return mapItem(state, action.variantKey, action.slotKey, action.itemKey, (item) =>
         // El cambio de unidad solo es confiable con macros por 100 en mano (food del catalogo).
+        // Con alimento, la cantidad SE CONVIERTE (W1.1): dejar "30" y pasar de g a `un` publicaba
+        // 30 porciones de 100 g. Si la conversion no es representable el numero queda intacto
+        // (SPEC §4.1) y el aviso de plausibilidad se ocupa.
+        item.food
+          ? {
+              ...item,
+              unit: action.unit,
+              quantity: convertQuantityTextOnUnitChange({
+                quantity: item.quantity,
+                fromUnit: item.unit,
+                toUnit: action.unit,
+                food: item.food,
+              }),
+            }
+          : item,
+      )
+    case 'REINTERPRET_ITEM_UNIT':
+      return mapItem(state, action.variantKey, action.slotKey, action.itemKey, (item) =>
+        // Mismo guard que `SET_ITEM_UNIT` (sin alimento la unidad no se toca), pero la cantidad
+        // se DEJA COMO ESTA: es el "quise decir 30 gramos" del aviso de plausibilidad.
         item.food ? { ...item, unit: action.unit } : item,
       )
     case 'SET_ITEM_NAME':
@@ -1963,6 +1999,24 @@ export function qeItemMacros(item: QeItem): ItemMacros {
     return scaleMacros(item.macroBase.macros, qty / item.macroBase.quantity)
   }
   return ZERO_ITEM_MACROS
+}
+
+/**
+ * ¿Este item del editor tiene una cantidad poco plausible? (W1.3). Vive junto a `qeItemMacros`
+ * porque usa exactamente las kcal que el editor ya muestra: si la fila dice 4.470 kcal, el
+ * aviso habla de esas 4.470 y no de un numero recalculado por otro camino.
+ *
+ * Los gramos salen de la unidad + la porcion del catalogo. La medida casera (`householdGrams`)
+ * llega en W2 junto con el campo en `BuilderFood`: hasta entonces viaja `null` a proposito.
+ */
+export function qeItemPlausibility(item: QeItem): ItemPlausibility {
+  return assessItemPlausibility({
+    quantity: Number(item.quantity.trim()),
+    unit: item.unit,
+    servingSize: item.food?.servingSize ?? null,
+    householdGrams: null,
+    calories: qeItemMacros(item).calories,
+  })
 }
 
 // ---------------------------------------------------------------------------

@@ -30,8 +30,12 @@ import {
   convertIntakeQuantity,
   defaultCatalogUnit,
   firstNameFromFullName,
+  formatNutritionCalories,
   intakeUnitLabel,
+  kcalBucket,
   normalizeIntakeUnit,
+  prescribedItemImplausibleCopy,
+  prescribedItemPlausibility,
   sortFoodsByFavoriteFirst,
   substituteFromOption,
   substitutionAttemptFromToday,
@@ -39,6 +43,7 @@ import {
   swipeOptionAt,
   type BulkMarkSlotState,
   type FoodCatalogItem,
+  type ItemPlausibility,
   type NutritionIntakeReadItem,
   type NutritionTodayReadModel,
   type SubstitutionAnyOption,
@@ -48,6 +53,7 @@ import {
 import { MacroChipRow, NutritionCard, NutritionMotionButton } from '@/components/nutrition-v2'
 import { humanizeStudentWriteError } from '@/lib/student-access'
 import { AuraHero } from './AuraHero'
+import { ImplausibleIntakeDialog } from './ImplausibleIntakeDialog'
 import { SubstitutionSheet } from './SubstitutionSheet'
 import { SwipeToExchange } from './SwipeToExchange'
 import { TodayModal } from './TodayModal'
@@ -109,6 +115,7 @@ import {
 import { useNavigationGate } from './navigation-gate'
 import { readTodayCache, writeTodayCache } from './today-cache'
 import {
+  useCaptureNutritionItemImplausible,
   useCaptureStudentNutritionCorrection,
   useCaptureStudentNutritionIntake,
 } from '@/lib/posthog/events'
@@ -128,6 +135,26 @@ import {
  * después el control se desmonta solo (la franja quedó completa).
  */
 const BULK_MARKED_FLASH_MS = 1600
+
+/** Franja e item prescrito tal como los trae el read model del Hoy. */
+type TodaySlot = NutritionTodayReadModel['mealSlots'][number]
+type PrescribedItem = TodaySlot['prescriptionItems'][number]
+
+/**
+ * Confirmación de "Lo comí" sobre umbral (SPEC cantidades-honestas §4.5): el gesto queda
+ * congelado acá hasta que el alumno confirma. `item` = un click en el check; `bulk` = "Comí toda
+ * esta comida" con al menos un elegible sospechoso.
+ */
+type ImplausibleIntakeConfirm =
+  | { kind: 'item'; slot: TodaySlot; item: PrescribedItem; body: string }
+  | { kind: 'bulk'; slot: TodaySlot; state: BulkMarkSlotState; body: string; names: string[] }
+
+/**
+ * Items (por id + motivo) que ya emitieron `nutrition_item_implausible` en esta sesión. A nivel
+ * MÓDULO y no de estado: la métrica de W1.6 cuenta "cuántos avisos distintos vio un usuario", no
+ * cuántas veces volvió a tocar el mismo item, y el componente se remonta con cada navegación.
+ */
+const IMPLAUSIBLE_EVENT_SENT = new Set<string>()
 
 type DialogState =
   | { kind: 'none' }
@@ -315,6 +342,9 @@ export function TodayExperience({
   }
   const captureIntake = useCaptureStudentNutritionIntake()
   const captureCorrection = useCaptureStudentNutritionCorrection()
+  const captureImplausible = useCaptureNutritionItemImplausible()
+  /** Confirmación de "Lo comí" sobre umbral (SPEC cantidades-honestas §4.5): gesto en pausa. */
+  const [implausibleConfirm, setImplausibleConfirm] = useState<ImplausibleIntakeConfirm | null>(null)
 
   const ctx = useMemo(() => contextFromToday(today, clientId), [today, clientId])
 
@@ -395,13 +425,119 @@ export function TodayExperience({
     })
   }
 
+  /** El "Lo comí" de siempre, ya confirmado si hacía falta (§4.5: el diálogo no toca el payload). */
+  function runEatPrescribed(slot: TodaySlot, item: PrescribedItem) {
+    const payload = buildPrescribedIntakePayload({
+      context: ctx,
+      slot,
+      item,
+      idempotencyKey: prescribedIntakeIdempotencyKey({
+        localDate: ctx.date,
+        prescriptionItemId: item.id,
+        attempt: prescribedAttempt(item.id),
+      }),
+    })
+    runMutation(
+      `eat:${item.id}`,
+      () => recordIntakeAction({ payload }),
+      () => captureIntake('item_tap'),
+      {
+        kind: 'add',
+        slotCode: slot.code,
+        entry: buildOptimisticIntakeEntry({
+          payload,
+          // Totales = los macros prescritos que la fila ya muestra (el snapshot va
+          // normalizado per-unidad justamente para que el RPC reconstruya este número).
+          totals: {
+            calories: item.macros.calories ?? 0,
+            proteinG: item.macros.proteinG ?? 0,
+            carbsG: item.macros.carbsG ?? 0,
+            fatsG: item.macros.fatsG ?? 0,
+            fiberG: item.macros.fiberG ?? 0,
+          },
+          media: item.media ?? null,
+          category: item.category ?? null,
+        }),
+      },
+    )
+  }
+
+  /**
+   * `nutrition_item_implausible` (W1.6) al MOSTRAR la confirmación, una vez por (item, motivo) y
+   * sesión. Viajan metadatos: superficie, unidad, motivo y TRAMO de kcal — nunca la cifra ni el
+   * nombre del alimento (Ley 21.719, regla del módulo de eventos).
+   */
+  function captureImplausibleOnce(item: PrescribedItem, assessment: ItemPlausibility) {
+    const reason = assessment.reasons[0]
+    if (!reason) return
+    const key = `${item.id}:${reason}`
+    if (IMPLAUSIBLE_EVENT_SENT.has(key)) return
+    IMPLAUSIBLE_EVENT_SENT.add(key)
+    captureImplausible({
+      surface: 'today',
+      unit: item.unit,
+      reason,
+      kcalBucket: kcalBucket(assessment.calories),
+    })
+  }
+
+  /**
+   * SPEC §4.5: entre el click y las 4.470 kcal del "Huevo revuelto 30 un" no había nada. Si el
+   * item pasa el umbral se abre la confirmación; si no, el flujo corre igual que siempre. Avisa,
+   * no bloquea, y confirmar no cambia ni el payload ni la idempotency key.
+   */
+  function handleEat(slot: TodaySlot, item: PrescribedItem) {
+    const assessment = prescribedItemPlausibility(item)
+    if (!assessment.implausible) {
+      runEatPrescribed(slot, item)
+      return
+    }
+    captureImplausibleOnce(item, assessment)
+    setImplausibleConfirm({
+      kind: 'item',
+      slot,
+      item,
+      body: prescribedItemImplausibleCopy(item, assessment),
+    })
+  }
+
+  /**
+   * Mismo guard para la franja entera: si ALGÚN elegible pasa el umbral se pregunta UNA sola vez
+   * por la comida. Con un solo sospechoso el cuerpo es su propia explicación; con varios, el
+   * conteo más la lista corta de nombres.
+   */
+  function handleBulkEat(slot: TodaySlot, state: BulkMarkSlotState) {
+    if (state.eligible.length === 0) return
+    const flagged = state.eligible
+      .map((item) => ({ item, assessment: prescribedItemPlausibility(item) }))
+      .filter(({ assessment }) => assessment.implausible)
+    if (flagged.length === 0) {
+      runBulkEat(slot, state)
+      return
+    }
+    for (const { item, assessment } of flagged) captureImplausibleOnce(item, assessment)
+    setImplausibleConfirm({
+      kind: 'bulk',
+      slot,
+      state,
+      body:
+        flagged.length === 1
+          ? prescribedItemImplausibleCopy(flagged[0].item, flagged[0].assessment)
+          : `${flagged.length} ítems de esta comida suman más de lo habitual.`,
+      names:
+        flagged.length === 1
+          ? []
+          : flagged.map(
+              ({ item, assessment }) =>
+                `${item.name ?? 'Alimento prescrito'} · ${formatNutritionCalories(assessment.calories)}`,
+            ),
+    })
+  }
+
   // Bulk-mark de una franja: registra los elegibles (el helper puro decide cuáles = requeridos no
   // consumidos), 1 request y 1 cargo de rate-limit. Éxito → toast con "Deshacer" (anula los N ids
   // creados por el camino de void). Estado parcial → aviso honesto de cuántos quedaron.
-  function handleBulkEat(
-    slot: NutritionTodayReadModel['mealSlots'][number],
-    state: BulkMarkSlotState,
-  ) {
+  function runBulkEat(slot: TodaySlot, state: BulkMarkSlotState) {
     if (state.eligible.length === 0) return
     const id = `bulk:${slot.id}`
     const payloads = buildBulkPrescribedPayloads({
@@ -775,41 +911,7 @@ export function TodayExperience({
         substitutionOptionsByItem={substitutionOptionsByItem}
         onOpenPortionSheet={(slotCode, groupCode) => setPortionSheet({ slotCode, groupCode })}
         onBulkEat={handleBulkEat}
-        onEat={(slot, item) => {
-          const payload = buildPrescribedIntakePayload({
-            context: ctx,
-            slot,
-            item,
-            idempotencyKey: prescribedIntakeIdempotencyKey({
-              localDate: ctx.date,
-              prescriptionItemId: item.id,
-              attempt: prescribedAttempt(item.id),
-            }),
-          })
-          runMutation(
-            `eat:${item.id}`,
-            () => recordIntakeAction({ payload }),
-            () => captureIntake('item_tap'),
-            {
-              kind: 'add',
-              slotCode: slot.code,
-              entry: buildOptimisticIntakeEntry({
-                payload,
-                // Totales = los macros prescritos que la fila ya muestra (el snapshot va
-                // normalizado per-unidad justamente para que el RPC reconstruya este número).
-                totals: {
-                  calories: item.macros.calories ?? 0,
-                  proteinG: item.macros.proteinG ?? 0,
-                  carbsG: item.macros.carbsG ?? 0,
-                  fatsG: item.macros.fatsG ?? 0,
-                  fiberG: item.macros.fiberG ?? 0,
-                },
-                media: item.media ?? null,
-                category: item.category ?? null,
-              }),
-            },
-          )
-        }}
+        onEat={handleEat}
         onEdit={(entry) => openDialog({ kind: 'edit', entry })}
         onVoid={(entry) => openDialog({ kind: 'void', entry })}
         onOpenExchange={(itemEntry, consumedFoodId) =>
@@ -1012,6 +1114,23 @@ export function TodayExperience({
               },
               { kind: 'void', entryId: dialog.entry.id },
             )
+          }}
+        />
+      ) : null}
+
+      {/* Cantidades honestas W1.5: confirmación de "Lo comí" cuando el item (o algún elegible del
+          bulk) pasa el umbral. Confirmar corre el flujo intacto; cancelar no registra nada. */}
+      {implausibleConfirm !== null ? (
+        <ImplausibleIntakeDialog
+          title={implausibleConfirm.kind === 'bulk' ? '¿Registrar la comida igual?' : '¿Registrar este ítem igual?'}
+          body={implausibleConfirm.body}
+          items={implausibleConfirm.kind === 'bulk' ? implausibleConfirm.names : undefined}
+          onClose={() => setImplausibleConfirm(null)}
+          onConfirm={() => {
+            const confirm = implausibleConfirm
+            setImplausibleConfirm(null)
+            if (confirm.kind === 'item') runEatPrescribed(confirm.slot, confirm.item)
+            else runBulkEat(confirm.slot, confirm.state)
           }}
         />
       ) : null}

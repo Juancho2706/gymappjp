@@ -12,6 +12,7 @@ import Link from 'next/link'
 import { AlertTriangle, ArrowRight, Loader2, LockKeyhole, RefreshCcw } from 'lucide-react'
 import { MacroSparkPopover } from '@/components/nutrition-v2'
 import { MACRO_META, macroPct, type MacroKey } from '@/components/nutrition/macro-tokens'
+import { ImplausibleNotice } from '@/components/nutrition-v2/ImplausibleNotice'
 import { useQuickEdit } from './QuickEditProvider'
 import { QE_COPY } from './microcopy'
 
@@ -55,12 +56,20 @@ export const DAY_MACRO_ROWS: ReadonlyArray<{
 
 export function PublishBar({
   dayTotals = null,
+  dayWarning = null,
   hideActions = false,
   leading = null,
   validationMessage = null,
   validationAction = null,
 }: {
   dayTotals?: PublishBarDayTotals | null
+  /**
+   * Aviso de plausibilidad del DIA activo, ya redactado por el lienzo (`dayWarningCopy`, W1.3):
+   * «El día suma 4.906 kcal, 3,2× la meta de 1.556 · 2 ítems con cantidades poco plausibles».
+   * La barra no lo deriva —no conoce el dia activo ni sus items— y sobre todo NO bloquea:
+   * publicar sigue siendo un tap, igual que con el mismatch de Atwater. `null` = nada que decir.
+   */
+  dayWarning?: string | null
   /**
    * Aviso de la validacion LOCAL que corto el publish, ya redactado por la superficie que sabe
    * que dia se esta viendo (`qePublishBlockedBar`). La barra no lo deriva: en el editor unico el
@@ -203,6 +212,17 @@ export function PublishBar({
               </button>
             ) : null}
           </div>
+        ) : null}
+        {/* W1.3 — aviso de plausibilidad del día (mockup M1). Va DEBAJO de la validación que
+            bloquea y ENCIMA de los totales: es una advertencia, no un impedimento, y el coach
+            tiene que leerla junto a las kcal que la provocan. */}
+        {dayWarning ? (
+          <ImplausibleNotice
+            variant="box"
+            className="mb-2 w-full"
+            testId="qe-day-implausible"
+            message={dayWarning}
+          />
         ) : null}
         {publishError ? (
           <button

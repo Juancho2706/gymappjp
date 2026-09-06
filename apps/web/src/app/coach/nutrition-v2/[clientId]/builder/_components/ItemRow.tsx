@@ -1,6 +1,6 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { MoreVertical, MoveRight, Pencil, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 // Import por ruta directa (no via el barrel index.ts): desacopla del orden de edicion de otros
@@ -17,7 +17,23 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import type { FoodCatalogItem } from '@eva/nutrition-v2'
-import { BUILDER_UNITS, itemMacros, type BuilderItem, type BuilderSlot } from '../_lib/draft-builder'
+import {
+  BUILDER_UNITS,
+  builderItemPlausibility,
+  itemMacros,
+  type BuilderItem,
+  type BuilderSlot,
+} from '../_lib/draft-builder'
+import {
+  foodMagnitudeUnit,
+  implausibleItemCopy,
+  kcalBucket,
+  normalizeIntakeUnit,
+  reinterpretUnitActionLabel,
+  unitEquivalenceCaption,
+} from '@eva/nutrition-v2'
+import { useCaptureNutritionItemImplausible } from '@/lib/posthog/events'
+import { ImplausibleNotice } from '@/components/nutrition-v2/ImplausibleNotice'
 import { stepCountedQuantity } from '@/app/coach/nutrition-v2/_lib/quantity-format'
 import type { Dispatch } from '../_lib/builder-view-model'
 import { inputClass } from '@/app/coach/nutrition-v2/_lib/builder-ui-classes'
@@ -38,6 +54,14 @@ const UNDO_TOAST_MS = 8000
 
 const menuTriggerClass =
   'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control border-0 bg-transparent p-0 normal-case tracking-normal text-muted transition-colors hover:bg-surface-sunken hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-transparent'
+
+/**
+ * Avisos de plausibilidad ya reportados a PostHog desde el WIZARD (W1.6): `<itemKey>|<motivo>`.
+ * Set de módulo ⇒ una vez por ítem y motivo mientras viva la pestaña. Espejo del mismo guard del
+ * editor único (`_quick-edit/EditableItemRow.tsx`); son dos superficies distintas y cada una
+ * lleva su propio registro para que un aviso en una no silencie el de la otra.
+ */
+const REPORTED_IMPLAUSIBLE_ITEMS = new Set<string>()
 
 function PortionMacros({ item }: { item: BuilderItem }) {
   const m = itemMacros(item)
@@ -85,6 +109,30 @@ export function ItemRow({
 }) {
   const unitOptions = item.food ? BUILDER_UNITS : (['g', 'ml'] as const)
   const displayName = item.food ? item.food.name : item.customName
+  // ── Cantidades honestas (W1.2 + W1.3) en el wizard: mismo rótulo y mismo aviso que el editor
+  // único, resueltos por los módulos puros del paquete.
+  const plausibility = builderItemPlausibility(item)
+  const implausibleReason = plausibility.reasons[0] ?? null
+  const unitCaption = item.food
+    ? unitEquivalenceCaption({
+        unit: item.unit,
+        servingSize: item.food.servingSize,
+        servingUnit: item.food.servingUnit,
+      })
+    : null
+  const captureImplausible = useCaptureNutritionItemImplausible()
+  useEffect(() => {
+    if (implausibleReason === null) return
+    const key = `${item.key}|${implausibleReason}`
+    if (REPORTED_IMPLAUSIBLE_ITEMS.has(key)) return
+    REPORTED_IMPLAUSIBLE_ITEMS.add(key)
+    captureImplausible({
+      surface: 'wizard',
+      unit: item.unit,
+      reason: implausibleReason,
+      kcalBucket: kcalBucket(plausibility.calories),
+    })
+  }, [captureImplausible, implausibleReason, item.key, item.unit, plausibility.calories])
   const imageUrl = item.food ? resolveFoodImageUrl(item.food.media as FoodCatalogItem['media'], SUPABASE_BASE) : null
   // Sin `category` (alimento custom del coach, snapshot viejo) se deriva del NOMBRE antes de
   // caer al icono generico de cubiertos: "Pechuga de pollo" merece el icono de proteina igual.
@@ -284,6 +332,49 @@ export function ItemRow({
           ))}
         </select>
       </div>
+
+      {/* W1.2 — «1 un = 100 g»: la equivalencia que nadie decía, bajo los controles. */}
+      {unitCaption ? <p className="mt-1 text-xs text-muted">{unitCaption}</p> : null}
+
+      {/* W1.3 — aviso de plausibilidad (mockup M1). Avisa, NO bloquea. La acción «keep the
+          number» reusa `UPDATE_ITEM` con la cantidad EXPLÍCITA: así `applyItemPatch` no
+          convierte y el número que el coach escribió se mantiene tal cual. */}
+      {plausibility.implausible ? (
+        <ImplausibleNotice
+          variant="box"
+          className="mt-2"
+          testId="builder-item-implausible"
+          message={implausibleItemCopy({
+            quantity: Number(item.quantity),
+            unit: item.unit,
+            foodName: displayName || 'este alimento',
+            grams: plausibility.grams,
+            calories: plausibility.calories,
+            servingSize: item.food?.servingSize ?? null,
+            servingUnit: item.food?.servingUnit ?? null,
+          })}
+          actions={
+            item.food && normalizeIntakeUnit(item.unit) === 'un'
+              ? [
+                  {
+                    label: reinterpretUnitActionLabel({
+                      quantity: Number(item.quantity),
+                      servingUnit: item.food.servingUnit,
+                    }),
+                    onClick: () =>
+                      dispatch({
+                        type: 'UPDATE_ITEM',
+                        variantKey,
+                        slotKey,
+                        itemKey: item.key,
+                        patch: { unit: foodMagnitudeUnit(item.food?.servingUnit), quantity: item.quantity },
+                      }),
+                  },
+                ]
+              : []
+          }
+        />
+      ) : null}
 
       {!item.food ? (
         <FreeFoodFields item={item} variantKey={variantKey} slotKey={slotKey} clientId={clientId} dispatch={dispatch} />

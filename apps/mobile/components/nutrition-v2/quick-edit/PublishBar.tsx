@@ -4,6 +4,7 @@ import { ArrowRight, RotateCcw } from 'lucide-react-native'
 import type { NutritionMacroKey } from '@eva/nutrition-v2'
 import { NutritionMotionButton } from '../NutritionV2Kit'
 import { useTheme } from '../../../context/ThemeContext'
+import { ImplausibleNotice } from './ImplausibleNotice'
 import { EDITOR_COPY, QUICK_EDIT_COPY, dirtyBarLabel } from './microcopy'
 
 /**
@@ -55,6 +56,7 @@ export function PublishBar({
   errorMessage,
   errorAction,
   dayTotals = null,
+  dayWarning = null,
   template = false,
   creation = false,
   onDiscard,
@@ -77,6 +79,12 @@ export function PublishBar({
    * botones siguen apareciendo solo con cambios). Ausente = quick-edit clasico, igual que antes.
    */
   dayTotals?: PublishBarDayTotals | null
+  /**
+   * Aviso de plausibilidad del dia, ya redactado por el orquestador (`dayWarningCopy`, W1.3 del
+   * tren «Cantidades honestas»). La barra no lo deriva —no conoce los items— y NO bloquea:
+   * publicar sigue siendo un tap. `null` = nada que decir. Espejo de la barra web.
+   */
+  dayWarning?: string | null
   /** Modo PLANTILLA: se GUARDA material del coach, no se publica nada a un alumno. */
   template?: boolean
   /** Modo CREACION: se publica un plan NUEVO, no cambios sobre uno vigente. */
@@ -93,7 +101,7 @@ export function PublishBar({
     : creation
       ? EDITOR_COPY.createPublish
       : QUICK_EDIT_COPY.publish
-  if (dayTotals === null && !hasActions) return null
+  if (dayTotals === null && dayWarning === null && !hasActions) return null
 
   return (
     <View
@@ -128,6 +136,14 @@ export function PublishBar({
               <Text className="text-xs font-bold text-danger-600">{QUICK_EDIT_COPY.retry}</Text>
             </Pressable>
           )}
+        </View>
+      ) : null}
+
+      {/* W1.3 «Cantidades honestas» — aviso del día, encima de los totales que lo provocan y de
+          los botones. Avisa, NO bloquea (misma regla que el mismatch de Atwater). */}
+      {dayWarning ? (
+        <View className="mb-2">
+          <ImplausibleNotice variant="box" message={dayWarning} testID="qe-day-implausible" />
         </View>
       ) : null}
 

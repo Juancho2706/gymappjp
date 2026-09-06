@@ -342,6 +342,22 @@ pnpm qa:prod:suave                # Playwright contra prod, 1 navegador
   actualizaron sin correrlos y siguen fuera del dispatch.
 - No encender `ONBOARDING_BEHAVIOR_EMAILS_ENABLED` ni `FREE_COACH_DRIP_ENABLED`.
 
+## Tren «Cantidades honestas» (Nutrición V2) — W1, 06-09 (worktree `nutrition-cantidades-honestas`, sin push)
+
+SDD en [`docs/specs/nutrition-cantidades-honestas/`](../specs/nutrition-cantidades-honestas/TASKS.md). Gates corridos por el
+jefe en el worktree tras el juicio de los workers (salida real):
+
+- `pnpm exec vitest run packages/nutrition-v2 packages/nutrition-engine apps/web/src/app/coach/nutrition-v2 "apps/web/src/app/c/[coach_slug]/nutrition-v2" apps/web/src/lib/posthog apps/web/src/components/nutrition-v2 tests/mobile-nutrition-v2-{builder,builder-macros-basis,intake,builder-rehydrate}.test.ts`
+  ⇒ **122 archivos / 1.841 tests verdes** (24,7 s). Tests nuevos: `packages/nutrition-v2/{unit-change,plausibility,editor-state.unit-change,today-entries}.test.ts`
+  (+ casos en `bulk-mark.test.ts`, `draft-builder.test.ts`, `read-models.test.ts`). Los macros congelados siguen byte-idénticos
+  (`draft-builder.macros-basis.test.ts`, `mobile-nutrition-v2-builder-macros-basis.test.ts`).
+- `pnpm typecheck` ⇒ verde · `pnpm --filter @eva/mobile exec tsc --noEmit` ⇒ verde.
+- `pnpm exec eslint <27 archivos web/paquete>` y `pnpm exec eslint --config eslint.mobile.config.mjs <12 archivos mobile>` ⇒ sin hallazgos.
+- `pnpm check:nutrition-v2-boundaries` ⇒ 430 archivos OK · `pnpm docs:check` ⇒ OK.
+- SQL: la migración de W2 (`20260906202957_nutrition_v2_household_units.sql`) y su smoke `supabase/tests/nutrition_v2_household_units_rollback.sql`
+  ya se validaron en LIVE dentro de una sola transacción con **ROLLBACK** (casos A–E verdes, «W2 SMOKE OK»); **no está aplicada**.
+- E2E `qa:prod:suave`: solo al cierre del tren.
+
 ## Pendientes actuales
 
 - [x] Artefactos del run `30185211552` retenidos (`D:\tmp\eva-artifacts-856829fa\`: build.aab + build.ipa) y procesamiento en TestFlight/Play internal verificado por el owner (2026-07-25).
