@@ -3,6 +3,12 @@ import { NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { wrapEmailLayout } from '@/lib/email/base-layout'
+import {
+    computeDigestHash,
+    readLastDigestHash,
+    recordDigest,
+    PAID_EXPIRY_DIGEST_ACTION,
+} from '@/lib/email/admin-digest'
 import { getPaymentsProviderForCoach } from '@/lib/payments/provider'
 import { mapProviderStatus } from '@/lib/payments/subscription-state'
 import { ProviderRequestError } from '@/lib/payments/provider-error'
@@ -357,6 +363,17 @@ export async function GET(req: Request) {
             .filter(Boolean)
 
         if (adminEmails.length > 0) {
+            // DEDUPE DEL DIGEST (D4): mismo mecanismo que `mp-reconcile`. El hash cubre SOLO lo que
+            // el humano lee (quién se expiró y por qué, quién quedó alertado, quién dio error); si
+            // repite el del último registrado, el correo no aporta nada y se suprime. Para forzar un
+            // reenvío basta con que el contenido cambie (otro coach, otra razón, otro error).
+            const digestHash = computeDigestHash({
+                expired: expiredList.map((e) => ({ slug: e.slug, reason: e.reason })),
+                alerts: alerts.map((a) => ({ slug: a.slug, dbStatus: a.dbStatus, reason: a.reason })),
+                errors: errorList.map((e) => e.slug),
+            })
+            const suppressed = (await readLastDigestHash(admin, PAID_EXPIRY_DIGEST_ACTION)) === digestHash
+
             const expiredRows = expiredList
                 .map(
                     (e) => `<tr>
@@ -425,11 +442,25 @@ ${errorBlock}`
             })
             const subject = `[EVA] paid-expiry: ${expired} expirado(s), ${alerts.length} alerta(s) — ${nowIso.slice(0, 10)}`
 
-            for (const email of adminEmails) {
-                await sendTransactionalEmail({ to: email, subject, html }).catch((e) =>
-                    console.error(`[cron/paid-expiry] email to ${email} failed:`, e)
-                )
+            if (suppressed) {
+                console.info('[cron/paid-expiry] digest idéntico al anterior, suprimido')
+            } else {
+                for (const email of adminEmails) {
+                    await sendTransactionalEmail({ to: email, subject, html }).catch((e) =>
+                        console.error(`[cron/paid-expiry] email to ${email} failed:`, e)
+                    )
+                }
             }
+            await recordDigest(admin, PAID_EXPIRY_DIGEST_ACTION, {
+                digest_hash: digestHash,
+                sent: !suppressed,
+                summary: {
+                    expired,
+                    alerts: alerts.length,
+                    errors,
+                    recipients: adminEmails.length,
+                },
+            })
         }
     }
 

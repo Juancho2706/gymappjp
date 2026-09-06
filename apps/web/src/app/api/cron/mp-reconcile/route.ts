@@ -3,6 +3,12 @@ import { NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import { wrapEmailLayout } from '@/lib/email/base-layout'
+import {
+    computeDigestHash,
+    readLastDigestHash,
+    recordDigest,
+    MP_RECONCILE_DIGEST_ACTION,
+} from '@/lib/email/admin-digest'
 import { isModuleKilledByOperator, type ModuleKey } from '@/services/entitlements.service'
 import { applyExpiry, listLive } from '@/infrastructure/db/coach-addons.repository'
 import { getPaymentsProviderForCoach } from '@/lib/payments/provider'
@@ -453,6 +459,17 @@ export async function GET(req: Request) {
 
     // Email to ADMIN_EMAILS if divergences OR add-on alerts found (mejora F3.5: el mismo email).
     if (divergences.length > 0 || addonAlerts.length > 0) {
+        // DEDUPE DEL DIGEST (D4): el hash cubre SOLO lo que el humano lee — las divergencias, las
+        // alertas de add-ons y el conteo de facturas vencidas. Si sale idéntico al último registrado,
+        // el correo no aporta nada nuevo y se suprime. Para forzar un reenvío basta con que el
+        // contenido cambie (una divergencia nueva, un detalle distinto, otro conteo de vencidas).
+        const digestHash = computeDigestHash({
+            divergences: divergences.map((d) => ({ slug: d.slug, dbStatus: d.dbStatus, mpStatus: d.mpStatus })),
+            addonAlerts: addonAlerts.map((a) => ({ slug: a.slug, kind: a.kind, detail: a.detail })),
+            overdue: overdueInvoices?.length ?? 0,
+        })
+        const suppressed = (await readLastDigestHash(admin, MP_RECONCILE_DIGEST_ACTION)) === digestHash
+
         const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map(e => e.trim()).filter(Boolean)
         const rows = divergences
             .map(d => `<tr>
@@ -508,11 +525,25 @@ ${addonBlock}
         })
         const subject = `[EVA] ${divergences.length} divergencia(s) + ${addonAlerts.length} alerta(s) add-ons — ${now.toISOString().slice(0, 10)}`
 
-        for (const email of adminEmails) {
-            await sendTransactionalEmail({ to: email, subject, html }).catch(e =>
-                console.error(`[cron/mp-reconcile] email to ${email} failed:`, e)
-            )
+        if (suppressed) {
+            console.info('[cron/mp-reconcile] digest idéntico al anterior, suprimido')
+        } else {
+            for (const email of adminEmails) {
+                await sendTransactionalEmail({ to: email, subject, html }).catch(e =>
+                    console.error(`[cron/mp-reconcile] email to ${email} failed:`, e)
+                )
+            }
         }
+        await recordDigest(admin, MP_RECONCILE_DIGEST_ACTION, {
+            digest_hash: digestHash,
+            sent: !suppressed,
+            summary: {
+                divergences: divergences.length,
+                addon_alerts: addonAlerts.length,
+                overdue: overdueInvoices?.length ?? 0,
+                recipients: adminEmails.length,
+            },
+        })
     }
 
     console.info(

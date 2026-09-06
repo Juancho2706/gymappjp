@@ -8,6 +8,9 @@ import { ProviderRequestError } from '@/lib/payments/provider-error'
 const auditInserts: Array<Record<string, unknown>> = []
 const coachUpdates: Array<{ id: string; update: Record<string, unknown> }> = []
 let candidates: Array<Record<string, unknown>> = []
+// D4: cuando está en true, el SELECT sobre admin_audit_logs devuelve error → el dedupe del digest
+// tiene que caer FAIL-OPEN y mandar el correo igual.
+let auditReadBroken = false
 
 function makeAdmin() {
     return {
@@ -41,6 +44,34 @@ function makeAdmin() {
                     insert: async (row: Record<string, unknown>) => {
                         auditInserts.push(row)
                         return { error: null }
+                    },
+                    // SELECT del ledger (dedupe del digest, D4): filtra por el .eq('action', …) y
+                    // devuelve lo ya insertado en ESTA corrida, más reciente primero (la query pide
+                    // order desc + limit 1). El fake ignora la dirección del order a propósito.
+                    select: () => {
+                        const eqCalls: Array<[string, unknown]> = []
+                        const chain: Record<string, unknown> = {}
+                        const ret = () => chain
+                        Object.assign(chain, {
+                            eq: (col: string, val: unknown) => {
+                                eqCalls.push([col, val])
+                                return chain
+                            },
+                            gte: ret,
+                            order: ret,
+                            limit: ret,
+                            then: (resolve: (v: { data: unknown; error: unknown }) => unknown) => {
+                                if (auditReadBroken) {
+                                    return resolve({ data: null, error: { message: 'ledger caído' } })
+                                }
+                                const action = eqCalls.find(([col]) => col === 'action')?.[1]
+                                return resolve({
+                                    data: auditInserts.filter((r) => r.action === action).reverse(),
+                                    error: null,
+                                })
+                            },
+                        })
+                        return chain
                     },
                 }
             }
@@ -95,6 +126,7 @@ beforeEach(() => {
     coachUpdates.length = 0
     candidates = []
     snapshots.clear()
+    auditReadBroken = false
     fakeAdmin = makeAdmin()
     vi.stubEnv('CRON_SECRET', SECRET)
     vi.stubEnv('ADMIN_EMAILS', 'ceo@eva-app.cl')
@@ -325,5 +357,82 @@ describe('GET /api/cron/paid-expiry — resumen', () => {
         expect(sendTransactionalEmail).toHaveBeenCalledWith(
             expect.objectContaining({ to: 'ceo@eva-app.cl' })
         )
+    })
+})
+
+// D4 (owner, 05-09): el digest se mandaba TODOS los días aunque el contenido fuera idéntico (la misma
+// divergencia llegó del 29-08 al 05-09). Ahora se hashea el contenido y, si repite el último enviado,
+// se suprime dejando la traza `cron.paid_expiry_digest` con `sent:false`.
+describe('GET /api/cron/paid-expiry — dedupe del digest (D4)', () => {
+    const alertCandidate = {
+        id: 'c20',
+        slug: 'ljfitness',
+        subscription_status: 'active',
+        subscription_provider: 'mercadopago',
+        subscription_mp_id: 'pre_20',
+        subscription_provider_external_id: null,
+    }
+    const digestRows = () => auditInserts.filter((a) => a.action === 'cron.paid_expiry_digest')
+
+    it('primer digest ⇒ manda y registra el hash con sent:true', async () => {
+        candidates = [alertCandidate]
+        snapshots.set('pre_20', { status: 'authorized' }) // viva → alerta, no expira
+        await GET(authedReq())
+        expect(sendTransactionalEmail).toHaveBeenCalledTimes(1)
+        expect(digestRows()).toHaveLength(1)
+        const payload = digestRows()[0].payload as { digest_hash: string; sent: boolean }
+        expect(payload.sent).toBe(true)
+        expect(payload.digest_hash).toMatch(/^[0-9a-f]{64}$/)
+    })
+
+    it('mismo contenido en la corrida siguiente ⇒ NO manda y registra la supresión (sent:false)', async () => {
+        candidates = [alertCandidate]
+        snapshots.set('pre_20', { status: 'authorized' })
+        await GET(authedReq())
+        await GET(authedReq()) // "día siguiente": mismo coach, misma razón
+        expect(sendTransactionalEmail).toHaveBeenCalledTimes(1)
+        const rows = digestRows()
+        expect(rows).toHaveLength(2)
+        expect((rows[0].payload as { sent: boolean }).sent).toBe(true)
+        expect((rows[1].payload as { sent: boolean }).sent).toBe(false)
+        // Mismo contenido ⇒ mismo hash: eso es lo que dispara la supresión.
+        expect((rows[1].payload as { digest_hash: string }).digest_hash).toBe(
+            (rows[0].payload as { digest_hash: string }).digest_hash
+        )
+    })
+
+    it('contenido distinto (aparece otro coach) ⇒ vuelve a mandar', async () => {
+        candidates = [alertCandidate]
+        snapshots.set('pre_20', { status: 'authorized' })
+        await GET(authedReq())
+        candidates = [
+            alertCandidate,
+            {
+                id: 'c21',
+                slug: 'nuevo-caso',
+                subscription_status: 'active',
+                subscription_provider: 'mercadopago',
+                subscription_mp_id: 'pre_21',
+                subscription_provider_external_id: null,
+            },
+        ]
+        snapshots.set('pre_21', { status: 'cancelled' })
+        await GET(authedReq())
+        expect(sendTransactionalEmail).toHaveBeenCalledTimes(2)
+        const rows = digestRows()
+        expect((rows[1].payload as { sent: boolean }).sent).toBe(true)
+        expect((rows[1].payload as { digest_hash: string }).digest_hash).not.toBe(
+            (rows[0].payload as { digest_hash: string }).digest_hash
+        )
+    })
+
+    it('ledger ilegible ⇒ fail-open: manda igual aunque el contenido repita', async () => {
+        auditReadBroken = true
+        candidates = [alertCandidate]
+        snapshots.set('pre_20', { status: 'authorized' })
+        await GET(authedReq())
+        await GET(authedReq())
+        expect(sendTransactionalEmail).toHaveBeenCalledTimes(2)
+        expect(digestRows().every((r) => (r.payload as { sent: boolean }).sent)).toBe(true)
     })
 })
