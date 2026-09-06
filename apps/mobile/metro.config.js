@@ -28,6 +28,12 @@ config.resolver.nodeModulesPaths = [
 
 // Los worktrees de agentes viven bajo `.claude/worktrees` con su propio node_modules:
 // vigilar el monorepo entero los incluye y el watcher de Metro nunca llega a arrancar.
+//
+// Excepción: si ESTE proyecto ya vive dentro de un worktree, el bloqueo taparía su propio
+// `index.js` («Unable to resolve module ./apps/mobile/index.js») y `expo export` —gate mínimo de
+// AGENTS.md— no podría correr ahí. Los worktrees hermanos quedan fuera igual: no están en
+// `watchFolders` ni en `nodeModulesPaths`, así que nada los resuelve.
+const WORKTREES_RE = /[\\/]\.claude[\\/]worktrees[\\/]/
 const previousBlockList = config.resolver.blockList
 config.resolver.blockList = [
   ...(Array.isArray(previousBlockList)
@@ -35,7 +41,7 @@ config.resolver.blockList = [
     : previousBlockList
       ? [previousBlockList]
       : []),
-  /[\\/]\.claude[\\/]worktrees[\\/].*/,
+  ...(WORKTREES_RE.test(monorepoRoot) ? [] : [/[\\/]\.claude[\\/]worktrees[\\/].*/]),
 ]
 
 module.exports = withNativeWind(config, { input: './global.css' })
