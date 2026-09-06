@@ -54,8 +54,10 @@ real; cada ola cierra con su sección «Gates» y la salida pegada. Modelo por t
       formateadores es-CL del paquete, copy casero con label); B sin BLOQUEA (1 MEJORA: huérfanos DENTRO de la card con chip
       en el encabezado, un solo refetch en «Retirar los N»); `ImplausibleNotice` web movido a `components/nutrition-v2/` para
       que el wizard no importe desde `_quick-edit`. Docs: CURRENT #13, MOBILE_PARITY (bloque 06-09), TEST_STATUS.
-- [x] W1.9 [owner] **Decisión 06-09: «nada todavía»** — W1 queda commiteada en el worktree (`d35e454e`); push, deploy,
+- [x] W1.9 [owner] **Decisión 06-09: «nada todavía»** — W1 queda commiteada en el worktree; push, deploy,
       migraciones en LIVE y OTA salen TODOS JUNTOS al cierre del tren (W2–W4), con OK explícito en ese momento.
+      Commits finales tras rebase sobre `rnmobiledenuevo` @`f5d50cdc`: W1 `bfcd5f6d` · W2 `1d6f79cd` · W3 `7bfcebd5` ·
+      W4 `d3c1f28e` (rama `nutrition-cantidades-honestas`, worktree `.claude/worktrees/nutrition-cantidades-honestas`).
 
 ## W2 · Medida casera de verdad («2 huevos (122 g)»)
 
