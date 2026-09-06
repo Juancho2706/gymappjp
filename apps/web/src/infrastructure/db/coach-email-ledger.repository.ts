@@ -144,6 +144,33 @@ export async function findActiveByCoachAndKeys(
     return rowsOrThrow(result, 'findActiveByCoachAndKeys')
 }
 
+/**
+ * La fila de UN correo lógico del coach SIN filtrar por estado — `failed` incluido.
+ *
+ * Existe aparte de `findActiveByCoachAndKeys` porque aquella lectura sirve al DEDUPE y por eso deja
+ * `failed` afuera (es el único correo reintentable). La higiene del drip necesita exactamente lo
+ * contrario: un `failed` (Resend no pudo entregarlo, o la dirección está suprimida) es la prueba de
+ * que la casilla no recibe, y es una de las señales que dispara la cancelación del resto de la serie.
+ * Con la lectura del dedupe esa fila era invisible y el rebote pasaba de largo.
+ *
+ * Devuelve la MÁS RECIENTE: el índice de dedupe garantiza a lo sumo una fila viva por
+ * `(coach_id, template_key)`, pero puede haber `failed` viejas de intentos anteriores debajo, y la
+ * que vale es la del último intento.
+ */
+export async function findLatestByCoachAndKey(
+    admin: Db,
+    coachId: string,
+    templateKey: string
+): Promise<CoachEmailLedgerRow | null> {
+    const result = (await ledger(admin)
+        .select(LEDGER_COLUMNS)
+        .eq('coach_id', coachId)
+        .eq('template_key', templateKey)
+        .order('created_at', { ascending: false })
+        .limit(1)) as QueryResult
+    return rowsOrThrow(result, 'findLatestByCoachAndKey')[0] ?? null
+}
+
 /** Deja la fila del envío. Devuelve la fila creada (el service solo usa el `id`). */
 export async function insertLedgerRow(
     admin: Db,

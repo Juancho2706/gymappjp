@@ -4,6 +4,7 @@ import { addResendAudienceContact } from './send-email'
 import { buildDripTemplates, type DripTemplate, type DripTemplateKey } from './drip-templates'
 import { siteBaseUrl } from './subscription-url'
 import { cancelCoachEmails, scheduleCoachEmail } from '@/services/email/coach-email-ledger.service'
+import { findLatestByCoachAndKey } from '@/infrastructure/db/coach-email-ledger.repository'
 
 type FreeDripInput = {
     /** Service-role client: el ledger de correos se escribe con service_role, nunca con la sesión. */
@@ -181,7 +182,7 @@ function addToFreeCoachAudience(
     })
 }
 
-// ── Higiene: el drip no le sigue hablando a una casilla que nadie probó (FCN W3.8) ──────────────
+// ── Higiene: el drip no le sigue hablando a una casilla que REBOTA (FCN W3.8 + D1 del 05-09) ────
 
 /**
  * Las CUATRO keys de la serie, derivadas del calendario. Una sola fuente: agregar un correo al
@@ -189,7 +190,16 @@ function addToFreeCoachAudience(
  */
 export const DRIP_TEMPLATE_KEYS: readonly string[] = DRIP_SCHEDULE.map(({ key }) => key)
 
-/** Gracia desde el alta antes de dar la casilla por no probada: 24 h (`DAY_MS` ya son 24 h). */
+/**
+ * El correo cuya ENTREGA prueba que la casilla existe: el D+1, el primero de la serie.
+ *
+ * Se escribe explícito (y no como `DRIP_SCHEDULE[0].key`) porque no es «el primero del arreglo»: es
+ * el único correo que ya salió cuando la higiene corre a las 24 h, así que es el único que puede
+ * traer veredicto de Resend. Reordenar el calendario no debe mover la prueba en silencio.
+ */
+export const DRIP_PROOF_TEMPLATE_KEY: DripTemplateKey = 'day1_value'
+
+/** Gracia desde el alta antes de mirar el veredicto del D+1: 24 h (`DAY_MS` ya son 24 h). */
 export const UNVERIFIED_DRIP_GRACE_MS = DAY_MS
 
 /**
@@ -198,33 +208,62 @@ export const UNVERIFIED_DRIP_GRACE_MS = DAY_MS
  */
 export const UNVERIFIED_DRIP_LOOKBACK_MS = 30 * DAY_MS
 
+/** Motivos por los que la higiene NO toca la serie. Uno por rama de la decisión, para el contador. */
+export type UnverifiedDripSkipReason =
+    | 'verified'
+    | 'too_soon'
+    | 'delivered'
+    | 'no_signal'
+    | 'no_day1'
+    | 'not_found'
+    | 'unreadable'
+
 export type UnverifiedDripHygieneResult =
-    | { skipped: 'verified' | 'too_soon' | 'not_found' | 'unreadable' }
+    | { skipped: UnverifiedDripSkipReason }
     | { cancelled: number; alreadySent: number; failed: number }
 
 /**
- * Cancela lo que quede AGENDADO de la serie si el coach no probó su casilla pasadas 24 h.
+ * Cancela lo que quede AGENDADO de la serie SOLO si el D+1 del coach REBOTÓ.
  *
- * POR QUÉ (SPEC §9 R4): con D1 = A el alta free nace sin abrir el correo, así que una dirección mal
- * tipeada queda viva y recibiendo cuatro correos a lo largo de dos semanas. Son cuatro rebotes duros
- * por coach fantasma contra la reputación del dominio en Resend.
+ * D1 DEL OWNER (05-09) — **«no verificado» NO es «casilla inexistente», y la regla vieja las
+ * confundía.** Esta higiene cancelaba el D+2 / D+7 / D+14 de todo coach con
+ * `coaches.email_verified_at` en NULL a las 24 h. Resultado real: 24 de 45 altas nuevas se quedaron
+ * sin el «pásate a Pro» aunque Resend había ENTREGADO el D+1 en su casilla. La columna solo prueba
+ * que el coach volvió por un `verifyOtp` o entró por Google; no volver es de lo más común en un alta
+ * free que ya entró sin abrir el correo, y no dice absolutamente nada de si la dirección existe.
+ * **SPEC §9 R4 queda SUPERADA por esta decisión.**
  *
- * LA SEÑAL ES `coaches.email_verified_at`, NUNCA `auth.users.email_confirmed_at` (regla 11 del SPEC).
- * `auth.admin.createUser({ email_confirm: true })` sella la columna de GoTrue EN LA CREACIÓN: bajo
- * D1 = A nace seteada para todos y este salto no saltaría a nadie — la higiene quedaría escrita y
- * muerta. La prueba real de la casilla la escribe `service_role` en `coaches.email_verified_at`
- * (W3.0) al volver de un `verifyOtp` OK o al entrar por Google.
+ * LA PRUEBA DE LA CASILLA ES LA ENTREGA DEL D+1 QUE REPORTA RESEND, no la verificación del coach.
+ * El webhook (`api/webhooks/resend`) ya escribe el veredicto en la fila `day1_value` del
+ * `coach_email_ledger`; esta función solo lo lee y decide:
  *
- * CÓMO SE «SALTA», ya que no hay filtro en el momento del envío: `scheduleFreeCoachDripSequence`
- * agenda los cuatro correos DE UNA VEZ en el alta, con el `scheduled_at` de Resend. Saltar a las
- * 24 h es CANCELAR lo agendado por su `provider_message_id` del ledger (`cancelCoachEmails`), que es
- * el mismo mecanismo que ya usa el webhook de pagos cuando el coach compra.
+ * · `delivered` (o `delivered_at` sellado) → `delivered`: la casilla existe, la serie SIGUE ENTERA.
+ * · `bounced` / `complained` / `failed` → **CANCELA** el resto de `DRIP_TEMPLATE_KEYS`. Es el caso
+ *   que la higiene existe para atajar: la dirección no recibe (rebote duro, queja o supresión) y
+ *   otros tres correos son otros tres golpes a la reputación del dominio.
+ * · `scheduled` → `too_soon`: el D+1 todavía no salió, así que no hay veredicto que leer.
+ * · `sent` sin `delivered_at` → `no_signal`: salió pero el webhook no dijo nada (puede no estar
+ *   registrado, o venir demorado). SIN SEÑAL NO SE CANCELA.
+ * · sin fila del D+1 → `no_day1`: la serie ni se agendó (drip apagado por D11, alta vieja).
+ * · cualquier otro estado (`cancelled`, o uno nuevo del enum) → `no_signal`: ninguno es prueba de
+ *   rebote.
  *
- * FAIL-CLOSED: si la fila del coach no se puede leer NO se cancela nada. El error de más barato es
- * un correo de más a una casilla dudosa; el caro es dejar sin drip a un coach legítimo por un
- * hipo de la DB.
+ * FAIL-CLOSED EN TODAS LAS RAMAS: sin prueba explícita de rebote no se cancela. El error barato es
+ * un correo de más a una casilla dudosa; el caro —el que ya pagamos— es dejar sin la serie de venta
+ * a un coach legítimo. Por eso la lectura del ledger, que SÍ lanza (`CoachEmailLedgerDbError`), va
+ * envuelta y cae en `unreadable`.
  *
- * Nunca lanza: `cancelCoachEmails` no lanza por contrato y la lectura va por `error`, no por throw.
+ * SIGUE MIRANDO `coaches`: `email_verified_at` seteado corta antes (verificó ⇒ ni se lee el ledger)
+ * y la gracia de 24 h evita mirar un D+1 que ni siquiera está agendado. Y sigue siendo esa columna,
+ * NUNCA `auth.users.email_confirmed_at` (regla 11 del SPEC): `createUser({ email_confirm: true })`
+ * la sella en la creación para todos.
+ *
+ * CÓMO SE CANCELA: `scheduleFreeCoachDripSequence` agenda los cuatro correos de una vez con el
+ * `scheduled_at` de Resend; cancelar es pegarle a Resend con el `provider_message_id` del ledger
+ * (`cancelCoachEmails`), el mismo mecanismo que usa el webhook de pagos cuando el coach compra.
+ *
+ * Nunca lanza: `cancelCoachEmails` no lanza por contrato, la lectura del coach va por `error` y la
+ * del ledger va en `try`.
  */
 export async function cancelDripForUnverifiedCoach(
     admin: SupabaseClient<Database>,
@@ -245,13 +284,37 @@ export async function cancelDripForUnverifiedCoach(
         return { skipped: 'unreadable' }
     }
     if (!data) return { skipped: 'not_found' }
-    // Probó la casilla: el drip sigue su curso.
+    // Probó la casilla: el drip sigue su curso (y ni hace falta ir al ledger).
     if (data.email_verified_at) return { skipped: 'verified' }
 
     // Sin `created_at` no se puede probar que pasaron las 24 h ⇒ misma decisión que fail-closed.
     const createdAtMs = data.created_at ? new Date(data.created_at).getTime() : NaN
     if (!Number.isFinite(createdAtMs)) return { skipped: 'too_soon' }
     if (now.getTime() - createdAtMs < UNVERIFIED_DRIP_GRACE_MS) return { skipped: 'too_soon' }
+
+    // El veredicto de Resend sobre el D+1. La lectura NO es la del dedupe
+    // (`findActiveByCoachAndKeys`) justamente porque aquella filtra `failed`, que acá es señal de
+    // rebote y no ruido.
+    let day1: Awaited<ReturnType<typeof findLatestByCoachAndKey>>
+    try {
+        day1 = await findLatestByCoachAndKey(admin, coachId, DRIP_PROOF_TEMPLATE_KEY)
+    } catch (err) {
+        console.warn('[drip-hygiene] no se pudo leer el D+1 del ledger — no se cancela nada (fail-closed)', {
+            coachId,
+            message: errMessage(err),
+        })
+        return { skipped: 'unreadable' }
+    }
+
+    if (!day1) return { skipped: 'no_day1' }
+    // `delivered_at` sellado con estado `sent` no debería pasar (el webhook sella y mueve juntos),
+    // pero si pasa la casilla igual recibió: la entrega manda sobre el estado.
+    if (day1.status === 'delivered' || day1.delivered_at) return { skipped: 'delivered' }
+    if (day1.status === 'scheduled') return { skipped: 'too_soon' }
+
+    if (day1.status !== 'bounced' && day1.status !== 'complained' && day1.status !== 'failed') {
+        return { skipped: 'no_signal' }
+    }
 
     // Solo las keys de la serie: `'*'` se llevaría por delante cualquier otro correo agendado del
     // coach (nudges de cupo, correos de comportamiento), que no es lo que esta higiene decide.
@@ -263,23 +326,39 @@ export type UnverifiedDripSweepSummary = {
     cancelled: number
     alreadySent: number
     failed: number
+    /** Cuántos candidatos NO se tocaron y por qué. Es el tablero de la regla D1 en producción. */
+    skipped: Record<UnverifiedDripSkipReason, number>
 }
 
 /**
- * Barrido de la higiene anterior: coaches sin casilla probada cuya alta ya pasó las 24 h.
+ * Barrido diario de la higiene anterior: coaches sin verificar cuya alta ya pasó las 24 h.
  *
- * Los candidatos salen de `coaches` (no del ledger) porque el predicado es del coach; a los que no
- * tengan nada agendado, `cancelCoachEmails` les devuelve ceros sin tocar Resend. La ventana
- * (`UNVERIFIED_DRIP_LOOKBACK_MS`) evita arrastrar para siempre a todo el histórico sin verificar.
+ * Los candidatos salen de `coaches` (no del ledger) porque la ventana es del alta, pero la DECISIÓN
+ * de cancelar es de `cancelDripForUnverifiedCoach`, una por candidato. Antes el barrido llamaba
+ * derecho a `cancelCoachEmails` y por eso cancelaba a todo el que no hubiera verificado, sin mirar
+ * el veredicto del D+1: era el segundo camino a la misma regla vieja, y el que corría en el cron.
+ * UNA sola regla, un solo lugar.
  *
- * Es la función que un cron diario llama; no tiene caller todavía (el endpoint vive fuera del
- * alcance de W3.8) y por eso nunca lanza y devuelve un resumen contable.
+ * El precio es una lectura extra del coach por candidato (el barrido ya lo listó y la higiene lo
+ * vuelve a leer). Es un cron diario sobre decenas de filas: duplicar la regla para ahorrar esa
+ * consulta es exactamente el error que causó el incidente de las 24 altas.
+ *
+ * `skipped` desglosa por qué no se tocó a cada uno: es lo que deja ver en el log del cron si la
+ * regla nueva está frenando (delivered) o si el webhook dejó de reportar (no_signal en masa).
+ *
+ * Nunca lanza y devuelve un resumen contable; su caller es `api/cron/drip-hygiene`.
  */
 export async function sweepUnverifiedCoachDrips(
     admin: SupabaseClient<Database>,
     now: Date = new Date()
 ): Promise<UnverifiedDripSweepSummary> {
-    const summary: UnverifiedDripSweepSummary = { candidates: 0, cancelled: 0, alreadySent: 0, failed: 0 }
+    const summary: UnverifiedDripSweepSummary = {
+        candidates: 0,
+        cancelled: 0,
+        alreadySent: 0,
+        failed: 0,
+        skipped: { verified: 0, too_soon: 0, delivered: 0, no_signal: 0, no_day1: 0, not_found: 0, unreadable: 0 },
+    }
 
     const { data, error } = await admin
         .from('coaches')
@@ -297,7 +376,11 @@ export async function sweepUnverifiedCoachDrips(
 
     summary.candidates = data?.length ?? 0
     for (const row of data ?? []) {
-        const result = await cancelCoachEmails(admin, row.id, DRIP_TEMPLATE_KEYS)
+        const result = await cancelDripForUnverifiedCoach(admin, row.id, now)
+        if ('skipped' in result) {
+            summary.skipped[result.skipped] += 1
+            continue
+        }
         summary.cancelled += result.cancelled
         summary.alreadySent += result.alreadySent
         summary.failed += result.failed

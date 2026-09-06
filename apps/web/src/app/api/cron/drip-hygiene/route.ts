@@ -4,17 +4,23 @@ import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { sweepUnverifiedCoachDrips } from '@/lib/email/send-drip-sequence'
 
 /**
- * Cron `drip-hygiene` — el caller diario de la higiene de W3.8 (FCN).
+ * Cron `drip-hygiene` — el caller diario de la higiene del drip (FCN W3.8, regla nueva de D1 05-09).
  *
- * QUÉ HACE: cancela en Resend los drips agendados de coaches cuya casilla nadie probó nunca
- * (`coaches.email_verified_at IS NULL`) pasadas 24 h del alta. Bajo D1 = A el alta free nace
- * activa sin abrir el correo: mandarle 4 correos a una casilla que puede no existir quema la
- * reputación del dominio con rebotes. La bienvenida (transaccional, ya enviada en el alta) no
- * se toca; esto solo frena lo AGENDADO.
+ * QUÉ HACE: cancela en Resend lo que quede AGENDADO de la serie (D+2 / D+7 / D+14) de los coaches
+ * cuyo D+1 REBOTÓ. La bienvenida transaccional del alta no se toca; esto solo frena lo agendado.
+ *
+ * QUÉ CAMBIÓ Y POR QUÉ: antes cancelaba por `coaches.email_verified_at IS NULL` a las 24 h, o sea a
+ * todo coach que no volviera a probar su casilla. «No verificado» NO es «casilla inexistente»: le
+ * comió el «pásate a Pro» a 24 de 45 altas nuevas que SÍ habían recibido el D+1 (Resend lo reportó
+ * entregado). La prueba de que la casilla existe es la ENTREGA del D+1, que el webhook de Resend
+ * escribe en `coach_email_ledger`; solo `bounced` / `complained` / `failed` cancelan, y todo lo
+ * demás (entregado, sin señal del webhook, todavía sin salir) deja la serie viva. **SPEC §9 R4
+ * queda superada por esta decisión.**
  *
  * La lógica entera vive en `sweepUnverifiedCoachDrips` (send-drip-sequence.ts), que nunca lanza
- * y devuelve el resumen contable; este endpoint es solo auth + wrapper, molde de `cap-nudge`
- * (Bearer CRON_SECRET fail-closed con timingSafeEqual).
+ * y devuelve el resumen contable —con el desglose `skipped` de por qué no se tocó a cada
+ * candidato—; este endpoint es solo auth + wrapper, molde de `cap-nudge` (Bearer CRON_SECRET
+ * fail-closed con timingSafeEqual).
  */
 export const maxDuration = 60
 

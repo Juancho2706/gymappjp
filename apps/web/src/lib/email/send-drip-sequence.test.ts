@@ -6,19 +6,31 @@ import type { DripTemplate } from './drip-templates'
 type BuildDripTemplates = typeof import('./drip-templates').buildDripTemplates
 type DripContext = Parameters<BuildDripTemplates>[0]
 
-const { scheduleCoachEmailMock, cancelCoachEmailsMock, addResendAudienceContactMock, buildDripTemplatesMock, real } =
-    vi.hoisted(() => ({
-        scheduleCoachEmailMock: vi.fn(),
-        cancelCoachEmailsMock: vi.fn(),
-        addResendAudienceContactMock: vi.fn(),
-        buildDripTemplatesMock: vi.fn(),
-        // Holder del módulo REAL: el mock delega en él salvo cuando el test quiere una lista incompleta.
-        real: { build: null as null | ((ctx: unknown) => DripTemplate[]) },
-    }))
+const {
+    scheduleCoachEmailMock,
+    cancelCoachEmailsMock,
+    addResendAudienceContactMock,
+    buildDripTemplatesMock,
+    findLatestByCoachAndKeyMock,
+    real,
+} = vi.hoisted(() => ({
+    scheduleCoachEmailMock: vi.fn(),
+    cancelCoachEmailsMock: vi.fn(),
+    addResendAudienceContactMock: vi.fn(),
+    buildDripTemplatesMock: vi.fn(),
+    findLatestByCoachAndKeyMock: vi.fn(),
+    // Holder del módulo REAL: el mock delega en él salvo cuando el test quiere una lista incompleta.
+    real: { build: null as null | ((ctx: unknown) => DripTemplate[]) },
+}))
 
 vi.mock('@/services/email/coach-email-ledger.service', () => ({
     scheduleCoachEmail: scheduleCoachEmailMock,
     cancelCoachEmails: cancelCoachEmailsMock,
+}))
+
+// El veredicto del D+1 sale del ledger: la higiene lo lee por acá y es lo que decide si cancela.
+vi.mock('@/infrastructure/db/coach-email-ledger.repository', () => ({
+    findLatestByCoachAndKey: findLatestByCoachAndKeyMock,
 }))
 
 vi.mock('./send-email', () => ({
@@ -31,10 +43,12 @@ vi.mock('./drip-templates', async (importOriginal) => {
     return { ...actual, buildDripTemplates: buildDripTemplatesMock }
 })
 
+import type { CoachEmailLedgerStatus } from '@/infrastructure/db/coach-email-ledger.repository'
 import {
     cancelDripForUnverifiedCoach,
     scheduleFreeCoachDripSequence,
     sweepUnverifiedCoachDrips,
+    DRIP_PROOF_TEMPLATE_KEY,
     DRIP_SCHEDULE,
     DRIP_TEMPLATE_KEYS,
 } from './send-drip-sequence'
@@ -300,17 +314,40 @@ describe('scheduleFreeCoachDripSequence — resumen', () => {
     })
 })
 
+/** Fila del D+1 en el ledger, con lo único que la higiene mira: el veredicto de Resend. */
+function day1Row(status: CoachEmailLedgerStatus, deliveredAt: string | null = null) {
+    return {
+        id: 'led-day1',
+        template_key: 'day1_value',
+        status,
+        sent_at: status === 'scheduled' ? null : '2026-08-25T12:05:00.000Z',
+        delivered_at: deliveredAt,
+    }
+}
+
+const SIN_SKIPS = {
+    verified: 0,
+    too_soon: 0,
+    delivered: 0,
+    no_signal: 0,
+    no_day1: 0,
+    not_found: 0,
+    unreadable: 0,
+}
+
 /**
- * FCN W3.8 — la higiene que introduce D1 = A. El coach free entra sin abrir el correo, así que una
- * dirección mal tipeada queda viva recibiendo cuatro correos: cuatro rebotes duros contra la
- * reputación del dominio.
+ * D1 DEL OWNER (05-09) — la regla de la higiene CAMBIÓ y estos tests pinnean la nueva.
  *
- * LO QUE ESTOS TESTS PROTEGEN es DE DÓNDE sale la señal. Si alguien la vuelve a leer de
- * `auth.users.email_confirmed_at`, bajo D1 = A nace seteada para TODOS y esta higiene no saltaría
- * jamás a nadie: quedaría escrita y muerta (regla 11 del SPEC). La prueba de la casilla es
- * `coaches.email_verified_at`, y acá se pinnea contra esa columna.
+ * Antes cancelaba el D+2 / D+7 / D+14 de todo coach con `coaches.email_verified_at` en NULL a las
+ * 24 h (SPEC §9 R4, hoy SUPERADA). Eso le comió el «pásate a Pro» a 24 de 45 altas nuevas cuyo D+1
+ * Resend había ENTREGADO: «no verificado» no es «casilla inexistente» — la columna solo dice que el
+ * coach no volvió por un `verifyOtp` ni entró por Google, que en un alta free es lo NORMAL.
+ *
+ * LO QUE ESTOS TESTS PROTEGEN ahora es que la única razón para cancelar sea el REBOTE REAL del D+1
+ * (`bounced` / `complained` / `failed` en `coach_email_ledger`), y que TODAS las demás ramas dejen
+ * la serie viva. Si alguien vuelve a cancelar por la columna del coach, el caso «delivered» revienta.
  */
-describe('cancelDripForUnverifiedCoach (W3.8)', () => {
+describe('cancelDripForUnverifiedCoach (D1 del owner, 05-09)', () => {
     const COACH_ID = '11111111-1111-4111-8111-111111111111'
     const NOW = new Date('2026-08-26T12:00:00.000Z')
     const HACE_2_DIAS = '2026-08-24T12:00:00.000Z'
@@ -323,49 +360,151 @@ describe('cancelDripForUnverifiedCoach (W3.8)', () => {
         return { from: vi.fn(() => ({ select })) } as unknown as SupabaseClient<Database>
     }
 
+    /** El caso base de todos estos tests: coach sin verificar y fuera de la gracia de 24 h. */
+    function adminSinVerificar() {
+        return adminWith({ data: { email_verified_at: null, created_at: HACE_2_DIAS } })
+    }
+
     beforeEach(() => {
         vi.clearAllMocks()
         cancelCoachEmailsMock.mockResolvedValue({ cancelled: 3, alreadySent: 1, failed: 0 })
+        findLatestByCoachAndKeyMock.mockResolvedValue(day1Row('bounced'))
     })
 
-    it('sin `email_verified_at` y pasadas 24 h CANCELA las 4 keys de la serie (y solo esas)', async () => {
-        const admin = adminWith({ data: { email_verified_at: null, created_at: HACE_2_DIAS } })
+    it('el D+1 que REBOTÓ cancela las 4 keys de la serie (y solo esas)', async () => {
+        const admin = adminSinVerificar()
 
         await expect(cancelDripForUnverifiedCoach(admin, COACH_ID, NOW)).resolves.toEqual({
             cancelled: 3,
             alreadySent: 1,
             failed: 0,
         })
+        // El veredicto se busca en la fila del D+1, no en otra key de la serie.
+        expect(findLatestByCoachAndKeyMock).toHaveBeenCalledWith(admin, COACH_ID, 'day1_value')
+        expect(DRIP_PROOF_TEMPLATE_KEY).toBe('day1_value')
         expect(cancelCoachEmailsMock).toHaveBeenCalledWith(admin, COACH_ID, DRIP_TEMPLATE_KEYS)
         // NUNCA `'*'`: eso se llevaría puesto cualquier otro correo agendado del coach.
         expect(cancelCoachEmailsMock).not.toHaveBeenCalledWith(admin, COACH_ID, '*')
         expect(DRIP_TEMPLATE_KEYS).toEqual(['day1_value', 'day2_pro', 'day7_nutrition', 'day14_last_call'])
     })
 
-    // El salto se decide contra la COLUMNA. Con GoTrue nadie tendría `email_verified_at` en null.
-    it('con `email_verified_at` seteado NO cancela nada', async () => {
+    it('una queja de spam sobre el D+1 cancela igual que el rebote', async () => {
+        findLatestByCoachAndKeyMock.mockResolvedValue(day1Row('complained'))
+
+        await expect(cancelDripForUnverifiedCoach(adminSinVerificar(), COACH_ID, NOW)).resolves.toMatchObject({
+            cancelled: 3,
+        })
+    })
+
+    // `failed` = Resend no pudo entregarlo o la dirección está suprimida. Es el estado que la lectura
+    // del DEDUPE (`findActiveByCoachAndKeys`) filtra, y por eso la higiene usa una lectura propia.
+    it('un D+1 `failed` (no se pudo entregar / dirección suprimida) también cancela', async () => {
+        findLatestByCoachAndKeyMock.mockResolvedValue(day1Row('failed'))
+
+        await expect(cancelDripForUnverifiedCoach(adminSinVerificar(), COACH_ID, NOW)).resolves.toMatchObject({
+            cancelled: 3,
+        })
+    })
+
+    // ⚠️ EL INCIDENTE: 24 de 45 altas se quedaron sin el «pásate a Pro» con esta misma fila.
+    it('con el D+1 ENTREGADO no cancela nada, aunque el coach nunca haya verificado', async () => {
+        findLatestByCoachAndKeyMock.mockResolvedValue(day1Row('delivered', '2026-08-25T12:06:00.000Z'))
+
+        await expect(cancelDripForUnverifiedCoach(adminSinVerificar(), COACH_ID, NOW)).resolves.toEqual({
+            skipped: 'delivered',
+        })
+        expect(cancelCoachEmailsMock).not.toHaveBeenCalled()
+    })
+
+    // Borde: el webhook sella estado y fecha juntos, pero si llegara `sent` con `delivered_at`, la
+    // casilla igual recibió. La ENTREGA manda sobre el estado.
+    it('`sent` con `delivered_at` sellado cuenta como entregado', async () => {
+        findLatestByCoachAndKeyMock.mockResolvedValue(day1Row('sent', '2026-08-25T12:06:00.000Z'))
+
+        await expect(cancelDripForUnverifiedCoach(adminSinVerificar(), COACH_ID, NOW)).resolves.toEqual({
+            skipped: 'delivered',
+        })
+        expect(cancelCoachEmailsMock).not.toHaveBeenCalled()
+    })
+
+    it('el D+1 todavía agendado ⇒ too_soon: no hay veredicto que leer', async () => {
+        findLatestByCoachAndKeyMock.mockResolvedValue(day1Row('scheduled'))
+
+        await expect(cancelDripForUnverifiedCoach(adminSinVerificar(), COACH_ID, NOW)).resolves.toEqual({
+            skipped: 'too_soon',
+        })
+        expect(cancelCoachEmailsMock).not.toHaveBeenCalled()
+    })
+
+    // Fail-CLOSED: el correo salió pero el webhook no dijo nada (puede no estar registrado o venir
+    // demorado). Silencio NO es rebote.
+    it('`sent` sin `delivered_at` ⇒ no_signal y NO cancela', async () => {
+        findLatestByCoachAndKeyMock.mockResolvedValue(day1Row('sent'))
+
+        await expect(cancelDripForUnverifiedCoach(adminSinVerificar(), COACH_ID, NOW)).resolves.toEqual({
+            skipped: 'no_signal',
+        })
+        expect(cancelCoachEmailsMock).not.toHaveBeenCalled()
+    })
+
+    // Ningún otro estado del enum prueba un rebote: `cancelled` lo escribimos NOSOTROS.
+    it('un estado que no prueba rebote (`cancelled`) cae en no_signal', async () => {
+        findLatestByCoachAndKeyMock.mockResolvedValue(day1Row('cancelled'))
+
+        await expect(cancelDripForUnverifiedCoach(adminSinVerificar(), COACH_ID, NOW)).resolves.toEqual({
+            skipped: 'no_signal',
+        })
+        expect(cancelCoachEmailsMock).not.toHaveBeenCalled()
+    })
+
+    it('sin fila del D+1 en el ledger ⇒ no_day1 y NO cancela (fail-closed)', async () => {
+        findLatestByCoachAndKeyMock.mockResolvedValue(null)
+
+        await expect(cancelDripForUnverifiedCoach(adminSinVerificar(), COACH_ID, NOW)).resolves.toEqual({
+            skipped: 'no_day1',
+        })
+        expect(cancelCoachEmailsMock).not.toHaveBeenCalled()
+    })
+
+    // La columna del coach sigue siendo un CORTE TEMPRANO: verificó ⇒ ni se pregunta por el ledger.
+    it('con `email_verified_at` seteado NO cancela nada ni lee el ledger', async () => {
         const admin = adminWith({
             data: { email_verified_at: '2026-08-25T09:00:00.000Z', created_at: HACE_2_DIAS },
         })
 
         await expect(cancelDripForUnverifiedCoach(admin, COACH_ID, NOW)).resolves.toEqual({ skipped: 'verified' })
+        expect(findLatestByCoachAndKeyMock).not.toHaveBeenCalled()
         expect(cancelCoachEmailsMock).not.toHaveBeenCalled()
     })
 
-    it('sin verificar pero dentro de las 24 h todavía no se toca la serie', async () => {
+    it('dentro de las 24 h no se toca la serie ni se lee el ledger', async () => {
         const admin = adminWith({ data: { email_verified_at: null, created_at: HACE_2_HORAS } })
 
         await expect(cancelDripForUnverifiedCoach(admin, COACH_ID, NOW)).resolves.toEqual({ skipped: 'too_soon' })
+        expect(findLatestByCoachAndKeyMock).not.toHaveBeenCalled()
         expect(cancelCoachEmailsMock).not.toHaveBeenCalled()
     })
 
     // Fail-CLOSED: el error barato es un correo de más; el caro es dejar sin drip a un coach
     // legítimo porque la DB tosió.
-    it('si la fila no se puede leer NO cancela (fail-closed) y loguea sin PII', async () => {
+    it('si la fila del coach no se puede leer NO cancela (fail-closed) y loguea sin PII', async () => {
         const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
         const admin = adminWith({ error: { message: 'connection reset' } })
 
         await expect(cancelDripForUnverifiedCoach(admin, COACH_ID, NOW)).resolves.toEqual({ skipped: 'unreadable' })
+        expect(cancelCoachEmailsMock).not.toHaveBeenCalled()
+        expect(JSON.stringify(warn.mock.calls)).not.toContain('@')
+    })
+
+    // A diferencia de la lectura del coach, el repository LANZA (`CoachEmailLedgerDbError`): sin el
+    // try/catch el cron entero se caía en el primer candidato.
+    it('si el ledger LANZA cae en unreadable y no cancela', async () => {
+        const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+        findLatestByCoachAndKeyMock.mockRejectedValue(new Error('findLatestByCoachAndKey coach_email_ledger: timeout'))
+
+        await expect(cancelDripForUnverifiedCoach(adminSinVerificar(), COACH_ID, NOW)).resolves.toEqual({
+            skipped: 'unreadable',
+        })
         expect(cancelCoachEmailsMock).not.toHaveBeenCalled()
         expect(JSON.stringify(warn.mock.calls)).not.toContain('@')
     })
@@ -378,10 +517,14 @@ describe('cancelDripForUnverifiedCoach (W3.8)', () => {
     })
 })
 
-describe('sweepUnverifiedCoachDrips (W3.8)', () => {
+describe('sweepUnverifiedCoachDrips (W3.8 + D1 05-09)', () => {
     const NOW = new Date('2026-08-26T12:00:00.000Z')
+    const HACE_2_DIAS = '2026-08-24T12:00:00.000Z'
 
-    /** Cliente mínimo del barrido: `select().is().gte().lt()` resuelve la lista. */
+    /**
+     * El barrido y la higiene por coach comparten el MISMO cliente, así que `select()` tiene que
+     * responder a las dos formas: `.is().gte().lt()` (la lista) y `.eq().maybeSingle()` (cada coach).
+     */
     function adminWithCandidates(result: { data?: Array<{ id: string }>; error?: { message: string } }) {
         const filters = { is: '', gte: '', lt: '' }
         const thenable = {
@@ -401,6 +544,13 @@ describe('sweepUnverifiedCoachDrips (W3.8)', () => {
                 filters.lt = value
                 return Promise.resolve(thenable)
             }),
+            // Todos los candidatos cumplen el predicado del barrido: sin verificar y fuera de la gracia.
+            eq: vi.fn(() => ({
+                maybeSingle: vi.fn(async () => ({
+                    data: { email_verified_at: null, created_at: HACE_2_DIAS },
+                    error: null,
+                })),
+            })),
         }
         const admin = {
             from: vi.fn(() => ({ select: vi.fn(() => chain) })),
@@ -413,19 +563,48 @@ describe('sweepUnverifiedCoachDrips (W3.8)', () => {
         cancelCoachEmailsMock.mockResolvedValue({ cancelled: 2, alreadySent: 0, failed: 0 })
     })
 
-    it('barre a los candidatos y suma el resultado de cada cancelación', async () => {
-        const { admin, filters } = adminWithCandidates({ data: [{ id: 'a' }, { id: 'b' }] })
+    /**
+     * ANTES el barrido llamaba DERECHO a `cancelCoachEmails` para cada candidato: era el segundo
+     * camino a la regla vieja —y el que corría en el cron—, así que cancelaba a todos los no
+     * verificados aunque su D+1 estuviera entregado. Ahora delega en `cancelDripForUnverifiedCoach`
+     * y solo cancela al que rebotó; el resto se contabiliza en `skipped` con su motivo.
+     */
+    it('delega en la higiene por coach: solo cancela al que rebotó y desglosa el resto en skipped', async () => {
+        const veredictos: Record<string, ReturnType<typeof day1Row> | null> = {
+            a: day1Row('bounced'),
+            b: day1Row('delivered', '2026-08-25T12:06:00.000Z'),
+            c: null,
+            d: day1Row('sent'),
+        }
+        findLatestByCoachAndKeyMock.mockImplementation(async (_admin: unknown, coachId: string) => veredictos[coachId])
+        const { admin, filters } = adminWithCandidates({ data: [{ id: 'a' }, { id: 'b' }, { id: 'c' }, { id: 'd' }] })
+
+        await expect(sweepUnverifiedCoachDrips(admin, NOW)).resolves.toEqual({
+            candidates: 4,
+            cancelled: 2,
+            alreadySent: 0,
+            failed: 0,
+            skipped: { ...SIN_SKIPS, delivered: 1, no_day1: 1, no_signal: 1 },
+        })
+        expect(cancelCoachEmailsMock).toHaveBeenCalledTimes(1)
+        expect(cancelCoachEmailsMock).toHaveBeenCalledWith(admin, 'a', DRIP_TEMPLATE_KEYS)
+        // El candidato es «sin la columna probada» y con el alta fuera de la gracia de 24 h.
+        expect(filters.is).toBe('email_verified_at')
+        expect(filters.lt).toBe('2026-08-25T12:00:00.000Z')
+        expect(filters.gte).toBe('2026-07-27T12:00:00.000Z')
+    })
+
+    it('varios rebotes suman sus contadores de cancelación', async () => {
+        findLatestByCoachAndKeyMock.mockResolvedValue(day1Row('bounced'))
+        const { admin } = adminWithCandidates({ data: [{ id: 'a' }, { id: 'b' }] })
 
         await expect(sweepUnverifiedCoachDrips(admin, NOW)).resolves.toEqual({
             candidates: 2,
             cancelled: 4,
             alreadySent: 0,
             failed: 0,
+            skipped: { ...SIN_SKIPS },
         })
-        // El candidato es «sin la columna probada» y con el alta fuera de la gracia de 24 h.
-        expect(filters.is).toBe('email_verified_at')
-        expect(filters.lt).toBe('2026-08-25T12:00:00.000Z')
-        expect(filters.gte).toBe('2026-07-27T12:00:00.000Z')
         expect(cancelCoachEmailsMock).toHaveBeenCalledTimes(2)
     })
 
@@ -438,6 +617,7 @@ describe('sweepUnverifiedCoachDrips (W3.8)', () => {
             cancelled: 0,
             alreadySent: 0,
             failed: 0,
+            skipped: { ...SIN_SKIPS },
         })
         expect(cancelCoachEmailsMock).not.toHaveBeenCalled()
     })
