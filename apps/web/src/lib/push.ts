@@ -21,6 +21,8 @@ export type PushEventKey =
     | 'checkin_due'
     /** Solicitud nueva en `/join/<código>` (coach-leads W3.3). Destinatario: el COACH. */
     | 'lead_received'
+    /** Novedad publicada en la campanita (`news_items`). Destinatarios: TODOS los coaches activos. */
+    | 'news_published'
 
 export type PushPayload = {
     /** Evento del catálogo — gobierna el kill-switch y la telemetría. */
@@ -61,6 +63,9 @@ function ensureVapid(): boolean {
     return true
 }
 
+/** Expo acepta hasta 100 mensajes por request; el fan-out a coaches lo supera. */
+const EXPO_PUSH_BATCH = 100
+
 async function sendExpoTokens(
     tokens: string[],
     payload: PushPayload,
@@ -74,12 +79,59 @@ async function sendExpoTokens(
         sound: 'default',
         channelId: 'default',
     }))
-    await fetch('https://exp.host/--/api/v2/push/send', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-        body: JSON.stringify(messages),
-    })
+    for (let i = 0; i < messages.length; i += EXPO_PUSH_BATCH) {
+        await fetch('https://exp.host/--/api/v2/push/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+            body: JSON.stringify(messages.slice(i, i + EXPO_PUSH_BATCH)),
+        })
+    }
     return tokens.length
+}
+
+/** `.in()` con listas largas infla la URL de PostgREST; se pagina de a 200 ids. */
+const TOKEN_LOOKUP_CHUNK = 200
+
+/**
+ * Fan-out NATIVO (Expo) a muchos usuarios de una vez — hoy, los coaches al publicar una novedad
+ * (`news_published`). No pasa por Web Push: `push_subscriptions` es por `client_id` (alumnos) y
+ * los coaches no tienen suscripción web, así que el único canal real para ellos es la app.
+ *
+ * Un mismo token puede estar repetido bajo varios `device_id` del mismo usuario (reinstalaciones):
+ * se deduplica para que nadie reciba la notificación dos veces.
+ *
+ * Best-effort como `sendPushToClient`: jamás lanza; devuelve conteos para la auditoría del caller.
+ */
+export async function sendExpoPushToUsers(
+    userIds: string[],
+    payload: PushPayload,
+): Promise<{ users: number; tokens: number; sent: number }> {
+    const ids = Array.from(new Set(userIds.filter(Boolean)))
+    const result = { users: ids.length, tokens: 0, sent: 0 }
+    try {
+        if (!ids.length || !isPushEventEnabled(payload.event)) return result
+
+        const admin = createServiceRoleClient()
+        const tokens = new Set<string>()
+        for (let i = 0; i < ids.length; i += TOKEN_LOOKUP_CHUNK) {
+            // `push_tokens` no está en los tipos generados (misma deuda que en sendPushToClient).
+            const { data } = await (admin as any)
+                .from('push_tokens')
+                .select('token')
+                .in('user_id', ids.slice(i, i + TOKEN_LOOKUP_CHUNK))
+            for (const row of (data ?? []) as { token: string }[]) {
+                if (row.token) tokens.add(row.token)
+            }
+        }
+        result.tokens = tokens.size
+        if (!tokens.size) return result
+
+        result.sent = await sendExpoTokens(Array.from(tokens), payload)
+        console.log(`[push] event=${payload.event} users=${ids.length} expo=${result.sent}/${result.tokens}`)
+    } catch (err) {
+        console.error(`[push] event=${payload.event} fan-out failed:`, err)
+    }
+    return result
 }
 
 /**

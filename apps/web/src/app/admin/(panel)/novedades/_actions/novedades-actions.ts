@@ -3,6 +3,7 @@
 import { z } from 'zod'
 import { revalidatePath } from 'next/cache'
 import { assertAdmin, logAdminAction } from '@/lib/admin/admin-action-wrapper'
+import { notifyCoachesOfNewsPublished } from '@/lib/push-events'
 
 const newsSchema = z.object({
   title: z.string().min(3).max(200),
@@ -119,7 +120,7 @@ export async function publishNewsItemAction(id: string): Promise<NewsActionResul
   // feed de los coaches y en el orden del historial). Solo se setea cuando nunca la tuvo.
   const { data: current, error: readError } = await adminClient
     .from('news_items')
-    .select('published_at')
+    .select('published_at, title, content')
     .eq('id', id)
     .maybeSingle()
 
@@ -144,11 +145,23 @@ export async function publishNewsItemAction(id: string): Promise<NewsActionResul
     return { success: false, error: error.message }
   }
 
+  // Push nativa a los coaches SOLO en la primera publicacion (decision del owner 2026-09-06:
+  // siempre, para todo tipo). Restaurar un archivado no vuelve a sonar en el telefono. Best-effort:
+  // la novedad ya quedo publicada y una push fallida no la revierte.
+  const push = current.published_at
+    ? null
+    : await notifyCoachesOfNewsPublished(adminClient, {
+        newsItemId: id,
+        title: current.title,
+        content: current.content,
+      })
+
   await logAdminAction(adminClient, 'publish_news_item', 'news_items', id, {
     status: 'published',
     published_at: current.published_at ?? patch.published_at,
     // true = restauracion que conservo la fecha original (no es una publicacion nueva).
     published_at_preserved: Boolean(current.published_at),
+    ...(push ? { push_users: push.users, push_tokens: push.tokens, push_sent: push.sent } : {}),
   })
   revalidatePath('/admin/novedades')
   return { success: true }

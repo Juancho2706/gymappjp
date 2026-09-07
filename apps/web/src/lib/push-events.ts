@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/database.types'
-import { sendPushToClient } from './push'
+import { sendExpoPushToUsers, sendPushToClient } from './push'
+import { getTestCoachIds } from './test-accounts'
 
 /**
  * Constructores de los eventos push W1 (catálogo aprobado por el owner 2026-07-29).
@@ -103,5 +104,71 @@ export async function notifyCoachOfLeadPush(input: {
         })
     } catch (err) {
         console.error('[push-events] lead_received failed:', err)
+    }
+}
+
+/** Largo máximo del cuerpo en la bandeja del teléfono: iOS corta a ~4 líneas y 120 deja la idea entera. */
+const NEWS_PUSH_BODY_MAX = 120
+
+/**
+ * Cuerpo de la push de una novedad: la primera línea de TEXTO del contenido markdown, sin marcas
+ * (`**`, `- `, `---`), recortada a NEWS_PUSH_BODY_MAX con «…». Los subtítulos (`##`/`###`) se
+ * saltan: son títulos, no cuerpo, y la push ya lleva el título de la novedad. El renderer de la
+ * campanita solo entiende negrita, H2/H3, viñetas y `---`, así que con eso alcanza. Sin texto
+ * útil → frase fija.
+ */
+export function newsPushBody(content: string): string {
+    for (const raw of content.split(/\r?\n/)) {
+        if (/^\s*#{1,6}\s/.test(raw)) continue
+        const line = raw
+            .replace(/^\s*([-*]\s+|---\s*$)/, '')
+            .replace(/\*\*(.*?)\*\*/g, '$1')
+            .replace(/\s+/g, ' ')
+            .trim()
+        if (!line) continue
+        if (line.length <= NEWS_PUSH_BODY_MAX) return line
+        return `${line.slice(0, NEWS_PUSH_BODY_MAX - 1).trimEnd()}…`
+    }
+    return 'Hay novedades en EVA. Tócalo para verlas.'
+}
+
+/**
+ * `news_published` — push NATIVA a todos los coaches activos cuando el admin publica una novedad
+ * en la campanita (`/admin/novedades`). Decisión del owner (2026-09-06): SIEMPRE, para todo tipo;
+ * título = título de la novedad, cuerpo = primera línea del contenido (`newsPushBody`).
+ *
+ * Destinatarios: `coaches.subscription_status = 'active'` menos las cuentas de prueba
+ * (`getTestCoachIds`, que incluye la de App Review: los revisores no tienen por qué recibir
+ * nuestras novedades). El tap abre el Home del coach, donde vive la campanita; en web, el topbar
+ * de `/coach` la muestra en cualquier ruta.
+ *
+ * Solo aplica a una publicación NUEVA: el caller no la dispara al restaurar un archivado.
+ * Best-effort: jamás lanza; devuelve conteos para la auditoría admin.
+ */
+export async function notifyCoachesOfNewsPublished(
+    admin: DB,
+    input: { newsItemId: string; title: string; content: string }
+): Promise<{ users: number; tokens: number; sent: number }> {
+    const empty = { users: 0, tokens: 0, sent: 0 }
+    try {
+        const { data: coaches } = await admin
+            .from('coaches')
+            .select('id')
+            .eq('subscription_status', 'active')
+        if (!coaches?.length) return empty
+
+        const testIds = await getTestCoachIds(admin)
+        const ids = coaches.map((c) => c.id).filter((id) => !testIds.has(id))
+
+        return await sendExpoPushToUsers(ids, {
+            event: 'news_published',
+            title: input.title.trim(),
+            body: newsPushBody(input.content),
+            url: '/coach/dashboard',
+            screen: '/coach/(tabs)/home',
+        })
+    } catch (err) {
+        console.error(`[push-events] news_published failed (news=${input.newsItemId}):`, err)
+        return empty
     }
 }

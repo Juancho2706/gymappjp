@@ -880,6 +880,18 @@ en device pendiente del owner tras la OTA. Detalle en
 > countdown en lockscreen, sonido de fin de descanso (expo-audio) y Health Connect exigen la
 > build EAS nueva.
 
+> **2026-09-06 · push `news_published`** (pedido del owner: «que al publicar en la campanita les salga
+> notificación al coach»): `publishNewsItemAction` (`/admin/novedades`) dispara, SOLO en la primera publicación
+> (restaurar un archivado no vuelve a sonar), `notifyCoachesOfNewsPublished` → `sendExpoPushToUsers`
+> (`lib/push.ts`, fan-out Expo en lotes de 100, tokens deduplicados) a todos los coaches `active` menos las
+> cuentas de prueba; título = título de la novedad, cuerpo = primera línea de texto del contenido
+> (`newsPushBody`, 120 chars), tap → `/coach/(tabs)/home` (web `/coach/dashboard`). Solo canal nativo: los
+> coaches no tienen Web Push. Kill-switch: `EVA_PUSH_DISABLED_EVENTS=news_published`. Conteos en
+> `admin_audit_logs` (`push_users/push_tokens/push_sent`). Android sigue en 0 tokens: la app no tiene FCM
+> configurado (sin `googleServicesFile` en `app.json`) ⇒ `getExpoPushTokenAsync` falla en silencio; habilitarlo
+> exige credenciales FCM en EAS + build nativa nueva. Tests: `lib/push-events.news.test.ts`,
+> `admin/(panel)/novedades/_actions/novedades-actions.test.ts`.
+
 > **2026-07-29 (misma rama, corte 2)**: (a) **push W1** (catálogo aprobado por el owner): payload dual
 > `url`/`screen`, kill-switch `EVA_PUSH_DISABLED_EVENTS`, `meal_reminder` extendido a nativo (el cron
 > pasa por `sendPushToClient`), `program_assigned` (web action + bridge RN), `checkin_received` al coach
