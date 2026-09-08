@@ -1,5 +1,5 @@
 import { Pressable, Text, View } from 'react-native'
-import { Copy, GitMerge, MoreVertical, Pencil, Trash2, Users } from 'lucide-react-native'
+import { Copy, MoreVertical, Pencil, Trash2, Users } from 'lucide-react-native'
 import { Badge, type BadgeTone } from '../../Badge'
 import { DropdownMenu, type MenuAction } from '../../DropdownMenu'
 import { FONT, textStyle } from '../../../lib/typography'
@@ -40,7 +40,6 @@ export function ProgramCard({
   onAssign,
   onDuplicate,
   onDelete,
-  onSync,
 }: {
   program: ProgramItem
   compact: boolean
@@ -50,7 +49,6 @@ export function ProgramCard({
   onAssign: () => void
   onDuplicate: () => void
   onDelete: () => void
-  onSync: () => void
 }) {
   const stats = getProgramStats(program)
   const isTemplate = !program.client_id
@@ -64,9 +62,7 @@ export function ProgramCard({
       ? [{ key: 'assign', label: 'Asignar a alumnos', icon: Users, onSelect: onAssign, disabled: busy }]
       : []),
     { key: 'duplicate', label: 'Duplicar como plantilla', icon: Copy, onSelect: onDuplicate, disabled: busy },
-    ...(program.source_template_id
-      ? [{ key: 'sync', label: 'Sincronizar con plantilla', icon: GitMerge, onSelect: onSync, disabled: busy }]
-      : []),
+    // «Sincronizar con plantilla» se retiró el 2026-09-07 (ver docs/specs/plan-vivo-y-guardado/SPEC.md).
     {
       key: 'delete',
       label: isTemplate ? 'Eliminar plantilla' : 'Eliminar programa',

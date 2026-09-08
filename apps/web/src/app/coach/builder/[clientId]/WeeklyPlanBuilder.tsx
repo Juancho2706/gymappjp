@@ -41,6 +41,7 @@ import { postStepCompleted } from '../../dashboard/_lib/onboarding-telemetry.cli
 import { FirstRoutineCards } from './components/FirstRoutineCards'
 import { StudentLivePreview } from './components/StudentLivePreview'
 import { builderTourStorageKey } from './_lib/first-routine'
+import { resolveBrowserBack, type BrowserBackState } from './_lib/browser-back-guard'
 import { savedProgramToast } from './_lib/save-feedback'
 // «Vive tu app» solo aparece tras guardar la rutina del alumno de EJEMPLO: entra por `dynamic`
 // para no meter el QR ni su server action en el bundle del builder de todos los días.
@@ -54,6 +55,7 @@ import { BlockEditSheet } from './components/BlockEditSheet'
 import { ProgramConfigSheet } from './components/ProgramConfigSheet'
 import { BuilderOnboardingTour, type BuilderTourStep } from './components/BuilderOnboardingTour'
 import { ProgramPhasesBar } from './components/ProgramPhasesBar'
+import { InactiveProgramBanner } from './components/InactiveProgramBanner'
 import { ExerciseBlock } from './components/ExerciseBlock'
 import { DraggableExerciseCatalog, type ExerciseOwnerScope } from './DraggableExerciseCatalog'
 import type { BuilderBlock, BuilderCardioContext, DayState, ProgramPhase } from './types'
@@ -103,7 +105,7 @@ export interface FirstRoutineContext {
     primera?: boolean
 }
 
-export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName, lastEditor, areas = [], cardio, firstRoutine, ownerScope }: { client?: Partial<Client> | null, exercises: Exercise[], initialProgram?: any, coachName?: string, lastEditor?: { name: string; at: string | null } | null, areas?: WorkoutArea[], cardio?: BuilderCardioContext, firstRoutine?: FirstRoutineContext, ownerScope?: ExerciseOwnerScope }) {
+export function WeeklyPlanBuilder({ client, exercises, initialProgram, programIsActive, activeProgram, sourceTemplate, coachName, lastEditor, areas = [], cardio, firstRoutine, ownerScope }: { client?: Partial<Client> | null, exercises: Exercise[], initialProgram?: any, programIsActive?: boolean | null, activeProgram?: { id: string; name: string } | null, sourceTemplate?: { id: string; name: string } | null, coachName?: string, lastEditor?: { name: string; at: string | null } | null, areas?: WorkoutArea[], cardio?: BuilderCardioContext, firstRoutine?: FirstRoutineContext, ownerScope?: ExerciseOwnerScope }) {
     const router = useRouter()
     const { t } = useTranslation()
 
@@ -440,10 +442,10 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
     // nutrición (PlanBuilderClient). El texto propio ya no se muestra en navegadores modernos
     // (sale el diálogo genérico): `returnValue` va igual porque sigue siendo lo que dispara el
     // aviso en los que lo piden.
-    // LIMITACIÓN ACEPTADA: el botón «atrás» del NAVEGADOR no se intercepta. App Router no expone
-    // un guard de navegación y el truco de pushState + popstate deja la barra de direcciones
-    // inconsistente. Los builders de nutrición tienen el mismo hueco. El respaldo real es el
-    // autosave de arriba: el borrador sobrevive.
+    // El botón «atrás» del NAVEGADOR ya NO es un hueco: lo cubre el guard de `popstate` de más
+    // abajo (R3.3). Lo que sigue fuera de alcance es la navegación interna por `<Link>` — App
+    // Router no expone un guard para eso —; ahí el respaldo real es el autosave de arriba: el
+    // borrador sobrevive.
     useEffect(() => {
         if (!shouldConfirmExit({ dirty: hasUnsavedChanges, saving: isPending })) return
         const handler = (event: BeforeUnloadEvent) => {
@@ -466,6 +468,43 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
         }
         setExitDialogOpen(true)
     }, [hasUnsavedChanges, isPending, router, backHref])
+
+    // Guard del «atrás» del NAVEGADOR (R3.3). App Router no expone un guard de navegación, así que
+    // va el patrón del sentinela: una entrada EXTRA de historial con la MISMA url, para que el
+    // «atrás» la consuma sin cambiar de ruta (Next no desmonta el builder si la url no cambió) y
+    // el `popstate` llegue a tiempo de decidir.
+    //
+    // El sentinela está DESACOPLADO del estado sucio a propósito: se arma UNA sola vez al montar,
+    // no cuando aparecen cambios. Atarlo a `hasUnsavedChanges` era un bug — el sentinela sobrevivía
+    // al guardado, el listener no, y el siguiente ciclo de edición quedaba sin armar: el coach salía
+    // sin que se le preguntara nada. Y rearmarlo en cada ciclo sucio→limpio acumula entradas
+    // huérfanas (habría que apretar «atrás» N veces para salir). Una sola entrada, siempre.
+    //
+    // Quien decide es el listener, con el estado FRESCO que le deja `exitGuardRef` (se registra una
+    // vez: leer `hasUnsavedChanges` de su clausura sería leer el render del montaje). Las dos ramas
+    // están en `resolveBrowserBack` — incluida la salida real cuando no hay nada que perder, sin la
+    // cual el «atrás» con el borrador limpio dejaría al coach clavado en la misma pantalla.
+    const exitGuardRef = useRef<BrowserBackState>({ dirty: false, saving: false, backHref })
+    useEffect(() => {
+        exitGuardRef.current = { dirty: hasUnsavedChanges, saving: isPending, backHref }
+    }, [hasUnsavedChanges, isPending, backHref])
+
+    useEffect(() => {
+        window.history.pushState({ evaBuilderExitGuard: true }, '')
+        const handler = () => {
+            const effect = resolveBrowserBack(exitGuardRef.current)
+            if (effect.type === 'leave') {
+                router.push(effect.href)
+                return
+            }
+            // El sentinela se consumió: se repone ANTES de preguntar, para que «Seguir editando»
+            // deje el historial igual que estaba.
+            window.history.pushState({ evaBuilderExitGuard: true }, '')
+            setExitDialogOpen(true)
+        }
+        window.addEventListener('popstate', handler)
+        return () => window.removeEventListener('popstate', handler)
+    }, [router])
 
     // Keyboard shortcuts: Ctrl+Z undo, Ctrl+Shift+Z / Ctrl+Y redo
     useEffect(() => {
@@ -1145,8 +1184,13 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                         </span>
                                     )}
                                 </div>
-                                <p className="text-xs text-muted">
-                                    {client ? `Cliente: ${client.full_name}` : 'Plantilla global'}
+                                {/* Identidad de lo que se edita (R2.1/R2.2): plantilla y copia del
+                                    alumno se llaman igual en el 86 % de los casos, así que el
+                                    subtítulo es lo único que las distingue. El linaje se cita, pero
+                                    las dos siguen siendo independientes: editar acá no toca a la otra. */}
+                                <p className="truncate text-xs text-muted">
+                                    {client ? `Plan de ${client.full_name}` : 'Plantilla'}
+                                    {sourceTemplate && ` · Copia de «${sourceTemplate.name}»`}
                                 </p>
                             </div>
                             {/* Mobile title — tap to edit (design 1:1) */}
@@ -1170,7 +1214,10 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                     </button>
                                 )}
                                 <p className="mt-0.5 flex items-center gap-1.5 text-[11.5px] text-[var(--text-muted)]/70 truncate">
-                                    <span className="truncate">{client ? client.full_name : 'Plantilla'}</span>
+                                    <span className="truncate">
+                                        {client ? `Plan de ${client.full_name}` : 'Plantilla'}
+                                        {sourceTemplate && ` · Copia de «${sourceTemplate.name}»`}
+                                    </span>
                                     {hasUnsavedChanges && (
                                         <span className="flex shrink-0 items-center gap-1 font-bold text-[var(--warning-600)]">
                                             · <span className="inline-block w-1.5 h-1.5 rounded-full bg-[var(--warning-500)] animate-pulse" /> Sin guardar
@@ -1402,24 +1449,47 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                             señal de que el guardado está en curso se vea apagada. Con nombre en
                             blanco sigue atenuándose (ahí sí «no puedes»); mientras guarda queda
                             SÓLIDO y lo dice por `aria-busy`. */}
+                        {/* R3.1 — etiqueta única: «Guardar y enviar» prometía un envío que no
+                            existe y «Guardar plantilla» era la otra mitad de la misma acción. El
+                            CTA del alumno de EJEMPLO se conserva: ahí guardar sí hace otra cosa
+                            (asigna y abre la vista del alumno).
+                            R3.2 — el aspecto dice si hay algo que guardar: con cambios pendientes
+                            es el CTA sólido con glow; sin cambios baja a `secondary` (outline del
+                            DS) en vez de gritar por un guardado que no cambiaría nada. */}
                         <Button
                             onClick={() => handleSave()}
                             disabled={isPending || !programName.trim()}
                             aria-busy={isPending}
                             data-tour-id={isMobile ? undefined : 'save-button'}
                             size="sm"
-                            className={`eva-press hidden h-10 min-h-10 shrink-0 rounded-pill text-[13px] font-bold bg-primary text-primary-foreground shadow-[0_0_20px_rgba(var(--theme-primary-rgb,0,122,255),0.3)] transition-all hover:opacity-90 md:flex md:px-6 ${isPending ? 'opacity-100' : 'disabled:opacity-50'}`}
-                            style={{ backgroundColor: 'var(--theme-primary, #007AFF)' }}
+                            variant={hasUnsavedChanges || isPending ? 'default' : 'secondary'}
+                            className={`eva-press hidden h-10 min-h-10 shrink-0 rounded-pill text-[13px] font-bold transition-all md:flex md:px-6 ${
+                                hasUnsavedChanges || isPending
+                                    ? `text-primary-foreground shadow-[0_0_20px_rgba(var(--theme-primary-rgb,0,122,255),0.3)] hover:opacity-90 ${isPending ? 'opacity-100' : 'disabled:opacity-50'}`
+                                    : 'shadow-none'
+                            }`}
+                            style={hasUnsavedChanges || isPending ? { backgroundColor: 'var(--theme-primary, #007AFF)' } : undefined}
                         >
                             {isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Save className="w-4 h-4 mr-2" />}
                             {isPending
                                 ? 'Guardando...'
                                 : isDemoClient
                                     ? `Asignar y ver como ${studentFirstName || 'tu alumno'}`
-                                    : client ? 'Guardar y enviar' : 'Guardar plantilla'}
+                                    : 'Guardar cambios'}
                         </Button>
                     </div>
                 </div>
+
+                {/* Plan desactivado (R1.1/R1.2): fijo, sin «✕». Va acá arriba porque manda sobre
+                    cualquier otro aviso del header — es el estado de lo que se está editando.
+                    Solo aplica a un plan DE ALUMNO: una plantilla no la «ve» nadie, así que sin
+                    `client` el estado no se anuncia (el builder es el mismo componente para las dos). */}
+                <InactiveProgramBanner
+                    programIsActive={client ? programIsActive : null}
+                    clientId={client?.id ?? null}
+                    clientName={studentFirstName}
+                    activeProgram={activeProgram}
+                />
 
                 {showBuilderHint && (
                     <div className="flex items-center gap-3 px-4 py-2.5 bg-[var(--warning-500)]/10 border-b border-[var(--warning-500)]/20 animate-in slide-in-from-top-1 duration-300">
@@ -1810,7 +1880,10 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, coachName
                                 disabled={isPending || !programName.trim()}
                                 aria-busy={isPending}
                                 data-tour-id="save-button"
-                                aria-label={client ? 'Guardar y enviar' : 'Guardar plantilla'}
+                                // Misma etiqueta única que en escritorio (R3.1). El texto visible
+                                // sigue siendo «Guardar» por ancho del pill, y el nombre accesible
+                                // lo contiene (WCAG 2.5.3).
+                                aria-label="Guardar cambios"
                                 // Mismo criterio que el botón de desktop: guardando = SÓLIDO (con su
                                 // sombra), deshabilitado por falta de nombre = atenuado.
                                 className={`eva-press flex h-14 items-center gap-2 rounded-full px-5 text-[14px] font-bold text-primary-foreground shadow-xl transition-transform active:scale-95 ${isPending ? 'opacity-100' : 'disabled:opacity-50 disabled:shadow-none'}`}

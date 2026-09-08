@@ -38,7 +38,7 @@ export default async function BuilderPage(
         clientOrgId: workspace?.type === 'enterprise_coach' ? workspace.orgId : null,
     })
 
-    const { user, client, exercises, initialProgram, lastEditor, areas, cardio, orgId, teamId } = await getBuilderData(clientId, programId)
+    const { user, client, exercises, initialProgram, programIsActive, activeProgram, sourceTemplate, lastEditor, areas, cardio, orgId, teamId } = await getBuilderData(clientId, programId)
     if (!user) redirect('/login')
 
     if (!client) redirect('/coach/clients')
@@ -52,6 +52,11 @@ export default async function BuilderPage(
             client={client}
             exercises={exercises}
             initialProgram={initialProgram}
+            /* Plan vivo y guardado honesto (R1.1/R1.2/R2.2): el builder ya no puede fingir que
+               edita algo que el alumno ve. */
+            programIsActive={programIsActive}
+            activeProgram={activeProgram}
+            sourceTemplate={sourceTemplate}
             coachName={coach?.brand_name ?? coach?.full_name ?? undefined}
             lastEditor={lastEditor}
             areas={areas}

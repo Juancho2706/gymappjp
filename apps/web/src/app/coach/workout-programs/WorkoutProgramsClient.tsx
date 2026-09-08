@@ -62,6 +62,7 @@ import { ProgramPreviewPanel } from './components/ProgramPreviewPanel'
 import {
     type LibraryFilters,
     type ProgramListModel,
+    PROGRAM_STATUS_LABEL,
     matchesProgramFilters,
 } from './libraryStats'
 import type { WorkoutArea } from '@/domain/workout/types'
@@ -122,20 +123,76 @@ function initialsOf(name?: string | null): string {
     )
 }
 
+/**
+ * Filtro «Estado» (SPEC plan-vivo-y-guardado, B5). Solo se ofrece sobre los programas de los
+ * alumnos: una plantilla no está «en uso» ni «ya no está en uso», así que en la pestaña
+ * Plantillas se esconde y se resetea (si no, la combinación sería siempre vacía).
+ */
+const STATUS_FILTER_OPTIONS: { value: LibraryFilters['filterStatus']; label: string }[] = [
+    { value: 'all', label: 'Todos' },
+    { value: 'active', label: PROGRAM_STATUS_LABEL.active },
+    { value: 'inactive', label: PROGRAM_STATUS_LABEL.inactive },
+]
+
+function StatusFilterChips({
+    value,
+    onChange,
+    className,
+}: {
+    value: LibraryFilters['filterStatus']
+    onChange: (v: LibraryFilters['filterStatus']) => void
+    className?: string
+}) {
+    return (
+        <div
+            role="group"
+            aria-label="Estado del programa"
+            className={cn('flex flex-wrap items-center gap-1.5', className)}
+        >
+            <span className="mr-0.5 text-[11px] font-bold uppercase tracking-[0.06em] text-muted">
+                Estado
+            </span>
+            {STATUS_FILTER_OPTIONS.map((opt) => {
+                const on = value === opt.value
+                return (
+                    <button
+                        key={opt.value}
+                        type="button"
+                        aria-pressed={on}
+                        onClick={() => onChange(opt.value)}
+                        className={cn(
+                            'eva-press inline-flex h-8 items-center rounded-pill border-[1.5px] px-3 text-[12.5px] font-bold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-app)]',
+                            on
+                                ? 'border-[var(--sport-300)] bg-[var(--sport-100)] text-[var(--sport-700)]'
+                                : 'border-subtle bg-surface-card text-muted hover:text-strong'
+                        )}
+                    >
+                        {opt.label}
+                    </button>
+                )
+            })}
+        </div>
+    )
+}
+
 /** Empty state contextual — tile 60px sport + título display + CTA (eva-app ProgramasHome). */
 function LibraryEmptyState({
     hasPrograms,
     filterType,
+    filterStatus,
     search,
     onNewTemplate,
     onClearSearch,
+    onClearStatus,
     onShowTemplates,
 }: {
     hasPrograms: boolean
     filterType: LibraryFilters['filterType']
+    filterStatus: LibraryFilters['filterStatus']
     search: string
     onNewTemplate: () => void
     onClearSearch: () => void
+    onClearStatus: () => void
     onShowTemplates: () => void
 }) {
     const trimmed = search.trim()
@@ -149,32 +206,44 @@ function LibraryEmptyState({
                   ctaIcon: X,
                   act: onClearSearch,
               }
-            : hasPrograms && filterType === 'assigned'
+            : hasPrograms && filterStatus !== 'all'
               ? {
-                    icon: CalendarClock,
-                    title: 'Nada en curso',
-                    sub: 'Cuando asignes una plantilla a un alumno, su programa activo aparece aquí.',
-                    cta: 'Ver plantillas',
-                    ctaIcon: LayoutTemplate,
-                    act: onShowTemplates,
+                    icon: SearchX,
+                    title: 'Nada en ese estado',
+                    sub:
+                        filterStatus === 'active'
+                            ? 'Ningún programa de tus alumnos está en uso ahora mismo.'
+                            : 'Ningún programa de tus alumnos quedó fuera de uso.',
+                    cta: 'Ver todos los estados',
+                    ctaIcon: X,
+                    act: onClearStatus,
                 }
-              : hasPrograms && filterType === 'templates'
-                ? {
-                      icon: LayoutTemplate,
-                      title: 'Sin plantillas todavía',
-                      sub: 'Crea una plantilla reutilizable y asígnala a tus alumnos en segundos.',
-                      cta: 'Crear plantilla',
-                      ctaIcon: Plus,
-                      act: onNewTemplate,
-                  }
-                : {
-                      icon: Dumbbell,
-                      title: 'Tu biblioteca está vacía',
-                      sub: 'Crea tu primera plantilla de entrenamiento para empezar a asignar.',
-                      cta: 'Crear plantilla',
-                      ctaIcon: Plus,
-                      act: onNewTemplate,
-                  }
+                : hasPrograms && filterType === 'assigned'
+                  ? {
+                        icon: CalendarClock,
+                        title: 'Sin programas asignados',
+                        sub: 'Cuando asignes una plantilla a un alumno, su copia aparece acá.',
+                        cta: 'Ver plantillas',
+                        ctaIcon: LayoutTemplate,
+                        act: onShowTemplates,
+                    }
+                  : hasPrograms && filterType === 'templates'
+                    ? {
+                          icon: LayoutTemplate,
+                          title: 'Sin plantillas todavía',
+                          sub: 'Crea una plantilla reutilizable y asígnala a tus alumnos en segundos.',
+                          cta: 'Crear plantilla',
+                          ctaIcon: Plus,
+                          act: onNewTemplate,
+                      }
+                    : {
+                          icon: Dumbbell,
+                          title: 'Tu biblioteca está vacía',
+                          sub: 'Crea tu primera plantilla de entrenamiento para empezar a asignar.',
+                          cta: 'Crear plantilla',
+                          ctaIcon: Plus,
+                          act: onNewTemplate,
+                      }
     const EmptyIcon = cfg.icon
     const CtaIcon = cfg.ctaIcon
     return (
@@ -218,6 +287,7 @@ export function WorkoutProgramsClient({
     const isAssignDesktop = useIsDesktopMd()
     const [search, setSearch] = useState('')
     const [filterType, setFilterType] = useState<LibraryFilters['filterType']>('all')
+    const [filterStatus, setFilterStatus] = useState<LibraryFilters['filterStatus']>('all')
     const [sort, setSort] = useState<'Recientes' | 'Nombre'>('Recientes')
     const [sortOpen, setSortOpen] = useState(false)
     const [programs, setPrograms] = useState<ProgramListModel[]>(initialPrograms)
@@ -254,12 +324,34 @@ export function WorkoutProgramsClient({
         () => ({
             search,
             filterType,
-            filterStatus: 'all',
+            filterStatus,
             filterStructure: 'all',
             filterHasPhases: 'all',
         }),
-        [search, filterType]
+        [search, filterType, filterStatus]
     )
+
+    /**
+     * El estado solo tiene sentido sobre las copias de los alumnos; en «Plantillas» se esconde y
+     * se resetea para que la lista nunca quede vacía por un filtro invisible.
+     */
+    const changeFilterType = (t: LibraryFilters['filterType']) => {
+        setFilterType(t)
+        if (t === 'templates') setFilterStatus('all')
+    }
+
+    /**
+     * Nombre de cada PLANTILLA por id: con esto la fila de una copia puede citar a su plantilla
+     * madre (`Copia de «…»`) sin una query nueva — plantillas y copias viajan en la misma lista.
+     * Si la madre no está cargada, el linaje se omite en silencio (nunca se muestra un id).
+     */
+    const templateNames = useMemo(() => {
+        const byId = new Map<string, string>()
+        for (const p of programs) {
+            if (!p.client_id) byId.set(p.id, p.name)
+        }
+        return byId
+    }, [programs])
 
     const filtered = useMemo(() => {
         const rows = programs.filter((p) => matchesProgramFilters(p, filterState))
@@ -274,18 +366,17 @@ export function WorkoutProgramsClient({
     }, [programs, filterState, sort])
 
     const templateCount = useMemo(() => programs.filter((p) => !p.client_id).length, [programs])
-    const activeAssignedCount = useMemo(
-        () => programs.filter((p) => !!p.client_id && p.is_active).length,
-        [programs]
-    )
+    // Todas las copias del alumno, en uso o no: el estado ya lo separa el filtro «Estado», y
+    // esconder las 78 inactivas de producción detrás de un conteo fue parte del incidente.
+    const assignedCount = useMemo(() => programs.filter((p) => !!p.client_id).length, [programs])
     const tabCounts: Record<LibraryFilters['filterType'], number> = {
         all: programs.length,
         templates: templateCount,
-        assigned: activeAssignedCount,
+        assigned: assignedCount,
     }
     const filtering = search.trim().length > 0
 
-    const listMotionKey = `${search}|${filterType}|${sort}`
+    const listMotionKey = `${search}|${filterType}|${filterStatus}|${sort}`
 
     /**
      * Biblioteca en CERO y sin busqueda ⇒ vacio template-first (SPEC coach-onboarding-v2 §7):
@@ -904,13 +995,13 @@ export function WorkoutProgramsClient({
                 {/* Tabs-stats accionables */}
                 <div className="mb-3 flex gap-1 rounded-control bg-surface-sunken p-[3px]">
                     {(['all', 'templates', 'assigned'] as const).map((t) => {
-                        const label = t === 'all' ? 'Todos' : t === 'templates' ? 'Plantillas' : 'En curso'
+                        const label = t === 'all' ? 'Todos' : t === 'templates' ? 'Plantillas' : 'Asignados'
                         const on = filterType === t
                         return (
                             <button
                                 key={t}
                                 type="button"
-                                onClick={() => setFilterType(t)}
+                                onClick={() => changeFilterType(t)}
                                 className={cn(
                                     'flex h-[46px] flex-1 flex-col items-center justify-center rounded-[calc(var(--radius-control)-3px)]',
                                     on ? 'bg-surface-card shadow-sm' : ''
@@ -931,6 +1022,11 @@ export function WorkoutProgramsClient({
                         )
                     })}
                 </div>
+
+                {/* Estado — solo sobre las copias de los alumnos */}
+                {filterType !== 'templates' && (
+                    <StatusFilterChips value={filterStatus} onChange={setFilterStatus} className="mb-3" />
+                )}
 
                 {/* Contador de resultados al filtrar */}
                 {filtering && filtered.length > 0 && (
@@ -954,10 +1050,12 @@ export function WorkoutProgramsClient({
                     <LibraryEmptyState
                         hasPrograms={programs.length > 0}
                         filterType={filterType}
+                        filterStatus={filterStatus}
                         search={search}
                         onNewTemplate={() => router.push('/coach/workout-programs/builder')}
                         onClearSearch={() => setSearch('')}
-                        onShowTemplates={() => setFilterType('templates')}
+                        onClearStatus={() => setFilterStatus('all')}
+                        onShowTemplates={() => changeFilterType('templates')}
                     />
                     )
                 ) : (
@@ -969,7 +1067,12 @@ export function WorkoutProgramsClient({
                         transition={{ duration: reduceMotion ? 0 : 0.2 }}
                     >
                         {filtered.map((program) => (
-                            <ProgramRow key={program.id} program={program} onOpen={() => openPreview(program)} />
+                            <ProgramRow
+                                key={program.id}
+                                program={program}
+                                templateNames={templateNames}
+                                onOpen={() => openPreview(program)}
+                            />
                         ))}
                     </motion.div>
                 )}
@@ -1012,16 +1115,21 @@ export function WorkoutProgramsClient({
                     </div>
                 </div>
 
-                {/* Chips por vista (Todos / Plantillas / En curso) — .dt-chips / .dt-chip / .dt-chip-n */}
-                <div className="mb-[18px] flex flex-wrap gap-2">
+                {/* Chips por vista (Todos / Plantillas / Asignados) — .dt-chips / .dt-chip / .dt-chip-n */}
+                <div
+                    className={cn(
+                        'flex flex-wrap gap-2',
+                        filterType === 'templates' ? 'mb-[18px]' : 'mb-2.5'
+                    )}
+                >
                     {(['all', 'templates', 'assigned'] as const).map((t) => {
-                        const label = t === 'all' ? 'Todos' : t === 'templates' ? 'Plantillas' : 'En curso'
+                        const label = t === 'all' ? 'Todos' : t === 'templates' ? 'Plantillas' : 'Asignados'
                         const on = filterType === t
                         return (
                             <button
                                 key={t}
                                 type="button"
-                                onClick={() => setFilterType(t)}
+                                onClick={() => changeFilterType(t)}
                                 className={cn(
                                     'eva-press inline-flex h-[34px] items-center gap-1.5 rounded-pill border px-3.5 font-ui text-[13px] font-bold transition-colors',
                                     on
@@ -1038,16 +1146,23 @@ export function WorkoutProgramsClient({
                     })}
                 </div>
 
+                {/* Estado — solo sobre las copias de los alumnos */}
+                {filterType !== 'templates' && (
+                    <StatusFilterChips value={filterStatus} onChange={setFilterStatus} className="mb-[18px]" />
+                )}
+
                 {/* Grid de tarjetas — .dt-prog-grid (auto-fill minmax 240px) */}
                 {filtered.length === 0 ? (
                     firstRunEmpty ?? (
                     <LibraryEmptyState
                         hasPrograms={programs.length > 0}
                         filterType={filterType}
+                        filterStatus={filterStatus}
                         search={search}
                         onNewTemplate={() => router.push('/coach/workout-programs/builder')}
                         onClearSearch={() => setSearch('')}
-                        onShowTemplates={() => setFilterType('templates')}
+                        onClearStatus={() => setFilterStatus('all')}
+                        onShowTemplates={() => changeFilterType('templates')}
                     />
                     )
                 ) : (
@@ -1059,7 +1174,12 @@ export function WorkoutProgramsClient({
                         transition={{ duration: reduceMotion ? 0 : 0.2 }}
                     >
                         {filtered.map((program) => (
-                            <ProgramCard key={program.id} program={program} onOpen={() => openPreview(program)} />
+                            <ProgramCard
+                                key={program.id}
+                                program={program}
+                                templateNames={templateNames}
+                                onOpen={() => openPreview(program)}
+                            />
                         ))}
                     </motion.div>
                 )}
@@ -1180,6 +1300,7 @@ export function WorkoutProgramsClient({
                 open={isPreviewOpen}
                 onOpenChange={setIsPreviewOpen}
                 areas={areas}
+                templateNames={templateNames}
                 onEdit={previewEdit}
                 onAssign={previewAssign}
                 onDuplicate={previewDuplicate}

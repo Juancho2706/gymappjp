@@ -44,10 +44,58 @@ export interface ProgramListModel {
     }[]
 }
 
+/**
+ * Copy ÚNICO de identidad y estado (SPEC plan-vivo-y-guardado · tabla de PLAN.md).
+ * Vive acá para que la fila, la tarjeta y la vista previa no inventen variantes.
+ */
+export const PROGRAM_STATUS_LABEL = {
+    template: 'Plantilla',
+    active: 'En uso',
+    inactive: 'Ya no está en uso',
+} as const
+
+export type ProgramStatusLabel = (typeof PROGRAM_STATUS_LABEL)[keyof typeof PROGRAM_STATUS_LABEL]
+
+/**
+ * Etiqueta de estado de un programa de la biblioteca:
+ * plantilla (sin alumno) · copia viva del alumno · copia que quedó como historial.
+ */
+export function programStatusLabel(
+    p: Pick<ProgramListModel, 'client_id' | 'is_active'>
+): ProgramStatusLabel {
+    if (!p.client_id) return PROGRAM_STATUS_LABEL.template
+    return p.is_active ? PROGRAM_STATUS_LABEL.active : PROGRAM_STATUS_LABEL.inactive
+}
+
+/**
+ * Identidad EN PANTALLA de la copia (decisión del owner D3-A: no se renombra nada en la base).
+ * 105 de 122 copias heredaron el nombre exacto de su plantilla, así que el nombre guardado no
+ * distingue nada: la copia se rotula por su alumno y la plantilla conserva su nombre.
+ */
+export function programDisplayName(p: ProgramListModel): string {
+    if (p.client_id && p.client?.full_name) return `Plan de ${p.client.full_name}`
+    return p.name
+}
+
+/**
+ * Linaje de la copia — se resuelve contra las filas YA cargadas (plantilla y copias viven en la
+ * misma lista, sin query nueva). Si la plantilla madre no está en la lista se omite en silencio:
+ * nunca se muestra un id.
+ */
+export function programLineageLabel(
+    p: Pick<ProgramListModel, 'source_template_id'>,
+    templateNames?: ReadonlyMap<string, string>
+): string | null {
+    if (!p.source_template_id || !templateNames) return null
+    const name = templateNames.get(p.source_template_id)
+    return name ? `Copia de «${name}»` : null
+}
+
 export interface ProgramStats {
     daysWithWork: number
     blockCount: number
-    templateLabel: 'Plantilla' | 'Activo' | 'Inactivo'
+    /** Etiqueta de estado lista para pintar (`programStatusLabel`). */
+    statusLabel: ProgramStatusLabel
     hasPhases: boolean
     cycleLabel: string
     structureKind: 'weekly' | 'cycle'
@@ -65,11 +113,6 @@ export function getProgramStats(p: ProgramListModel): ProgramStats {
         (plan) => (plan.workout_blocks?.length ?? 0) > 0
     ).length
 
-    let templateLabel: ProgramStats['templateLabel'] = 'Plantilla'
-    if (p.client_id) {
-        templateLabel = p.is_active ? 'Activo' : 'Inactivo'
-    }
-
     const structureKind = (p.program_structure_type || 'weekly') as 'weekly' | 'cycle'
     const cycleLabel =
         structureKind === 'cycle'
@@ -81,7 +124,7 @@ export function getProgramStats(p: ProgramListModel): ProgramStats {
     return {
         daysWithWork,
         blockCount,
-        templateLabel,
+        statusLabel: programStatusLabel(p),
         hasPhases: (p.program_phases?.length ?? 0) > 0,
         cycleLabel,
         structureKind,
@@ -105,11 +148,15 @@ export function matchesProgramFilters(p: ProgramListModel, f: LibraryFilters): b
         p.name.toLowerCase().includes(q) ||
         (p.client?.full_name?.toLowerCase().includes(q) ?? false)
 
+    // `filterType` dice QUÉ es (plantilla / copia de un alumno) y `filterStatus` dice EN QUÉ
+    // ESTADO está. Hasta el 07-09-2026 `assigned` exigía además `is_active`, así que las 78
+    // copias inactivas de producción solo aparecían en «Todos» y la combinación
+    // asignados + «Ya no está en uso» era un callejón siempre vacío. Los dos ejes ya no se pisan.
     const matchesType =
         f.filterType === 'templates'
             ? !p.client_id
             : f.filterType === 'assigned'
-              ? !!p.client_id && !!p.is_active
+              ? !!p.client_id
               : true
 
     const matchesStatus =

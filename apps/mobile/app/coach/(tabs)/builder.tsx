@@ -5,7 +5,6 @@ import { FlashList } from '@shopify/flash-list'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ArrowDownUp, CalendarClock, ChevronRight, ClipboardList, Dumbbell, LayoutGrid, LayoutTemplate, List, Plus, Search, SearchX } from 'lucide-react-native'
 import { MotiView } from 'moti'
-import * as Haptics from 'expo-haptics'
 import { supabase } from '../../../lib/supabase'
 import { getCoachProfile } from '../../../lib/coach'
 import { useWorkspace } from '../../../lib/workspace'
@@ -33,7 +32,6 @@ import { DuplicateForm } from '../../../components/coach/programs/DuplicateForm'
 import {
   assignTemplateToClients,
   duplicateProgramAsTemplate,
-  syncProgramFromTemplate,
 } from '../../../components/coach/programs/library-actions'
 import {
   buildLibraryStats,
@@ -380,29 +378,9 @@ export default function BuilderScreen() {
     setSelectedClientIds((prev) => (prev.includes(clientId) ? prev.filter((id) => id !== clientId) : [...prev, clientId]))
   }
 
-  function confirmSync(program: ProgramItem) {
-    Alert.alert(
-      'Sincronizar con plantilla',
-      `Se traen los cambios de la plantilla base a "${program.name}".\n\n• Los ejercicios marcados como override (ajustes manuales del alumno) se conservan.\n• El resto se reemplaza con la versión de la plantilla.`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Sincronizar',
-          onPress: async () => {
-            setActionBusy(`sync-${program.id}`)
-            const result = await syncProgramFromTemplate(program)
-            setActionBusy(null)
-            if (!result.ok) {
-              Alert.alert('No se pudo sincronizar', result.error ?? 'Intenta nuevamente.')
-              return
-            }
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {})
-            await loadLibrary()
-          },
-        },
-      ]
-    )
-  }
+  // «Sincronizar con plantilla» se retiró el 2026-09-07: borraba planes y bloques del alumno antes
+  // de reinsertarlos, sin transacción, y su diálogo prometía conservar ajustes que nunca conservó.
+  // Detalle en docs/specs/plan-vivo-y-guardado/SPEC.md (R4).
 
   if (loading) {
     return (
@@ -612,7 +590,6 @@ export default function BuilderScreen() {
             onEdit={() => { const p = preview; setPreview(null); editProgram(p) }}
             onAssign={() => { const p = preview; setPreview(null); openAssign(p) }}
             onDuplicate={() => { const p = preview; setPreview(null); openDuplicate(p) }}
-            onSync={() => { const p = preview; setPreview(null); confirmSync(p) }}
             onDelete={() => { const p = preview; setPreview(null); confirmDelete(p) }}
           />
         ) : null}

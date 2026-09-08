@@ -23,7 +23,7 @@ export const getBuilderData = cache(async (clientId: string, programId?: string)
     // getClaims(): verificación local del JWT (ES256), sin /user. El proxy ya validó/refrescó la sesión.
     const { data: __cl } = await supabase.auth.getClaims()
     const user = __cl?.claims?.sub ? { id: __cl.claims.sub as string } : null
-    if (!user) return { user: null, client: null, exercises: [] as Exercise[], initialProgram: null, areas: [] as WorkoutArea[], cardio: { enabled: false, zones: null } as BuilderCardioContext, orgId: null as string | null, teamId: null as string | null }
+    if (!user) return { user: null, client: null, exercises: [] as Exercise[], initialProgram: null, programIsActive: null as boolean | null, activeProgram: null as { id: string; name: string } | null, sourceTemplate: null as { id: string; name: string } | null, areas: [] as WorkoutArea[], cardio: { enabled: false, zones: null } as BuilderCardioContext, orgId: null as string | null, teamId: null as string | null }
 
     const workspace = await resolvePreferredWorkspace(supabase, user.id)
     const orgId = workspace?.type === 'enterprise_coach' ? workspace.orgId : null
@@ -112,6 +112,52 @@ export const getBuilderData = cache(async (clientId: string, programId?: string)
         initialProgram = program ?? null
     }
 
+    // «Plan vivo y guardado honesto» (R1.2 / R2.2). Dos datos que el builder necesita para no
+    // mentirle al coach, pedidos en UNA sola ida y solo cuando hacen falta:
+    //   · `activeProgram` — qué rutina está usando HOY el alumno. Alimenta el aviso del plan
+    //     desactivado; solo se pide si el programa abierto está inactivo (el 62 % de los
+    //     asignados nunca paga esta lectura).
+    //   · `sourceTemplate` — la plantilla madre de la copia, para el linaje «Copia de «…»».
+    //     Solo se pide si la copia declara `source_template_id`.
+    // El `or` mezcla las dos filas y se separan abajo por `client_id` / `id`. Scope idéntico al
+    // del resto de la query (team ⇒ pool sin org; standalone/enterprise ⇒ coach + org); RLS es
+    // el techo, esto es visibilidad.
+    const programIsActive = (initialProgram as { is_active?: boolean | null } | null)?.is_active ?? null
+    const sourceTemplateId = (initialProgram as { source_template_id?: string | null } | null)?.source_template_id ?? null
+    // El id del alumno sale de la fila YA validada por el gate de arriba, nunca del parámetro
+    // crudo de la ruta: acá se interpola dentro de un filtro `or` de PostgREST.
+    const scopedClientId = (clientResult.data as Client | null)?.id ?? null
+    const wantsActiveProgram = programIsActive === false && scopedClientId != null
+    const wantsSourceTemplate = sourceTemplateId != null
+
+    let activeProgram: { id: string; name: string } | null = null
+    let sourceTemplate: { id: string; name: string } | null = null
+    if (wantsActiveProgram || wantsSourceTemplate) {
+        const orFilters: string[] = []
+        if (wantsActiveProgram) orFilters.push(`and(client_id.eq.${scopedClientId},is_active.is.true)`)
+        if (wantsSourceTemplate) orFilters.push(`id.eq.${sourceTemplateId}`)
+        let relatedQuery = supabase
+            .from('workout_programs')
+            .select('id, name, client_id, is_active')
+            .or(orFilters.join(','))
+            .order('created_at', { ascending: false })
+        if (activeTeamId) {
+            relatedQuery = relatedQuery.is('org_id', null)
+        } else {
+            relatedQuery = relatedQuery.eq('coach_id', user.id)
+            relatedQuery = applyOrgScope(relatedQuery, orgId)
+        }
+        const { data: related } = await relatedQuery
+        for (const row of related ?? []) {
+            if (wantsActiveProgram && !activeProgram && row.client_id === scopedClientId && row.is_active) {
+                activeProgram = { id: row.id, name: row.name }
+            }
+            if (wantsSourceTemplate && !sourceTemplate && row.id === sourceTemplateId) {
+                sourceTemplate = { id: row.id, name: row.name }
+            }
+        }
+    }
+
     // E (awareness): nombre del último editor — solo interesa en el pool (contexto team)
     // y solo si fue OTRO coach (el badge "editado por mí" es ruido).
     let lastEditor: { name: string; at: string | null } | null = null
@@ -135,6 +181,12 @@ export const getBuilderData = cache(async (clientId: string, programId?: string)
         client: clientResult.data as Client | null,
         exercises: (exercisesResult.data ?? []) as Exercise[],
         initialProgram,
+        /** `null` sin programa abierto (plantilla nueva); `false` ⇒ el alumno ya no la ve. */
+        programIsActive,
+        /** Rutina que el alumno está usando hoy — solo se resuelve con el programa inactivo. */
+        activeProgram,
+        /** Plantilla madre de la copia (linaje en pantalla; las dos siguen independientes). */
+        sourceTemplate,
         lastEditor,
         areas,
         cardio,

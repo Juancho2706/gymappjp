@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/sheet'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-import type { LibraryFilters } from '../libraryStats'
+import { PROGRAM_STATUS_LABEL, type LibraryFilters } from '../libraryStats'
 
 export interface LibraryToolbarProps {
     search: string
@@ -33,10 +33,16 @@ export interface LibraryToolbarProps {
     className?: string
 }
 
+/**
+ * OJO: esta toolbar no la monta nadie hoy (la biblioteca vive con su propia barra dentro de
+ * `WorkoutProgramsClient`, que es donde se cableó el filtro «Estado»). El copy se mantiene
+ * alineado con `PROGRAM_STATUS_LABEL` para que, si algún día se adopta, no reviva
+ * «Activos/Inactivos».
+ */
 function filterStatusLabel(v: LibraryFilters['filterStatus']) {
     if (v === 'all') return 'Estado: todos'
-    if (v === 'active') return 'Activos'
-    return 'Inactivos'
+    if (v === 'active') return PROGRAM_STATUS_LABEL.active
+    return PROGRAM_STATUS_LABEL.inactive
 }
 
 function filterStructureLabel(v: LibraryFilters['filterStructure']) {
@@ -78,8 +84,8 @@ function FiltersForm({
                     </SelectTrigger>
                     <SelectContent>
                         <SelectItem value="all">Estado: todos</SelectItem>
-                        <SelectItem value="active">Activos</SelectItem>
-                        <SelectItem value="inactive">Inactivos</SelectItem>
+                        <SelectItem value="active">{PROGRAM_STATUS_LABEL.active}</SelectItem>
+                        <SelectItem value="inactive">{PROGRAM_STATUS_LABEL.inactive}</SelectItem>
                     </SelectContent>
                 </Select>
             </div>

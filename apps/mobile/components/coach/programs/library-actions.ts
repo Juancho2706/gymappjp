@@ -106,6 +106,20 @@ function blockInsertMerged(block: ProgramBlock, planId: string, orderIndex: numb
   return { ...blockInsertFromSource(block, planId), order_index: orderIndex, is_override: !!block.is_override }
 }
 
+/**
+ * SIN CALLERS desde el 2026-09-07 — su superficie de UI en la app (menú de la tarjeta, botón de la
+ * vista previa y el diálogo del builder) fue RETIRADA por el mismo motivo por el que la web la retiró
+ * el 15-07-2026 en `086dc786`: el algoritmo borra todos los planes y bloques del alumno y recién
+ * después reinserta, sin transacción ni rollback. Un insert que falle a mitad deja al alumno sin
+ * rutina; y como los ids de bloque cambian todos, los `workout_logs` quedan huérfanos (se pierden
+ * «sesión anterior», progreso por ejercicio y todo join por `block_id`). El diálogo además prometía
+ * conservar los ajustes manuales del alumno, cosa que no ocurría: editar nunca prende `is_override`.
+ *
+ * NO se vuelve a exponer hasta el rediseño seguro: identidad estable de bloque, dirty-tracking,
+ * diff previo visible para el coach y snapshot antes de escribir.
+ *
+ * Contexto y decisiones: `docs/specs/plan-vivo-y-guardado/SPEC.md` (R4).
+ */
 export async function syncProgramFromTemplate(program: ProgramItem): Promise<{ ok: boolean; error?: string }> {
   const coach = await getCoachProfile()
   if (!coach) return { ok: false, error: 'Coach no encontrado.' }

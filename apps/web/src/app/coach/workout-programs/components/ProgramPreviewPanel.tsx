@@ -28,7 +28,7 @@ import { buildAreaVMs } from '@/app/coach/builder/[clientId]/area-ui'
 import type { WorkoutArea } from '@/domain/workout/types'
 import { useSyncExternalStore } from 'react'
 import type { ProgramListModel } from '../libraryStats'
-import { getProgramStats } from '../libraryStats'
+import { getProgramStats, programDisplayName, programLineageLabel } from '../libraryStats'
 import { StatusBadge, assignedProgress } from './ProgramRow'
 
 type BlockSection = 'warmup' | 'main' | 'cooldown'
@@ -337,6 +337,8 @@ export interface ProgramPreviewPanelProps {
     onOpenChange: (open: boolean) => void
     /** Areas visibles del workspace activo — resuelve nombres de areas custom/extra (fallback legacy si falta). */
     areas?: WorkoutArea[]
+    /** Nombre de cada plantilla de la lista por id — resuelve el linaje `Copia de «…»`. */
+    templateNames?: ReadonlyMap<string, string>
     /** Acciones (diseño: hoja de vista previa con botonera). Opcionales: si faltan, sólo se muestra «Cerrar». */
     onEdit?: () => void
     onAssign?: () => void
@@ -358,6 +360,10 @@ function PreviewActions({
     onDelete?: () => void
 }) {
     const isTemplate = !program.client_id
+    // El programa que el alumno ya no ve se sigue pudiendo editar y guardar (decisión del owner
+    // D2-A: sirve para reciclar planes viejos), pero «Editar plan» deja de ser la acción
+    // destacada — el botón sport invitaba a trabajar sobre un plan muerto (SPEC R1.3/R1.4).
+    const isRetired = !isTemplate && program.is_active === false
     const hasAny = onEdit || onAssign || onDuplicate || onDelete
     if (!hasAny) return null
 
@@ -379,7 +385,13 @@ function PreviewActions({
                 )
             ) : (
                 onEdit && (
-                    <Button type="button" variant="sport" size="lg" className="w-full gap-2" onClick={onEdit}>
+                    <Button
+                        type="button"
+                        variant={isRetired ? 'secondary' : 'sport'}
+                        size="lg"
+                        className="w-full gap-2"
+                        onClick={onEdit}
+                    >
                         <Pencil className="size-[18px]" />
                         Editar plan
                     </Button>
@@ -421,6 +433,7 @@ export function ProgramPreviewPanel({
     open,
     onOpenChange,
     areas = [],
+    templateNames,
     onEdit,
     onAssign,
     onDuplicate,
@@ -434,7 +447,12 @@ export function ProgramPreviewPanel({
 
     const stats = getProgramStats(program)
     const progress = program.client_id ? assignedProgress(program) : null
-    const clientName = program.client?.full_name
+    // Identidad en pantalla (R2.1/R2.2): la copia se titula por su alumno y cita a la plantilla
+    // madre; si esa plantilla no está en la lista cargada, cae al nombre guardado.
+    const displayName = programDisplayName(program)
+    const subtitle =
+        programLineageLabel(program, templateNames) ??
+        (displayName !== program.name ? program.name : null)
 
     const header = (
         <div className="shrink-0 space-y-3.5 border-b border-subtle px-4 py-4 sm:px-6">
@@ -445,12 +463,12 @@ export function ProgramPreviewPanel({
                 </div>
                 <div className="min-w-0 flex-1">
                     <p className="truncate font-display text-[19px] font-extrabold leading-[1.15] tracking-[-0.01em] text-strong">
-                        {program.name}
+                        {displayName}
                     </p>
                     <div className="mt-1 flex min-w-0 items-center gap-2">
                         <StatusBadge program={program} />
-                        {clientName && (
-                            <span className="truncate text-[12.5px] text-muted">· {clientName}</span>
+                        {subtitle && (
+                            <span className="truncate text-[12.5px] text-muted">· {subtitle}</span>
                         )}
                     </div>
                 </div>
@@ -505,7 +523,7 @@ export function ProgramPreviewPanel({
             <Dialog open={open} onOpenChange={onOpenChange}>
                 <DialogContent showCloseButton className={cn(shellDialogClass)}>
                     <DialogHeader className="sr-only">
-                        <DialogTitle>Vista previa de {program.name}</DialogTitle>
+                        <DialogTitle>Vista previa de {displayName}</DialogTitle>
                     </DialogHeader>
                     {/* Columna acotada: header fijo arriba, cuerpo scrolleable, footer fijo.
                         El wrapper interno de DialogContent es un `block` sin altura, así que
@@ -530,7 +548,7 @@ export function ProgramPreviewPanel({
                     aria-hidden="true"
                 />
                 <SheetHeader className="shrink-0 border-0 bg-surface-app p-0">
-                    <SheetTitle className="sr-only">Vista previa de {program.name}</SheetTitle>
+                    <SheetTitle className="sr-only">Vista previa de {displayName}</SheetTitle>
                     {header}
                 </SheetHeader>
                 <ProgramPreviewBody program={program} areas={areas} />

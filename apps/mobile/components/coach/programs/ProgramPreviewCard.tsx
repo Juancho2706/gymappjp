@@ -1,5 +1,5 @@
 import { ScrollView, Text, View } from 'react-native'
-import { CalendarDays, Copy, Dumbbell, GitMerge, Layers3, Pencil, Trash2, Users } from 'lucide-react-native'
+import { CalendarDays, Copy, Dumbbell, Layers3, Pencil, Trash2, Users } from 'lucide-react-native'
 import { Button } from '../../Button'
 import { FONT, textStyle } from '../../../lib/typography'
 import { themedIcon, type ThemedIcon } from './themed-icon'
@@ -23,7 +23,6 @@ export function ProgramPreviewCard({
   onEdit,
   onAssign,
   onDuplicate,
-  onSync,
   onDelete,
   busy,
 }: {
@@ -31,7 +30,6 @@ export function ProgramPreviewCard({
   onEdit: () => void
   onAssign: () => void
   onDuplicate: () => void
-  onSync?: () => void
   onDelete?: () => void
   busy?: boolean
 }) {
@@ -131,9 +129,7 @@ export function ProgramPreviewCard({
           <Button label="Asignar plantilla" variant="outline" leftIcon={Users} onPress={onAssign} full />
         ) : null}
         <Button label="Duplicar como plantilla" variant="outline" leftIcon={Copy} onPress={onDuplicate} disabled={busy} full />
-        {onSync && program.source_template_id ? (
-          <Button label="Sincronizar con plantilla" variant="outline" leftIcon={GitMerge} onPress={onSync} disabled={busy} full />
-        ) : null}
+        {/* «Sincronizar con plantilla» se retiró el 2026-09-07 (ver docs/specs/plan-vivo-y-guardado/SPEC.md). */}
         {onDelete ? (
           <Button label={program.client_id ? 'Eliminar programa' : 'Eliminar plantilla'} variant="destructive" leftIcon={Trash2} onPress={onDelete} disabled={busy} full />
         ) : null}

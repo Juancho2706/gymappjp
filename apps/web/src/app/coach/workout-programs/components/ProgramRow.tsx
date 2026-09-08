@@ -4,13 +4,24 @@ import { Calendar, ChevronRight, Dumbbell, Layers } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import type { ProgramListModel } from '../libraryStats'
-import { getProgramStats } from '../libraryStats'
+import {
+    PROGRAM_STATUS_LABEL,
+    getProgramStats,
+    programDisplayName,
+    programLineageLabel,
+    programStatusLabel,
+} from '../libraryStats'
 
 export interface ProgramRowProps {
     program: ProgramListModel
     /** Abre la vista previa (hoja en móvil / diálogo en desktop) con las acciones. */
     onOpen: () => void
     isSelected?: boolean
+    /**
+     * Nombre de cada plantilla de la lista por id — resuelve el linaje `Copia de «…»` de una
+     * copia sin pedir nada nuevo al servidor. Si la madre no está, el linaje se omite.
+     */
+    templateNames?: ReadonlyMap<string, string>
 }
 
 /**
@@ -35,31 +46,41 @@ export function assignedProgress(p: ProgramListModel): { curWeek: number; weeks:
     return { curWeek, weeks, pct: Math.round((curWeek / weeks) * 100) }
 }
 
+/**
+ * Estado del programa (fila móvil + header de la vista previa). El inactivo lleva tono de
+ * PELIGRO real: hasta el 07-09-2026 era el gris más apagado de la paleta y una coach editó toda
+ * una tarde el plan que su alumna ya no veía (SPEC plan-vivo-y-guardado, R1.3).
+ */
 export function StatusBadge({ program }: { program: ProgramListModel }) {
-    const isTemplate = !program.client_id
-    if (isTemplate) {
+    const label = programStatusLabel(program)
+    if (label === PROGRAM_STATUS_LABEL.template) {
         return (
             <Badge tone="sport" variant="soft" size="sm" className="shrink-0">
-                Plantilla
+                {label}
             </Badge>
         )
     }
-    return program.is_active ? (
+    return label === PROGRAM_STATUS_LABEL.active ? (
         <Badge tone="success" variant="soft" size="sm" dot className="shrink-0">
-            Activo
+            {label}
         </Badge>
     ) : (
-        <Badge tone="neutral" variant="soft" size="sm" className="shrink-0">
-            Inactivo
+        <Badge tone="danger" variant="soft" size="sm" dot className="shrink-0">
+            {label}
         </Badge>
     )
 }
 
 /** Tarjeta horizontal — diseño móvil (eva-app ProgramasHome). */
-export function ProgramRow({ program, onOpen, isSelected }: ProgramRowProps) {
+export function ProgramRow({ program, onOpen, isSelected, templateNames }: ProgramRowProps) {
     const stats = getProgramStats(program)
     const isTemplate = !program.client_id
-    const clientName = program.client?.full_name
+    const displayName = programDisplayName(program)
+    // Linaje si la plantilla madre está en la lista; si no, el nombre guardado (el que el rótulo
+    // «Plan de …» acaba de reemplazar) para no perder información en la fila.
+    const subtitle =
+        programLineageLabel(program, templateNames) ??
+        (displayName !== program.name ? program.name : null)
     const progress = !isTemplate ? assignedProgress(program) : null
 
     return (
@@ -79,11 +100,11 @@ export function ProgramRow({ program, onOpen, isSelected }: ProgramRowProps) {
                     {programMonogram(program.name)}
                 </span>
                 <div className="min-w-0 flex-1">
-                    <div className="truncate text-[15px] font-bold text-strong">{program.name}</div>
+                    <div className="truncate text-[15px] font-bold text-strong">{displayName}</div>
                     <div className="mt-1 flex min-w-0 items-center gap-2">
                         <StatusBadge program={program} />
-                        {clientName && (
-                            <span className="truncate text-xs text-muted">· {clientName}</span>
+                        {subtitle && (
+                            <span className="truncate text-xs text-muted">· {subtitle}</span>
                         )}
                     </div>
                     {progress ? (
@@ -129,27 +150,40 @@ export function ProgramRow({ program, onOpen, isSelected }: ProgramRowProps) {
 /**
  * Badge de la tarjeta desktop — .dt-progcard-badge (pill 10px/800 uppercase, sport).
  * El diseño muestra siempre "Plantilla"; aquí varía el tono por estado real del programa.
+ * El inactivo va en peligro (mismo criterio que `StatusBadge`, R1.3 del SPEC).
  */
 function CardBadge({ program }: { program: ProgramListModel }) {
     const base =
         'rounded-pill px-2 py-[3px] text-[10px] font-extrabold uppercase tracking-[0.04em]'
-    if (!program.client_id) {
-        return <span className={cn(base, 'bg-[var(--sport-100)] text-[var(--sport-700)]')}>Plantilla</span>
+    const label = programStatusLabel(program)
+    if (label === PROGRAM_STATUS_LABEL.template) {
+        return <span className={cn(base, 'bg-[var(--sport-100)] text-[var(--sport-700)]')}>{label}</span>
     }
-    return program.is_active ? (
-        <span className={cn(base, 'bg-[var(--success-100)] text-[var(--success-700)]')}>Activo</span>
+    return label === PROGRAM_STATUS_LABEL.active ? (
+        <span className={cn(base, 'bg-[var(--success-100)] text-[var(--success-700)]')}>{label}</span>
     ) : (
-        <span className={cn(base, 'bg-surface-sunken text-muted')}>Inactivo</span>
+        <span
+            className={cn(
+                base,
+                'border border-[var(--danger-500)]/35 bg-[var(--danger-100)] text-[var(--danger-700)]'
+            )}
+        >
+            {label}
+        </span>
     )
 }
 
 /** Tarjeta vertical — diseño desktop (eva-desktop DesktopPrograms · .dt-progcard). */
-export function ProgramCard({ program, onOpen, isSelected }: ProgramRowProps) {
+export function ProgramCard({ program, onOpen, isSelected, templateNames }: ProgramRowProps) {
     const stats = getProgramStats(program)
     const isTemplate = !program.client_id
-    // El diseño usa p.focus (taxonomía de objetivo); la data real no la expone →
-    // mostramos el alumno (asignado) o un descriptor de plantilla en la misma línea.
-    const focusLine = program.client?.full_name ?? (isTemplate ? 'Plantilla reutilizable' : 'Programa')
+    const displayName = programDisplayName(program)
+    // El diseño usa p.focus (taxonomía de objetivo); la data real no la expone → la línea
+    // secundaria lleva el linaje de la copia, y si la plantilla madre no está en la lista, el
+    // nombre guardado (o el descriptor de plantilla).
+    const focusLine =
+        programLineageLabel(program, templateNames) ??
+        (isTemplate ? 'Plantilla reutilizable' : displayName !== program.name ? program.name : 'Programa')
 
     return (
         <button
@@ -172,7 +206,7 @@ export function ProgramCard({ program, onOpen, isSelected }: ProgramRowProps) {
             </div>
             {/* .dt-progcard-name */}
             <div className="font-display text-base font-extrabold leading-[1.2] tracking-[-0.01em] text-strong">
-                {program.name}
+                {displayName}
             </div>
             {/* .dt-progcard-focus */}
             <div className="truncate text-[12.5px] text-muted">{focusLine}</div>
