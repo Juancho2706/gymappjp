@@ -70,9 +70,10 @@ Push, deploy y OTA solo a pedido del owner.
 - [x] D1 Revisión de los tres diffs contra este documento (jefe).
 - [x] D2 `pnpm docs:check` · `pnpm lint` · `pnpm typecheck` · `pnpm check:tokens`.
 - [x] D3 Vitest de los tres directorios tocados.
-- [ ] D4 Commit en `rnmobiledenuevo`.
-- [ ] D5 **Owner**: push + deploy web + OTA.
+- [x] D4 Commit `95817804` en `rnmobiledenuevo`.
+- [x] D5 Push a `rnmobiledenuevo` y `master` (08-09), deploy web `dpl_HNXWcBmC…` READY (humo `www.eva-app.cl` y `/login` 200) y OTA 1.1.2 canal `production`: android `fa85b4c7-996d-46f7-857f-9bf420c68d4f` (run 34182217975) / ios `34245c78-ab31-4939-b505-bf3a6f58d150` (run 34182225023).
 - [ ] D6 **Owner**: responder a Angela (borrador listo).
+- [ ] D7 **Owner**: QA en device.
 
 ## Hallazgos al margen (NO se tocaron hoy)
 
