@@ -271,7 +271,7 @@ loader del picker web (`QuickEditProvider` / `portions-groups.actions.ts`), (b) 
 (`apps/web/src/app/api/mobile/nutrition-v2/exchange-groups/route.ts:111-117`, **marcando, no filtrando**: el cliente
 particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
 
-- [ ] W1.1 [Opus] `portionSystem?: 'smae' | 'cl'` — **OPCIONAL, y en las DOS interfaces `ExchangeGroup`**: la del engine
+- [x] W1.1 [Opus] `portionSystem?: 'smae' | 'cl'` — **OPCIONAL, y en las DOS interfaces `ExchangeGroup`**: la del engine
       (`packages/nutrition-engine/exchange-types.ts`) **y** la de dominio web
       (`apps/web/src/domain/nutrition/exchange.types.ts:8-29`, la que importa `exchanges.repository.ts:3-10` y usan ~20
       archivos web: bundle del alumno V1, PDF de intercambios, builder V1, actions de grupos y de listas). Si solo se
@@ -286,13 +286,13 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
       **Criterio**: `pnpm typecheck` y tsc mobile verdes sin `any`; **sin editar los tests existentes de `editor-state`
       / `_quick-edit`, y sin tocar los ~42 fixtures que construyen `ExchangeGroup`** (no cambian porque el campo es
       opcional); los grupos reconstruidos de snapshots (sin la columna) caen a «no legado», nunca se esconden.
-- [ ] W1.2 [Opus] `QePortionGroup` (`packages/nutrition-v2/editor-state.ts:247-258`) gana `portionSystem?: 'smae' |
+- [x] W1.2 [Opus] `QePortionGroup` (`packages/nutrition-v2/editor-state.ts:247-258`) gana `portionSystem?: 'smae' |
       'cl'`, propagado en `catalogToPortionGroups` (`:588-600`); `collectPortionGroups` (`:549-568`) lo deja
       `undefined` **a propósito** (el snapshot no guarda el set) y se documenta en el JSDoc. **`CL_CODES`, `systemOf` e
       `isClGroup` NO se declaran acá**: viven en `packages/nutrition-v2/exchange-visibility.ts` y nacen en **W1.4**
       (DATA §6 y §7; ver la nota de W1.4). **Criterio**: `catalogToPortionGroups` propaga el campo; los grupos que salen
       de `collectPortionGroups` lo traen `undefined`; `quick-edit-state.test.ts` verde sin editarse.
-- [ ] W1.3 [Opus] **Productor 1**: `findUsedPortionSystemsForCoach(db, coachId): Promise<PortionSystem[]>` en
+- [x] W1.3 [Opus] **Productor 1**: `findUsedPortionSystemsForCoach(db, coachId): Promise<PortionSystem[]>` en
       `apps/web/src/infrastructure/db/exchanges.repository.ts` — mismo join del conteo de W0.6
       (`nutrition_slot_exchange_targets_v2` → `nutrition_plan_versions_v2` → `nutrition_plans_v2` → `exchange_groups`)
       **más la rama V1** `meal_exchange_targets` (sigue viva: `PlanBuilder.tsx`, `exchange.actions.ts`,
@@ -304,7 +304,7 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
       elementos; test del repo con doble de `db`. **Evidencia W0.6 (09-09): la forma `exists` sobre `exchange_groups`
       cuesta 11,6 ms frío y la forma join (targets → versions → plans → groups, `limit 2`, una por rama V2/V1 unidas) 0,3 ms
       ⇒ implementar la join.**
-- [ ] W1.4 [Opus] `packages/nutrition-v2/exchange-visibility.ts` con `visibleExchangeGroupsForCoach({ groups,
+- [x] W1.4 [Opus] `packages/nutrition-v2/exchange-visibility.ts` con `visibleExchangeGroupsForCoach({ groups,
       coachSystem, usedSystems })` (unión, no exclusión) + tests. **En este archivo, y en esta ola, nacen también los
       tres helpers que DATA §7 exporta desde acá** (X-07; W3 los importa, no los redefine): `CL_CODES`,
       `systemOf(group, coachSystem)` = `group.portionSystem ?? (CL_CODES.has(group.groupCode) ? 'cl' : coachSystem)`
@@ -318,7 +318,7 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
       catálogo con `portionSystem: 'cl'` ⇒ `'cl'`; grupo del plan sin dato y `groupCode = 'PCT'` ⇒ `'cl'` por
       `CL_CODES`; grupo del plan sin dato y `groupCode = 'C'` con coach `'cl'` ⇒ `'cl'` (**no** legado) y con coach
       `'smae'` ⇒ `'smae'`; `compareVisibleGroups` ordena propio → legado y `sortOrder` asc dentro de cada bloque.
-- [ ] W1.5 [Opus] **Productor 2 + aplicación web en el BORDE DE PRESENTACIÓN**: el loader del picker web
+- [x] W1.5 [Opus] **(implementado como MARCA, no filtra — decisión (k) del juicio W1.14)** Productor 2 + aplicación web en el BORDE DE PRESENTACIÓN: el loader del picker web
       —`QuickEditProvider` y `apps/web/src/app/coach/nutrition-v2/_actions/portions-groups.actions.ts`— lee
       `coaches.portion_system` por `coachId` (una columna), llama a `findUsedPortionSystemsForCoach` y aplica
       `visibleExchangeGroupsForCoach` **en TypeScript**, nunca dentro del `.or()`.
@@ -332,7 +332,7 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
       tocar** (grep en el diff); `findExchangeGroupConflict` sigue recibiendo el catálogo **sin filtrar** (ambos sets);
       `group-foods/route.ts` sigue respondiendo 200 para un grupo SMAE de un coach `'cl'`; test que simula el error de
       cada lectura y verifica que el catálogo vuelve completo y sin `legacy`.
-- [ ] W1.6 [Opus] **Ruta móvil viva**: `apps/web/src/app/api/mobile/nutrition-v2/exchange-groups/route.ts` pasa de
+- [x] W1.6 [Opus] **Ruta móvil viva**: `apps/web/src/app/api/mobile/nutrition-v2/exchange-groups/route.ts` pasa de
       `jsonNoStore({ groups, foodCounts })` (`:117`) a **`jsonNoStore({ groups, foodCounts, portionSystem,
       legacySystems })`** (nombres canónicos de R14(3), OUTLINE §13 y DATA §7.1.1), con cada grupo trayendo
       **`portionSystem?: 'smae' | 'cl'`**. **`legacy` NO viaja por fila**: se deriva **en el cliente** con
@@ -350,7 +350,7 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
       grep en `apps/mobile` da **cero consumidores** — su única aparición fuera de su definición es un comentario en
       `apps/mobile/app/coach/nutrition-v2/builder/[clientId].tsx:354`, el wizard retirado. Va al backlog «retirar junto
       con el wizard RN»; lo único que sí se toca de ese archivo es su `GROUP_COLUMNS` (W1.1), para que el tipo cierre.
-- [ ] W1.7 [Opus] Orden y secciones del picker **sin tocar `mergePortionGroupChoices`** (`editor-state.ts:641-650`,
+- [x] W1.7 [Opus] **(a) hecho en W1: `comparePickerGroups` + 7 tests; (b) la partición en los dos consumidores se hace en W2.4/W2.7 junto con el rediseño del picker (decisión (j))** — Orden y secciones del picker **sin tocar `mergePortionGroupChoices`** (`editor-state.ts:641-650`,
       «plan primero, catálogo después», fijado por `quick-edit-state.test.ts:578`): (a) comparador nuevo
       `comparePickerGroups` en `editor-state.ts`, sobre `QePortionGroup` + `legacy` + `sortOrder?` + `groupCode` — hay
       **dos** comparadores y no se mezclan: `compareCatalogGroups` (`:571-575`, sobre `ExchangeGroup`) queda **sin
@@ -361,32 +361,56 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
       `comparePickerGroups` en el paquete (set del coach primero, propios después, legado al final) y
       `quick-edit-state.test.ts:578-590` **verde sin editarse**. Las tres copias de `sortGroupsForPicker` viven en los
       wizards retirados: **no se tocan**.
-- [ ] W1.8 [Sonnet] `SYSTEM_EXCHANGE_CODES` (`packages/nutrition-v2/read-models.ts:638-649`) + los 13 códigos.
+- [x] W1.8 [Sonnet→Opus] `SYSTEM_EXCHANGE_CODES` (`packages/nutrition-v2/read-models.ts:638-649`) + los 13 códigos.
       **Criterio**: `reconstructExchangeGroups` devuelve `isSystem: true` para un snapshot con `code = 'PCT'`.
-- [ ] W1.9 [Sonnet] Conteo del picker web por `getExchangeListCounts` en
+- [x] W1.9 [Sonnet→Opus] **(hecho por `countExchangeListRowsByGroup`, la función de la que `getExchangeListCounts` es un wrapper de una línea: mismo dato de `exchange_group_foods`, con `truncated`)** Conteo del picker web por `getExchangeListCounts` en
       `apps/web/src/app/coach/nutrition-v2/_actions/portions-groups.actions.ts:65-84`. **Criterio**: un grupo chileno con
       equivalencias en `exchange_group_foods` deja de mostrar «0 equivalencias» (test del action o verificación manual
       con captura).
-- [ ] W1.10 [Sonnet] `GROUP_REFS` de `scripts/nutrition-portions/heuristics.ts:113-124` + los 13 (R5) **y la unión
+- [x] W1.10 [Sonnet→Opus] `GROUP_REFS` de `scripts/nutrition-portions/heuristics.ts:113-124` + los 13 (R5) **y la unión
       cerrada `ExchangeGroupCode` de `heuristics.ts:52`** (`'C' | 'P' | … | 'LEG'`, usada además en `:72,78,79,80`): sin
       ampliarla el archivo no compila (R-09). **Criterio**: `verifyGroupRefs` no aborta con `missing_in_fixture` y
       `tsc` del script pasa (correr solo la verificación, **no** el clasificador).
-- [ ] W1.11 [Sonnet] `apps/web/src/lib/database.types.ts` a mano: `portion_system` en Row/Insert/Update de
+- [x] W1.11 [Sonnet→Opus] `apps/web/src/lib/database.types.ts` a mano: `portion_system` en Row/Insert/Update de
       `exchange_groups` y `coaches`. **Criterio**: `pnpm typecheck` verde; el diff toca solo esas dos tablas (nada de
       regen completo).
-- [ ] W1.12 [Opus] Caso nuevo en `apps/web/src/services/nutrition-exchanges/nutrition-exchanges.groups.test.ts`
+- [x] W1.12 [Opus] Caso nuevo en `apps/web/src/services/nutrition-exchanges/nutrition-exchanges.groups.test.ts`
       atacando **`createExchangeGroup` y `updateExchangeGroup`** (no la función pura, que pasaría igual): un coach
       `'cl'` **sin** targets SMAE —o sea, uno que ya no ve el set legado en su picker— **no** puede crear ni renombrar
       un grupo propio con `code` `C`, `LAC`, `LEG`, `FR` ni `PCT`. **Criterio**: el test se pone rojo si alguien mueve
       el filtro de visibilidad dentro de `findExchangeGroupsForScope` (que es la regresión exacta de B-01).
-- [ ] W1.13 Gates W1 (<fecha>): `pnpm exec vitest run packages/nutrition-v2 packages/nutrition-engine` ⇒ `<n>` archivos
-      / `<n>` tests · vitest de `apps/web/src/services/nutrition-exchanges` y `tests/mobile-nutrition-exchange-groups-api.test.ts`
-      · `pnpm typecheck` · tsc mobile · eslint por archivo · `pnpm check:nutrition-v2-boundaries` `<n>` archivos OK.
+- [x] W1.13 Gates W1 (2026-09-09, jefe, salida real en [TEST_STATUS](../../testing/TEST_STATUS.md)): `pnpm exec vitest run
+      packages/nutrition-v2 packages/nutrition-engine apps/web/src/services/nutrition-exchanges apps/web/src/infrastructure/db
+      apps/web/src/app/api/mobile/nutrition-v2/exchange-groups apps/web/src/app/coach/nutrition-v2/_actions
+      tests/mobile-nutrition-exchange-groups-api.test.ts tests/mobile-nutrition-v2-duplicate-group.test.ts tests/nutrition-portions
+      "apps/web/src/app/coach/nutrition-v2/[clientId]/_quick-edit"` ⇒ **90 archivos / 1.446 tests verdes** · `pnpm typecheck` ⇒
+      verde · `pnpm --filter @eva/mobile exec tsc --noEmit` ⇒ verde · eslint por archivo (web y `--config eslint.mobile.config.mjs`)
+      ⇒ sin hallazgos (corrido por cada worker y su refutador) · `pnpm check:nutrition-v2-boundaries` ⇒ **454 archivos OK**.
+      Invariante de conteo: `quick-edit-state.test.ts` 58 · `editor-state.day-errors.test.ts` 16 · `.meta` 22 · `publish-guards` 7
+      siguen verdes sin editarse. Tests nuevos: `exchange-visibility.test.ts` 18 · `editor-state.picker-compare.test.ts` 7 ·
+      `read-models.test.ts` +1 · `exchanges.repository.portion-systems.test.ts` 11 · `portions-groups.actions.test.ts` 15 ·
+      `nutrition-exchanges.groups.test.ts` +11 (W1.12) · `tests/mobile-nutrition-exchange-groups-api.test.ts` +7 · `route.test.ts`
+      +3; `tests/nutrition-portions/heuristics.test.ts` actualizado (fixture de 9 → 22 grupos).
       **Invariante de conteo (números reales verificados en `f93378c3`, ninguno usa `.each`)**: `editor-state.day-errors.test.ts`
       **16** · `quick-edit-state.test.ts` **58** · `quick-edit-state.meta.test.ts` **22** · `quick-edit-publish-guards.test.ts`
       **7** ⇒ **16 + 87 = 103** existentes, más los casos nuevos de cada ola. El «16 + 106 = 122» que circulaba es falso:
       quien vea 103 no rompió nada.
-- [ ] W1.14 [Fable] Juicio de W1: `<…>`.
+- [x] W1.14 [Fable] Juicio de W1 (2026-09-09): 4 workers Opus (V visibilidad ∥ T tipos → P productores + loader ∥ R ruta
+      móvil + RN) con un refutador Opus por worker (0 BLOQUEA en la primera ronda; dos MEJORA elevadas a corrección por el jefe) y
+      una ronda de fixes con refutadores (0 BLOQUEA; T corrigió además el fixture stale de `tests/nutrition-portions/heuristics.test.ts`).
+      **Decisiones del jefe:** **(k)** el loader web `portions-groups.actions.ts` MARCA y no filtra (devuelve el catálogo completo
+      con `portionSystem?` por fila + `portionSystem`, `legacySystems`, `degraded`): alimenta seis superficies, entre ellas
+      `FoodCatalogBrowser → ClassifyFoodFlow`, que resuelve ids ya asignados; la partición vive en el consumidor del picker
+      (`EditablePortionsCard.tsx`, W2.7), espejo de la ruta móvil y de RN — DATA §7.3 corregido. **(l)** piso defensivo en
+      `visibleExchangeGroupsForCoach`: si el input trae grupos del sistema y el resultado no deja ninguno, devuelve todo sin
+      `legacy` (entre W0 y W6.8 los 13 chilenos están apagados y un coach `cl` sin SMAE vería un picker vacío) — casos 17/18 del
+      test. **(m)** `portionSystem` sin `| null` en todo el motor (DATA §7 corregido) y `findUsedPortionSystemsForCoach` en forma
+      JOIN (V2 ∪ V1, dedupe, ≤ 2 elementos) por la evidencia E6 de W0.6. **(n)** DATA §7.2 filas 3 y 8 contradecían el código de
+      §7: corregidas. **(o)** `SYSTEM_EXCHANGE_CODES` con 22 códigos no colisiona con los 5 custom vivos (PRO, CER, LDC, ARG,
+      CHO; verificado en LIVE). **(p)** `classify-foods.mjs` (no se corre en este tren) reporta `missing_in_db` de los 13 chilenos
+      hasta el encendido de W6.8: queda anotado en W6.8. **MEJORA pendientes (backlog):** el cliente RN podría descartar el set
+      propio de `legacySystems` (hoy lo garantiza el servidor); el degradado del loader web es silencioso (la ruta móvil sí deja
+      `errorCode: 'VISIBILITY_DEGRADED'` en el log); un `null` de `findCoachPortionSystem` no se marca como degradado.
 
 ## W2 · Picker, bump, tap-to-edit y Legumbres (2 d)
 
@@ -620,7 +644,10 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
       `count(*) from exchange_groups where is_system and deleted_at is null` = **22 vivos** (el «= 22» que antes vivía
       en W0.10); el índice único parcial `exchange_groups_system_code_uq` no se queja (0 códigos duplicados ya con las 13
       vivas); un coach `'cl'` de prueba ve 13 filas y **ninguna** con «0 equivalencias»; un coach `'smae'` de prueba ve
-      su set + la sección Legado. Si algo sale mal, el apagado es la misma sentencia con `deleted_at = now()` (W0.4).
+      su set + la sección Legado. Si algo sale mal, el apagado es la misma sentencia con `deleted_at = now()` (W0.4). Tras el
+      encendido, `node --import tsx scripts/nutrition-portions/classify-foods.mjs` (dry-run) vuelve a salir con exit 0: hasta ahí
+      `verifyGroupRefs` reporta los 13 chilenos como `missing_in_db` (decisión (p) de W1.14). Y el piso defensivo (l) deja de
+      dispararse.
 - [ ] W6.9 [Fable] `pnpm qa:prod:suave` al cierre. **Criterio**: 9/9 o los fallos explicados; run id pegado.
 - [ ] W6.10 [Fable] Completar «Registro de cierres» y el checklist de QA en device con el veredicto del owner.
 - [ ] W6.11 [owner] Avisos: banner in-app a **los coaches con porciones SMAE vivas** (9 por V2 al 08-09; **sumar los de
@@ -662,7 +689,7 @@ _(vacía: se llena si aparece un reporte después del cierre, con `### <fecha> �
 | Fecha | Tanda | Commit | Gates | Notas |
 |---|---|---|---|---|
 | 2026-09-09 | W0 · datos (W0a + W0b) | worktree `porciones-chilenas`, sin push (`02db17b7` + commit del apply) | tx-rollback + smoke A–G + Q1–Q9 + dry-run ×3 + apply ×2 | 120000/120500 en LIVE (`20260909163802` / `20260909163812`), seed apagado, **2.499 equivalencias + 5 foods en LIVE**; OK del owner citado en W0.9 |
-| | W1 · motor | | | |
+| 2026-09-09 | W1 · motor y visibilidad | worktree `porciones-chilenas`, sin push | vitest 90/1.446 · typecheck · tsc mobile · boundaries 454 · eslint por archivo | 4 workers + 4 refutadores + ronda de fixes; decisiones (k)–(p) en W1.14 |
 | | W2 · picker | | | |
 | | W3 · conversión | | | |
 | | W4 · metas | | | |

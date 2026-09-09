@@ -34,6 +34,7 @@ vi.mock('../apps/mobile/lib/supabase', () => ({
 }))
 
 const coach = await import('../apps/mobile/lib/nutrition-exchanges.coach')
+const v2 = await import('../apps/mobile/lib/nutrition-v2-exchange-groups.api')
 
 const GROUPS_PATH = '/api/mobile/nutrition/exchanges/groups'
 const GROUP_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
@@ -187,5 +188,133 @@ describe('NUT-005: jamás Supabase directo para escribir grupos', () => {
     expect(typeof source.updateCoachExchangeGroup).toBe('function')
     expect(typeof source.deleteCoachExchangeGroup).toBe('function')
     expect(source.insertExchangeGroupRow).toBeUndefined()
+  })
+})
+
+/**
+ * W1.6 — contrato de LECTURA del catálogo V2 móvil: `{ groups, foodCounts, portionSystem,
+ * legacySystems }` (nombres canónicos, DATA §7.1.1).
+ *
+ * Las tres llaves nuevas son OPCIONALES a propósito y eso es el fail-open del cliente: un binario
+ * nuevo contra un deploy viejo —o el borde degradado, que omite AMBAS llaves si falla una de sus
+ * dos lecturas— recibe el cuerpo de siempre y NO marca nada como legado. Esconder un grupo que la
+ * pauta del coach usa es peor que mostrar uno de más.
+ *
+ * Y `legacy` JAMÁS viaja por fila (R18): el servidor no puede afirmar «legado» sobre un grupo que
+ * sale del PLAN, porque el snapshot congelado no guarda el set. Se deriva en el cliente con
+ * `systemOf(group, portionSystem)`.
+ */
+describe('fetchNutritionV2ExchangeGroups: contrato de sets de porciones (W1.6)', () => {
+  const SCOPE = { scopeType: 'standalone', teamId: null, orgId: null } as const
+  const CATALOG_PATH = '/api/mobile/nutrition-v2/exchange-groups'
+  const CL_GROUP = { ...API_GROUP, code: 'PCT', isSystem: true, portionSystem: 'cl' }
+  const SMAE_GROUP = {
+    ...API_GROUP,
+    id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+    code: 'C',
+    isSystem: true,
+    portionSystem: 'smae',
+  }
+
+  it('parsea las tres llaves nuevas y el `portionSystem` de cada grupo', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      groups: [CL_GROUP, SMAE_GROUP],
+      foodCounts: { [GROUP_ID]: 12 },
+      portionSystem: 'cl',
+      legacySystems: ['smae'],
+    })
+    const res = await v2.fetchNutritionV2ExchangeGroups(SCOPE)
+
+    const [path, options] = apiFetchMock.mock.calls[0]
+    expect(path).toBe(`${CATALOG_PATH}?scopeType=standalone`)
+    expect(options.authenticated).toBe(true)
+
+    expect(res.portionSystem).toBe('cl')
+    expect(res.legacySystems).toEqual(['smae'])
+    expect(res.groups.map((group) => group.portionSystem)).toEqual(['cl', 'smae'])
+    expect(res.foodCounts).toEqual({ [GROUP_ID]: 12 })
+  })
+
+  it('FAIL-OPEN: sin las tres llaves también parsea, y no inventa set ni legado', async () => {
+    apiFetchMock.mockResolvedValueOnce({ groups: [{ ...API_GROUP }] })
+    const res = await v2.fetchNutritionV2ExchangeGroups(SCOPE)
+
+    expect(res.groups).toHaveLength(1)
+    expect(res.portionSystem).toBeUndefined()
+    expect(res.legacySystems).toBeUndefined()
+    expect(res.foodCounts).toBeUndefined()
+    // Sin el dato el grupo NO queda con un set inventado: `systemOf` decidirá por código. La llave
+    // queda presente con `undefined`, igual que el mapeador web (`exchanges.repository.ts:79`).
+    expect(res.groups[0]!.portionSystem).toBeUndefined()
+  })
+
+  it('un `portionSystem` de fila con basura se OMITE en vez de propagarse', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      groups: [
+        { ...API_GROUP, portionSystem: 'usda' },
+        { ...API_GROUP, id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', portionSystem: 7 },
+      ],
+      portionSystem: 'usda',
+    })
+    const res = await v2.fetchNutritionV2ExchangeGroups(SCOPE)
+    expect(res.groups.map((group) => group.portionSystem)).toEqual([undefined, undefined])
+    expect(res.portionSystem).toBeUndefined()
+  })
+
+  it('`legacySystems` con basura se filtra a `[]` (llegó la llave, pero no hay legado válido)', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      groups: [],
+      portionSystem: 'cl',
+      legacySystems: ['usda', 3],
+    })
+    const res = await v2.fetchNutritionV2ExchangeGroups(SCOPE)
+    // `[]` («se leyó y no usa nada») ≠ `undefined` («no se pudo leer»): la diferencia decide si el
+    // picker muestra el bloque «Legado» o no muestra nada.
+    expect(res.legacySystems).toEqual([])
+    expect(res.legacySystems).not.toBeUndefined()
+  })
+
+  it('`legacySystems` conserva solo los sets válidos y sin repetir', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      groups: [],
+      portionSystem: 'smae',
+      legacySystems: ['cl', null, 'cl'],
+    })
+    const res = await v2.fetchNutritionV2ExchangeGroups(SCOPE)
+    // Deduplicado: el picker pinta UN bloque «Legado» por set, no uno por aparición.
+    expect(res.legacySystems).toEqual(['cl'])
+    expect(res.portionSystem).toBe('smae')
+  })
+
+  it('FAIL-OPEN: si el `portionSystem` no parsea, `legacySystems` cae con él (nunca a medias)', async () => {
+    apiFetchMock.mockResolvedValueOnce({
+      groups: [CL_GROUP, SMAE_GROUP],
+      portionSystem: 'usda',
+      legacySystems: ['smae'],
+    })
+    const res = await v2.fetchNutritionV2ExchangeGroups(SCOPE)
+    // Sin set del coach no hay contra qué medir el legado: quedarse con `['smae']` escondería los
+    // grupos SMAE del coach que justo usa SMAE. Se omiten las dos y se muestra el catálogo entero.
+    expect(res.portionSystem).toBeUndefined()
+    expect(res.legacySystems).toBeUndefined()
+    expect(res.groups).toHaveLength(2)
+  })
+
+  it('R18: ninguna fila del catálogo trae `legacy` (se deriva en el cliente, no en el servidor)', async () => {
+    // Aunque un servidor lo mandara, el mapeador NO lo copia: el sheet decide con `systemOf`, que
+    // es lo único que no marca legado a un grupo del plan sin la columna.
+    apiFetchMock.mockResolvedValueOnce({
+      groups: [
+        { ...CL_GROUP, legacy: true },
+        { ...SMAE_GROUP, legacy: true },
+      ],
+      portionSystem: 'cl',
+      legacySystems: ['smae'],
+    })
+    const res = await v2.fetchNutritionV2ExchangeGroups(SCOPE)
+    expect(res.groups).toHaveLength(2)
+    for (const group of res.groups) {
+      expect('legacy' in group).toBe(false)
+    }
   })
 })

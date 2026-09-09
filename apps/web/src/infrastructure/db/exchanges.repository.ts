@@ -8,6 +8,7 @@ import type {
     MealExchangeTarget,
     NutritionPlanMode,
 } from '@/domain/nutrition/exchange.types'
+import type { PortionSystem } from '@eva/nutrition-v2'
 
 /**
  * Repository del módulo `nutrition_exchanges` (tablas: exchange_groups,
@@ -29,7 +30,7 @@ export type MealExchangeTargetRow = Tables['meal_exchange_targets']['Row']
 export type DayVariantRow = Tables['nutrition_plan_day_variants']['Row']
 
 const GROUP_COLUMNS =
-    'id, slug, code, name, coach_id, team_id, is_system, ref_calories, ref_protein_g, ref_carbs_g, ref_fats_g, color, sort_order, composed_of, macros_confirmed'
+    'id, slug, code, name, coach_id, team_id, is_system, ref_calories, ref_protein_g, ref_carbs_g, ref_fats_g, color, sort_order, composed_of, macros_confirmed, portion_system'
 
 function parseComposedOf(value: Json | null): ComposedGroupPart[] | null {
     if (!Array.isArray(value)) return null
@@ -46,6 +47,12 @@ function parseComposedOf(value: Json | null): ComposedGroupPart[] | null {
         }
     }
     return parts.length > 0 ? parts : null
+}
+
+/** `portion_system` crudo -> tipo del paquete. Cualquier otra cosa (columna ausente, valor
+ *  desconocido) es `null`: el set se resuelve despues, nunca se adivina. */
+function toPortionSystem(value: unknown): PortionSystem | null {
+    return value === 'smae' || value === 'cl' ? value : null
 }
 
 export function mapExchangeGroupRow(row: Pick<ExchangeGroupRow, never> & Record<string, unknown>): ExchangeGroup {
@@ -66,6 +73,10 @@ export function mapExchangeGroupRow(row: Pick<ExchangeGroupRow, never> & Record<
         sortOrder: r.sort_order,
         composedOf: parseComposedOf(r.composed_of),
         macrosConfirmed: r.macros_confirmed,
+        // El campo es OPCIONAL (R15): una fila sin la columna —o con un valor que no
+        // conocemos— sale `undefined`, y `systemOf` la resuelve por código o por el set del
+        // coach. Nunca se inventa `'smae'`: eso marcaría legado a un grupo chileno.
+        portionSystem: toPortionSystem((r as { portion_system?: unknown }).portion_system) ?? undefined,
     }
 }
 
@@ -102,6 +113,131 @@ export async function findExchangeGroupsForScope(
         .order('sort_order', { ascending: true })
         .order('code', { ascending: true })
     return (data ?? []).map(mapExchangeGroupRow)
+}
+
+// ─── Sets de porciones EN USO por el coach (W1.3, DATA §7.1) ────────────────────
+//
+// El insumo `usedSystems` de `visibleExchangeGroupsForCoach`: sin el, el bloque «Legado»
+// del picker no se apagaria nunca. Vive ACA y no dentro de `findExchangeGroupsForScope`
+// (R13/T-01): ese catalogo es el de AUTORIZACION y no se toca.
+//
+// FORMA JOIN, no `exists` (evidencia W0.6 del 09-09: la forma `exists` sobre
+// `exchange_groups` costo 11,6 ms en frio y la join 0,3 ms). Con PostgREST no hay join SQL
+// libre, asi que la join se expresa con embeds `!inner` sobre las FK reales y los filtros se
+// escriben con la ruta del embed. Dos detalles obligados por PostgREST:
+//
+//   1. `nutrition_slot_exchange_targets_v2` NO tiene FK a `nutrition_plan_versions_v2` por
+//      `version_id` sola (la FK declarada es compuesta `(meal_slot_id, version_id)` contra
+//      `nutrition_meal_slots_v2`), asi que no hay embed que suba de targets a versiones. La
+//      ventana de versiones se resuelve en su propia consulta —que SI puede embeber
+//      `nutrition_plans_v2!inner` por `plan_id`— y se aplica a los targets con un `in`.
+//   2. La condicion `v.id = p.current_published_version_id or v.status <> 'published'` compara
+//      columnas de DOS tablas: PostgREST no la puede expresar y se evalua en TypeScript, con
+//      las dos columnas ya traidas. La ventana queda identica a la del SQL de DATA §7.1:
+//      version publicada VIGENTE o borrador abierto, sobre plan no archivado. Las versiones
+//      publicadas VIEJAS quedan fuera a proposito: si contaran, convertir jamas apagaria el
+//      legado (S1).
+//
+// El `limit 2` del SDD acompana al `select distinct` de SQL; PostgREST no tiene `distinct`,
+// asi que el corte a lo sumo dos elementos se hace al deduplicar en memoria.
+//
+// ERRORES: estas funciones LANZAN (no devuelven `[]`). La diferencia es la que sostiene el
+// fail-open de R14: `[]` significa «se leyo y el coach no usa nada» y esconde el set legado,
+// mientras que una lectura fallida tiene que llegar al borde como «no se» (`usedSystems:
+// undefined`) para que se muestre todo sin marcar legado.
+
+type EmbeddedPlanWindow = { current_published_version_id: string | null }
+type VersionWindowRow = {
+    id: string
+    status: string
+    nutrition_plans_v2: EmbeddedPlanWindow | EmbeddedPlanWindow[] | null
+}
+type EmbeddedGroupSystem = { portion_system: string | null }
+type TargetGroupRow = { exchange_groups: EmbeddedGroupSystem | EmbeddedGroupSystem[] | null }
+
+/** supabase-js tipa un embed to-one como objeto y uno to-many como arreglo segun la FK; se
+ *  normaliza para no depender de esa inferencia. */
+function firstEmbed<T>(value: T | T[] | null): T | null {
+    if (value == null) return null
+    return Array.isArray(value) ? (value[0] ?? null) : value
+}
+
+function collectSystems(rows: TargetGroupRow[]): PortionSystem[] {
+    const out: PortionSystem[] = []
+    for (const row of rows) {
+        const system = toPortionSystem(firstEmbed(row.exchange_groups)?.portion_system)
+        if (system && !out.includes(system)) out.push(system)
+        if (out.length === 2) break
+    }
+    return out
+}
+
+/**
+ * Techo EXPLICITO de la ventana de versiones. PostgREST ya corta en `max_rows = 1000`
+ * (`supabase/config.toml:18`), asi que esto no cambia el resultado: lo deja escrito para que el
+ * dia que la ventana crezca el corte sea una decision y no una sorpresa del servidor. En LIVE
+ * (09-09) el coach con mas versiones vivas tiene 40, y los ids viajan por URL en el `.in(...)`
+ * de la consulta de targets: si alguna vez se acerca al techo, se pagina antes de que la URL
+ * reviente, no despues.
+ */
+const USED_SYSTEMS_VERSION_WINDOW_LIMIT = 1000
+
+/** Rama V2: targets de la version publicada vigente o de un borrador abierto. */
+async function findUsedPortionSystemsV2(db: DB, coachId: string): Promise<PortionSystem[]> {
+    const { data: versions, error: versionsError } = await db
+        .from('nutrition_plan_versions_v2')
+        .select('id, status, nutrition_plans_v2!inner(current_published_version_id)')
+        .eq('nutrition_plans_v2.coach_id', coachId)
+        .neq('nutrition_plans_v2.lifecycle_status', 'archived')
+        .limit(USED_SYSTEMS_VERSION_WINDOW_LIMIT)
+    if (versionsError) throw new Error(versionsError.message)
+
+    const versionIds: string[] = []
+    for (const row of (versions ?? []) as unknown as VersionWindowRow[]) {
+        const plan = firstEmbed(row.nutrition_plans_v2)
+        const isCurrentPublished = plan != null && plan.current_published_version_id === row.id
+        if (isCurrentPublished || row.status !== 'published') versionIds.push(row.id)
+    }
+    if (versionIds.length === 0) return []
+
+    const { data, error } = await db
+        .from('nutrition_slot_exchange_targets_v2')
+        .select('exchange_groups!inner(portion_system)')
+        .in('version_id', versionIds)
+    if (error) throw new Error(error.message)
+    return collectSystems((data ?? []) as unknown as TargetGroupRow[])
+}
+
+/** Rama V1 (S-04): el builder legado sigue vivo en produccion y sus targets cuentan igual. */
+async function findUsedPortionSystemsV1(db: DB, coachId: string): Promise<PortionSystem[]> {
+    const { data, error } = await db
+        .from('meal_exchange_targets')
+        .select('exchange_groups!inner(portion_system), nutrition_meals!inner(nutrition_plans!inner(coach_id))')
+        .eq('nutrition_meals.nutrition_plans.coach_id', coachId)
+    if (error) throw new Error(error.message)
+    return collectSystems((data ?? []) as unknown as TargetGroupRow[])
+}
+
+/**
+ * Sets de porciones que el coach TIENE EN USO HOY (DATA §7.1). A lo sumo dos elementos.
+ * Union de las dos ramas —V2 y V1— deduplicada en TypeScript.
+ */
+export async function findUsedPortionSystemsForCoach(db: DB, coachId: string): Promise<PortionSystem[]> {
+    const [v2, v1] = await Promise.all([findUsedPortionSystemsV2(db, coachId), findUsedPortionSystemsV1(db, coachId)])
+    const out: PortionSystem[] = []
+    for (const system of [...v2, ...v1]) if (!out.includes(system)) out.push(system)
+    return out
+}
+
+/**
+ * Set de porciones del coach (`coaches.portion_system`). `null` = no se pudo leer o el coach
+ * no existe; el borde lo trata como fail-open (muestra los dos sets, sin marcar legado) y la
+ * funcion pura cae a `'cl'`, que es el default de la columna.
+ */
+export async function findCoachPortionSystem(db: DB, coachId: string): Promise<PortionSystem | null> {
+    const { data, error } = await db.from('coaches').select('portion_system').eq('id', coachId).maybeSingle()
+    if (error || data == null) return null
+    return toPortionSystem((data as { portion_system?: unknown }).portion_system)
 }
 
 /**

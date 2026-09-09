@@ -152,10 +152,21 @@ describe('classifyFood — fixture de 36 foods reales (9 grupos + bordes)', () =
   })
 })
 
-describe('GROUP_REFS — fixture constante de los 9 grupos system (origen seed V1)', () => {
-  it('tiene exactamente los 9 grupos system', () => {
+describe('GROUP_REFS — fixture constante de los 22 grupos system (9 SMAE + 13 chilenos)', () => {
+  it('tiene exactamente los 22 grupos system', () => {
     const codes = GROUP_REFS.map((g) => g.code).sort()
-    expect(codes).toEqual(['ARL', 'C', 'F', 'G', 'LAC', 'LEG', 'P', 'SP', 'V'])
+    // Los 13 chilenos entran al fixture solo para que `verifyGroupRefs` no aborte con
+    // `missing_in_fixture` el dia del seed (R5); el clasificador sigue siendo SMAE.
+    expect(codes).toEqual([
+      'AG', 'ARL', 'AZ', 'C', 'CA', 'CB', 'F', 'FR', 'G', 'LAC', 'LD', 'LE', 'LEG',
+      'LGS', 'LS', 'P', 'PCT', 'SCP', 'SP', 'V', 'VG', 'VL',
+    ])
+  })
+
+  it('los 9 grupos SMAE siguen presentes en el fixture', () => {
+    for (const code of ['ARL', 'C', 'F', 'G', 'LAC', 'LEG', 'P', 'SP', 'V']) {
+      expect(GROUP_REFS.some((g) => g.code === code)).toBe(true)
+    }
   })
 
   it('los ref_* coinciden con el seed V1', () => {

@@ -1465,6 +1465,7 @@ export type Database = {
           persona: string | null
           persona_also_other: boolean
           persona_set_at: string | null
+          portion_system: string
           previous_slugs: string[] | null
           primary_color: string
           provider_customer_id: string | null
@@ -1536,6 +1537,7 @@ export type Database = {
           persona?: string | null
           persona_also_other?: boolean
           persona_set_at?: string | null
+          portion_system?: string
           previous_slugs?: string[] | null
           primary_color?: string
           provider_customer_id?: string | null
@@ -1607,6 +1609,7 @@ export type Database = {
           persona?: string | null
           persona_also_other?: boolean
           persona_set_at?: string | null
+          portion_system?: string
           previous_slugs?: string[] | null
           primary_color?: string
           provider_customer_id?: string | null
@@ -2104,6 +2107,7 @@ export type Database = {
           is_system: boolean
           macros_confirmed: boolean
           name: string
+          portion_system: string
           ref_calories: number
           ref_carbs_g: number
           ref_fats_g: number
@@ -2124,6 +2128,7 @@ export type Database = {
           is_system?: boolean
           macros_confirmed?: boolean
           name: string
+          portion_system?: string
           ref_calories?: number
           ref_carbs_g?: number
           ref_fats_g?: number
@@ -2144,6 +2149,7 @@ export type Database = {
           is_system?: boolean
           macros_confirmed?: boolean
           name?: string
+          portion_system?: string
           ref_calories?: number
           ref_carbs_g?: number
           ref_fats_g?: number

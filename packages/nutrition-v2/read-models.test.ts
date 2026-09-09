@@ -366,6 +366,27 @@ describe('nutrition V2 portions — exchangeGroups reconstruction (SPEC R2/R3/A2
     expect(p.id).toBe(directP.exchangeGroupId)
     expect(p.refCalories).toBe(100)
   })
+
+  it('marca isSystem: true un snapshot del set chileno (code = PCT) — W1.8', () => {
+    // El snapshot congelado no guarda `is_system`: se deriva del código contra
+    // SYSTEM_EXCHANGE_CODES. Sin los 13 chilenos, PCT quedaría `isSystem: false` y
+    // perdería el desempate de `findByCode` y su lugar en el orden del picker.
+    const pctTarget: Pick<
+      NutritionSlotExchangeTargetRead,
+      'exchangeGroupId' | 'groupCode' | 'groupName' | 'color' | 'ref' | 'composedOf' | 'macrosConfirmed'
+    > = {
+      exchangeGroupId: '88888888-8888-4888-8888-888888888888',
+      groupCode: 'PCT',
+      groupName: 'Panes, cereales y tubérculos',
+      color: '#F59E0B',
+      ref: { calories: 140, proteinG: 3, carbsG: 30, fatsG: 1 },
+      composedOf: null,
+      macrosConfirmed: true,
+    }
+    const dict = reconstructExchangeGroups([pctTarget])
+    const pct = dict.find((g) => g.code === 'PCT')!
+    expect(pct.isSystem).toBe(true)
+  })
 })
 
 describe('nutrition V2 portions — coverage split (SPEC R5; solo cadenas activas)', () => {

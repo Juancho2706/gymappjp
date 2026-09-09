@@ -37,6 +37,7 @@ import {
     createCoachExchangeGroup,
     deleteCoachExchangeGroup,
     findExchangeGroupConflict,
+    getExchangeGroupsForCoach,
     updateCoachExchangeGroup,
     MAX_CUSTOM_EXCHANGE_GROUPS,
 } from './nutrition-exchanges.service'
@@ -244,4 +245,149 @@ describe('deleteCoachExchangeGroup', () => {
         expect(res.success).toBe(false)
         expect(mocks.softDeleteExchangeGroup).not.toHaveBeenCalled()
     })
+})
+
+// ─── W1.12 · el filtro de visibilidad NO puede vivir rio arriba (R13 / T-02 / B-01) ─────
+//
+// Este bloque NO mockea `findExchangeGroupsForScope`: la deja correr de verdad contra un
+// doble de supabase-js con los DOS sets en la tabla. Es la unica forma de que el test se
+// ponga rojo el dia que alguien mueva `visibleExchangeGroupsForCoach` adentro del repo o del
+// servicio: filtrado por set, un coach 'cl' SIN targets SMAE dejaria de ver la 'C', la 'LAC'
+// y la 'LEG' del sistema, y `findExchangeGroupConflict` —que es puro y recibe ese mismo
+// array— lo dejaria crear su propio grupo con ese codigo. El indice
+// `exchange_groups_system_code_uq` no lo atrapa: es parcial `where is_system`.
+
+type FakeResult = { data: unknown; error: null }
+
+function systemRow(code: string, slug: string, portionSystem: 'smae' | 'cl', sortOrder: number) {
+    return {
+        id: `sys-${code.toLowerCase()}`,
+        slug,
+        code,
+        name: code,
+        coach_id: null,
+        team_id: null,
+        is_system: true,
+        ref_calories: 100,
+        ref_protein_g: 2,
+        ref_carbs_g: 15,
+        ref_fats_g: 1,
+        color: null,
+        sort_order: sortOrder,
+        composed_of: null,
+        macros_confirmed: true,
+        portion_system: portionSystem,
+    }
+}
+
+/** 9 SMAE + 13 chilenos, tal como los ve la RLS `xg_select` (que no conoce sets). */
+const CATALOG_ROWS = [
+    ...['C', 'P', 'F', 'V', 'LAC', 'ARL', 'SP', 'G', 'LEG'].map((code, i) =>
+        systemRow(code, `smae-${code.toLowerCase()}`, 'smae', 10 + i * 10),
+    ),
+    ...['LD', 'LS', 'LE', 'CB', 'CA', 'LGS', 'VG', 'VL', 'FR', 'PCT', 'AG', 'AZ', 'SCP'].map((code, i) =>
+        systemRow(code, `cl-${code.toLowerCase()}`, 'cl', 210 + i * 10),
+    ),
+    {
+        ...systemRow('SHK', 'batido', 'smae', 100),
+        id: 'own-shk',
+        is_system: false,
+        coach_id: COACH,
+        name: 'Batido',
+    },
+]
+
+/**
+ * Doble de PostgREST que SI aplica `eq` / `in` / `is` sobre las filas.
+ *
+ * Un doble que los ignoraba dejaba estos 11 casos verdes ante la regresion que vienen a
+ * cuidar: si alguien mete el filtro de set en la capa DB —`.eq('portion_system', coachSystem)`
+ * dentro de `findExchangeGroupsForScope`, que es la forma natural de hacerlo mal— el catalogo
+ * de autorizacion se achica, `findExchangeGroupConflict` deja de ver el otro set y el coach
+ * puede crear un custom con el codigo `C`. Con el doble filtrando de verdad, ese cambio pone
+ * en rojo el largo del catalogo Y los diez casos de unicidad.
+ *
+ * El `or()` del scope 3-vias NO se evalua a proposito: es el techo que la RLS ya impone y las
+ * filas del fixture son justamente las que el coach puede ver.
+ */
+function catalogDb(rows: unknown[]) {
+    // Una cadena NUEVA por `from()`: los predicados son de esa consulta, no del doble entero.
+    const makeChain = () => {
+        const chain: Record<string, unknown> = {}
+        const predicates: ((row: Record<string, unknown>) => boolean)[] = []
+        const resolveRows = () =>
+            (rows as Record<string, unknown>[]).filter((row) => predicates.every((predicate) => predicate(row)))
+        Object.assign(chain, {
+            select: () => chain,
+            or: () => chain,
+            is: (column: string, value: unknown) => {
+                predicates.push((row) => (row[column] ?? null) === value)
+                return chain
+            },
+            in: (column: string, values: unknown[]) => {
+                predicates.push((row) => values.includes(row[column]))
+                return chain
+            },
+            eq: (column: string, value: unknown) => {
+                predicates.push((row) => row[column] === value)
+                return chain
+            },
+            order: () => chain,
+            limit: () => chain,
+            then: (resolve: (value: FakeResult) => unknown) =>
+                Promise.resolve({ data: resolveRows(), error: null } as FakeResult).then(resolve),
+        })
+        return chain
+    }
+    return { from: () => makeChain() } as never
+}
+
+describe('W1.12 · visibilidad fuera del catalogo de autorizacion', () => {
+    const catalogoDb = catalogDb(CATALOG_ROWS)
+    const CL_COACH_VALUES = { ...VALUES, refCalories: 90 }
+
+    beforeEach(async () => {
+        const real = await vi.importActual<typeof import('@/infrastructure/db/exchanges.repository')>(
+            '@/infrastructure/db/exchanges.repository',
+        )
+        // La REAL, no un stub: si alguien le mete el filtro adentro, estos casos se caen.
+        mocks.findExchangeGroupsForScope.mockImplementation(real.findExchangeGroupsForScope)
+    })
+
+    it('getExchangeGroupsForCoach sigue devolviendo los DOS sets, sin filtrar ni marcar', async () => {
+        const catalog = await getExchangeGroupsForCoach(catalogoDb, COACH, SCOPE)
+        expect(catalog).toHaveLength(CATALOG_ROWS.length)
+        expect(catalog.filter((g) => g.portionSystem === 'smae').map((g) => g.code)).toContain('C')
+        expect(catalog.filter((g) => g.portionSystem === 'cl').map((g) => g.code)).toContain('PCT')
+        expect(catalog.some((g) => 'legacy' in g)).toBe(false)
+    })
+
+    it.each(['C', 'LAC', 'LEG', 'FR', 'PCT'])(
+        'un coach cl SIN targets SMAE no puede CREAR un grupo propio con el codigo %s',
+        async (code) => {
+            const res = await createCoachExchangeGroup(catalogoDb, {
+                actorCoachId: COACH,
+                scope: SCOPE,
+                values: { ...CL_COACH_VALUES, code, name: `Mi ${code}` },
+            })
+            expect(res.success).toBe(false)
+            if (!res.success) expect(res.error).toContain(`«${code}»`)
+            expect(mocks.insertExchangeGroup).not.toHaveBeenCalled()
+        },
+    )
+
+    it.each(['C', 'LAC', 'LEG', 'FR', 'PCT'])(
+        'tampoco puede RENOMBRAR su grupo propio al codigo %s',
+        async (code) => {
+            const res = await updateCoachExchangeGroup(catalogoDb, {
+                actorCoachId: COACH,
+                scope: SCOPE,
+                groupId: 'own-shk',
+                values: { ...CL_COACH_VALUES, code, name: `Mi ${code}` },
+            })
+            expect(res.success).toBe(false)
+            if (!res.success) expect(res.error).toContain(`«${code}»`)
+            expect(mocks.updateExchangeGroup).not.toHaveBeenCalled()
+        },
+    )
 })

@@ -256,6 +256,14 @@ export interface QePortionGroup {
    */
   composedOf: NutritionExchangeComposedPart[] | null
   macrosConfirmed: boolean
+  /**
+   * Set de porciones del grupo. OPCIONAL a proposito: solo lo trae el catalogo VIVO
+   * (`catalogToPortionGroups`); los grupos que salen del plan lo dejan `undefined`
+   * porque el snapshot congelado no guarda el set (R18). El borde de presentacion lo
+   * resuelve con `systemOf`, que ante la ausencia cae al set del coach y NUNCA a
+   * 'smae': asi un grupo chileno ya prescrito jamas se pinta «Legado (SMAE)».
+   */
+  portionSystem?: 'smae' | 'cl'
 }
 
 export interface QeSlot {
@@ -545,6 +553,12 @@ function hydrateSlot(slot: ReadSlot, subsByItemId: SubstitutionsByItemId): QeSlo
  * Grupos elegibles para el picker de porciones del quick-edit: los que el plan YA usa
  * (dict reconstruible desde los snapshots congelados de los targets), unicos por id y
  * ordenados por codigo. Puro y sin catalogo vivo (hallazgo F3).
+ *
+ * `portionSystem` queda `undefined` A PROPOSITO (R18): el target congelado guarda
+ * `snapshot_group_code/name/ref_*` pero NO el set de porciones, asi que aca no hay dato
+ * que copiar. Inventarle 'smae' pintaria «Legado (SMAE)» —y dentro de la seccion
+ * colapsada— a un grupo chileno que el coach ya tiene prescrito. El borde de
+ * presentacion lo resuelve con `systemOf`, que cae al set del coach.
  */
 export function collectPortionGroups(planModel: NutritionPlanReadModel): QePortionGroup[] {
   const byId = new Map<string, QePortionGroup>()
@@ -572,6 +586,31 @@ function compareCatalogGroups(a: ExchangeGroup, b: ExchangeGroup): number {
   if (a.isSystem !== b.isSystem) return a.isSystem ? -1 : 1
   if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder
   return a.code.localeCompare(b.code)
+}
+
+/**
+ * Orden del PICKER de porciones (R17). Vive al lado de `compareCatalogGroups` pero es OTRO
+ * comparador y no se mezclan: aquel ordena `ExchangeGroup` (catalogo vivo) y este
+ * `QePortionGroup`, que es lo unico que el picker maneja. `sortOrder` y `legacy` llegan
+ * pegados por el consumidor (RN ya lo hace en `EditablePortionsSection.tsx:29`), por eso
+ * son opcionales.
+ *
+ * Criterio: no legado antes que legado; luego `sortOrder` asc con los que no lo traen al
+ * final; empate ⇒ `groupCode`. Nada de `sort_order` negativo en la DB: el orden es una
+ * decision de UI.
+ *
+ * NO reemplaza a `mergePortionGroupChoices` («plan primero, catalogo despues»), que sigue
+ * intacto: la particion por seccion la hace el consumidor sobre la lista ya mergeada.
+ */
+export function comparePickerGroups(
+  a: QePortionGroup & { sortOrder?: number; legacy?: boolean },
+  b: QePortionGroup & { sortOrder?: number; legacy?: boolean },
+): number {
+  if ((a.legacy ?? false) !== (b.legacy ?? false)) return a.legacy ? 1 : -1
+  const sa = a.sortOrder ?? Number.MAX_SAFE_INTEGER
+  const sb = b.sortOrder ?? Number.MAX_SAFE_INTEGER
+  if (sa !== sb) return sa - sb
+  return a.groupCode.localeCompare(b.groupCode)
 }
 
 /**
@@ -621,6 +660,9 @@ export function catalogToPortionGroups(groups: readonly ExchangeGroup[]): QePort
       },
       composedOf: resolved.length > 0 ? resolved : null,
       macrosConfirmed: group.macrosConfirmed,
+      // El catalogo VIVO si trae la columna: se propaga tal cual. Los grupos que salen
+      // del plan (`collectPortionGroups`) la dejan `undefined` (R18).
+      portionSystem: group.portionSystem,
     }
   })
 }

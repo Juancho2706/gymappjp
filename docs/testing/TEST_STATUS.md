@@ -397,6 +397,13 @@ jefe en el worktree tras el juicio de los workers (salida real):
 - **`--apply` en LIVE 09-09 ~18:30Z** (OK del owner «Q1 a … Q4 a»; doble gate): 2.341 derivadas + 158 curadas = **2.499**
   filas globales en los 13 grupos, 5 `foods` nuevos (Congrio, Plateada, Pepino dulce, Pan amasado, Mote de trigo), 0 filas con
   dueño tocadas; Q4–Q9 de W0.12 verdes (salida en TASKS). El set sigue apagado hasta W6.8.
+- **W1 (motor y visibilidad, 09-09)**: `pnpm exec vitest run packages/nutrition-v2 packages/nutrition-engine
+  apps/web/src/services/nutrition-exchanges apps/web/src/infrastructure/db apps/web/src/app/api/mobile/nutrition-v2/exchange-groups
+  apps/web/src/app/coach/nutrition-v2/_actions tests/mobile-nutrition-exchange-groups-api.test.ts
+  tests/mobile-nutrition-v2-duplicate-group.test.ts tests/nutrition-portions "apps/web/src/app/coach/nutrition-v2/[clientId]/_quick-edit"`
+  ⇒ **90 archivos / 1.446 tests verdes** · `pnpm typecheck` ⇒ verde · `pnpm --filter @eva/mobile exec tsc --noEmit` ⇒ verde ·
+  `pnpm check:nutrition-v2-boundaries` ⇒ 454 archivos OK · eslint por archivo sin hallazgos. Los 103 tests del editor
+  (58 + 16 + 22 + 7) siguen verdes sin editarse.
 - No corrido: E2E (cierre del tren, W6).
 
 ## Pendientes actuales

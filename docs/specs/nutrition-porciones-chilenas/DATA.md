@@ -1918,14 +1918,15 @@ export type VisibleExchangeGroup = ExchangeGroup & {
  * porque el snapshot congelado no lo guarda). R18.
  */
 export type SystemResolvable = {
-  readonly portionSystem?: PortionSystem | null
+  /** Sin `| null`: `ExchangeGroup.portionSystem?` (W1.1) es `'smae' | 'cl' | undefined`; el mapeador del repo coacciona a `undefined`. */
+  readonly portionSystem?: PortionSystem
   readonly code?: string
   readonly groupCode?: string
 }
 
 export type VisibilityInput = {
   /** Catalogo completo YA acotado por RLS (custom ajenos jamas llegan aca). */
-  readonly groups: readonly (ExchangeGroup & { portionSystem?: PortionSystem | null })[]
+  readonly groups: readonly (ExchangeGroup & { portionSystem?: PortionSystem })[]
   /** `coaches.portion_system`. Ausente/desconocido ⇒ 'cl' (default de la columna). */
   readonly coachSystem: PortionSystem | null | undefined
   /**
@@ -2150,12 +2151,12 @@ El mapeador `apps/mobile/lib/nutrition-v2-exchange-groups.api.ts:31-48` (`toGrou
 |---|---|---|
 | 1 | coach `cl`, `usedSystems: []` (los 97 de STATS) | 13 grupos, todos `legacy: false`; 0 SMAE |
 | 2 | coach `cl` con targets SMAE vivos (los 9 de STATS; **sin backfill**, R14-bis) | 22 grupos: 13 propios `legacy: false`, 9 SMAE `legacy: true` |
-| 3 | coach `smae` (preferencia futura) con `usedSystems: ['smae']` | 22 grupos: 9 propios, 13 chilenos `legacy: true` |
+| 3 | coach `smae` (preferencia futura) con `usedSystems: ['smae', 'cl']` | 22 grupos: 9 propios, 13 chilenos `legacy: true`. (Con `usedSystems: ['smae']` a secas el algoritmo de unión devuelve solo los 9 propios: corregido el 09-09 al implementar W1.4, el test fija los dos casos) |
 | 4 | coach que ya convirtió todo (`usedSystems: ['cl']`, coach `cl`) | 13 grupos y **el legado desaparece sin un solo write** (S1) |
 | 5 | grupo custom del coach con `portionSystem: 'smae'`, coach `cl` | presente, `legacy: false` |
 | 6 | grupo custom de team, coach `cl` | presente, `legacy: false` |
 | 7 | `coachSystem: null` / `undefined` | se comporta como `'cl'` |
-| 8 | grupo del sistema con `portionSystem: null` y `code: 'C'`, coach `cl`, `usedSystems: ['smae']` | `systemOf` lo resuelve por código ⇒ `'smae'`, `legacy: true`. (La columna es `not null`: el caso cuida el borde, no la producción) |
+| 8 | grupo del sistema SIN `portionSystem` y `code: 'C'`, coach `cl`, `usedSystems: ['smae']` | `systemOf` no tiene fallback a `'smae'`: `'C'` no está en `CL_CODES` ⇒ cae al set del coach ⇒ `'cl'`, `legacy: false` (R18: un grupo sin dato nunca se marca legado). (La columna es `not null`: el caso cuida el borde, no la producción; corregido el 09-09, la versión anterior de esta fila contradecía el código de §7) |
 | 9 | `groups: []` | `[]` |
 | 10 | `compareVisibleGroups` | propio antes que legado; dentro del propio, `sortOrder` asc; empate ⇒ `code` |
 | 11 | Coach ve ambos sets: orden completo | `[LD…SCP (210-330), C…LEG (10-90)]` — el chileno primero pese al `sort_order` mayor |
@@ -2178,7 +2179,7 @@ Y **un test de integración aparte** para `findUsedPortionSystemsForCoach` (§7.
 | Repo web del catálogo | `apps/web/src/infrastructure/db/exchanges.repository.ts:89-104` (`findExchangeGroupsForScope`) | **JAMÁS. No se toca.** Devuelve el catálogo completo, como hoy |
 | Servicio web | `apps/web/src/services/nutrition-exchanges/nutrition-exchanges.service.ts:92-98` (`getExchangeGroupsForCoach`) | **JAMÁS. No se toca** (R13). Es el gate de 5 caminos, incluida la ruta `group-foods` |
 | **Respuesta de la ruta móvil V2** | `api/mobile/nutrition-v2/exchange-groups/route.ts:111-117` | **Sí, MARCANDO, no filtrando**: agrega `portionSystem` + `legacySystems` al payload y `portionSystem` a cada grupo. El cliente particiona (§7.1.1) |
-| **Loader del picker web** | `coach/nutrition-v2/[clientId]/_quick-edit/QuickEditProvider.tsx` + `coach/nutrition-v2/_actions/portions-groups.actions.ts` | **Sí** — `visibleExchangeGroupsForCoach` acá, sobre lo que devuelve el servicio |
+| **Loader del picker web** | `coach/nutrition-v2/_actions/portions-groups.actions.ts` (+ `QuickEditProvider.tsx` como consumidor) | **MARCA, no filtra (decisión del jefe (k), 09-09, al implementar W1.5)**: el action alimenta seis superficies, entre ellas `FoodCatalogBrowser → ClassifyFoodFlow`, que resuelve ids YA asignados (`groups.find(g => g.id === current.groupId)`); filtrar ahí es la misma clase de bug que R13. Devuelve el catálogo completo con `portionSystem?` por grupo más `portionSystem` del coach, `legacySystems` y `degraded` (fail-open); `visibleExchangeGroupsForCoach` se aplica en el **consumidor del picker** (`EditablePortionsCard.tsx`, W2.7), espejo exacto de la ruta móvil y de RN |
 | **Sheet del picker RN** | `apps/mobile/components/nutrition-v2/quick-edit/EditablePortionsSection.tsx` (el `groups.map` de `:272`) | **Sí**, sobre la lista **ya mergeada** por `mergePortionGroupChoices`, particionando en «Sistema chileno» / «Propios» / «Legado (SMAE)» con `comparePickerGroups` (R17) |
 | **Card del picker web** | `_quick-edit/EditablePortionsCard.tsx` (el `groups.map` de `:286`) | **Sí**, misma partición que RN, mismo comparador |
 | PostgREST directo de RN (camino V1) | `apps/mobile/lib/nutrition-exchanges.coach.ts:92-101` (`fetchCoachExchangeGroups`) | **No se toca: es código muerto** (R-05). Su única aparición fuera de su definición es un comentario en `coach/nutrition-v2/builder/[clientId].tsx:354`, el wizard retirado. Backlog: «retirar junto con el wizard RN» |

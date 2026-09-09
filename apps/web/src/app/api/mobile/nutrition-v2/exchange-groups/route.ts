@@ -5,7 +5,7 @@ import {
   DeleteExchangeGroupSchema,
   UpdateExchangeGroupSchema,
 } from '@eva/schemas/nutrition-exchanges'
-import { NutritionV2CoachScopeSchema } from '@eva/nutrition-v2'
+import { NutritionV2CoachScopeSchema, type PortionSystem } from '@eva/nutrition-v2'
 import type { Database } from '@/lib/database.types'
 import {
   createCoachExchangeGroup,
@@ -16,6 +16,10 @@ import {
   type ExchangeGroupScope,
 } from '@/services/nutrition-exchanges/nutrition-exchanges.service'
 import { getExchangeListCounts } from '@/services/nutrition-exchanges/exchange-lists.service'
+import {
+  findCoachPortionSystem,
+  findUsedPortionSystemsForCoach,
+} from '@/infrastructure/db/exchanges.repository'
 import {
   gateNutritionV2Api,
   jsonNoStore,
@@ -94,6 +98,56 @@ async function foodCountsFor(gate: NutritionV2ApiGate, groupIds: string[]): Prom
   }
 }
 
+/**
+ * Los dos insumos de la visibilidad de sets (R14), leídos en el BORDE DE PRESENTACIÓN.
+ *
+ * Acá se MARCA, jamás se filtra: `groups` sale completo y el cliente particiona. Y `legacy` NO
+ * viaja por fila a propósito (R18): un grupo que sale del PLAN no trae la columna, así que el
+ * servidor no puede afirmar «legado» sobre él; el teléfono lo deriva con `systemOf`.
+ *
+ * FAIL-OPEN (R14 punto 4): si cualquiera de las dos lecturas falla se devuelve `visibility: null` y
+ * las DOS llaves se omiten del payload (con `degraded: true` para que el log lo delate). El cliente sin `portionSystem` no marca nada como legado y ve
+ * todo el catálogo. Esconder un grupo que el plan del coach usa es MUCHO peor que mostrar uno de
+ * más: lo dejaría sin poder editar su propia pauta.
+ *
+ * OJO con la forma del fallo: `findCoachPortionSystem` NO lanza, devuelve `null` cuando la lectura
+ * falla (o el coach no existe), así que el `try/catch` solo cubre a la otra. Sin el `null` explícito
+ * de abajo, un coach `'smae'` cuya lectura reventara recibiría `portionSystem: 'cl'` con
+ * `legacySystems: []` y el picker le ESCONDERÍA sus propios grupos SMAE: el fail-open al revés.
+ */
+type VisibilityRead = {
+  visibility: { portionSystem: PortionSystem; legacySystems: PortionSystem[] } | null
+  /**
+   * `true` SOLO cuando una lectura LANZÓ. El fail-open es silencioso para el cliente (mismo cuerpo
+   * de siempre), pero no puede serlo para nosotros: sin este marcador un bug que reviente
+   * `findUsedPortionSystemsForCoach` en prod se ve idéntico a un deploy sano y nadie se entera de
+   * que TODOS los coaches perdieron la marca de legado.
+   */
+  degraded: boolean
+}
+
+async function visibilityFor(gate: NutritionV2ApiGate, coachId: string): Promise<VisibilityRead> {
+  try {
+    const db = dbOf(gate)
+    const [coachSystem, usedSystems] = await Promise.all([
+      findCoachPortionSystem(db, coachId),
+      findUsedPortionSystemsForCoach(db, coachId),
+    ])
+    if (coachSystem == null) return { visibility: null, degraded: false }
+    // Default de la columna (R14-bis): cualquier cosa que no sea 'smae' es el set chileno.
+    const portionSystem: PortionSystem = coachSystem === 'smae' ? 'smae' : 'cl'
+    return {
+      visibility: {
+        portionSystem,
+        legacySystems: usedSystems.filter((system) => system !== portionSystem),
+      },
+      degraded: false,
+    }
+  } catch {
+    return { visibility: null, degraded: true }
+  }
+}
+
 /** Catálogo V2 scoped: system + grupos propios + grupo del Team activo, con su conteo de equivalencias. */
 export async function GET(request: NextRequest) {
   const startedAt = Date.now()
@@ -113,9 +167,31 @@ export async function GET(request: NextRequest) {
     resolved.gate.coachId!,
     workspaceOf(resolved.scope),
   )
-  const foodCounts = await foodCountsFor(resolved.gate, groups.map((group) => group.id))
-  const response = jsonNoStore({ groups, foodCounts })
-  logNutritionV2Api({ route: ROUTE, startedAt, status: response.status, payload: { count: groups.length } })
+  // En paralelo a propósito: son dos caminos independientes y la visibilidad son 4 queries
+  // (coaches + versiones + targets V2 + targets V1). Encadenarlas sumaría un round-trip completo a
+  // cada apertura del picker (DATA §7.1.1 avisa del costo por request).
+  const [foodCounts, visibilityRead] = await Promise.all([
+    foodCountsFor(resolved.gate, groups.map((group) => group.id)),
+    visibilityFor(resolved.gate, resolved.gate.coachId!),
+  ])
+  // `JSON.stringify` descarta las llaves `undefined`: en el modo degradado el cuerpo vuelve a ser
+  // exactamente `{ groups, foodCounts }`, que es lo que ya entiende el binario RN viejo.
+  const response = jsonNoStore({
+    groups,
+    foodCounts,
+    portionSystem: visibilityRead.visibility?.portionSystem,
+    legacySystems: visibilityRead.visibility?.legacySystems,
+  })
+  // La RESPUESTA no cambia (sigue omitiendo las dos llaves): el marcador va solo al log. Usa
+  // `errorCode` —y no `payload`— porque `logNutritionV2Api` de `payload` solo emite su tamaño en
+  // bytes, así que un `{ visibilityDegraded: true }` ahí sería invisible en el log.
+  logNutritionV2Api({
+    route: ROUTE,
+    startedAt,
+    status: response.status,
+    payload: { count: groups.length },
+    errorCode: visibilityRead.degraded ? 'VISIBILITY_DEGRADED' : undefined,
+  })
   return response
 }
 

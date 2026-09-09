@@ -30,6 +30,8 @@ export interface ExchangeGroup {
     composedOf: ComposedGroupPart[] | null
     /** false ⇒ la UI/PDF muestran badge "macros referenciales" (AC3). */
     macrosConfirmed: boolean
+    /** Set de porciones del grupo. OPCIONAL: el snapshot congelado no lo guarda (R15/R18). */
+    portionSystem?: 'smae' | 'cl'
 }
 
 export interface ComposedGroupPart {

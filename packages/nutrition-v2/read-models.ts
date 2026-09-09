@@ -635,8 +635,16 @@ export function parseNutritionReadModel<T>(schema: z.ZodType<T>, input: unknown)
 // read-model (server), el sheet de equivalencias y los tests de paridad del engine.
 // ---------------------------------------------------------------------------
 
-/** Los 9 grupos system de V1 (SPEC R3). Se usan para marcar `isSystem` al reconstruir. */
+/**
+ * Codigos de los grupos SYSTEM. Se usan para marcar `isSystem` al reconstruir desde el
+ * snapshot congelado, que no guarda la bandera.
+ *
+ * Son los 9 de V1/SMAE (SPEC R3) MAS los 13 del set chileno («Porciones a la chilena»):
+ * sin ellos, un grupo chileno reconstruido de un snapshot quedaria `isSystem: false` y
+ * perderia el desempate de `findByCode` y su lugar en el orden del picker.
+ */
 export const SYSTEM_EXCHANGE_CODES = new Set([
+  // SMAE / V1
   'C',
   'P',
   'F',
@@ -646,6 +654,20 @@ export const SYSTEM_EXCHANGE_CODES = new Set([
   'SP',
   'G',
   'LEG',
+  // Set chileno (INTA/UDD)
+  'LD',
+  'LS',
+  'LE',
+  'CB',
+  'CA',
+  'LGS',
+  'VG',
+  'VL',
+  'FR',
+  'PCT',
+  'AG',
+  'AZ',
+  'SCP',
 ])
 
 /** Prefijo de id determinista para grupos BASE sintetizados desde `composed_of`. */

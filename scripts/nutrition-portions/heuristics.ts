@@ -5,7 +5,9 @@
  * fila por fila.
  *
  * Cada food recibe:
- *   - `group`                 → uno de los 9 grupos SYSTEM (o null si no clasifica)
+ *   - `group`                 → uno de los 9 grupos SMAE (o null si no clasifica). El
+ *                               fixture completo tiene 22 (9 SMAE + 13 chilenos), pero el
+ *                               clasificador NO emite códigos chilenos — ver R5 más abajo.
  *   - `tier`                  → 'alto' | 'medio' | 'bajo' (confianza)
  *   - `exchangePortionGrams`  → gramos de 1 porción de intercambio (o null)
  *   - `exchangePortionLabel`  → medida legible ('{n} g') (o null)
@@ -16,7 +18,8 @@
  *       compartida web+RN en `packages/nutrition-v2/food-category.ts`).
  *   (b) keywords es-CL del nombre (arroz→C, pollo→P, palta→ARL, aceite→G, ...).
  *   (c) perfil de macros dominante del food (ratios P/C/G) vs los `ref_*` de los
- *       9 grupos system.
+ *       9 grupos SMAE (el NN NO mira los 13 chilenos del fixture — ver
+ *       `macroSignalFromPer100`).
  *
  * Regla de tier (documentada — SPEC R8 "3 coinciden = alto; 2 = medio; 1 o
  * conflicto = bajo"):
@@ -49,7 +52,14 @@ import { foodCategoryFromName, type NutritionFoodCategory } from '../../packages
 // Tipos
 // ---------------------------------------------------------------------------
 
-export type ExchangeGroupCode = 'C' | 'P' | 'F' | 'V' | 'LAC' | 'ARL' | 'SP' | 'G' | 'LEG'
+/**
+ * Códigos de grupo SYSTEM. Los 9 primeros son el set SMAE/V1; los 13 siguientes, el set
+ * chileno (INTA/UDD) del tren «Porciones a la chilena». La unión es CERRADA y se usa en
+ * `:72,78,79,80`: sin los códigos nuevos el archivo no compila (R-09).
+ */
+export type ExchangeGroupCode =
+  | 'C' | 'P' | 'F' | 'V' | 'LAC' | 'ARL' | 'SP' | 'G' | 'LEG'
+  | 'LD' | 'LS' | 'LE' | 'CB' | 'CA' | 'LGS' | 'VG' | 'VL' | 'FR' | 'PCT' | 'AG' | 'AZ' | 'SCP'
 
 export type ClassificationTier = 'alto' | 'medio' | 'bajo'
 
@@ -84,10 +94,17 @@ export interface FoodClassification {
 }
 
 // ---------------------------------------------------------------------------
-// Fixture CONSTANTE de los 9 grupos SYSTEM (origen: seed V1 — ver header)
+// Fixture CONSTANTE de los 22 grupos SYSTEM: 9 SMAE (origen: seed V1 — ver header) + 13
+// chilenos (seed de W0, DATA §0)
 // ---------------------------------------------------------------------------
 
-type MacroKey = 'protein' | 'carbs' | 'fats'
+/**
+ * Macro que DEFINE la porción del grupo. `'calories'` se sumó para el eje lácteo chileno
+ * (LD/LS/LE): con los valores UDD el macro dominante sale `carbs` para LD y LS pero `fats`
+ * para LE, así que derivar los tres subgrupos por macro daría gramajes inconsistentes entre
+ * subgrupos del MISMO eje. `Per100` ya expone `calories`, así que `per100[keyMacro]` cierra.
+ */
+type MacroKey = 'protein' | 'carbs' | 'fats' | 'calories'
 
 interface GroupRef {
   code: ExchangeGroupCode
@@ -97,7 +114,12 @@ interface GroupRef {
   refProteinG: number
   refCarbsG: number
   refFatsG: number
-  /** Macro clave del grupo y su referencia (gramos por porción) para derivar la porción. */
+  /**
+   * Macro clave del grupo y su referencia por porción, para derivar la porción.
+   * Ojo con la unidad: `keyRefG` guarda GRAMOS cuando `keyMacro` es `'protein' | 'carbs' |
+   * 'fats'`, pero KILOCALORÍAS cuando `keyMacro` es `'calories'` (eje lácteo chileno
+   * LD/LS/LE). La `G` del nombre quedó del set SMAE, que no tenía grupos por kcal.
+   */
   keyMacro: MacroKey
   keyRefG: number
   /** Perfil efectivo de macros-gramos para el NN de la señal (c). LEG usa 1P+1C. */
@@ -110,7 +132,7 @@ interface GroupRef {
  * los gramos del food que aportan ~esa cantidad del macro clave). LEG (compuesto
  * 1P+1C) usa su suma efectiva 9P/15C/3G y macro clave carbs=15.
  */
-export const GROUP_REFS: readonly GroupRef[] = [
+const SMAE_GROUP_REFS: readonly GroupRef[] = [
   { code: 'C', slug: 'cereales', name: 'Carbohidratos/Cereales', refCalories: 70, refProteinG: 2, refCarbsG: 15, refFatsG: 0, keyMacro: 'carbs', keyRefG: 15, profile: { protein: 2, carbs: 15, fats: 0 } },
   { code: 'P', slug: 'proteinas-bajo-grasa', name: 'Proteinas (bajo grasa)', refCalories: 55, refProteinG: 7, refCarbsG: 0, refFatsG: 3, keyMacro: 'protein', keyRefG: 7, profile: { protein: 7, carbs: 0, fats: 3 } },
   { code: 'F', slug: 'frutas', name: 'Frutas', refCalories: 60, refProteinG: 0, refCarbsG: 15, refFatsG: 0, keyMacro: 'carbs', keyRefG: 15, profile: { protein: 0, carbs: 15, fats: 0 } },
@@ -121,6 +143,49 @@ export const GROUP_REFS: readonly GroupRef[] = [
   { code: 'G', slug: 'grasa-cocina', name: 'Grasa de cocina', refCalories: 45, refProteinG: 0, refCarbsG: 0, refFatsG: 5, keyMacro: 'fats', keyRefG: 5, profile: { protein: 0, carbs: 0, fats: 5 } },
   { code: 'LEG', slug: 'legumbres', name: 'Legumbres', refCalories: 125, refProteinG: 9, refCarbsG: 15, refFatsG: 3, keyMacro: 'carbs', keyRefG: 15, profile: { protein: 9, carbs: 15, fats: 3 } },
 ]
+
+/**
+ * Los 13 grupos del set chileno (INTA/UDD), ref_* EXACTOS del seed de W0 (DATA §0):
+ * `sort_order` 210-330 y `macros_confirmed = true`. Están acá por una sola razón (R5):
+ * `verifyGroupRefs` (`classify-lib.ts:150-154`) ABORTA con `missing_in_fixture` en cuanto ve
+ * un grupo `is_system` que el fixture no conoce, así que sin estas 13 filas el clasificador
+ * viejo queda muerto el día que se siembren.
+ *
+ * `keyMacro`/`keyRefG` = tabla `CL_KEY_MACRO` de DATA §4.1. El eje lácteo (LD/LS/LE) usa
+ * `'calories'` con `keyRefG = ref_calories`: los tres subgrupos se separan por % de kcal
+ * desde la grasa, y derivar cada uno por su macro dominante daría gramajes que no conversan
+ * entre subgrupos del mismo eje.
+ *
+ * **El clasificador NO se corre en este tren** (SPEC R5): la derivación al set chileno la
+ * hace el script propio de W2, no `macroSignal`.
+ */
+const CL_GROUP_REFS: readonly GroupRef[] = [
+  { code: 'LD', slug: 'cl-lacteos-descremados', name: 'Lácteos descremados', refCalories: 70, refProteinG: 7, refCarbsG: 10, refFatsG: 0, keyMacro: 'calories', keyRefG: 70, profile: { protein: 7, carbs: 10, fats: 0 } },
+  { code: 'LS', slug: 'cl-lacteos-semidescremados', name: 'Lácteos semidescremados', refCalories: 85, refProteinG: 5, refCarbsG: 9, refFatsG: 3, keyMacro: 'calories', keyRefG: 85, profile: { protein: 5, carbs: 9, fats: 3 } },
+  { code: 'LE', slug: 'cl-lacteos-enteros', name: 'Lácteos enteros', refCalories: 110, refProteinG: 5, refCarbsG: 9, refFatsG: 6, keyMacro: 'calories', keyRefG: 110, profile: { protein: 5, carbs: 9, fats: 6 } },
+  { code: 'CB', slug: 'cl-carnes-bajas-grasa', name: 'Carnes bajas en grasa', refCalories: 65, refProteinG: 11, refCarbsG: 1, refFatsG: 2, keyMacro: 'protein', keyRefG: 11, profile: { protein: 11, carbs: 1, fats: 2 } },
+  { code: 'CA', slug: 'cl-carnes-altas-grasa', name: 'Carnes altas en grasa', refCalories: 120, refProteinG: 11, refCarbsG: 1, refFatsG: 8, keyMacro: 'protein', keyRefG: 11, profile: { protein: 11, carbs: 1, fats: 8 } },
+  { code: 'LGS', slug: 'cl-legumbres-secas', name: 'Legumbres secas', refCalories: 170, refProteinG: 11, refCarbsG: 30, refFatsG: 1, keyMacro: 'carbs', keyRefG: 30, profile: { protein: 11, carbs: 30, fats: 1 } },
+  { code: 'VG', slug: 'cl-verduras-generales', name: 'Verduras generales', refCalories: 25, refProteinG: 2, refCarbsG: 5, refFatsG: 0, keyMacro: 'carbs', keyRefG: 5, profile: { protein: 2, carbs: 5, fats: 0 } },
+  { code: 'VL', slug: 'cl-verduras-libre-consumo', name: 'Verduras de libre consumo', refCalories: 10, refProteinG: 0, refCarbsG: 2.5, refFatsG: 0, keyMacro: 'carbs', keyRefG: 2.5, profile: { protein: 0, carbs: 2.5, fats: 0 } },
+  { code: 'FR', slug: 'cl-frutas', name: 'Frutas', refCalories: 60, refProteinG: 0, refCarbsG: 15, refFatsG: 0, keyMacro: 'carbs', keyRefG: 15, profile: { protein: 0, carbs: 15, fats: 0 } },
+  { code: 'PCT', slug: 'cl-panes-cereales-tuberculos', name: 'Panes, cereales y tubérculos', refCalories: 140, refProteinG: 3, refCarbsG: 30, refFatsG: 1, keyMacro: 'carbs', keyRefG: 30, profile: { protein: 3, carbs: 30, fats: 1 } },
+  { code: 'AG', slug: 'cl-aceites-y-grasas', name: 'Aceites y grasas', refCalories: 45, refProteinG: 0, refCarbsG: 0, refFatsG: 5, keyMacro: 'fats', keyRefG: 5, profile: { protein: 0, carbs: 0, fats: 5 } },
+  { code: 'AZ', slug: 'cl-azucares', name: 'Azúcares', refCalories: 20, refProteinG: 0, refCarbsG: 5, refFatsG: 0, keyMacro: 'carbs', keyRefG: 5, profile: { protein: 0, carbs: 5, fats: 0 } },
+  { code: 'SCP', slug: 'cl-scoop-proteina', name: 'Scoop proteína', refCalories: 120, refProteinG: 24, refCarbsG: 2, refFatsG: 1, keyMacro: 'protein', keyRefG: 24, profile: { protein: 24, carbs: 2, fats: 1 } },
+]
+
+/**
+ * Fixture completo: los 22 grupos system = 9 SMAE + 13 chilenos. Es lo que `verifyGroupRefs`
+ * compara contra la DB.
+ *
+ * Hasta el encendido de W6.8 los 13 chilenos están APAGADOS (no sembrados en LIVE), así que
+ * `verifyGroupRefs` los reporta como `missing_in_db` y `classify-foods` abortaría con exit 2.
+ * Es lo esperado y no molesta a nadie: el clasificador NO se corre en este tren (R5). Cuando
+ * W6.8 siembre los 13, el chequeo vuelve solo a verde — y mientras tanto el fixture ya los
+ * conoce, que es lo que evita el abort inverso (`missing_in_fixture`) el día del seed.
+ */
+export const GROUP_REFS: readonly GroupRef[] = [...SMAE_GROUP_REFS, ...CL_GROUP_REFS]
 
 const GROUP_BY_CODE: ReadonlyMap<ExchangeGroupCode, GroupRef> = new Map(
   GROUP_REFS.map((g) => [g.code, g]),
@@ -284,10 +349,15 @@ export function macroSignalFromPer100(per100: Per100): ExchangeGroupCode | null 
   const frac = { protein: protein / total, carbs: carbs / total, fats: fats / total }
   const energy = macroEnergy(protein, carbs, fats)
 
+  // El NN corre SOLO sobre los 9 SMAE, no sobre `GROUP_REFS` completo: los 13 chilenos
+  // entraron al fixture únicamente para que `verifyGroupRefs` no aborte (R5), y el
+  // clasificador viejo sigue siendo el clasificador SMAE — la derivación al set chileno la
+  // hace el script propio de W2. Mezclarlos movería alimentos ya clasificados (p. ej.
+  // lentejas: LEG ⇒ LGS) sin que nadie lo haya pedido.
   const nearest = (exclude?: ExchangeGroupCode): ExchangeGroupCode => {
-    let best: ExchangeGroupCode = GROUP_REFS[0].code
+    let best: ExchangeGroupCode = SMAE_GROUP_REFS[0].code
     let bestDist = Number.POSITIVE_INFINITY
-    for (const g of GROUP_REFS) {
+    for (const g of SMAE_GROUP_REFS) {
       if (g.code === exclude) continue
       const gt = g.profile.protein + g.profile.carbs + g.profile.fats
       if (gt <= 0) continue

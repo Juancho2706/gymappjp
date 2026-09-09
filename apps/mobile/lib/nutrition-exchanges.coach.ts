@@ -79,11 +79,14 @@ function mapGroupRow(r: any): ExchangeGroup {
     sortOrder: Number(r.sort_order) || 0,
     composedOf: parseComposedOf(r.composed_of),
     macrosConfirmed: !!r.macros_confirmed,
+    // Set de porciones ('smae' | 'cl'). Cualquier otro valor queda `undefined`: el
+    // campo es opcional y el borde de presentación lo resuelve con `systemOf`.
+    portionSystem: r.portion_system === 'cl' || r.portion_system === 'smae' ? r.portion_system : undefined,
   }
 }
 
 const GROUP_COLUMNS =
-  'id, slug, code, name, coach_id, team_id, is_system, ref_calories, ref_protein_g, ref_carbs_g, ref_fats_g, color, sort_order, composed_of, macros_confirmed'
+  'id, slug, code, name, coach_id, team_id, is_system, ref_calories, ref_protein_g, ref_carbs_g, ref_fats_g, color, sort_order, composed_of, macros_confirmed, portion_system'
 
 /**
  * Catálogo de grupos visible para el coach (standalone v1): system + propios. Espejo de

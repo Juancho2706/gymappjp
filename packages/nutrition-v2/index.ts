@@ -71,6 +71,10 @@ export * from './macro-spark'
 // Notas del coach (SPEC nutrition-coach-notes N3): la regla unica de que texto ve el
 // alumno bajo franja/grupo en el Hoy (whitespace => cero render), web y RN.
 export * from './coach-notes'
+// Tren «Porciones a la chilena» (W1.4): que grupos de intercambio ve un coach en el picker
+// (union, nunca exclusion) + los helpers de set (`CL_CODES`, `systemOf`, `isClGroup`). Se
+// aplica SOLO en los bordes de presentacion: el catalogo de autorizacion no se filtra (R13).
+export * from './exchange-visibility'
 export {
   NUTRITION_V2_PERMISSION_DENIED,
   NUTRITION_V2_PERMISSION_DENIED_CODE,
