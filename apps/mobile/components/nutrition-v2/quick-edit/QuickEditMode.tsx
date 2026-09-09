@@ -96,6 +96,7 @@ import {
   type QePortionGroup,
   type QePortionTarget,
   type QeTargetsScope,
+  type QeTargetsText,
   type QeVariant,
   type QuickEditState,
 } from '@eva/nutrition-v2'
@@ -158,7 +159,11 @@ import { AppBackground } from '../../AppBackground'
 import { EditableSlotCard } from './EditableSlotCard'
 import { EditorDayRibbon } from './EditorRibbon'
 import { EditorMetaCard } from './EditorMetaCard'
-import { TargetsEditorCard } from './TargetsEditorCard'
+import {
+  TargetsEditorCard,
+  planSwitchOff,
+  type QeSwitchOffApplied,
+} from './TargetsEditorCard'
 import { FoodSearchSheet, type FoodSearchMode } from './FoodSearchSheet'
 import { PublishBar, UndoSnackbar, type PublishBarDayTotals } from './PublishBar'
 import { PublishBlockedSheet, PublishConfirmSheet, StaleBaseSheet } from './QuickEditSheets'
@@ -203,6 +208,13 @@ const KEYBOARD_GAP = 12
 
 /** Respiro con el borde del lienzo al traer a la vista la fila bumpeada (§7.4). */
 const REVEAL_GAP = 12
+
+/**
+ * Las cuatro metas que edita la card, para restaurar la foto del «Deshacer» campo a campo (W4).
+ * `passthroughTargets` (fibra/sodio/agua) queda FUERA a propósito: la UI no lo edita y el gesto
+ * del switch nunca lo movió, así que tampoco tiene nada que devolver.
+ */
+const TARGET_FIELD_KEYS: ReadonlyArray<keyof QeTargetsText> = ['calories', 'proteinG', 'carbsG', 'fatsG']
 
 interface SearchTarget {
   mode: FoodSearchMode
@@ -498,9 +510,9 @@ export function QuickEditMode({
   // botón; un error de validación de metas la fuerza abierta aunque el usuario intente cerrarla
   // (espejo del patrón `forcedOpen`/`metasOpen` de `EditorRibbon.tsx` web).
   const [metasRequested, setMetasRequested] = useState(false)
-  // W4.6: alcance vivo del switch «Solo el {día}», con la clave del día al que pertenece. Solo
-  // lo usa el TÍTULO de la hoja; el alcance de cada escritura lo sigue decidiendo la card.
-  const [targetsScope, setTargetsScope] = useState<{ key: string; scope: QeTargetsScope } | null>(null)
+  // W4 remate (decisión del jefe D1): el título de la hoja es FIJO, así que el host NO espeja el
+  // alcance del switch. Ese estado existía solo para el título; el alcance de cada escritura lo
+  // decide la card (que es donde vive el switch) y el evento sale de ahí mismo.
   const [publishing, setPublishing] = useState(false)
   const [publishError, setPublishError] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -1361,35 +1373,65 @@ export function QuickEditMode({
    * El coach movio el switch «Solo el {dia}». Ley 21.719: viaja el ALCANCE elegido, jamas la
    * cifra de la meta ni el nombre del dia concreto.
    */
-  const handleTargetsScope = useCallback(
-    (scope: QeTargetsScope) => {
-      captureNutritionTargetsScope({ scope, from: 'switch' })
-      // El titulo de la hoja tiene que seguir al switch (W4.6), y el switch vive DENTRO de la
-      // card: el host se entera por aca. Se guarda junto a la clave del dia para que cambiar de
-      // dia vuelva al default — el mismo motivo por el que la card se remonta con `key`.
-      if (activeVariant) setTargetsScope({ key: activeVariant.key, scope })
-    },
-    [activeVariant],
-  )
+  const handleTargetsScope = useCallback((scope: QeTargetsScope) => {
+    captureNutritionTargetsScope({ scope, from: 'switch' })
+  }, [])
 
   /**
-   * W4.6 — el titulo de la hoja de metas dice DONDE se guarda lo que el coach escribe. Con el
-   * switch apagado (default de todo dia que hereda, o sea el caso Pame) la hoja escribe en el
-   * base y en todos los dias que heredaban: decir «Metas del dia» ahi es justo la mentira que
-   * este tren viene a reparar. En un plan de un solo dia no hay «todos los dias» que nombrar,
-   * asi que manda el titulo de siempre.
+   * El coach APAGÓ «Solo el {día}» (decisión del jefe D2). La card decide QUÉ se mueve
+   * (`planSwitchOff`, la misma tabla que la web) y el host —único que ve TODOS los días— decide
+   * A QUIÉNES y guarda la foto del «Deshacer».
+   *
+   * Los dos motivos por los que esto NO puede resolverse en la card con `scope: 'all'`:
+   *  1. El reducer recalcula «quiénes heredaban» en cada dispatch, contra el base de ESE momento.
+   *     Con los cuatro campos por separado, la 2.ª escritura alcanza al día que la 1.ª acaba de
+   *     dejar igual al base y le pisa su meta propia (SPEC §7.5 manda dejarlo intacto). Acá el
+   *     conjunto se resuelve UNA vez, con el estado previo, y recién después se escribe.
+   *  2. El «Deshacer» por ese mismo camino BORRABA: mandar '' con `scope: 'all'` arrastraba a los
+   *     días que, después de propagar, habían quedado casualmente iguales al base. Se deshace con
+   *     la foto exacta de cada día y `scope: 'day'`, igual que la web.
    */
-  const targetsScopeNow: QeTargetsScope =
-    targetsScope != null && activeVariant != null && targetsScope.key === activeVariant.key
-      ? targetsScope.scope
-      : activeVariant != null &&
-          !activeVariant.isDefault &&
-          baseVariant != null &&
-          !qeTargetsEqual(activeVariant, baseVariant)
-        ? 'day'
-        : 'all'
-  const metasTitle =
-    showVariantHeader && targetsScopeNow === 'all' ? EDITOR_COPY.metasPopoverAll : EDITOR_COPY.metasPopover
+  const handleTargetsSwitchOff = useCallback((): QeSwitchOffApplied | null => {
+    if (!activeVariant || !baseVariant) return null
+    // Se desarma en dos constantes: así `mode` queda acotado a los dos modos que ESCRIBEN
+    // después del corte de abajo, sin depender de que TS conserve el estrechamiento de una
+    // propiedad a través del cuerpo entero.
+    const { mode, writes } = planSwitchOff(baseVariant, activeVariant)
+    if (mode === 'noop') return null
+    // La foto va de TODOS los días y de los cuatro campos: es lo único que devuelve el estado
+    // exacto sin volver a razonar quién heredaba de quién.
+    const snapshot = state.variants.map((variant) => ({ key: variant.key, targets: { ...variant.targets } }))
+    // `backToBase` toca solo el día activo. `appliedToAll` toca el base y los días que HOY
+    // heredan de él (mismo criterio `qeTargetsEqual` que el `scope: 'all'` del reducer), nunca al
+    // día con meta propia distinta.
+    const keys =
+      mode === 'backToBase'
+        ? [activeVariant.key]
+        : [
+            ...new Set<string>([
+              activeVariant.key,
+              baseVariant.key,
+              ...state.variants
+                .filter((variant) => qeTargetsEqual(variant, baseVariant))
+                .map((variant) => variant.key),
+            ]),
+          ]
+    for (const variantKey of keys) {
+      for (const write of writes) {
+        dispatch({ type: 'SET_TARGET', variantKey, field: write.field, value: write.value, scope: 'day' })
+      }
+    }
+    return {
+      mode,
+      undo: () => {
+        for (const day of snapshot) {
+          for (const field of TARGET_FIELD_KEYS) {
+            dispatch({ type: 'SET_TARGET', variantKey: day.key, field, value: day.targets[field], scope: 'day' })
+          }
+        }
+      },
+    }
+  }, [activeVariant, baseVariant, state.variants])
 
   /**
    * Traer al viewport la fila que acaba de recibir un bump (SPEC §7.4). MISMO gesto que
@@ -2740,8 +2782,8 @@ export function QuickEditMode({
         onClose={() => setMetasRequested(false)}
         nativeModal
         dynamicSizing
-        title={metasTitle}
-        accessibilityLabel={metasTitle}
+        title={EDITOR_COPY.metasPopover}
+        accessibilityLabel={EDITOR_COPY.metasPopover}
       >
         {activeVariant ? (
           <TargetsEditorCard
@@ -2761,6 +2803,7 @@ export function QuickEditMode({
               initialOn: baseVariant != null && !qeTargetsEqual(activeVariant, baseVariant),
               baseTargets: baseVariant?.targets ?? null,
               onScopeChange: handleTargetsScope,
+              onSwitchOff: handleTargetsSwitchOff,
             }}
             onTargetChange={(field, value, scope) =>
               dispatch({ type: 'SET_TARGET', variantKey: activeVariant.key, field, value, scope })
@@ -3535,7 +3578,7 @@ function DayAnchorRow({
         const attentionLabel = hasDayError
           ? QUICK_EDIT_COPY.dayNeedsAttention
           : missingTarget
-            ? EDITOR_COPY.targets.noTarget
+            ? EDITOR_COPY.targets.dayNoTarget
             : null
         return (
           <Pressable

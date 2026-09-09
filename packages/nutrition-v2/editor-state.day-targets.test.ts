@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { EDITOR_TARGETS_COPY } from './editor-copy-targets'
 import {
+  autoDayVariantLabel,
   joinDayLabels,
   qeDaysMissingTargets,
   qeTargetsEqual,
@@ -9,6 +11,7 @@ import {
   type QeVariant,
   type QuickEditState,
 } from './editor-state'
+import { NUTRITION_WEEK_ORDER } from './day-variants'
 
 // Metas por dia (tren «Porciones a la chilena», W4 — caso Pame Cid). Escribir 2.040 kcal parada
 // en Martes dejaba al resto de la semana sin objetivo, porque el snapshot copia la variante
@@ -171,6 +174,35 @@ describe('qeDaysMissingTargets', () => {
     ])
   })
 
+  it('los 7 dias propios con meta ⇒ el base no sirve a nadie y NO figura sin meta (D4)', () => {
+    // Antes contaba variantes: el base vacio pintaba punto ambar aunque ningun dia lo use.
+    const week = NUTRITION_WEEK_ORDER.map((dow) =>
+      variant(`d${dow}`, autoDayVariantLabel(dow), dow, false, { calories: '2040' }),
+    )
+    const state = stateOf([BASE_EMPTY, ...week])
+    expect(qeDaysMissingTargets(state)).toEqual([])
+    expect(qeTargetsGapBar(state)).toBeNull()
+  })
+
+  it('base vacio + Martes propio: el punto ambar y el aviso salen del MISMO mapa (D4)', () => {
+    const tuesday = variant('tue', 'Martes', 2, false, { calories: '2040' })
+    const state = stateOf([BASE_EMPTY, tuesday])
+    // El base es la unica variante sin meta, y sirve a los 6 dias que el aviso nombra.
+    expect(qeDaysMissingTargets(state)).toEqual([{ key: 'default', label: 'El día base', isDefault: true }])
+    expect(qeTargetsGapBar(state)).toEqual({
+      message: 'Solo Martes tiene meta. Lunes, miércoles, jueves, viernes, sábado y domingo quedan sin objetivo.',
+      dayKey: 'tue',
+    })
+  })
+
+  it('una variante no-default con dayOfWeek null no sirve a ningun dia y no cuenta (D4)', () => {
+    const base = variant('default', 'Todos los días', null, true, { calories: '2000' })
+    const huerfana = variant('vieja', 'Variante suelta', null, false)
+    const state = stateOf([base, huerfana])
+    expect(qeDaysMissingTargets(state)).toEqual([])
+    expect(qeTargetsGapBar(state)).toBeNull()
+  })
+
   it('es [] si ningun dia tiene meta y si todos la tienen', () => {
     expect(qeDaysMissingTargets(stateOf([BASE_EMPTY, MONDAY_EMPTY]))).toEqual([])
     const base = variant('default', 'Todos los días', null, true, { calories: '2000' })
@@ -235,9 +267,38 @@ describe('APPLY_BASE_TARGETS', () => {
     expect(qeTargetsGapBar(after)).toBeNull()
   })
 
+  it('rellena campo a campo: un dia sin kcal pero con proteina propia la conserva (D4)', () => {
+    const tuesday = variant('tue', 'Martes', 2, false, { calories: '2040', proteinG: '144' })
+    // Dia a medio llenar: el coach ya escribio la proteina, pero no la energia.
+    const monday = variant('mon', 'Lunes', 1, false, { proteinG: '120' })
+    const after = quickEditReducer(stateOf([BASE_EMPTY, monday, tuesday]), {
+      type: 'APPLY_BASE_TARGETS',
+      fromVariantKey: 'tue',
+    })
+    expect(after.variants.map((v) => [v.key, v.targets.calories, v.targets.proteinG])).toEqual([
+      ['default', '2040', '144'],
+      ['mon', '2040', '120'],
+      ['tue', '2040', '144'],
+    ])
+  })
+
   it('un origen inexistente o sin meta es un no-op total', () => {
     const before = stateOf([BASE_EMPTY, TUESDAY_EMPTY])
     expect(quickEditReducer(before, { type: 'APPLY_BASE_TARGETS', fromVariantKey: 'tue' })).toBe(before)
     expect(quickEditReducer(before, { type: 'APPLY_BASE_TARGETS', fromVariantKey: 'nope' })).toBe(before)
+  })
+})
+
+describe('EDITOR_TARGETS_COPY.targets (copys del apagado del switch, D2/D3)', () => {
+  it('los textos nuevos son los aprobados, en tuteo y sin cifras', () => {
+    // Base CON metas: el dia vuelve a la de todos los dias. El dia ABRE la oracion, asi que el
+    // copy lo capitaliza venga como venga («martes» en RN, «Martes» en la web).
+    expect(EDITOR_TARGETS_COPY.targets.backToBase('martes')).toBe('Martes vuelve a la meta de todos los días')
+    expect(EDITOR_TARGETS_COPY.targets.backToBase('Martes')).toBe('Martes vuelve a la meta de todos los días')
+    expect(EDITOR_TARGETS_COPY.targets.backToBase('miércoles')).toBe('Miércoles vuelve a la meta de todos los días')
+    // Base VACIO (el plan de Pame): la meta del dia se propaga a la semana.
+    expect(EDITOR_TARGETS_COPY.targets.appliedToAll).toBe('Ahora vale para toda la semana')
+    expect(EDITOR_TARGETS_COPY.targets.undo).toBe('Deshacer')
+    expect(EDITOR_TARGETS_COPY.targets.dayNoTarget).toBe('sin meta')
   })
 })

@@ -153,35 +153,21 @@ export const EDITOR_COPY = {
    * T3.v Cabina (V3.3): título del botón/hoja «Metas ▾» del header — hospeda el MISMO
    * `TargetsEditorCard` que antes vivía en el lienzo (espejo del `QE_COPY.metasPopover` web).
    */
+  /**
+   * DECISIÓN DEL JEFE D1 (W4, remate): el título de la hoja es FIJO «Metas del día» en RN y en
+   * web (mockup M4 aprobado + SPEC §7.5). El criterio de TASKS §W4.6 («deja de decir “Metas del
+   * día” cuando escribe en todos») queda SUPERADO: quien dice el alcance es la AYUDA del switch
+   * (`targets.onlyThisDayOff` / `onlyThisDayOn`), que además lo dice completo. Por eso ya no
+   * existe `metasPopoverAll` — un título que cambiaba solo en el teléfono era paridad rota.
+   */
   metasPopover: 'Metas del día',
   /**
-   * W4.6 — título de la MISMA hoja cuando el switch «Solo el {día}» está apagado: lo que se
-   * escribe ahí va al base y a todos los días que heredaban, así que «Metas del día» sería la
-   * mentira que este tren repara (criterio literal de TASKS §W4.6: «el título del sheet deja de
-   * decir “Metas del día” cuando escribe en todos»).
-   *
-   * PENDIENTE DE PARIDAD (revisión adversarial W4): hoy es RN-only —SPEC §16.1 no lo tabula y el
-   * mockup M4 dibuja el título fijo—, y el Popover web sigue en `QE_COPY.metasPopover`. La llave
-   * tiene que SUBIR a `EDITOR_TARGETS_COPY.targets` (mismo texto) y la web consumirla en el
-   * mismo commit; si el owner prefiere el título fijo del mockup, se borra en las DOS
-   * superficies. Lo que no puede quedar es una hoja que cambia de título solo en el teléfono.
+   * W4 «Metas por día» — copys del switch «Solo el {día}», los dos toasts de apagarlo y la
+   * coletilla «sin meta»: SE REEXPORTAN TAL CUAL del paquete (decisión del jefe D3). RN no
+   * agrega ni una llave propia acá; si falta un texto, se agrega en `editor-copy-targets.ts` y
+   * lo leen las dos superficies. (`noTarget` local se borró: hoy es `targets.dayNoTarget`.)
    */
-  metasPopoverAll: 'Metas de todos los días',
-  /**
-   * W4 «Metas por día» — copys del switch «Solo el {día}», re-exportados del paquete para que
-   * RN y web digan EXACTAMENTE lo mismo. Se agrega una sola llave propia de RN:
-   *
-   * - `noTarget`: la mini-cinta imprime «1.240 · sin meta» cuando el día activo no tiene
-   *   objetivo (W4.5). No está en la tabla de SPEC §16.1 —el mockup M4 no la dibuja— así que
-   *   nació acá. PENDIENTE (revisión adversarial W4): la cinta web YA lo imprime con el mismo
-   *   texto bajo otra llave (`QE_COPY.dayNoTarget`), así que corresponde una sola llave en
-   *   `EDITOR_TARGETS_COPY.targets` y estas dos pasan a leerla — dos llaves con el mismo texto
-   *   es exactamente cómo se separan los copys de RN y web sin que nadie lo note.
-   */
-  targets: {
-    ...EDITOR_TARGETS_COPY.targets,
-    noTarget: 'sin meta',
-  },
+  targets: EDITOR_TARGETS_COPY.targets,
   /** W4 — aviso ámbar de metas parciales de la `PublishBar` y su botón «Publicar igual». */
   publish: EDITOR_TARGETS_COPY.publish,
   /** Modo creacion: no hay plan previo que "editar" — se esta armando uno. */

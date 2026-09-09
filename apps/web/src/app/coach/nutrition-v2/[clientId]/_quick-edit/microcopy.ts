@@ -275,11 +275,11 @@ export const QE_COPY = {
    * W4.5 — sufijo de la lectura de kcal de la cinta cuando el dia activo NO tiene objetivo:
    * «0 · sin meta» en vez de un «0» pelado que se lee como «meta cumplida en cero».
    *
-   * Vive aca y no en `EDITOR_TARGETS_COPY` porque SPEC §16.1 no lo tabula (§7.6 solo fija el
-   * formato «{kcal} · sin meta»); si RN llega a imprimirlo, se sube al paquete y las dos lo
-   * importan, igual que el resto de esta wave.
+   * REEXPORTA el copy del paquete (decision del jefe D3): vivia suelto aca y con otro nombre
+   * (`noTarget`) en RN, o sea dos literales que nadie garantizaba iguales. La llave se queda con
+   * el nombre `dayNoTarget` para no tocar a `EditorRibbon`, pero el texto ya no se escribe aca.
    */
-  dayNoTarget: 'sin meta',
+  dayNoTarget: EDITOR_TARGETS_COPY.targets.dayNoTarget,
   /** Rótulo de la columna de días del editor ≥1024 (V2.3). */
   railTitle: 'Días del plan',
   railApplyBase: 'sin porciones · Aplicar del base',

@@ -37,7 +37,7 @@ export function EditorDayRibbon({ dayTotals }: { dayTotals: PublishBarDayTotals 
     dayTotals.label,
     target != null
       ? `${calories} de ${Math.round(target)} kcal`
-      : `${calories} kcal, ${EDITOR_COPY.targets.noTarget}`,
+      : `${calories} kcal, ${EDITOR_COPY.targets.dayNoTarget}`,
     ...macroPcts
       .filter((row) => row.pct != null)
       .map((row) => `${NUTRITION_MACROS[row.key].label} ${row.pct}% de la meta`),
@@ -57,7 +57,7 @@ export function EditorDayRibbon({ dayTotals }: { dayTotals: PublishBarDayTotals 
           {/* W4.5: sin meta la cinta lo DICE («1.240 · sin meta») en vez de imprimir un « kcal»
               pelado que se lee igual que un día con objetivo cumplido. */}
           <Text className="text-muted">
-            {target != null ? ` / ${Math.round(target)} kcal` : ` · ${EDITOR_COPY.targets.noTarget}`}
+            {target != null ? ` / ${Math.round(target)} kcal` : ` · ${EDITOR_COPY.targets.dayNoTarget}`}
           </Text>
         </Text>
         <View className="flex-row items-center gap-2.5">

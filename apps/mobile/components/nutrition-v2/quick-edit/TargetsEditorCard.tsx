@@ -22,6 +22,80 @@ const TARGET_ROWS: Array<{ field: keyof QeTargetsText; label: string }> = [
 ]
 
 /**
+ * Una escritura de meta: el campo y el texto que le va. SIN alcance a propósito — a QUÉ días se
+ * escribe lo resuelve el host una sola vez para los cuatro campos (ver `QeSwitchOffApplied`).
+ */
+export interface QeTargetWrite {
+  field: keyof QeTargetsText
+  value: string
+}
+
+/** Los dos modos que ESCRIBEN al apagar el switch; `noop` es «no había nada que mover». */
+export type QeSwitchOffMode = 'backToBase' | 'appliedToAll'
+
+/**
+ * Qué pasa al APAGAR el switch «Solo el {día}» (decisión del jefe D2) — MISMOS tres modos y
+ * MISMA tabla que la web (`apps/web/.../_quick-edit/TargetsEditorCard.tsx`), que es la forma de
+ * cumplir el «idéntico en RN y web» sin un módulo compartido (solo comparten el paquete).
+ * Apagar el switch NUNCA borra una meta: eso era el bug del checkpoint, que copiaba encima del
+ * día los strings vacíos del base y el plan de Pame perdía sus 2.040 kcal de un toque.
+ *
+ *  - `backToBase` — el base SÍ tiene meta (SPEC §7.5): el día vuelve a la meta de todos los días,
+ *    o sea se le copian las cuatro cifras del base encima, y solo a él.
+ *  - `appliedToAll` — el base está VACÍO (el plan de Pame: base vacío, martes 2.040): en vez de
+ *    dejar al día sin objetivo, su meta se PROPAGA al base y a los días que heredaban.
+ *  - `noop` — el día ya muestra la meta del base, o el plan entero está sin metas: el switch se
+ *    apaga y ya, sin un toast que anuncie un cambio que no ocurrió.
+ */
+export interface QeSwitchOffPlan {
+  mode: QeSwitchOffMode | 'noop'
+  writes: readonly QeTargetWrite[]
+}
+
+/** Lo que devuelve el host DESPUÉS de aplicar el plan: qué pasó (para el toast) y cómo se deshace. */
+export interface QeSwitchOffApplied {
+  mode: QeSwitchOffMode
+  /** Devuelve CADA día a la foto previa. La arma el host, que es el único que ve todos los días. */
+  undo: () => void
+}
+
+/**
+ * Plan puro de apagar el switch: el criterio, sin estado ni React (un test lo puede fijar sin
+ * montar nada). Devuelve solo QUÉ se escribe; el conjunto de días es cosa del host.
+ *
+ * Por qué el plan ya no lleva `scope: 'all'`, que es como lo hacía el checkpoint: el reducer
+ * recalcula «quiénes heredaban» en CADA dispatch, contra el base de ESE momento. Con los cuatro
+ * campos por separado, la 2.ª escritura alcanza al día que la 1.ª acaba de dejar igual al base y
+ * le pisa su meta propia — justo lo que SPEC §7.5 manda no tocar.
+ */
+export function planSwitchOff(base: QeVariant | null, day: QeVariant): QeSwitchOffPlan {
+  if (base == null) return { mode: 'noop', writes: [] }
+  // La llave es SIEMPRE kcal, igual que `hasTargetCalories` del reducer y que la web: sin
+  // energía no hay objetivo que mostrarle a nadie, por más proteína que tenga cargada el día.
+  if (base.targets.calories.trim() !== '') {
+    // La igualdad la decide el PAQUETE, no un `!==` crudo: `qeTargetsEqual` normaliza (' 2040 ' y
+    // '2040' son la MISMA meta), así que un día que ya muestra la del base no dispara ni
+    // escrituras ni un «Deshacer» que no cambia nada visible.
+    if (qeTargetsEqual(day, base)) return { mode: 'noop', writes: [] }
+    return {
+      mode: 'backToBase',
+      writes: TARGET_ROWS.map(({ field }) => ({ field, value: base.targets[field] })),
+    }
+  }
+  if (day.targets.calories.trim() === '') return { mode: 'noop', writes: [] }
+  // Los campos VACÍOS del día quedan fuera, igual que en web: viajan al base y a los días que
+  // heredaban, y un base que tenía la proteína cargada la perdería (D2: nunca se borra). Como
+  // arriba ya cortamos con la kcal vacía, siempre queda al menos una escritura.
+  return {
+    mode: 'appliedToAll',
+    writes: TARGET_ROWS.filter(({ field }) => day.targets[field].trim() !== '').map(({ field }) => ({
+      field,
+      value: day.targets[field],
+    })),
+  }
+}
+
+/**
  * Switch «Solo el {día}» (W4.3, mockup M4). Lo pide el HOST: la card no sabe qué día está
  * activo ni cuántos días tiene el plan, así que no puede decidir sola si el switch corresponde.
  *
@@ -38,13 +112,23 @@ export interface TargetsOnlyThisDayProps {
   /** Estado inicial del switch, derivado del estado con `qeTargetsEqual` (ver arriba). */
   initialOn: boolean
   /**
-   * Metas del día BASE. Son dos cosas a la vez: la kcal de la ayuda con el switch encendido y
-   * los valores que se copian sobre el día al APAGARLO. `null` = el plan no tiene día base.
+   * Metas del día BASE, para la kcal de la ayuda con el switch encendido. `null` = el plan no
+   * tiene día base. Lo que pasa al APAGAR el switch ya no se decide con esto: lo resuelve
+   * `onSwitchOff` en el host, que además ve al resto de los días.
    */
   baseTargets: QeTargetsText | null
   /**
-   * El coach cambió el alcance. La card no habla con PostHog (es presentacional): el evento
-   * `nutrition_targets_scope` lo emite el host, que ya tiene el resto del contexto.
+   * El coach APAGÓ el switch estando encendido: el host mueve las metas AHORA (decisión del jefe
+   * D2 — si no, el día se quedaría con su meta vieja hasta el próximo tecleo y el switch estaría
+   * mintiendo) y devuelve qué pasó, para el toast, más su «Deshacer». `null` = no había nada que
+   * mover y no se anuncia nada.
+   */
+  onSwitchOff?: () => QeSwitchOffApplied | null
+  /**
+   * El coach cambió el alcance (mover el switch, o el «Deshacer» que lo devuelve a su lugar). La
+   * card no habla con PostHog —es presentacional—: el host emite `nutrition_targets_scope` con
+   * `from: 'switch'`. Ya NO alimenta ningún título: el de la hoja es fijo (decisión del jefe D1)
+   * y quien cuenta el alcance en pantalla es la ayuda de abajo del switch.
    */
   onScopeChange?: (scope: QeTargetsScope) => void
 }
@@ -108,35 +192,33 @@ export function TargetsEditorCard({
     setOnlyThisDayOn(next)
     onlyThisDay.onScopeChange?.(next ? 'day' : 'all')
     if (next) return
-    // Apagarlo estando encendido no es solo cambiar el alcance de la PRÓXIMA escritura: el día
-    // vuelve a las metas de todos los días, así que se le copian las del base ahora mismo. Va
-    // con `scope: 'day'` a propósito — escribe SOLO este día, no toca al resto de la semana.
-    const base = onlyThisDay.baseTargets
-    if (!base) return
-    const previous = { ...variant.targets }
-    // La comparación la hace el PAQUETE, no un `!==` crudo: `qeTargetsEqual` normaliza (' 2040 '
-    // y '2040' son la MISMA meta), así que un día que ya está igual al base no dispara ni el
-    // dispatch ni un toast «Deshacer» que no cambia nada visible. Duplicar acá esa regla de
-    // normalización sería una segunda verdad sobre cuándo dos metas son iguales.
-    if (qeTargetsEqual({ ...variant, targets: base }, variant)) return
-    const changed = TARGET_ROWS.filter(({ field }) => base[field] !== previous[field])
-    if (changed.length === 0) return
-    for (const { field } of changed) onTargetChange(field, base[field], 'day')
-    // MISMO texto que la web imprime en este gesto (`EDITOR_COPY.targets.onlyThisDayOff`): el
-    // copy del switch sale del paquete y ninguna superficie inventa el suyo (no negociable 8).
-    toast.info(EDITOR_COPY.targets.onlyThisDayOff, {
-      action: {
-        label: QUICK_EDIT_COPY.undo,
-        onPress: () => {
-          setOnlyThisDayOn(true)
-          // El host TAMBIÉN tiene que volver a `'day'`: el título de la hoja sigue al alcance
-          // (W4.6) y sin este aviso quedaba un switch ENCENDIDO bajo un título que anuncia
-          // «todos los días» mientras se escribe con `scope: 'day'` — la mentira que W4 repara.
-          onlyThisDay.onScopeChange?.('day')
-          for (const { field } of changed) onTargetChange(field, previous[field], 'day')
+    // Apagarlo estando encendido no es solo cambiar el alcance de la PRÓXIMA escritura: hay que
+    // resolver la meta que el día ya tiene. Decisión del jefe D2: NUNCA se borra — o el día
+    // vuelve a la del base, o la suya pasa a valer para toda la semana. QUÉ se mueve, A QUIÉNES y
+    // cómo se deshace lo resuelve el host (`onSwitchOff`), que es el único que ve todos los días;
+    // acá solo se cuenta lo que pasó.
+    const applied = onlyThisDay.onSwitchOff?.() ?? null
+    if (!applied) return
+    toast.info(
+      applied.mode === 'backToBase'
+        ? EDITOR_COPY.targets.backToBase(onlyThisDay.dayLabel)
+        : EDITOR_COPY.targets.appliedToAll,
+      {
+        // Los 4 s de siempre no alcanzan para leer el aviso y decidir deshacer: mismos 6 s que
+        // el toast gemelo de la web.
+        duration: 6000,
+        action: {
+          label: EDITOR_COPY.targets.undo,
+          onPress: () => {
+            applied.undo()
+            setOnlyThisDayOn(true)
+            // El evento sigue la POSICIÓN del switch (D5): si el deshacer no reportara, el
+            // embudo mostraría un 'all' que el coach canceló y ningún 'day' de vuelta.
+            onlyThisDay.onScopeChange?.('day')
+          },
         },
       },
-    })
+    )
   }
 
   return (

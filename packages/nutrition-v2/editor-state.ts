@@ -1926,8 +1926,10 @@ function writeTargetField(
 
 /**
  * Copia las metas de `fromVariantKey` al dia base y a los dias que quedaron SIN meta («Ir a
- * Base»). Solo RELLENA: un dia con meta propia no se pisa, y `passthroughTargets` no se toca.
- * Idempotente: despues no queda ningun dia sin meta, asi que un segundo dispatch devuelve el
+ * Base»). Solo RELLENA, y ahora CAMPO A CAMPO (decision del jefe D4): un dia sin kcal pero con
+ * la proteina ya escrita conserva SU proteina y recibe solo lo que le falta. Un dia con meta
+ * (kcal) no se toca en absoluto, y `passthroughTargets` (fibra/sodio/agua) nunca entra.
+ * Idempotente: despues no queda ningun dia sin kcal, asi que un segundo dispatch devuelve el
  * MISMO estado (misma referencia).
  */
 function applyBaseTargets(state: QuickEditState, fromVariantKey: string): QuickEditState {
@@ -1936,8 +1938,18 @@ function applyBaseTargets(state: QuickEditState, fromVariantKey: string): QuickE
   let touched = false
   const variants = state.variants.map((variant) => {
     if (variant.key === source.key || hasTargetCalories(variant)) return variant
+    const targets: QeTargetsText = { ...variant.targets }
+    let variantTouched = false
+    for (const field of QE_TARGET_FIELDS) {
+      // Ni pisar lo cargado ni escribir un vacio arriba de otro vacio (eso no es un cambio).
+      if (normalizedTargetText(targets[field]) !== '') continue
+      if (normalizedTargetText(source.targets[field]) === '') continue
+      targets[field] = source.targets[field]
+      variantTouched = true
+    }
+    if (!variantTouched) return variant
     touched = true
-    return { ...variant, targets: { ...source.targets } }
+    return { ...variant, targets }
   })
   return touched ? { ...state, variants } : state
 }
@@ -1951,15 +1963,41 @@ export interface QeTargetsGap {
 }
 
 /**
- * Dias SIN meta —el base incluido— cuando otra variante si tiene. Devuelve `[]` si ninguna
- * tiene meta (plan sin objetivos: valido, no hay nada que avisar) y si todas la tienen. En el
- * caso Pame (2.040 kcal solo en Martes) devuelve el base y los seis dias restantes.
+ * Que variante SIRVE cada dia de la semana, igual que lo resuelve el snapshot: la variante
+ * propia de ese dia si existe, si no el base. Es el UNICO mapa del que salen el punto ambar
+ * (`qeDaysMissingTargets`) y el aviso de la barra (`qeTargetsGapBar`) — decision del jefe D4:
+ * antes uno contaba variantes y el otro dias, asi que un plan con los 7 dias propios pintaba
+ * el punto ambar en un base que no le sirve a NADIE mientras la barra, con razon, callaba.
+ *
+ * Consecuencias, las dos deliberadas: el base solo cuenta si algun dia lo usa (sin variante
+ * propia), y una variante no-default con `dayOfWeek === null` —dato viejo o a medio crear— no
+ * sirve a ningun dia y no se cuenta en ninguno de los dos. Sin base, los dias sin variante
+ * propia simplemente no estan en el mapa.
+ */
+function servedVariantByDow(variants: readonly QeVariant[]): Map<number, QeVariant> {
+  const base = variants.find((variant) => variant.isDefault) ?? null
+  const byDow = new Map<number, QeVariant>()
+  for (const dayOfWeek of NUTRITION_WEEK_ORDER) {
+    const own = variants.find((variant) => !variant.isDefault && variant.dayOfWeek === dayOfWeek)
+    const serving = own ?? base
+    if (serving) byDow.set(dayOfWeek, serving)
+  }
+  return byDow
+}
+
+/**
+ * Dias SIN meta —el base incluido si le sirve a alguno— cuando otro dia si tiene. Devuelve `[]`
+ * si ningun dia tiene meta (plan sin objetivos: valido, no hay nada que avisar) y si todos la
+ * tienen. En el caso Pame (2.040 kcal solo en Martes) devuelve el base y los seis dias
+ * restantes; con los 7 dias propios cubiertos NO devuelve el base, que ahi no sirve a nadie.
  */
 export function qeDaysMissingTargets(state: QuickEditState): QeTargetsGap[] {
-  const variants = sortNutritionDayVariantsForDisplay(state.variants)
-  const withTargets = variants.filter(hasTargetCalories).length
-  if (withTargets === 0 || withTargets === variants.length) return []
-  return variants
+  const served = new Set<string>()
+  for (const variant of servedVariantByDow(state.variants).values()) served.add(variant.key)
+  const servedVariants = state.variants.filter((variant) => served.has(variant.key))
+  const withTargets = servedVariants.filter(hasTargetCalories).length
+  if (withTargets === 0 || withTargets === servedVariants.length) return []
+  return sortNutritionDayVariantsForDisplay(servedVariants)
     .filter((variant) => !hasTargetCalories(variant))
     .map((variant) => ({ key: variant.key, label: qeDayErrorLabel(variant), isDefault: variant.isDefault }))
 }
@@ -1984,14 +2022,15 @@ function sentenceDayLabels(labels: readonly string[]): string[] {
  * lista de variantes donde «Todos los días» convive con «Lunes».
  */
 export function qeTargetsGapBar(state: QuickEditState): QeTargetsGapBar | null {
-  const base = defaultQeVariant(state)
-  if (!base) return null
+  const byDow = servedVariantByDow(state.variants)
   const withMeta: string[] = []
   const withoutMeta: string[] = []
   let fromKey: string | null = null
   for (const dayOfWeek of NUTRITION_WEEK_ORDER) {
-    const own = state.variants.find((variant) => !variant.isDefault && variant.dayOfWeek === dayOfWeek)
-    const serving = own ?? base
+    const serving = byDow.get(dayOfWeek)
+    // Sin base y sin variante propia ese dia no existe en el plan: no se nombra ni de un lado
+    // ni del otro (mismo mapa que el punto ambar, decision del jefe D4).
+    if (!serving) continue
     const label = autoDayVariantLabel(dayOfWeek)
     if (hasTargetCalories(serving)) {
       withMeta.push(label)

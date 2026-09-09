@@ -211,14 +211,25 @@ export function captureNutritionPortionGroupBumped(props: PortionGroupBumpedProp
  * `from` separa las dos puertas: el `'switch'` de la hoja de metas y el `'go_to_base'` del aviso
  * ámbar de la barra de publicar.
  *
- * LEY 21.719: el payload lo arma el paquete compartido (`targetsScopePayload`) y son DOS llaves,
- * ninguna más. JAMÁS la cifra de la meta ni el nombre del día concreto — las kcal de un plan son
- * dato de salud. Mismo motivo que en `nutrition_portion_group_bumped` para no agregar `platform`
- * a mano: web llama al MISMO constructor y una prop de más sería una prop que solo manda uno.
+ * En RN son TRES puertas y todas reportan lo mismo: mover el switch, el «Deshacer» del toast que
+ * lo devuelve a su lugar (el evento sigue la POSICIÓN del switch: si no, el embudo mostraría un
+ * `'all'` que el coach canceló) y el «Ir a Base» del aviso ámbar.
+ *
+ * LEY 21.719: el payload es EXHAUSTIVO — las TRES llaves de DATA §11 evento 4 (`surface`, `scope`,
+ * `from`) y ninguna más. JAMÁS la cifra de la meta ni el nombre del día concreto: las kcal de un
+ * plan son dato de salud. `scope`/`from` los arma el constructor compartido para que web y RN no
+ * puedan mandar enums distintos bajo el mismo evento; `surface` se agrega acá porque
+ * `targetsScopePayload` todavía no lo toma por parámetro como su hermano
+ * `portionGroupBumpedPayload('rn', …)` — PENDIENTE del paquete cuando entre la web de W4, que es
+ * quien va a pasar `'web'`. Hasta entonces esta es la única forma de cumplir DATA sin editar un
+ * archivo fuera del encargo.
  */
 export function captureNutritionTargetsScope(props: {
     scope: QeTargetsScope
     from: TargetsScopeFrom
 }): void {
-    captureAppEvent(TARGETS_EVENT_SCOPE, targetsScopePayload(props.scope, props.from))
+    captureAppEvent(TARGETS_EVENT_SCOPE, {
+        surface: 'rn',
+        ...targetsScopePayload(props.scope, props.from),
+    })
 }

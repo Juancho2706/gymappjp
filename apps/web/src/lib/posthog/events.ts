@@ -604,12 +604,18 @@ export function useCaptureNutritionPortionGroupBumped() {
  * eso el payload son DOS llaves y ninguna mas — **jamas la cifra de la meta**, que es un dato de
  * salud (§17.9, Ley 21.719). El constructor vive en el paquete y RN importa el mismo: dos
  * superficies, un solo shape (DATA §11).
+ *
+ * `surface` lo pone ESTE hook y no el constructor: `targetsScopePayload` devuelve las dos llaves
+ * de la decision del coach y la plataforma la sabe quien captura (decision del jefe D5, y DATA
+ * §11 evento 4 pide las tres). Si el paquete algun dia recibe la superficie por parametro —como
+ * `portionGroupBumpedPayload('web', …)`—, este spread sigue siendo correcto: la llave del payload
+ * gana sobre la de aca porque va despues.
  */
 export function useCaptureNutritionTargetsScope() {
     const ph = usePostHog()
     return useCallback(
         (scope: QeTargetsScope, from: TargetsScopeFrom) => {
-            ph?.capture(TARGETS_EVENT_SCOPE, targetsScopePayload(scope, from))
+            ph?.capture(TARGETS_EVENT_SCOPE, { surface: 'web', ...targetsScopePayload(scope, from) })
         },
         [ph]
     )

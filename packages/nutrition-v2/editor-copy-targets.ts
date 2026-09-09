@@ -23,6 +23,29 @@ export const EDITOR_TARGETS_COPY = {
      */
     onlyThisDayOn: (dia: string, kcal: string): string =>
       `Encendido: el ${dia} usa esta meta; los demás días siguen con ${kcal} kcal.`,
+    /**
+     * Toast al APAGAR el switch cuando el dia base SI tiene metas (decision del jefe D2-a): el
+     * dia vuelve a la meta de todos los dias (`scope: 'day'` copiando las del base encima). El
+     * dia ABRE la oracion, asi que va con mayuscula inicial; la ponemos aca —y no en el caller—
+     * porque RN tiene a mano el dia en minuscula («martes», el mismo que usa `onlyThisDay`) y
+     * la web el rotulo capitalizado: con una sola llave las dos superficies dicen lo mismo.
+     */
+    backToBase: (dia: string): string =>
+      `${dia.charAt(0).toLocaleUpperCase('es')}${dia.slice(1)} vuelve a la meta de todos los días`,
+    /**
+     * Toast al APAGAR el switch cuando el base esta VACIO (decision del jefe D2-b, el plan de
+     * Pame): en vez de borrar la meta del dia, se propaga con `scope: 'all'` al base y a los
+     * dias que heredaban. Sin cifras: el numero ya esta en pantalla.
+     */
+    appliedToAll: 'Ahora vale para toda la semana',
+    /** Accion de los dos toasts de arriba: devuelve el estado previo tal cual estaba. */
+    undo: 'Deshacer',
+    /**
+     * Coletilla del dia sin meta en la cinta/capsula del dia activo («2.040 kcal · sin meta»
+     * no; «sin meta» solo). Vivia suelta en cada superficie (`QE_COPY.dayNoTarget` en web,
+     * `noTarget` en RN) y con dos textos distintos era cuestion de tiempo: una sola llave.
+     */
+    dayNoTarget: 'sin meta',
   },
   publish: {
     /**
