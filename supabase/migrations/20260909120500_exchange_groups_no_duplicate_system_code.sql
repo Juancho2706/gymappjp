@@ -1,0 +1,42 @@
+-- ============================================================================
+-- EVA Nutricion V2 — «Porciones a la chilena» W0.2: un solo grupo del sistema
+-- por `code` vivo.
+-- SPEC: docs/specs/nutrition-porciones-chilenas/SPEC.md §11 (T-02)
+-- ----------------------------------------------------------------------------
+-- Por que existe. `exchange_groups.code` no tiene UNIQUE (los tres unicos
+-- parciales de 20260611093001:63-68 son por `slug`), pero es la llave SEMANTICA
+-- de facto en cinco caminos de codigo que rompen o mienten si dos grupos del
+-- sistema comparten codigo:
+--   1. plan-persistence.ts:397-404 — resolver la base de un composed_of con
+--      .maybeSingle() ⇒ error duro PGRST116 al PUBLICAR;
+--   2. packages/nutrition-engine/exchange-calc.ts:38-41 findByCode;
+--   3. packages/nutrition-v2/editor-state.ts:589-598 refByCode;
+--   4. apps/web/src/services/onboarding/demo-writers.ts:586-592 groupByCode
+--      (.in('code', ...).eq('is_system', true));
+--   5. los mapas por code de get_nutrition_today_v2 (20260718150000:212-226), cuyo
+--      propio comentario (:206-211) ya advertia el riesgo.
+-- Al sembrar 13 grupos del sistema nuevos, la probabilidad de colision deja de
+-- ser teorica. Este indice la convierte en un 23505 al escribir, no en un plan
+-- que no se puede publicar.
+--
+-- Que hace. Un indice unico PARCIAL sobre los grupos del sistema vivos. No toca
+-- grupos custom (un coach puede seguir teniendo su propio 'FR'), ni grupos
+-- soft-borrados (un set retirado con deleted_at no bloquea el alta de otro).
+--
+-- ADITIVA: sin DDL destructiva. Rollback trivial:
+--   drop index if exists public.exchange_groups_system_code_uq;
+--
+-- Verificación PREVIA obligatoria (debe devolver 0 filas; la corre el jefe en LIVE antes de aplicar):
+-- -- Si esto devuelve filas, el CREATE UNIQUE INDEX falla y ademas hay un bug vivo:
+-- -- plan-persistence.ts:397-404 hace .eq('code', code).eq('is_system', true).maybeSingle()
+-- -- y revienta con PGRST116 «multiple rows» al publicar un plan con grupo compuesto.
+-- select code, count(*) as n, array_agg(id order by created_at) as ids
+-- from public.exchange_groups
+-- where is_system and deleted_at is null
+-- group by code
+-- having count(*) > 1;
+-- ============================================================================
+
+create unique index if not exists exchange_groups_system_code_uq
+  on public.exchange_groups (code)
+  where is_system and deleted_at is null;

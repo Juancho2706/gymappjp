@@ -1,0 +1,1690 @@
+{
+  "version": "2026-09-09",
+  "sources": {
+    "UDD": "Ratner, Aicardi, Allende, Madrid, Riesco — Manual de porciones de intercambio, UDD 2019 (Tabla N.º 5, pp. 25 y 51; listas pp. 52-73)",
+    "INTA": "Jury, Urteaga, Taibo — Porciones de intercambio y composición química de los alimentos, INTA 1999"
+  },
+  "note": "portion_grams = gramos de UNA porción del grupo. Cuando UDD e INTA difieren manda UDD y el desacuerdo queda en `note`. Las macros de cada grupo son las de §5.1 y NO se repiten por fila: la fila hereda las del grupo. Convención (a llenar después del dry-run, no en esta transcripción): una fila puede traer \"food_id\": \"<uuid>\" para fijar el alimento del catálogo cuando el nombre no calza 1:1 (lo llena el jefe después del dry-run), y \"aliases\": [\"…\"] con nombres alternativos exactos.",
+  "groups": {
+    "LD": {
+      "kcal": 70,
+      "protein_g": 7,
+      "carbs_g": 10,
+      "fats_g": 0,
+      "source": "UDD p. 53",
+      "foods": [
+        {
+          "name": "Leche descremada",
+          "grams": 200,
+          "label": "1 taza",
+          "food_id": "1ef78c53-3dc0-41d5-b989-498ae9f7903d",
+          "match_note": "Generico brand null, nombre exacto. 34 kcal / 3 P / 5 C / 0 G por 100 g: 0 % de kcal desde grasa, cae en LD como manda el curado."
+        },
+        {
+          "name": "Leche saborizada descremada sin azúcar",
+          "grams": 200,
+          "label": "1 taza",
+          "match_note": "Sin candidato: el catalogo solo trae leches saborizadas semidescremadas y/o azucaradas (Lonco Leche frutilla 43 kcal, Colun frutilla 46 kcal / 10 g CHO). Ninguna descremada sin azucar.",
+          "needs_owner": true
+        },
+        {
+          "name": "Yogur descremado sin azúcar",
+          "grams": 125,
+          "label": "½ taza o 1 envase chico",
+          "food_id": "b62aa221-7aef-47d8-a08a-1735e0527351",
+          "aliases": [
+            "Yogur descremado"
+          ],
+          "match_note": "Generico brand null equivalente (falta el sufijo «sin azucar»). 50 kcal / 4 P / 8 C / 0 G por 100 g: 0 % kcal desde grasa, LD. Los 8 g CHO son algo altos para un yogur sin azucar."
+        },
+        {
+          "name": "Leche cultivada descremada sin azúcar",
+          "grams": 200,
+          "label": "1 taza",
+          "food_id": "ee7324a6-a6cd-43b2-bdf3-0647ba9e3029",
+          "aliases": [
+            "Leche Cultivada"
+          ],
+          "match_note": "Representante de marca (Colun, marca grande): no hay generico descremado. 30 kcal / 3 P / 4 C / 0 G por 100 g: 0 % grasa y 4 g CHO, o sea sin azucar añadida, LD.",
+          "needs_owner": true
+        },
+        {
+          "name": "Leche en polvo descremada",
+          "grams": 20,
+          "label": "2 cucharadas colmadas",
+          "food_id": "9131ec5f-f71b-4902-bc12-24003732d499",
+          "aliases": [
+            "Leche En Polvo Descremada"
+          ],
+          "match_note": "Representante de marca (Lonco Leche), unico match exacto; no hay generico. 355 kcal / 35 P / 52 C / 1 G por 100 g, plausible para leche descremada en polvo. 3 % kcal grasa, LD.",
+          "needs_owner": true
+        },
+        {
+          "name": "Quesillo light",
+          "grams": 90,
+          "label": "1 rodela de 4 cm",
+          "note": "UDD: el CHO del quesillo light es 2,4 g/porción; el aporte calórico lo cubren proteína y grasa",
+          "food_id": "dab88da3-1e28-4966-aada-9367a9fc496d",
+          "aliases": [
+            "Quesillo Light Colun"
+          ],
+          "match_note": "Fila con brand null (la marca solo aparece en el nombre). 85 kcal / 14 P / 4 C / 1 G por 100 g: 11 % kcal desde grasa, LD, coherente con el curado."
+        },
+        {
+          "name": "Yogur natural descremado",
+          "grams": 125,
+          "label": "½ taza",
+          "source": "INTA p. 25",
+          "food_id": "124cd848-6fdd-4c94-b702-94c53daf709b",
+          "match_note": "Generico brand null, nombre exacto. 56 kcal / 6 P / 8 C / 0 G por 100 g: 0 % kcal desde grasa, LD."
+        },
+        {
+          "name": "Queso cottage 1%",
+          "grams": 100,
+          "label": "5 cucharadas",
+          "source": "derivado, ver §5.4",
+          "food_id": "b48daf14-85b0-4402-af35-4fea84dbd738",
+          "match_note": "Generico brand null, nombre exacto. 72 kcal / 12 P / 3 C / 1 G por 100 g: 13 % kcal desde grasa, LD, igual que el curado."
+        }
+      ]
+    },
+    "LS": {
+      "kcal": 85,
+      "protein_g": 5,
+      "carbs_g": 9,
+      "fats_g": 3,
+      "source": "UDD p. 54",
+      "foods": [
+        {
+          "name": "Leche semidescremada",
+          "grams": 200,
+          "label": "1 taza",
+          "food_id": "0591fd8d-cc74-402a-ade6-52105dc9f41b",
+          "aliases": [
+            "Leche Semidescremada"
+          ],
+          "match_note": "Generico brand null, nombre exacto. 47 kcal / 3 P / 5 C / 2 G por 100 g: 38 % kcal desde grasa, LS, igual que el curado."
+        },
+        {
+          "name": "Yogur natural",
+          "grams": 125,
+          "label": "½ taza",
+          "note": "AUTORIDAD sobre el dato del catálogo (R-13 + §C.7): su grasa real da 47 % de las kcal y la derivación lo mandaría a LE. Al estar curado acá, su food_id se excluye del universo derivado y vive SOLO en LS, como dice UDD p. 54",
+          "food_id": "a1ac9e04-c10c-4efd-9995-8a25dd32fd6d",
+          "aliases": [
+            "Yogurt natural"
+          ],
+          "match_note": "Generico brand null (variante ortografica «Yogurt»). 76 kcal / 5 P / 6 C / 4 G por 100 g: 47 % kcal desde grasa, exactamente el caso R-13 del JSON; manda el curado y se queda en LS."
+        },
+        {
+          "name": "Yogur griego light",
+          "grams": 110,
+          "label": "½ taza",
+          "food_id": "5bcdecef-3819-4cc5-97b3-b414e6980c79",
+          "aliases": [
+            "Yoghurt griego light"
+          ],
+          "match_note": "Representante de marca (Colun): no hay generico «griego light». 68 kcal / 7 P / 10 C / 0 G por 100 g. Con 0 g de grasa caeria en LD por dato; manda el curado (LS).",
+          "needs_owner": true
+        },
+        {
+          "name": "Quesillo",
+          "grams": 60,
+          "label": "1 rodela de 3 cm",
+          "food_id": "c8d75857-3acb-41e4-9134-2265845fd9c6",
+          "match_note": "Unico generico brand null, pero 299 kcal / 18 P / 3 C / 24 G por 100 g es un queso graso, no el quesillo chileno (~140 kcal, 8 g grasa). Alternativa real: «Quesillo (Soprole)» 1debd2cd (144/13/5/8).",
+          "needs_owner": true,
+          "macros_dudosos": true
+        },
+        {
+          "name": "Queso fresco light",
+          "grams": 60,
+          "label": "1 rebanada de 3 cm",
+          "food_id": "1b36683e-2fc6-479a-a68f-b69083161b72",
+          "aliases": [
+            "Queso fresco bajo en calorías"
+          ],
+          "match_note": "Representante de marca (Colun): no hay generico light. 133 kcal / 13 P / 4 C / 7 G por 100 g, cercano al dato UDD (142 kcal/100 g). 47 % kcal grasa lo pondria en LE; manda el curado.",
+          "needs_owner": true
+        },
+        {
+          "name": "Queso cottage",
+          "grams": 80,
+          "label": "4 cucharadas",
+          "food_id": "56aebb19-2b3f-4001-ae29-6592f6ff8863",
+          "match_note": "Generico brand null, nombre exacto. 98 kcal / 11 P / 3 C / 4 G por 100 g: 37 % kcal desde grasa, LS, igual que el curado."
+        },
+        {
+          "name": "Ricota light",
+          "grams": 65,
+          "label": "3 cucharadas",
+          "food_id": "bbf5990a-e535-40b9-befa-80d7a021be7d",
+          "aliases": [
+            "Queso ricotta semidescremado"
+          ],
+          "match_note": "Generico brand null equivalente (semidescremado ~ light). 138 kcal / 11 P / 5 C / 8 G por 100 g vs 131 kcal/100 g del curado. 52 % kcal grasa lo pondria en LE; manda el curado."
+        },
+        {
+          "name": "Yogur batido simple",
+          "grams": 175,
+          "label": "1 unidad",
+          "note": "INTA lo clasifica como lácteo medio en grasa RICO en CHO (167 kcal, 30 g CHO): el coach debe ajustar si cuenta CHO",
+          "source": "INTA p. 26",
+          "food_id": "a0316c36-ea44-4cf8-9dba-0ee97e607ce6",
+          "aliases": [
+            "Yoghurt batido"
+          ],
+          "match_note": "Generico brand null (variante «Yoghurt»). 69 kcal / 3 P / 13 C / 1 G por 100 g: mismo perfil rico en CHO que describe INTA, algo mas bajo que sus 95 kcal/100 g. 13 % kcal grasa."
+        }
+      ]
+    },
+    "LE": {
+      "kcal": 110,
+      "protein_g": 5,
+      "carbs_g": 9,
+      "fats_g": 6,
+      "source": "UDD p. 55",
+      "foods": [
+        {
+          "name": "Leche entera",
+          "grams": 200,
+          "label": "1 taza",
+          "food_id": "0aa9195c-6b75-4758-9720-4b45cb5f0471",
+          "aliases": [
+            "Leche entera líquida"
+          ],
+          "match_note": "Generico brand null (las cuatro filas «Leche entera» del dry-run son de marca, una de ellas leche en polvo). 60 kcal / 3 P / 5 C / 3 G por 100 g: 45 % kcal grasa, LE."
+        },
+        {
+          "name": "Yogur griego",
+          "grams": 110,
+          "label": "½ taza",
+          "food_id": "1a5300d7-7672-4f0a-b3c6-407069e31743",
+          "aliases": [
+            "Yogur griego natural (sin azúcar)"
+          ],
+          "match_note": "Generico brand null. 94 kcal / 9 P / 5 C / 4 G por 100 g, casi identico a los 100 kcal/100 g del curado. 38 % kcal grasa lo pondria en LS; manda el curado (LE)."
+        },
+        {
+          "name": "Leche cultivada",
+          "grams": 200,
+          "label": "1 taza",
+          "food_id": "01a1a96b-2393-4281-a77e-9cd304cfc8fb",
+          "aliases": [
+            "Leche cultivada (Kéfir natural)"
+          ],
+          "match_note": "Generico brand null (los dos «Leche cultivada» del dry-run son de marca). 45 kcal / 4 P / 5 C / 1 G por 100 g: 20 % kcal grasa lo pondria en LS; manda el curado (LE)."
+        },
+        {
+          "name": "Queso fresco",
+          "grams": 60,
+          "label": "1 rebanada de 3 cm",
+          "food_id": "025ca56f-81ef-4a5a-a671-b3fa52b7e3a8",
+          "match_note": "Unico generico brand null, pero 298 kcal / 19 P / 3 C / 23 G por 100 g es muy graso para el queso fresco chileno (dato UDD 183 kcal/100 g). Alternativa real: QUESO FRESCO Colun 0491b870 (175/12/5/12).",
+          "needs_owner": true,
+          "macros_dudosos": true
+        },
+        {
+          "name": "Queso chanco",
+          "grams": 30,
+          "label": "2 láminas",
+          "note": "UDD marca alto en sodio",
+          "food_id": "6dba7e8a-106e-418a-938d-8ecd0a8a071a",
+          "match_note": "Generico brand null, nombre exacto. 332 kcal / 25 P / 1 C / 26 G por 100 g, plausible para chanco. 70 % kcal grasa, LE."
+        },
+        {
+          "name": "Queso mantecoso",
+          "grams": 30,
+          "label": "2 láminas",
+          "note": "alto en sodio",
+          "food_id": "241ff82c-3e61-49a7-bc23-2894b19ec7a5",
+          "match_note": "Generico brand null, nombre exacto; coincide con las once filas de marca (343-377 kcal). 360 kcal / 23 P / 2 C / 29 G por 100 g: 73 % kcal grasa, LE."
+        },
+        {
+          "name": "Queso gouda",
+          "grams": 30,
+          "label": "2 láminas",
+          "note": "alto en sodio",
+          "food_id": "b62a9e4a-bdb4-4513-a100-31786896f726",
+          "aliases": [
+            "Queso laminado Gouda - Lider"
+          ],
+          "match_note": "Fila con brand null (la marca solo aparece en el nombre); las dos «Queso gouda» del dry-run son de marca. 347 kcal / 29 P / 1 C / 25 G por 100 g, plausible para gouda. 65 % kcal grasa, LE."
+        },
+        {
+          "name": "Queso chédar",
+          "grams": 30,
+          "label": "2 láminas",
+          "note": "alto en sodio",
+          "food_id": "5485eeb0-664f-4f61-95bd-4cbdbe6fd7d4",
+          "aliases": [
+            "Cheddar"
+          ],
+          "match_note": "Representante de marca (Adler): no hay generico (el unico brand null es un cheddar vegano). 242 kcal / 11 P / 2 C / 21 G por 100 g queda bajo para cheddar real (~400 kcal, 25 P, 33 G).",
+          "needs_owner": true,
+          "macros_dudosos": true
+        },
+        {
+          "name": "Queso de cabra",
+          "grams": 30,
+          "label": "1 cajita de fósforo",
+          "note": "alto en sodio",
+          "food_id": "fd804314-b6b8-49bf-a831-d706bcf96001",
+          "match_note": "Generico brand null, nombre exacto. 264 kcal / 19 P / 0 C / 21 G por 100 g, plausible para queso de cabra fresco. 72 % kcal grasa, LE."
+        },
+        {
+          "name": "Queso parmesano",
+          "grams": 25,
+          "label": "5 cucharaditas rasas",
+          "note": "alto en sodio",
+          "food_id": "d331dc58-9b67-4e95-b8db-a266084fd6b0",
+          "match_note": "Generico brand null, nombre exacto. 392 kcal / 36 P / 3 C / 25 G por 100 g, plausible para parmesano. 57 % kcal grasa, LE."
+        },
+        {
+          "name": "Queso crema",
+          "grams": 30,
+          "label": "1½ cucharadas",
+          "food_id": "1e5ec469-3518-4516-8c66-50e9c8595b7d",
+          "aliases": [
+            "Queso crema (Philadelphia)"
+          ],
+          "match_note": "Fila con brand null (la marca solo va en el nombre); las siete «Queso crema» del dry-run son de marca. 350 kcal / 6 P / 6 C / 34 G por 100 g vs 367 del curado. 87 % kcal grasa, LE."
+        },
+        {
+          "name": "Ricota",
+          "grams": 65,
+          "label": "3 cucharadas",
+          "food_id": "a0058757-6836-41b7-b8c2-e7cec8ec6631",
+          "aliases": [
+            "Ricotta"
+          ],
+          "match_note": "Generico brand null (variante ortografica «Ricotta»). 157 kcal / 8 P / 7 C / 11 G por 100 g vs 169 kcal/100 g del curado. 63 % kcal grasa, LE."
+        }
+      ]
+    },
+    "CB": {
+      "kcal": 65,
+      "protein_g": 11,
+      "carbs_g": 1,
+      "fats_g": 2,
+      "source": "UDD p. 57",
+      "foods": [
+        {
+          "name": "Filete de vacuno",
+          "grams": 50,
+          "label": "1 trozo de 6×6×1 cm",
+          "food_id": "a205c125-8a99-4752-8939-6b20374629b9",
+          "aliases": [
+            "Filete de Vacuno magro"
+          ],
+          "match_note": "Genérico (brand null) casi exacto; filete de vacuno magro. 142 kcal / 22 P / 0 C / 5 G por 100 g, share 0,32 ≤ 0,40 ⇒ entra en CB."
+        },
+        {
+          "name": "Lomo liso",
+          "grams": 50,
+          "label": "1 trozo de 6×6×1 cm",
+          "food_id": "f8d18629-385a-4f8f-ac9a-eb16e64db324",
+          "aliases": [
+            "Lomo liso (Vacuno)"
+          ],
+          "control_exception": "UDD p. 57 clasifica el lomo liso como carne BAJA en grasa (asume el corte desgrasado); el genérico del catálogo, con grasa, da share 0,54.",
+          "match_note": "Único genérico de lomo liso: 200 kcal / 20 P / 0 C / 12 G por 100 g, share 0,54 (corte con su capa de grasa). Alternativa de marca: Lomo Liso Torobayo 138/22/5, share 0,33.",
+          "needs_owner": true
+        },
+        {
+          "name": "Posta negra",
+          "grams": 50,
+          "label": "1 trozo de 6×6×1 cm",
+          "food_id": "15532a40-74df-4b80-b1cf-b69ada72f9a3",
+          "aliases": [
+            "Posta negra (Vacuno magro)"
+          ],
+          "match_note": "Genérico casi exacto; preferido sobre la Posta Negra Cuisine&co del dry-run. 130 kcal / 22 P / 0 C / 4 G por 100 g, share 0,28 ⇒ CB."
+        },
+        {
+          "name": "Pollo",
+          "grams": 50,
+          "label": "1 trozo de 6×6×1 cm",
+          "food_id": "d25b4562-ebcd-48d2-9382-efc1edc3f0f8",
+          "aliases": [
+            "Pechuga de pollo (cruda)"
+          ],
+          "match_note": "«Pollo» en CB (UDD) es pechuga sin piel; genérico crudo. 120 kcal / 23 P / 0 C / 3 G por 100 g, share 0,23 ⇒ CB."
+        },
+        {
+          "name": "Pavo",
+          "grams": 50,
+          "label": "1 trozo de 6×6×1 cm",
+          "food_id": "7a82662a-23e9-4ae1-b078-083edd0036de",
+          "aliases": [
+            "Pechuga de pavo (cruda)"
+          ],
+          "match_note": "«Pavo» en CB es pechuga sin piel; genérico crudo. 114 kcal / 23 P / 0 C / 2 G por 100 g, share 0,16 ⇒ CB."
+        },
+        {
+          "name": "Pechuga de pavo cocida",
+          "grams": 60,
+          "label": "3 rebanadas",
+          "note": "alto en sodio",
+          "food_id": "09e13fa5-7977-442e-88bb-895beea6ac86",
+          "aliases": [
+            "Pechuga de Pavo Cocida (laminada)"
+          ],
+          "match_note": "Genérico laminado (fiambre), coherente con «3 rebanadas» y con el aviso de sodio. 84 kcal / 17 P / 1 C / 1 G por 100 g, share 0,11 ⇒ CB."
+        },
+        {
+          "name": "Filete de cerdo",
+          "grams": 50,
+          "label": "1 trozo de 6×6×1 cm",
+          "food_id": "b4d8628a-86d4-4740-b564-d4cbcc63442f",
+          "aliases": [
+            "Filete de cerdo (solomillo), crudo"
+          ],
+          "match_note": "Genérico crudo (la fila no dice cocido); preferido sobre el Filete de cerdo Súper Cerdo del dry-run. 120 kcal / 21 P / 0 C / 4 G por 100 g, share 0,30 ⇒ CB."
+        },
+        {
+          "name": "Atún al agua",
+          "grams": 60,
+          "label": "⅓ de taza",
+          "note": "alto en sodio",
+          "food_id": "970b4b01-678b-4301-b597-29857f8836dc",
+          "aliases": [
+            "Atún al agua (en lata)"
+          ],
+          "match_note": "Genérico casi exacto, conserva al agua. 90 kcal / 19 P / 0 C / 1 G por 100 g, share 0,10 ⇒ CB."
+        },
+        {
+          "name": "Merluza",
+          "grams": 80,
+          "label": "1 trozo de 10×6×1 cm",
+          "food_id": "7e22ee3d-f902-4bb9-b7a2-36b95ca78ac8",
+          "aliases": [
+            "Merluza (cruda)"
+          ],
+          "match_note": "Genérico crudo (la fila no dice cocción). 90 kcal / 19 P / 0 C / 1 G por 100 g, share 0,10 ⇒ CB."
+        },
+        {
+          "name": "Reineta",
+          "grams": 80,
+          "label": "1 trozo de 10×6×1 cm",
+          "food_id": "07a79b75-0d8f-4afc-a88c-34fece54ade3",
+          "aliases": [
+            "Reineta (cruda)"
+          ],
+          "match_note": "Existe genérico brand null que el dry-run no listó (solo mostró Acuenta/Jumbo/Lider). 95 kcal / 18 P / 0 C / 2 G por 100 g, share 0,19 ⇒ CB."
+        },
+        {
+          "name": "Congrio",
+          "grams": 80,
+          "label": "1 trozo de 10×6×1 cm",
+          "match_note": "No hay ningún alimento con raíz «congri» en el catálogo (ni global ni de marca). Sin candidato: hay que crear el genérico (congrio crudo ≈ 90 kcal / 19 P / 1 G por 100 g).",
+          "needs_owner": true
+        },
+        {
+          "name": "Camarón",
+          "grams": 120,
+          "label": "20 unidades",
+          "food_id": "b921d256-ae1d-4cbc-8830-c9fda558c7d4",
+          "aliases": [
+            "Camarones"
+          ],
+          "match_note": "Genérico (plural). 85 kcal / 20 P / 0 C / 1 G por 100 g, share 0,11 ⇒ CB; plausible para camarón pelado."
+        },
+        {
+          "name": "Choritos",
+          "grams": 60,
+          "label": "8 unidades",
+          "food_id": "3393a0f6-481e-42fc-8a50-b005e7396281",
+          "match_note": "Genérico de nombre exacto (el dry-run lo marcó ambiguo por las marcas Lider y Robinson Crusoe). 100 kcal / 15 P / 3 C / 3 G por 100 g, share 0,27 ⇒ CB."
+        },
+        {
+          "name": "Huevo entero",
+          "grams": 75,
+          "label": "1,5 unidades",
+          "note": "INTA p. 29 dice 50 g = 1 unidad; manda UDD",
+          "food_id": "5444561c-5a2f-46f5-8a56-4fb435fc049d",
+          "aliases": [
+            "Huevo"
+          ],
+          "control_exception": "UDD p. 57 pone el huevo entero en CB pese a que ~60 % de sus kcal son grasa; se respeta el manual.",
+          "match_note": "Genérico neutro (sin cocción impuesta), serving 50 g = 1 unidad. 143 kcal / 13 P / 1 C / 10 G por 100 g, share 0,63: macros reales del huevo, no un error.",
+          "needs_owner": true
+        },
+        {
+          "name": "Proteína vegetal de soya texturizada",
+          "grams": 25,
+          "label": "2,5 cucharadas",
+          "food_id": "2407cf39-7049-4e20-827b-44b51421320d",
+          "aliases": [
+            "Soja texturizada"
+          ],
+          "match_note": "Genérico equivalente (soja = soya). 350 kcal / 50 P / 30 C / 2 G por 100 g, share 0,05 ⇒ CB; 25 g dan ~88 kcal y 12,5 g P, cerca de los 65 kcal / 11 P del grupo."
+        },
+        {
+          "name": "Jamón de cerdo",
+          "grams": 60,
+          "label": "2 rebanadas",
+          "note": "alto en sodio",
+          "food_id": "dd099fcd-e0d5-40cb-8db7-bdd18e2a7af1",
+          "aliases": [
+            "Jamon de cerdo magro, cocido"
+          ],
+          "match_note": "Genérico casi exacto, versión magra (la que UDD pone en CB). 145 kcal / 21 P / 2 C / 6 G por 100 g, share 0,37 ≤ 0,40 ⇒ CB."
+        }
+      ]
+    },
+    "CA": {
+      "kcal": 120,
+      "protein_g": 11,
+      "carbs_g": 1,
+      "fats_g": 8,
+      "source": "INTA p. 28",
+      "foods": [
+        {
+          "name": "Asado de tira",
+          "grams": 50,
+          "label": "1 trozo de 6×6×1 cm",
+          "food_id": "3f6d6bcc-5bb3-455e-a6dc-2640b5170694",
+          "aliases": [
+            "Asado Tira"
+          ],
+          "match_note": "No hay genérico: representante de marca (Cuisine&co, supermercado). 173 kcal / 19 P / 0 C / 10 G por 100 g, share 0,52 ⇒ CA; algo magro para el corte real pero coherente.",
+          "needs_owner": true
+        },
+        {
+          "name": "Lomo vetado",
+          "grams": 50,
+          "label": "1 trozo de 6×6×1 cm",
+          "food_id": "f720f75f-528f-415a-ba02-572085932cd9",
+          "aliases": [
+            "Lomo vetado (Vacuno)"
+          ],
+          "match_note": "Genérico casi exacto. 290 kcal / 16 P / 0 C / 24 G por 100 g, share 0,74 > 0,40 ⇒ CA."
+        },
+        {
+          "name": "Plateada",
+          "grams": 50,
+          "label": "1 trozo de 6×6×1 cm",
+          "match_note": "El único candidato es «Plateada De Lomo de Cerdo Criollo Picante» (Super Cerdo): plateada de CERDO marinada, otro alimento que la plateada de vacuno de INTA. Sin candidato válido.",
+          "needs_owner": true
+        },
+        {
+          "name": "Sobrecostilla",
+          "grams": 50,
+          "label": "1 trozo de 6×6×1 cm",
+          "food_id": "d44c3f2a-3b2d-4f96-bd8e-b079f9cea535",
+          "aliases": [
+            "Sobrecostilla (Vacuno)"
+          ],
+          "match_note": "Genérico; se descarta la Sobrecostilla Carnes Ñuble del dry-run (104 kcal / 2 G, share 0,17: dato raro para el corte). 250 kcal / 17 P / 0 C / 20 G por 100 g, share 0,72 ⇒ CA."
+        },
+        {
+          "name": "Carne molida corriente",
+          "grams": 50,
+          "label": "2½ cucharadas",
+          "food_id": "24b9e00c-ef2c-4dd4-a37d-d0b785a56b39",
+          "aliases": [
+            "Carne molida de vacuno 80/20, cruda"
+          ],
+          "match_note": "Genérico: la molida «corriente» chilena equivale al 80/20. 243 kcal / 18 P / 0 C / 19 G por 100 g, share 0,70 ⇒ CA."
+        },
+        {
+          "name": "Chuleta de cerdo",
+          "grams": 50,
+          "label": "1 trozo de 6×6×1 cm",
+          "food_id": "9c6d0f0f-0589-4baa-ba94-82a95b7cbdfd",
+          "aliases": [
+            "Chuleta de cerdo con hueso, cruda"
+          ],
+          "match_note": "Genérico crudo con hueso (la chuleta chilena estándar). 170 kcal / 21 P / 0 C / 9 G por 100 g, share 0,48 ⇒ CA."
+        },
+        {
+          "name": "Salmón crudo",
+          "grams": 80,
+          "label": "1 trozo de 10×6×1 cm",
+          "food_id": "4d1b9baa-5a3c-4231-ab2f-dee86d91f36a",
+          "aliases": [
+            "Salmon del Atlantico (de cultivo), crudo"
+          ],
+          "match_note": "Genérico crudo de cultivo (el salmón chileno). 197 kcal / 20 P / 0 C / 13 G por 100 g, share 0,59 ⇒ CA."
+        },
+        {
+          "name": "Sardinas en aceite",
+          "grams": 50,
+          "label": "⅓ de taza",
+          "note": "alto en sodio",
+          "food_id": "d298dc04-c0d5-4e7b-90f1-bf308ff3405b",
+          "aliases": [
+            "Sardinas en aceite (escurridas)"
+          ],
+          "match_note": "Genérico casi exacto. 208 kcal / 25 P / 0 C / 12 G por 100 g, share 0,52 ⇒ CA."
+        },
+        {
+          "name": "Jurel en aceite",
+          "grams": 50,
+          "label": "⅓ de taza",
+          "note": "alto en sodio",
+          "food_id": "51ae23eb-0669-49ca-902b-88aa52099231",
+          "aliases": [
+            "Jurel, cocido"
+          ],
+          "match_note": "No existe «jurel en aceite»; el genérico al agua (156 kcal, share 0,35) no calza en CA. Jurel cocido: 201 kcal / 26 P / 0 C / 10 G por 100 g, share 0,45 ⇒ CA."
+        },
+        {
+          "name": "Atún en aceite",
+          "grams": 50,
+          "label": "⅓ de taza",
+          "note": "alto en sodio",
+          "food_id": "763782db-93f4-46b8-b427-87e465f945f4",
+          "aliases": [
+            "Atún con aceite (escurrido)"
+          ],
+          "match_note": "Genérico casi exacto. 198 kcal / 29 P / 0 C / 9 G por 100 g, share 0,41 > 0,40 ⇒ CA (el otro genérico, «Atun en conserva en aceite (blanco)», queda en 0,39 y no pasa)."
+        },
+        {
+          "name": "Longaniza",
+          "grams": 45,
+          "label": "1 rodela de 4 cm",
+          "note": "alto en sodio",
+          "food_id": "8d6c7a0e-7e44-4edf-9284-f9f8efbe8e34",
+          "aliases": [
+            "Longaniza italiana de cerdo, cruda"
+          ],
+          "match_note": "Genérico (la fila no dice cocción). 290 kcal / 14 P / 3 C / 24 G por 100 g, share 0,74 ⇒ CA."
+        },
+        {
+          "name": "Vienesa",
+          "grams": 40,
+          "label": "1 unidad",
+          "note": "alto en sodio",
+          "food_id": "191ecfce-05ee-4297-8d8c-7472d436adc8",
+          "aliases": [
+            "Vienesa de vacuno"
+          ],
+          "match_note": "Genérico; se descartan las marcas del dry-run (Vienesa Tradicional San Jorge tiene serving_size 1 g y macros rotas). 322 kcal / 12 P / 3 C / 29 G por 100 g, share 0,81 ⇒ CA."
+        },
+        {
+          "name": "Mortadela",
+          "grams": 60,
+          "label": "3 tajadas",
+          "note": "alto en sodio",
+          "food_id": "31d9a1b3-6500-4ddf-afd7-532384c21a81",
+          "aliases": [
+            "Mortadela de vacuno y cerdo"
+          ],
+          "match_note": "Genérico; se descarta la Mortadela La Preferida del dry-run (108 kcal / 6 G por 100 g, inverosímil). 308 kcal / 15 P / 5 C / 25 G por 100 g, share 0,73 ⇒ CA."
+        },
+        {
+          "name": "Jamón",
+          "grams": 40,
+          "label": "1 tajada",
+          "note": "alto en sodio",
+          "food_id": "342505d5-0d9c-40e2-a475-b340195667a1",
+          "aliases": [
+            "Jamón  pierna"
+          ],
+          "control_exception": "INTA p. 28 pone el jamón en CA (alta en grasa); el genérico disponible es jamón pierna magro y da share 0,34 < 0,40.",
+          "match_note": "Único genérico de jamón común (no serrano, no de pavo). 107 kcal / 16 P / 2 C / 4 G por 100 g, share 0,34: el catálogo solo tiene jamones magros.",
+          "needs_owner": true
+        }
+      ]
+    },
+    "LGS": {
+      "kcal": 170,
+      "protein_g": 11,
+      "carbs_g": 30,
+      "fats_g": 1,
+      "source": "INTA p. 30",
+      "foods": [
+        {
+          "name": "Poroto cocido",
+          "grams": 130,
+          "label": "¾ taza",
+          "note": "R-14: la misma medida casera no puede valer 100, 130 y 140 g en el mismo grupo y la misma pantalla. Se unifica en los 130 g que fija OUTLINE §5.3; INTA p. 30 imprime 100 g para el poroto",
+          "food_id": "8ac44634-2694-4c07-9a94-c0905401d120",
+          "aliases": [
+            "Porotos cocidos"
+          ],
+          "match_note": "Genérico «Porotos cocidos» (plural del nombre). 125 kcal/9 P/15 C/3 G por 100 g: el CHO va bajo y la grasa alta vs poroto cocido real (~127/9/23/0,5). Alternativa: «Poroto negro cocido» 130/8/24/0.",
+          "needs_owner": true,
+          "macros_dudosos": true
+        },
+        {
+          "name": "Garbanzo cocido",
+          "grams": 130,
+          "label": "¾ taza",
+          "food_id": "4f12315b-60e2-404b-b661-d0a5d2dfb4b6",
+          "aliases": [
+            "Garbanzos cocidos"
+          ],
+          "match_note": "Genérico plural y cocido como la fila. 164 kcal/9 P/27 C/3 G por 100 g, calcados del garbanzo cocido real."
+        },
+        {
+          "name": "Lenteja cocida",
+          "grams": 130,
+          "label": "¾ taza",
+          "note": "R-14: unificado a 130 g; INTA p. 30 imprime 140 g",
+          "food_id": "430547fc-7c9e-4b4a-8ed8-9e6f8307b787",
+          "aliases": [
+            "Lentejas cocidas"
+          ],
+          "match_note": "Genérico plural y cocido como la fila. 116 kcal/9 P/20 C/0 G por 100 g, idénticos a la lenteja cocida real."
+        },
+        {
+          "name": "Poroto crudo",
+          "grams": 50,
+          "label": "½ taza",
+          "food_id": "d17a3e2c-834c-41df-8d57-7977fb92a9fb",
+          "aliases": [
+            "Porotos / Frijoles (crudos)"
+          ],
+          "match_note": "Genérico crudo, como pide la fila. 340 kcal/21 P/62 C/1 G por 100 g, exacto para poroto seco."
+        },
+        {
+          "name": "Lenteja cruda",
+          "grams": 50,
+          "label": "4 cucharadas o ¼ taza",
+          "food_id": "d7e5bc28-b2e4-4bc6-93a8-1bbe76909abf",
+          "aliases": [
+            "Lentejas (crudas)"
+          ],
+          "match_note": "Genérico crudo, plural. 350 kcal/25 P/60 C/1 G por 100 g, exacto para lenteja seca."
+        },
+        {
+          "name": "Garbanzo crudo",
+          "grams": 50,
+          "label": "4 cucharadas o ¼ taza",
+          "food_id": "90bd3248-7606-430c-8079-c4fae6f81db4",
+          "aliases": [
+            "Garbanzos (crudos)"
+          ],
+          "match_note": "Genérico crudo, plural. 364 kcal/19 P/61 C/6 G por 100 g, exacto para garbanzo seco."
+        },
+        {
+          "name": "Arveja seca cruda",
+          "grams": 50,
+          "label": "½ taza",
+          "food_id": "af98988d-abac-426b-a5cd-dc258b4d059b",
+          "aliases": [
+            "Arveja partida cruda"
+          ],
+          "match_note": "Arveja seca = arveja partida. 364 kcal/23 P/62 C/4 G por 100 g, plausible para arveja seca. «Arvejas crudas» (81 kcal) es arveja verde fresca, otro alimento."
+        },
+        {
+          "name": "Haba seca",
+          "grams": 60,
+          "label": "4 cucharadas o ¼ taza",
+          "food_id": "46eb3c56-2b4f-44d3-92a5-5660e7fed527",
+          "aliases": [
+            "Haba cruda"
+          ],
+          "match_note": "Único genérico de haba seca. 341 kcal/26 P/58 C/2 G por 100 g, exacto para haba seca. «Habas» del catálogo es marca Wasil de haba verde (49 kcal)."
+        },
+        {
+          "name": "Chícharo",
+          "grams": 60,
+          "label": "4 cucharadas o ¼ taza",
+          "match_note": "Sin genérico en el catálogo: no hay «chícharo» ni equivalente distinto de la arveja seca ya mapeada en esta misma lista. Requiere alta o decisión del owner.",
+          "needs_owner": true
+        }
+      ]
+    },
+    "VG": {
+      "kcal": 25,
+      "protein_g": 2,
+      "carbs_g": 5,
+      "fats_g": 0,
+      "source": "UDD p. 61",
+      "foods": [
+        {
+          "name": "Tomate",
+          "grams": 120,
+          "label": "1 unidad regular",
+          "food_id": "eea48b0a-a8ed-4ae4-b0cf-6e01692e6679",
+          "match_note": "Match exacto genérico (ya resuelto en el dry-run). 18 kcal/1 P/4 C/0 G por 100 g, exacto para tomate crudo."
+        },
+        {
+          "name": "Zanahoria cruda",
+          "grams": 50,
+          "label": "1 taza",
+          "food_id": "2c7cd2f3-1a0c-49d4-83bc-6e530ccf5f47",
+          "aliases": [
+            "Zanahoria"
+          ],
+          "match_note": "Genérico sin sufijo = zanahoria cruda, como pide la fila. 41 kcal/1 P/10 C/0 G por 100 g, exacto para zanahoria cruda."
+        },
+        {
+          "name": "Zanahoria cocida",
+          "grams": 50,
+          "label": "½ taza",
+          "food_id": "5eae0719-0f9a-4559-9394-5343ecb083f8",
+          "match_note": "Match exacto genérico (ya resuelto en el dry-run). 35 kcal/1 P/8 C/0 G por 100 g, exacto para zanahoria cocida."
+        },
+        {
+          "name": "Brócoli hervido",
+          "grams": 100,
+          "label": "1 taza",
+          "food_id": "4d73f2a4-f208-4ca3-b1cf-9c66f7671ce0",
+          "aliases": [
+            "Brócoli (cocido)"
+          ],
+          "match_note": "Genérico cocido = hervido de la fila. 35 kcal/2 P/7 C/0 G por 100 g, exacto para brócoli cocido."
+        },
+        {
+          "name": "Coliflor",
+          "grams": 110,
+          "label": "1 taza",
+          "food_id": "d06cd461-8ad6-469a-859b-6c62e5aa859a",
+          "match_note": "Match exacto genérico (ya resuelto en el dry-run); la fila no dice cocida. 28 kcal/2 P/5 C/0 G por 100 g, plausible para coliflor cruda."
+        },
+        {
+          "name": "Zapallo italiano cocido",
+          "grams": 150,
+          "label": "1 taza",
+          "food_id": "24419a8d-c852-4ed9-82d7-81b7dc121e92",
+          "match_note": "Match exacto genérico (ya resuelto en el dry-run). 15 kcal/1 P/3 C/0 G por 100 g, exacto para zapallo italiano cocido."
+        },
+        {
+          "name": "Zapallo",
+          "grams": 70,
+          "label": "½ taza",
+          "food_id": "0be9ff31-b6b8-40f4-b25e-62d68a6f569e",
+          "aliases": [
+            "Zapallo crudo"
+          ],
+          "match_note": "Genérico de zapallo (la fila no dice cocido). 26 kcal/1 P/7 C/0 G por 100 g, exacto para zapallo crudo. «Zapallo (camote / butternut)» es otra especie."
+        },
+        {
+          "name": "Porotos verdes cocidos",
+          "grams": 70,
+          "label": "¾ taza",
+          "food_id": "26440625-e46e-46e2-8c29-6435f448d5ea",
+          "aliases": [
+            "Poroto verde cocido"
+          ],
+          "match_note": "Mismo alimento en singular y cocido como la fila. 35 kcal/2 P/8 C/0 G por 100 g, exacto para poroto verde cocido."
+        },
+        {
+          "name": "Cebolla cruda",
+          "grams": 60,
+          "label": "¾ taza",
+          "food_id": "3303bc17-d4c0-4e50-83bc-fb418745a5ca",
+          "aliases": [
+            "Cebolla"
+          ],
+          "match_note": "Genérico sin sufijo = cebolla cruda. 40 kcal/1 P/9 C/0 G por 100 g, exacto para cebolla cruda."
+        },
+        {
+          "name": "Betarraga cocida",
+          "grams": 90,
+          "label": "½ taza",
+          "food_id": "01dcdff1-565d-409b-be71-5c222677fb2d",
+          "aliases": [
+            "Betarraga cruda"
+          ],
+          "match_note": "No existe genérico de betarraga cocida; se usa la cruda, cuyas macros casi no cambian al cocer. 45 kcal/2 P/9 C/0 G por 100 g. Revisar si conviene dar de alta la cocida.",
+          "needs_owner": true
+        },
+        {
+          "name": "Espinaca cocida",
+          "grams": 130,
+          "label": "½ taza",
+          "food_id": "e83ec107-5429-4298-9767-3f20c9224797",
+          "match_note": "Match exacto genérico (ya resuelto en el dry-run). 23 kcal/3 P/4 C/0 G por 100 g, exacto para espinaca cocida."
+        },
+        {
+          "name": "Acelga cocida",
+          "grams": 110,
+          "label": "½ taza",
+          "food_id": "3e496e19-0c33-4b69-844c-8d84181af34a",
+          "match_note": "Match exacto genérico (ya resuelto en el dry-run). 20 kcal/2 P/4 C/0 G por 100 g, exacto para acelga cocida."
+        },
+        {
+          "name": "Berenjena cocida",
+          "grams": 100,
+          "label": "½ taza",
+          "food_id": "1e12daa8-46d1-4833-93cb-aca9fc846523",
+          "aliases": [
+            "Berenjena (cocida)"
+          ],
+          "match_note": "Genérico cocido, mismo nombre con paréntesis. 35 kcal/1 P/9 C/0 G por 100 g, exacto para berenjena cocida."
+        },
+        {
+          "name": "Champiñón cocido",
+          "grams": 100,
+          "label": "¾ taza",
+          "food_id": "840c5e05-25b2-4d1d-a038-85f3baab0945",
+          "aliases": [
+            "Champinon blanco cocido"
+          ],
+          "match_note": "Genérico cocido (el catálogo lo escribe sin tilde). 28 kcal/2 P/5 C/0 G por 100 g, exacto para champiñón blanco cocido."
+        },
+        {
+          "name": "Alcachofa cocida",
+          "grams": 50,
+          "label": "1 unidad",
+          "food_id": "1d79ef7d-5411-447e-9fa3-7f7a44deeedb",
+          "match_note": "Match exacto genérico (ya resuelto en el dry-run). 53 kcal/3 P/12 C/0 G por 100 g, exacto para alcachofa cocida."
+        },
+        {
+          "name": "Coles de Bruselas",
+          "grams": 100,
+          "label": "½ taza",
+          "food_id": "bf69f2c5-0777-4a89-84ca-7790d37f05d7",
+          "aliases": [
+            "Col de Bruselas"
+          ],
+          "match_note": "Mismo alimento en singular. 43 kcal/3 P/9 C/0 G por 100 g, exacto para col de Bruselas."
+        }
+      ]
+    },
+    "VL": {
+      "kcal": 10,
+      "protein_g": 0,
+      "carbs_g": 2.5,
+      "fats_g": 0,
+      "source": "UDD p. 63",
+      "foods": [
+        {
+          "name": "Lechuga",
+          "grams": 50,
+          "label": "1 taza",
+          "food_id": "0439cb08-4a4a-4ed1-b840-1a121863fb71",
+          "match_note": "Match exacto genérico (ya resuelto en el dry-run). 15 kcal/1 P/3 C/0 G por 100 g, exacto para lechuga."
+        },
+        {
+          "name": "Apio",
+          "grams": 70,
+          "label": "1 taza",
+          "food_id": "339b32c7-0d2c-42a0-8a9d-92753065bf79",
+          "match_note": "Match exacto genérico (ya resuelto en el dry-run). 17 kcal/0 P/3 C/0 G por 100 g, exacto para apio crudo."
+        },
+        {
+          "name": "Repollo",
+          "grams": 50,
+          "label": "1 taza",
+          "food_id": "a2c1ba6e-70ae-4ed9-a0b4-315d8726df9b",
+          "aliases": [
+            "Repollo / Col"
+          ],
+          "match_note": "Genérico «Repollo / Col», crudo como la fila. 25 kcal/1 P/6 C/0 G por 100 g, exacto para repollo crudo."
+        },
+        {
+          "name": "Rúcula",
+          "grams": 50,
+          "label": "1 taza",
+          "food_id": "4ab917b4-aaf4-4873-9cd4-daa2cd687f04",
+          "match_note": "Match exacto genérico (ya resuelto en el dry-run). 25 kcal/3 P/4 C/1 G por 100 g, exacto para rúcula."
+        },
+        {
+          "name": "Espinaca cruda",
+          "grams": 50,
+          "label": "1 taza",
+          "food_id": "03ab32f3-c287-40bd-9731-297691e47317",
+          "aliases": [
+            "Espinaca"
+          ],
+          "match_note": "Genérico sin sufijo = espinaca cruda. 23 kcal/3 P/4 C/0 G por 100 g, exacto para espinaca cruda."
+        },
+        {
+          "name": "Acelga cruda",
+          "grams": 50,
+          "label": "1 taza",
+          "food_id": "e5acb1a6-3667-4bad-8297-240bbb203aad",
+          "match_note": "Match exacto genérico (ya resuelto en el dry-run). 19 kcal/2 P/4 C/0 G por 100 g, exacto para acelga cruda."
+        },
+        {
+          "name": "Pepino ensalada",
+          "grams": 100,
+          "label": "½ unidad",
+          "food_id": "65113cbc-122e-4b1c-97ae-d95a9ff2c481",
+          "aliases": [
+            "Pepino (1/2 unidad)"
+          ],
+          "match_note": "Genérico de pepino con cáscara; el nombre trae la medida casera, la misma ½ unidad de la fila. 16 kcal/1 P/3 C/0 G por 100 g, exacto para pepino crudo."
+        },
+        {
+          "name": "Pimentón rojo",
+          "grams": 60,
+          "label": "½ taza",
+          "food_id": "0e539fda-334f-4200-ae0e-2809b2e012a8",
+          "aliases": [
+            "Pimentón (Morrón)"
+          ],
+          "match_note": "Único genérico de pimentón sin color acotado (los otros dicen «verde»). 26 kcal/1 P/6 C/0 G por 100 g, plausible (el rojo real ~31/1/6)."
+        },
+        {
+          "name": "Rabanito",
+          "grams": 50,
+          "label": "5 unidades",
+          "food_id": "783d51ba-8f7e-45e4-8a2f-d2cbeb1dbae6",
+          "aliases": [
+            "Rábano"
+          ],
+          "match_note": "Rabanito = rábano; genérico crudo. 16 kcal/1 P/3 C/0 G por 100 g, exacto para rabanito."
+        },
+        {
+          "name": "Cebollín",
+          "grams": 30,
+          "label": "½ unidad",
+          "food_id": "9a02a26a-0699-4495-9257-4e7b3764e7bc",
+          "aliases": [
+            "Cebollin crudo"
+          ],
+          "match_note": "Genérico crudo (el catálogo lo escribe sin tilde); el otro «Cebollin» es marca Pro verde. 32 kcal/2 P/7 C/0 G por 100 g, exacto para cebollín."
+        },
+        {
+          "name": "Perejil",
+          "grams": 30,
+          "label": "3 cucharadas",
+          "food_id": "d5cf0422-efcf-4b7e-8910-9bfbb1a535d3",
+          "aliases": [
+            "Perejil fresco"
+          ],
+          "match_note": "Genérico fresco. 36 kcal/3 P/6 C/1 G por 100 g, exacto para perejil fresco."
+        },
+        {
+          "name": "Ajo",
+          "grams": 8,
+          "label": "8 dientes",
+          "food_id": "a7da61cc-1a93-418a-8d61-aa7344aeabf3",
+          "match_note": "Match exacto genérico (ya resuelto en el dry-run). 143 kcal/7 P/28 C/0 G por 100 g, plausible para ajo crudo (~149/6/33)."
+        }
+      ]
+    },
+    "FR": {
+      "kcal": 60,
+      "protein_g": 0,
+      "carbs_g": 15,
+      "fats_g": 0,
+      "source": "UDD pp. 65 y 67",
+      "foods": [
+        {
+          "name": "Manzana",
+          "grams": 100,
+          "label": "1 unidad chica",
+          "food_id": "b118be1d-4fb5-4149-82ea-44aadc0113fc",
+          "match_note": "Genérico (brand null) frente a la «Manzana» Watts, que es jugo (21 kcal). 52 kcal/0 P/14 C/0 G por 100 g, exacto para manzana."
+        },
+        {
+          "name": "Pera",
+          "grams": 100,
+          "label": "1 unidad chica",
+          "food_id": "0ca024e2-4669-4ef9-b0ff-0e9ffb733b2c",
+          "match_note": "Genérico (brand null); la «Pera AQUARIUS» es bebida (457 kcal). 57 kcal/0 P/15 C/0 G por 100 g, exacto para pera."
+        },
+        {
+          "name": "Plátano",
+          "grams": 60,
+          "label": "½ unidad",
+          "food_id": "f0f00114-f079-40ce-8d83-f7fcaa174b2d",
+          "aliases": [
+            "Plátano / Banana"
+          ],
+          "match_note": "Genérico «Plátano / Banana»; los candidatos del dry-run eran plátano frito, chips y lácteos saborizados. 89 kcal/1 P/23 C/0 G por 100 g, exacto para plátano."
+        },
+        {
+          "name": "Naranja",
+          "grams": 150,
+          "label": "1 unidad regular",
+          "source": "INTA p. 21",
+          "food_id": "7cda7085-e8e9-43d1-95e2-f31d22271d5f",
+          "match_note": "Genérico (brand null) frente a la «Naranja» Watts, que es jugo (20 kcal). 47 kcal/1 P/12 C/0 G por 100 g, exacto para naranja."
+        },
+        {
+          "name": "Mandarina",
+          "grams": 180,
+          "label": "2 unidades chicas",
+          "food_id": "0e6d24a8-7fc2-415d-b6b6-ab469fbe98b7",
+          "match_note": "Match exacto genérico (ya resuelto en el dry-run). 53 kcal/1 P/13 C/0 G por 100 g, exacto para mandarina."
+        },
+        {
+          "name": "Frutilla",
+          "grams": 200,
+          "label": "1½ taza",
+          "food_id": "1780dd6e-990b-4e52-865c-474e0c44003b",
+          "aliases": [
+            "Frutillas / Fresas"
+          ],
+          "match_note": "El match exacto «Frutilla» del dry-run es marca BC La Campagnola con 148 kcal/36 g CHO (pulpa en almíbar), absurdo. Se usa el genérico «Frutillas / Fresas»: 36 kcal/1 P/8 C/0 G por 100 g."
+        },
+        {
+          "name": "Arándano",
+          "grams": 120,
+          "label": "½ taza",
+          "food_id": "19b7ec50-b390-4fd2-a65a-2b7e3d96d2bf",
+          "aliases": [
+            "Arándanos frescos"
+          ],
+          "match_note": "Genérico fresco; los candidatos con marca son conservas y mermeladas (160-276 kcal). 64 kcal/1 P/15 C/0 G por 100 g, plausible para arándano (~57/15)."
+        },
+        {
+          "name": "Frambuesa",
+          "grams": 130,
+          "label": "1 taza",
+          "food_id": "0ab9c364-b32d-46cb-809d-a2cc1509c2bf",
+          "aliases": [
+            "Frambuesas"
+          ],
+          "match_note": "Genérico plural; los demás candidatos eran mermeladas y jugos. 57 kcal/1 P/13 C/0 G por 100 g, plausible para frambuesa (~52/12)."
+        },
+        {
+          "name": "Uva",
+          "grams": 90,
+          "label": "10 unidades",
+          "food_id": "3c3e09a7-d6e4-4521-adb6-0fe2d741375b",
+          "aliases": [
+            "Uvas"
+          ],
+          "match_note": "Genérico plural «Uvas» del seed. 69 kcal/1 P/18 C/0 G por 100 g, exacto para uva."
+        },
+        {
+          "name": "Melón",
+          "grams": 180,
+          "label": "1 taza",
+          "food_id": "7c955991-0a36-482b-8c8c-5301618a5e46",
+          "match_note": "Match exacto genérico (ya resuelto en el dry-run). 34 kcal/1 P/8 C/0 G por 100 g, exacto para melón."
+        },
+        {
+          "name": "Piña",
+          "grams": 120,
+          "label": "¾ taza",
+          "food_id": "1637337f-25e1-4f3c-ab7a-4851664a22fd",
+          "match_note": "Match exacto genérico (ya resuelto en el dry-run). 60 kcal/0 P/14 C/0 G por 100 g, algo alto vs piña real (~50/13) pero dentro de rango."
+        },
+        {
+          "name": "Pepino dulce",
+          "grams": 240,
+          "label": "1 unidad grande",
+          "match_note": "Sin genérico: el «Pepino» del catálogo es pepino de ensalada, otro alimento; no existe pepino dulce (Solanum muricatum). Requiere alta o decisión del owner.",
+          "needs_owner": true
+        },
+        {
+          "name": "Ciruelas secas",
+          "grams": 30,
+          "label": "3 unidades",
+          "food_id": "e8539096-fe6f-48e2-8e6c-a2914f3d2266",
+          "aliases": [
+            "Ciruelas D'agen"
+          ],
+          "match_note": "Representante de marca: no hay genérico de ciruela deshidratada; se elige Lider (supermercado grande), 240 kcal/2 P/64 C/0 G por 100 g, calcados de la ciruela seca real.",
+          "needs_owner": true
+        },
+        {
+          "name": "Pasas",
+          "grams": 20,
+          "label": "20 unidades",
+          "food_id": "b32a42c0-500b-4142-ac7e-4235daa728e7",
+          "aliases": [
+            "Pasas (uvas pasas)"
+          ],
+          "match_note": "Genérico. 299 kcal/3 P/79 C/0 G por 100 g, exacto para pasas."
+        },
+        {
+          "name": "Higos frescos",
+          "grams": 80,
+          "label": "2 unidades",
+          "food_id": "91feae50-94ce-4c48-bc76-244d8872d81a",
+          "aliases": [
+            "Higo fresco"
+          ],
+          "match_note": "Genérico fresco en singular (el «Higo seco» es otro alimento, 249 kcal). 74 kcal/1 P/19 C/0 G por 100 g, exacto para higo fresco."
+        },
+        {
+          "name": "Huesillo",
+          "grams": 30,
+          "label": "1 unidad",
+          "food_id": "d516e790-8365-4120-9b75-40a7ec83dc19",
+          "aliases": [
+            "Huesillos"
+          ],
+          "match_note": "Representante de marca: «Huesillos» es Cuisine&co (marca de supermercado) y no hay genérico. 230 kcal/4 P/52 C/0 G por 100 g, plausible para durazno deshidratado.",
+          "needs_owner": true
+        }
+      ]
+    },
+    "PCT": {
+      "kcal": 140,
+      "protein_g": 3,
+      "carbs_g": 30,
+      "fats_g": 1,
+      "source": "UDD pp. 69, 70 y 71",
+      "foods": [
+        {
+          "name": "Pan marraqueta",
+          "grams": 50,
+          "label": "½ unidad",
+          "note": "alto en sodio",
+          "food_id": "aacc6487-3f8b-4c30-a98b-d79b004fc69d",
+          "aliases": [
+            "Marraqueta (Pan batido / francés)"
+          ],
+          "match_note": "Genérico con macros reales: 270 kcal / P8 / C55 / G2 por 100 g. Se descarta el seed SMAE «Pan marraqueta» (5faeab94, 70 kcal por 50 g, macros = ref del grupo)."
+        },
+        {
+          "name": "Pan hallulla",
+          "grams": 50,
+          "label": "½ unidad",
+          "note": "alto en sodio",
+          "food_id": "7d7d4b7a-efba-409d-b632-50c615bef943",
+          "aliases": [
+            "Hallulla (Pan tradicional)"
+          ],
+          "match_note": "Genérico chileno con macros reales: 363 kcal / P9 / C54 / G13 por 100 g. Se descarta el seed «Pan hallulla» (3baab183, 70 kcal por 50 g)."
+        },
+        {
+          "name": "Pan de molde blanco",
+          "grams": 60,
+          "label": "2½ rebanadas",
+          "note": "INTA dice 60 g = 3 rebanadas; manda UDD",
+          "food_id": "d8cc41fa-a14e-4987-bbf2-71cddf1674e6",
+          "aliases": [
+            "Pan blanco de molde"
+          ],
+          "match_note": "Único genérico de molde blanco (brand null): 238 kcal / P11 / C44 / G2 por 100 g. Los demás eran marcas (Líder, Jumbo, Cuisine&Co)."
+        },
+        {
+          "name": "Pan de molde integral",
+          "grams": 50,
+          "label": "2½ rebanadas",
+          "food_id": "24274e07-0784-4350-a88a-19acc8980ade",
+          "aliases": [
+            "Pan Integral"
+          ],
+          "match_note": "No hay genérico «pan de molde integral»; el equivalente es «Pan Integral» (brand null): 239 kcal / P9 / C44 / G3 por 100 g. Alternativa: «Pan Integral (1 rebanada)» 7165e2ae (254 kcal)."
+        },
+        {
+          "name": "Pan amasado",
+          "grams": 35,
+          "label": "¼ unidad",
+          "note": "alto en sodio",
+          "match_note": "Sin candidato: no existe ningún alimento global (ni genérico ni de marca) cuyo nombre contenga «amasad». Hay que crear el alimento.",
+          "needs_owner": true
+        },
+        {
+          "name": "Pan pita blanco",
+          "grams": 60,
+          "label": "1½ unidades",
+          "food_id": "20047095-f129-451e-b2d8-116453389cca",
+          "aliases": [
+            "Pan pita"
+          ],
+          "match_note": "Genérico «Pan pita» (brand null, blanco por defecto): 275 kcal / P9 / C56 / G1 por 100 g. Se descarta «Pan blanco Ideal», que es pan de molde de marca."
+        },
+        {
+          "name": "Tortilla para tacos",
+          "grams": 50,
+          "label": "1 tortilla grande",
+          "food_id": "65e194d4-e35e-483f-94cd-eebba1d2b587",
+          "aliases": [
+            "Tortilla de trigo (tipo fajita)"
+          ],
+          "match_note": "En Chile la tortilla para tacos/fajitas es de trigo. Genérico: 300 kcal / P8 / C50 / G7 por 100 g (50 g = 150 kcal, cerca de las 140 del grupo)."
+        },
+        {
+          "name": "Galletas de agua",
+          "grams": 40,
+          "label": "7 unidades",
+          "note": "alto en sodio",
+          "food_id": "b2ca874b-9d48-4864-94c0-2932137bb9cc",
+          "aliases": [
+            "Galletas De Agua"
+          ],
+          "match_note": "Representante de marca (Mckay, líder del rubro): no existe genérico de galleta de agua. 428 kcal / P9 / C76 / G10 por 100 g, plausible.",
+          "needs_owner": true
+        },
+        {
+          "name": "Galletas de soda",
+          "grams": 40,
+          "label": "7 unidades",
+          "note": "alto en sodio",
+          "food_id": "dab91c31-48ca-4b5e-8828-da2a5721dd39",
+          "match_note": "Match exacto con genérico (brand null, USDA): 418 kcal / P9 / C74 / G9 por 100 g."
+        },
+        {
+          "name": "Arroz cocido",
+          "grams": 130,
+          "label": "¾ taza",
+          "note": "INTA dice 100 g = ¾ taza; manda UDD",
+          "food_id": "d942ccff-6023-4747-8676-bde73a858133",
+          "aliases": [
+            "Arroz Blanco (cocido)"
+          ],
+          "match_note": "Genérico con macros reales: 130 kcal / P3 / C28 / G0 por 100 g. Se descarta el seed SMAE «Arroz cocido» (80 g, 70 kcal) que avisa el brief."
+        },
+        {
+          "name": "Arroz crudo",
+          "grams": 40,
+          "label": "¼ taza",
+          "food_id": "3193af9c-c5ed-4a0e-b33d-9c9f9c74e45d",
+          "aliases": [
+            "Arroz blanco (crudo)"
+          ],
+          "match_note": "Genérico crudo (brand null, USDA): 365 kcal / P7 / C80 / G1 por 100 g."
+        },
+        {
+          "name": "Arroz integral cocido",
+          "grams": 120,
+          "label": "¾ taza",
+          "food_id": "ba818be8-ca8d-4724-a9e5-c7f64dd6e391",
+          "aliases": [
+            "Arroz Integral (cocido)"
+          ],
+          "match_note": "Genérico integral cocido (brand null): 111 kcal / P3 / C23 / G1 por 100 g."
+        },
+        {
+          "name": "Fideos cocidos",
+          "grams": 110,
+          "label": "¾ taza",
+          "food_id": "8bf756ea-525c-446b-a739-445d626c414d",
+          "aliases": [
+            "Pasta cocida"
+          ],
+          "match_note": "Genérico de pasta cocida (brand null): 158 kcal / P6 / C31 / G1 por 100 g. Se descarta «Fideos al huevo, cocidos» (variedad al huevo)."
+        },
+        {
+          "name": "Fideos crudos",
+          "grams": 40,
+          "label": "½ taza",
+          "food_id": "bc93722b-9ad3-4df2-9f68-b12fa0f01a17",
+          "aliases": [
+            "Pasta seca (fideos)"
+          ],
+          "match_note": "Genérico de fideo seco (brand null): 371 kcal / P13 / C75 / G2 por 100 g."
+        },
+        {
+          "name": "Quínoa cocida",
+          "grams": 110,
+          "label": "¾ taza",
+          "food_id": "547db9c4-2f06-4250-9f6a-359b127b33b2",
+          "aliases": [
+            "Quinoa (cocida)"
+          ],
+          "match_note": "Genérico cocido (brand null): 120 kcal / P4 / C21 / G2 por 100 g."
+        },
+        {
+          "name": "Quínoa cruda",
+          "grams": 40,
+          "label": "¼ taza o 4 cucharadas",
+          "food_id": "d78b79f2-ce66-4c32-9a56-bc4699e5872b",
+          "aliases": [
+            "Quínoa (cruda)"
+          ],
+          "match_note": "Genérico crudo (brand null): 368 kcal / P14 / C64 / G6 por 100 g."
+        },
+        {
+          "name": "Avena",
+          "grams": 40,
+          "label": "6 cucharadas",
+          "food_id": "c19ab784-fa1b-4416-aa81-ec371f30c0fe",
+          "aliases": [
+            "avena"
+          ],
+          "match_note": "Match exacto con genérico (brand null): 367 kcal / P12 / C61 / G8 por 100 g, plausible. El resto eran marcas (Quaker, Lider, Vivo)."
+        },
+        {
+          "name": "Choclo cocido",
+          "grams": 130,
+          "label": "¾ taza",
+          "food_id": "5cd36caa-2454-4d3a-9ebf-4559e62254bc",
+          "aliases": [
+            "Choclo cocido (en grano)"
+          ],
+          "match_note": "Genérico cocido (brand null): 96 kcal / P3 / C21 / G2 por 100 g."
+        },
+        {
+          "name": "Mote de trigo",
+          "grams": 100,
+          "label": "¾ taza",
+          "match_note": "Sin candidato: no hay ningún alimento global con «mote» (solo camote). Hay que crear el alimento.",
+          "needs_owner": true
+        },
+        {
+          "name": "Papa cocida",
+          "grams": 150,
+          "label": "1 unidad regular",
+          "food_id": "06b348bc-1015-47b2-9bef-528a05a5822b",
+          "match_note": "Match exacto con genérico (brand null, USDA) y macros reales: 86 kcal / P2 / C20 / G0 por 100 g (no es el ref falso del seed SMAE)."
+        },
+        {
+          "name": "Camote",
+          "grams": 120,
+          "label": "½ taza",
+          "food_id": "44c906ec-7ee1-4f69-90af-bc192dd26546",
+          "aliases": [
+            "Batata / Camote cocido"
+          ],
+          "match_note": "La fila no dice cocción pero la medida (½ taza) es de preparado, así que va el cocido: 76 kcal / P1 / C18 / G0 por 100 g. Crudo disponible: 561440a3."
+        },
+        {
+          "name": "Arvejas",
+          "grams": 180,
+          "label": "1 taza",
+          "food_id": "4e717bbb-d769-4e0b-8382-3c266fd5b770",
+          "aliases": [
+            "Arvejas cocidas"
+          ],
+          "match_note": "Genérico (brand null): 81 kcal / P5 / C15 / G0 por 100 g; 180 g = 146 kcal, calza con las 140 del grupo. Se descartan las marcas Frutos del Maipo y Wasil."
+        },
+        {
+          "name": "Porotos granados",
+          "grams": 120,
+          "label": "¾ taza",
+          "food_id": "0971939e-962d-40b8-9d32-89a3acb41ffc",
+          "match_note": "Representante de marca (wasil), único candidato; no hay genérico. 63 kcal / P4 / C11 / G0 por 100 g, bajo para granados cocidos (~120 kcal): macros dudosas.",
+          "needs_owner": true,
+          "macros_dudosos": true
+        },
+        {
+          "name": "Habas",
+          "grams": 112,
+          "label": "¾ taza",
+          "food_id": "bbfaae89-0cd8-4da9-aa6e-9f7fd2ff4a89",
+          "aliases": [
+            "Habas cocidas"
+          ],
+          "match_note": "Genérico cocido (brand null): 110 kcal / P8 / C20 / G0 por 100 g. Se descarta «Habas» Wasil (13686ce1, 49 kcal, demasiado bajo)."
+        },
+        {
+          "name": "Granola",
+          "grams": 30,
+          "label": "⅓ taza",
+          "food_id": "d5aa1371-ffc0-4f59-b591-458b5e145951",
+          "aliases": [
+            "Granola (genérica)"
+          ],
+          "match_note": "Genérico (brand null, USDA): 489 kcal / P14 / C54 / G24 por 100 g. Se descartan Kelloggs, Quaker y Cáscara Foods."
+        },
+        {
+          "name": "Cereales de desayuno sin azúcar",
+          "grams": 40,
+          "label": "1 taza",
+          "food_id": "db215cf2-2e4f-4661-a9b6-1786a0b40beb",
+          "aliases": [
+            "Cereal de maíz (sin azúcar)"
+          ],
+          "match_note": "Genérico equivalente (brand null): 370 kcal / P8 / C80 / G1 por 100 g; es el único cereal de desayuno sin azúcar sin marca."
+        },
+        {
+          "name": "Harina de trigo",
+          "grams": 40,
+          "label": "4 cucharadas",
+          "food_id": "69cb1e16-6cbe-4394-9bf8-7f274384c699",
+          "match_note": "Match exacto con genérico (brand null, USDA): 366 kcal / P11 / C77 / G1 por 100 g."
+        },
+        {
+          "name": "Cabritas",
+          "grams": 35,
+          "label": "1½ taza",
+          "food_id": "120d4292-5ce4-44db-8436-9ab0222e92d3",
+          "aliases": [
+            "Cabritas de maiz (sin sal)"
+          ],
+          "match_note": "Genérico (brand null, USDA): 382 kcal / P12 / C78 / G4 por 100 g. Se prefiere sobre «Cabritas» Martini (e5998c88), que es de marca."
+        }
+      ]
+    },
+    "AG": {
+      "kcal": 45,
+      "protein_g": 0,
+      "carbs_g": 0,
+      "fats_g": 5,
+      "source": "UDD p. 73",
+      "foods": [
+        {
+          "name": "Aceite de oliva",
+          "grams": 5,
+          "label": "1 cucharadita",
+          "food_id": "5d346be3-0fbd-498d-9441-504a1be21281",
+          "match_note": "Match exacto con genérico (brand null): 828 kcal / G92 por 100 (valor por 100 ml de etiqueta). El EVOO genérico fbe0046b trae los 884 kcal / G100 por 100 g."
+        },
+        {
+          "name": "Aceite de maravilla",
+          "grams": 5,
+          "label": "1 cucharadita",
+          "food_id": "1b53a483-0c9f-4654-b2f8-e31ee1e34867",
+          "match_note": "Match exacto con genérico (brand null, USDA): 884 kcal / P0 / C0 / G100 por 100 g."
+        },
+        {
+          "name": "Aceite de maíz",
+          "grams": 5,
+          "label": "1 cucharadita",
+          "match_note": "Sin genérico propio de maíz. El único equivalente es «Aceite vegetal» (2fb6e577, 884 kcal / G100 por 100 g), que serviría igual para Aceite de soya: no se asigna para no duplicar food_id en AG.",
+          "needs_owner": true
+        },
+        {
+          "name": "Aceite de soya",
+          "grams": 5,
+          "label": "1 cucharadita",
+          "match_note": "Sin genérico propio de soya. Mismo caso que Aceite de maíz: el único vecino es «Aceite vegetal» (2fb6e577, 884 kcal / G100 por 100 g). Decide el owner cuál lo toma o si se crean ambos.",
+          "needs_owner": true
+        },
+        {
+          "name": "Margarina",
+          "grams": 6,
+          "label": "1 cucharadita",
+          "note": "alto en sodio",
+          "food_id": "0b90f301-8aad-43a3-addc-2d615725f140",
+          "aliases": [
+            "Margarina vegetal"
+          ],
+          "match_note": "Único genérico (brand null) pero con macros falsas: 173 kcal / G19 por 100 g (margarina real ~717 kcal / G80; la chilena ~477 / G51, ver Soprole 8db51bde). Mejor dato = Soprole.",
+          "needs_owner": true,
+          "macros_dudosos": true
+        },
+        {
+          "name": "Margarina diet",
+          "grams": 15,
+          "label": "2 cucharaditas",
+          "note": "alto en sodio",
+          "match_note": "Sin candidato: no hay margarina light/diet en el catálogo global; el único genérico («Margarina vegetal») ya se usa para Margarina y además trae macros falsas.",
+          "needs_owner": true
+        },
+        {
+          "name": "Mayonesa",
+          "grams": 12,
+          "label": "1 cucharada",
+          "note": "alto en sodio",
+          "food_id": "d72a65a8-fb0d-4090-8b42-a4d24a093f93",
+          "match_note": "Match exacto con genérico (brand null): 306 kcal / P1 / C8 / G31 por 100 g, que es el nivel de grasa de la mayonesa chilena (Hellmann's CL ~307)."
+        },
+        {
+          "name": "Mayonesa light",
+          "grams": 18,
+          "label": "1½ cucharadas",
+          "note": "alto en sodio",
+          "food_id": "8183117e-6e83-4272-bac5-2242fa133176",
+          "aliases": [
+            "Mayonesa Light"
+          ],
+          "match_note": "Representante de marca (Hellmann's): no hay genérico light. 175 kcal / P0 / C9 / G15 por 100 g, plausible. Duplicado con typo: f5e7c350 («Helmann's»).",
+          "needs_owner": true
+        },
+        {
+          "name": "Semillas de chía",
+          "grams": 12,
+          "label": "1 cucharada",
+          "note": "aporta 2,3 g de proteína/porción",
+          "food_id": "0c781d0b-72b9-4aaa-9f1e-c56b18404683",
+          "match_note": "Match exacto con genérico (brand null): 486 kcal / P17 / C42 / G31 por 100 g."
+        },
+        {
+          "name": "Linaza",
+          "grams": 12,
+          "label": "1 cucharada",
+          "note": "aporta 2,3 g de proteína/porción",
+          "food_id": "a01888b8-615c-458e-aa5d-4b0f6ae8f4c3",
+          "aliases": [
+            "Semillas de linaza"
+          ],
+          "match_note": "Genérico equivalente (brand null): 534 kcal / P18 / C29 / G42 por 100 g. Se descartan las marcas Renacer y La Fuente Natural."
+        },
+        {
+          "name": "Semillas de zapallo",
+          "grams": 8,
+          "label": "1 cucharada",
+          "food_id": "535e9890-bcfc-4eaa-a4d9-24211efb0a74",
+          "match_note": "Match exacto con genérico (brand null, USDA): 555 kcal / P30 / C19 / G40 por 100 g."
+        },
+        {
+          "name": "Nuez",
+          "grams": 7.5,
+          "label": "1,5 unidades (3 mariposas)",
+          "note": "aporta 1,4 g de proteína/porción",
+          "food_id": "befb0b90-615f-4949-a4b6-1654985594b4",
+          "aliases": [
+            "Nueces"
+          ],
+          "match_note": "Genérico en plural (brand null): 654 kcal / P15 / C14 / G65 por 100 g. Los candidatos del dry-run eran otros alimentos (muffin, pan, cookie con nuez)."
+        },
+        {
+          "name": "Palta",
+          "grams": 30,
+          "label": "2 cucharadas",
+          "note": "DECIDIDO (RESOLUCIONES-2 R-16): la palta va a AG, 2 cucharadas = 30 g. INTA la deja en «alimentos ricos en lípidos» (175 kcal · 15 g grasa), un grupo que el set UDD NO tiene; no se crea un grupo 14. Queda anotado en SPEC «Fuera de alcance»",
+          "source": "INTA p. 33",
+          "food_id": "0fdedd27-24b0-4465-b4bf-515c739014b3",
+          "match_note": "Match exacto con genérico (brand null): 160 kcal / P2 / C9 / G15 por 100 g."
+        }
+      ]
+    },
+    "AZ": {
+      "kcal": 20,
+      "protein_g": 0,
+      "carbs_g": 5,
+      "fats_g": 0,
+      "source": "UDD p. 77",
+      "foods": [
+        {
+          "name": "Azúcar",
+          "grams": 5,
+          "label": "1 cucharadita",
+          "food_id": "b1c33e18-c2f5-44b4-af93-64116c119db5",
+          "aliases": [
+            "Azúcar granulada"
+          ],
+          "match_note": "Genérico equivalente (brand null): 400 kcal / C100 por 100 g. Los candidatos del dry-run eran productos «sin azúcar», otro alimento."
+        },
+        {
+          "name": "Miel de abeja",
+          "grams": 5,
+          "label": "1 cucharadita",
+          "food_id": "c82d7a3e-e226-4865-8493-79934cbbae9a",
+          "aliases": [
+            "Miel"
+          ],
+          "match_note": "Genérico (brand null): 304 kcal / C82 por 100 g. Se prefiere sobre el resuelto del dry-run «miel de abeja» (6bb4e7ed), que es de marca (apícola San José)."
+        },
+        {
+          "name": "Miel de palma",
+          "grams": 5,
+          "label": "1 cucharadita",
+          "match_note": "Sin candidato: no existe miel de palma en el catálogo. «Miel» ya se usa para Miel de abeja y es otro alimento. Hay que crearlo.",
+          "needs_owner": true
+        },
+        {
+          "name": "Chancaca",
+          "grams": 5,
+          "label": "1 cucharadita",
+          "food_id": "2b1610b3-13c1-4292-9636-aff71652f93f",
+          "aliases": [
+            "Chancaca Deliciosa"
+          ],
+          "match_note": "Único candidato (brand null pese al nombre comercial): 375 kcal pero C0 / G1, imposible para chancaca (~95 g CHO). Macros dudosas, hay que corregirlas.",
+          "needs_owner": true,
+          "macros_dudosos": true
+        },
+        {
+          "name": "Mermelada",
+          "grams": 7.5,
+          "label": "1 cucharadita",
+          "food_id": "886e60a7-4bd4-46e9-94cf-181a886d0f6d",
+          "match_note": "Match exacto con genérico (brand null, USDA): 278 kcal / C69 por 100 g."
+        },
+        {
+          "name": "Dulce de membrillo",
+          "grams": 8,
+          "label": "1 cucharadita",
+          "food_id": "85566566-0351-4bac-83e1-606130c3a080",
+          "match_note": "Representante de marca (Watts, supermercado): no hay genérico. 237 kcal / C59 por 100 g, plausible; el otro (Eckart, 93 kcal) es inverosímil.",
+          "needs_owner": true
+        },
+        {
+          "name": "Dulce de camote",
+          "grams": 8,
+          "label": "1 cucharadita",
+          "match_note": "Sin candidato: todos los «camote» del catálogo son la verdura (cruda, cocida, al horno), no el dulce. Hay que crear el alimento.",
+          "needs_owner": true
+        },
+        {
+          "name": "Manjar",
+          "grams": 7.5,
+          "label": "¾ cucharadita",
+          "food_id": "6a969ce2-8f82-4dc0-832d-440b55673ac6",
+          "aliases": [
+            "Manjar Tradicional (Colun/Nestlé)"
+          ],
+          "match_note": "Genérico (brand null pese a citar marcas): 315 kcal / P7 / C55 / G7 por 100 g, coherente con las marcas (Colun 290, Nestlé 313)."
+        },
+        {
+          "name": "Jalea en polvo",
+          "grams": 7,
+          "label": "1 cucharadita colmada",
+          "food_id": "6bea5dbf-d5e7-4f4a-b16f-1d8ed99e4af1",
+          "aliases": [
+            "Gelatina Sabor Cereza"
+          ],
+          "match_note": "Representante de marca (Lider): no hay genérico de jalea en polvo. 378 kcal / P18 / C77 por 100 g, propio del polvo (las jaleas preparadas rondan 30 kcal).",
+          "needs_owner": true
+        },
+        {
+          "name": "Leche condensada",
+          "grams": 7,
+          "label": "1 cucharadita",
+          "food_id": "0ead255d-d8c2-4b71-ad17-188cb7863f1f",
+          "match_note": "Match exacto con genérico (brand null): 321 kcal / P8 / C54 / G9 por 100 g."
+        },
+        {
+          "name": "Bebida gaseosa",
+          "grams": 50,
+          "label": "¼ taza",
+          "food_id": "570fb06b-f962-4768-a994-14eb68a7c637",
+          "aliases": [
+            "Bebida cola"
+          ],
+          "match_note": "Genérico equivalente (brand null, USDA): 42 kcal / C10 por 100 g, la gaseosa azucarada estándar. Se descarta la versión light (2 kcal)."
+        },
+        {
+          "name": "Néctar de fruta",
+          "grams": 40,
+          "label": "⅕ taza",
+          "food_id": "0d810d84-7ec1-4a81-849b-262c6b85e9f1",
+          "aliases": [
+            "Nectar de fruta"
+          ],
+          "match_note": "Representante de marca (Watts): no hay genérico. 41 kcal / C10 por 100 g, el único con macros de néctar azucarado; el resto son 0 % o light (9-22 kcal).",
+          "needs_owner": true
+        }
+      ]
+    },
+    "SCP": {
+      "kcal": 120,
+      "protein_g": 24,
+      "carbs_g": 2,
+      "fats_g": 1,
+      "source": "EVA (S3, no viene de manual)",
+      "foods": [
+        {
+          "name": "Proteína de suero (whey) en polvo",
+          "grams": 30,
+          "label": "1 scoop",
+          "food_id": "98b421fa-f3d3-4d2e-bc55-55a49c31093c",
+          "aliases": [
+            "Proteína Whey (Polvo genérico)"
+          ],
+          "match_note": "Genérico de whey en polvo. 352 kcal / 78 P / 6 C / 2 G por 100 g ⇒ el scoop de 30 g da 106 kcal y 23,4 g P, casi calcado a los 120 kcal / 24 P del grupo SCP."
+        }
+      ]
+    }
+  }
+}

@@ -381,6 +381,22 @@ jefe en el worktree tras el juicio de los workers (salida real):
   disparado aparte por `workflow_dispatch`: run `34065862670` **verde** (`e2e` `prod-suave` **9/9 en 45,6 s** sobre `master`
   @`2fe28d61` ya desplegado; `quality`, `unit` ×3 y `hygiene` verdes; `nutrition-smoke` skipped en el dispatch).
 
+## Tren «Porciones a la chilena» (Nutrición V2) — W0a + W0b dry-run, 09-09 (worktree `porciones-chilenas`, sin push)
+
+- `pnpm docs:check` ⇒ **OK — 20 canónicos, 257 Markdown activos** con el SDD copiado a `docs/specs/nutrition-porciones-chilenas/`.
+- `node --check scripts/nutrition-portions-cl/derive-cl-equivalences.mjs` ⇒ OK. Sin vitest/typecheck: W0 no toca código de producto.
+- SQL en LIVE por MCP, `BEGIN … ROLLBACK`: DDL `20260909120000` + `20260909120500` (dos pasadas cada una) + seed
+  `_POST_DEPLOY_20260909121000` + encendido simulado + 6 `EXPLAIN (analyze, buffers)` + 23505 con `FR` + rollback rama (a) ⇒
+  todo verde; salida pegada en `docs/specs/nutrition-porciones-chilenas/TASKS.md` § «Registro W0a + W0b».
+- **Aplicado en LIVE**: versiones `20260909163802` (`exchange_groups_portion_system`) y `20260909163812`
+  (`exchange_groups_no_duplicate_system_code`); seed **apagado** por `execute_sql` (13 `cl` con `deleted_at`, 9 SMAE vivos).
+  `get_advisors` security + performance ⇒ 0 hallazgos nuevos.
+- Smoke `supabase/tests/exchange_groups_portion_system_rollback.sql` (casos A–G) en LIVE con ROLLBACK ⇒ «W0.5 SMOKE OK».
+- Dry-run `pnpm exec jiti scripts/nutrition-portions-cl/derive-cl-equivalences.mjs --dry-run` (cero escrituras; `tsx` no está
+  instalado, `jiti` sí) ⇒ 2.341 derivadas + 153 curadas a insertar, control de carnes 28/30, 0 en `CB` con share > 0,40;
+  `--apply` bloqueado por 12 curados sin alimento hasta el OK del owner (W0.9).
+- No corrido: Q4–Q9 de W0.12 (requieren el `--apply`); E2E (cierre del tren, W6).
+
 ## Pendientes actuales
 
 - [x] Artefactos del run `30185211552` retenidos (`D:\tmp\eva-artifacts-856829fa\`: build.aab + build.ipa) y procesamiento en TestFlight/Play internal verificado por el owner (2026-07-25).
