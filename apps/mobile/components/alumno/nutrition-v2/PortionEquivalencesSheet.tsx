@@ -14,9 +14,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Pressable, Text, TextInput, View } from 'react-native'
 import { Search } from 'lucide-react-native'
-import type {
-  NutritionExchangeFoodRead,
-  NutritionSlotExchangeTargetRead,
+import {
+  qeGroupRefPerPortion,
+  type NutritionExchangeFoodRead,
+  type NutritionSlotExchangeTargetRead,
 } from '@eva/nutrition-v2'
 import { Sheet } from '../../Sheet'
 import { NutritionMotionButton } from '../../nutrition-v2'
@@ -88,6 +89,19 @@ export function PortionEquivalencesSheet({
   const foods = useMemo(
     () => (target ? filterPortionExchangeFoods(exchangeFoods, target.groupCode, search) : []),
     [exchangeFoods, search, target],
+  )
+
+  /**
+   * Macros de 1 porción del grupo activo, con los COMPUESTOS ya expandidos (R11). Legumbres
+   * (`LEG`) vive en la DB con `ref_* = 0` y `composed_of = [{P,1},{C,1}]`: la cabecera imprimía
+   * «≈ 0 kcal · P 0 g · C 0 g · G 0 g» porque leía el ref crudo. El diccionario se reconstruye
+   * desde los targets de la franja —que traen el `ref` CONGELADO de cada base dentro de
+   * `composedOf`—, así que no hace falta ninguna lectura nueva y el número es el mismo que el
+   * motor le suma al día.
+   */
+  const refPerPortion = useMemo(
+    () => (target ? qeGroupRefPerPortion(target, orderedTargets) : null),
+    [target, orderedTargets],
   )
 
   const view = target ? views[target.groupCode] : undefined
@@ -162,7 +176,7 @@ export function PortionEquivalencesSheet({
                 {PORTIONS_COPY.student.sheetTitle(target.groupName)}
               </Text>
               <Text className="text-[11px] leading-4 text-muted">
-                {`≈ ${Math.round(target.ref.calories)} kcal · P ${formatPortionsCl(target.ref.proteinG)} g · C ${formatPortionsCl(target.ref.carbsG)} g · G ${formatPortionsCl(target.ref.fatsG)} g`}
+                {`≈ ${Math.round((refPerPortion ?? target.ref).calories)} kcal · P ${formatPortionsCl((refPerPortion ?? target.ref).proteinG)} g · C ${formatPortionsCl((refPerPortion ?? target.ref).carbsG)} g · G ${formatPortionsCl((refPerPortion ?? target.ref).fatsG)} g`}
               </Text>
               {!target.macrosConfirmed ? (
                 <View className="mt-1 self-start rounded-pill border border-warning-500/30 bg-warning-500/10 px-2 py-0.5">

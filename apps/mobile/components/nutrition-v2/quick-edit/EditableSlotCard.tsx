@@ -11,6 +11,7 @@ import {
   qeSlotPortionTotals,
   qeSlotSubtotal,
   type NutritionV2CoachScope,
+  type PortionSystem,
   type QeItem,
   type QePortionTarget,
   type QeSlot,
@@ -117,9 +118,18 @@ export function EditableSlotCard({
   onRemoveItem,
   onOpenItemMenu,
   onPortionStep,
+  onPortionSetValue,
   onPortionNotes,
   onPortionRemove,
   onPortionAdd,
+  onPortionBumpGroup,
+  onPortionConvertPress,
+  portionCoachSystem,
+  portionUsedSystems,
+  portionSystemGroupIds,
+  portionLegacyPlanCount,
+  portionBumpedGroupId = null,
+  portionBumpNonce = 0,
   portionGroupAdmin,
   tourTargets = false,
 }: {
@@ -161,9 +171,29 @@ export function EditableSlotCard({
   /** Menu por item (solo editor unico): reemplazos autorizados + reorden. */
   onOpenItemMenu?: (itemKey: string) => void
   onPortionStep: (targetKey: string, direction: 1 | -1) => void
+  /** Tap-to-edit del stepper (M3): texto CRUDO hacia `SET_PORTION_TARGET`. */
+  onPortionSetValue: (targetKey: string, value: string) => void
   onPortionNotes: (targetKey: string, value: string) => void
   onPortionRemove: (target: QePortionTarget, index: number) => void
   onPortionAdd: (group: PortionPickerGroup) => void
+  /**
+   * Tocar en el picker un grupo que la franja YA tiene suma media porción (D2-A). Todo lo que la
+   * card hace es pasar el mensaje: el bump, el toast con Deshacer y el evento los resuelve el
+   * orquestador, que es quien tiene el `dispatch` y el `variantKey`.
+   */
+  onPortionBumpGroup?: (exchangeGroupId: string) => void
+  /** Carcasa del banner del plan legado: sin handler no se monta (W3.6 la cablea). */
+  onPortionConvertPress?: () => void
+  /** Set del coach y sets con targets vivos en otros planes suyos (visibilidad del picker). */
+  portionCoachSystem?: PortionSystem | null
+  portionUsedSystems?: readonly PortionSystem[]
+  /** Ids que el catálogo vivo marcó `is_system`; un id ausente se trata como propio. */
+  portionSystemGroupIds?: ReadonlySet<string>
+  /** `n` del encabezado «Legado (SMAE) · Lo usas en {n} planes». */
+  portionLegacyPlanCount?: number
+  /** Grupo con resalte pendiente tras un bump, y el nonce que lo redispara. */
+  portionBumpedGroupId?: string | null
+  portionBumpNonce?: number
   /** Porciones propias (FD6a): altas/edición de grupos desde el picker. Ausente = sin esa UI. */
   portionGroupAdmin?: QuickEditGroupAdmin
   /** Workspace del coach: habilita el lápiz de corrección de macros (T2.2). */
@@ -446,11 +476,22 @@ export function EditableSlotCard({
             <EditablePortionsSection
               targets={slot.portionTargets}
               groups={portionGroups}
+              slotName={slot.name}
               disabled={disabled}
+              errors={errors}
+              coachSystem={portionCoachSystem}
+              usedSystems={portionUsedSystems}
+              systemGroupIds={portionSystemGroupIds}
+              legacyPlanCount={portionLegacyPlanCount}
+              bumpedGroupId={portionBumpedGroupId}
+              bumpNonce={portionBumpNonce}
               onStep={onPortionStep}
+              onSetValue={onPortionSetValue}
               onSetNotes={onPortionNotes}
               onRemove={onPortionRemove}
               onAdd={onPortionAdd}
+              onBumpGroup={onPortionBumpGroup}
+              onConvertPress={onPortionConvertPress}
               groupAdmin={portionGroupAdmin}
             />
           </TourTarget>

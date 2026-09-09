@@ -1082,6 +1082,13 @@ export type QuickEditAction =
   | { type: 'RESTORE_PORTION_TARGET'; variantKey: string; slotKey: string; index: number; target: QePortionTarget }
   | { type: 'ADD_PORTION_TARGET'; variantKey: string; slotKey: string; key: string; group: QePortionGroup }
   /**
+   * Suma media porcion (o `by`) al target del grupo YA presente en la franja. Se resuelve por
+   * `exchangeGroupId` y no por `targetKey` a proposito: el picker no conoce la key de la fila,
+   * solo el grupo que el coach toco (SPEC §7.1). Si el grupo no esta en la franja es un no-op
+   * que devuelve el MISMO estado — el alta la hace `ADD_PORTION_TARGET`, no esto.
+   */
+  | { type: 'BUMP_PORTION_TARGET'; variantKey: string; slotKey: string; exchangeGroupId: string; by?: number }
+  /**
    * Baja las porciones del dia base a los dias que se quedaron sin ellas (defecto B4). Sin
    * payload a proposito: los huecos se recalculan del estado en el momento de aplicar, asi
    * que jamas se copia contra un diagnostico viejo. Deshacer: `RESTORE_DRAFT` con el arbol
@@ -1209,6 +1216,47 @@ export function stepPortionsText(current: string, direction: 1 | -1): string {
   return String(Math.min(next, PORTION_MAX))
 }
 
+// `Intl.NumberFormat` es de las construcciones mas caras del runtime (carga los datos de locale)
+// y estas dos funciones se llaman por FILA del picker: `qeGroupRefLabel` sola arma 4 etiquetas
+// por fila, ~88 por apertura. Los formateadores son inmutables y sin estado, asi que se cachean
+// a nivel de modulo. Son DOS a proposito, uno por contrato (ver el JSDoc de `formatMacroEsCl`):
+// compartir la instancia volveria a atar las porciones a los macros por la puerta de atras.
+const PORTIONS_FORMATTER = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 1 })
+const MACRO_FORMATTER = new Intl.NumberFormat('es-CL', { maximumFractionDigits: 1 })
+
+/**
+ * UNICO formateador de porciones en es-CL (SPEC §10.6). Coma decimal y sin ceros de mas:
+ * 1 -> "1", 1,5 -> "1,5", 0,5 -> "0,5". Vivia copiado en `plan-dow-strip.ts`, en el picker RN
+ * y en el builder RN; con tres copias la misma pantalla imprimia "1,5" y "1.5" a la vez.
+ */
+export function formatPortionsEsCl(portions: number): string {
+  if (!Number.isFinite(portions)) return ''
+  return PORTIONS_FORMATTER.format(portions)
+}
+
+/**
+ * Formateador de MACROS (kcal, C, P, G) en es-CL. Hoy imprime igual que `formatPortionsEsCl`,
+ * pero es su PROPIO contrato: las porciones son medios de un rango 0,5–99 y los macros son kcal
+ * y gramos sin tope. Compartir el formateador significaba que un cambio en el de porciones (por
+ * ejemplo, obligar la coma o subir los decimales) movia en silencio las etiquetas del picker.
+ */
+export function formatMacroEsCl(value: number): string {
+  if (!Number.isFinite(value)) return ''
+  return MACRO_FORMATTER.format(value)
+}
+
+/**
+ * Valor de porciones tras un bump: suma, snap a medios y acota al rango del contrato
+ * (0,5 a 99). SATURA en el tope, no falla — el picker deshabilita la fila en 99 y este es el
+ * cinturon (SPEC §10.1).
+ */
+export function portionsAfterBump(current: number, by: number): number {
+  const base = Number.isFinite(current) ? current : 0
+  const step = Number.isFinite(by) ? by : 0
+  const snapped = Math.round((base + step) * 2) / 2
+  return Math.min(PORTION_MAX, Math.max(PORTION_MIN, snapped))
+}
+
 function mapVariant(state: QuickEditState, variantKey: string, fn: (v: QeVariant) => QeVariant): QuickEditState {
   // Spread OBLIGATORIO: el estado tiene campos hermanos de `variants` (visibleNotes);
   // reconstruir solo `{ variants }` los perderia en silencio en cada edicion.
@@ -1320,6 +1368,18 @@ export function createPortionTarget(key: string, group: QePortionGroup): QePorti
     portions: '1',
     notes: null,
   }
+}
+
+/**
+ * Target de la franja para un grupo dado (null si el grupo no esta prescrito ahi). Lo usa el
+ * picker, que solo conoce el `exchangeGroupId`, para decidir entre alta y bump y para leer el
+ * valor PREVIO que restaura el "Deshacer" del toast (SPEC §7.4).
+ */
+export function findPortionTargetByGroup(
+  slot: QeSlot,
+  exchangeGroupId: string,
+): QePortionTarget | null {
+  return slot.portionTargets.find((target) => target.exchangeGroupId === exchangeGroupId) ?? null
 }
 
 function mapPortionTarget(
@@ -1991,6 +2051,28 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
           ? slot
           : { ...slot, portionTargets: [...slot.portionTargets, createPortionTarget(action.key, action.group)] },
       )
+    case 'BUMP_PORTION_TARGET': {
+      // Resolucion por grupo (el picker no tiene el `targetKey`): sin target => MISMO estado,
+      // ni fila nueva ni clon del arbol. El guard de unicidad de `ADD_PORTION_TARGET` sigue
+      // siendo el otro cinturon contra `unique (meal_slot_id, exchange_group_id)`.
+      const slot = state.variants
+        .find((variant) => variant.key === action.variantKey)
+        ?.slots.find((candidate) => candidate.key === action.slotKey)
+      const target = slot ? findPortionTargetByGroup(slot, action.exchangeGroupId) : null
+      if (!target) return state
+      const current = parsePortionsValue(target.portions)
+      const next = portionsAfterBump(current ?? 0, action.by ?? PORTION_STEP)
+      // Saturado en el tope (99): `portionsAfterBump` devuelve el MISMO valor, asi que clonar el
+      // arbol solo ensuciaria el borrador sin cambio real. Mismo no-op que la rama de arriba.
+      // La comparacion es NUMERICA: el tap-to-edit deja textos como '99,0' o ' 99 ' que valen 99
+      // pero no son la cadena '99', y comparando strings el "no-op" reescribia el campo y marcaba
+      // el borrador como sucio — justo lo que esta rama existe para evitar.
+      if (current === next) return state
+      return mapPortionTarget(state, action.variantKey, action.slotKey, target.key, (current) => ({
+        ...current,
+        portions: String(next),
+      }))
+    }
     case 'APPLY_BASE_PORTIONS':
       return applyBasePortions(state)
     case 'SET_VISIBLE_NOTES':
@@ -2536,6 +2618,67 @@ export function qeExchangeGroups(groups: readonly QePortionGroup[]): QeExchangeG
       macrosConfirmed: group.macrosConfirmed,
     })),
   )
+}
+
+/**
+ * Macros de UNA porcion del grupo, EXPANDIENDO los compuestos (D5/R11). Es el defecto que
+ * reporto Pame: `LEG` (Legumbres) tiene `ref_* = 0` + `composed_of = [{P,1},{C,1}]` y las seis
+ * etiquetas "1 porcion ≈" imprimian el ref crudo, o sea "0 kcal · 0 C · 0 P". El 0 es correcto
+ * en la DB; lo que faltaba era pedirle al motor que expanda (`macrosForTargets`, el MISMO que
+ * ve el alumno).
+ *
+ * Fallback HONESTO al ref crudo en los tres casos en que el motor no puede responder: dict
+ * vacio, grupo ausente del dict, o expansion que devuelve todo en cero. Nunca se inventa un
+ * valor ni se muestra un cero de mas.
+ *
+ * El `groups` que se pasa debe ser el diccionario CONGELADO del plan (o el catalogo con el que
+ * se pinta el picker), nunca una mezcla: `portions-qa.test.ts` guarda esa invariante.
+ */
+export function qeGroupRefPerPortion(
+  group: QePortionGroup,
+  groups: readonly QePortionGroup[],
+): ExchangeMacroTotals {
+  return qeGroupRefPerPortionFromDict(group, qeExchangeGroups(groups))
+}
+
+/**
+ * Igual que `qeGroupRefPerPortion` pero recibiendo el diccionario YA armado. Es la variante que
+ * usan las dos superficies del picker: la etiqueta se pinta POR FILA y la version que recibe
+ * `groups` reconstruia el diccionario entero (`qeExchangeGroups`) en cada una — 22 veces por
+ * render con el set chileno completo. El consumidor memoiza el dict una vez y llama a esta.
+ */
+export function qeGroupRefPerPortionFromDict(
+  group: QePortionGroup,
+  // Mutable a proposito: es el mismo tipo que ya piden `qeSlotPortionTotals` /
+  // `qeVariantPortionTotals` y el que exige `macrosForTargets` del motor.
+  dict: QeExchangeGroup[],
+): ExchangeMacroTotals {
+  const raw: ExchangeMacroTotals = {
+    calories: group.ref.calories,
+    proteinG: group.ref.proteinG,
+    carbsG: group.ref.carbsG,
+    fatsG: group.ref.fatsG,
+  }
+  if (dict.length === 0) return raw
+  if (!dict.some((entry) => entry.id === group.exchangeGroupId)) return raw
+  const totals = macrosForTargets([{ exchangeGroupId: group.exchangeGroupId, portions: 1 }], dict)
+  const allZero =
+    totals.calories === 0 && totals.proteinG === 0 && totals.carbsG === 0 && totals.fatsG === 0
+  return allZero ? raw : totals
+}
+
+/**
+ * Etiqueta "1 porcion = 140 kcal · 30 C · 3 P · 1 G" del picker (M1). El conector distingue
+ * lo confirmado de lo referencial: "=" cuando `macros_confirmed` (set chileno, contrastado con
+ * INTA/UDD) y "≈" cuando no (los 9 SMAE nacieron con valores provisorios). El orden es
+ * kcal · C · P · G y la G entra porque en Chile la grasa es lo que separa lacteos y carnes.
+ */
+export function qeGroupRefLabel(
+  ref: ExchangeMacroTotals,
+  options: { confirmed: boolean },
+): string {
+  const connector = options.confirmed ? '=' : '≈'
+  return `1 porción ${connector} ${formatMacroEsCl(ref.calories)} kcal · ${formatMacroEsCl(ref.carbsG)} C · ${formatMacroEsCl(ref.proteinG)} P · ${formatMacroEsCl(ref.fatsG)} G`
 }
 
 /**

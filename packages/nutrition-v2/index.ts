@@ -75,6 +75,8 @@ export * from './coach-notes'
 // (union, nunca exclusion) + los helpers de set (`CL_CODES`, `systemOf`, `isClGroup`). Se
 // aplica SOLO en los bordes de presentacion: el catalogo de autorizacion no se filtra (R13).
 export * from './exchange-visibility'
+// Tren «Porciones a la chilena» (W2.10): eventos PostHog de porciones, con payload cerrado y sin una sola cifra de salud (Ley 21.719).
+export * from './portions-analytics'
 export {
   NUTRITION_V2_PERMISSION_DENIED,
   NUTRITION_V2_PERMISSION_DENIED_CODE,

@@ -35,6 +35,9 @@ import {
   type NutritionDayVariantLike,
 } from './day-variants'
 import { formatNutritionCalories } from './design'
+// Tren «Porciones a la chilena» (W2.1): el formateador es UNO solo y vive en `editor-state`.
+// Aca habia una copia privada identica; con dos copias la misma pantalla imprimia «1,5» y «1.5».
+import { formatPortionsEsCl } from './editor-state'
 
 /** Franja mínima para contar kcal/porciones. El read-model y el draft la cumplen sin casts. */
 export interface NutritionPlanDowSlotLike {
@@ -91,11 +94,6 @@ export const NUTRITION_PLAN_DOW_LEGEND = {
 
 function finiteOrNull(value: number | null | undefined): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null
-}
-
-/** "1,5" / "2" en es-CL (las porciones van de medio en medio). */
-function formatPortionsEsCl(portions: number): string {
-  return new Intl.NumberFormat('es-CL', { maximumFractionDigits: 1 }).format(portions)
 }
 
 /**

@@ -5,6 +5,14 @@ import * as Updates from 'expo-updates'
 // tipos: se borran en compilación, no suman nada al bundle, y garantizan que RN y web manden
 // EL MISMO enum en `nutrition_item_implausible`.
 import type { ImplausibleEventReason, ImplausibleSurface, KcalBucket } from '@eva/nutrition-v2'
+// Nombre y payload del bump de porciones (tren «Porciones a la chilena», W2.10). Son VALORES, no
+// tipos: el nombre del evento y el constructor del payload viven en el paquete compartido para que
+// web y RN no puedan mandar props distintas bajo el mismo evento.
+import {
+    PORTIONS_EVENT_GROUP_BUMPED,
+    portionGroupBumpedPayload,
+    type PortionGroupBumpedProps,
+} from '@eva/nutrition-v2'
 
 /**
  * Analytics de producto del binario (Share Entreno F7.1).
@@ -166,4 +174,26 @@ export function captureNutritionItemImplausible(props: {
         reason: props.reason,
         kcal_bucket: props.kcalBucket,
     })
+}
+
+/**
+ * `nutrition_portion_group_bumped` — el coach tocó en el picker un grupo que la franja YA tenía y
+ * eso sumó media porción en vez de no hacer nada (D2-A, tren «Porciones a la chilena»). Responde
+ * UNA pregunta de producto: si el gesto se usa más en el celular o en el escritorio.
+ *
+ * LEY 21.719: el payload es EXHAUSTIVO y lo arma el paquete compartido — las 5 props de DATA.md
+ * §11 (`surface`, `group_code`, `portion_system`, `from`, `undone`) y ninguna más. Ni porciones,
+ * ni kcal, ni gramos, ni nombre de alimento, ni ids. `group_code` sí viaja porque este evento lo
+ * dispara el COACH: 'PCT' o 'LAC' es un término de dominio sobre su propia herramienta.
+ *
+ * A diferencia de `nutrition_item_implausible` acá NO se agrega `platform`: la superficie ya lo
+ * dice, y una prop de más en un evento que web y RN comparten es una prop que solo uno de los dos
+ * manda. Por eso el payload lo construye `portionGroupBumpedPayload` y no se arma a mano: web
+ * (`apps/web/src/lib/posthog/events.ts`) llama al MISMO constructor con `'web'`.
+ *
+ * El «Deshacer» del toast emite un SEGUNDO evento con `undone: true` — así se lee cuántos bumps
+ * se revirtieron sin tener que correlacionar dos eventos distintos.
+ */
+export function captureNutritionPortionGroupBumped(props: PortionGroupBumpedProps): void {
+    captureAppEvent(PORTIONS_EVENT_GROUP_BUMPED, portionGroupBumpedPayload('rn', props))
 }

@@ -119,10 +119,14 @@ export const QE_COPY = {
     'Tus cambios de porciones se aplican al publicar esta edición. Los planes que ya publicaste mantienen los valores con los que salieron.',
   /**
    * Ayuda del picker "Agregar grupo": desde 08-04 la lista ofrece TODO el catálogo de grupos
-   * del coach y no solo los que el plan ya usaba, así que conviene decir de dónde sale y por
-   * qué algunos están desactivados (antes la lista completa venía deshabilitada y parecía rota).
+   * del coach y no solo los que el plan ya usaba, así que conviene decir de dónde sale.
+   *
+   * Reescrito en W2.7 («Porciones a la chilena», D2-A): el texto anterior afirmaba que los
+   * grupos ya usados «aparecen desactivados», y desde este tren ya NO lo están — tocarlos suma
+   * media porción. Ningún gate atrapa un copy que miente: es texto de producto.
    */
-  portionsPickerHint: 'Elige cualquier grupo de tu catálogo. Los que ya están en esta comida aparecen desactivados.',
+  portionsPickerHint:
+    'Elige cualquier grupo de tu catálogo. Si ya está en esta comida, súmale media porción con un clic.',
   // ── Multi-día (FD5): menú por día en el modo edición. El alta vive en `AddDayPopover`
   //    (compartido con el builder), que trae su propio copy y su upsell del gate Pro.
   baseDayEyebrow: 'Día base',

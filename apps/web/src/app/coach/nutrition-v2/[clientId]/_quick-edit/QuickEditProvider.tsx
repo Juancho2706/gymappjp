@@ -58,6 +58,7 @@ import {
   readModelToEditState,
   validateQuickEdit,
   type QeExchangeGroup,
+  type PortionSystem,
   type QePortionGroup,
   type QuickEditAction,
   type QuickEditState,
@@ -135,6 +136,13 @@ export interface QuickEditTodayIntakeSummary {
   slotCount: number
 }
 
+/**
+ * Lo que el picker de porciones necesita del catalogo VIVO y que el snapshot congelado del plan
+ * no guarda: si el grupo es del sistema y su `sort_order` real. Se expone como mapa por id —el
+ * unico identificador que comparten el snapshot y el catalogo— y NUNCA por codigo.
+ */
+export type PortionCatalogMeta = ReadonlyMap<string, { readonly isSystem: boolean; readonly sortOrder: number }>
+
 interface QuickEditContextValue {
   state: QuickEditState
   dispatch: (action: QuickEditAction) => void
@@ -180,6 +188,34 @@ interface QuickEditContextValue {
    * porciones, o la lectura fallo): la UI no pinta nada — callar, no mentir un cero.
    */
   portionFoodCounts: ExchangeGroupFoodCounts | null
+  /**
+   * `isSystem` y `sort_order` REALES del catalogo vivo, por id de grupo (W2, fix del revisor):
+   * el picker los necesita para partir por seccion y ordenar. No se pueden inferir del codigo —
+   * `exchange_groups_system_code_uq` es un indice PARCIAL (solo `is_system`), asi que un grupo
+   * PROPIO del coach puede llamarse 'C' o 'FR' sin colisionar; si se lo tomara por system, la
+   * regla de visibilidad lo sacaria del picker y el coach perderia su propio grupo.
+   * `null` = el catalogo no llego: el consumidor cae al criterio por codigo (degradacion).
+   */
+  portionCatalogMeta: PortionCatalogMeta | null
+  /**
+   * Set de porciones del coach (`coaches.portion_system`), tal como lo devuelve el loader del
+   * picker (W1.5). `'cl'` mientras la lectura no llegue: es el default de la columna y el set
+   * al que cae `systemOf` cuando el grupo no declara el suyo (R18).
+   */
+  portionSystem: PortionSystem
+  /**
+   * Sets EN USO por los planes del coach que NO son el propio (`findUsedPortionSystemsForCoach`
+   * menos el suyo). `[]` = no usa ninguno ⇒ el picker no monta la sección «Legado».
+   */
+  portionLegacySystems: PortionSystem[]
+  /**
+   * `true` ⇒ MODO DEGRADADO: los dos campos de arriba son el default por falta de dato, no un
+   * hecho leido. El consumidor tiene que pasar `usedSystems: undefined` a
+   * `visibleExchangeGroupsForCoach` —fail-open: se muestra TODO sin marcar legado— en vez de
+   * `[]`, que significaria «se leyo y no usa nada» y escondería un set que el coach sí usa.
+   * Arranca en `true` porque antes de la primera respuesta no hay dato ninguno.
+   */
+  portionSystemsDegraded: boolean
   /**
    * NUT-008: la carga server-side de los reemplazos autorizados fallo. Publicar los
    * borraria (la publicacion reescribe el arbol completo), asi que "Publicar" queda
@@ -383,6 +419,15 @@ export function QuickEditProvider({
   // Catalogo vivo de grupos del coach (misma respuesta que trae los conteos). null = todavia
   // no llego o la lectura fallo: el picker vuelve a ofrecer solo los grupos del plan.
   const [portionGroupCatalog, setPortionGroupCatalog] = useState<QePortionGroup[] | null>(null)
+  // `isSystem` y `sort_order` reales del catalogo (ver `PortionCatalogMeta`): viajan en la misma
+  // respuesta y son lo unico que el snapshot congelado del plan no puede reconstruir.
+  const [portionCatalogMeta, setPortionCatalogMeta] = useState<PortionCatalogMeta | null>(null)
+  // Set del coach y sets legados EN USO (W1.5): viajan en la MISMA respuesta que el catalogo.
+  // `degraded` arranca en true —todavia no hay dato— para que el picker no afirme «Legado» sobre
+  // un set que quizas el coach si usa: sin lectura se muestra todo, sin chip (fail-open, R14).
+  const [portionSystem, setPortionSystem] = useState<PortionSystem>('cl')
+  const [portionLegacySystems, setPortionLegacySystems] = useState<PortionSystem[]>([])
+  const [portionSystemsDegraded, setPortionSystemsDegraded] = useState(true)
   const [isPending, startTransition] = useTransition()
   // Instrumentacion T1.0 (nutrition-flows-redesign): duracion editar -> publicar del quick-edit.
   const capturePublished = useCaptureCoachNutritionPlanPublished()
@@ -550,6 +595,15 @@ export function QuickEditProvider({
         if (!alive || !res.ok) return
         setPortionFoodCounts(res.foodCounts)
         setPortionGroupCatalog(catalogToPortionGroups(res.groups))
+        setPortionCatalogMeta(
+          new Map(res.groups.map((group) => [group.id, { isSystem: group.isSystem, sortOrder: group.sortOrder }])),
+        )
+        // El loader MARCA y no filtra (decision (k) de W1.14): la particion por set la hace el
+        // consumidor del picker (`EditablePortionsCard`), que es el unico borde donde recortar
+        // no le esconde datos a nadie mas.
+        setPortionSystem(res.portionSystem)
+        setPortionLegacySystems(res.legacySystems)
+        setPortionSystemsDegraded(res.degraded ?? false)
       } catch {
         // Informativo: el quick-edit sigue funcionando sin la linea de apoyo.
       }
@@ -913,6 +967,10 @@ export function QuickEditProvider({
     portionGroupChoices,
     exchangeGroups,
     portionFoodCounts,
+    portionCatalogMeta,
+    portionSystem,
+    portionLegacySystems,
+    portionSystemsDegraded,
     substitutionsFailed: substitutionsLoadFailed,
     retrySubstitutions,
     futureDateLabel,

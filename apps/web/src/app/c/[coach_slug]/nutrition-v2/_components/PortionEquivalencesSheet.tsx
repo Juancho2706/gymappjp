@@ -4,9 +4,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { Search, X } from 'lucide-react'
-import type {
-  NutritionExchangeFoodRead,
-  NutritionMealSlotRead,
+import {
+  qeGroupRefPerPortion,
+  type NutritionExchangeFoodRead,
+  type NutritionMealSlotRead,
 } from '@eva/nutrition-v2'
 import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
 import { NutritionMotionButton } from '@/components/nutrition-v2'
@@ -73,6 +74,16 @@ export function PortionEquivalencesSheet({
     if (!term) return list
     return list.filter((food) => food.name.toLowerCase().includes(term))
   }, [target, exchangeFoods, search])
+
+  /**
+   * Macros de UNA porción con los grupos COMPUESTOS expandidos (W2.9 / R11). El ref crudo de
+   * Legumbres es `0` en la DB —su valor vive en `composed_of` = 1P + 1C— y la cabecera imprimía
+   * «≈ 0 kcal · P 0 g · C 0 g». `qeGroupRefPerPortion` le pide la expansión al MISMO motor que
+   * ve el alumno (`macrosForTargets`), sobre los targets CONGELADOS de la franja: los
+   * `composedOf` del read model traen el `ref` de cada base, así que el diccionario se reconstruye
+   * sin consultar el catálogo vivo. Fallback honesto al ref crudo si el motor no puede responder.
+   */
+  const headerRef = useMemo(() => (target ? qeGroupRefPerPortion(target, targets) : null), [target, targets])
 
   const open = slot !== null && target !== null
 
@@ -152,8 +163,10 @@ export function PortionEquivalencesSheet({
                   {PORTIONS_COPY.student.sheetTitle(target.groupName)}
                 </h3>
                 <p className="text-[11px] text-muted">
-                  ≈ {Math.round(target.ref.calories)} kcal · P {target.ref.proteinG} g · C{' '}
-                  {target.ref.carbsG} g · G {target.ref.fatsG} g
+                  ≈ {Math.round((headerRef ?? target.ref).calories)} kcal · P{' '}
+                  {Math.round((headerRef ?? target.ref).proteinG)} g · C{' '}
+                  {Math.round((headerRef ?? target.ref).carbsG)} g · G{' '}
+                  {Math.round((headerRef ?? target.ref).fatsG)} g
                 </p>
                 {!target.macrosConfirmed ? (
                   <span className="mt-1 inline-flex rounded-pill border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-800 dark:border-amber-700/60 dark:bg-amber-950/40 dark:text-amber-300">

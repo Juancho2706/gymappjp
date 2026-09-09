@@ -8,6 +8,14 @@ import { PRICING_VERSION, type RegistrationMethod } from '@/lib/posthog/registra
 // importa del paquete —solo tipos, se borran en compilacion— para que web y RN manden EL MISMO
 // enum y no dos listas que driftan.
 import type { ImplausibleEventReason, ImplausibleSurface, KcalBucket } from '@eva/nutrition-v2'
+// Bump de porciones (tren «Porciones a la chilena», W2.10): el nombre del evento y el
+// constructor del payload viven en el paquete compartido y se IMPORTAN — web no declara su
+// propia copia. Ver el JSDoc de `useCaptureNutritionPortionGroupBumped`.
+import {
+    PORTIONS_EVENT_GROUP_BUMPED,
+    portionGroupBumpedPayload,
+    type PortionGroupBumpedProps,
+} from '@eva/nutrition-v2'
 
 /**
  * Identify coach after login/registration (only when they opted in).
@@ -547,6 +555,36 @@ export function useCaptureCheckoutConfirmed() {
                 },
                 { send_instantly: true, transport: 'sendBeacon' }
             )
+        },
+        [ph]
+    )
+}
+
+/**
+ * Tren «Porciones a la chilena» (W2.10) — `nutrition_portion_group_bumped`: el coach tocó un
+ * grupo que YA estaba en la franja y, en vez del viejo no-op, se le sumó media porción (D2-A).
+ *
+ * Shape EXACTA de DATA §11, que es la UNICA fuente de la forma de los 5 eventos del tren.
+ * Metadatos de la interaccion y nada mas: **cero kcal, cero gramos, cero nombres de alimentos y
+ * cero ids** (Ley 21.719 y regla literal de `apps/mobile/lib/analytics.ts:151-152`). El
+ * `group_code` SI viaja porque este es un evento del COACH: para el, 'PCT' o 'LAC' es un termino
+ * de dominio sobre su propia herramienta de trabajo; el mismo codigo en un evento del ALUMNO
+ * seria su pauta nutricional atada a su distinct_id, y por eso el evento del sheet no lo lleva.
+ *
+ * UN SOLO CONSTRUCTOR (fix del revisor adversarial, 09-09): el nombre del evento, el tipo de las
+ * props y `portionGroupBumpedPayload` viven en `packages/nutrition-v2/portions-analytics.ts` y web
+ * los IMPORTA. Antes web declaraba su propia copia con el mismo nombre: dos funciones con la misma
+ * firma y ningun compilador que avisara si una de las dos sumaba una prop. RN importa la misma
+ * (`apps/mobile/lib/analytics.ts`), asi que las dos superficies no pueden driftear.
+ *
+ * El hook se queda aca porque depende de `usePostHog` (web); el payload es puro y vive en el
+ * paquete.
+ */
+export function useCaptureNutritionPortionGroupBumped() {
+    const ph = usePostHog()
+    return useCallback(
+        (props: PortionGroupBumpedProps) => {
+            ph?.capture(PORTIONS_EVENT_GROUP_BUMPED, portionGroupBumpedPayload('web', props))
         },
         [ph]
     )

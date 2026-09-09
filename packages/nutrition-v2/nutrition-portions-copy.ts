@@ -20,6 +20,11 @@
  * "2 porciones") — estas funciones reciben el string ya formateado, nunca el number.
  */
 
+// El tope y su formateo salen del motor, no de un literal en el texto: el copy no es la fuente
+// del contrato numerico. `editor-state` NO importa este archivo, asi que no hay ciclo, y ambos
+// modulos ya viajan juntos en el barrel `@eva/nutrition-v2` que consumen las dos superficies.
+import { PORTION_MAX, formatPortionsEsCl } from './editor-state'
+
 export const PORTIONS_COPY = {
   builder: {
     sectionTitle: 'Porciones a elección',
@@ -54,6 +59,61 @@ export const PORTIONS_COPY = {
     stepUpAria: (grupo: string) => `Sumar media porción de ${grupo}`,
     noteFor: (grupo: string) => `Nota para ${grupo}`,
     notePlaceholder: 'Nota (opcional)',
+    // ── Tren «Porciones a la chilena» (W2.3) — textos EXACTOS de SPEC §16.1, en TUTEO ──
+    // El artifact de mockups venia en voseo («Tocá», «Podés», «Escribí») dentro de un editor
+    // que es 100 % tuteo; §16.1 manda y el mockup se regenera con estos textos (R-04).
+    /** Cabecera de la seccion del set chileno en el picker (RN y web). */
+    setChile: 'Sistema chileno · INTA 1999 · UDD 2019',
+    /**
+     * Cabecera de la seccion de grupos PROPIOS del coach. SPEC §7.1 y TASKS W2.4 nombran las TRES
+     * secciones del picker («Sistema chileno» / «Propios» / «Legado (SMAE)»), pero la tabla de
+     * §16.1 no traia la llave y el texto vivia como string suelto dentro de
+     * `EditablePortionsSection.tsx` — exactamente lo que esta tabla existe para impedir. Se agrega
+     * aca (una sola vez, para RN y web), no se overridea por superficie.
+     */
+    setOwn: 'Propios',
+    /**
+     * Cabecera COLAPSABLE del set viejo: solo se monta si el coach todavia tiene porciones
+     * SMAE vivas en algun plan. `n` = cantidad de planes, ya contada por el borde.
+     *
+     * `n` es OPCIONAL a proposito. Hoy NINGUNA superficie sabe cuantos planes son: el borde manda
+     * una lista de SETS (`legacySystems`), no un conteo, y el placeholder `1` que se usaba en su
+     * lugar imprimia «Lo usas en 1 planes» a todo coach con set viejo — castellano roto y ademas
+     * un numero inventado. Sin `n` el copy no miente; con `n` (cuando el servidor lo mande)
+     * pluraliza bien.
+     */
+    setLegacy: (n?: number) =>
+      n === undefined
+        ? 'Legado (SMAE) · Toca para ver'
+        : `Legado (SMAE) · Lo usas en ${n} ${n === 1 ? 'plan' : 'planes'} · Toca para ver`,
+    /** Chip de las filas del set viejo: reemplaza a `referentialBadge`, no se suma. */
+    legacyBadge: 'Legado (SMAE)',
+    /**
+     * Subtitulo de la fila YA usada, que dejo de estar deshabilitada: dice que va a pasar al
+     * tocarla, no solo el estado. `n` llega pre-formateado en es-CL (`formatPortionsEsCl`).
+     * La divergencia web es de INTERACCION (click, no tap), por eso viaja como parametro y no
+     * como override de superficie.
+     */
+    groupUsedBump: (franja: string, n: string, surface: 'rn' | 'web') =>
+      `Ya está en ${franja} con ${n} · ${surface === 'web' ? 'Clic' : 'Toca'} para sumar ½`,
+    /**
+     * Toast del bump. `n` llega pre-formateado, asi que el plural se decide sobre el texto:
+     * `formatPortionsEsCl(1)` es exactamente «1» y cualquier otro valor lleva coma («1,5»).
+     * Sin el plural el toast diria «Frutas: ahora 1 porciones en Desayuno» — justo la frase que
+     * el caso pidio arreglar, porque con `PORTION_MIN = 0,5` el primer bump ya llega a 1.
+     */
+    groupBumped: (grupo: string, n: string, franja: string) =>
+      `${grupo}: ahora ${n} ${n.trim() === '1' ? 'porción' : 'porciones'} en ${franja}`,
+    groupBumpedUndo: 'Deshacer',
+    /**
+     * Unico estado que sigue `disabled`: el target ya esta en el tope del contrato. El numero
+     * NO se escribe a mano: sale de `PORTION_MAX` formateado, para que el dia que el CHECK de la
+     * tabla suba el tope el copy no quede mintiendo un «99» que ya no existe.
+     */
+    groupAtMax: (franja: string) =>
+      `Ya está en ${franja} con ${formatPortionsEsCl(PORTION_MAX)} · es el máximo`,
+    /** Subtitulo del stepper mientras el numero esta en edicion (tap-to-edit RN, M3). */
+    stepperEditHint: 'Escribe la cantidad · de 0,5 a 99',
   },
   student: {
     coverageTitle: 'Porciones de hoy',
@@ -228,6 +288,18 @@ export const PORTIONS_COPY = {
     copyFailed: 'El grupo se creó, pero no pudimos copiar su lista.',
     groupUnavailable: 'Ese grupo de porciones ya no está disponible.',
     foodUnavailable: 'Ese alimento ya no está disponible.',
+  },
+  /**
+   * Conversion SMAE → set chileno (tren «Porciones a la chilena»). Solo las CUATRO llaves del
+   * BANNER: la carcasa se monta en W2 (colision declarada W2/W3 en TASKS) y W3 la cablea al
+   * conversor, sumando aca `title`/`intro`/`footer`/`cta`/`review` de SPEC §16.1.
+   */
+  convert: {
+    bannerTitle: 'Este plan usa las porciones anteriores (SMAE)',
+    bannerBody:
+      'Ahora EVA trae el sistema chileno (INTA/UDD): cereales a 140 kcal y 30 g, lácteos por grasa, carnes bajas y altas. Puedes convertir el borrador y revisar antes de publicar.',
+    bannerCta: 'Ver conversión',
+    bannerDismiss: 'Ahora no',
   },
   coach: {
     dayCoverage: 'Porciones',

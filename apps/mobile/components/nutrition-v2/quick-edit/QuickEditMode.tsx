@@ -52,7 +52,9 @@ import {
   countVariantHeaderChanges,
   dayWarningCopy,
   daysForCopyPreset,
+  findPortionTargetByGroup,
   formatNutritionDayOfWeek,
+  formatPortionsEsCl,
   kcalBucket,
   mergePortionGroupChoices,
   nextDaysFrom,
@@ -66,10 +68,15 @@ import {
   qeSubstitutionEquivalence,
   qeVariantTotalWithPortions,
   quickEditReducer,
+  PORTION_MAX,
+  PORTION_STEP,
+  parsePortionsValue,
+  portionsAfterBump,
   readModelToDraft,
   readModelToEditState,
   resolveNutritionDayVariantForDate,
   sortNutritionDayVariantsForDisplay,
+  systemOf,
   takenDayVariantDows,
   validateQuickEdit,
   type CopyMode,
@@ -79,6 +86,7 @@ import {
   type NutritionPlanReadModel,
   type NutritionStrategy,
   type NutritionV2CoachScope,
+  type PortionSystem,
   type QeItemSubstitution,
   type QePortionGroup,
   type QePortionTarget,
@@ -108,7 +116,10 @@ import {
   type PublishEffectiveFromChoice,
 } from '../../../lib/nutrition-v2-quick-edit'
 import type { PortionPickerGroup, QuickEditGroupAdmin } from './EditablePortionsSection'
-import { captureNutritionItemImplausible } from '../../../lib/analytics'
+import {
+  captureNutritionItemImplausible,
+  captureNutritionPortionGroupBumped,
+} from '../../../lib/analytics'
 import { fetchNutritionV2ExchangeGroups } from '../../../lib/nutrition-v2-exchange-groups.api'
 import { toQuickEditPortionGroup } from '../../../lib/nutrition-v2-builder-portions'
 import { publishDraftRN, publishQuickEditRN, savePlanTemplateRN } from '../../../lib/nutrition-v2.api'
@@ -171,6 +182,13 @@ function genKey(prefix: string): string {
 
 // T2.6 F1: ventana unica del Deshacer destructivo en todo el modulo (web y RN), era 5 s.
 const UNDO_TIMEOUT_MS = 8000
+
+/**
+ * Vida del toast del bump. Se declara acá (en vez de dejar el default del `Toast`) porque el
+ * MISMO número decide cuándo vence la captura del «Deshacer»: si divergieran, el toast podría
+ * seguir visible con una captura ya vencida —o al revés— y «Deshacer» devolvería otro valor.
+ */
+const PORTION_BUMP_TOAST_MS = 4000
 
 /** Respiro entre el borde inferior del campo enfocado y la barrera (teclado + PublishBar). */
 const KEYBOARD_GAP = 12
@@ -379,6 +397,42 @@ export function QuickEditMode({
   // congelados, asi que sin esto el picker de porciones abriria vacio. null = todavia no llego o
   // la lectura fallo ⇒ se ofrecen solo los del plan (degradacion invisible, espejo del web).
   const [catalogGroups, setCatalogGroups] = useState<QePortionGroup[] | null>(null)
+  /**
+   * Set del coach (`coaches.portion_system`) y sets con targets VIVOS que NO son el suyo, tal
+   * como los devuelve la ruta móvil. Los dos arrancan `undefined` y pueden quedarse así: un
+   * binario nuevo contra un deploy viejo —o el modo degradado del borde— no los recibe, y ese es
+   * el caso FAIL-OPEN (el picker muestra todo y no marca nada como legado). `usedSystems` NO se
+   * inventa a partir de `portionSystem`: `undefined` significa «no se pudo leer», que es distinto
+   * de «se leyó y no usa nada» (`[]`).
+   */
+  const [portionSystem, setPortionSystem] = useState<PortionSystem | undefined>(undefined)
+  const [portionLegacySystems, setPortionLegacySystems] = useState<PortionSystem[] | undefined>(
+    undefined,
+  )
+  /**
+   * Ids que el catálogo vivo marcó `is_system`: el dict congelado del plan no lo distingue.
+   *
+   * Arranca `undefined` —no en un `Set` vacío— porque el picker necesita distinguir «todavía no
+   * cargó» de «se leyó y no hay ninguno del sistema»: con el set vacío TODOS los grupos caían en
+   * «Propios» mientras el catálogo viajaba, y el coach veía sus 13 grupos chilenos bajo el título
+   * equivocado. Con `undefined` el sheet no titula nada hasta saber.
+   */
+  const [systemGroupIds, setSystemGroupIds] = useState<ReadonlySet<string> | undefined>(undefined)
+  /**
+   * Grupo con resalte pendiente tras un bump, y el nonce que lo redispara. Vive acá y no en la
+   * sección porque el bump nace en el picker de OTRA franja posible: la card compara el id contra
+   * el `slotKey` antes de pasarlo.
+   */
+  const [portionBump, setPortionBump] = useState<{ slotKey: string; groupId: string; nonce: number } | null>(
+    null,
+  )
+  /**
+   * Valor PREVIO capturado al crear cada toast de bump, por id de toast (§7.4). Mientras el toast
+   * sigue vivo los bumps siguientes NO vuelven a capturar: dos taps + «Deshacer» devuelven el
+   * valor con el que empezó la interacción, no el intermedio. Se guarda el vencimiento porque el
+   * toast expira solo y el próximo bump abre una interacción nueva.
+   */
+  const portionBumpBaselineRef = useRef(new Map<string, { portions: string; expiresAt: number }>())
 
   const portionGroups = useMemo<PortionPickerGroup[]>(() => {
     const overrides = new Map(groupOverrides.map((group) => [group.exchangeGroupId, group]))
@@ -634,10 +688,16 @@ export function QuickEditMode({
     let active = true
     ownGroupsRequestedRef.current = true
     void fetchNutritionV2ExchangeGroups(scope)
-      .then(({ groups }) => {
+      .then((result) => {
         if (!active || !mountedRef.current) return
+        const { groups } = result
         setCatalogGroups(catalogToPortionGroups(groups))
         setOwnGroupIds(new Set(groups.filter((group) => !group.isSystem).map((group) => group.id)))
+        setSystemGroupIds(new Set(groups.filter((group) => group.isSystem).map((group) => group.id)))
+        // Set del coach y sets legados: si la respuesta no los trae, quedan `undefined` y el
+        // picker se comporta como antes (todo visible, nada marcado como legado).
+        setPortionSystem(result.portionSystem)
+        setPortionLegacySystems(result.legacySystems ? [...result.legacySystems] : undefined)
       })
       .catch(() => {
         /* best-effort */
@@ -862,6 +922,123 @@ export function QuickEditMode({
     dispatch({ type: 'ADD_PORTION_TARGET', variantKey, slotKey, key: genKey('ptarget'), group })
   }, [])
 
+  const handleSetPortionValue = useCallback(
+    (variantKey: string, slotKey: string, targetKey: string, value: string) => {
+      dispatch({ type: 'SET_PORTION_TARGET', variantKey, slotKey, targetKey, value })
+    },
+    [],
+  )
+
+  /**
+   * Bump (D2-A): tocar en el picker un grupo que la franja YA tiene suma media porción en vez de
+   * no hacer nada. Se resuelve por `exchangeGroupId` —el picker no conoce el `targetKey`— y NO
+   * pasa por `ADD_PORTION_TARGET`, cuyo guard de unicidad sigue intacto.
+   *
+   * El «Deshacer» del toast restaura el valor previo capturado al CREAR el toast, no `−0,5`:
+   * tocar la fila cierra el sheet, así que dos bumps son dos aperturas y capturar en cada una
+   * devolvería el valor intermedio. Mientras el toast de ese `id` siga vivo no se vuelve a
+   * capturar, y por eso dos taps + «Deshacer» vuelven al valor con el que empezó la interacción.
+   *
+   * El Map de baselines se PODA en cada bump (las entradas vencidas se borran): antes solo salía
+   * una entrada al usar «Deshacer», así que en una sesión larga el ref acumulaba una por
+   * franja+grupo y no la soltaba nunca. Vencida la ventana, la entrada ya no sirve para nada.
+   *
+   * Borde conocido que NO se cierra acá: si el coach descarta el toast con swipe antes de los 4 s,
+   * la baseline sigue viva por reloj y un bump nuevo dentro de esa ventana la reusa. Cerrarlo pide
+   * un `onDismiss` por toast que la API de `components/Toast.tsx` hoy no expone, y ese archivo no
+   * es de esta wave. El efecto está acotado: «Deshacer» devuelve el valor con el que empezó la
+   * interacción, que es la semántica documentada arriba, nunca un valor de otra franja o grupo.
+   */
+  const handleBumpPortion = useCallback(
+    (variantKey: string, slotKey: string, slotName: string, exchangeGroupId: string) => {
+      const variant = state.variants.find((v) => v.key === variantKey)
+      const slot = variant?.slots.find((s) => s.key === slotKey)
+      const target = slot ? findPortionTargetByGroup(slot, exchangeGroupId) : null
+      if (!target) return
+      const current = parsePortionsValue(target.portions) ?? 0
+      // El picker ya deshabilita la fila en el tope; esto es el cinturón (sin toast en 99).
+      if (current >= PORTION_MAX) return
+      const next = portionsAfterBump(current, PORTION_STEP)
+
+      dispatch({ type: 'BUMP_PORTION_TARGET', variantKey, slotKey, exchangeGroupId })
+      setPortionBump((prev) => ({
+        slotKey,
+        groupId: exchangeGroupId,
+        nonce: (prev?.nonce ?? 0) + 1,
+      }))
+
+      /**
+       * Payload del evento (DATA.md §11, evento 1). `portion_system` sale de `systemOf` con el
+       * mismo fallback que el picker (sin dato del coach, el default de la columna: 'cl'), y
+       * `from` es 'picker' porque en RN este handler lo llama SOLO la fila del sheet: el ± del
+       * stepper despacha `STEP_PORTION_TARGET`, que no es un bump.
+       */
+      const group = portionGroups.find((g) => g.exchangeGroupId === exchangeGroupId)
+      const bumpProps = {
+        groupCode: target.groupCode,
+        portionSystem: systemOf(
+          group ?? { groupCode: target.groupCode },
+          portionSystem === 'smae' ? 'smae' : 'cl',
+        ),
+        from: 'picker',
+      } as const
+      captureNutritionPortionGroupBumped({ ...bumpProps, undone: false })
+
+      const toastId = `portion-bump:${slotKey}:${exchangeGroupId}`
+      const now = Date.now()
+      // Poda de vencidas: sin esto el ref crece una entrada por franja+grupo y no baja nunca.
+      for (const [key, entry] of portionBumpBaselineRef.current) {
+        if (entry.expiresAt <= now) portionBumpBaselineRef.current.delete(key)
+      }
+      const live = portionBumpBaselineRef.current.get(toastId)
+      const baseline = live && live.expiresAt > now ? live.portions : target.portions
+      portionBumpBaselineRef.current.set(toastId, {
+        portions: baseline,
+        expiresAt: now + PORTION_BUMP_TOAST_MS,
+      })
+
+      toast.info(
+        PORTIONS_COPY.builder.groupBumped(target.groupName, formatPortionsEsCl(next), slotName),
+        {
+          id: toastId,
+          duration: PORTION_BUMP_TOAST_MS,
+          action: {
+            label: PORTIONS_COPY.builder.groupBumpedUndo,
+            onPress: () => {
+              portionBumpBaselineRef.current.delete(toastId)
+              dispatch({
+                type: 'SET_PORTION_TARGET',
+                variantKey,
+                slotKey,
+                targetKey: target.key,
+                value: baseline,
+              })
+              captureNutritionPortionGroupBumped({ ...bumpProps, undone: true })
+            },
+          },
+        },
+      )
+    },
+    [state, portionGroups, portionSystem],
+  )
+
+  /**
+   * `n` del encabezado «Legado (SMAE) · Lo usas en {n} planes».
+   *
+   * NO se deriva del borrador, y no por pereza: `systemOf` cae al set del COACH cuando el grupo
+   * no trae la columna (R18), y los grupos que salen del plan nunca la traen —`mergePortionGroupChoices`
+   * les da prioridad sobre el catálogo—, así que contar franjas «legadas» del draft daría 0
+   * siempre. El borde tampoco manda un conteo: `legacySystems` es una lista de SETS, no de planes.
+   * Con `legacySystems` no vacío lo único cierto es «al menos uno».
+   *
+   * Por eso viaja `undefined` y NO un `1` de relleno: con el `1`, la cabecera y su
+   * `accessibilityLabel` decían «Lo usas en 1 planes» —castellano roto, y para el coach con tres
+   * planes viejos además un número falso—. Sin conteo el encabezado queda en «Legado (SMAE) ·
+   * Toca para ver», que es lo único que sabemos. Cuando el
+   * servidor mande el conteo real (o `findUsedPortionSystemsForCoach` devuelva planes), entra acá.
+   */
+  const legacyPlanCount: number | undefined = undefined
+
   // Porciones propias (FD6a): administración de grupos desde el picker del quick-edit. La
   // ESCRITURA vive en `ExchangeGroupFormSheet` (endpoint mobile, nunca Supabase directo); acá solo
   // se refleja el resultado en la lista y —al eliminar— se quitan los targets que quedarían
@@ -874,9 +1051,13 @@ export function QuickEditMode({
         if (ownGroupsRequestedRef.current) return
         ownGroupsRequestedRef.current = true
         void fetchNutritionV2ExchangeGroups(scope)
-          .then(({ groups }) => {
+          .then((result) => {
             if (!mountedRef.current) return
+            const { groups } = result
             setOwnGroupIds(new Set(groups.filter((group) => !group.isSystem).map((group) => group.id)))
+            setSystemGroupIds(new Set(groups.filter((group) => group.isSystem).map((group) => group.id)))
+            setPortionSystem(result.portionSystem)
+            setPortionLegacySystems(result.legacySystems ? [...result.legacySystems] : undefined)
           })
           .catch(() => {
             // Best-effort: sin catálogo no hay afordancia de editar, pero crear sigue disponible.
@@ -2069,6 +2250,19 @@ export function QuickEditMode({
                         handleRemovePortion(variant.key, slot.key, target, targetIndex)
                       }
                       onPortionAdd={(group) => handleAddPortion(variant.key, slot.key, group)}
+                      onPortionSetValue={(targetKey, value) =>
+                        handleSetPortionValue(variant.key, slot.key, targetKey, value)
+                      }
+                      onPortionBumpGroup={(exchangeGroupId) =>
+                        handleBumpPortion(variant.key, slot.key, slot.name, exchangeGroupId)
+                      }
+                      portionCoachSystem={portionSystem}
+                      portionUsedSystems={portionLegacySystems}
+                      portionSystemGroupIds={systemGroupIds}
+                      portionLegacyPlanCount={legacyPlanCount}
+                      // El resalte se pinta SOLO en la franja donde ocurrió el bump.
+                      portionBumpedGroupId={portionBump?.slotKey === slot.key ? portionBump.groupId : null}
+                      portionBumpNonce={portionBump?.slotKey === slot.key ? portionBump.nonce : 0}
                       onSlotPatch={(patch) =>
                         dispatch({ type: 'UPDATE_SLOT', variantKey: variant.key, slotKey: slot.key, patch })
                       }
