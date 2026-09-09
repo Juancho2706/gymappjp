@@ -138,21 +138,42 @@ en dos.
       JSON y en SPEC «Fuera de alcance»; (c) las 23 filas de `CA` y `LGS` salen de INTA pp. 28 y 30 porque el escaneo
       UDD salta de p. 57 a p. 61 y de p. 73 a p. 77 (R-15): se aceptan para W0 —los encabezados imprimen los mismos
       macros— y queda el ítem de backlog «verificar `CA` y `LGS` contra las láminas UDD si aparece el escaneo completo».
-- [ ] W0.9 [owner] OK del informe del dry-run (artifact
+- [x] W0.9 [owner] OK del informe del dry-run (artifact
       https://claude.ai/code/artifact/8494a516-51ef-4b2f-a21f-37dcb2d06330, publicado 2026-09-09 con las preguntas Q1–Q5:
       12 alimentos sin catálogo · 3 excepciones de carnes · 7 macros dudosas + 14 representantes de marca · apply · dónde vive
-      la rama). **Criterio**: respuesta explícita del owner citada acá con fecha; sin eso no se corre `--apply`.
+      la rama). **Respuesta del owner, 2026-09-09 ~17:40Z, textual: «Q1 a, Q2 a, Q3 a, Q4 a, Q5 a ultracode on y que bueno
+      que caches cosas que estaban mal asi que eso lets GO»** ⇒ alta de Congrio, Plateada, Pepino dulce, Pan amasado y Mote de
+      trigo con macros del INTA + `skip` de los otros 7 · las 3 excepciones se aceptan · dudosos y marcas quedan marcados ·
+      apply hoy · la rama sigue en el worktree sin push.
 - [x] W0.10 [jefe] Aplicar por MCP en LIVE: 120000 → 120500 (inertes: solo columnas con default e índice parcial) →
       seed **apagado** (13 filas con `deleted_at` no nulo), más `get_advisors` (security + performance). **Criterio**:
       `count(*) from exchange_groups where is_system and deleted_at is null` sigue en **22 − 13 = 9** (nada cambia para
       los 106 coaches); `count(*) where portion_system='cl' and is_system` = 13; 0 advisors nuevos; registrar **archivo**
       y **versión LIVE** de cada migración (pueden diferir). **El criterio «= 22» se verifica en W6.8, no acá.**
-- [ ] W0.11 [jefe] `--apply` del script + genéricos curados (se puede correr con los grupos apagados: `exchange_group_foods`
+- [x] W0.11 [jefe] **Ejecutado 2026-09-09 ~18:30Z en dos corridas** (`NUTRITION_PORTIONS_CL_CONFIRM=yes` + `--apply` por
+      `jiti`): corrida 1 ⇒ 153 curadas + 2.341 derivadas insertadas, 0 con dueño tocadas, pero las 5 altas §5.3 fallaron
+      («invalid input syntax for type integer»: `foods.calories/protein_g/carbs_g/fats_g` son INTEGER) y el guard «CB > 0,40»
+      marcó 2 (eran los curados con `control_exception`); fix del script (redondeo al insertar + el guard excluye y lista las
+      excepciones) ⇒ corrida 2 idempotente: 5 `foods` creados (Congrio 73/17/1/1 · Plateada 134/20/1/6 · Pepino dulce
+      28/0/6/0 · Pan amasado 429/7/53/21 · Mote de trigo 131/4/30/0, `eva`/`CL`/`per_100`) + 5 curadas, 153 saltadas por
+      conflicto, guards 0/0. Total **2.499** filas globales del set chileno. Las macros de las 5 altas se transcribieron del
+      INTA 1999 (págs. 70, 64, 54, 44, 44) por dos lectores Opus independientes con adjudicador (workflow
+      `porciones-cl-inta-macros`; PDF renderizado con PyMuPDF en `D:\tmp\pdf_pages`).
+      Diseño original de la tarea: `--apply` del script + genéricos curados (se puede correr con los grupos apagados: `exchange_group_foods`
       referencia el `exchange_group_id`, no la visibilidad, y el script corre con service-role). **Criterio**: assert
       «0 filas con `coach_id` u `org_id` no nulo modificadas»; las 19 filas propias de coaches siguen con su `updated_at`
       anterior; ninguna de las filas escritas es visible para un coach mientras el set siga apagado (chequeo: el picker
       web de una cuenta de prueba sigue mostrando las 9 filas de siempre).
-- [ ] W0.12 [Sonnet] Verificaciones SQL post-seed, con el número al lado (patrón Q1…Q6): Q1 grupos `'cl'` sembrados = 13,
+- [x] W0.12 **Corridas en LIVE 2026-09-09 (post-apply)**: Q1 13 sembrados / 13 con `deleted_at` / 0 vivos · Q2 0 códigos
+      duplicados · Q3 112 coaches en `cl` / 0 en `smae` · Q4 equivalencias por grupo (total / con medida casera): LD 77/7 ·
+      LS 109/8 · LE 211/12 · CB 299/16 · CA 302/14 · LGS 83/8 · VG 105/16 · VL 12/12 · FR 216/16 · PCT 707/28 · AG 317/10 ·
+      AZ 10/10 · SCP 51/1 = **2.499** (2.341 derivadas + 158 curadas) · Q5 PCT: Arroz Blanco (cocido) 130 g «¾ taza», Arroz
+      Integral (cocido) 120 g, Marraqueta 50 g «½ unidad», Hallulla 50 g, Pan blanco de molde 60 g «2½ rebanadas», Papa cocida
+      150 g «1 unidad regular», Pan amasado 35 g «¼ unidad»; LD Leche descremada 200 g; CB Atún al agua 60 g, Camarones 120 g;
+      FR Frambuesas 130 g · Q6 medidas caseras = la segunda cifra de Q4 (158 filas; el manual dio 8–28 por grupo, no 30–50) ·
+      Q7 filas en CB con share > 0,40: **solo Huevo 0,63 y Lomo liso 0,54**, las dos con `control_exception` (UDD p. 57) ·
+      Q8 0 · Q9 0 · extra: 0 grupos `cl` vivos (sigue apagado), 19 filas con dueño intactas.
+      Diseño original: Verificaciones SQL post-seed, con el número al lado (patrón Q1…Q6): Q1 grupos `'cl'` sembrados = 13,
       **todos con `deleted_at` no nulo** (vivos = 0 hasta W6.8) ·
       Q2 códigos del sistema duplicados = 0 · Q3 coaches en `'cl'` = **106** y en `'smae'` = **0** (R14-bis: nadie se movió; los 9 con targets SMAE se cuentan aparte, por sus targets, no por la columna) · Q4 equivalencias nuevas por
       grupo (esperado > 0 en los 12 derivables; `VL` puede ir en 0 + los curados) · Q5 muestra de 10 gramos por grupo
@@ -224,7 +245,13 @@ propósito un alimento inexistente sin bloquear el apply; (e) `keywordSuspect` e
 solo listaba); (f) **trampa del seed SMAE de junio**: sus `foods` («Pan marraqueta», «Pan hallulla», «Arroz cocido»,
 «Aceite de oliva»… sin marca) llevan macros = ref del grupo (70 kcal por 50 g de marraqueta): los curadores los esquivaron
 eligiendo genéricos con macros reales; quedan **7 `macros_dudosos`** (Quesillo, Queso fresco, Queso chédar, Poroto cocido,
-Porotos granados, Margarina, Chancaca) con la alternativa anotada en `match_note`.
+Porotos granados, Margarina, Chancaca) con la alternativa anotada en `match_note`; (g) el control de carnes evalúa
+también a los curados que recién se crean en el apply, armando el alimento sintético desde `macros_100` (sin esto
+Congrio/Plateada quedaban «sin verificar» y bloqueaban); (h) `foods.calories/protein_g/carbs_g/fats_g` son INTEGER: el
+JSON conserva los decimales del manual y el alta redondea; (i) el guard post-apply «0 CB con share > 0,40» excluye los
+curados con `control_exception` y los lista; (j) **W1.7(b)** —la partición por sección en `EditablePortionsSection.tsx` y
+`EditablePortionsCard.tsx`— se hace en **W2** junto con el rediseño del picker (W2.4/W2.7); W1 deja `comparePickerGroups`
+con tests.
 
 ## W1 · Motor y visibilidad (2 d)
 
@@ -634,7 +661,7 @@ _(vacía: se llena si aparece un reporte después del cierre, con `### <fecha> �
 
 | Fecha | Tanda | Commit | Gates | Notas |
 |---|---|---|---|---|
-| 2026-09-09 | W0 · datos (W0a + W0b dry-run) | worktree `porciones-chilenas`, sin push | tx-rollback + smoke A–G + Q1–Q3 + dry-run | 120000/120500 en LIVE (`20260909163802` / `20260909163812`), seed apagado; `--apply` espera el OK del owner (W0.9) |
+| 2026-09-09 | W0 · datos (W0a + W0b) | worktree `porciones-chilenas`, sin push (`02db17b7` + commit del apply) | tx-rollback + smoke A–G + Q1–Q9 + dry-run ×3 + apply ×2 | 120000/120500 en LIVE (`20260909163802` / `20260909163812`), seed apagado, **2.499 equivalencias + 5 foods en LIVE**; OK del owner citado en W0.9 |
 | | W1 · motor | | | |
 | | W2 · picker | | | |
 | | W3 · conversión | | | |

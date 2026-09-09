@@ -25,7 +25,8 @@
           "grams": 200,
           "label": "1 taza",
           "match_note": "Sin candidato: el catalogo solo trae leches saborizadas semidescremadas y/o azucaradas (Lonco Leche frutilla 43 kcal, Colun frutilla 46 kcal / 10 g CHO). Ninguna descremada sin azucar.",
-          "needs_owner": true
+          "skip": true,
+          "skip_reason": "Q1 (owner, 2026-09-09): el catálogo solo tiene saborizadas semidescremadas o con azúcar; se omite."
         },
         {
           "name": "Yogur descremado sin azúcar",
@@ -417,8 +418,14 @@
           "name": "Congrio",
           "grams": 80,
           "label": "1 trozo de 10×6×1 cm",
-          "match_note": "No hay ningún alimento con raíz «congri» en el catálogo (ni global ni de marca). Sin candidato: hay que crear el genérico (congrio crudo ≈ 90 kcal / 19 P / 1 G por 100 g).",
-          "needs_owner": true
+          "match_note": "Alta §5.3 (Q1 a, owner 2026-09-09): sin alimento global en el catálogo. Macros por 100 g del INTA 1999 pág. 70 «Congrio dorado» (crudo, origen TC): 73 kcal · P 16,5 · C 0,5 · G 0,5; share grasa 6 % ⇒ CB. Doble lectura coincidente.",
+          "macros_100": {
+            "kcal": 73,
+            "protein_g": 16.5,
+            "carbs_g": 0.5,
+            "fats_g": 0.5
+          },
+          "category": "proteina"
         },
         {
           "name": "Camarón",
@@ -505,8 +512,15 @@
           "name": "Plateada",
           "grams": 50,
           "label": "1 trozo de 6×6×1 cm",
-          "match_note": "El único candidato es «Plateada De Lomo de Cerdo Criollo Picante» (Super Cerdo): plateada de CERDO marinada, otro alimento que la plateada de vacuno de INTA. Sin candidato válido.",
-          "needs_owner": true
+          "match_note": "Alta §5.3 (Q1 a, owner 2026-09-09): sin genérico de plateada de vacuno (solo una de cerdo marinada). Macros por 100 g del INTA 1999 pág. 64 (origen TC): 134 kcal · P 20,3 · C 0,9 · G 5,5. Doble lectura coincidente.",
+          "macros_100": {
+            "kcal": 134,
+            "protein_g": 20.3,
+            "carbs_g": 0.9,
+            "fats_g": 5.5
+          },
+          "category": "proteina",
+          "control_exception": "INTA p. 28 (porciones) y la tabla de composición (pág. 64, bloque «GRUPO ALTOS EN GRASA › CARNE DE VACUNO») la clasifican en CA; por dato da 37 % de kcal desde grasa (≤ 0,40). Manda el manual."
         },
         {
           "name": "Sobrecostilla",
@@ -725,7 +739,8 @@
           "grams": 60,
           "label": "4 cucharadas o ¼ taza",
           "match_note": "Sin genérico en el catálogo: no hay «chícharo» ni equivalente distinto de la arveja seca ya mapeada en esta misma lista. Requiere alta o decisión del owner.",
-          "needs_owner": true
+          "skip": true,
+          "skip_reason": "Q1 (owner, 2026-09-09): no existe en el catálogo y su uso es marginal; se omite."
         }
       ]
     },
@@ -1096,8 +1111,14 @@
           "name": "Pepino dulce",
           "grams": 240,
           "label": "1 unidad grande",
-          "match_note": "Sin genérico: el «Pepino» del catálogo es pepino de ensalada, otro alimento; no existe pepino dulce (Solanum muricatum). Requiere alta o decisión del owner.",
-          "needs_owner": true
+          "match_note": "Alta §5.3 (Q1 a, owner 2026-09-09): sin alimento en el catálogo. Macros por 100 g del INTA 1999 pág. 54, tabla FRUTAS (origen TC): 28 kcal · P 0,4 · C 6,3 · G 0,1. Doble lectura coincidente.",
+          "macros_100": {
+            "kcal": 28,
+            "protein_g": 0.4,
+            "carbs_g": 6.3,
+            "fats_g": 0.1
+          },
+          "category": "fruta"
         },
         {
           "name": "Ciruelas secas",
@@ -1198,8 +1219,14 @@
           "grams": 35,
           "label": "¼ unidad",
           "note": "alto en sodio",
-          "match_note": "Sin candidato: no existe ningún alimento global (ni genérico ni de marca) cuyo nombre contenga «amasad». Hay que crear el alimento.",
-          "needs_owner": true
+          "match_note": "Alta §5.3 (Q1 a, owner 2026-09-09): sin alimento en el catálogo. Macros por 100 g del INTA 1999 pág. 44, subgrupo PAN (origen USDA): 429 kcal · P 7,2 · C 53,4 · G 20,7 (lleva manteca). Doble lectura coincidente.",
+          "macros_100": {
+            "kcal": 429,
+            "protein_g": 7.2,
+            "carbs_g": 53.4,
+            "fats_g": 20.7
+          },
+          "category": "carbohidrato"
         },
         {
           "name": "Pan pita blanco",
@@ -1336,8 +1363,14 @@
           "name": "Mote de trigo",
           "grams": 100,
           "label": "¾ taza",
-          "match_note": "Sin candidato: no hay ningún alimento global con «mote» (solo camote). Hay que crear el alimento.",
-          "needs_owner": true
+          "match_note": "Alta §5.3 (Q1 a, owner 2026-09-09): sin alimento en el catálogo. Macros por 100 g del INTA 1999 pág. 44, «MOTE, TRIGO» en CEREALES Y PASTAS COCIDAS (origen USDA): 131 kcal · P 3,5 · C 30,4 · G 0,4. Doble lectura coincidente.",
+          "macros_100": {
+            "kcal": 131,
+            "protein_g": 3.5,
+            "carbs_g": 30.4,
+            "fats_g": 0.4
+          },
+          "category": "carbohidrato"
         },
         {
           "name": "Papa cocida",
@@ -1450,14 +1483,16 @@
           "grams": 5,
           "label": "1 cucharadita",
           "match_note": "Sin genérico propio de maíz. El único equivalente es «Aceite vegetal» (2fb6e577, 884 kcal / G100 por 100 g), que serviría igual para Aceite de soya: no se asigna para no duplicar food_id en AG.",
-          "needs_owner": true
+          "skip": true,
+          "skip_reason": "Q1 (owner, 2026-09-09): sin genérico propio; AG ya tiene oliva y maravilla. Se omite."
         },
         {
           "name": "Aceite de soya",
           "grams": 5,
           "label": "1 cucharadita",
           "match_note": "Sin genérico propio de soya. Mismo caso que Aceite de maíz: el único vecino es «Aceite vegetal» (2fb6e577, 884 kcal / G100 por 100 g). Decide el owner cuál lo toma o si se crean ambos.",
-          "needs_owner": true
+          "skip": true,
+          "skip_reason": "Q1 (owner, 2026-09-09): sin genérico propio; AG ya tiene oliva y maravilla. Se omite."
         },
         {
           "name": "Margarina",
@@ -1478,7 +1513,8 @@
           "label": "2 cucharaditas",
           "note": "alto en sodio",
           "match_note": "Sin candidato: no hay margarina light/diet en el catálogo global; el único genérico («Margarina vegetal») ya se usa para Margarina y además trae macros falsas.",
-          "needs_owner": true
+          "skip": true,
+          "skip_reason": "Q1 (owner, 2026-09-09): sin genérico; Margarina ya está en AG. Se omite."
         },
         {
           "name": "Mayonesa",
@@ -1580,7 +1616,8 @@
           "grams": 5,
           "label": "1 cucharadita",
           "match_note": "Sin candidato: no existe miel de palma en el catálogo. «Miel» ya se usa para Miel de abeja y es otro alimento. Hay que crearlo.",
-          "needs_owner": true
+          "skip": true,
+          "skip_reason": "Q1 (owner, 2026-09-09): no existe en el catálogo; se omite."
         },
         {
           "name": "Chancaca",
@@ -1614,7 +1651,8 @@
           "grams": 8,
           "label": "1 cucharadita",
           "match_note": "Sin candidato: todos los «camote» del catálogo son la verdura (cruda, cocida, al horno), no el dulce. Hay que crear el alimento.",
-          "needs_owner": true
+          "skip": true,
+          "skip_reason": "Q1 (owner, 2026-09-09): no existe en el catálogo; se omite."
         },
         {
           "name": "Manjar",

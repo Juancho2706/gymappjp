@@ -393,9 +393,11 @@ jefe en el worktree tras el juicio de los workers (salida real):
   `get_advisors` security + performance ⇒ 0 hallazgos nuevos.
 - Smoke `supabase/tests/exchange_groups_portion_system_rollback.sql` (casos A–G) en LIVE con ROLLBACK ⇒ «W0.5 SMOKE OK».
 - Dry-run `pnpm exec jiti scripts/nutrition-portions-cl/derive-cl-equivalences.mjs --dry-run` (cero escrituras; `tsx` no está
-  instalado, `jiti` sí) ⇒ 2.341 derivadas + 153 curadas a insertar, control de carnes 28/30, 0 en `CB` con share > 0,40;
-  `--apply` bloqueado por 12 curados sin alimento hasta el OK del owner (W0.9).
-- No corrido: Q4–Q9 de W0.12 (requieren el `--apply`); E2E (cierre del tren, W6).
+  instalado, `jiti` sí) ×3 ⇒ tercera corrida «apply habilitado: sí» (carnes 30/30, 0 ambiguos, 0 perdidos, 0 en `CB` > 0,40).
+- **`--apply` en LIVE 09-09 ~18:30Z** (OK del owner «Q1 a … Q4 a»; doble gate): 2.341 derivadas + 158 curadas = **2.499**
+  filas globales en los 13 grupos, 5 `foods` nuevos (Congrio, Plateada, Pepino dulce, Pan amasado, Mote de trigo), 0 filas con
+  dueño tocadas; Q4–Q9 de W0.12 verdes (salida en TASKS). El set sigue apagado hasta W6.8.
+- No corrido: E2E (cierre del tren, W6).
 
 ## Pendientes actuales
 

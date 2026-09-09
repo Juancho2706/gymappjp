@@ -908,7 +908,24 @@ function meatControl(curatedRows, curated) {
   const filas = []
   const noResueltos = []
   for (const row of universo) {
-    const food = foodByRow.get(row)
+    let food = foodByRow.get(row)
+    // Curado SIN alimento en el catálogo pero CON `macros_100` + `category`: el
+    // apply lo da de alta (§5.3) y el control tiene que poder evaluarlo ANTES de
+    // escribir. Se arma el alimento sintético por 100 g con esas macros: es
+    // exactamente la fila que `createSystemFood` va a insertar.
+    if (!food && row.macros100 && row.category && !ambiguosRows.has(row)) {
+      const m = row.macros100
+      food = {
+        id: null,
+        name: `(alta §5.3) ${row.name}`,
+        calories: Number(m.kcal),
+        protein_g: Number(m.protein_g),
+        carbs_g: Number(m.carbs_g),
+        fats_g: Number(m.fats_g),
+        serving_size: 100,
+        macros_basis: 'per_100',
+      }
+    }
     if (!food) {
       noResueltos.push({
         manual: row.code,
@@ -1314,7 +1331,7 @@ function buildReport(model) {
     push(`- Labels completados: **${applyResult.labelsUpdated}**`)
     push(`- Alimentos globales dados de alta (§5.3): **${applyResult.foodsCreated}**`)
     push(`- Guard «filas con dueño tocadas por esta corrida»: **${applyResult.ownedTouched}** (esperado 0)`)
-    push(`- Guard «0 filas en CB con share > 0,40» sobre lo escrito: **${applyResult.cbOverCutAfter}** (esperado 0)`)
+    push(`- Guard «0 filas en CB con share > 0,40» sobre lo escrito: **${applyResult.cbOverCutAfter}** (esperado 0; excluye los curados con \`control_exception\`: ${applyResult.cbOverCutExceptions.length ? applyResult.cbOverCutExceptions.join(', ') : 'ninguno'})`)
     if (applyResult.errors.length > 0) {
       push()
       push('| error |')
@@ -1339,13 +1356,19 @@ function buildReport(model) {
  */
 async function createSystemFood(db, row) {
   const macros = row.macros100
+  // `foods.calories/protein_g/carbs_g/fats_g` son INTEGER en el catalogo (verificado
+  // en LIVE 2026-09-09: `information_schema.columns`). El JSON conserva los decimales
+  // del manual (trazabilidad); la fila se escribe redondeada, que es la convencion
+  // de todo el catalogo. Sin esto Postgres rechaza «invalid input syntax for type
+  // integer: "0.5"» y el alta muere.
+  const int = (v) => Math.round(Number(v))
   const payload = {
     name: row.name,
     brand: null,
-    calories: Number(macros.kcal),
-    protein_g: Number(macros.protein_g),
-    carbs_g: Number(macros.carbs_g),
-    fats_g: Number(macros.fats_g),
+    calories: int(macros.kcal),
+    protein_g: int(macros.protein_g),
+    carbs_g: int(macros.carbs_g),
+    fats_g: int(macros.fats_g),
     serving_size: 100,
     serving_unit: 'g',
     macros_basis: 'per_100',
@@ -1666,6 +1689,7 @@ async function main() {
   const errors = []
   let foodsCreated = 0
   const extraCuratedRows = []
+  const createdFoodIdsWithException = []
 
   // Alta de los curados sin match que traen macros_100 + category (§5.3).
   // Los que NO los traen ya bloquearon el apply mas arriba (`curatedPerdidos`):
@@ -1676,6 +1700,7 @@ async function main() {
       const food = await createSystemFood(db, s.row)
       if (food) {
         foodsCreated += 1
+        if (s.row.controlException != null) createdFoodIdsWithException.push(food.id)
         extraCuratedRows.push({
           exchange_group_id: clGroups.get(s.row.code).id,
           food_id: food.id,
@@ -1719,9 +1744,18 @@ async function main() {
   const labelsUpdated = await updateCuratedLabels(db, [...curatedRowsToWrite, ...extraCuratedRows].filter((r) => r.portion_label != null), errors)
   console.log(`Labels completados: ${labelsUpdated}`)
 
-  // (c) Guards post-apply.
+  // (c) Guards post-apply. El recuento «0 filas en CB con share > 0,40» EXCLUYE los
+  // curados con `control_exception` (Huevo entero, Lomo liso: el manual manda sobre el
+  // dato y la excepcion esta escrita con su pagina); se listan aparte para que el
+  // owner los vea, pero no pintan de rojo un apply correcto.
   const ownedTouched = await countOwnedTouched(db, startedAtIso)
-  const cbAfter = await countCbOverCut(db, cbGroup.id)
+  const exceptionFoodIds = new Set([
+    ...curated.resolved.filter(({ row }) => row.controlException != null).map(({ food }) => food.id),
+    ...createdFoodIdsWithException,
+  ])
+  const cbAfterAll = await countCbOverCut(db, cbGroup.id)
+  const cbAfter = cbAfterAll.filter((r) => !exceptionFoodIds.has(r.food_id))
+  const cbAfterExceptions = cbAfterAll.filter((r) => exceptionFoodIds.has(r.food_id))
 
   model.applyResult = {
     curatedInserted: curatedWrite.inserted,
@@ -1732,6 +1766,7 @@ async function main() {
     foodsCreated,
     ownedTouched,
     cbOverCutAfter: cbAfter.length,
+    cbOverCutExceptions: cbAfterExceptions.map((r) => r.food.name),
     errors,
   }
   writeReport(outPath, buildReport(model))
