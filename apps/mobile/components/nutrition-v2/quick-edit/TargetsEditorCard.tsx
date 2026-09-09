@@ -1,9 +1,9 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import {
   formatMacroEsCl,
-  qeTargetsEqual,
   targetStep,
+  type QeSwitchOffPlan,
   type QeTargetsScope,
   type QeTargetsText,
   type QeVariant,
@@ -11,7 +11,6 @@ import {
 import { NutritionCard } from '../NutritionCard'
 import { QuantityStepper } from './QuantityStepper'
 import { Switch } from '../../Switch'
-import { toast } from '../../Toast'
 import { EDITOR_COPY, QUICK_EDIT_COPY } from './microcopy'
 
 const TARGET_ROWS: Array<{ field: keyof QeTargetsText; label: string }> = [
@@ -22,78 +21,20 @@ const TARGET_ROWS: Array<{ field: keyof QeTargetsText; label: string }> = [
 ]
 
 /**
- * Una escritura de meta: el campo y el texto que le va. SIN alcance a propósito — a QUÉ días se
- * escribe lo resuelve el host una sola vez para los cuatro campos (ver `QeSwitchOffApplied`).
+ * Lo que devuelve el host DESPUÉS de aplicar el plan de apagado. TODO el criterio —qué se escribe
+ * y a QUÉ días— vive en `qeSwitchOffPlan` del paquete, que es lo que hace cumplible el «idéntico
+ * en RN y web»: antes esa tabla estaba copiada en las dos cards. La card solo necesita saber QUÉ
+ * pasó, para elegir el texto del aviso, y cómo se deshace. `null` = no había nada que mover, el
+ * switch se apaga y ya (sin anunciar un cambio que no ocurrió).
  */
-export interface QeTargetWrite {
-  field: keyof QeTargetsText
-  value: string
-}
-
-/** Los dos modos que ESCRIBEN al apagar el switch; `noop` es «no había nada que mover». */
-export type QeSwitchOffMode = 'backToBase' | 'appliedToAll'
-
-/**
- * Qué pasa al APAGAR el switch «Solo el {día}» (decisión del jefe D2) — MISMOS tres modos y
- * MISMA tabla que la web (`apps/web/.../_quick-edit/TargetsEditorCard.tsx`), que es la forma de
- * cumplir el «idéntico en RN y web» sin un módulo compartido (solo comparten el paquete).
- * Apagar el switch NUNCA borra una meta: eso era el bug del checkpoint, que copiaba encima del
- * día los strings vacíos del base y el plan de Pame perdía sus 2.040 kcal de un toque.
- *
- *  - `backToBase` — el base SÍ tiene meta (SPEC §7.5): el día vuelve a la meta de todos los días,
- *    o sea se le copian las cuatro cifras del base encima, y solo a él.
- *  - `appliedToAll` — el base está VACÍO (el plan de Pame: base vacío, martes 2.040): en vez de
- *    dejar al día sin objetivo, su meta se PROPAGA al base y a los días que heredaban.
- *  - `noop` — el día ya muestra la meta del base, o el plan entero está sin metas: el switch se
- *    apaga y ya, sin un toast que anuncie un cambio que no ocurrió.
- */
-export interface QeSwitchOffPlan {
-  mode: QeSwitchOffMode | 'noop'
-  writes: readonly QeTargetWrite[]
-}
-
-/** Lo que devuelve el host DESPUÉS de aplicar el plan: qué pasó (para el toast) y cómo se deshace. */
 export interface QeSwitchOffApplied {
-  mode: QeSwitchOffMode
-  /** Devuelve CADA día a la foto previa. La arma el host, que es el único que ve todos los días. */
+  mode: QeSwitchOffPlan['mode']
+  /** Devuelve a la foto previa SOLO los días tocados (C4). La arma el host con el `snapshot`. */
   undo: () => void
 }
 
-/**
- * Plan puro de apagar el switch: el criterio, sin estado ni React (un test lo puede fijar sin
- * montar nada). Devuelve solo QUÉ se escribe; el conjunto de días es cosa del host.
- *
- * Por qué el plan ya no lleva `scope: 'all'`, que es como lo hacía el checkpoint: el reducer
- * recalcula «quiénes heredaban» en CADA dispatch, contra el base de ESE momento. Con los cuatro
- * campos por separado, la 2.ª escritura alcanza al día que la 1.ª acaba de dejar igual al base y
- * le pisa su meta propia — justo lo que SPEC §7.5 manda no tocar.
- */
-export function planSwitchOff(base: QeVariant | null, day: QeVariant): QeSwitchOffPlan {
-  if (base == null) return { mode: 'noop', writes: [] }
-  // La llave es SIEMPRE kcal, igual que `hasTargetCalories` del reducer y que la web: sin
-  // energía no hay objetivo que mostrarle a nadie, por más proteína que tenga cargada el día.
-  if (base.targets.calories.trim() !== '') {
-    // La igualdad la decide el PAQUETE, no un `!==` crudo: `qeTargetsEqual` normaliza (' 2040 ' y
-    // '2040' son la MISMA meta), así que un día que ya muestra la del base no dispara ni
-    // escrituras ni un «Deshacer» que no cambia nada visible.
-    if (qeTargetsEqual(day, base)) return { mode: 'noop', writes: [] }
-    return {
-      mode: 'backToBase',
-      writes: TARGET_ROWS.map(({ field }) => ({ field, value: base.targets[field] })),
-    }
-  }
-  if (day.targets.calories.trim() === '') return { mode: 'noop', writes: [] }
-  // Los campos VACÍOS del día quedan fuera, igual que en web: viajan al base y a los días que
-  // heredaban, y un base que tenía la proteína cargada la perdería (D2: nunca se borra). Como
-  // arriba ya cortamos con la kcal vacía, siempre queda al menos una escritura.
-  return {
-    mode: 'appliedToAll',
-    writes: TARGET_ROWS.filter(({ field }) => day.targets[field].trim() !== '').map(({ field }) => ({
-      field,
-      value: day.targets[field],
-    })),
-  }
-}
+/** Cuánto vive el aviso: los 4 s de un toast común no alcanzan para leerlo y decidir deshacer. */
+const SWITCH_OFF_NOTICE_MS = 6000
 
 /**
  * Switch «Solo el {día}» (W4.3, mockup M4). Lo pide el HOST: la card no sabe qué día está
@@ -120,8 +61,8 @@ export interface TargetsOnlyThisDayProps {
   /**
    * El coach APAGÓ el switch estando encendido: el host mueve las metas AHORA (decisión del jefe
    * D2 — si no, el día se quedaría con su meta vieja hasta el próximo tecleo y el switch estaría
-   * mintiendo) y devuelve qué pasó, para el toast, más su «Deshacer». `null` = no había nada que
-   * mover y no se anuncia nada.
+   * mintiendo) y devuelve qué pasó, para el aviso de abajo, más su «Deshacer». `null` = no había
+   * nada que mover y no se anuncia nada.
    */
   onSwitchOff?: () => QeSwitchOffApplied | null
   /**
@@ -187,38 +128,63 @@ export function TargetsEditorCard({
         : null
       : EDITOR_COPY.targets.onlyThisDayOff
 
+  /**
+   * Aviso de «apagué el switch», INLINE y no un toast (decisión del jefe C3). El `<Toaster />` de
+   * la app es un singleton del árbol raíz y esta card vive siempre dentro de un `Sheet
+   * nativeModal`: cada `toast.*()` disparado desde acá se pinta DETRÁS de la ventana nativa —
+   * invisible, verificado en device (mismo motivo por el que `WorkoutShareComposer` tiene su
+   * `ComposerNotice` propio). Y un aviso invisible con «Deshacer» adentro es lo peor de los dos
+   * mundos: el coach ve moverse las cifras y no tiene cómo volver atrás. La web sigue con
+   * `sonner`, que no tiene este problema.
+   */
+  const [notice, setNotice] = useState<QeSwitchOffApplied | null>(null)
+  const noticeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  function clearNoticeTimer() {
+    if (noticeTimerRef.current !== null) {
+      clearTimeout(noticeTimerRef.current)
+      noticeTimerRef.current = null
+    }
+  }
+
+  // Desmontar la card (cerrar la hoja, cambiar de día) con el timer vivo dejaría un `setState`
+  // sobre un componente muerto: el timer se limpia una sola vez, al desmontar.
+  useEffect(() => clearNoticeTimer, [])
+
   function handleToggle(next: boolean) {
     if (!onlyThisDay) return
     setOnlyThisDayOn(next)
     onlyThisDay.onScopeChange?.(next ? 'day' : 'all')
-    if (next) return
+    if (next) {
+      // Volver a encenderlo a mano deja el aviso sin sentido: lo que anunciaba ya no describe el
+      // estado del switch. Se va, pero SIN deshacer nada (eso solo lo hace el botón).
+      clearNoticeTimer()
+      setNotice(null)
+      return
+    }
     // Apagarlo estando encendido no es solo cambiar el alcance de la PRÓXIMA escritura: hay que
     // resolver la meta que el día ya tiene. Decisión del jefe D2: NUNCA se borra — o el día
     // vuelve a la del base, o la suya pasa a valer para toda la semana. QUÉ se mueve, A QUIÉNES y
-    // cómo se deshace lo resuelve el host (`onSwitchOff`), que es el único que ve todos los días;
-    // acá solo se cuenta lo que pasó.
+    // cómo se deshace lo resuelve el host con `qeSwitchOffPlan`; acá solo se cuenta lo que pasó.
     const applied = onlyThisDay.onSwitchOff?.() ?? null
+    clearNoticeTimer()
+    setNotice(applied)
     if (!applied) return
-    toast.info(
-      applied.mode === 'backToBase'
-        ? EDITOR_COPY.targets.backToBase(onlyThisDay.dayLabel)
-        : EDITOR_COPY.targets.appliedToAll,
-      {
-        // Los 4 s de siempre no alcanzan para leer el aviso y decidir deshacer: mismos 6 s que
-        // el toast gemelo de la web.
-        duration: 6000,
-        action: {
-          label: EDITOR_COPY.targets.undo,
-          onPress: () => {
-            applied.undo()
-            setOnlyThisDayOn(true)
-            // El evento sigue la POSICIÓN del switch (D5): si el deshacer no reportara, el
-            // embudo mostraría un 'all' que el coach canceló y ningún 'day' de vuelta.
-            onlyThisDay.onScopeChange?.('day')
-          },
-        },
-      },
-    )
+    noticeTimerRef.current = setTimeout(() => {
+      noticeTimerRef.current = null
+      setNotice(null)
+    }, SWITCH_OFF_NOTICE_MS)
+  }
+
+  function handleUndo() {
+    if (!notice || !onlyThisDay) return
+    notice.undo()
+    clearNoticeTimer()
+    setNotice(null)
+    setOnlyThisDayOn(true)
+    // El evento sigue la POSICIÓN del switch (D5): si el deshacer no reportara, el embudo
+    // mostraría un 'all' que el coach canceló y ningún 'day' de vuelta.
+    onlyThisDay.onScopeChange?.('day')
   }
 
   return (
@@ -268,6 +234,30 @@ export function TargetsEditorCard({
             </View>
           </Pressable>
           {helpText ? <Text className="mt-0.5 text-xs leading-5 text-muted">{helpText}</Text> : null}
+          {/* Caja ÁMBAR con los mismos tokens que el `dayNotice` de la `PublishBar`
+              (`warning-500/30`) y `accessibilityLiveRegion="polite"`, el equivalente RN del
+              `role="status"` de la web: es un estado que acaba de cambiar, no una alerta. */}
+          {notice ? (
+            <View
+              accessibilityLiveRegion="polite"
+              className="mt-2 flex-row items-center justify-between gap-2 rounded-control border border-warning-500/30 bg-warning-500/10 px-3 py-2"
+            >
+              <Text className="min-w-0 flex-1 text-xs font-medium leading-5 text-warning-700">
+                {notice.mode === 'back_to_base'
+                  ? EDITOR_COPY.targets.backToBase(onlyThisDay.dayLabel)
+                  : EDITOR_COPY.targets.appliedToAll}
+              </Text>
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={EDITOR_COPY.targets.undo}
+                disabled={disabled}
+                onPress={handleUndo}
+                className="min-h-11 justify-center rounded-control px-2"
+              >
+                <Text className="text-xs font-bold text-warning-700">{EDITOR_COPY.targets.undo}</Text>
+              </Pressable>
+            </View>
+          ) : null}
         </View>
       ) : null}
     </NutritionCard>

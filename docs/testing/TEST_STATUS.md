@@ -412,6 +412,7 @@ jefe en el worktree tras el juicio de los workers (salida real):
   (15), `editor-state.portions-ref` (9 + 2), `editor-state.picker-meta` (7), RTL `EditablePortionsCard.test.tsx` (16), test del
   sheet del alumno web (3). Los 103 congelados del editor siguen sin editarse. Refutadores: 3 lanes × 2 rondas + remate (1 TS2304
   cazado antes del gate).
+- **W4 (metas por día, 09-09; `383e4a74` (checkpoint) + `20769987` (remate 1) + remate 2 y docs (este commit))**: `pnpm exec vitest run packages/nutrition-v2 packages/nutrition-engine "apps/web/src/app/coach/nutrition-v2/[clientId]/_quick-edit" "apps/web/src/app/c/[coach_slug]/nutrition-v2" tests/mobile-nutrition-v2-portions.test.ts tests/mobile-nutrition-v2-targets-switch.test.ts tests/nutrition-portions apps/web/src/app/coach/nutrition-v2/_actions` ⇒ **96 archivos / 1.626 tests verdes** · `pnpm typecheck` ⇒ exit 0 · `pnpm --filter @eva/mobile exec tsc --noEmit` ⇒ exit 0 · `pnpm check:tokens` ⇒ OK (86 + 5) · `pnpm check:nutrition-v2-boundaries` ⇒ 464 archivos OK · eslint por archivo sin hallazgos (workers). Tests nuevos: `editor-state.day-targets.test.ts` (28), `quick-edit-publish-guards.targets.test.ts` (3), RTL `TargetsEditorCard.test.tsx` (11), `tests/mobile-nutrition-v2-targets-switch.test.ts` (5); los 103 congelados del editor sin editar. Refutadores: 3 lanes (paquete 0 rondas; RN 2 + 1 + remate 2; web refutado de cero en el remate tras caerse el verificador por el tope del schema).
 - No corrido: E2E (cierre del tren, W6).
 
 ## Pendientes actuales

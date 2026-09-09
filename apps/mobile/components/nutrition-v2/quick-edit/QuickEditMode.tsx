@@ -69,12 +69,14 @@ import {
   qePublishBlockedBar,
   qeSlotCopyTargets,
   qeSubstitutionEquivalence,
+  qeSwitchOffPlan,
   qeTargetsEqual,
   qeTargetsGapBar,
   qeVariantTotalWithPortions,
   quickEditReducer,
   PORTION_MAX,
   PORTION_STEP,
+  QE_TARGET_FIELDS,
   parsePortionsValue,
   portionsAfterBump,
   readModelToDraft,
@@ -96,7 +98,6 @@ import {
   type QePortionGroup,
   type QePortionTarget,
   type QeTargetsScope,
-  type QeTargetsText,
   type QeVariant,
   type QuickEditState,
 } from '@eva/nutrition-v2'
@@ -159,11 +160,7 @@ import { AppBackground } from '../../AppBackground'
 import { EditableSlotCard } from './EditableSlotCard'
 import { EditorDayRibbon } from './EditorRibbon'
 import { EditorMetaCard } from './EditorMetaCard'
-import {
-  TargetsEditorCard,
-  planSwitchOff,
-  type QeSwitchOffApplied,
-} from './TargetsEditorCard'
+import { TargetsEditorCard, type QeSwitchOffApplied } from './TargetsEditorCard'
 import { FoodSearchSheet, type FoodSearchMode } from './FoodSearchSheet'
 import { PublishBar, UndoSnackbar, type PublishBarDayTotals } from './PublishBar'
 import { PublishBlockedSheet, PublishConfirmSheet, StaleBaseSheet } from './QuickEditSheets'
@@ -208,13 +205,6 @@ const KEYBOARD_GAP = 12
 
 /** Respiro con el borde del lienzo al traer a la vista la fila bumpeada (§7.4). */
 const REVEAL_GAP = 12
-
-/**
- * Las cuatro metas que edita la card, para restaurar la foto del «Deshacer» campo a campo (W4).
- * `passthroughTargets` (fibra/sodio/agua) queda FUERA a propósito: la UI no lo edita y el gesto
- * del switch nunca lo movió, así que tampoco tiene nada que devolver.
- */
-const TARGET_FIELD_KEYS: ReadonlyArray<keyof QeTargetsText> = ['calories', 'proteinG', 'carbsG', 'fatsG']
 
 interface SearchTarget {
   mode: FoodSearchMode
@@ -1378,60 +1368,47 @@ export function QuickEditMode({
   }, [])
 
   /**
-   * El coach APAGÓ «Solo el {día}» (decisión del jefe D2). La card decide QUÉ se mueve
-   * (`planSwitchOff`, la misma tabla que la web) y el host —único que ve TODOS los días— decide
-   * A QUIÉNES y guarda la foto del «Deshacer».
+   * El coach APAGÓ «Solo el {día}» (decisión del jefe D2). TODO el criterio —qué se escribe y a
+   * QUÉ días— lo resuelve `qeSwitchOffPlan` en el paquete, de una sola vez y contra el estado
+   * PREVIO; acá solo se despacha y se guarda la foto del «Deshacer». Vivía repartido entre la
+   * card y este host, y duplicado en la web: era imposible mantener el «idéntico en RN y web».
    *
-   * Los dos motivos por los que esto NO puede resolverse en la card con `scope: 'all'`:
+   * Los dos motivos por los que esto NO puede resolverse con un `scope: 'all'`, los dos
+   * verificados en el checkpoint (por eso van `scope: 'day'` key por key):
    *  1. El reducer recalcula «quiénes heredaban» en cada dispatch, contra el base de ESE momento.
    *     Con los cuatro campos por separado, la 2.ª escritura alcanza al día que la 1.ª acaba de
-   *     dejar igual al base y le pisa su meta propia (SPEC §7.5 manda dejarlo intacto). Acá el
-   *     conjunto se resuelve UNA vez, con el estado previo, y recién después se escribe.
+   *     dejar igual al base y le pisa su meta propia (SPEC §7.5 manda dejarlo intacto).
    *  2. El «Deshacer» por ese mismo camino BORRABA: mandar '' con `scope: 'all'` arrastraba a los
-   *     días que, después de propagar, habían quedado casualmente iguales al base. Se deshace con
-   *     la foto exacta de cada día y `scope: 'day'`, igual que la web.
+   *     días que, después de propagar, habían quedado casualmente iguales al base.
    */
   const handleTargetsSwitchOff = useCallback((): QeSwitchOffApplied | null => {
-    if (!activeVariant || !baseVariant) return null
-    // Se desarma en dos constantes: así `mode` queda acotado a los dos modos que ESCRIBEN
-    // después del corte de abajo, sin depender de que TS conserve el estrechamiento de una
-    // propiedad a través del cuerpo entero.
-    const { mode, writes } = planSwitchOff(baseVariant, activeVariant)
-    if (mode === 'noop') return null
-    // La foto va de TODOS los días y de los cuatro campos: es lo único que devuelve el estado
-    // exacto sin volver a razonar quién heredaba de quién.
-    const snapshot = state.variants.map((variant) => ({ key: variant.key, targets: { ...variant.targets } }))
-    // `backToBase` toca solo el día activo. `appliedToAll` toca el base y los días que HOY
-    // heredan de él (mismo criterio `qeTargetsEqual` que el `scope: 'all'` del reducer), nunca al
-    // día con meta propia distinta.
-    const keys =
-      mode === 'backToBase'
-        ? [activeVariant.key]
-        : [
-            ...new Set<string>([
-              activeVariant.key,
-              baseVariant.key,
-              ...state.variants
-                .filter((variant) => qeTargetsEqual(variant, baseVariant))
-                .map((variant) => variant.key),
-            ]),
-          ]
-    for (const variantKey of keys) {
-      for (const write of writes) {
+    if (!activeVariant) return null
+    const plan = qeSwitchOffPlan(state, activeVariant.key)
+    if (!plan) return null
+    for (const variantKey of plan.keys) {
+      for (const write of plan.writes) {
         dispatch({ type: 'SET_TARGET', variantKey, field: write.field, value: write.value, scope: 'day' })
       }
     }
     return {
-      mode,
+      mode: plan.mode,
       undo: () => {
-        for (const day of snapshot) {
-          for (const field of TARGET_FIELD_KEYS) {
-            dispatch({ type: 'SET_TARGET', variantKey: day.key, field, value: day.targets[field], scope: 'day' })
+        // Solo las variantes del `snapshot` —las TOCADAS— y con los cuatro campos: es lo único
+        // que devuelve el estado exacto sin volver a razonar quién heredaba de quién (C4).
+        for (const entry of plan.snapshot) {
+          for (const field of QE_TARGET_FIELDS) {
+            dispatch({
+              type: 'SET_TARGET',
+              variantKey: entry.variantKey,
+              field,
+              value: entry.targets[field],
+              scope: 'day',
+            })
           }
         }
       },
     }
-  }, [activeVariant, baseVariant, state.variants])
+  }, [activeVariant, state])
 
   /**
    * Traer al viewport la fila que acaba de recibir un bump (SPEC §7.4). MISMO gesto que

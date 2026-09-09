@@ -16,9 +16,15 @@
  * Escribir metas parado en Martes dejaba al resto de la semana SIN objetivo, porque el snapshot
  * copia la variante entera y un dia con `target_calories NULL` no hereda del base. Con el switch
  * APAGADO los steppers despachan `scope: 'all'` y la meta se guarda en el base y en los dias que
- * heredaban; ENCENDIDO, solo en el dia. Como los DOS hosts web (la card `md:hidden` del lienzo y
- * el popover «Metas del día» de la cinta) montan ESTE componente, el switch aparece en los dos
- * por construccion — verificado en `QuickEditPlanView.tsx:525` y `EditorRibbon.tsx:362`.
+ * heredaban; ENCENDIDO, solo en el dia; y parado en el dia BASE —donde el switch no se pinta—
+ * tambien sale `scope: 'all'`, que es la otra mitad del mismo agujero (subir el base sin arrastrar
+ * a los dias que lo espejaban). Como los DOS hosts web (la card `md:hidden` del lienzo y el
+ * popover «Metas del día» de la cinta) montan ESTE componente, el switch aparece en los dos por
+ * construccion — verificado en `QuickEditPlanView.tsx:525` y `EditorRibbon.tsx:362`.
+ *
+ * QUE se escribe al apagar el switch y a QUIENES no vive aca: es `qeSwitchOffPlan` del paquete
+ * (`@eva/nutrition-v2`), la MISMA funcion pura que consume RN — antes estaba duplicada en las dos
+ * superficies y el conjunto de dias repartido entre la card y el host.
  *
  * El titulo de la hoja de metas es FIJO (decision del jefe D1): «Metas del día» lo pone el
  * popover, y esta card no tiene titulo dinamico ni un copy alterno para el alcance — quien dice
@@ -33,9 +39,12 @@ import {
   defaultQeVariant,
   formatMacroEsCl,
   formatNutritionDayOfWeek,
+  QE_TARGET_FIELDS,
+  qeSwitchOffPlan,
   qeTargetsEqual,
   qeVariantPortionTotals,
   qeVariantTotalWithPortions,
+  type QeSwitchOffPlan,
   type QeTargetsScope,
   type QeTargetsText,
   type QeVariant,
@@ -52,70 +61,6 @@ const TARGET_FIELDS: Array<{ field: keyof QeTargetsText; label: string; suffix: 
   { field: 'carbsG', label: 'Carbohidratos objetivo', suffix: 'g C' },
   { field: 'fatsG', label: 'Grasas objetivo', suffix: 'g G' },
 ]
-
-/** Las cuatro llaves que edita la card, en el orden en que se pintan. */
-const TARGET_KEYS: ReadonlyArray<keyof QeTargetsText> = TARGET_FIELDS.map(({ field }) => field)
-
-/**
- * Una escritura de meta: el campo y el texto que le va. SIN alcance a propósito —a QUÉ días se
- * escribe lo resuelve `toggleScope` UNA sola vez para los cuatro campos, igual que el host RN
- * (`QuickEditMode.handleTargetsSwitchOff`)—. Ver el porqué en `planSwitchOff`.
- */
-type QeTargetWrite = { field: keyof QeTargetsText; value: string }
-
-/** Foto de las metas de un día, para poder devolverlas EXACTAS con «Deshacer». */
-type QeTargetsSnapshot = { key: string; targets: QeTargetsText }
-
-/**
- * Qué pasa al APAGAR el switch «Solo el {día}» — decisión del jefe D2, y la MISMA en RN.
- * Apagar el switch **nunca borra una meta**: eso era el bug del checkpoint (copiaba encima del
- * día los strings vacíos del base y el plan de Pame perdía sus 2.040 kcal de un toque).
- *
- *  - `backToBase` — el base SÍ tiene meta (SPEC §7.5): el día vuelve a la meta de todos los días,
- *    o sea se le copian las cuatro cifras del base con `scope: 'day'` (solo ese día).
- *  - `appliedToAll` — el base está VACÍO (el plan de Pame): en vez de vaciar el día, se PROPAGA
- *    lo que el día tiene con `scope: 'all'`, que el reducer escribe en el base y en los días que
- *    heredaban, sin tocar a los que tienen meta propia distinta.
- *  - `noop` — no hay nada que mover (el día ya muestra la meta del base, o el plan entero está
- *    sin metas): el switch se apaga y ya, sin toast que anuncie un cambio que no ocurrió.
- *
- * Pura a propósito: es el criterio, y un test lo puede fijar sin montar React. Devuelve solo QUÉ
- * se escribe; el conjunto de días es cosa del host, EXACTAMENTE como en RN.
- *
- * Por qué el plan ya no lleva `scope: 'all'`, que es como lo hacía el checkpoint: el reducer
- * recalcula «quiénes heredaban» en CADA dispatch, contra el base de ESE momento. Con los cuatro
- * campos por separado, la 2.ª escritura alcanza al día que la 1.ª acaba de dejar igual al base y
- * le pisa su meta propia (base vacío · martes 2040/144/247/52 · miércoles con 2040 kcal propias:
- * tras el write de `calories` el base queda idéntico a miércoles y P/C/G le caen encima) — justo
- * lo que SPEC §7.5 manda no tocar.
- */
-export function planSwitchOff(
-  base: QeVariant | null,
-  day: QeVariant,
-): { mode: 'backToBase' | 'appliedToAll' | 'noop'; writes: readonly QeTargetWrite[] } {
-  if (base == null) return { mode: 'noop', writes: [] }
-  // La llave es SIEMPRE kcal, igual que `hasTargetCalories` del reducer: sin energía no hay
-  // objetivo que mostrarle a nadie, por más proteína que tenga cargada el día.
-  if (base.targets.calories.trim() !== '') {
-    if (qeTargetsEqual(day, base)) return { mode: 'noop', writes: [] }
-    return {
-      mode: 'backToBase',
-      writes: TARGET_KEYS.map((field) => ({ field, value: base.targets[field] })),
-    }
-  }
-  if (day.targets.calories.trim() === '') return { mode: 'noop', writes: [] }
-  // Los campos VACIOS del dia quedan fuera, igual que en RN: un '' viaja al base y a los dias que
-  // heredaban, y un base que tenia la proteina cargada la perderia. Ese caso existe de verdad
-  // —`applyBaseTargets` (D4) contempla el dia sin kcal pero con proteina— y borrar ahi seria justo
-  // lo que D2 prohibe. Como arriba ya cortamos con kcal vacia, siempre queda al menos una escritura.
-  return {
-    mode: 'appliedToAll',
-    writes: TARGET_KEYS.filter((field) => day.targets[field].trim() !== '').map((field) => ({
-      field,
-      value: day.targets[field],
-    })),
-  }
-}
 
 export function TargetsEditorCard({
   variant,
@@ -143,7 +88,21 @@ export function TargetsEditorCard({
   // sin un efecto que sincronice (el estado derivado es la fuente, no una copia que puede driftar).
   const [manualScope, setManualScope] = useState<{ key: string; onlyThisDay: boolean } | null>(null)
   const onlyThisDay = manualScope?.key === variant.key ? manualScope.onlyThisDay : defaultOnlyThisDay
-  const scope: QeTargetsScope | undefined = showScopeSwitch ? (onlyThisDay ? 'day' : 'all') : undefined
+  /**
+   * Alcance de CADA tecleo. Con el switch a la vista lo dice el switch. Escondido, el caso que
+   * importa es el dia BASE (C2, paridad con RN): editar «Todos los dias» tiene que escribir en el
+   * base Y en los dias que heredaban de el —si no, subir el base a 2.100 dejaba a los dias que lo
+   * espejaban clavados en la cifra vieja, que es el MISMO agujero del caso Pame por el otro lado—.
+   * En un plan de un solo dia `scope: 'all'` y sin scope hacen exactamente lo mismo. Sin base
+   * (`base == null`) y parado en un dia no-base no hay «todos los dias» posible: sin scope.
+   */
+  const scope: QeTargetsScope | undefined = showScopeSwitch
+    ? onlyThisDay
+      ? 'day'
+      : 'all'
+    : variant.isDefault
+      ? 'all'
+      : undefined
 
   // Nombre del dia DENTRO de la frase («Solo el martes»): en minuscula, con su etiqueta como
   // respaldo para las variantes con nombre propio y sin dia de semana («Día de entrenamiento»).
@@ -163,40 +122,39 @@ export function TargetsEditorCard({
     : EDITOR_COPY.targets.onlyThisDayOff
 
   /**
-   * Escribe el plan de `planSwitchOff` sobre un conjunto de dias YA resuelto, siempre con
-   * `scope: 'day'`. El conjunto se calcula una sola vez contra el estado PREVIO (ver
-   * `toggleScope`): despachar `scope: 'all'` campo por campo dejaba que la 2.ª escritura pisara
-   * al dia con meta propia que la 1.ª acababa de dejar igual al base.
+   * Escribe el plan de `qeSwitchOffPlan` —dias × campos— siempre con `scope: 'day'`. El conjunto
+   * de dias ya viene resuelto contra el estado PREVIO, en el paquete: despachar `scope: 'all'`
+   * campo por campo dejaba que la 2.ª escritura pisara al dia con meta propia que la 1.ª acababa
+   * de dejar igual al base.
    */
-  function applyWrites(keys: readonly string[], writes: readonly QeTargetWrite[]) {
-    for (const variantKey of keys) {
-      for (const { field, value } of writes) {
+  function applyWrites(plan: QeSwitchOffPlan) {
+    for (const variantKey of plan.keys) {
+      for (const { field, value } of plan.writes) {
         dispatch({ type: 'SET_TARGET', variantKey, field, value, scope: 'day' })
       }
     }
   }
 
   /**
-   * «Deshacer»: devuelve a la foto previa los dias que el gesto TOCO, uno por uno y con
-   * `scope: 'day'`.
+   * «Deshacer»: devuelve a la foto previa los dias que el gesto TOCO —el `snapshot` del plan ya
+   * es solo esos (C4)—, uno por uno y con `scope: 'day'`.
    *
    * No se deshace con un `scope: 'all'` invertido a proposito: el reducer recalcula «quienes
    * heredaban» contra el base de ESE momento, que despues de propagar ya no es el de antes, y
    * un dia que casualmente quedo igual al base se llevaria un borrado que nadie pidio. Restaurar
    * dia por dia es exacto y, como el contador de cambios es un diff contra el borrador publicado
    * (no un contador de acciones), tambien deja el «N cambios sin publicar» donde estaba.
-   *
-   * Solo los dias TOCADOS: la foto es de todos (es lo unico que devuelve el estado exacto sin
-   * volver a razonar quien heredaba de quien), pero un dia que nadie escribio ya esta en su valor
-   * y reescribirlo son 4 dispatches de mas — `mapVariant` devuelve estado nuevo SIEMPRE, asi que
-   * cada uno es un render del editor y un disparo del autosave.
    */
-  function restoreSnapshot(snapshot: readonly QeTargetsSnapshot[], touched: readonly string[]) {
-    const keys = new Set(touched)
+  function restoreSnapshot(snapshot: QeSwitchOffPlan['snapshot']) {
     for (const day of snapshot) {
-      if (!keys.has(day.key)) continue
-      for (const field of TARGET_KEYS) {
-        dispatch({ type: 'SET_TARGET', variantKey: day.key, field, value: day.targets[field], scope: 'day' })
+      for (const field of QE_TARGET_FIELDS) {
+        dispatch({
+          type: 'SET_TARGET',
+          variantKey: day.variantKey,
+          field,
+          value: day.targets[field],
+          scope: 'day',
+        })
       }
     }
   }
@@ -206,36 +164,16 @@ export function TargetsEditorCard({
     setManualScope({ key: variant.key, onlyThisDay: next })
     captureTargetsScope(next ? 'day' : 'all', 'switch')
     if (next) return
-    // Sin base no hay «todos los dias» (el switch ni se pinta): el guard es para que `base.key`
-    // de abajo no dependa de esa invariante de render.
-    if (base == null) return
     // Apagarlo estando ENCENDIDO mueve metas AHORA (si no, el dia se quedaria con su meta vieja
-    // hasta el proximo tecleo y el switch estaria mintiendo). El QUE se mueve lo decide la funcion
-    // pura de arriba —nunca un vacio encima del dia, decision D2— y el toast dice lo que paso, que
-    // no es lo mismo que la ayuda del switch (ese era el otro bug: el aviso mentia).
-    const plan = planSwitchOff(base, variant)
-    if (plan.mode === 'noop') return
-    const snapshot: QeTargetsSnapshot[] = state.variants.map((day) => ({
-      key: day.key,
-      targets: { ...day.targets },
-    }))
-    // A QUE dias se escribe se resuelve ACA, UNA vez y contra el estado previo (mismo patron que
-    // `handleTargetsSwitchOff` en RN): `backToBase` toca solo el dia activo; `appliedToAll` toca
-    // el dia, el base y los que HOY heredan de el (mismo criterio `qeTargetsEqual` que el
-    // `scope: 'all'` del reducer), y nunca al dia con meta propia distinta.
-    const touched =
-      plan.mode === 'backToBase'
-        ? [variant.key]
-        : [
-            ...new Set<string>([
-              variant.key,
-              base.key,
-              ...state.variants.filter((day) => qeTargetsEqual(day, base)).map((day) => day.key),
-            ]),
-          ]
-    applyWrites(touched, plan.writes)
+    // hasta el proximo tecleo y el switch estaria mintiendo). QUE se escribe y a QUIENES lo decide
+    // la funcion pura del paquete —la MISMA que consume RN, nunca un vacio encima del dia
+    // (decision D2)—; `null` es «no habia nada que mover»: el switch se apaga y ya, sin un aviso
+    // que anuncie un cambio que no ocurrio.
+    const plan = qeSwitchOffPlan(state, variant.key)
+    if (!plan) return
+    applyWrites(plan)
     toast(
-      plan.mode === 'backToBase'
+      plan.mode === 'back_to_base'
         ? EDITOR_COPY.targets.backToBase(dayLabel)
         : EDITOR_COPY.targets.appliedToAll,
       {
@@ -243,7 +181,7 @@ export function TargetsEditorCard({
         action: {
           label: EDITOR_COPY.targets.undo,
           onClick: () => {
-            restoreSnapshot(snapshot, touched)
+            restoreSnapshot(plan.snapshot)
             setManualScope({ key: variant.key, onlyThisDay: true })
             // El evento sigue la POSICION del switch (D5), igual que RN: sin esto el embudo
             // mostraria un 'all' que el coach cancelo y ningun 'day' de vuelta, y solo en web.

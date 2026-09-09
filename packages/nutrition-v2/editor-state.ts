@@ -1860,8 +1860,11 @@ function applyBasePortions(state: QuickEditState): QuickEditState {
 /** Alcance de una edicion de metas: solo el dia activo (historico) o el base + los que heredaban. */
 export type QeTargetsScope = 'day' | 'all'
 
-/** Las cuatro metas que la UI edita. `passthroughTargets` (fibra/sodio/agua) queda FUERA. */
-const QE_TARGET_FIELDS: readonly (keyof QeTargetsText)[] = ['calories', 'proteinG', 'carbsG', 'fatsG']
+/** Una de las cuatro metas que la UI edita. Alias unico: RN y web tenian su propia copia. */
+export type QeTargetField = keyof QeTargetsText
+
+/** Las cuatro metas que la UI edita, en el orden en que se pintan. `passthroughTargets` queda FUERA. */
+export const QE_TARGET_FIELDS: readonly QeTargetField[] = ['calories', 'proteinG', 'carbsG', 'fatsG']
 
 /**
  * Texto de meta normalizado para comparar: '' y '   ' son lo mismo, y '2040' == ' 2040.0 '.
@@ -1952,6 +1955,112 @@ function applyBaseTargets(state: QuickEditState, fromVariantKey: string): QuickE
     return { ...variant, targets }
   })
   return touched ? { ...state, variants } : state
+}
+
+/** Una escritura de meta: el campo y el texto que le va. SIN alcance: a QUE dias, lo dice `keys`. */
+export interface QeTargetWrite {
+  field: QeTargetField
+  value: string
+}
+
+/** Foto de las metas de un dia, para devolverlas EXACTAS con «Deshacer». */
+export interface QeTargetsSnapshotEntry {
+  /** La `key` de la variante: es lo que espera `SET_TARGET.variantKey` (ver `mapVariant`). */
+  variantKey: string
+  targets: QeTargetsText
+}
+
+/**
+ * Que pasa al APAGAR el switch «Solo el {dia}» (SPEC §7.5, decision del jefe D2). Apagar el
+ * switch NUNCA borra una meta: ese era el bug del checkpoint, que copiaba encima del dia los
+ * strings vacios del base y el plan de Pame perdia sus 2.040 kcal de un toque.
+ *
+ *  - `back_to_base` — el base SI tiene meta: el dia vuelve a la meta de todos los dias, o sea se
+ *    le copian las cuatro cifras del base encima (las vacias tambien: el dia vuelve a ESPEJAR el
+ *    base), y solo a el.
+ *  - `applied_to_all` — el base esta VACIO (el plan de Pame: base vacio, martes 2.040): en vez de
+ *    dejar al dia sin objetivo, su meta se PROPAGA al base y a los dias que heredaban.
+ *
+ * «No habia nada que mover» no es un tercer modo: es `null` (el switch se apaga y ya, sin aviso).
+ */
+export interface QeSwitchOffPlan {
+  mode: 'back_to_base' | 'applied_to_all'
+  /** Dias a los que se escribe, resueltos UNA vez contra el estado PREVIO. Incluye al dia activo. */
+  keys: string[]
+  writes: QeTargetWrite[]
+  /** Las metas de `keys` ANTES de escribir: es el «Deshacer», y solo de los dias TOCADOS (C4). */
+  snapshot: QeTargetsSnapshotEntry[]
+}
+
+/**
+ * Plan puro de apagar el switch «Solo el {dia}»: el criterio completo —que se escribe Y a quienes—
+ * sin estado de React ni un solo dispatch. Vivia duplicado en las dos superficies
+ * (`TargetsEditorCard.planSwitchOff` en RN y en web, con el conjunto de dias repartido entre la
+ * card y el host); acá es UNA funcion que las dos consumen, que es lo que hace cumplible el
+ * «identico en RN y web».
+ *
+ * El consumidor despacha `SET_TARGET { variantKey: key, field, value, scope: 'day' }` por cada
+ * `key` × `write`, y NUNCA `scope: 'all'`. Los dos motivos, los dos verificados en el checkpoint:
+ *  1. El reducer recalcula «quienes heredaban» en CADA dispatch, contra el base de ESE momento.
+ *     Con los cuatro campos por separado, la 2.ª escritura alcanza al dia que la 1.ª acaba de
+ *     dejar igual al base y le pisa su meta propia — justo lo que SPEC §7.5 manda no tocar.
+ *  2. El «Deshacer» por ese camino BORRABA: mandar '' con `scope: 'all'` arrastraba a los dias
+ *     que, despues de propagar, habian quedado casualmente iguales al base.
+ *
+ * Devuelve `null` —nada que mover, ni aviso— sin dia base, con un `dayKey` que no existe, con el
+ * dia BASE (escribir la base ya es escribir todos), con un dia que ya muestra la meta del base
+ * (`qeTargetsEqual`, que normaliza: ' 2040 ' y '2040' son la MISMA meta) y con el plan entero sin
+ * kcal.
+ */
+export function qeSwitchOffPlan(state: QuickEditState, dayKey: string): QeSwitchOffPlan | null {
+  const base = defaultQeVariant(state)
+  if (!base) return null
+  const day = state.variants.find((variant) => variant.key === dayKey)
+  if (!day || day.key === base.key) return null
+  if (qeTargetsEqual(day, base)) return null
+  const snapshotOf = (keys: readonly string[]): QeTargetsSnapshotEntry[] =>
+    keys.flatMap((key) => {
+      const variant = state.variants.find((candidate) => candidate.key === key)
+      return variant ? [{ variantKey: key, targets: { ...variant.targets } }] : []
+    })
+  // La llave es SIEMPRE kcal, igual que `hasTargetCalories` en el resto del modulo: sin energia no
+  // hay objetivo que mostrarle a nadie, por mas proteina que tenga cargada el dia.
+  if (hasTargetCalories(base)) {
+    const keys = [day.key]
+    return {
+      mode: 'back_to_base',
+      keys,
+      writes: QE_TARGET_FIELDS.map((field) => ({ field, value: base.targets[field] })),
+      snapshot: snapshotOf(keys),
+    }
+  }
+  if (!hasTargetCalories(day)) return null
+  // Base vacio: la meta del dia sube. Toca el dia, el base y los que HOY heredan de el (mismo
+  // criterio `qeTargetsEqual` que el `scope: 'all'` del reducer), nunca al dia con meta propia
+  // distinta. Una variante no-default con `dayOfWeek === null` —dato viejo o a medio crear— no le
+  // sirve a NINGUN dia de la semana (mismo corte que `servedVariantByDow`) y queda fuera.
+  const keys = [
+    ...new Set<string>([
+      day.key,
+      base.key,
+      ...state.variants
+        .filter((variant) => (variant.isDefault || variant.dayOfWeek !== null) && qeTargetsEqual(variant, base))
+        .map((variant) => variant.key),
+    ]),
+  ]
+  // Los campos VACIOS del dia quedan fuera: un '' viajaria al base y a los dias que heredaban, y un
+  // base que tenia la proteina cargada la perderia (ese caso existe de verdad —`applyBaseTargets`
+  // contempla el dia sin kcal pero con proteina— y borrar ahi es justo lo que D2 prohibe). Como
+  // arriba ya cortamos con la kcal vacia, siempre queda al menos una escritura.
+  return {
+    mode: 'applied_to_all',
+    keys,
+    writes: QE_TARGET_FIELDS.filter((field) => normalizedTargetText(day.targets[field]) !== '').map((field) => ({
+      field,
+      value: day.targets[field],
+    })),
+    snapshot: snapshotOf(keys),
+  }
 }
 
 /** Un dia sin meta cuando OTRO dia si la tiene (punto ambar del chip / del rail). */

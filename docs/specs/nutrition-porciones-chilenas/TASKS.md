@@ -532,40 +532,59 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
 
 ## W4 · Metas por día (1 d)
 
-- [ ] W4.1 [Opus] `SET_TARGET` y `STEP_TARGET` con `scope?: 'day' | 'all'` en `packages/nutrition-v2/editor-state.ts`;
+- [x] W4.1 [Opus] `SET_TARGET` y `STEP_TARGET` con `scope?: 'day' | 'all'` en `packages/nutrition-v2/editor-state.ts`;
       `scope: 'all'` escribe en el base y en los días que heredaban (`qeTargetsEqual` evaluado **antes** del cambio).
-      **Criterio**: `packages/nutrition-v2/editor-state.day-targets.test.ts` (archivo nuevo) — (1) sin `scope`,
-      comportamiento actual; (2) base y martes vacíos ⇒ ambos con la meta; (3) no pisa un día con metas propias; (4)
-      desde un día que hereda escribe también la base.
-- [ ] W4.2 [Opus] Helpers `qeTargetsEqual`, `qeDaysMissingTargets`, `qeTargetsGapBar` y acción `APPLY_BASE_TARGETS`.
-      **Criterio**: `qeTargetsGapBar` es `null` si **ningún** día tiene meta y si **todos** la tienen; nombra 1/2/3 días
-      con `joinDayLabels`; `APPLY_BASE_TARGETS` es idempotente (segundo dispatch ⇒ misma referencia).
-- [ ] W4.3 [Opus] Switch «Solo el {día}» en `TargetsEditorCard` RN y web, con el default de la tabla del PLAN y
-      `role="switch"` / `accessibilityRole="switch"`. **RN tiene dos hosts, pero el switch va en UNO solo** (X-08; manda SPEC §7.5 por evidencia, y satisface lo que
-      R-07 pedía: declarar el comportamiento del segundo). El switch vive en la **hoja del header**
-      (`QuickEditMode.tsx:2383-2402`, `TargetsEditorCard` en `:2392`, que despacha `SET_TARGET` con `activeVariant.key`
-      en `:2398`). La **card del lienzo** (`QuickEditMode.tsx:2011-2020`, despacha con `variant.key` en `:2018`) se
-      pinta **solo con `editorMode === false`** —o sea nunca dentro del editor único, que es donde vive esta feature—,
-      así que queda **byte-idéntica y SIN switch**. Web ya tiene declarados sus dos hosts (el Popover y la card
-      `md:hidden`) y se comporta igual.
-      **Criterio**: oculto en el base y en planes de un solo día; apagarlo estando ON copia las metas del base sobre el
-      día con «Deshacer»; **el host del lienzo sigue despachando `SET_TARGET` sin `scope`** — su diff es cero y su
-      comportamiento actual no cambia (grep en el diff: `QuickEditMode.tsx:2011-2020` intacto).
-- [ ] W4.4 [Opus] Aviso no bloqueante: `dayNotice` en `PublishBar` RN y `noticeMessage`/`noticeAction` en la web
-      (ámbar, `role="status"`), con acción «Ir a Base» = `APPLY_BASE_TARGETS` + `jumpToDay('default')` y botón primario
-      «Publicar igual». **Criterio**: caso nuevo en `quick-edit-publish-guards.test.ts` — un plan con metas parciales
-      **sigue** publicando (`validation.ok === true`); los 16 tests de `editor-state.day-errors.test.ts` no se editan.
-- [ ] W4.5 [Sonnet] Punto ámbar de los días sin meta en `DayAnchorRow` (RN) y en cápsula + rail (web), sin pasar por
-      `showErrors`; «sin meta» en la cinta cuando el día activo no tiene objetivo. **Criterio**: el punto usa el mismo
-      estilo que `attentionKeys`, no uno nuevo.
-- [ ] W4.6 [Sonnet] Copys `EDITOR_COPY.targets.{onlyThisDay,onlyThisDayOff,onlyThisDayOn}` y
-      `EDITOR_COPY.publish.{partialTargets,anyway,goToBase}` + PostHog `nutrition_targets_scope { scope, from }`.
-      **Criterio**: idénticos en RN y web; el título del sheet deja de decir «Metas del día» cuando escribe en todos.
-- [ ] W4.7 [owner] QA en device de los puntos 6 y 7 del checklist final; además, arreglar el plan real de
-      `nutricionista-pame-cid` con «Ir a Base» (es el único plan afectado en LIVE).
-- [ ] W4.8 Gates W4 (<fecha>): vitest paquete (incluye `editor-state.day-targets.test.ts`) + reducer web ·
-      `pnpm typecheck` · tsc mobile · eslint por archivo · `pnpm check:tokens`.
-- [ ] W4.9 [Fable] Juicio de W4: `<…>`.
+      **Cerrado 09-09**: `editor-state.day-targets.test.ts` — sin `scope` comportamiento actual; base y martes vacíos ⇒
+      ambos con la meta; no pisa un día con metas propias; desde un día que hereda escribe también la base. **Nota
+      declarada (W4.9)**: el reducer recalcula «quién hereda» EN CADA dispatch con `scope: 'all'`, por eso las
+      superficies NO propagan campo a campo con `'all'`: resuelven las llaves una vez con `qeSwitchOffPlan` y escriben
+      `scope: 'day'`.
+- [x] W4.2 [Opus] Helpers `qeTargetsEqual`, `qeDaysMissingTargets`, `qeTargetsGapBar`, `joinDayLabels` y acción
+      `APPLY_BASE_TARGETS`. **Cerrado 09-09**: `qeTargetsGapBar` es `null` sin ningún día con meta y con todos; nombra
+      1/2/3 días; `APPLY_BASE_TARGETS` idempotente (misma referencia). **Remate**: los dos helpers salen del mismo mapa
+      día → variante servida (`servedVariantByDow`; el base cuenta solo si sirve a algún día; una variante no-default con
+      `dayOfWeek === null` no cuenta) y `applyBaseTargets` RELLENA campo a campo (un día con kcal propias no se toca,
+      comportamiento declarado para el QA de W4.7). **Remate 2**: `qeSwitchOffPlan(state, dayKey)` (única verdad del
+      «apagar el switch», `wf_0ad946ab-3f5`, 6 agentes, 0 BLOQUEA: `qeSwitchOffPlan(state, dayKey)` ⇒ `{ mode: 'back_to_base' | 'applied_to_all', keys, writes, snapshot }` con simulación end-to-end del reducer (7 casos); RN y web sin lógica local ni `scope: 'all'` campo a campo).
+- [x] W4.3 [Opus] Switch «Solo el {día}» en `TargetsEditorCard` RN y web, default por estado (base ⇒ oculto; día igual al
+      base ⇒ OFF; distinto ⇒ ON; plan de un día ⇒ oculto), `role="switch"` / `accessibilityRole="switch"`; en RN solo
+      en la hoja del header con `KeyboardDoneBar` dentro del `Sheet`; la card del lienzo clásico (`editorMode === false`)
+      queda byte-idéntica y sin `scope`. **Cerrado 09-09** con la **decisión (y) del jefe**: apagar el switch estando ON
+      NUNCA borra — base con kcal ⇒ copia el base sobre el día («{Día} vuelve a la meta de todos los días»); base SIN
+      kcal (el plan de Pame) ⇒ propaga la meta del día al base y a los días que heredaban («Ahora vale para toda la
+      semana»); ambos con «Deshacer» por snapshot de las variantes tocadas. En el día base (switch oculto) las dos
+      superficies escriben con `scope: 'all'` («escribir la base es escribir todos», SPEC §7.5).
+- [x] W4.4 [Opus] Aviso no bloqueante: `dayNotice` en `PublishBar` RN y `noticeMessage`/`noticeAction` en la web (ámbar,
+      `role="status"`), «Ir a Base» = `APPLY_BASE_TARGETS` + `jumpToDay('default')`, primario «Publicar igual».
+      **Cerrado 09-09**: `quick-edit-publish-guards.targets.test.ts` — un plan con metas parciales sigue publicando
+      (`validation.ok === true`); los 16 de `editor-state.day-errors.test.ts` sin editar.
+- [x] W4.5 [Sonnet→Opus] Punto ámbar de los días sin meta en `DayAnchorRow` (RN) y en cápsula + rail (web) con el estilo de
+      `attentionKeys`, sin pasar por `showErrors`; «sin meta» en la cinta (`targets.dayNoTarget`). **Cerrado 09-09**.
+- [x] W4.6 [Sonnet→Opus] Copys `EDITOR_TARGETS_COPY` (`packages/nutrition-v2/editor-copy-targets.ts`):
+      `targets.{onlyThisDay,onlyThisDayOff,onlyThisDayOn,backToBase,appliedToAll,undo,dayNoTarget}` y
+      `publish.{partialTargets,anyway,goToBase}`; RN y web solo reexportan. PostHog `nutrition_targets_scope
+      { surface, scope, from }` (DATA §11 evento 4) desde el switch y «Ir a Base». **Cerrado 09-09** con la **decisión (z)**:
+      el título de la hoja queda FIJO «Metas del día» en RN y web (mockup M4 aprobado + SPEC §7.5 «decisión del
+      writer»); el criterio «deja de decir Metas del día cuando escribe en todos» queda superado — la verdad del
+      alcance la dice la ayuda del switch. **OK del owner pendiente** sobre esa decisión y sobre los copys nuevos
+      (`backToBase`, `appliedToAll`; filas en SPEC §16.1).
+- [ ] W4.7 [owner] QA en device de los puntos 6 y 7 del checklist final (incluido: en RN el aviso con «Deshacer» es
+      INLINE dentro del sheet porque el `Toaster` raíz queda detrás del `nativeModal`; en iOS confirmar que el
+      `KeyboardDoneBar` del Modal gana); además, arreglar el plan real de `nutricionista-pame-cid` con «Ir a Base» (es
+      el único plan afectado en LIVE; los días con kcal propias no se tocan).
+- [x] W4.8 Gates W4 (09-09, sobre `383e4a74` (checkpoint) + `20769987` (remate 1) + remate 2 y docs (este commit)): `pnpm exec vitest run packages/nutrition-v2 packages/nutrition-engine "apps/web/src/app/coach/nutrition-v2/[clientId]/_quick-edit" "apps/web/src/app/c/[coach_slug]/nutrition-v2" tests/mobile-nutrition-v2-portions.test.ts tests/mobile-nutrition-v2-targets-switch.test.ts tests/nutrition-portions apps/web/src/app/coach/nutrition-v2/_actions` ⇒ **96 archivos / 1.626 tests verdes** · `pnpm typecheck` ⇒ exit 0 · `pnpm --filter @eva/mobile exec tsc --noEmit` ⇒ exit 0 · `pnpm check:tokens` ⇒ OK (86 + 5) · `pnpm check:nutrition-v2-boundaries` ⇒ 464 archivos OK · eslint por archivo sin hallazgos (workers). Tests nuevos: `editor-state.day-targets.test.ts` (28), `quick-edit-publish-guards.targets.test.ts` (3), RTL `TargetsEditorCard.test.tsx` (11), `tests/mobile-nutrition-v2-targets-switch.test.ts` (5); los 103 congelados del editor sin editar.
+- [x] W4.9 [Fable] Juicio de W4, 09-09: workflow `wf_1815a117-96b` (paquete → RN ∥ web → refutadores; el refutador web
+      murió por el tope de 500 caracteres del schema y se refutó de cero en el remate) + remate `wf_2daaf2b5-5ba` (12
+      agentes) + remate 2 `wf_0ad946ab-3f5`. Commits: `383e4a74` (checkpoint) + `20769987` (remate 1) + remate 2 y docs (este commit). Decisiones del jefe:
+      (y) apagar el switch nunca borra (propaga con base vacío / copia el base con base con kcal), lógica pura en el
+      paquete (`qeSwitchOffPlan`), «Deshacer» por snapshot de las variantes tocadas;
+      (z) título fijo «Metas del día» (mockup + SPEC §7.5 mandan sobre TASKS W4.6), pendiente del OK del owner;
+      (aa) DATA §11 evento 4 lleva `surface`; (ab) `applyBaseTargets` solo rellena vacíos y no toca días con kcal;
+      (ac) el aviso de RN es inline (toast detrás del `Sheet nativeModal`, gotcha de `WorkoutShareComposer`).
+      MEJORA diferidas al backlog: `TARGET_FIELD_KEYS`/`TARGET_ROWS`/`TARGET_KEYS` (cuarta copia de la lista de campos ⇒
+      exportar `QE_TARGET_FIELDS`), ayuda del switch ON con base sin kcal (`onlyThisDayOnNoBase`), la card `md:hidden`
+      web titula «Metas diarias» vs «Metas del día» del popover, `partialTargets` sin concordancia de número («Solo Lunes
+      y martes tiene meta»), botón «Listo» persistente del mockup vs `KeyboardDoneBar` (iOS-only).
 
 ## W5 · Equivalencias del alumno (1,5 d)
 
@@ -715,7 +734,7 @@ _(vacía: se llena si aparece un reporte después del cierre, con `### <fecha> �
 | 2026-09-09 | W1 · motor y visibilidad | worktree `porciones-chilenas`, sin push | vitest 90/1.446 · typecheck · tsc mobile · boundaries 454 · eslint por archivo | 4 workers + 4 refutadores + ronda de fixes; decisiones (k)–(p) en W1.14 |
 | 2026-09-09 | W2 · picker, bump, tap-to-edit, Legumbres | worktree `porciones-chilenas`, sin push (`564a2d2c` + remate) | vitest 92/1.578 · typecheck · tsc mobile · tokens · boundaries 460 · eslint por archivo | 18 + 8 agentes (2 rondas por lane + remate del overlay); decisiones (q)–(x) en W2.13; QA device W2.11 pendiente |
 | | W3 · conversión | | | |
-| | W4 · metas | | | |
+| 2026-09-09 | W4 · metas por día | worktree `porciones-chilenas`, sin push (`383e4a74` (checkpoint) + `20769987` (remate 1) + remate 2 y docs (este commit)) | vitest paquete + `_quick-edit` + tests RN · typecheck · tsc mobile · tokens · boundaries · eslint por archivo | 10 + 12 + remate 2 agentes; decisiones (y)–(ac) en W4.9; QA device W4.7 pendiente (aviso inline RN, KeyboardDoneBar iOS, plan de Pame con «Ir a Base») |
 | | W5 · equivalencias | | | |
 | | W6 · cierre | | | |
 

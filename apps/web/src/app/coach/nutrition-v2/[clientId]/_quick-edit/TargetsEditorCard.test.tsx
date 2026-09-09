@@ -17,14 +17,18 @@ import {
  * Lo que fija este archivo es la decisión D2 del jefe: **apagar el switch nunca borra una meta**.
  * Hay dos caminos y ninguno escribe un vacío encima del día:
  *
- *  - base CON metas ⇒ el día vuelve a la del base (`scope: 'day'`, toast «… vuelve a la meta de
- *    todos los días»);
+ *  - base CON metas ⇒ el día vuelve a la del base (toast «… vuelve a la meta de todos los días»);
  *  - base SIN metas —el plan de Pame: base vacío y 2.040 kcal escritas solo en Martes— ⇒ lo del
- *    día se PROPAGA a toda la semana (`scope: 'all'`, toast «Ahora vale para toda la semana»).
+ *    día se PROPAGA al base y a los que heredaban (toast «Ahora vale para toda la semana»).
  *
  * Los dos con «Deshacer», y ese «Deshacer» tiene que devolver los OTROS días también: propagar
  * toca el base y a los que heredaban, así que restaurar solo el día activo dejaría media semana
  * con una meta que el coach acaba de rechazar.
+ *
+ * QUÉ se escribe y a QUIÉNES ya no se decide acá: lo dice `qeSwitchOffPlan` del paquete (la misma
+ * función pura que consume RN), y la card solo despacha `SET_TARGET … scope: 'day'` por cada día ×
+ * campo del plan. Estos casos siguen mirando el RESULTADO —los dispatches y el estado— porque es
+ * lo que le pasa al coach; el criterio en sí lo fija `editor-state.day-targets.test.ts`.
  *
  * El estado se verifica con el reducer de VERDAD (`quickEditReducer` sobre los dispatches
  * capturados): un test que solo mirara la forma del dispatch habría dado verde con el bug del
@@ -108,6 +112,16 @@ function pameState(): QuickEditState {
   ])
 }
 
+/** Plan de Pame con un Jueves que tiene meta PROPIA distinta: propagar no puede tocarlo. */
+function pameStateWithThursday(): QuickEditState {
+  return stateOf([
+    variant('default', 'Todos los días', null, true),
+    variant('mon', 'Lunes', 1, false),
+    variant('tue', 'Martes', 2, false, MARTES),
+    variant('thu', 'Jueves', 4, false, { calories: '1700', proteinG: '130' }),
+  ])
+}
+
 /** Mismo plan pero con el base ya con metas. */
 function baseWithTargetsState(): QuickEditState {
   return stateOf([
@@ -163,6 +177,13 @@ function setTargetCalls(): Array<Extract<QuickEditAction, { type: 'SET_TARGET' }
   return dispatchMock.mock.calls
     .map(([action]) => action as QuickEditAction)
     .filter((action): action is Extract<QuickEditAction, { type: 'SET_TARGET' }> => action.type === 'SET_TARGET')
+}
+
+/** Las `STEP_TARGET` (botones −/+) que salieron de la card. */
+function stepTargetCalls(): Array<Extract<QuickEditAction, { type: 'STEP_TARGET' }>> {
+  return dispatchMock.mock.calls
+    .map(([action]) => action as QuickEditAction)
+    .filter((action): action is Extract<QuickEditAction, { type: 'STEP_TARGET' }> => action.type === 'STEP_TARGET')
 }
 
 /** El `onClick` de «Deshacer» del último toast. */
@@ -361,5 +382,76 @@ describe('switch «Solo el {día}» — dónde NO aparece', () => {
     render(<Harness initial={stateOf([variant('default', 'Todos los días', null, true)])} variantKey="default" />)
 
     expect(screen.queryByRole('switch')).toBeNull()
+  })
+})
+
+describe('parado en el día BASE — la otra mitad del agujero (C2)', () => {
+  it("los steppers y el tap-to-edit salen con scope 'all': el base arrastra a los días que heredaban", () => {
+    // Sin esto, subir «Todos los días» dejaba a Lunes clavado en la cifra vieja aunque el coach
+    // nunca hubiera querido separarlo — el caso Pame visto desde el base.
+    render(<Harness initial={pameState()} variantKey="default" />)
+    expect(screen.queryByRole('switch')).toBeNull()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Aumentar Calorías objetivo' }))
+
+    expect(stepTargetCalls()).toEqual([
+      { type: 'STEP_TARGET', variantKey: 'default', field: 'calories', direction: 1, scope: 'all' },
+    ])
+
+    // Tap-to-edit: el valor se vuelve <input> y su onChange despacha con el MISMO alcance.
+    fireEvent.click(screen.getByRole('button', { name: 'Editar Proteína objetivo' }))
+    fireEvent.change(screen.getByLabelText('Proteína objetivo'), { target: { value: '150' } })
+
+    expect(setTargetCalls()).toEqual([
+      { type: 'SET_TARGET', variantKey: 'default', field: 'proteinG', value: '150', scope: 'all' },
+    ])
+
+    const state = finalState(pameState())
+    expect(targetsOf(state, 'default')).toEqual(targets({ calories: '50', proteinG: '150' }))
+    expect(targetsOf(state, 'mon')).toEqual(targets({ calories: '50', proteinG: '150' }))
+    // Y los días con meta propia siguen siendo suyos.
+    expect(targetsOf(state, 'tue')).toEqual(targets(MARTES))
+    expect(targetsOf(state, 'wed')).toEqual(targets({ calories: '2040' }))
+  })
+})
+
+describe('el plan lo arma el paquete (`qeSwitchOffPlan`)', () => {
+  it('caso Pame: escribe Martes, el base y Lunes con scope «day», y NUNCA el Jueves con meta propia', () => {
+    render(<Harness initial={pameStateWithThursday()} variantKey="tue" />)
+
+    fireEvent.click(screen.getByRole('switch', { name: /Solo el martes/ }))
+
+    const calls = setTargetCalls()
+    expect([...new Set(calls.map((call) => call.variantKey))]).toEqual(['tue', 'default', 'mon'])
+    expect(calls.every((call) => call.scope === 'day')).toBe(true)
+    expect(calls.some((call) => call.variantKey === 'thu')).toBe(false)
+
+    const state = finalState(pameStateWithThursday())
+    expect(targetsOf(state, 'default')).toEqual(targets(MARTES))
+    expect(targetsOf(state, 'mon')).toEqual(targets(MARTES))
+    expect(targetsOf(state, 'thu')).toEqual(targets({ calories: '1700', proteinG: '130' }))
+  })
+
+  it('«Deshacer» reescribe SOLO los días del snapshot, ni uno más', () => {
+    render(<Harness initial={pameState()} variantKey="tue" />)
+    fireEvent.click(screen.getByRole('switch', { name: /Solo el martes/ }))
+    const applied = setTargetCalls().length
+
+    act(() => undoFromToast()())
+
+    // 3 días tocados × 4 campos: la foto es de los TOCADOS, no de la semana entera (C4). Un día
+    // que nadie escribió ya está en su valor y reescribirlo son dispatches de más — cada uno es
+    // un render del editor y un disparo del autosave.
+    const undone = setTargetCalls().slice(applied)
+    expect(undone).toHaveLength(12)
+    expect([...new Set(undone.map((call) => call.variantKey))]).toEqual(['tue', 'default', 'mon'])
+    expect(undone.every((call) => call.scope === 'day')).toBe(true)
+
+    // Y el plan queda EXACTO como estaba, Miércoles incluido (nunca entró en el gesto).
+    const state = finalState(pameState())
+    expect(targetsOf(state, 'default')).toEqual(targets())
+    expect(targetsOf(state, 'mon')).toEqual(targets())
+    expect(targetsOf(state, 'tue')).toEqual(targets(MARTES))
+    expect(targetsOf(state, 'wed')).toEqual(targets({ calories: '2040' }))
   })
 })
