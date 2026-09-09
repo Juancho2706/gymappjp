@@ -414,54 +414,77 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
 
 ## W2 · Picker, bump, tap-to-edit y Legumbres (2 d)
 
-- [ ] W2.1 [Opus A] `packages/nutrition-v2/editor-state.ts`: acción `BUMP_PORTION_TARGET { variantKey, slotKey,
+- [x] W2.1 [Opus A] `packages/nutrition-v2/editor-state.ts`: acción `BUMP_PORTION_TARGET { variantKey, slotKey,
       exchangeGroupId, by? }` + `findPortionTargetByGroup` + `portionsAfterBump` + export de `formatPortionsEsCl`.
-      **Criterio**: casos nuevos en `…/_quick-edit/quick-edit-state.test.ts` — suma 0,5 al target del grupo; no-op si el
-      grupo no está; satura en 99; `ADD_PORTION_TARGET` sobre un grupo presente **sigue** siendo no-op (el test de
-      `editor-state.ts:1948` no se borra).
-- [ ] W2.2 [Opus A] `qeGroupRefPerPortion(group, groups)` + `qeGroupRefLabel(ref)` en el paquete, sobre
-      `macrosForTargets` (`packages/nutrition-engine/exchange-calc.ts:85-100`). **Criterio**: archivo nuevo
-      `packages/nutrition-v2/editor-state.portions-ref.test.ts` — LEG con dict completo ⇒ P+C (no 0), dict vacío ⇒ `ref`
-      crudo, base ausente ⇒ `ref` crudo, grupo simple ⇒ su propio ref.
-- [ ] W2.3 [Sonnet] Copys en `packages/nutrition-v2/nutrition-portions-copy.ts`: `builder.{setChile,setLegacy,
-      legacyBadge,groupUsedBump,groupBumped,groupBumpedUndo,groupAtMax,stepperEditHint}` con los textos de la tabla
-      «Copys propuestos» del mockup. **Criterio**: `builder.groupUsed` se conserva para el estado en el tope; las
-      cantidades llegan pre-formateadas en es-CL.
-- [ ] W2.4 [Opus A · RN] `EditablePortionsSection.tsx`: fila usada sin `disabled` ni `opacity-50` (salvo tope 99),
-      subtítulo `groupUsedBump`, secciones «Sistema chileno» / «Propios» / «Legado (SMAE)» colapsable con
-      `accessibilityState`, chip `legacyBadge` en filas legado. La partición se hace **acá**, sobre la lista que ya
-      devolvió `mergePortionGroupChoices` (el `groups.map` de `:273`), con `comparePickerGroups` de W1.7 — no se toca el
-      merge. Incluye la **carcasa del banner del plan legado** (colisión declarada arriba): se renderiza solo si llega
-      `onConvertPress`, que W3.6 cablea. **Criterio**: QA en device (W2.11) + `accessibilityLabel` que dice qué va a
-      pasar, no solo el estado; sin `onConvertPress` el banner no se monta (nada visible antes de W3).
-- [ ] W2.5 [Opus A · RN] `QuickEditMode.tsx`: `BUMP_PORTION_TARGET` al elegir un grupo ya usado, resalte 1,2 s con
-      `Animated` (`useNativeDriver: false`, respeta `useReducedMotion`) y toast con `id` estable y acción «Deshacer» que
-      restaura el valor previo capturado. **Criterio**: dos taps seguidos ⇒ **un** toast actualizado; «Deshacer» tras dos
-      bumps vuelve al valor inicial de la interacción.
-- [ ] W2.6 [Opus A · RN] Stepper con `TextInput` siempre montado (`decimal-pad`, `inputAccessoryViewID`,
-      `selectTextOnFocus`, valor crudo mientras se tipea, formateo en `onBlur`) y error
-      `portion.<key>.portions` bajo la fila con `accessibilityLiveRegion="polite"`. **Criterio**: el árbol no cambia por
-      foco (patrón `QuantityStepper.tsx:11-13`); «1,3» muestra el error y no rompe el estado.
-- [ ] W2.7 [Opus B · web] `EditablePortionsCard.tsx`: mismo comportamiento (bump, `ring-2 ring-primary/60`,
-      `scrollIntoView`, toast con `action` de `sonner`, secciones por set) y `QE_COPY.portionsPickerHint`
-      (`microcopy.ts:125`) reescrito porque hoy afirma que los usados «aparecen desactivados». Igual que en RN, la
-      partición por sección va en el consumidor (el `groups.map` de `:285`) sobre la lista ya mergeada, y la carcasa del
-      banner legado se monta acá con `onConvertClick` opcional (W3.6 la cablea). **Criterio**: RTL nuevo
-      `EditablePortionsCard.test.tsx` — (a) la fila usada no está `disabled` y su subtítulo dice la cantidad, (b) el
-      click despacha `BUMP_PORTION_TARGET` y cierra el sheet, (c) `StepperField` con `1,3` marca `invalid`, (d) con
-      grupos de los dos sets se dibujan las secciones en el orden Sistema chileno → Propios → Legado y el orden de
-      entrada del merge no las altera.
-- [ ] W2.8 [Opus B] D5 en las etiquetas «1 porción ≈» del coach (RN y web) con `qeGroupRefPerPortion`. **Criterio**:
-      Legumbres SMAE deja de decir «0 kcal» y el caso queda cubierto por `portions-qa.test.ts` (la etiqueta usa los
-      `ref_*` **congelados** aunque cambie el catálogo vivo).
-- [ ] W2.9 [Opus B] R11: misma corrección en la cabecera de los dos `PortionEquivalencesSheet` del alumno (web
-      `:154-157`, RN `:165`). **Criterio**: con un plan que prescribe LEG, la cabecera muestra 125 kcal · 15 C · 9 P.
-- [ ] W2.10 [Sonnet] PostHog `nutrition_portion_group_bumped { surface }` en web y RN, con el enum en el paquete
-      compartido. **Criterio**: cero kcal, gramos, nombres de alimentos o ids en el payload (Ley 21.719).
+      **Criterio**: casos nuevos — suma 0,5 al target del grupo; no-op si el grupo no está; satura en 99 (no-op
+      **numérico**: «99,0» no ensucia el borrador); `ADD_PORTION_TARGET` sobre un grupo presente **sigue** siendo no-op.
+      **Cerrado 09-09**: los casos viven en `packages/nutrition-v2/editor-state.portions-bump.test.ts` (15) y no en
+      `_quick-edit/quick-edit-state.test.ts` (decisión (v): el reducer vive en el paquete y los 58 congelados no se tocan).
+      Gate: `pnpm exec vitest run packages/nutrition-v2` ⇒ 48 archivos / 849 tests.
+- [x] W2.2 [Opus A] `qeGroupRefPerPortion(group, groups)` + `qeGroupRefPerPortionFromDict(group, dict)` +
+      `qeGroupRefLabel(ref, { confirmed })` + `formatMacroEsCl` en el paquete, sobre `macrosForTargets`. **Cerrado 09-09**:
+      `packages/nutrition-v2/editor-state.portions-ref.test.ts` (LEG ⇒ 125/15/9/3, dict vacío ⇒ `ref` crudo, base ausente ⇒
+      `ref` crudo, simple ⇒ su ref, paridad exacta con la variante `FromDict`).
+- [x] W2.3 [Sonnet→Opus] Copys en `packages/nutrition-v2/nutrition-portions-copy.ts`: `builder.{setChile,setLegacy,setOwn,
+      legacyBadge,groupUsedBump,groupBumped,groupBumpedUndo,groupAtMax,stepperEditHint,portionsInputAria}` en tuteo
+      (SPEC §16.1). **Cerrado 09-09**: `groupUsed` intacto; `setLegacy(n?, surface)` pluraliza «1 plan / N planes», sin `n`
+      dice «Legado (SMAE) · Toca para ver» (web «Clic para ver»); `groupAtMax(franja)` = «Ya está en {franja} con 99 · es el
+      máximo» (99 = `PORTION_MAX` formateado; texto del worker aprobado por el jefe, **pendiente del OK del owner**, decisión (u)).
+- [x] W2.4 [Opus A · RN] `EditablePortionsSection.tsx`: fila usada sin `disabled` ni `opacity-50` (salvo tope 99),
+      subtítulo `groupUsedBump`, secciones «Sistema chileno» / «Propios» / «Legado (SMAE)» colapsable y **sticky**
+      (`stickyHeaderIndices`), chip `legacyBadge`. Partición en el consumidor sobre la lista mergeada
+      (`mergePortionGroupChoices` byte-idéntico) con `comparePickerGroups` + **overlay del catálogo vivo
+      `applyCatalogMetaToPickerGroups` (remate W2, decisión (s))**: un grupo SMAE ya prescrito cae en «Legado» y el orden
+      sale por `sortOrder` (PCT, CB…), sin catálogo nada cambia (R18). Carcasa del banner solo con `onConvertPress`
+      (queda POR FRANJA: W3.6 la levanta a nivel plan, decisión (x)). **Cerrado 09-09**; QA en device ⇒ W2.11.
+- [x] W2.5 [Opus A · RN] `QuickEditMode.tsx`: `BUMP_PORTION_TARGET` al elegir un grupo ya usado, resalte 1,2 s con
+      `Animated` (`useNativeDriver: false`, respeta `useReducedMotion`), toast con `id` estable y «Deshacer» que restaura
+      el valor capturado; **remate**: si la fila queda fuera de vista, scroll con el mismo gesto de `jumpToDay` (SPEC §7.4).
+      **Cerrado 09-09** (dos taps ⇒ un toast; Deshacer vuelve al valor inicial de la interacción; baseline expira a los 4 s).
+- [x] W2.6 [Opus A · RN] Stepper con `TextInput` siempre montado (`decimal-pad`, `inputAccessoryViewID`,
+      `selectTextOnFocus`, valor crudo mientras se tipea, formateo en `onBlur`) y error `portion.<key>.portions` bajo la
+      fila con `accessibilityLiveRegion="polite"`. **Cerrado 09-09** (el árbol no cambia por foco; «1,3» muestra el error).
+- [x] W2.7 [Opus B · web] `EditablePortionsCard.tsx`: bump + `ring-2 ring-primary/60` + `scrollIntoView` + toast de
+      `sonner` con `action`, secciones Sistema chileno → Propios → Legado (`setOwn`, `setLegacy(undefined, 'web')`,
+      `aria-labelledby`), `portionsPickerHint` reescrito, carcasa del banner con `onConvertClick` (por franja: W3.6 la
+      levanta a `QuickEditPlanView`), `isSystem`/`sortOrder`/`portionSystem` **reales** del catálogo vía
+      `applyCatalogMetaToPickerGroups` (`SYSTEM_EXCHANGE_CODES` solo como fallback sin catálogo, decisión (w)).
+      **Cerrado 09-09**: RTL `EditablePortionsCard.test.tsx` 16 casos (a–d + SMAE prescrito ⇒ Legado, propio «C» ⇒ Propios,
+      orden por `sortOrder`, sin catálogo sin títulos, porciones ilegibles); `pnpm exec vitest run "…/_quick-edit"` ⇒ 6/128.
+- [x] W2.8 [Opus B] D5 en las etiquetas «1 porción ≈» del coach (RN y web) con `qeGroupRefPerPortionFromDict` (dict
+      memoizado por apertura). **Cerrado 09-09**: Legumbres SMAE deja de decir «0 kcal»; cubierto por
+      `editor-state.portions-ref.test.ts` (la etiqueta usa los `ref_*` congelados del snapshot, no el catálogo vivo).
+- [x] W2.9 [Opus B] R11: misma corrección en la cabecera de los dos `PortionEquivalencesSheet` del alumno. **Cerrado
+      09-09**: test web nuevo `apps/web/src/app/c/[coach_slug]/nutrition-v2/_components/PortionEquivalencesSheet.test.tsx`
+      (3 casos: plan que solo prescribe LEG ⇒ «≈ 125 kcal · P 9 g · C 15 g · G 3 g», fallback al ref crudo, simple intacto).
+- [x] W2.10 [Sonnet→Opus] PostHog `nutrition_portion_group_bumped` en web y RN con el **único** constructor del paquete
+      (`packages/nutrition-v2/portions-analytics.ts`: `PORTIONS_EVENT_GROUP_BUMPED`, `portionGroupBumpedPayload(surface,
+      props)`). **Corrección de texto (decisión (q))**: el shape es el de DATA §11 —fuente única, fix S-07—
+      `{ surface, group_code, portion_system, from, undone }`, no `{ surface }`. **Cerrado 09-09**: cero kcal, gramos,
+      nombres de alimentos o ids (test exhaustivo en `editor-state.portions-bump.test.ts`).
 - [ ] W2.11 [owner] QA en device de los puntos 1–4 y 10 del checklist final.
-- [ ] W2.12 Gates W2 (<fecha>): vitest paquete + `_quick-edit` + RTL nuevo · `pnpm typecheck` · tsc mobile · eslint por
-      archivo (web y `--config eslint.mobile.config.mjs`) · `pnpm check:tokens`.
-- [ ] W2.13 [Fable] Juicio de W2 (A y B por separado): `<…>`.
+- [x] W2.12 Gates W2 (09-09, sobre `564a2d2c` + remate): `pnpm exec vitest run packages/nutrition-v2 packages/nutrition-engine
+      "apps/web/src/app/coach/nutrition-v2/[clientId]/_quick-edit" "apps/web/src/app/c/[coach_slug]/nutrition-v2"
+      tests/mobile-nutrition-v2-portions.test.ts tests/nutrition-portions apps/web/src/app/coach/nutrition-v2/_actions` ⇒
+      **92 archivos / 1.578 tests verdes** · `pnpm typecheck` ⇒ exit 0 · `pnpm --filter @eva/mobile exec tsc --noEmit` ⇒
+      exit 0 · eslint por archivo (web y `--config eslint.mobile.config.mjs`) sin hallazgos (workers) ·
+      `pnpm check:tokens` ⇒ OK (86 + 5) · `pnpm check:nutrition-v2-boundaries` ⇒ 460 archivos OK. Los 103 tests congelados
+      del editor (58 + 22 + 7 + 16) sin editar y verdes.
+- [x] W2.13 [Fable] Juicio de W2 (A y B por separado), 09-09: workflow `wf_1cbd5814-89d` (paquete → RN ∥ web → 3
+      refutadores Opus, 2 rondas por lane, 18 agentes) + remate `wf_717c9069-8ab` (8 agentes, 1 BLOQUEA real cazado:
+      `setSystemGroupIds` huérfano ⇒ TS2304). Decisiones del jefe:
+      (q) **DATA §11 manda** sobre el texto abreviado de TASKS W2.10: 5 props, un solo constructor en el paquete.
+      (r) **Tres particiones en las dos superficies** (SPEC §7.1:277 + W2.7 d): «Propios» solo se dibuja si hay propios.
+      (s) **Overlay de metadatos en el consumidor** (`applyCatalogMetaToPickerGroups`): `collectPortionGroups` sigue sin
+      inventar set (R18) y el merge no se toca (R17); el catálogo vivo pega `portionSystem`/`sortOrder`/`isSystem` por id.
+      (t) **`setLegacy()` sin conteo de planes** en RN y web: el loader de W1 no devuelve el conteo y pedirlo sería alcance
+      nuevo; fila añadida a SPEC §16.1 («Legado (SMAE) · Toca/Clic para ver»).
+      (u) `groupAtMax` sin fila en §16.1: texto del worker aprobado provisionalmente, **OK del owner pendiente**.
+      (v) Tests del reducer en el paquete, no en `_quick-edit`.
+      (w) Web usa el `isSystem` real del catálogo; la inferencia por código queda solo como fallback sin catálogo.
+      (x) **Banner legado**: la carcasa de W2 vive por franja en las dos superficies; W3.6 la levanta a nivel plan
+      (`QuickEditMode` RN / `QuickEditPlanView` web), carga el catálogo ANTES de decidir el banner y persiste «Ahora no»
+      30 días por `planId`. MEJORA diferidas al backlog (abajo).
 
 ## W3 · Conversión SMAE → chileno (2 d)
 
@@ -690,7 +713,7 @@ _(vacía: se llena si aparece un reporte después del cierre, con `### <fecha> �
 |---|---|---|---|---|
 | 2026-09-09 | W0 · datos (W0a + W0b) | worktree `porciones-chilenas`, sin push (`02db17b7` + commit del apply) | tx-rollback + smoke A–G + Q1–Q9 + dry-run ×3 + apply ×2 | 120000/120500 en LIVE (`20260909163802` / `20260909163812`), seed apagado, **2.499 equivalencias + 5 foods en LIVE**; OK del owner citado en W0.9 |
 | 2026-09-09 | W1 · motor y visibilidad | worktree `porciones-chilenas`, sin push | vitest 90/1.446 · typecheck · tsc mobile · boundaries 454 · eslint por archivo | 4 workers + 4 refutadores + ronda de fixes; decisiones (k)–(p) en W1.14 |
-| | W2 · picker | | | |
+| 2026-09-09 | W2 · picker, bump, tap-to-edit, Legumbres | worktree `porciones-chilenas`, sin push (`564a2d2c` + remate) | vitest 92/1.578 · typecheck · tsc mobile · tokens · boundaries 460 · eslint por archivo | 18 + 8 agentes (2 rondas por lane + remate del overlay); decisiones (q)–(x) en W2.13; QA device W2.11 pendiente |
 | | W3 · conversión | | | |
 | | W4 · metas | | | |
 | | W5 · equivalencias | | | |
@@ -726,6 +749,17 @@ _(vacía: se llena si aparece un reporte después del cierre, con `### <fecha> �
 - **2.253 `foods` sin clasificar en ningún grupo**: fuera de alcance de este tren; el clasificador no se corre.
 - **Vocabulario «Objetivos propios» del builder retirado**: el builder legado llamaba así a lo que acá es «Solo el
   {día}»; no se toca, queda anotado para cuando se borre el wizard.
+
+- **MEJORA diferidas de W2 (refutadores 09-09).** (1) `nutrition-portions-copy.ts` importa `editor-state`
+  (`PORTION_MAX` + `formatPortionsEsCl`) y lo consumen ~15 pantallas del alumno: mover las dos constantes a un módulo hoja.
+  (2) `Toast.tsx` no expone `onDismiss`: la baseline del «Deshacer» sobrevive a un swipe del toast (expira a los 4 s).
+  (3) `handleBumpPortion` (RN) se recrea por tecleo; web recalcula `portionsAfterBump` solo para el texto del toast.
+  (4) `EditablePortionsCard.tsx` reconstruye `usedSystems` en vez de recibirlo del provider. (5) Copy suelto preexistente
+  «Quitar porciones de …» (`builder.removePortionsAria`). (6) `apps/mobile/lib/nutrition-v2-portions.ts:49 formatPortionsCl`
+  sigue vivo (PortionChip, PortionDayCoverageRow): unificar con `formatPortionsEsCl`. (7) Mockup «con 1 porción» vs
+  §16.1 «con {n}» ⇒ regenerar (D-8). (8) Para W3: en quick-edit clásico el catálogo entra solo al abrir el picker
+  (primera apertura sin encabezados y alfabética, luego se reordena) ⇒ precargar al montar; RN `EditablePortionsSection.tsx`
+  pinta «Legado» con `sectioned === false`; web titula «Sistema chileno» sin catálogo (RN no).
 
 ## Decisiones del jefe post-críticos
 

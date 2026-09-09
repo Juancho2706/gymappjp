@@ -26,10 +26,10 @@
  * Plan sin porciones => la seccion NO se pinta (capa invisible, SPEC UX-c).
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { ChevronDown, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
-import { exchangeGroupColor } from '@eva/nutrition-engine'
+import { exchangeGroupColor, type ExchangeGroup } from '@eva/nutrition-engine'
 import { AddActionButton, useBrandPrimaryHex } from '@/components/nutrition-v2'
 import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
 import { useReducedMotion } from '@/lib/use-reduced-motion'
@@ -39,6 +39,7 @@ import {
   PORTION_NOTES_MAX,
   PORTION_STEP,
   SYSTEM_EXCHANGE_CODES,
+  applyCatalogMetaToPickerGroups,
   comparePickerGroups,
   findPortionTargetByGroup,
   formatPortionsEsCl,
@@ -50,11 +51,12 @@ import {
   systemOf,
   visibleExchangeGroupsForCoach,
   type PortionSystem,
+  type QePickerGroup,
   type QePortionGroup,
   type QePortionTarget,
   type QeSlot,
 } from '@eva/nutrition-v2'
-import { useQuickEdit, genQuickEditKey, type PortionCatalogMeta } from './QuickEditProvider'
+import { useQuickEdit, genQuickEditKey } from './QuickEditProvider'
 import { QeBottomSheet } from './QeBottomSheet'
 import { QeNoteButton } from './QeNoteButton'
 import { StepperField } from './StepperField'
@@ -95,7 +97,7 @@ function GroupDot({ group, sortOrder }: { group: { groupCode: string; color: str
  *   (`exchangeGroupColor` cae a una paleta por indice cuando el grupo no tiene color propio):
  *   se conserva tal cual estaba para que ningun circulito cambie de color con este fix.
  */
-type PickerGroup = QePortionGroup & {
+type PickerGroup = QePickerGroup & {
   sortOrder: number
   colorIndex: number
   isSystem: boolean
@@ -112,49 +114,54 @@ type PickerGroup = QePortionGroup & {
  * picker recibe `QePortionGroup` (sin `isSystem` ni `sortOrder`: el snapshot congelado no los
  * guarda), se le pasa un shim y se vuelve al objeto original por id.
  *
- * `isSystem` y `sortOrder` salen del CATALOGO VIVO (`portionCatalogMeta` del provider), no del
- * codigo: `exchange_groups_system_code_uq` es un indice PARCIAL (solo `is_system`), asi que un
- * grupo PROPIO del coach puede llamarse 'C' o 'FR'; darlo por system lo dejaria fuera del picker
- * de un coach 'cl' sin legado vivo —el coach perderia su propio grupo—. `SYSTEM_EXCHANGE_CODES`
- * queda solo como fallback para los grupos que no estan en el catalogo (snapshot de un grupo
- * borrado) o cuando el catalogo no llego: es el MISMO criterio que usa `reconstructExchangeGroups`
- * (`read-models.ts:718`).
+ * Los tres metadatos que el snapshot NO guarda —`portionSystem`, `sortOrder` e `isSystem`— los
+ * pega `applyCatalogMetaToPickerGroups` (paquete) desde el CATALOGO VIVO, POR ID y ANTES de
+ * partir. Es el defecto que cierra W2: `collectPortionGroups` no devuelve `portionSystem` (R18,
+ * a proposito), asi que `systemOf` caia al set del coach y los 9 grupos SMAE ya prescritos de un
+ * coach 'cl' se pintaban bajo «Sistema chileno», con el legado nacido muerto. El set NO se
+ * adivina por codigo: `exchange_groups_system_code_uq` es un indice PARCIAL (solo `is_system`),
+ * asi que un grupo PROPIO del coach puede llamarse 'C' o 'FR'; darlo por system lo dejaria fuera
+ * del picker de un coach 'cl' sin legado vivo —el coach perderia su propio grupo—.
+ * `SYSTEM_EXCHANGE_CODES` queda solo como fallback para los grupos que no estan en el catalogo
+ * (snapshot de un grupo borrado) o cuando el catalogo no llego: es el MISMO criterio que usa
+ * `reconstructExchangeGroups` (`read-models.ts:718`).
  */
 export function partitionPickerGroups(
   groups: readonly QePortionGroup[],
   coachSystem: PortionSystem,
   usedSystems: readonly PortionSystem[] | undefined,
-  catalogMeta?: PortionCatalogMeta | null,
+  catalog?: readonly ExchangeGroup[] | null,
 ): { own: PickerGroup[]; custom: PickerGroup[]; legacy: PickerGroup[] } {
-  const byId = new Map<string, { group: QePortionGroup; index: number }>()
-  groups.forEach((group, index) => {
+  // Catalogo ausente o vacio ⇒ copias sin cambio (R18: nadie inventa un set que no se leyo).
+  const overlaid = applyCatalogMetaToPickerGroups(groups, catalog)
+  const hasCatalog = catalog != null && catalog.length > 0
+
+  const byId = new Map<string, { group: QePickerGroup; index: number }>()
+  overlaid.forEach((group, index) => {
     if (!byId.has(group.exchangeGroupId)) byId.set(group.exchangeGroupId, { group, index })
   })
 
-  const shims = [...byId.values()].map(({ group, index }) => {
-    const meta = catalogMeta?.get(group.exchangeGroupId)
-    return {
-      id: group.exchangeGroupId,
-      slug: group.groupCode.toLowerCase(),
-      code: group.groupCode,
-      name: group.groupName,
-      coachId: null,
-      teamId: null,
-      isSystem: meta?.isSystem ?? SYSTEM_EXCHANGE_CODES.has(group.groupCode),
-      refCalories: group.ref.calories,
-      refProteinG: group.ref.proteinG,
-      refCarbsG: group.ref.carbsG,
-      refFatsG: group.ref.fatsG,
-      color: group.color,
-      // Sin catalogo no hay orden que respetar y se conserva el de la lista mergeada; con
-      // catalogo, el grupo que no esta en el (borrado, pero congelado en el plan) va al final
-      // de su seccion y desempata por codigo, en vez de colarse entre los del catalogo.
-      sortOrder: meta?.sortOrder ?? (catalogMeta == null ? index : Number.MAX_SAFE_INTEGER),
-      composedOf: null,
-      macrosConfirmed: group.macrosConfirmed,
-      portionSystem: group.portionSystem,
-    }
-  })
+  const shims = [...byId.values()].map(({ group, index }) => ({
+    id: group.exchangeGroupId,
+    slug: group.groupCode.toLowerCase(),
+    code: group.groupCode,
+    name: group.groupName,
+    coachId: null,
+    teamId: null,
+    isSystem: group.isSystem ?? SYSTEM_EXCHANGE_CODES.has(group.groupCode),
+    refCalories: group.ref.calories,
+    refProteinG: group.ref.proteinG,
+    refCarbsG: group.ref.carbsG,
+    refFatsG: group.ref.fatsG,
+    color: group.color,
+    // Sin catalogo no hay orden que respetar y se conserva el de la lista mergeada; con
+    // catalogo, el grupo que no esta en el (borrado, pero congelado en el plan) va al final
+    // de su seccion y desempata por codigo, en vez de colarse entre los del catalogo.
+    sortOrder: group.sortOrder ?? (hasCatalog ? Number.MAX_SAFE_INTEGER : index),
+    composedOf: null,
+    macrosConfirmed: group.macrosConfirmed,
+    portionSystem: group.portionSystem,
+  }))
 
   const own: PickerGroup[] = []
   const custom: PickerGroup[] = []
@@ -205,7 +212,7 @@ export function EditablePortionsCard({
   const {
     portionGroups,
     portionGroupChoices,
-    portionCatalogMeta,
+    portionCatalog,
     portionSystem,
     portionLegacySystems,
     portionSystemsDegraded,
@@ -325,7 +332,7 @@ export function EditablePortionsCard({
         coachSystem={portionSystem}
         legacySystems={portionLegacySystems}
         degraded={portionSystemsDegraded}
-        catalogMeta={portionCatalogMeta}
+        catalog={portionCatalog}
       />
     </section>
   )
@@ -470,7 +477,7 @@ function GroupPickerSheet({
   coachSystem,
   legacySystems,
   degraded,
-  catalogMeta,
+  catalog,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -483,12 +490,20 @@ function GroupPickerSheet({
   legacySystems: PortionSystem[]
   /** Modo degradado del loader: `usedSystems` viaja `undefined` ⇒ se muestra todo sin marcar. */
   degraded: boolean
-  /** `isSystem` y `sort_order` reales del catalogo vivo; `null` = no llego (ver la particion). */
-  catalogMeta: PortionCatalogMeta | null
+  /**
+   * Catalogo VIVO crudo del coach: de aca salen `portionSystem`, `sortOrder` e `isSystem`
+   * reales. `null` = no llego (ver la particion: se degrada sin inventar ningun set).
+   */
+  catalog: readonly ExchangeGroup[] | null
 }) {
   const { dispatch, portionFoodCounts } = useQuickEdit()
   const captureBump = useCaptureNutritionPortionGroupBumped()
   const [legacyOpen, setLegacyOpen] = useState(false)
+  // La region legado se nombra APUNTANDO al encabezado visible en vez de repetir su texto en un
+  // `aria-label`: un solo texto, una sola traduccion y cero riesgo de que el rotulo anunciado se
+  // desincronice del que se ve (el `aria-label` gana sobre el contenido y el lector leia dos veces
+  // la misma frase, una de ellas con la accion de OTRA superficie).
+  const legacyHeadingId = useId()
   /**
    * Valor PREVIO capturado al CREAR el toast, por `id` de toast (SPEC §7.4). Mientras ese toast
    * siga vivo los bumps siguientes NO vuelven a capturar: dos taps + un «Deshacer» devuelven al
@@ -512,9 +527,9 @@ function GroupPickerSheet({
         groups,
         coachSystem,
         degraded ? undefined : [coachSystem, ...legacySystems],
-        catalogMeta,
+        catalog,
       ),
-    [groups, coachSystem, legacySystems, degraded, catalogMeta],
+    [groups, coachSystem, legacySystems, degraded, catalog],
   )
 
   /**
@@ -593,7 +608,12 @@ function GroupPickerSheet({
 
   function renderRow(group: PickerGroup) {
     const target = findPortionTargetByGroup(slot, group.exchangeGroupId)
-    const current = target ? (parsePortionsValue(target.portions) ?? 0) : null
+    // `null` = el grupo NO esta en la franja **o** sus porciones no son un numero legible. Los dos
+    // casos caen al label de referencia de la fila: con el `?? 0` de antes, un target invalido
+    // («1,3», o el string vacio de una fila a medio editar) decia «Ya está en Desayuno con 0»,
+    // un numero que no existe en ningun lado. El copy del bump se reserva para cuando SE SABE
+    // cuanto hay; el que avisa del valor invalido es el stepper de la fila, no el picker.
+    const current = target ? parsePortionsValue(target.portions) : null
     const atMax = current != null && current >= PORTION_MAX
     const foods = foodsHint(portionFoodCounts?.[group.exchangeGroupId])
     const subtitle =
@@ -689,19 +709,20 @@ function GroupPickerSheet({
         ) : null}
 
         {/* La sección legado SOLO existe si hay grupos legado, y nace colapsada. El encabezado es
-            `builder.setLegacy()` SIN `n` —«Legado (SMAE) · Toca para ver»—, el mismo que pinta RN:
-            el conteo de planes no viaja (el loader del picker devuelve `{groups, foodCounts,
-            portionSystem, legacySystems, degraded}`) y la firma es opcional justamente para no
-            inventar el número. `legacyBadge` queda solo para el chip de la fila. */}
+            `builder.setLegacy(undefined, 'web')` SIN `n` —«Legado (SMAE) · Clic para ver»: mismo copy
+            que RN salvo la acción, que en web es un clic—. El conteo de planes no viaja (el loader
+            del picker devuelve `{groups, foodCounts, portionSystem, legacySystems, degraded}`) y la
+            firma es opcional justamente para no inventar el número. `legacyBadge` queda solo para el chip de la fila. */}
         {sections.legacy.length > 0 ? (
-          <section aria-label={PORTIONS_COPY.builder.setLegacy()}>
+          <section aria-labelledby={legacyHeadingId}>
             <button
+              id={legacyHeadingId}
               type="button"
               aria-expanded={legacyOpen}
               onClick={() => setLegacyOpen((prev) => !prev)}
               className="flex min-h-11 w-full items-center justify-between gap-2 rounded-control px-2 py-1.5 text-left text-[10px] font-semibold uppercase tracking-wide text-subtle transition-colors hover:bg-surface-sunken focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              {PORTIONS_COPY.builder.setLegacy()}
+              {PORTIONS_COPY.builder.setLegacy(undefined, 'web')}
               <ChevronDown
                 aria-hidden="true"
                 className={'h-4 w-4 shrink-0 transition-transform ' + (legacyOpen ? 'rotate-180' : '')}

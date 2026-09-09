@@ -30,16 +30,22 @@ import {
   systemOf,
   visibleExchangeGroupsForCoach,
   type QeExchangeGroup,
-  type QePortionGroup,
+  type QePickerGroup,
   type QePortionTarget,
 } from '@eva/nutrition-v2'
 
 /**
- * Grupo elegible del picker: el `QePortionGroup` compartido + `sortOrder` opcional para el
- * color fallback del circulito (los grupos del catalogo del coach lo traen; los snapshots
- * congelados del read model no — caen al indice 0, solo cosmetico).
+ * Grupo elegible del picker. Es EXACTAMENTE el `QePickerGroup` del paquete: el
+ * `QePortionGroup` compartido más los dos metadatos que solo trae el catálogo VIVO
+ * (`sortOrder` para el orden y el color fallback del circulito, `isSystem` para separar
+ * «Sistema chileno» de «Propios»).
+ *
+ * Quién los pega: `applyCatalogMetaToPickerGroups` en `QuickEditMode`, sobre la lista que ya
+ * mergeó `mergePortionGroupChoices` (que no se toca). Los grupos que solo existen en el
+ * snapshot congelado del plan llegan acá SIN esos campos, y eso es un dato honesto: significa
+ * «el catálogo no lo tiene», no «es propio».
  */
-export type PortionPickerGroup = QePortionGroup & { sortOrder?: number }
+export type PortionPickerGroup = QePickerGroup
 
 /**
  * Display es-CL de un valor de porciones que viaja como TEXTO en el árbol del editor. El
@@ -82,12 +88,16 @@ type PickerSections = {
  * la función de visibilidad no mira. Duplicar la regla acá en vez de adaptar sería justo lo que
  * §7.3 prohíbe.
  *
- * `systemGroupIds` es la lista de ids que el catálogo vivo marcó `is_system`. `undefined` es
- * «todavía no cargó / no se pudo leer», y es DISTINTO de un set vacío («se leyó y no hay ninguno
- * del sistema»): mientras no cargue, todos los grupos caerían en «Propios» y el coach vería sus
- * 13 grupos chilenos bajo el título equivocado. Por eso ese caso devuelve `sectioned: false` y el
- * sheet no titula nada. Un id AUSENTE de un set ya cargado sí se trata como propio, que es el
- * lado seguro: los custom nunca se filtran por set.
+ * `isSystem` y `portionSystem` salen del PROPIO grupo, no de un set de ids paralelo: el overlay
+ * del catálogo vivo (`applyCatalogMetaToPickerGroups`, aplicado en `QuickEditMode`) ya los pegó
+ * por id. Un grupo sin `isSystem` es uno que el catálogo NO tiene, y se trata como propio: es el
+ * lado seguro, porque los custom nunca se filtran por set.
+ *
+ * `catalogKnown` es el veredicto sobre si ese overlay tuvo con qué trabajar. `false` es «todavía
+ * no cargó / no se pudo leer / llegó vacío», y es DISTINTO de «se leyó y no hay ninguno del
+ * sistema»: mientras no cargue, todos los grupos caerían en «Propios» y el coach vería sus 13
+ * grupos chilenos bajo el título equivocado. Por eso ese caso devuelve `sectioned: false` y el
+ * sheet no titula nada.
  *
  * `coachSystemKnown` es la MISMA duda por el otro lado: si el borde no pudo leer
  * `coaches.portion_system`, `coachSystem` es el fallback 'cl' inventado acá, no un dato. Con el
@@ -100,7 +110,7 @@ function partitionPickerGroups(
   coachSystem: PortionSystem,
   coachSystemKnown: boolean,
   usedSystems: readonly PortionSystem[] | undefined,
-  systemGroupIds: ReadonlySet<string> | undefined,
+  catalogKnown: boolean,
 ): PickerSections {
   const byId = new Map(groups.map((group) => [group.exchangeGroupId, group]))
   const visible = visibleExchangeGroupsForCoach({
@@ -111,7 +121,7 @@ function partitionPickerGroups(
       name: group.groupName,
       coachId: null,
       teamId: null,
-      isSystem: systemGroupIds?.has(group.exchangeGroupId) === true,
+      isSystem: group.isSystem === true,
       refCalories: group.ref.calories,
       refProteinG: group.ref.proteinG,
       refCarbsG: group.ref.carbsG,
@@ -128,7 +138,7 @@ function partitionPickerGroups(
 
   // Sin catálogo vivo —o sin el set del coach— no se sabe qué grupo es del sistema para ESTE
   // coach: la lista va entera y sin títulos.
-  const sectioned = systemGroupIds !== undefined && coachSystemKnown
+  const sectioned = catalogKnown && coachSystemKnown
   const sections: PickerSections = { chile: [], own: [], legacy: [], sectioned }
   for (const entry of visible) {
     const group = byId.get(entry.id)
@@ -267,7 +277,7 @@ function PortionsStepper({
         <Minus color={theme.foreground} size={16} />
       </Pressable>
       <TextInput
-        accessibilityLabel={`Porciones de ${groupName}`}
+        accessibilityLabel={PORTIONS_COPY.builder.portionsInputAria(groupName)}
         value={editing ? portions : displayPortions(portions)}
         onChangeText={(value) => onSetValue(targetKey, value)}
         onFocus={() => onEditingChange(true)}
@@ -310,6 +320,7 @@ function PortionTargetRow({
   disabled,
   error,
   highlightNonce,
+  onRevealBumpedRow,
   onStep,
   onSetValue,
   onSetNotes,
@@ -329,6 +340,11 @@ function PortionTargetRow({
    * resalte, y un booleano que ya está en `true` no cambia.
    */
   highlightNonce: number
+  /**
+   * Rectángulo de ESTA fila en coordenadas de pantalla, medido tras el bump (§7.4). El
+   * orquestador es el único que conoce el scroll, así que la fila solo se mide y avisa.
+   */
+  onRevealBumpedRow?: (rect: { y: number; height: number }) => void
   onStep: (targetKey: string, direction: 1 | -1) => void
   onSetValue: (targetKey: string, value: string) => void
   onSetNotes: (targetKey: string, value: string) => void
@@ -357,8 +373,19 @@ function PortionTargetRow({
     inputRange: [0, 1],
     outputRange: [hexToRgba(theme.primary, 0), hexToRgba(theme.primary, 0.12)],
   })
+  /** Vista de la fila: solo se usa para MEDIRLA tras el bump (§7.4), nunca para escribirle estilo. */
+  const rowRef = useRef<View>(null)
   useEffect(() => {
     if (highlightNonce === 0) return
+    /**
+     * Traer la fila a la vista (§7.4). Va ANTES del guard de `reduceMotion` a propósito: esa
+     * preferencia apaga el PARPADEO, no la navegación — con el resalte apagado, una fila fuera
+     * del viewport dejaría al coach sin ninguna señal de qué cambió. `measureInWindow` es
+     * asíncrono y corre después del layout, así que el rectángulo ya es el de la fila bumpeada.
+     */
+    rowRef.current?.measureInWindow((_x, y, _width, height) => {
+      onRevealBumpedRow?.({ y, height })
+    })
     if (reduceMotion) {
       highlight.setValue(0)
       return
@@ -371,13 +398,18 @@ function PortionTargetRow({
     })
     animation.start()
     return () => animation.stop()
-  }, [highlightNonce, reduceMotion, highlight])
+    // El handler viaja MEMOIZADO desde el orquestador (`useCallback` sin dependencias, solo lee
+    // refs): si dejara de serlo, un render del padre volvería a resaltar una fila que nadie tocó.
+  }, [highlightNonce, reduceMotion, highlight, onRevealBumpedRow])
 
   return (
     // El `className` va en el View de afuera y el color animado en el `Animated.View` de adentro:
     // css-interop mapea `className` a `style` en los componentes del kit, no en los envoltorios de
     // `Animated`, así que una clase colgada del animado no pintaría nada.
-    <View className="overflow-hidden rounded-control">
+    // `collapsable={false}` es el seguro de la medición: en la arquitectura vieja de Android una
+    // View que solo aporta layout se aplana y `measureInWindow` devuelve ceros, así que el reveal
+    // del bump (§7.4) no scrollearía. Con Fabric mide bien igual; el prop cuesta nada.
+    <View ref={rowRef} collapsable={false} className="overflow-hidden rounded-control">
       <Animated.View style={{ backgroundColor: highlightColor }}>
         <View className="flex-row items-center gap-2">
         <View className="min-w-0 flex-1 flex-row items-center gap-2">
@@ -603,7 +635,7 @@ function GroupPickerSheet({
   coachSystem,
   coachSystemKnown,
   usedSystems,
-  systemGroupIds,
+  catalogKnown,
   legacyPlanCount,
   onPick,
   groupAdmin,
@@ -619,7 +651,8 @@ function GroupPickerSheet({
   /** ¿`coachSystem` es un dato leído o el fallback 'cl'? Ver `partitionPickerGroups`. */
   coachSystemKnown: boolean
   usedSystems: readonly PortionSystem[] | undefined
-  systemGroupIds: ReadonlySet<string> | undefined
+  /** ¿El overlay del catálogo vivo llegó a correr? Ver `partitionPickerGroups`. */
+  catalogKnown: boolean
   /** `undefined` = nadie sabe cuántos planes: el copy omite el conteo en vez de inventarlo. */
   legacyPlanCount: number | undefined
   onPick: (group: PortionPickerGroup) => void
@@ -637,8 +670,8 @@ function GroupPickerSheet({
   const reduceMotion = useReducedMotion()
 
   const sections = useMemo(
-    () => partitionPickerGroups(groups, coachSystem, coachSystemKnown, usedSystems, systemGroupIds),
-    [groups, coachSystem, coachSystemKnown, usedSystems, systemGroupIds],
+    () => partitionPickerGroups(groups, coachSystem, coachSystemKnown, usedSystems, catalogKnown),
+    [groups, coachSystem, coachSystemKnown, usedSystems, catalogKnown],
   )
 
   /**
@@ -734,13 +767,13 @@ function GroupPickerSheet({
       <Pressable
         key="sec-legacy"
         accessibilityRole="button"
-        accessibilityLabel={PORTIONS_COPY.builder.setLegacy(legacyPlanCount)}
+        accessibilityLabel={PORTIONS_COPY.builder.setLegacy(legacyPlanCount, 'rn')}
         accessibilityState={{ expanded: legacyOpen }}
         onPress={toggleLegacy}
         className="min-h-11 flex-row items-center gap-2 rounded-control bg-surface-card px-2 py-1 active:bg-surface-sunken"
       >
         <Text className="min-w-0 flex-1 font-mono text-[10px] uppercase tracking-widest text-muted">
-          {PORTIONS_COPY.builder.setLegacy(legacyPlanCount)}
+          {PORTIONS_COPY.builder.setLegacy(legacyPlanCount, 'rn')}
         </Text>
         <ChevronDown
           color={theme.mutedForeground}
@@ -808,10 +841,11 @@ export function EditablePortionsSection({
   errors,
   coachSystem,
   usedSystems,
-  systemGroupIds,
+  catalogKnown = false,
   legacyPlanCount,
   bumpedGroupId = null,
   bumpNonce = 0,
+  onRevealBumpedRow,
   onStep,
   onSetValue,
   onSetNotes,
@@ -837,10 +871,12 @@ export function EditablePortionsSection({
   coachSystem?: PortionSystem | null
   usedSystems?: readonly PortionSystem[]
   /**
-   * Ids que el catálogo vivo marcó `is_system`. Un id ausente se trata como PROPIO, que es el lado
-   * seguro: los custom nunca se filtran por set.
+   * ¿Los grupos de `groups` ya pasaron por el overlay del catálogo vivo
+   * (`applyCatalogMetaToPickerGroups`) y ese catálogo traía algo? Solo con eso en `true` el picker
+   * se anima a titular «Sistema chileno» / «Propios»; si no, va como una sola lista sin
+   * encabezados. Default `false` = superficie que no lee catálogo (nada cambia respecto de antes).
    */
-  systemGroupIds?: ReadonlySet<string>
+  catalogKnown?: boolean
   /**
    * `n` del encabezado «Legado (SMAE) · Lo usas en {n} planes». Ausente ⇒ el encabezado se queda
    * en «Legado (SMAE) · Toca para ver»: hoy NADIE sabe el conteo (el borde manda una lista de
@@ -851,6 +887,12 @@ export function EditablePortionsSection({
   /** Grupo que acaba de recibir un bump (resalte de su fila) y nonce que lo redispara. */
   bumpedGroupId?: string | null
   bumpNonce?: number
+  /**
+   * Rectángulo en pantalla de la fila resaltada, medido tras cada bump (§7.4). Quien sabe si esa
+   * fila entra en el viewport —y cómo scrollear— es el orquestador, no esta sección. Ausente ⇒ el
+   * resalte se pinta igual y nadie mueve el lienzo.
+   */
+  onRevealBumpedRow?: (rect: { y: number; height: number }) => void
   onStep: (targetKey: string, direction: 1 | -1) => void
   /** Tap-to-edit del stepper (M3): texto CRUDO hacia `SET_PORTION_TARGET`. */
   onSetValue: (targetKey: string, value: string) => void
@@ -897,9 +939,18 @@ export function EditablePortionsSection({
     [groups],
   )
   /**
-   * ¿Este plan prescribe porciones del set viejo? Se mira lo PRESCRITO, no el catálogo: el banner
-   * habla del plan, no de lo que el coach podría elegir. `systemOf` cae al set del coach cuando el
-   * snapshot congelado no guarda el set, así que un grupo sin dato nunca dispara el banner.
+   * ¿Este plan prescribe porciones del set viejo? Se mira lo PRESCRITO (los `targets`), no el
+   * catálogo entero: el banner habla del plan, no de lo que el coach podría elegir.
+   *
+   * Funciona porque `groups` YA viene enriquecido por `applyCatalogMetaToPickerGroups`: el
+   * snapshot congelado del plan no guarda el set (R18) y `mergePortionGroupChoices` lo pone
+   * PRIMERO, así que sin el overlay `systemOf` caía al set del coach y para el coach 'cl' con
+   * plan SMAE esto daba `false` — el banner nacía muerto. Un grupo que el catálogo ya no tiene
+   * (borrado) sigue sin dato y sigue sin disparar el banner: no se inventa 'smae'.
+   *
+   * TODO(W3.6): el flag DEFINITIVO viene del borde (`legacySystems` de la ruta móvil), que sabe
+   * de todos los planes del coach y no solo del que está abierto; y el «Ahora no» pasa a durar
+   * 30 días por `planId` en vez de lo que dura esta sesión de edición (`convertDismissed`).
    */
   const planUsesLegacy = useMemo(
     () =>
@@ -959,6 +1010,7 @@ export function EditablePortionsSection({
               disabled={disabled}
               error={errors?.[`portion.${target.key}.portions`] ?? null}
               highlightNonce={bumpedGroupId === target.exchangeGroupId ? bumpNonce : 0}
+              onRevealBumpedRow={onRevealBumpedRow}
               onStep={onStep}
               onSetValue={onSetValue}
               onSetNotes={onSetNotes}
@@ -1001,7 +1053,7 @@ export function EditablePortionsSection({
         coachSystem={effectiveSystem}
         coachSystemKnown={coachSystemKnown}
         usedSystems={usedSystems}
-        systemGroupIds={systemGroupIds}
+        catalogKnown={catalogKnown}
         legacyPlanCount={legacyPlanCount}
         groupAdmin={groupAdmin}
         onPick={(group) => {

@@ -2041,6 +2041,8 @@ export function compareVisibleGroups(a: VisibleExchangeGroup, b: VisibleExchange
 }
 ```
 
+**Remate W2 — overlay de metadatos del catálogo (`applyCatalogMetaToPickerGroups`, en `editor-state.ts`).** `collectPortionGroups` deja `portionSystem` en `undefined` (R18) y `mergePortionGroupChoices` pone primero los grupos del plan (R17), así que el consumidor —antes de `comparePickerGroups` y de partir por sección— pega por id `portionSystem`, `sortOrder` e `isSystem` del catálogo vivo (`ExchangeGroup[]`): `applyCatalogMetaToPickerGroups(groups: readonly QePortionGroup[], catalog: readonly ExchangeGroup[] | null | undefined): QePickerGroup[]`, con `QePickerGroup = QePortionGroup & { sortOrder?: number; isSystem?: boolean }`. Orden de entrada preservado; catálogo `null`/vacío ⇒ copias sin cambio (nadie inventa `'smae'`); id ausente ⇒ sin cambio; nunca toca `ref`, `composedOf`, `groupName`, `color`, `macrosConfirmed`. Test: `packages/nutrition-v2/editor-state.picker-meta.test.ts` (7 casos).
+
 **Y el segundo comparador, el del picker (R17/R18), que vive en `editor-state.ts`** porque opera sobre el tipo del editor:
 
 ```ts

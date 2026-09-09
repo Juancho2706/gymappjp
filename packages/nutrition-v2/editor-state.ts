@@ -603,14 +603,76 @@ function compareCatalogGroups(a: ExchangeGroup, b: ExchangeGroup): number {
  * intacto: la particion por seccion la hace el consumidor sobre la lista ya mergeada.
  */
 export function comparePickerGroups(
-  a: QePortionGroup & { sortOrder?: number; legacy?: boolean },
-  b: QePortionGroup & { sortOrder?: number; legacy?: boolean },
+  a: QePickerGroup & { legacy?: boolean },
+  b: QePickerGroup & { legacy?: boolean },
 ): number {
   if ((a.legacy ?? false) !== (b.legacy ?? false)) return a.legacy ? 1 : -1
   const sa = a.sortOrder ?? Number.MAX_SAFE_INTEGER
   const sb = b.sortOrder ?? Number.MAX_SAFE_INTEGER
   if (sa !== sb) return sa - sb
   return a.groupCode.localeCompare(b.groupCode)
+}
+
+/**
+ * Metadatos que el picker necesita y el snapshot congelado del plan NO guarda: el orden
+ * del catalogo (`sort_order`) y si el grupo es del sistema o propio del coach.
+ */
+export interface QePickerGroupMeta {
+  sortOrder?: number
+  isSystem?: boolean
+}
+
+/** Grupo del picker: el del plan mas los metadatos que solo trae el catalogo vivo. */
+export type QePickerGroup = QePortionGroup & QePickerGroupMeta
+
+/**
+ * Superpone los metadatos del catalogo VIVO sobre la lista que ya devolvio
+ * `mergePortionGroupChoices`, machando POR ID.
+ *
+ * Por que vive aca y no adentro del merge: `mergePortionGroupChoices` (R17) pone PRIMERO los
+ * grupos del plan, que salen de `collectPortionGroups` y por diseño (R18) no traen
+ * `portionSystem` — el target congelado guarda codigo, nombre y refs, nunca el set de
+ * porciones. Ese merge NO se toca: su orden alimenta el color de identidad de las filas y la
+ * reconstruccion del diccionario del engine (gana el snapshot del plan). Pero el consumidor
+ * despues parte la lista en secciones con `systemOf`, que ante la ausencia cae al set del
+ * coach: para un coach con `portion_system = 'cl'` sus grupos SMAE ya prescritos se pintaban
+ * bajo la cabecera chilena y el banner de legado nacia muerto. Ademas, sin `sortOrder`
+ * `comparePickerGroups` empata siempre y el picker termina alfabetico (AG, AZ, CA…) en vez del
+ * orden del catalogo, y sin `isSystem` la web lo infiere por codigo (un grupo PROPIO llamado
+ * 'C' se trataba como del sistema).
+ *
+ * La solucion es este overlay, que corre en el consumidor JUSTO ANTES de partir por seccion:
+ *
+ * - Preserva el orden de entrada (es la lista ya mergeada; ordenar es otro paso).
+ * - Catalogo `null`/`undefined`/vacio ⇒ copias superficiales sin cambio. R18 intacto: nadie
+ *   inventa 'smae' cuando no hay dato.
+ * - Id presente en el catalogo ⇒ pega `portionSystem`, `sortOrder` e `isSystem`. Si el
+ *   catalogo no trae `portionSystem` se conserva el que ya tenia el grupo.
+ * - Id ausente ⇒ copia sin cambio.
+ * - NUNCA toca `ref`, `composedOf`, `groupName`, `color` ni `macrosConfirmed`: en esos campos
+ *   el snapshot congelado del plan le gana al catalogo (invariante de la capa). Solo viajan
+ *   los tres metadatos de presentacion.
+ */
+export function applyCatalogMetaToPickerGroups(
+  groups: readonly QePortionGroup[],
+  catalog: readonly ExchangeGroup[] | null | undefined,
+): QePickerGroup[] {
+  if (!catalog || catalog.length === 0) return groups.map((group) => ({ ...group }))
+  const metaById = new Map<string, ExchangeGroup>()
+  for (const group of catalog) {
+    if (metaById.has(group.id)) continue
+    metaById.set(group.id, group)
+  }
+  return groups.map((group) => {
+    const meta = metaById.get(group.exchangeGroupId)
+    if (!meta) return { ...group }
+    return {
+      ...group,
+      portionSystem: meta.portionSystem ?? group.portionSystem,
+      sortOrder: meta.sortOrder,
+      isSystem: meta.isSystem,
+    }
+  })
 }
 
 /**
@@ -2068,8 +2130,11 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
       // pero no son la cadena '99', y comparando strings el "no-op" reescribia el campo y marcaba
       // el borrador como sucio — justo lo que esta rama existe para evitar.
       if (current === next) return state
-      return mapPortionTarget(state, action.variantKey, action.slotKey, target.key, (current) => ({
-        ...current,
+      // `prev`, no `current`: el callback tapaba al `current` numerico del scope de arriba
+      // (las porciones ya parseadas) con el target del map. Salida identica, un nombre menos
+      // que confundir cuando alguien lea esta rama buscando el no-op del tope.
+      return mapPortionTarget(state, action.variantKey, action.slotKey, target.key, (prev) => ({
+        ...prev,
         portions: String(next),
       }))
     }

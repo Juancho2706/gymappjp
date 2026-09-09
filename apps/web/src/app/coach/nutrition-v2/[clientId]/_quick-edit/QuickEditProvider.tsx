@@ -31,6 +31,7 @@ import {
   type NutritionPlanReadModel,
   type NutritionStrategy,
 } from '@eva/nutrition-v2'
+import type { ExchangeGroup } from '@eva/nutrition-engine'
 import { quickEditPublishAction } from '../../_actions/quick-edit.actions'
 import { publishPlanAction } from '@/app/coach/nutrition-v2/_actions/plan-publish.actions'
 import {
@@ -136,13 +137,6 @@ export interface QuickEditTodayIntakeSummary {
   slotCount: number
 }
 
-/**
- * Lo que el picker de porciones necesita del catalogo VIVO y que el snapshot congelado del plan
- * no guarda: si el grupo es del sistema y su `sort_order` real. Se expone como mapa por id —el
- * unico identificador que comparten el snapshot y el catalogo— y NUNCA por codigo.
- */
-export type PortionCatalogMeta = ReadonlyMap<string, { readonly isSystem: boolean; readonly sortOrder: number }>
-
 interface QuickEditContextValue {
   state: QuickEditState
   dispatch: (action: QuickEditAction) => void
@@ -189,14 +183,20 @@ interface QuickEditContextValue {
    */
   portionFoodCounts: ExchangeGroupFoodCounts | null
   /**
-   * `isSystem` y `sort_order` REALES del catalogo vivo, por id de grupo (W2, fix del revisor):
-   * el picker los necesita para partir por seccion y ordenar. No se pueden inferir del codigo —
-   * `exchange_groups_system_code_uq` es un indice PARCIAL (solo `is_system`), asi que un grupo
-   * PROPIO del coach puede llamarse 'C' o 'FR' sin colisionar; si se lo tomara por system, la
-   * regla de visibilidad lo sacaria del picker y el coach perderia su propio grupo.
-   * `null` = el catalogo no llego: el consumidor cae al criterio por codigo (degradacion).
+   * Catalogo VIVO de grupos del coach, CRUDO (tal cual lo devolvio el loader). Es la unica
+   * fuente de los tres metadatos que el snapshot congelado del plan NO guarda y que el picker
+   * necesita: `portionSystem` (el set del grupo — R18: el target congelado guarda codigo, nombre
+   * y refs, nunca el set), `sortOrder` (el orden del catalogo, 210-330 en el set chileno) e
+   * `isSystem`. Ninguno se puede inferir del codigo: `exchange_groups_system_code_uq` es un
+   * indice PARCIAL (solo `is_system`), asi que un grupo PROPIO del coach puede llamarse 'C' o
+   * 'FR' sin colisionar; si se lo tomara por system, la regla de visibilidad lo sacaria del
+   * picker y el coach perderia su propio grupo.
+   *
+   * El consumidor lo superpone POR ID sobre la lista ya mergeada con
+   * `applyCatalogMetaToPickerGroups` (paquete). `null` = el catalogo no llego: nada se superpone
+   * y el picker degrada al criterio por codigo, sin inventar ningun set (R18).
    */
-  portionCatalogMeta: PortionCatalogMeta | null
+  portionCatalog: readonly ExchangeGroup[] | null
   /**
    * Set de porciones del coach (`coaches.portion_system`), tal como lo devuelve el loader del
    * picker (W1.5). `'cl'` mientras la lectura no llegue: es el default de la columna y el set
@@ -416,12 +416,11 @@ export function QuickEditProvider({
   // Equivalencias por grupo (catalogo vivo). Informativo puro: null hasta que llegue, y null
   // para siempre si la lectura falla — jamas bloquea ni retrasa la edicion.
   const [portionFoodCounts, setPortionFoodCounts] = useState<ExchangeGroupFoodCounts | null>(null)
-  // Catalogo vivo de grupos del coach (misma respuesta que trae los conteos). null = todavia
-  // no llego o la lectura fallo: el picker vuelve a ofrecer solo los grupos del plan.
-  const [portionGroupCatalog, setPortionGroupCatalog] = useState<QePortionGroup[] | null>(null)
-  // `isSystem` y `sort_order` reales del catalogo (ver `PortionCatalogMeta`): viajan en la misma
-  // respuesta y son lo unico que el snapshot congelado del plan no puede reconstruir.
-  const [portionCatalogMeta, setPortionCatalogMeta] = useState<PortionCatalogMeta | null>(null)
+  // Catalogo vivo de grupos del coach, CRUDO (misma respuesta que trae los conteos). null =
+  // todavia no llego o la lectura fallo: el picker vuelve a ofrecer solo los grupos del plan.
+  // Se guarda sin proyectar porque el picker necesita `portionSystem`, `sortOrder` e `isSystem`,
+  // que `catalogToPortionGroups` no transporta (ver `portionCatalog` en el contexto).
+  const [portionCatalog, setPortionCatalog] = useState<ExchangeGroup[] | null>(null)
   // Set del coach y sets legados EN USO (W1.5): viajan en la MISMA respuesta que el catalogo.
   // `degraded` arranca en true —todavia no hay dato— para que el picker no afirme «Legado» sobre
   // un set que quizas el coach si usa: sin lectura se muestra todo, sin chip (fail-open, R14).
@@ -435,6 +434,12 @@ export function QuickEditProvider({
   useEffect(() => {
     if (openedAtRef.current === null) openedAtRef.current = Date.now()
   }, [])
+  // Proyeccion del catalogo crudo a la forma que consume el merge. Derivada, no un estado mas:
+  // una sola verdad (`portionCatalog`) y cero riesgo de que las dos queden desfasadas.
+  const portionGroupCatalog = useMemo(
+    () => (portionCatalog ? catalogToPortionGroups(portionCatalog) : null),
+    [portionCatalog],
+  )
   // Grupos ofrecidos por el picker: plan primero, catalogo despues (ver `mergePortionGroupChoices`).
   const portionGroupChoices = useMemo(
     () => mergePortionGroupChoices(portionGroups, portionGroupCatalog),
@@ -594,10 +599,7 @@ export function QuickEditProvider({
           : await loadExchangeGroupsForBuilderAction({ clientId })
         if (!alive || !res.ok) return
         setPortionFoodCounts(res.foodCounts)
-        setPortionGroupCatalog(catalogToPortionGroups(res.groups))
-        setPortionCatalogMeta(
-          new Map(res.groups.map((group) => [group.id, { isSystem: group.isSystem, sortOrder: group.sortOrder }])),
-        )
+        setPortionCatalog(res.groups)
         // El loader MARCA y no filtra (decision (k) de W1.14): la particion por set la hace el
         // consumidor del picker (`EditablePortionsCard`), que es el unico borde donde recortar
         // no le esconde datos a nadie mas.
@@ -967,7 +969,7 @@ export function QuickEditProvider({
     portionGroupChoices,
     exchangeGroups,
     portionFoodCounts,
-    portionCatalogMeta,
+    portionCatalog,
     portionSystem,
     portionLegacySystems,
     portionSystemsDegraded,

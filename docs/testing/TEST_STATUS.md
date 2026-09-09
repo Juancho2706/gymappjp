@@ -404,6 +404,14 @@ jefe en el worktree tras el juicio de los workers (salida real):
   ⇒ **90 archivos / 1.446 tests verdes** · `pnpm typecheck` ⇒ verde · `pnpm --filter @eva/mobile exec tsc --noEmit` ⇒ verde ·
   `pnpm check:nutrition-v2-boundaries` ⇒ 454 archivos OK · eslint por archivo sin hallazgos. Los 103 tests del editor
   (58 + 16 + 22 + 7) siguen verdes sin editarse.
+- **W2 (picker, bump, tap-to-edit, Legumbres, 09-09; `564a2d2c` + remate)**: `pnpm exec vitest run packages/nutrition-v2
+  packages/nutrition-engine "apps/web/src/app/coach/nutrition-v2/[clientId]/_quick-edit" "apps/web/src/app/c/[coach_slug]/nutrition-v2"
+  tests/mobile-nutrition-v2-portions.test.ts tests/nutrition-portions apps/web/src/app/coach/nutrition-v2/_actions` ⇒
+  **92 archivos / 1.578 tests verdes** · `pnpm typecheck` ⇒ exit 0 · tsc mobile ⇒ exit 0 · `pnpm check:tokens` ⇒ OK (86 + 5) ·
+  `pnpm check:nutrition-v2-boundaries` ⇒ 460 archivos OK · eslint por archivo sin hallazgos. Tests nuevos: `editor-state.portions-bump`
+  (15), `editor-state.portions-ref` (9 + 2), `editor-state.picker-meta` (7), RTL `EditablePortionsCard.test.tsx` (16), test del
+  sheet del alumno web (3). Los 103 congelados del editor siguen sin editarse. Refutadores: 3 lanes × 2 rondas + remate (1 TS2304
+  cazado antes del gate).
 - No corrido: E2E (cierre del tren, W6).
 
 ## Pendientes actuales

@@ -58,6 +58,11 @@ export const PORTIONS_COPY = {
     stepDownAria: (grupo: string) => `Restar media porción de ${grupo}`,
     stepUpAria: (grupo: string) => `Sumar media porción de ${grupo}`,
     noteFor: (grupo: string) => `Nota para ${grupo}`,
+    /**
+     * Label a11y del campo de porciones del stepper. Vivia como template suelto dentro de
+     * `EditablePortionsSection.tsx` — el drift invisible que esta tabla existe para impedir.
+     */
+    portionsInputAria: (groupName: string) => `Porciones de ${groupName}`,
     notePlaceholder: 'Nota (opcional)',
     // ── Tren «Porciones a la chilena» (W2.3) — textos EXACTOS de SPEC §16.1, en TUTEO ──
     // El artifact de mockups venia en voseo («Tocá», «Podés», «Escribí») dentro de un editor
@@ -81,11 +86,18 @@ export const PORTIONS_COPY = {
      * lugar imprimia «Lo usas en 1 planes» a todo coach con set viejo — castellano roto y ademas
      * un numero inventado. Sin `n` el copy no miente; con `n` (cuando el servidor lo mande)
      * pluraliza bien.
+     *
+     * `surface` sigue el MISMO patron que `groupUsedBump`: la divergencia es de INTERACCION
+     * (en la web se hace clic, en el telefono se toca), no de tono, asi que viaja como
+     * parametro y no como override de superficie. Default 'rn' para que el texto que ya
+     * pinta el telefono —y el que la web venia mostrando sin pasar nada— no cambie.
      */
-    setLegacy: (n?: number) =>
-      n === undefined
-        ? 'Legado (SMAE) · Toca para ver'
-        : `Legado (SMAE) · Lo usas en ${n} ${n === 1 ? 'plan' : 'planes'} · Toca para ver`,
+    setLegacy: (n?: number, surface: 'rn' | 'web' = 'rn') => {
+      const accion = surface === 'web' ? 'Clic para ver' : 'Toca para ver'
+      return n === undefined
+        ? `Legado (SMAE) · ${accion}`
+        : `Legado (SMAE) · Lo usas en ${n} ${n === 1 ? 'plan' : 'planes'} · ${accion}`
+    },
     /** Chip de las filas del set viejo: reemplaza a `referentialBadge`, no se suma. */
     legacyBadge: 'Legado (SMAE)',
     /**

@@ -41,6 +41,7 @@ import {
   NEXT_DAYS_QUICK_PICKS,
   NUTRITION_WEEK_ORDER,
   VARIANT_LABEL_MAX,
+  applyCatalogMetaToPickerGroups,
   applyQuickEditToDraft,
   buildSubstitutionMap,
   catalogToPortionGroups,
@@ -93,6 +94,7 @@ import {
   type QeVariant,
   type QuickEditState,
 } from '@eva/nutrition-v2'
+import type { ExchangeGroup } from '@eva/nutrition-engine'
 import { NutritionCard } from '../NutritionCard'
 import { DayVariantWeekStrip } from '../DayVariantWeekStrip'
 import { NutritionMotionButton, NutritionStatePanel, StrategyBadge } from '../NutritionV2Kit'
@@ -192,6 +194,9 @@ const PORTION_BUMP_TOAST_MS = 4000
 
 /** Respiro entre el borde inferior del campo enfocado y la barrera (teclado + PublishBar). */
 const KEYBOARD_GAP = 12
+
+/** Respiro con el borde del lienzo al traer a la vista la fila bumpeada (§7.4). */
+const REVEAL_GAP = 12
 
 interface SearchTarget {
   mode: FoodSearchMode
@@ -410,14 +415,18 @@ export function QuickEditMode({
     undefined,
   )
   /**
-   * Ids que el catálogo vivo marcó `is_system`: el dict congelado del plan no lo distingue.
+   * Catálogo VIVO tal cual lo devolvió el borde. Es la ÚNICA fuente que trae `portionSystem`,
+   * `sortOrder` e `isSystem` por grupo: el snapshot congelado del plan no guarda ninguno de los
+   * tres (R18) y `mergePortionGroupChoices` (R17) pone los del plan PRIMERO, así que sin esta
+   * lista el picker ordenaba alfabético, titulaba mal las secciones y el banner de legado nacía
+   * muerto para el coach con plan SMAE y set 'cl'.
    *
-   * Arranca `undefined` —no en un `Set` vacío— porque el picker necesita distinguir «todavía no
-   * cargó» de «se leyó y no hay ninguno del sistema»: con el set vacío TODOS los grupos caían en
-   * «Propios» mientras el catálogo viajaba, y el coach veía sus 13 grupos chilenos bajo el título
-   * equivocado. Con `undefined` el sheet no titula nada hasta saber.
+   * `null` = todavía no cargó o la lectura falló, que NO es lo mismo que un catálogo vacío: en
+   * los dos casos el overlay no pega nada, pero solo con datos el picker se anima a titular.
    */
-  const [systemGroupIds, setSystemGroupIds] = useState<ReadonlySet<string> | undefined>(undefined)
+  const [catalog, setCatalog] = useState<readonly ExchangeGroup[] | null>(null)
+  /** ¿El overlay del catálogo tuvo con qué trabajar? Habilita los encabezados del picker. */
+  const catalogKnown = catalog !== null && catalog.length > 0
   /**
    * Grupo con resalte pendiente tras un bump, y el nonce que lo redispara. Vive acá y no en la
    * sección porque el bump nace en el picker de OTRA franja posible: la card compara el id contra
@@ -444,8 +453,23 @@ export function QuickEditMode({
     for (const group of groupOverrides) {
       if (!known.has(group.exchangeGroupId)) merged.push(group)
     }
-    return merged.filter((group) => !removedGroupIds.has(group.exchangeGroupId))
-  }, [frozen.portionGroups, catalogGroups, groupOverrides, removedGroupIds])
+    /**
+     * Overlay del catálogo VIVO (§7.1): `mergePortionGroupChoices` queda intacto —sigue mandando
+     * «plan primero, catálogo después», que es lo que hace ganar al snapshot congelado en `ref`,
+     * `composedOf`, nombre y color— y acá encima se le pegan POR ID los tres metadatos que ese
+     * snapshot nunca guardó: `portionSystem`, `sortOrder` e `isSystem`. Sin catálogo no cambia
+     * nada (R18: nadie inventa 'smae').
+     *
+     * Sabido y aceptado: un grupo CREADO en esta sesión (`groupOverrides`, alta por `onSaved`) no
+     * está en el catálogo congelado del montaje, así que sale sin `sortOrder` y se va al final de
+     * «Propios» hasta recargar. Es honesto —no se le inventa un orden que el servidor no dio— y se
+     * arregla solo cuando W3.6 traiga el grupo recién guardado con su metadato.
+     */
+    return applyCatalogMetaToPickerGroups(
+      merged.filter((group) => !removedGroupIds.has(group.exchangeGroupId)),
+      catalog,
+    )
+  }, [frozen.portionGroups, catalogGroups, groupOverrides, removedGroupIds, catalog])
 
   // Reemplazos autorizados (F-02) de la version base, por prescriptionItemId. Carry-over PURO:
   // el read-model no los trae; se fetchean al entrar y se re-inyectan al publicar para que
@@ -692,8 +716,11 @@ export function QuickEditMode({
         if (!active || !mountedRef.current) return
         const { groups } = result
         setCatalogGroups(catalogToPortionGroups(groups))
+        // El catálogo CRUDO se guarda además de su proyección: `catalogToPortionGroups` no
+        // propaga `sortOrder` ni `isSystem` (su tipo de salida no los declara) y son justo los
+        // que el picker necesita para ordenar y titular.
+        setCatalog(groups)
         setOwnGroupIds(new Set(groups.filter((group) => !group.isSystem).map((group) => group.id)))
-        setSystemGroupIds(new Set(groups.filter((group) => group.isSystem).map((group) => group.id)))
         // Set del coach y sets legados: si la respuesta no los trae, quedan `undefined` y el
         // picker se comporta como antes (todo visible, nada marcado como legado).
         setPortionSystem(result.portionSystem)
@@ -1055,7 +1082,13 @@ export function QuickEditMode({
             if (!mountedRef.current) return
             const { groups } = result
             setOwnGroupIds(new Set(groups.filter((group) => !group.isSystem).map((group) => group.id)))
-            setSystemGroupIds(new Set(groups.filter((group) => group.isSystem).map((group) => group.id)))
+            // Mismo catálogo CRUDO que guarda el efecto de montaje: este es el ÚNICO camino en
+            // quick-edit clásico (`editorMode === false`, donde ese efecto sale temprano), así que
+            // sin esto el overlay `applyCatalogMetaToPickerGroups` no corría nunca ahí y el picker
+            // volvía al orden alfabético, sin encabezados y con el legado apagado. NO se toca
+            // `catalogGroups`: fuera del editor el picker sigue ofreciendo solo los grupos del
+            // plan, y este overlay pega metadatos, no filas nuevas.
+            setCatalog(groups)
             setPortionSystem(result.portionSystem)
             setPortionLegacySystems(result.legacySystems ? [...result.legacySystems] : undefined)
           })
@@ -1275,6 +1308,41 @@ export function QuickEditMode({
     const y = dayOffsetsRef.current[variantKey]
     if (y == null) return
     scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true })
+  }, [])
+
+  /**
+   * Traer al viewport la fila que acaba de recibir un bump (SPEC §7.4). MISMO gesto que
+   * `jumpToDay` —un `scrollTo` animado sobre el mismo lienzo—, no un mecanismo nuevo: sin timers
+   * sueltos y sin tocar la animación del resalte (`useReducedMotion` apaga el parpadeo, nunca
+   * esto: con el resalte apagado, una fila fuera de pantalla no dejaría NINGUNA señal).
+   *
+   * Las cuentas van en coordenadas de PANTALLA porque es lo único que las dos partes pueden
+   * medir sin acoplarse: la fila se mide con `measureInWindow` (el mismo patrón que
+   * `flushNotesVisible` de acá arriba) y el viewport es el rectángulo del propio `ScrollView`,
+   * que se obtiene por su host nativo (`getNativeScrollRef`) — ese rectángulo ya EXCLUYE la
+   * PublishBar, que vive fuera del scroll. Un desplazamiento en pantalla vale lo mismo que en
+   * contenido, así que se le suma al offset vivo (`tourScrollOffsetYRef`).
+   *
+   * Si no se puede medir (host todavía sin montar) no pasa nada: mejor quieto que saltar a una
+   * coordenada inventada, igual que `jumpToDay`.
+   */
+  const revealBumpedPortionRow = useCallback((rect: { y: number; height: number }) => {
+    const scroller = scrollRef.current
+    const host = scroller?.getNativeScrollRef()
+    if (!scroller || !host) return
+    host.measureInWindow((_x, viewY, _width, viewHeight) => {
+      if (viewHeight <= 0) return
+      const offset = tourScrollOffsetYRef.current
+      // Debajo del borde inferior: se baja lo justo para que la fila entre entera con respiro.
+      const below = rect.y + rect.height + REVEAL_GAP - (viewY + viewHeight)
+      if (below > 1) {
+        scroller.scrollTo({ y: Math.max(0, offset + below), animated: true })
+        return
+      }
+      // Por encima del borde superior (la fila quedó arriba del scroll): se sube.
+      const above = viewY + REVEAL_GAP - rect.y
+      if (above > 1) scroller.scrollTo({ y: Math.max(0, offset - above), animated: true })
+    })
   }, [])
 
   function openAddDay() {
@@ -2258,11 +2326,12 @@ export function QuickEditMode({
                       }
                       portionCoachSystem={portionSystem}
                       portionUsedSystems={portionLegacySystems}
-                      portionSystemGroupIds={systemGroupIds}
+                      portionCatalogKnown={catalogKnown}
                       portionLegacyPlanCount={legacyPlanCount}
                       // El resalte se pinta SOLO en la franja donde ocurrió el bump.
                       portionBumpedGroupId={portionBump?.slotKey === slot.key ? portionBump.groupId : null}
                       portionBumpNonce={portionBump?.slotKey === slot.key ? portionBump.nonce : 0}
+                      onPortionRevealBumpedRow={revealBumpedPortionRow}
                       onSlotPatch={(patch) =>
                         dispatch({ type: 'UPDATE_SLOT', variantKey: variant.key, slotKey: slot.key, patch })
                       }

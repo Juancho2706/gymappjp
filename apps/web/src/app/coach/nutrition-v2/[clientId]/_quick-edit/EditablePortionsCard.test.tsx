@@ -1,5 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ExchangeGroup } from '@eva/nutrition-engine'
 import type { QePortionGroup, QePortionTarget, QeSlot } from '@eva/nutrition-v2'
 import { EditablePortionsCard } from './EditablePortionsCard'
 
@@ -35,7 +36,7 @@ const BANNER_TITLE = 'Este plan usa las porciones anteriores (SMAE)'
 const CHILE = 'Sistema chileno · INTA 1999 · UDD 2019'
 // Cabecera de la sección legado (`PORTIONS_COPY.builder.setLegacy()` sin conteo). NO es el chip
 // `legacyBadge` de la fila, que sí es «Legado (SMAE)» a secas.
-const LEGADO = 'Legado (SMAE) · Toca para ver'
+const LEGADO = 'Legado (SMAE) · Clic para ver'
 
 function group(overrides: Partial<QePortionGroup> & Pick<QePortionGroup, 'exchangeGroupId'>): QePortionGroup {
   return {
@@ -91,7 +92,7 @@ function setContext(overrides: Record<string, unknown> = {}) {
     portionFoodCounts: null,
     portionGroups: [],
     portionGroupChoices: [],
-    portionCatalogMeta: null,
+    portionCatalog: null,
     portionSystem: 'cl',
     portionLegacySystems: [],
     portionSystemsDegraded: false,
@@ -117,9 +118,32 @@ function pickerRow(name: string): HTMLButtonElement {
   return button
 }
 
-/** `portionCatalogMeta` del provider: `isSystem` y `sort_order` REALES del catálogo vivo. */
-function meta(entries: Array<[string, { isSystem: boolean; sortOrder: number }]>) {
-  return new Map(entries)
+/**
+ * `portionCatalog` del provider: el catálogo VIVO crudo del coach, que es de donde salen los tres
+ * metadatos que el snapshot congelado del plan no guarda (`portionSystem`, `sortOrder`,
+ * `isSystem`). El resto de las columnas es relleno: el overlay del paquete solo lee esas tres.
+ */
+function catalog(
+  entries: Array<[string, { isSystem: boolean; sortOrder: number; portionSystem?: 'smae' | 'cl'; code?: string }]>,
+): ExchangeGroup[] {
+  return entries.map(([id, row]) => ({
+    id,
+    slug: id,
+    code: row.code ?? id,
+    name: id,
+    coachId: null,
+    teamId: null,
+    isSystem: row.isSystem,
+    refCalories: 0,
+    refProteinG: 0,
+    refCarbsG: 0,
+    refFatsG: 0,
+    color: null,
+    sortOrder: row.sortOrder,
+    composedOf: null,
+    macrosConfirmed: true,
+    ...(row.portionSystem ? { portionSystem: row.portionSystem } : {}),
+  }))
 }
 
 /**
@@ -132,11 +156,19 @@ function pickerRowCodes(): string[] {
     .map((node) => node.querySelector('span')?.textContent ?? '')
 }
 
-/** Etiquetas de las secciones del picker, en orden de documento. */
+/**
+ * Nombre accesible de cada sección del picker, en orden de documento. Se resuelven las DOS formas
+ * de rotular: `aria-label` (secciones con eyebrow propio) y `aria-labelledby` apuntando al
+ * encabezado visible (la legado, cuyo rótulo es el botón que la despliega).
+ */
 function pickerSections(): string[] {
   return picker()
     .getAllByRole('region')
-    .map((node) => node.getAttribute('aria-label') ?? '')
+    .map((node) => {
+      const labelledBy = node.getAttribute('aria-labelledby')
+      if (labelledBy) return document.getElementById(labelledBy)?.textContent?.trim() ?? ''
+      return node.getAttribute('aria-label') ?? ''
+    })
 }
 
 beforeEach(() => {
@@ -435,7 +467,7 @@ describe('EditablePortionsCard — `isSystem` y orden vienen del catálogo, no d
       portionGroupChoices: [cereales, mio],
       portionSystem: 'smae',
       portionLegacySystems: [],
-      portionCatalogMeta: meta([
+      portionCatalog: catalog([
         ['g-c', { isSystem: true, sortOrder: 10 }],
         ['g-mio', { isSystem: false, sortOrder: 900 }],
       ]),
@@ -460,7 +492,7 @@ describe('EditablePortionsCard — `isSystem` y orden vienen del catálogo, no d
       // El merge pone primero los del plan: sin el `sort_order` real, AZ quedaría antes que PCT.
       portionGroups: [azucares],
       portionGroupChoices: [azucares, pct],
-      portionCatalogMeta: meta([
+      portionCatalog: catalog([
         ['g-az', { isSystem: true, sortOrder: 330 }],
         ['g-pct', { isSystem: true, sortOrder: 210 }],
       ]),
@@ -480,7 +512,7 @@ describe('EditablePortionsCard — `isSystem` y orden vienen del catálogo, no d
       portionSystem: 'cl',
     })
     const pct = group({ exchangeGroupId: 'g-pct', portionSystem: 'cl' })
-    setContext({ portionGroups: [azucares], portionGroupChoices: [azucares, pct], portionCatalogMeta: null })
+    setContext({ portionGroups: [azucares], portionGroupChoices: [azucares, pct], portionCatalog: null })
 
     render(<EditablePortionsCard variantKey="v1" slot={slotWith([])} />)
     openPicker()
@@ -501,7 +533,7 @@ describe('EditablePortionsCard — la sección propia no se anuncia como chilena
       portionGroups: [cereales],
       portionGroupChoices: [cereales],
       portionSystem: 'smae',
-      portionCatalogMeta: meta([['g-c', { isSystem: true, sortOrder: 10 }]]),
+      portionCatalog: catalog([['g-c', { isSystem: true, sortOrder: 10 }]]),
     })
 
     render(<EditablePortionsCard variantKey="v1" slot={slotWith([])} />)
@@ -543,5 +575,131 @@ describe('EditablePortionsCard — doble clic en la misma apertura', () => {
 
     const bumps = dispatch.mock.calls.filter(([action]) => action.type === 'BUMP_PORTION_TARGET')
     expect(bumps).toHaveLength(2)
+  })
+})
+/**
+ * EL defecto que cierra W2. `mergePortionGroupChoices` pone PRIMERO los grupos del plan, que salen
+ * de `collectPortionGroups` SIN `portionSystem` (R18: el snapshot congelado guarda código, nombre
+ * y refs, nunca el set). Sin overlay del catálogo vivo, `systemOf` caía al set del coach: para el
+ * coach objetivo del tren —plan SMAE, `coaches.portion_system = 'cl'`— sus 9 grupos ya prescritos
+ * se pintaban bajo «Sistema chileno» y la sección legado nacía muerta.
+ */
+describe('EditablePortionsCard — el SET sale del catálogo vivo, no del set del coach', () => {
+  /** Grupos tal cual los devuelve `collectPortionGroups`: sin `portionSystem` (R18). */
+  const cereales = group({
+    exchangeGroupId: 'g-c',
+    groupCode: 'C',
+    groupName: 'Cereales (SMAE)',
+    portionSystem: undefined,
+  })
+  const pct = group({ exchangeGroupId: 'g-pct', portionSystem: undefined })
+
+  it('un grupo SMAE ya prescrito por un coach «cl» cae bajo Legado, no bajo Sistema chileno', () => {
+    setContext({
+      portionGroups: [cereales, pct],
+      portionGroupChoices: [cereales, pct],
+      portionSystem: 'cl',
+      portionLegacySystems: ['smae'],
+      portionCatalog: catalog([
+        ['g-c', { isSystem: true, sortOrder: 20, portionSystem: 'smae', code: 'C' }],
+        ['g-pct', { isSystem: true, sortOrder: 210, portionSystem: 'cl', code: 'PCT' }],
+      ]),
+    })
+
+    render(<EditablePortionsCard variantKey="v1" slot={slotWith([])} />)
+    openPicker()
+
+    expect(pickerSections()).toEqual([CHILE, LEGADO])
+    // Colapsada: la fila legado ni siquiera está en el árbol, y menos bajo la cabecera chilena.
+    expect(within(picker().getByRole('region', { name: CHILE })).queryByText('Cereales (SMAE)')).toBeNull()
+
+    fireEvent.click(picker().getByRole('button', { name: LEGADO }))
+    const legado = picker().getByRole('region', { name: LEGADO })
+    expect(within(legado).getByText('Cereales (SMAE)')).toBeInTheDocument()
+  })
+
+  it('un grupo PROPIO con un código del sistema («C») queda en Propios: manda el `isSystem` del catálogo', () => {
+    const mio = group({
+      exchangeGroupId: 'g-mio',
+      groupCode: 'C',
+      groupName: 'Mi mezcla',
+      portionSystem: undefined,
+    })
+    setContext({
+      portionGroups: [pct],
+      portionGroupChoices: [mio, pct],
+      portionSystem: 'cl',
+      portionLegacySystems: [],
+      portionCatalog: catalog([
+        ['g-mio', { isSystem: false, sortOrder: 900, portionSystem: 'smae', code: 'C' }],
+        ['g-pct', { isSystem: true, sortOrder: 210, portionSystem: 'cl', code: 'PCT' }],
+      ]),
+    })
+
+    render(<EditablePortionsCard variantKey="v1" slot={slotWith([])} />)
+    openPicker()
+
+    expect(pickerSections()).toEqual([CHILE, 'Propios'])
+    const propios = picker().getByRole('region', { name: 'Propios' })
+    expect(within(propios).getByText('Mi mezcla')).toBeInTheDocument()
+  })
+
+  it('dentro de «Sistema chileno» ordena el `sort_order` del catálogo (PCT antes que CB)', () => {
+    const cb = group({
+      exchangeGroupId: 'g-cb',
+      groupCode: 'CB',
+      groupName: 'Cereales y bebidas',
+      portionSystem: undefined,
+    })
+    setContext({
+      // El merge los trae al revés (el del plan primero): sin el `sort_order` real, CB ganaría.
+      portionGroups: [cb],
+      portionGroupChoices: [cb, pct],
+      portionSystem: 'cl',
+      portionCatalog: catalog([
+        ['g-cb', { isSystem: true, sortOrder: 230, portionSystem: 'cl', code: 'CB' }],
+        ['g-pct', { isSystem: true, sortOrder: 210, portionSystem: 'cl', code: 'PCT' }],
+      ]),
+    })
+
+    render(<EditablePortionsCard variantKey="v1" slot={slotWith([])} />)
+    openPicker()
+
+    expect(pickerRowCodes()).toEqual(['PCT', 'CB'])
+  })
+
+  it('sin catálogo NADIE inventa el set: el mismo plan SMAE no dibuja legado (R18)', () => {
+    setContext({
+      portionGroups: [cereales, pct],
+      portionGroupChoices: [cereales, pct],
+      portionSystem: 'cl',
+      portionLegacySystems: ['smae'],
+      portionCatalog: null,
+    })
+
+    render(<EditablePortionsCard variantKey="v1" slot={slotWith([])} />)
+    openPicker()
+
+    expect(pickerSections()).toEqual([CHILE])
+    expect(picker().queryByRole('button', { name: LEGADO })).toBeNull()
+    expect(within(picker().getByRole('region', { name: CHILE })).getByText('Cereales (SMAE)')).toBeInTheDocument()
+  })
+})
+
+describe('EditablePortionsCard — fila con porciones ilegibles', () => {
+  it('no dice «con 0»: cae al label de referencia del grupo', () => {
+    const pct = group({ exchangeGroupId: 'g-pct' })
+    setContext({ portionGroups: [pct], portionGroupChoices: [pct] })
+
+    // Campo vaciado por el coach (`parsePortionsValue('')` es null). Antes el `?? 0` lo pintaba
+    // como «Ya está en Desayuno con 0 · Clic para sumar ½»: un número que no existe en el plan.
+    render(
+      <EditablePortionsCard variantKey="v1" slot={slotWith([target({ exchangeGroupId: 'g-pct', portions: '' })])} />,
+    )
+    openPicker()
+
+    const row = pickerRow('Panes, cereales y tubérculos')
+    expect(row).not.toHaveTextContent('con 0')
+    expect(row).toHaveTextContent('1 porción = 140 kcal · 30 C · 3 P · 1 G')
   })
 })

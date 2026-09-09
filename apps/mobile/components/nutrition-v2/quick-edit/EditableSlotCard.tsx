@@ -126,10 +126,11 @@ export function EditableSlotCard({
   onPortionConvertPress,
   portionCoachSystem,
   portionUsedSystems,
-  portionSystemGroupIds,
+  portionCatalogKnown = false,
   portionLegacyPlanCount,
   portionBumpedGroupId = null,
   portionBumpNonce = 0,
+  onPortionRevealBumpedRow,
   portionGroupAdmin,
   tourTargets = false,
 }: {
@@ -187,13 +188,18 @@ export function EditableSlotCard({
   /** Set del coach y sets con targets vivos en otros planes suyos (visibilidad del picker). */
   portionCoachSystem?: PortionSystem | null
   portionUsedSystems?: readonly PortionSystem[]
-  /** Ids que el catálogo vivo marcó `is_system`; un id ausente se trata como propio. */
-  portionSystemGroupIds?: ReadonlySet<string>
+  /** ¿Los grupos ya pasaron por el overlay del catálogo vivo? Habilita los títulos del picker. */
+  portionCatalogKnown?: boolean
   /** `n` del encabezado «Legado (SMAE) · Lo usas en {n} planes». */
   portionLegacyPlanCount?: number
   /** Grupo con resalte pendiente tras un bump, y el nonce que lo redispara. */
   portionBumpedGroupId?: string | null
   portionBumpNonce?: number
+  /**
+   * Rectángulo en pantalla de la fila resaltada tras el bump (§7.4): la card solo pasa el
+   * mensaje — quien decide si hay que scrollear es el orquestador, que tiene el lienzo.
+   */
+  onPortionRevealBumpedRow?: (rect: { y: number; height: number }) => void
   /** Porciones propias (FD6a): altas/edición de grupos desde el picker. Ausente = sin esa UI. */
   portionGroupAdmin?: QuickEditGroupAdmin
   /** Workspace del coach: habilita el lápiz de corrección de macros (T2.2). */
@@ -481,10 +487,11 @@ export function EditableSlotCard({
               errors={errors}
               coachSystem={portionCoachSystem}
               usedSystems={portionUsedSystems}
-              systemGroupIds={portionSystemGroupIds}
+              catalogKnown={portionCatalogKnown}
               legacyPlanCount={portionLegacyPlanCount}
               bumpedGroupId={portionBumpedGroupId}
               bumpNonce={portionBumpNonce}
+              onRevealBumpedRow={onPortionRevealBumpedRow}
               onStep={onPortionStep}
               onSetValue={onPortionSetValue}
               onSetNotes={onPortionNotes}
