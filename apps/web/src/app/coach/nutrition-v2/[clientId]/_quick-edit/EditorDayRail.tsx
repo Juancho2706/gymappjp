@@ -43,6 +43,7 @@ export function EditorDayRail({
   activeKey,
   todayVariantKey,
   attentionKeys,
+  noticeKeys,
   onSelect,
 }: {
   /** Días en orden de lectura (base primero, luego Lu→Do) — el mismo arreglo que pinta el lienzo. */
@@ -55,6 +56,16 @@ export function EditorDayRail({
    * no lee `errors`, la vista es la que sabe cuándo esas marcas se muestran (`showErrors`).
    */
   attentionKeys?: ReadonlySet<string>
+  /**
+   * Días SIN meta cuando otro día sí la tiene (`qeDaysMissingTargets`, W4.5). Es el MISMO punto
+   * ámbar que `attentionKeys` a propósito: para el coach «este día necesita una pasada» es una
+   * sola gramática visual, y un segundo color para «le falta la meta» sería otro idioma que
+   * aprender. La diferencia la explica el aviso de la barra, que sí nombra los días.
+   *
+   * No pasa por `showErrors`: no es un error, y esperar al primer intento de publicar dejaría al
+   * coach editando toda la semana sin señal (el caso Pame es exactamente eso).
+   */
+  noticeKeys?: ReadonlySet<string>
   onSelect: (key: string) => void
 }) {
   const { state, dispatch, isPending, exchangeGroups, strategy, hasNutritionPro } = useQuickEdit()
@@ -121,7 +132,11 @@ export function EditorDayRail({
             : formatNutritionDayOfWeek(variant.dayOfWeek, { short: true })
           const gap = gapByVariant.get(variant.key)
           const isEmptyDay = usesSlots && variant.slots.length === 0
-          const needsAttention = gap !== undefined || isEmptyDay || (attentionKeys?.has(variant.key) ?? false)
+          const needsAttention =
+            gap !== undefined ||
+            isEmptyDay ||
+            (attentionKeys?.has(variant.key) ?? false) ||
+            (noticeKeys?.has(variant.key) ?? false)
           return (
             <li key={variant.key}>
               <button

@@ -4,6 +4,12 @@
  * nunca ve "version"/"draft"/"supersede" (ajuste CSM §4).
  */
 
+// Metas por dia (tren «Porciones a la chilena», W4.6): el switch «Solo el {dia}» y el aviso
+// ambar de metas parciales viven en el PAQUETE, no aca — web y RN leen la MISMA tabla (SPEC
+// §16.1, en tuteo). Este modulo solo los re-exporta dentro de `EDITOR_COPY` para que las
+// superficies RN sigan teniendo una sola puerta de entrada al copy del editor.
+import { EDITOR_TARGETS_COPY } from '@eva/nutrition-v2'
+
 export const QUICK_EDIT_COPY = {
   enter: 'Editar plan',
   redo: 'Rehacer con el asistente',
@@ -148,6 +154,36 @@ export const EDITOR_COPY = {
    * `TargetsEditorCard` que antes vivía en el lienzo (espejo del `QE_COPY.metasPopover` web).
    */
   metasPopover: 'Metas del día',
+  /**
+   * W4.6 — título de la MISMA hoja cuando el switch «Solo el {día}» está apagado: lo que se
+   * escribe ahí va al base y a todos los días que heredaban, así que «Metas del día» sería la
+   * mentira que este tren repara (criterio literal de TASKS §W4.6: «el título del sheet deja de
+   * decir “Metas del día” cuando escribe en todos»).
+   *
+   * PENDIENTE DE PARIDAD (revisión adversarial W4): hoy es RN-only —SPEC §16.1 no lo tabula y el
+   * mockup M4 dibuja el título fijo—, y el Popover web sigue en `QE_COPY.metasPopover`. La llave
+   * tiene que SUBIR a `EDITOR_TARGETS_COPY.targets` (mismo texto) y la web consumirla en el
+   * mismo commit; si el owner prefiere el título fijo del mockup, se borra en las DOS
+   * superficies. Lo que no puede quedar es una hoja que cambia de título solo en el teléfono.
+   */
+  metasPopoverAll: 'Metas de todos los días',
+  /**
+   * W4 «Metas por día» — copys del switch «Solo el {día}», re-exportados del paquete para que
+   * RN y web digan EXACTAMENTE lo mismo. Se agrega una sola llave propia de RN:
+   *
+   * - `noTarget`: la mini-cinta imprime «1.240 · sin meta» cuando el día activo no tiene
+   *   objetivo (W4.5). No está en la tabla de SPEC §16.1 —el mockup M4 no la dibuja— así que
+   *   nació acá. PENDIENTE (revisión adversarial W4): la cinta web YA lo imprime con el mismo
+   *   texto bajo otra llave (`QE_COPY.dayNoTarget`), así que corresponde una sola llave en
+   *   `EDITOR_TARGETS_COPY.targets` y estas dos pasan a leerla — dos llaves con el mismo texto
+   *   es exactamente cómo se separan los copys de RN y web sin que nadie lo note.
+   */
+  targets: {
+    ...EDITOR_TARGETS_COPY.targets,
+    noTarget: 'sin meta',
+  },
+  /** W4 — aviso ámbar de metas parciales de la `PublishBar` y su botón «Publicar igual». */
+  publish: EDITOR_TARGETS_COPY.publish,
   /** Modo creacion: no hay plan previo que "editar" — se esta armando uno. */
   createEyebrow: 'Nuevo plan',
   /** Vocabulario de CREACION: "Publicar cambios" prometia tocar algo que el alumno ya veia. */

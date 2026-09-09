@@ -10,8 +10,12 @@ import type { ImplausibleEventReason, ImplausibleSurface, KcalBucket } from '@ev
 // web y RN no puedan mandar props distintas bajo el mismo evento.
 import {
     PORTIONS_EVENT_GROUP_BUMPED,
+    TARGETS_EVENT_SCOPE,
     portionGroupBumpedPayload,
+    targetsScopePayload,
     type PortionGroupBumpedProps,
+    type QeTargetsScope,
+    type TargetsScopeFrom,
 } from '@eva/nutrition-v2'
 
 /**
@@ -196,4 +200,25 @@ export function captureNutritionItemImplausible(props: {
  */
 export function captureNutritionPortionGroupBumped(props: PortionGroupBumpedProps): void {
     captureAppEvent(PORTIONS_EVENT_GROUP_BUMPED, portionGroupBumpedPayload('rn', props))
+}
+
+/**
+ * `nutrition_targets_scope` — el coach eligió EN QUÉ ALCANCE se guarda una meta del día (W4,
+ * tren «Porciones a la chilena»): `'all'` = el día base y los días que heredaban, `'day'` = solo
+ * el día activo. Responde UNA pregunta de producto: si el default del switch «Solo el {día}»
+ * acierta, o si el coach lo está corrigiendo todo el tiempo.
+ *
+ * `from` separa las dos puertas: el `'switch'` de la hoja de metas y el `'go_to_base'` del aviso
+ * ámbar de la barra de publicar.
+ *
+ * LEY 21.719: el payload lo arma el paquete compartido (`targetsScopePayload`) y son DOS llaves,
+ * ninguna más. JAMÁS la cifra de la meta ni el nombre del día concreto — las kcal de un plan son
+ * dato de salud. Mismo motivo que en `nutrition_portion_group_bumped` para no agregar `platform`
+ * a mano: web llama al MISMO constructor y una prop de más sería una prop que solo manda uno.
+ */
+export function captureNutritionTargetsScope(props: {
+    scope: QeTargetsScope
+    from: TargetsScopeFrom
+}): void {
+    captureAppEvent(TARGETS_EVENT_SCOPE, targetsScopePayload(props.scope, props.from))
 }

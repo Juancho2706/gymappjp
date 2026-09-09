@@ -33,6 +33,9 @@ import {
   formatNutritionDayOfWeek,
   sortNutritionDayVariantsForDisplay,
 } from './day-variants'
+// W4: el aviso de metas parciales arma su texto con el copy aprobado (SPEC §16.1), nunca con
+// un string suelto. La dependencia es de una sola via: el modulo de copys no importa de aca.
+import { EDITOR_TARGETS_COPY } from './editor-copy-targets'
 import { macrosForTargets, type ExchangeGroup, type ExchangeMacroTotals } from '@eva/nutrition-engine'
 import {
   computeItemMacros,
@@ -1128,8 +1131,14 @@ export type QuickEditAction =
   | { type: 'RESTORE_VARIANT'; index: number; variant: QeVariant }
   | { type: 'SET_VARIANT_DAY'; variantKey: string; dayOfWeek: number }
   | { type: 'SET_VARIANT_LABEL'; variantKey: string; value: string }
-  | { type: 'SET_TARGET'; variantKey: string; field: keyof QeTargetsText; value: string }
-  | { type: 'STEP_TARGET'; variantKey: string; field: keyof QeTargetsText; direction: 1 | -1 }
+  /**
+   * Escribe una meta del dia. `scope` AUSENTE = el comportamiento historico exacto (escribe
+   * solo en `variantKey`): es lo que sigue despachando el quick-edit clasico y la card del
+   * lienzo. `scope: 'all'` escribe ademas en el dia base y en los dias que heredaban del base
+   * (W4, caso Pame) — ver `writeTargetField`.
+   */
+  | { type: 'SET_TARGET'; variantKey: string; field: keyof QeTargetsText; value: string; scope?: QeTargetsScope }
+  | { type: 'STEP_TARGET'; variantKey: string; field: keyof QeTargetsText; direction: 1 | -1; scope?: QeTargetsScope }
   | { type: 'SET_VISIBLE_NOTES'; value: string }
   | { type: 'SET_PORTION_TARGET'; variantKey: string; slotKey: string; targetKey: string; value: string }
   /**
@@ -1157,6 +1166,13 @@ export type QuickEditAction =
    * previo (toca N dias, ningun `RESTORE_*` puntual la cubre).
    */
   | { type: 'APPLY_BASE_PORTIONS' }
+  /**
+   * Baja las metas de `fromVariantKey` al dia base y a los dias que quedaron SIN meta («Ir a
+   * Base» del aviso de metas parciales, W4). Espejo de `APPLY_BASE_PORTIONS`, pero con origen
+   * explicito: el aviso ya sabe cual es el unico dia con meta y no hay que re-adivinarlo.
+   * Deshacer: `RESTORE_DRAFT` con el arbol previo (toca N dias).
+   */
+  | { type: 'APPLY_BASE_TARGETS'; fromVariantKey: string }
   // ── Capacidades wizard-only migradas al editor (W2). El quick-edit clasico no las
   //    despacha (los menus que las ofrecen se gatean a `state.meta`). ──
   /**
@@ -1826,6 +1842,174 @@ function applyBasePortions(state: QuickEditState): QuickEditState {
   return touched ? { ...state, variants } : state
 }
 
+// ---------------------------------------------------------------------------
+// Metas por dia (tren «Porciones a la chilena», W4 — caso Pame Cid, 2026-09-08).
+//
+// La coach escribio 2.040 kcal parada en Martes y el resto de la semana quedo sin objetivo. NO
+// es un bug de la UI: `nutrition_v2_ensure_day_snapshot` copia la variante ENTERA, sin
+// `coalesce` contra el dia base (`20260714192500_nutrition_v2_draft_delete_and_effective_versions.sql:43-52,
+// 86-92`), asi que un dia con `target_calories NULL` publica SIN meta en vez de heredar la del
+// base. Por eso `scope: 'all'` ESCRIBE en el base y en los dias que heredaban, en vez de
+// escribir solo en el base y confiar en una herencia que la DB no hace. Cero DDL.
+//
+// El aviso de metas parciales vive FUERA de `errors` (misma via que `qeDaysMissingBasePortions`
+// + `PortionsDayGapNotice`): una meta parcial es valida a proposito para algunos coaches y
+// bloquear el publish dejaria irrepublicables los planes que ya estan asi en LIVE.
+// ---------------------------------------------------------------------------
+
+/** Alcance de una edicion de metas: solo el dia activo (historico) o el base + los que heredaban. */
+export type QeTargetsScope = 'day' | 'all'
+
+/** Las cuatro metas que la UI edita. `passthroughTargets` (fibra/sodio/agua) queda FUERA. */
+const QE_TARGET_FIELDS: readonly (keyof QeTargetsText)[] = ['calories', 'proteinG', 'carbsG', 'fatsG']
+
+/**
+ * Texto de meta normalizado para comparar: '' y '   ' son lo mismo, y '2040' == ' 2040.0 '.
+ * Lo que no parsea a numero se compara como texto crudo (nunca se declara igual por error).
+ */
+function normalizedTargetText(value: string): string {
+  const trimmed = value.trim()
+  if (trimmed === '') return ''
+  const n = Number(trimmed)
+  return Number.isFinite(n) ? String(n) : trimmed
+}
+
+/**
+ * ¿Los dos dias tienen la MISMA meta? Compara solo kcal/P/C/G como texto normalizado: dos dias
+ * vacios son iguales (es el caso Pame antes de escribir), y `passthroughTargets` no entra
+ * porque la UI no lo edita y arrastrarlo volveria "distinto" a un dia que el coach ve igual.
+ */
+export function qeTargetsEqual(a: QeVariant, b: QeVariant): boolean {
+  return QE_TARGET_FIELDS.every(
+    (field) => normalizedTargetText(a.targets[field]) === normalizedTargetText(b.targets[field]),
+  )
+}
+
+/** ¿El dia tiene meta de energia? Es la llave del aviso: sin kcal no hay objetivo que mostrar. */
+function hasTargetCalories(variant: QeVariant): boolean {
+  return normalizedTargetText(variant.targets.calories) !== ''
+}
+
+/**
+ * Escribe `value` en un campo de metas. Sin `scope: 'all'` es EXACTAMENTE el `mapVariant` de
+ * siempre. Con `scope: 'all'` escribe en el dia activo, en el dia base y en todos los dias que
+ * heredaban —`qeTargetsEqual(dia, base)` evaluado con el estado PREVIO, en la misma pasada del
+ * reducer—, y deja intacto el dia con metas propias distintas: eso es una decision del coach,
+ * mismo criterio que `APPLY_BASE_PORTIONS`. Sin dia base no hay "todos los dias" posible y cae
+ * al comportamiento de siempre.
+ */
+function writeTargetField(
+  state: QuickEditState,
+  variantKey: string,
+  field: keyof QeTargetsText,
+  value: string,
+  scope: QeTargetsScope | undefined,
+): QuickEditState {
+  const write = (variant: QeVariant): QeVariant => ({
+    ...variant,
+    targets: { ...variant.targets, [field]: value },
+  })
+  if (scope !== 'all') return mapVariant(state, variantKey, write)
+  const base = defaultQeVariant(state)
+  if (!base || !state.variants.some((variant) => variant.key === variantKey)) {
+    return mapVariant(state, variantKey, write)
+  }
+  const keys = new Set<string>([variantKey, base.key])
+  for (const variant of state.variants) {
+    if (qeTargetsEqual(variant, base)) keys.add(variant.key)
+  }
+  return {
+    ...state,
+    variants: state.variants.map((variant) => (keys.has(variant.key) ? write(variant) : variant)),
+  }
+}
+
+/**
+ * Copia las metas de `fromVariantKey` al dia base y a los dias que quedaron SIN meta («Ir a
+ * Base»). Solo RELLENA: un dia con meta propia no se pisa, y `passthroughTargets` no se toca.
+ * Idempotente: despues no queda ningun dia sin meta, asi que un segundo dispatch devuelve el
+ * MISMO estado (misma referencia).
+ */
+function applyBaseTargets(state: QuickEditState, fromVariantKey: string): QuickEditState {
+  const source = state.variants.find((variant) => variant.key === fromVariantKey)
+  if (!source || !hasTargetCalories(source)) return state
+  let touched = false
+  const variants = state.variants.map((variant) => {
+    if (variant.key === source.key || hasTargetCalories(variant)) return variant
+    touched = true
+    return { ...variant, targets: { ...source.targets } }
+  })
+  return touched ? { ...state, variants } : state
+}
+
+/** Un dia sin meta cuando OTRO dia si la tiene (punto ambar del chip / del rail). */
+export interface QeTargetsGap {
+  key: string
+  /** Etiqueta para nombrar el dia dentro de una oracion («El día base», «Martes»). */
+  label: string
+  isDefault: boolean
+}
+
+/**
+ * Dias SIN meta —el base incluido— cuando otra variante si tiene. Devuelve `[]` si ninguna
+ * tiene meta (plan sin objetivos: valido, no hay nada que avisar) y si todas la tienen. En el
+ * caso Pame (2.040 kcal solo en Martes) devuelve el base y los seis dias restantes.
+ */
+export function qeDaysMissingTargets(state: QuickEditState): QeTargetsGap[] {
+  const variants = sortNutritionDayVariantsForDisplay(state.variants)
+  const withTargets = variants.filter(hasTargetCalories).length
+  if (withTargets === 0 || withTargets === variants.length) return []
+  return variants
+    .filter((variant) => !hasTargetCalories(variant))
+    .map((variant) => ({ key: variant.key, label: qeDayErrorLabel(variant), isDefault: variant.isDefault }))
+}
+
+/** Aviso ambar de la `PublishBar` cuando el plan tiene metas parciales. */
+export interface QeTargetsGapBar {
+  message: string
+  /** Dia CON meta desde el que copiar: es el `fromVariantKey` de `APPLY_BASE_TARGETS`. */
+  dayKey: string
+}
+
+/** Nombres de dia dentro de una oracion: el primero con mayuscula, el resto en minuscula. */
+function sentenceDayLabels(labels: readonly string[]): string[] {
+  return labels.map((label, index) => (index === 0 ? label : label.toLocaleLowerCase('es')))
+}
+
+/**
+ * El aviso de metas parciales, o `null` si no hay nada que avisar. Habla en DIAS DE LA SEMANA,
+ * no en variantes: cada dia se resuelve como lo resuelve el snapshot (variante propia si
+ * existe, si no el base), asi el coach lee lo que le va a pasar al alumno —«Solo Martes tiene
+ * meta. Lunes, miércoles, jueves, viernes, sábado y domingo quedan sin objetivo.»— y no una
+ * lista de variantes donde «Todos los días» convive con «Lunes».
+ */
+export function qeTargetsGapBar(state: QuickEditState): QeTargetsGapBar | null {
+  const base = defaultQeVariant(state)
+  if (!base) return null
+  const withMeta: string[] = []
+  const withoutMeta: string[] = []
+  let fromKey: string | null = null
+  for (const dayOfWeek of NUTRITION_WEEK_ORDER) {
+    const own = state.variants.find((variant) => !variant.isDefault && variant.dayOfWeek === dayOfWeek)
+    const serving = own ?? base
+    const label = autoDayVariantLabel(dayOfWeek)
+    if (hasTargetCalories(serving)) {
+      withMeta.push(label)
+      if (fromKey === null) fromKey = serving.key
+    } else {
+      withoutMeta.push(label)
+    }
+  }
+  if (fromKey === null || withMeta.length === 0 || withoutMeta.length === 0) return null
+  return {
+    message: EDITOR_TARGETS_COPY.publish.partialTargets(
+      joinDayLabels(sentenceDayLabels(withMeta)),
+      joinDayLabels(sentenceDayLabels(withoutMeta)),
+    ),
+    dayKey: fromKey,
+  }
+}
+
 /**
  * Unidad inicial de un alimento recien agregado (b13). Delega en `defaultFoodUnit` (paquete),
  * que prefiere la medida casera cuando existe —incluso en un alimento nativo `un` (R7)— y si no
@@ -2176,18 +2360,27 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
     case 'SET_VARIANT_LABEL':
       return mapVariant(state, action.variantKey, (variant) => ({ ...variant, label: action.value }))
     case 'SET_TARGET':
-      return mapVariant(state, action.variantKey, (variant) => ({
-        ...variant,
-        targets: { ...variant.targets, [action.field]: action.value },
-      }))
-    case 'STEP_TARGET':
-      return mapVariant(state, action.variantKey, (variant) => ({
-        ...variant,
-        targets: {
-          ...variant.targets,
-          [action.field]: stepTargetText(variant.targets[action.field], targetStep(action.field), action.direction),
-        },
-      }))
+      return writeTargetField(state, action.variantKey, action.field, action.value, action.scope)
+    case 'STEP_TARGET': {
+      if (action.scope !== 'all') {
+        return mapVariant(state, action.variantKey, (variant) => ({
+          ...variant,
+          targets: {
+            ...variant.targets,
+            [action.field]: stepTargetText(variant.targets[action.field], targetStep(action.field), action.direction),
+          },
+        }))
+      }
+      // Con `scope: 'all'` el paso se calcula UNA vez, sobre el dia activo, y ese mismo valor
+      // baja a todos: pasar el stepper por cada dia dejaria valores distintos si alguno tenia
+      // texto raro, y el punto de «todos los días» es que queden con la MISMA meta.
+      const active = state.variants.find((variant) => variant.key === action.variantKey)
+      if (!active) return state
+      const next = stepTargetText(active.targets[action.field], targetStep(action.field), action.direction)
+      return writeTargetField(state, action.variantKey, action.field, next, 'all')
+    }
+    case 'APPLY_BASE_TARGETS':
+      return applyBaseTargets(state, action.fromVariantKey)
     case 'ADD_ITEM_SUBSTITUTION':
       return mapItem(state, action.variantKey, action.slotKey, action.itemKey, (item) => {
         const subs = item.substitutions ?? []
@@ -3103,7 +3296,12 @@ export interface QePublishBlockedBar {
   jumpLabel: string | null
 }
 
-function joinDayLabels(labels: readonly string[]): string {
+/**
+ * Gramatica de listas de dias, UNA sola en el paquete: «Lunes» · «Lunes y martes» · «Lunes,
+ * martes y miércoles». Solo une: la mayuscula/minuscula es del caller (la barra de errores
+ * pasa las etiquetas tal cual, el aviso de metas las baja con `sentenceDayLabels`).
+ */
+export function joinDayLabels(labels: readonly string[]): string {
   if (labels.length <= 1) return labels[0] ?? ''
   return labels.slice(0, -1).join(', ') + ' y ' + labels[labels.length - 1]
 }

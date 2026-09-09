@@ -69,9 +69,11 @@ import {
   buildDayVariantKey,
   defaultQeVariant,
   qeDaysMissingBasePortions,
+  qeDaysMissingTargets,
   qeErrorDayKeys,
   qeFirstErrorDayKey,
   qePublishBlockedBar,
+  qeTargetsGapBar,
   qeVariantTotalWithPortions,
   takenDayVariantDows,
   VARIANT_LABEL_MAX,
@@ -83,7 +85,8 @@ import { EditorRibbon, useRibbonViewport } from './EditorRibbon'
 import { DAY_MACRO_ROWS, type PublishBarDayTotals } from './PublishBar'
 import { MACRO_META } from '@/components/nutrition/macro-tokens'
 import { PrimeraPautaCards } from '../editor/PrimeraPauta'
-import { QE_COPY } from './microcopy'
+import { useCaptureNutritionTargetsScope } from '@/lib/posthog/events'
+import { EDITOR_COPY, QE_COPY } from './microcopy'
 
 /**
  * Id del bloque de un dia dentro del overlay: destino de las anclas del indice (P1-1). Se
@@ -241,6 +244,21 @@ export function QuickEditPlanView() {
     return keys
   }, [errorDayKeys, orderedVariants, usesSlots])
 
+  // ── W4 «Metas por día» (caso Pame Cid): metas parciales — un día con objetivo y el resto de la
+  // semana sin ninguno. NO es un error y por eso no pasa por `errors` ni por `showErrors`: vive
+  // por la misma vía que `qeDaysMissingBasePortions`, avisa desde que se abre el editor y publicar
+  // sigue permitido (si bloqueara, los planes que ya están así en LIVE quedarían irrepublicables).
+  //
+  // Solo en el EDITOR: en el quick-edit clásico la pila entera está a la vista y «Abrir metas del
+  // base» no tendría a dónde llevar a nadie (ahí no hay día activo que cambiar) — un botón que no
+  // mueve nada es peor que ninguno, mismo criterio que `validationAction`.
+  const targetsGap = useMemo(() => (isEditor ? qeTargetsGapBar(state) : null), [isEditor, state])
+  const targetsNoticeKeys = useMemo<ReadonlySet<string>>(
+    () => new Set(isEditor ? qeDaysMissingTargets(state).map((gap) => gap.key) : []),
+    [isEditor, state],
+  )
+  const captureTargetsScope = useCaptureNutritionTargetsScope()
+
   // Saltar a un día = cambiarlo en edición y devolver el scroll al principio del lienzo: el error
   // puede estar mucho más arriba de donde el coach tocó "Publicar".
   const canvasRef = useRef<HTMLDivElement | null>(null)
@@ -248,6 +266,17 @@ export function QuickEditPlanView() {
     setActiveDayKey(key)
     canvasRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' })
   }, [])
+
+  // «Abrir metas del base» (W4.4): rellena el base y los días sin objetivo con la meta del primer
+  // día que sí la tiene (`APPLY_BASE_TARGETS` solo RELLENA — un día con meta propia no se pisa) y
+  // deja al coach parado en el base para que vea con qué quedó. Un gesto, como pide el mockup M4.
+  const applyBaseTargets = useCallback(() => {
+    if (!targetsGap) return
+    dispatch({ type: 'APPLY_BASE_TARGETS', fromVariantKey: targetsGap.dayKey })
+    captureTargetsScope('all', 'go_to_base')
+    const baseKey = defaultQeVariant(state)?.key
+    if (baseKey) jumpToDay(baseKey)
+  }, [targetsGap, dispatch, captureTargetsScope, state, jumpToDay])
 
   // Cada publish cortado por validación mueve al coach al primer día con error (salvo que el activo
   // ya tenga los suyos: ahí las marcas están a la vista y saltar sería perderle el hilo).
@@ -415,6 +444,7 @@ export function QuickEditPlanView() {
             activeKey={activeVariant.key}
             todayVariantKey={todayVariantKey}
             attentionKeys={attentionKeys}
+            noticeKeys={targetsNoticeKeys}
             onSelect={setActiveDayKey}
           />
         ) : null}
@@ -486,6 +516,7 @@ export function QuickEditPlanView() {
               activeKey={activeVariant.key}
               todayVariantKey={todayVariantKey}
               attentionKeys={attentionKeys}
+              noticeKeys={targetsNoticeKeys}
               onSelect={setActiveDayKey}
             />
           </div>
@@ -675,6 +706,10 @@ export function QuickEditPlanView() {
             ? { label: validationJumpLabel, onClick: () => jumpToDay(validationJumpKey) }
             : null
         }
+        noticeMessage={targetsGap?.message ?? null}
+        noticeAction={
+          targetsGap ? { label: EDITOR_COPY.publish.goToBaseWeb, onClick: applyBaseTargets } : null
+        }
         leading={
           isEditor ? (
             <EditorTourHelpButton placement="docked" coachId={viewerCoachId} onOpen={tour.start} />
@@ -762,6 +797,7 @@ function EditorDayCapsule({
   activeKey,
   todayVariantKey,
   attentionKeys,
+  noticeKeys,
   onSelect,
 }: {
   variants: readonly QeVariant[]
@@ -773,6 +809,12 @@ function EditorDayCapsule({
    * dónde pintarse (el rail, que ya tenía su punto, solo existe desde 1024).
    */
   attentionKeys?: ReadonlySet<string>
+  /**
+   * Días SIN meta cuando otro día sí la tiene (W4.5). MISMO punto ámbar que `attentionKeys` —
+   * una sola gramática visual para «este día necesita una pasada» — y sin pasar por `showErrors`:
+   * no es un error, y el coach tiene que verlo mientras edita, no recién al publicar.
+   */
+  noticeKeys?: ReadonlySet<string>
   onSelect: (key: string) => void
 }) {
   return (
@@ -784,7 +826,8 @@ function EditorDayCapsule({
           const short = variant.isDefault
             ? QE_COPY.baseDayShort
             : formatNutritionDayOfWeek(variant.dayOfWeek, { short: true })
-          const needsAttention = attentionKeys?.has(variant.key) ?? false
+          const needsAttention =
+            (attentionKeys?.has(variant.key) ?? false) || (noticeKeys?.has(variant.key) ?? false)
           return (
             <li key={variant.key}>
               <button

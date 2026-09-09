@@ -14,7 +14,11 @@ import type { ImplausibleEventReason, ImplausibleSurface, KcalBucket } from '@ev
 import {
     PORTIONS_EVENT_GROUP_BUMPED,
     portionGroupBumpedPayload,
+    TARGETS_EVENT_SCOPE,
+    targetsScopePayload,
     type PortionGroupBumpedProps,
+    type QeTargetsScope,
+    type TargetsScopeFrom,
 } from '@eva/nutrition-v2'
 
 /**
@@ -585,6 +589,27 @@ export function useCaptureNutritionPortionGroupBumped() {
     return useCallback(
         (props: PortionGroupBumpedProps) => {
             ph?.capture(PORTIONS_EVENT_GROUP_BUMPED, portionGroupBumpedPayload('web', props))
+        },
+        [ph]
+    )
+}
+
+/**
+ * Alcance con el que el coach guardo una meta del dia (tren «Porciones a la chilena», W4.6):
+ * `from: 'switch'` = movio el switch «Solo el {dia}» de `TargetsEditorCard`; `from: 'go_to_base'`
+ * = uso «Abrir metas del base» del aviso ambar de la `PublishBar` (ahi el alcance es siempre
+ * 'all', porque esa accion rellena el base y los dias sin objetivo).
+ *
+ * Sirve para UNA pregunta: si el default del switch acierta (SPEC §7.5, default por ESTADO). Por
+ * eso el payload son DOS llaves y ninguna mas — **jamas la cifra de la meta**, que es un dato de
+ * salud (§17.9, Ley 21.719). El constructor vive en el paquete y RN importa el mismo: dos
+ * superficies, un solo shape (DATA §11).
+ */
+export function useCaptureNutritionTargetsScope() {
+    const ph = usePostHog()
+    return useCallback(
+        (scope: QeTargetsScope, from: TargetsScopeFrom) => {
+            ph?.capture(TARGETS_EVENT_SCOPE, targetsScopePayload(scope, from))
         },
         [ph]
     )

@@ -167,7 +167,9 @@ function RibbonDayReadout({ dayTotals }: { dayTotals: PublishBarDayTotals }) {
   // Nombre accesible del bloque entero: el anillo, el rótulo y la cifra son UNA sola lectura.
   const readoutLabel = [
     dayTotals.label,
-    target != null ? `${calories} de ${Math.round(target)} kcal` : `${calories} kcal`,
+    target != null
+      ? `${calories} de ${Math.round(target)} kcal`
+      : `${calories} kcal · ${QE_COPY.dayNoTarget}`,
     pct != null ? QE_COPY.sparkPctOfTarget(Math.round(pct)) : null,
   ]
     .filter(Boolean)
@@ -188,7 +190,12 @@ function RibbonDayReadout({ dayTotals }: { dayTotals: PublishBarDayTotals }) {
             {calories}
             {target != null ? (
               <span className="font-medium text-muted"> / {Math.round(target)}</span>
-            ) : null}
+            ) : (
+              /* W4.5: sin objetivo, un «0» pelado se lee como «meta cumplida en cero». El sufijo
+                 dice que lo que falta es la META, no las calorías — y es el mismo dato que el
+                 aviso ámbar de la barra nombra por día. */
+              <span className="font-medium text-muted"> · {QE_COPY.dayNoTarget}</span>
+            )}
           </span>
         </span>
       </div>

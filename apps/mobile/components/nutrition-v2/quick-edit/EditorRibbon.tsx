@@ -1,6 +1,7 @@
 import { Text, View } from 'react-native'
 import { NUTRITION_MACROS } from '@eva/nutrition-v2'
 import { DAY_MACRO_ROWS, type PublishBarDayTotals } from './PublishBar'
+import { EDITOR_COPY } from './microcopy'
 
 /**
  * Mini-cinta RN del editor único (T3.v Cabina, V3.3) — espejo comprimido de la cinta desktop
@@ -28,10 +29,15 @@ export function EditorDayRibbon({ dayTotals }: { dayTotals: PublishBarDayTotals 
   })
 
   // Un solo nodo accesible: el dot es puro color (no anunciable), así que el nombre completo de
-  // cada macro va acá — mismo criterio que el `role="img"` del anillo web.
+  // cada macro va acá — mismo criterio que el `role="img"` del anillo web. El texto es el MISMO
+  // que la cinta web («{kcal} kcal, sin meta»); acá el separador es la coma porque este label es
+  // una LISTA unida con ', ' (día, energía, macros) y el «·» de la web quedaría suelto adentro.
+  // La unidad se conserva solo en el label: leer «1.240, sin meta» no dice de qué es la cifra.
   const readoutLabel = [
     dayTotals.label,
-    target != null ? `${calories} de ${Math.round(target)} kcal` : `${calories} kcal`,
+    target != null
+      ? `${calories} de ${Math.round(target)} kcal`
+      : `${calories} kcal, ${EDITOR_COPY.targets.noTarget}`,
     ...macroPcts
       .filter((row) => row.pct != null)
       .map((row) => `${NUTRITION_MACROS[row.key].label} ${row.pct}% de la meta`),
@@ -48,7 +54,11 @@ export function EditorDayRibbon({ dayTotals }: { dayTotals: PublishBarDayTotals 
       <View className="flex-row items-center justify-between gap-3">
         <Text className="shrink-0 font-mono text-[12.5px]" style={{ fontVariant: ['tabular-nums'] }}>
           <Text className="font-bold text-strong">{calories}</Text>
-          <Text className="text-muted">{target != null ? ` / ${Math.round(target)} kcal` : ' kcal'}</Text>
+          {/* W4.5: sin meta la cinta lo DICE («1.240 · sin meta») en vez de imprimir un « kcal»
+              pelado que se lee igual que un día con objetivo cumplido. */}
+          <Text className="text-muted">
+            {target != null ? ` / ${Math.round(target)} kcal` : ` · ${EDITOR_COPY.targets.noTarget}`}
+          </Text>
         </Text>
         <View className="flex-row items-center gap-2.5">
           {macroPcts.map(({ key, pct }) => (

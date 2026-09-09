@@ -17,6 +17,7 @@
  */
 
 import type { PortionSystem } from './exchange-visibility'
+import type { QeTargetsScope } from './editor-state'
 
 /** Tocar un grupo ya presente en la franja suma media porcion en vez de no hacer nada (D2-A). */
 export const PORTIONS_EVENT_GROUP_BUMPED = 'nutrition_portion_group_bumped'
@@ -57,4 +58,23 @@ export function portionGroupBumpedPayload(
     from: props.from,
     undone: props.undone,
   }
+}
+
+/**
+ * El coach eligio en que alcance se guarda una meta del dia (W4). Mide si el default del
+ * switch acierta; JAMAS lleva la cifra de la meta — eso seria un dato de salud (§17.9).
+ */
+export const TARGETS_EVENT_SCOPE = 'nutrition_targets_scope'
+
+/** Desde donde se eligio: el switch «Solo el {dia}» o el «Ir a Base» del aviso de la barra. */
+export type TargetsScopeFrom = 'switch' | 'go_to_base'
+
+/** Payload del alcance de metas. EXHAUSTIVO: estas 2 llaves y ninguna mas (DATA.md §11). */
+export type TargetsScopePayload = {
+  scope: QeTargetsScope
+  from: TargetsScopeFrom
+}
+
+export function targetsScopePayload(scope: QeTargetsScope, from: TargetsScopeFrom): TargetsScopePayload {
+  return { scope, from }
 }

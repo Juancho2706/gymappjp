@@ -14,7 +14,7 @@ import { MacroSparkPopover } from '@/components/nutrition-v2'
 import { MACRO_META, macroPct, type MacroKey } from '@/components/nutrition/macro-tokens'
 import { ImplausibleNotice } from '@/components/nutrition-v2/ImplausibleNotice'
 import { useQuickEdit } from './QuickEditProvider'
-import { QE_COPY } from './microcopy'
+import { EDITOR_COPY, QE_COPY } from './microcopy'
 
 // Ruta canonica de upgrade de plan (inlineada: _lib/nutrition-pro.ts es server-only).
 // Nutricion Pro viene incluido en los planes pagos — el CTA apunta al cambio de plan.
@@ -61,6 +61,8 @@ export function PublishBar({
   leading = null,
   validationMessage = null,
   validationAction = null,
+  noticeMessage = null,
+  noticeAction = null,
 }: {
   dayTotals?: PublishBarDayTotals | null
   /**
@@ -82,6 +84,20 @@ export function PublishBar({
    * es peor que ninguno.
    */
   validationAction?: { label: string; onClick: () => void } | null
+  /**
+   * AVISO que NO bloquea (W4.4, tren «Porciones a la chilena»): hoy, metas parciales — «Solo
+   * Martes tiene meta. Los otros seis días quedan sin objetivo.» Hermano de `validationMessage`
+   * pero de otra especie, y por eso caja distinta: ÁMBAR (`warning-500/30`) y `role="status"`,
+   * nunca la roja con `role="alert"` de la validación.
+   *
+   * La diferencia es sustantiva, no decorativa: una meta parcial es válida a propósito para
+   * algunos coaches y **publicar sigue permitido** (si bloqueara, los planes que ya están así en
+   * LIVE quedarían irrepublicables — el daño que reparó `ee6766ae` el 02-09). El aviso está desde
+   * que se abre el editor, no recién al pulsar Publicar. `null` = nada que avisar.
+   */
+  noticeMessage?: string | null
+  /** Salida del aviso («Abrir metas del base»). `null` = el aviso se queda sin acción. */
+  noticeAction?: { label: string; onClick: () => void } | null
   /**
    * Ranura al principio de la fila de totales. Existe por UNA razón: el «?» de la Guía Viva, que en
    * <1024 la SPEC ubica «flotante sobre la PublishBar, lado IZQUIERDO» (D2).
@@ -122,11 +138,15 @@ export function PublishBar({
   // Creacion: la vigencia elegible existe solo ahi (ver `QeMeta.effectiveFrom`).
   const isCreation = state.meta?.effectiveFrom !== undefined
   const dirtyLabel = isTemplate ? QE_COPY.templateDirtyBar(changeCount) : QE_COPY.dirtyBar(changeCount)
+  // Con el aviso ámbar a la vista el CTA dice «Publicar igual» (W4.4): el botón es la respuesta a
+  // lo que el coach acaba de leer. En plantilla no aplica — ahí no se publica nada, se guarda.
   const ctaLabel = isTemplate
     ? QE_COPY.templateSave
-    : isCreation
-      ? QE_COPY.createPublish
-      : QE_COPY.publish
+    : noticeMessage
+      ? EDITOR_COPY.publish.anyway
+      : isCreation
+        ? QE_COPY.createPublish
+        : QE_COPY.publish
 
   const hasActions =
     changeCount > 0 ||
@@ -137,7 +157,9 @@ export function PublishBar({
   // Contador + Descartar + Publicar: solo cuando la cinta NO los está mostrando (ver `hideActions`).
   const showActions = hasActions && !hideActions
   // En el editor (dayTotals presente) la barra vive SIEMPRE: totales fijos abajo (W3b).
-  const visible = dayTotals !== null || hasActions
+  // El aviso ámbar la enciende sin sumarse a `hasActions`: NO destraba el contador ni los CTA
+  // (publicar con cero cambios sigue sin tener sentido) — solo garantiza que se lea.
+  const visible = dayTotals !== null || hasActions || noticeMessage != null
   if (!visible) return null
 
   return (
@@ -208,6 +230,31 @@ export function PublishBar({
                 className="inline-flex shrink-0 items-center gap-1 font-semibold underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [@media(pointer:coarse)]:min-h-11"
               >
                 {validationAction.label}
+                <ArrowRight aria-hidden="true" className="h-4 w-4" />
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+        {/* W4.4 — metas parciales (mockup M4). Entre la validación y el aviso de plausibilidad:
+            ámbar y `role="status"` (no `alert`) porque no interrumpe nada — el color es lo que
+            dice «esto no bloquea», y el botón primario de abajo pasa a «Publicar igual». */}
+        {noticeMessage ? (
+          <div
+            role="status"
+            data-testid="qe-targets-notice"
+            className="mb-2 flex w-full items-center justify-between gap-2 rounded-control border border-warning-500/30 bg-warning-500/10 px-3 py-2 text-left text-xs font-medium text-warning-700"
+          >
+            <span className="flex min-w-0 items-center gap-2">
+              <AlertTriangle aria-hidden="true" className="h-4 w-4 shrink-0" />
+              <span className="min-w-0">{noticeMessage}</span>
+            </span>
+            {noticeAction ? (
+              <button
+                type="button"
+                onClick={noticeAction.onClick}
+                className="inline-flex shrink-0 items-center gap-1 font-semibold underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring [@media(pointer:coarse)]:min-h-11"
+              >
+                {noticeAction.label}
                 <ArrowRight aria-hidden="true" className="h-4 w-4" />
               </button>
             ) : null}

@@ -64,6 +64,8 @@ export * from './editor-food'
 export * from './editor-portions'
 export * from './editor-copy-presets'
 export * from './editor-copy-plan'
+// Tren «Porciones a la chilena» (W4.6): copys del switch «Solo el {día}» y del aviso de metas parciales (SPEC §16.1, tuteo), idénticos en RN y web.
+export * from './editor-copy-targets'
 export * from './editor-state'
 // T3.v Cabina: reparto porcentual P/C/G del "MacroSpark" — UNA sola fuente para web y RN
 // (prohibido recalcular porcentajes en componentes, ver PLAN §1).

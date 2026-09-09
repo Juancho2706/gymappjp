@@ -56,6 +56,7 @@ export function PublishBar({
   errorMessage,
   errorAction,
   dayTotals = null,
+  dayNotice = null,
   dayWarning = null,
   template = false,
   creation = false,
@@ -80,6 +81,17 @@ export function PublishBar({
    */
   dayTotals?: PublishBarDayTotals | null
   /**
+   * W4 «Metas por dia»: aviso de METAS PARCIALES, ya redactado por el paquete (`qeTargetsGapBar`)
+   * — «Solo Martes tiene meta. Lunes, miércoles… quedan sin objetivo.» con «Ir a Base».
+   *
+   * AVISA, NO BLOQUEA: vive FUERA de `errorMessage` (no es una severidad de `validateQuickEdit`),
+   * no entra en `hasActions` y no toca `disabled` del boton primario. Va en AMBAR, nunca en la
+   * caja roja de validacion: el color es lo que dice que publicar sigue permitido — bloquear
+   * volveria irrepublicables los planes con metas parciales (el daño que reparo `ee6766ae`).
+   * Mientras esta presente, el boton primario pasa a decir «Publicar igual».
+   */
+  dayNotice?: { message: string; action?: { label: string; onPress: () => void } } | null
+  /**
    * Aviso de plausibilidad del dia, ya redactado por el orquestador (`dayWarningCopy`, W1.3 del
    * tren «Cantidades honestas»). La barra no lo deriva —no conoce los items— y NO bloquea:
    * publicar sigue siendo un tap. `null` = nada que decir. Espejo de la barra web.
@@ -96,12 +108,22 @@ export function PublishBar({
   const insets = useSafeAreaInsets()
   const { theme } = useTheme()
   const hasActions = count > 0 || errorMessage !== null
+  // Con el aviso de metas parciales a la vista el primario dice «Publicar igual»: nombra el
+  // aviso y confirma que publicar SIGUE permitido. En modo PLANTILLA no aplica — ahi no se
+  // publica nada, se guarda material del coach, y «Publicar igual» seria una mentira.
+  // En CREACION si aplica, a proposito: SPEC §7.6 solo exceptua la plantilla, y un plan nuevo
+  // con metas parciales necesita la misma promesa («se puede publicar igual») que uno vigente;
+  // «Publicar plan» vuelve sola en cuanto el aviso desaparece.
   const publishLabel = template
     ? EDITOR_COPY.templateSave
-    : creation
-      ? EDITOR_COPY.createPublish
-      : QUICK_EDIT_COPY.publish
-  if (dayTotals === null && dayWarning === null && !hasActions) return null
+    : dayNotice
+      ? EDITOR_COPY.publish.anyway
+      : creation
+        ? EDITOR_COPY.createPublish
+        : QUICK_EDIT_COPY.publish
+  // El aviso de metas parciales entra en la guarda: SPEC §7.6 lo quiere visible DESDE que se abre
+  // el editor, y una barra que se desmonta por no tener totales lo apagaria sin decir nada.
+  if (dayTotals === null && dayWarning === null && dayNotice == null && !hasActions) return null
 
   return (
     <View
@@ -136,6 +158,32 @@ export function PublishBar({
               <Text className="text-xs font-bold text-danger-600">{QUICK_EDIT_COPY.retry}</Text>
             </Pressable>
           )}
+        </View>
+      ) : null}
+
+      {/* W4 «Metas por día» — metas parciales. Hermano de la caja de error, NUNCA dentro: caja
+          ÁMBAR (`warning-500/30`) y `accessibilityLiveRegion="polite"`, el equivalente RN del
+          `role="status"` de la web — es un estado, no una alerta que corte el flujo. */}
+      {dayNotice ? (
+        <View
+          accessibilityLiveRegion="polite"
+          className="mb-2 flex-row items-center justify-between gap-2 rounded-control border border-warning-500/30 bg-warning-500/10 px-3 py-2"
+        >
+          <Text className="min-w-0 flex-1 text-xs font-medium leading-5 text-warning-700">
+            {dayNotice.message}
+          </Text>
+          {dayNotice.action ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={dayNotice.action.label}
+              disabled={publishing}
+              onPress={dayNotice.action.onPress}
+              className="min-h-11 flex-row items-center gap-1.5 rounded-control px-2"
+            >
+              <Text className="text-xs font-bold text-warning-700">{dayNotice.action.label}</Text>
+              <ArrowRight color={theme.warning} size={14} />
+            </Pressable>
+          ) : null}
         </View>
       ) : null}
 

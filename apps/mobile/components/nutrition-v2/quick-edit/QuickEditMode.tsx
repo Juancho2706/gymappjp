@@ -53,6 +53,7 @@ import {
   countVariantHeaderChanges,
   dayWarningCopy,
   daysForCopyPreset,
+  defaultQeVariant,
   findPortionTargetByGroup,
   formatNutritionDayOfWeek,
   formatPortionsEsCl,
@@ -60,6 +61,7 @@ import {
   mergePortionGroupChoices,
   nextDaysFrom,
   planCopy,
+  qeDaysMissingTargets,
   qeErrorDayKeys,
   qeExchangeGroups,
   qeFirstErrorDayKey,
@@ -67,6 +69,8 @@ import {
   qePublishBlockedBar,
   qeSlotCopyTargets,
   qeSubstitutionEquivalence,
+  qeTargetsEqual,
+  qeTargetsGapBar,
   qeVariantTotalWithPortions,
   quickEditReducer,
   PORTION_MAX,
@@ -91,6 +95,7 @@ import {
   type QeItemSubstitution,
   type QePortionGroup,
   type QePortionTarget,
+  type QeTargetsScope,
   type QeVariant,
   type QuickEditState,
 } from '@eva/nutrition-v2'
@@ -121,6 +126,7 @@ import type { PortionPickerGroup, QuickEditGroupAdmin } from './EditablePortions
 import {
   captureNutritionItemImplausible,
   captureNutritionPortionGroupBumped,
+  captureNutritionTargetsScope,
 } from '../../../lib/analytics'
 import { fetchNutritionV2ExchangeGroups } from '../../../lib/nutrition-v2-exchange-groups.api'
 import { toQuickEditPortionGroup } from '../../../lib/nutrition-v2-builder-portions'
@@ -492,6 +498,9 @@ export function QuickEditMode({
   // botón; un error de validación de metas la fuerza abierta aunque el usuario intente cerrarla
   // (espejo del patrón `forcedOpen`/`metasOpen` de `EditorRibbon.tsx` web).
   const [metasRequested, setMetasRequested] = useState(false)
+  // W4.6: alcance vivo del switch «Solo el {día}», con la clave del día al que pertenece. Solo
+  // lo usa el TÍTULO de la hoja; el alcance de cada escritura lo sigue decidiendo la card.
+  const [targetsScope, setTargetsScope] = useState<{ key: string; scope: QeTargetsScope } | null>(null)
   const [publishing, setPublishing] = useState(false)
   const [publishError, setPublishError] = useState<string | null>(null)
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -1310,6 +1319,78 @@ export function QuickEditMode({
     scrollRef.current?.scrollTo({ y: Math.max(0, y - 12), animated: true })
   }, [])
 
+  // ── W4 «Metas por dia» (caso Pame: 2.040 kcal escritas en Martes y el resto de la semana sin
+  //    objetivo). Todo lo puro sale del paquete, asi que la web dice EXACTAMENTE lo mismo. ──
+  /** Dia base: alimenta el default del switch y las metas que se copian al apagarlo. */
+  const baseVariant = useMemo(() => defaultQeVariant(state), [state])
+  /**
+   * Dias SIN meta cuando OTRO dia si la tiene. Pintan el MISMO punto ambar que `attentionKeys` y
+   * NO pasan por `showErrors`: esto no es un error de validacion —publicar sigue permitido—, es
+   * la unica pista de que los otros dias quedaron sin objetivo.
+   */
+  const noticeKeys = useMemo<ReadonlySet<string>>(
+    () => (editorMode ? new Set(qeDaysMissingTargets(state).map((gap) => gap.key)) : new Set<string>()),
+    [editorMode, state],
+  )
+  /** Aviso ambar de la barra de publicar, VISIBLE desde que se abre el editor (no es un modal). */
+  const targetsGap = useMemo(() => (editorMode ? qeTargetsGapBar(state) : null), [editorMode, state])
+
+  /**
+   * «Ir a Base» en un solo toque: rellena los dias sin meta desde el primero que la tiene
+   * (`APPLY_BASE_TARGETS` es idempotente y NO pisa un dia con meta propia), deja al coach parado
+   * en el dia base y le abre «Metas» ahi — que es donde va a querer revisar la cifra que quedo
+   * para toda la semana (mockup M4: «Ir a Base abre Metas en el base»).
+   *
+   * El SDD escribe `jumpToDay('default')`; la clave del dia base NO es la cadena 'default' sino
+   * el id de la variante, asi que se usa `baseVariant.key`. En el editor los chips CAMBIAN el dia
+   * activo (el lienzo pinta uno solo), por eso ademas del scroll va `setActiveDayKey`.
+   */
+  const handleGoToBaseTargets = useCallback(() => {
+    if (!targetsGap) return
+    dispatch({ type: 'APPLY_BASE_TARGETS', fromVariantKey: targetsGap.dayKey })
+    captureNutritionTargetsScope({ scope: 'all', from: 'go_to_base' })
+    if (baseVariant) {
+      setActiveDayKey(baseVariant.key)
+      jumpToDay(baseVariant.key)
+    }
+    scrollRef.current?.scrollTo({ y: 0, animated: true })
+    setMetasRequested(true)
+  }, [targetsGap, baseVariant, jumpToDay])
+
+  /**
+   * El coach movio el switch «Solo el {dia}». Ley 21.719: viaja el ALCANCE elegido, jamas la
+   * cifra de la meta ni el nombre del dia concreto.
+   */
+  const handleTargetsScope = useCallback(
+    (scope: QeTargetsScope) => {
+      captureNutritionTargetsScope({ scope, from: 'switch' })
+      // El titulo de la hoja tiene que seguir al switch (W4.6), y el switch vive DENTRO de la
+      // card: el host se entera por aca. Se guarda junto a la clave del dia para que cambiar de
+      // dia vuelva al default — el mismo motivo por el que la card se remonta con `key`.
+      if (activeVariant) setTargetsScope({ key: activeVariant.key, scope })
+    },
+    [activeVariant],
+  )
+
+  /**
+   * W4.6 — el titulo de la hoja de metas dice DONDE se guarda lo que el coach escribe. Con el
+   * switch apagado (default de todo dia que hereda, o sea el caso Pame) la hoja escribe en el
+   * base y en todos los dias que heredaban: decir «Metas del dia» ahi es justo la mentira que
+   * este tren viene a reparar. En un plan de un solo dia no hay «todos los dias» que nombrar,
+   * asi que manda el titulo de siempre.
+   */
+  const targetsScopeNow: QeTargetsScope =
+    targetsScope != null && activeVariant != null && targetsScope.key === activeVariant.key
+      ? targetsScope.scope
+      : activeVariant != null &&
+          !activeVariant.isDefault &&
+          baseVariant != null &&
+          !qeTargetsEqual(activeVariant, baseVariant)
+        ? 'day'
+        : 'all'
+  const metasTitle =
+    showVariantHeader && targetsScopeNow === 'all' ? EDITOR_COPY.metasPopoverAll : EDITOR_COPY.metasPopover
+
   /**
    * Traer al viewport la fila que acaba de recibir un bump (SPEC §7.4). MISMO gesto que
    * `jumpToDay` —un `scrollTo` animado sobre el mismo lienzo—, no un mecanismo nuevo: sin timers
@@ -2035,6 +2116,7 @@ export function QuickEditMode({
               todayVariantKey={todayVariantKey}
               activeVariantKey={activeVariant?.key ?? null}
               attentionKeys={editorMode ? attentionKeys : undefined}
+              noticeKeys={editorMode ? noticeKeys : undefined}
               onJump={(variantKey) => {
                 // Editor: los chips CAMBIAN el dia en edicion (capsula); el clasico scrollea
                 // hasta el bloque, que sigue apilado abajo.
@@ -2563,6 +2645,16 @@ export function QuickEditMode({
                 : undefined
             }
             dayTotals={dayTotals}
+            // W4: aviso de metas parciales. Avisa, NO bloquea — vive fuera de `errorMessage` y
+            // el primario pasa a «Publicar igual» sin dejar de estar habilitado.
+            dayNotice={
+              targetsGap
+                ? {
+                    message: targetsGap.message,
+                    action: { label: EDITOR_COPY.publish.goToBase, onPress: handleGoToBaseTargets },
+                  }
+                : null
+            }
             dayWarning={dayWarning}
             template={template !== null}
             creation={creation !== null}
@@ -2648,20 +2740,37 @@ export function QuickEditMode({
         onClose={() => setMetasRequested(false)}
         nativeModal
         dynamicSizing
-        title={EDITOR_COPY.metasPopover}
-        accessibilityLabel={EDITOR_COPY.metasPopover}
+        title={metasTitle}
+        accessibilityLabel={metasTitle}
       >
         {activeVariant ? (
           <TargetsEditorCard
+            // W4.3: el switch nace con el default del DIA activo, asi que cambiar de dia lo
+            // recalcula desde cero — de ahi el `key` (si no, el switch se quedaria con el
+            // estado del dia anterior y el coach escribiria con el alcance equivocado).
+            key={activeVariant.key}
             variant={activeVariant}
             showVariantLabel={showVariantHeader}
             errors={errors}
             disabled={publishing}
-            onTargetChange={(field, value) =>
-              dispatch({ type: 'SET_TARGET', variantKey: activeVariant.key, field, value })
+            onlyThisDay={{
+              // Oculto en el dia base (escribir la base es escribir todos) y en planes de un
+              // solo dia: ahi no hay nada que elegir.
+              visible: showVariantHeader && !activeVariant.isDefault,
+              dayLabel: activeVariant.label.toLocaleLowerCase('es'),
+              initialOn: baseVariant != null && !qeTargetsEqual(activeVariant, baseVariant),
+              baseTargets: baseVariant?.targets ?? null,
+              onScopeChange: handleTargetsScope,
+            }}
+            onTargetChange={(field, value, scope) =>
+              dispatch({ type: 'SET_TARGET', variantKey: activeVariant.key, field, value, scope })
             }
           />
         ) : null}
+        {/* Los cuatro steppers cuelgan `inputAccessoryViewID`, pero el accessory se resuelve por
+            `nativeID` DENTRO del arbol del Modal: sin esta barra el `decimal-pad` de iOS no tiene
+            como cerrarse y tapa justo el switch nuevo (SPEC §7.5). */}
+        <KeyboardDoneBar />
       </Sheet>
 
       {/* ── EDITOR UNICO (T3.3b): menu del item + reemplazos + duplicar/copiar dia ────────── */}
@@ -3374,6 +3483,7 @@ function DayAnchorRow({
   todayVariantKey,
   activeVariantKey = null,
   attentionKeys,
+  noticeKeys,
   onJump,
 }: {
   variants: readonly QeVariant[]
@@ -3386,6 +3496,12 @@ function DayAnchorRow({
    * = quick-edit clasico, que apila todos los dias y no necesita el aviso.
    */
   attentionKeys?: ReadonlySet<string>
+  /**
+   * W4: dias SIN meta cuando otro dia si la tiene. Pintan el MISMO punto ambar que
+   * `attentionKeys` —no un estilo nuevo— pero NO pasan por `showErrors`: publicar con metas
+   * parciales sigue permitido, esto avisa y no bloquea.
+   */
+  noticeKeys?: ReadonlySet<string>
   onJump: (variantKey: string) => void
 }) {
   return (
@@ -3410,7 +3526,17 @@ function DayAnchorRow({
           : formatNutritionDayOfWeek(variant.dayOfWeek, { short: true })
         // Ambar = ese dia tiene algo que corregir. Manda sobre el borde de "marcado": el dia
         // activo con problema sigue avisando (si no, entrar a arreglarlo apagaria la alarma).
-        const needsAttention = attentionKeys?.has(variant.key) ?? false
+        const hasDayError = attentionKeys?.has(variant.key) ?? false
+        const missingTarget = noticeKeys?.has(variant.key) ?? false
+        const needsAttention = hasDayError || missingTarget
+        // Mismo punto ámbar para los dos (es lo pedido), pero el lector de pantalla no puede
+        // anunciar «Necesita atención» en un día que solo está sin meta: publicar sigue
+        // permitido. El error manda si el día tiene las dos cosas.
+        const attentionLabel = hasDayError
+          ? QUICK_EDIT_COPY.dayNeedsAttention
+          : missingTarget
+            ? EDITOR_COPY.targets.noTarget
+            : null
         return (
           <Pressable
             key={variant.key}
@@ -3418,7 +3544,7 @@ function DayAnchorRow({
             accessibilityLabel={
               dayIndexJump(variant.label) +
               (isToday ? ' — ' + QUICK_EDIT_COPY.dayAppliesToday : '') +
-              (needsAttention ? ' — ' + QUICK_EDIT_COPY.dayNeedsAttention : '')
+              (attentionLabel ? ' — ' + attentionLabel : '')
             }
             onPress={() => onJump(variant.key)}
             hitSlop={4}

@@ -4,6 +4,23 @@
  * "supersede"): solo "cambios sin publicar" / "Publicar cambios". RN espeja esta misma tabla.
  */
 
+import { EDITOR_TARGETS_COPY } from '@eva/nutrition-v2'
+
+/**
+ * Copys de METAS POR DIA (tren «Porciones a la chilena», W4.6) — el switch «Solo el {dia}» y el
+ * aviso de metas parciales de la barra de publicar.
+ *
+ * NO se copian: son EXACTAMENTE `EDITOR_TARGETS_COPY` del paquete, la misma tabla que consume
+ * `EDITOR_COPY` en RN (SPEC §16.1). Se re-exporta con el nombre `EDITOR_COPY` para que las dos
+ * superficies escriban la MISMA expresion (`EDITOR_COPY.targets.onlyThisDay(dia)`) y una
+ * diferencia entre plataformas sea imposible de introducir sin tocar el paquete.
+ *
+ * Va aparte de `QE_COPY` y no adentro por una colision real: `QE_COPY.publish` ya es el string
+ * 'Publicar cambios', y `EDITOR_TARGETS_COPY.publish` es el grupo del aviso ({partialTargets,
+ * anyway, goToBase, goToBaseWeb}). Fundirlos pisaria el CTA de siempre.
+ */
+export const EDITOR_COPY = EDITOR_TARGETS_COPY
+
 function cambios(n: number): string {
   return `${n} ${n === 1 ? 'cambio' : 'cambios'}`
 }
@@ -254,6 +271,15 @@ export const QE_COPY = {
   sparkPer100: 'por 100 g',
   sparkPctOfTarget: (n: number) => `${n}% de la meta`,
   metasPopover: 'Metas del día',
+  /**
+   * W4.5 — sufijo de la lectura de kcal de la cinta cuando el dia activo NO tiene objetivo:
+   * «0 · sin meta» en vez de un «0» pelado que se lee como «meta cumplida en cero».
+   *
+   * Vive aca y no en `EDITOR_TARGETS_COPY` porque SPEC §16.1 no lo tabula (§7.6 solo fija el
+   * formato «{kcal} · sin meta»); si RN llega a imprimirlo, se sube al paquete y las dos lo
+   * importan, igual que el resto de esta wave.
+   */
+  dayNoTarget: 'sin meta',
   /** Rótulo de la columna de días del editor ≥1024 (V2.3). */
   railTitle: 'Días del plan',
   railApplyBase: 'sin porciones · Aplicar del base',
