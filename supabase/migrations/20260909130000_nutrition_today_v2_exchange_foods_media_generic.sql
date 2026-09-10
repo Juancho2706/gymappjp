@@ -70,12 +70,23 @@
 -- asi que `desc` es lo que pone los genericos PRIMERO. Queda escrito para que
 -- nadie lo «arregle».
 --
--- ADITIVA: misma firma, mismos grants, cero DDL, dos llaves nuevas en un JSON que
--- el read model declara OPCIONALES (un binario RN viejo con el RPC nuevo sigue
--- parseando).
+-- ADITIVA: misma firma, mismos grants, cero DDL, CUATRO llaves nuevas en un JSON
+-- (`isGeneric`, `imagePath`, `imageVersion`, `imageLicense`) que el read model
+-- declara OPCIONALES (un binario RN viejo con el RPC nuevo sigue parseando).
 --
--- ROLLBACK: re-aplicar 20260804091000 (que a su vez parte de la definicion viva)
--- y volver el ORDER a `eg.code, ranked.name, ranked.id`.
+-- ROLLBACK (dos pasos, en este orden). Re-aplicar 20260804091000 sola NO alcanza:
+-- su cuerpo arranca en el ancla `    into v_exchange_foods`, asi que revierte SOLO
+-- el empalme 2. El empalme 1 (el jsonb_agg con las cuatro llaves y el ORDER) vive
+-- POR ENCIMA de esa ancla y sobreviviria intacto (verificado en LIVE 09-09: el
+-- jsonb_agg en la posicion 11247 de la definicion, el `into` en la 11308).
+--   1) Deshacer el empalme 1 POR TEXTO con la ancla inversa: buscar `v_agg_new` y
+--      reemplazarlo por `v_agg_ini`, o sea sacar `isGeneric`/`imagePath`/
+--      `imageVersion`/`imageLicense` y devolver el ORDER a
+--      `eg.code, ranked.name, ranked.id`.
+--   2) Recien ahi re-aplicar 20260804091000 (que a su vez parte de la definicion
+--      viva) para deshacer el empalme 2: el bloque `select ... into
+--      v_exchange_foods` sin el lateral de food_media y sin el criterio
+--      genericos-primero dentro del row_number().
 -- ============================================================================
 
 do $do$
@@ -257,7 +268,7 @@ begin
   if position('where not cand.is_excluded' in v_def) = 0 then
     raise exception 'exchange_foods_media: se perdio el filtro de lapidas (20260804091000)';
   end if;
-  if position('media' in v_def) = 0 or position('category' in v_def) = 0 then
+  if position('''media''' in v_def) = 0 or position('''category''' in v_def) = 0 then
     raise exception 'exchange_foods_media: se perdio el enriquecimiento de items (20260720120000)';
   end if;
   -- B1: el filtro de tenant vive en las DOS ramas del union all mas el resto de

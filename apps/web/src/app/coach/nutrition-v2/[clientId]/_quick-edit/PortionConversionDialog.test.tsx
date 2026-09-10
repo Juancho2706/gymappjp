@@ -143,7 +143,7 @@ function variantWith(portionTargets: QePortionTarget[]): QeVariant {
     label: 'Día base',
     dayOfWeek: null,
     isDefault: true,
-    targets: {},
+    targets: { calories: '', proteinG: '', carbsG: '', fatsG: '' },
     passthroughTargets: { fiberG: null, sodiumMg: null, waterMl: null },
     slots: [slotWith(portionTargets)],
   }

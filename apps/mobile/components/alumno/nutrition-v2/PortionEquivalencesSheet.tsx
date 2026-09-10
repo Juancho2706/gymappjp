@@ -23,11 +23,11 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native'
 import { Search } from 'lucide-react-native'
 import {
-  CL_CODES,
   photoCreditNeeded,
   photoSourceLabel,
   qeGroupRefPerPortion,
   splitExchangeFoodsByOrigin,
+  systemOf,
   type NutritionExchangeFoodRead,
   type NutritionSlotExchangeTargetRead,
 } from '@eva/nutrition-v2'
@@ -182,31 +182,6 @@ export function PortionEquivalencesSheet({
     setConfirmExtra(false)
   }, [open])
 
-  /**
-   * PostHog `nutrition_equivalences_opened` (DATA §11 evento 5): UNA vez por APERTURA. El guard es
-   * de la superficie —lo dice el paquete— porque el evento no lleva `group_code`: cambiar de tab
-   * dentro del sheet no aportaría nada y solo duplicaría el volumen. La llave del guard es la
-   * apertura (franja + grupo inicial), no la identidad del objeto `open` ni la del catálogo: sin
-   * ella, cualquier revalidación de `exchangeFoods` con el sheet abierto volvería a emitir.
-   */
-  const openedKeyRef = useRef<string | null>(null)
-  useEffect(() => {
-    if (!open) {
-      openedKeyRef.current = null
-      return
-    }
-    const key = `${open.slotCode}|${open.groupCode}`
-    if (openedKeyRef.current === key) return
-    openedKeyRef.current = key
-    // Sin el buscador: el evento mide lo que el sheet ofrece al abrirse, no lo que el alumno filtra.
-    const rows = filterPortionExchangeFoods(exchangeFoods, open.groupCode, '')
-    captureNutritionEquivalencesOpened({
-      set: CL_CODES.has(open.groupCode) ? 'cl' : 'smae',
-      hasGeneric: splitExchangeFoodsByOrigin(rows).generic.length > 0,
-      rows: rows.length,
-    })
-  }, [exchangeFoods, open])
-
   const orderedTargets = useMemo(() => orderedPortionTargets(targets), [targets])
 
   const target = useMemo(
@@ -217,9 +192,23 @@ export function PortionEquivalencesSheet({
     [activeGroup, open, orderedTargets],
   )
 
+  /** Lista COMPLETA del grupo que se está mostrando (sin buscador): es la que describe el evento. */
+  const groupFoods = useMemo(
+    () => (target ? filterPortionExchangeFoods(exchangeFoods, target.groupCode, '') : []),
+    [exchangeFoods, target],
+  )
+
+  /**
+   * Lo que el alumno tiene delante: la lista del grupo con el buscador ya aplicado. Sin término se
+   * devuelve `groupFoods` TAL CUAL —misma referencia—, y esa identidad es la que deja reusar abajo
+   * el split ya hecho en vez de partir la lista dos veces por render.
+   */
   const foods = useMemo(
-    () => (target ? filterPortionExchangeFoods(exchangeFoods, target.groupCode, search) : []),
-    [exchangeFoods, search, target],
+    () =>
+      target && search.trim().length > 0
+        ? filterPortionExchangeFoods(groupFoods, target.groupCode, search)
+        : groupFoods,
+    [groupFoods, search, target],
   )
 
   /**
@@ -227,6 +216,51 @@ export function PortionEquivalencesSheet({
    * fijó el RPC (genéricos primero y, entre genéricos, el que tiene medida casera antes).
    */
   const sections = useMemo(() => splitExchangeFoodsByOrigin(foods), [foods])
+
+  /**
+   * ¿El grupo OFRECE genéricos? Es lo único que el evento de apertura le pregunta a la lista
+   * COMPLETA, y se resuelve acá —no dentro del efecto— para no recorrer las hasta 60 filas en cada
+   * render. Con el buscador vacío `foods` ES `groupFoods`, así que se reusa el split de arriba y
+   * solo se vuelve a partir cuando el alumno tecleó algo.
+   */
+  const groupHasGeneric = useMemo(
+    () =>
+      foods === groupFoods
+        ? sections.generic.length > 0
+        : splitExchangeFoodsByOrigin(groupFoods).generic.length > 0,
+    [foods, groupFoods, sections],
+  )
+
+  /**
+   * PostHog `nutrition_equivalences_opened` (DATA §11 evento 5): UNA vez por APERTURA. El guard es
+   * de la superficie —lo dice el paquete— y su llave es la FRANJA, no el grupo: el evento no lleva
+   * `group_code`, así que cambiar de tab dentro del sheet no aportaría nada y solo duplicaría el
+   * volumen. Se limpia al cerrar, de modo que reabrir la misma franja sí vuelve a contar; y como la
+   * llave no es la identidad del objeto `open` ni la del catálogo, revalidar `exchangeFoods` con el
+   * sheet abierto tampoco reemite.
+   *
+   * Todo se mide sobre el `target` REALMENTE renderizado (con su fallback a `orderedTargets[0]`):
+   * si el `groupCode` de la apertura no está entre los targets de la franja, el alumno ve OTRO
+   * grupo y `has_generic`/`rows_bucket` tienen que describir ESA lista. Sin target no se emite.
+   *
+   * `set` sale del código con `systemOf(..., 'smae')`, mismo criterio que la web: el read model del
+   * alumno no trae el set del grupo y el fallback contrario ('cl', default de la columna) marcaría
+   * chileno a TODO el set SMAE, que es justo la mitad que este evento tiene que distinguir.
+   */
+  const openedSlotRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!open || !target) {
+      openedSlotRef.current = null
+      return
+    }
+    if (openedSlotRef.current === open.slotCode) return
+    openedSlotRef.current = open.slotCode
+    captureNutritionEquivalencesOpened({
+      set: systemOf({ groupCode: target.groupCode }, 'smae'),
+      hasGeneric: groupHasGeneric,
+      rows: groupFoods.length,
+    })
+  }, [groupFoods, groupHasGeneric, open, target])
 
   /**
    * Pie de atribución CONDICIONAL (S-08): se recalcula sobre las filas VISIBLES —o sea, con el
@@ -277,10 +311,6 @@ export function PortionEquivalencesSheet({
   if (target) {
     const groupColor = portionTargetColor(target)
     const ref = refPerPortion ?? target.ref
-    // Set chileno SIN chip referencial (SPEC §9.3): sus valores vienen del INTA y son la fuente
-    // que este sheet publica. El chip queda para el set legado, que sí puede traer macros sin
-    // confirmar. `CL_CODES` es la única señal disponible acá (el target no viaja con set).
-    const isClSet = CL_CODES.has(target.groupCode)
 
     body.push(
       <View key="head" className="gap-4">
@@ -293,7 +323,7 @@ export function PortionEquivalencesSheet({
             <Text className="text-[11px] leading-4 text-muted">
               {`≈ ${Math.round(ref.calories)} kcal · P ${formatPortionsCl(ref.proteinG)} g · C ${formatPortionsCl(ref.carbsG)} g · G ${formatPortionsCl(ref.fatsG)} g`}
             </Text>
-            {!target.macrosConfirmed && !isClSet ? (
+            {!target.macrosConfirmed ? (
               <View className="mt-1 self-start rounded-pill border border-warning-500/30 bg-warning-500/10 px-2 py-0.5">
                 <Text className="text-[10px] font-semibold text-warning-700">
                   {PORTIONS_COPY.builder.referentialBadge}

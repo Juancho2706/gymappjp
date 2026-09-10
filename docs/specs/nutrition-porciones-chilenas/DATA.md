@@ -2289,12 +2289,23 @@ A1 vive **por encima** de A2-ini (fuera del bloque que reemplazó `2026080409100
 -- asi que `desc` es lo que pone los genericos PRIMERO. Queda escrito para que
 -- nadie lo «arregle».
 --
--- ADITIVA: misma firma, mismos grants, cero DDL, dos llaves nuevas en un JSON que
--- el read model declara OPCIONALES (un binario RN viejo con el RPC nuevo sigue
--- parseando).
+-- ADITIVA: misma firma, mismos grants, cero DDL, CUATRO llaves nuevas en un JSON
+-- (`isGeneric`, `imagePath`, `imageVersion`, `imageLicense`) que el read model
+-- declara OPCIONALES (un binario RN viejo con el RPC nuevo sigue parseando).
 --
--- ROLLBACK: re-aplicar 20260804091000 (que a su vez parte de la definicion viva)
--- y volver el ORDER a `eg.code, ranked.name, ranked.id`.
+-- ROLLBACK (dos pasos, en este orden). Re-aplicar 20260804091000 sola NO alcanza:
+-- su cuerpo arranca en el ancla `    into v_exchange_foods`, asi que revierte SOLO
+-- el empalme 2. El empalme 1 (el jsonb_agg con las cuatro llaves y el ORDER) vive
+-- POR ENCIMA de esa ancla y sobreviviria intacto (verificado en LIVE 09-09: el
+-- jsonb_agg en la posicion 11247 de la definicion, el `into` en la 11308).
+--   1) Deshacer el empalme 1 POR TEXTO con la ancla inversa: buscar `v_agg_new` y
+--      reemplazarlo por `v_agg_ini`, o sea sacar `isGeneric`/`imagePath`/
+--      `imageVersion`/`imageLicense` y devolver el ORDER a
+--      `eg.code, ranked.name, ranked.id`.
+--   2) Recien ahi re-aplicar 20260804091000 (que a su vez parte de la definicion
+--      viva) para deshacer el empalme 2: el bloque `select ... into
+--      v_exchange_foods` sin el lateral de food_media y sin el criterio
+--      genericos-primero dentro del row_number().
 -- ============================================================================
 
 do $do$
@@ -2476,7 +2487,7 @@ begin
   if position('where not cand.is_excluded' in v_def) = 0 then
     raise exception 'exchange_foods_media: se perdio el filtro de lapidas (20260804091000)';
   end if;
-  if position('media' in v_def) = 0 or position('category' in v_def) = 0 then
+  if position('''media''' in v_def) = 0 or position('''category''' in v_def) = 0 then
     raise exception 'exchange_foods_media: se perdio el enriquecimiento de items (20260720120000)';
   end if;
   -- B1: el filtro de tenant vive en las DOS ramas del union all mas el resto de
@@ -2907,7 +2918,7 @@ end $$;
 rollback;
 ```
 
-### 10.3 `supabase/tests/nutrition_today_v2_exchange_foods_media_rollback.sql` (W5)
+### 10.3 `supabase/tests/nutrition_today_v2_exchange_foods_media_generic_rollback.sql` (W5)
 
 ```sql
 -- Smoke del parche por texto del RPC. Verifica sobre la DEFINICION, no sobre una
@@ -2931,7 +2942,7 @@ begin
     raise exception 'el criterio genericos-primero no entro al row_number(): el cap rn <= 60 vuelve a cortar alfabeticamente';
   end if;
   if position('public.exchange_group_foods egf' in v_def) = 0 then raise exception 'canario 20260804091000 roto'; end if;
-  if position('media' in v_def) = 0 or position('category' in v_def) = 0 then raise exception 'canario 20260720120000 roto'; end if;
+  if position('''media''' in v_def) = 0 or position('''category''' in v_def) = 0 then raise exception 'canario 20260720120000 roto'; end if;
   if (length(v_def) - length(replace(v_def, 'cl.coach_id from public.clients cl', '')))
      / length('cl.coach_id from public.clients cl') < 3 then
     raise exception 'canario B1 roto: falta el filtro de tenant en alguna rama';
@@ -2989,8 +3000,10 @@ begin
   from ranked;
 
   -- N = cuantos genericos con medida casera cargo el script en PCT (§4.6 bloque 1).
-  -- El piso es la lista minima obligatoria del OUTLINE §5.3: 5 filas.
-  if v_cand > 60 and v_gen_en_60 < 5 then
+  -- El piso es 20 porque el script cargo 26 genericos con medida casera en PCT
+  -- (DATA §4.6). En LIVE PCT tiene 707 candidatos y 116 genericos, y con el orden
+  -- nuevo los 26 entran a los 60: menos de 20 ya significa que el orden se rompio.
+  if v_cand > 60 and v_gen_en_60 < 20 then
     raise exception 'B1: solo % genericos con medida casera entraron a los 60 de PCT (candidatos: %)', v_gen_en_60, v_cand;
   end if;
   if v_faltan is not null then
@@ -3070,14 +3083,19 @@ type NutritionEquivalencesOpened = {
   set: 'cl' | 'smae'
   has_generic: boolean                                   // ¿hay al menos un genérico?
   rows_bucket: '0' | '1-10' | '11-30' | '31-60'          // TRAMO, jamás el número
-  has_photos: boolean
-  searched: boolean
 }
 ```
 
 Reglas de implementación:
 
 - Los tramos (`rows_bucket`) se calculan en un helper puro compartido, no en cada componente, para que web y RN no diverjan.
+- **Evento 5 = estas cuatro llaves y ninguna más** (cierre de W5, 10-09). El borrador dibujaba además `has_photos` y `searched`:
+  quedaron FUERA del contrato (`has_photos` no mide D4-A —la foto la decide el catálogo, no el alumno— y `searched` acoplaba
+  el evento al buscador, que se dispara después de la apertura). Si algún día hacen falta, se agregan en
+  `equivalencesOpenedPayload` y en las dos superficies a la vez, nunca con un spread en el componente. Límites conocidos de
+  la métrica: `set` se deriva en la superficie con `systemOf({ groupCode }, 'smae')` porque el read model del alumno no trae
+  `portionSystem`, así que un grupo PROPIO del coach se cuenta como `smae`; `rows`/`has_generic` se miden sobre la lista del
+  grupo resuelto **sin** buscador; el guard de una emisión por apertura es por franja (cambiar de tab de grupo no re-emite).
 - El evento 5 se dispara **al abrir**, una vez por apertura, no por cada cambio de tab de grupo. Si el alumno cambia de grupo dentro del sheet **no** se emite otro evento: sin `group_code` no aportaría nada y solo multiplicaría el ruido.
 - Los eventos 1, 2 y 3 son del **coach** (superficies del editor) y ahí `group_code` / `dairy_choice` sí viajan. Ningún evento del alumno lleva código de grupo. Si mañana hace falta saber en qué grupo se abre más el sheet, se mide **desde el lado del coach** o con una propiedad agregada sin identidad, no agregándole `group_code` al evento 5.
 - Métrica de resultado del tren: la que **ya existe**, `student_nutrition_intake` con `method: 'portion_chip'` (`events.ts:296-306`). Si D4-A funciona, sube sin que haya que instrumentar nada nuevo.

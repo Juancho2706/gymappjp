@@ -1,10 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   FOOD_MEDIA_BUCKET,
   foodMediaBaseUrl,
   foodMediaThumbnailUrl,
   foodMediaThumbnailUrlFromPath,
 } from '../apps/mobile/lib/nutrition-v2-food-media'
+// El gemelo WEB se importa aca —y no al reves— porque este test vive en el raiz, que ya cruza
+// `apps/mobile` con `apps/web/src` (ver tests/mobile-nutrition-v2-intake.test.ts). Importarlo desde
+// el test de la web meteria `apps/mobile` en el programa de TS del typecheck web.
+import { foodMediaThumbnailUrlFromPath as webFoodMediaThumbnailUrlFromPath } from '../apps/web/src/lib/food-image'
 
 // Los helpers de este modulo se testeaban dentro de tests/mobile-nutrition-v2-parity-helpers.test.ts
 // (describe «nutrition-v2-food-media thumbnails»). Este archivo NUEVO cubre solo lo que agrega W5.6
@@ -53,5 +57,43 @@ describe('foodMediaThumbnailUrlFromPath (W5.6, sheet de equivalencias del alumno
   it('el bucket es el mismo literal que ya hardcodea el resto del catalogo', () => {
     expect(FOOD_MEDIA_BUCKET).toBe('food-media')
     expect(foodMediaBaseUrl(`${BASE}/`)).toBe(BASE)
+  })
+})
+
+// El sheet «1 porcion equivale a» pinta la misma foto en las dos superficies, asi que la URL tiene
+// que ser identica byte a byte. Si un helper drifta (otro encode, otro bucket, sin `?v=`), se cae
+// aca y no en el device del alumno. Cada superficie lee SU env, por eso se setean las dos.
+describe('paridad web/RN de la miniatura del sheet (W5.6)', () => {
+  const prevNext = process.env.NEXT_PUBLIC_SUPABASE_URL
+  const prevExpo = process.env.EXPO_PUBLIC_SUPABASE_URL
+
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = BASE
+    process.env.EXPO_PUBLIC_SUPABASE_URL = BASE
+  })
+
+  afterEach(() => {
+    if (prevNext === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL
+    else process.env.NEXT_PUBLIC_SUPABASE_URL = prevNext
+    if (prevExpo === undefined) delete process.env.EXPO_PUBLIC_SUPABASE_URL
+    else process.env.EXPO_PUBLIC_SUPABASE_URL = prevExpo
+  })
+
+  it('PARIDAD byte a byte: el helper web y foodMediaThumbnailUrl de RN dan la MISMA URL', () => {
+    for (const objectPath of ['off/3/012/345/front.jpg', 'coach/mi foto & co.png', 'a/b/c/d.webp']) {
+      const version = 3
+      expect(webFoodMediaThumbnailUrlFromPath({ objectPath, version })).toBe(
+        foodMediaThumbnailUrl({ bucket: FOOD_MEDIA_BUCKET, objectPath, version }),
+      )
+    }
+  })
+
+  it('PARIDAD tambien en los bordes: sin path y sin version', () => {
+    expect(webFoodMediaThumbnailUrlFromPath({ objectPath: null, version: 1 })).toBe(
+      foodMediaThumbnailUrlFromPath({ objectPath: null, version: 1 }),
+    )
+    expect(webFoodMediaThumbnailUrlFromPath({ objectPath: 'off/a.jpg', version: null })).toBe(
+      foodMediaThumbnailUrlFromPath({ objectPath: 'off/a.jpg', version: null }),
+    )
   })
 })

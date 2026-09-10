@@ -104,6 +104,36 @@ describe('photoCreditNeeded / photoSourceLabel (S-08: el pie es CONDICIONAL)', (
     expect(photoSourceLabel(null)).toBeNull()
     expect(photoSourceLabel(undefined)).toBeNull()
   })
+
+  // El CHECK de `food_media.license` tiene SEIS valores (migración 20260714220000): solo
+  // `cc_by_sa` y `cc_by` acreditan (S-08). Se enumeran los otros cuatro —más null/undefined,
+  // que son «fila sin foto»— para que agregar una licencia al CHECK sin decidir su pie rompa acá.
+  it('las OTRAS licencias del CHECK no acreditan: ni pie de lista ni fuente por fila', () => {
+    const noCredita = ['unknown', 'public_domain', 'eva_owned', 'supplier_authorized'] as const
+    for (const license of noCredita) {
+      expect(photoSourceLabel(license)).toBeNull()
+      expect(photoCreditNeeded([{ name: license, imageLicense: license }])).toBe(false)
+    }
+    expect(photoSourceLabel(null)).toBeNull()
+    expect(photoSourceLabel(undefined)).toBeNull()
+    expect(photoCreditNeeded([{ name: 'sin foto', imageLicense: null }])).toBe(false)
+    expect(photoCreditNeeded([{ name: 'sin llave' }])).toBe(false)
+    // Y la lista entera de no-acreditadas junta tampoco pide el pie.
+    expect(photoCreditNeeded(noCredita.map((l) => ({ name: l, imageLicense: l })))).toBe(false)
+  })
+
+  it('`cc_by` (sin `_sa`) TAMBIEN acredita: nombra la fuente y pide el pie', () => {
+    expect(photoSourceLabel('cc_by')).toBe(PORTIONS_COPY.student.sheetPhotoSource)
+    expect(photoCreditNeeded([{ name: 'a', imageLicense: 'cc_by' }])).toBe(true)
+    // Una sola fila CC en medio de las que no acreditan alcanza para el pie.
+    expect(
+      photoCreditNeeded([
+        { name: 'a', imageLicense: 'unknown' },
+        { name: 'b', imageLicense: 'public_domain' },
+        { name: 'c', imageLicense: 'cc_by' },
+      ]),
+    ).toBe(true)
+  })
 })
 
 // El evento 5 (`nutrition_equivalences_opened`) se cubre ACA y no en portions-analytics.test.ts

@@ -6,11 +6,6 @@ import {
   foodLightboxUrl,
   foodMediaThumbnailUrlFromPath,
 } from './food-image'
-// Import CRUZADO a proposito y SOLO para el caso de paridad: el sheet «1 porcion equivale a» pinta
-// la misma foto en las dos superficies, asi que la URL tiene que ser identica byte a byte. Si el
-// helper de una de las dos drifta (otro encode, otro bucket, sin `?v=`), este test se cae aca y no
-// en el device del alumno.
-import { foodMediaThumbnailUrl } from '../../../mobile/lib/nutrition-v2-food-media'
 
 const BASE = 'https://proj.supabase.co'
 const PUBLIC = `${BASE}/storage/v1/object/public/food-media`
@@ -143,12 +138,7 @@ describe('foodMediaThumbnailUrlFromPath (W5.6, gemelo web del helper de RN)', ()
     )
   })
 
-  it('PARIDAD byte a byte con foodMediaThumbnailUrl de RN para el mismo media', () => {
-    for (const objectPath of ['off/3/012/345/front.jpg', 'coach/mi foto & co.png', 'a/b/c/d.webp']) {
-      const version = 3
-      expect(foodMediaThumbnailUrlFromPath({ objectPath, version })).toBe(
-        foodMediaThumbnailUrl({ bucket: 'food-media', objectPath, version }, BASE),
-      )
-    }
-  })
+  // La PARIDAD byte a byte contra el helper de RN vive en tests/mobile-nutrition-v2-food-media.test.ts
+  // (test del raiz): ahi las dos superficies se pueden importar juntas sin meter `apps/mobile` en el
+  // programa de TS de la web.
 })

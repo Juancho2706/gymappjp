@@ -601,7 +601,7 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
 
 ## W5 · Equivalencias del alumno (1,5 d)
 
-- [ ] W5.1 [Opus] `supabase/migrations/20260909130000_nutrition_today_v2_exchange_foods_media_generic.sql`: parche por
+- [x] W5.1 [Opus] `supabase/migrations/20260909130000_nutrition_today_v2_exchange_foods_media_generic.sql`: parche por
       texto sobre `pg_get_functiondef` con los dos empalmes, `isGeneric` = `f.brand is null`, `imagePath`/`imageVersion`
       por `left join lateral` a `food_media` **después** del cap de 60, y el orden
       **`owner_rank, is_generic desc, portion_label_present desc, name, id`** —**dentro del `row_number()`**, o sea antes
@@ -617,22 +617,31 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
       ≥ 3, `public.exchange_group_foods egf`) más `position('isGeneric' in v_def) > 0`,
       `position('imageLicense' in v_def) > 0` y `position('food_media fm' in v_def) > 0`; **prohibido** el copy-body
       (revertiría B1).
-- [ ] W5.2 [Sonnet] `supabase/tests/nutrition_today_v2_exchange_foods_media_generic_rollback.sql`: casos A) el bloque
+      **Hecho 10-09 (jefe):** migración byte-idéntica a DATA §8.2 (diff vacío, propio y del refutador); tx-rollback en LIVE
+      con migración + smoke A/B/B1/C/D + aislamiento T1–T7 en una sola transacción ⇒ «W5 TX-ROLLBACK OK» (definición 21.119 →
+      22.470 chars, 4 llaves, lateral, orden en el `row_number()` y en el agg, tenant 3, 4 canarios); **aplicada en LIVE:
+      versión `20260910015432`** (`apply_migration`, nombre `nutrition_today_v2_exchange_foods_media_generic`; el archivo del
+      repo conserva `20260909130000` como espejo, igual que W0a — el repo no corre `db push`); T7 verde tras el apply;
+      `get_advisors` security/performance sin hallazgos nuevos. Remate del refutador: canarios `'media'`/`'category'` con
+      comillas SQL (el desnudo lo satisfacía `public.food_media fm`), nota de ROLLBACK en dos pasos (re-aplicar
+      `20260804091000` sola no revierte el empalme 1), comentario «cuatro llaves». La migración no es idempotente a
+      propósito (re-aplicarla falla en el assert de unicidad del ancla).
+- [x] W5.2 [Sonnet→Opus] `supabase/tests/nutrition_today_v2_exchange_foods_media_generic_rollback.sql` (A/B/B1/C/D verdes en LIVE con ROLLBACK 10-09; B con seed `f5000000` y nombres en orden alfabético inverso, C/D sobre la vista temporal `w5_block_rows`; umbral B1 ≥ 20 de los 26 genéricos con medida de PCT): casos A) el bloque
       emite las **4** llaves nuevas (`imagePath`, `imageVersion`, `imageLicense`, `isGeneric`) · B) el genérico ordena antes que la marca y,
       entre dos genéricos, el que tiene `portion_label` va primero · C) la fila del coach gana por
       `owner_rank = 0` · D) un alimento privado de otro coach sigue sin aparecer. **Criterio**: 4/4 verdes en
       `BEGIN … ROLLBACK` sobre LIVE.
-- [ ] W5.3 [Sonnet] `tests/team/exchange-lists-isolation.sql` extendido con la foto (regresión B1). **Criterio**: el
+- [x] W5.3 [Sonnet→Opus] `tests/team/exchange-lists-isolation.sql` extendido con la foto (T7, regresión B1; T1–T7 verdes en LIVE 10-09 antes y después del apply). **Criterio**: el
       test falla si el lateral de `food_media` se escribe sin el filtro de tenant del bloque.
-- [ ] W5.4 [Opus] Read model: `isGeneric`, `imagePath`, `imageVersion` e **`imageLicense`** (las cuatro,
+- [x] W5.4 [Opus] (5 casos nuevos en `read-models.test.ts`, versión intacta = 1) Read model: `isGeneric`, `imagePath`, `imageVersion` e **`imageLicense`** (las cuatro,
       **opcionales**, `imageLicense` además `nullable`) en
       `NutritionExchangeFoodReadSchema` (`packages/nutrition-v2/read-models.ts:292-305`) + corregir el JSDoc que todavía
       dice que la fuente son las columnas `foods.exchange_*`. **Criterio**: casos en `read-models.test.ts` — payload con
       las llaves parsea y payload **sin** ellas también (binario RN viejo); `NUTRITION_READ_MODEL_SCHEMA_VERSION` no
       cambia.
-- [ ] W5.5 [Opus] `packages/nutrition-v2/exchange-foods-origin.ts` con `splitExchangeFoodsByOrigin`. **Criterio**: test
+- [x] W5.5 [Opus] `packages/nutrition-v2/exchange-foods-origin.ts` con `splitExchangeFoodsByOrigin` (+ `photoCreditNeeded` y `photoSourceLabel`, con los seis valores del CHECK de licencia fijados en el test). **Criterio**: test
       propio — genérico por flag, genérico por `brand == null`, marca, y **orden de entrada preservado**.
-- [ ] W5.6 [Opus] **Helper de URL desde `imagePath` + `imageVersion`** (R-02; el RPC emite el `object_path` y la
+- [x] W5.6 [Opus] (paridad byte a byte web↔RN en `tests/mobile-nutrition-v2-food-media.test.ts`, test del raíz: el caso salió de `apps/web` porque era el primer import cruzado web→mobile y entraba al programa TS de la web) **Helper de URL desde `imagePath` + `imageVersion`** (R-02; el RPC emite el `object_path` y la
       `version`, no el objeto media): `foodMediaThumbnailUrlFromPath({ objectPath, version })` en
       `apps/mobile/lib/nutrition-v2-food-media.ts` y su gemelo en `apps/web/src/lib/food-image.ts`. El
       `foodMediaThumbnailUrl` existente (`nutrition-v2-food-media.ts:43-58`) **no se puede reutilizar tal cual**: exige
@@ -640,11 +649,11 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
       reencodea el path segmento a segmento igual que el original. **Criterio**: test de la URL construida en los dos
       lados —`${base}/storage/v1/object/public/food-media/<path encodeado>?v=<version>`—, `null` si falta la base o el
       path, y **paridad byte a byte** con lo que devuelve `foodMediaThumbnailUrl` para el mismo media.
-- [ ] W5.7 [Opus] Sheet web: dos secciones con encabezado, miniatura **36 px** (misma medida que RN: el kit ofrece
+- [x] W5.7 [Opus] (RTL: 3 casos W2.9 intactos + 8 nuevos, incluido «cambiar de tab no re-emite el evento») Sheet web: dos secciones con encabezado, miniatura **36 px** (misma medida que RN: el kit ofrece
       36/48/64 y **no existe 40**, R-11; `next/image unoptimized` + fallback, patrón `NutritionFoodRow.tsx:56-93`),
       medida casera en negrita y gramos en mono. **Criterio**: el buscador filtra **dentro** de cada sección y no dibuja
       el encabezado de una sección vacía.
-- [ ] W5.8 [Opus] Sheet RN: `FoodThumbnail size="sm"` (36 px), mismas secciones, y se borra el comentario `:243-247`
+- [x] W5.8 [Opus] (sin test que monte el sheet en RN: refutado leyendo + eslint mobile + tsc) Sheet RN: `FoodThumbnail size="sm"` (36 px), mismas secciones, y se borra el comentario `:243-247`
       que dice que la foto no llega. **Fallback sin foto = el `GroupDot` del grupo, que es lo que el sheet ya hace hoy**
       (R-10 + **D-2**): el «ícono de categoría derivado del nombre» no existe —`FoodThumbnail` toma `fallbackCategory`,
       una categoría del catálogo, y el read model del sheet **no** trae `category`, porque el RPC emite exactamente
@@ -656,20 +665,46 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
       `FoodDetailSheet` y `foods.tsx`. **Criterio**: `expo-image` con `cachePolicy="memory-disk"` (ya interno); ninguna
       fila queda sin marca visual cuando no hay foto; si el QA muestra jank, cortar a 30 filas + «Ver más» (no
       virtualizar).
-- [ ] W5.9 [Sonnet] Pie «Fotos: Open Food Facts (CC BY-SA)» **condicional**: se pinta solo si alguna fila **visible**
+- [x] W5.9 [Sonnet→Opus] (claves `student.{sheetGenericsTitle,sheetBrandsTitle,photoCredit}` + quinta `student.sheetPhotoSource` por fila; evento con exactamente `surface/set/has_generic/rows_bucket`, DATA §11 corregido) Pie «Fotos: Open Food Facts (CC BY-SA)» **condicional**: se pinta solo si alguna fila **visible**
       trae `imageLicense` `cc_by_sa` o `cc_by` (D-9; con el buscador activo se recalcula sobre lo visible), y la fila
       con foto nombra su fuente en el `accessibilityLabel`/tooltip derivándola de la misma llave. Copys
       `student.{sheetGenericsTitle,sheetBrandsTitle,photoCredit}` + PostHog
       `nutrition_equivalences_opened { set, has_generic, rows_bucket }`.
       **Criterio**: un grupo servido solo con fotos `eva_owned`/`eva_illustration`/`supplier_authorized` **no** dibuja el
       pie de OFF; la atribución aparece una sola vez al pie, no por fila; el evento no lleva nombres ni cifras.
-- [ ] W5.10 [jefe] Medir el payload del Today de un alumno real con 7 grupos, antes y después. **Criterio**: queda por
+- [x] W5.10 [jefe] Medir el payload del Today de un alumno real con 7 grupos, antes y después. **Criterio**: queda por
       debajo de los 750 kB de `apps/mobile/lib/nutrition-v2-cache.ts:6`; el número se pega acá.
+      **Medido en LIVE** (alumno `f28ed987-cc99-4e94-bcc8-e4b7c1eafc02`, `get_nutrition_today_v2(client, current_date,
+      'America/Santiago')` en tx con claims `sub = client` y ROLLBACK): **antes (09-09) 93.907 B** — 360 filas de
+      `exchangeFoods` (80.957 B), 7 llaves por fila; **después (10-09, RPC `20260910015432`) 132.878 B** — 360 filas
+      (119.928 B), 11 llaves, 283 genéricos, 313 con foto, 91 con licencia `cc_by*`, 6 grupos ese día. **+41 %**, 5,6× por
+      debajo del tope de 750 kB (el SPEC §9.1 estimaba +29 % sobre 532 filas; el path pesa más que la estimación).
 - [ ] W5.11 [owner] QA en device de los puntos 8 y 9 del checklist final.
-- [ ] W5.12 Gates W5 (<fecha>): vitest paquete + `apps/web/src/app/c/[coach_slug]/nutrition-v2` +
-      `tests/mobile-nutrition-v2-portions.test.ts` · SQL W5.2 y W5.3 por MCP con ROLLBACK · `pnpm typecheck` · tsc
-      mobile · eslint por archivo · `pnpm check:nutrition-v2-boundaries`.
-- [ ] W5.13 [Fable] Juicio de W5: `<…>`.
+- [x] W5.12 Gates W5 (2026-09-10): `pnpm exec vitest run packages/nutrition-v2 packages/nutrition-engine
+      "apps/web/src/app/coach/nutrition-v2/[clientId]/_quick-edit" "apps/web/src/app/c/[coach_slug]/nutrition-v2"
+      apps/web/src/lib/food-image.test.ts apps/web/src/infrastructure/db apps/web/src/app/api/mobile/nutrition-v2/exchange-groups
+      apps/web/src/app/coach/nutrition-v2/_actions tests/mobile-nutrition-v2-portions.test.ts
+      tests/mobile-nutrition-v2-targets-switch.test.ts tests/mobile-nutrition-v2-conversion-banner.test.ts
+      tests/mobile-nutrition-v2-food-media.test.ts tests/mobile-nutrition-exchange-groups-api.test.ts tests/nutrition-portions`
+      ⇒ **112 archivos / 1.897 tests verdes** · SQL W5.2 + W5.3 por MCP con ROLLBACK ⇒ verdes (ver W5.1) · `pnpm typecheck`
+      ⇒ exit 0 **tras corregir un fixture de W3** (`PortionConversionDialog.test.tsx:146` `targets: {}` ⇒ TS2739; el
+      typecheck estaba rojo en `973d5981` y ningún gate lo había vuelto a correr desde el remate de W3) · `pnpm --filter
+      @eva/mobile exec tsc --noEmit` ⇒ exit 0 · `pnpm check:tokens` ⇒ OK (86 + 5) · `pnpm check:nutrition-v2-boundaries` ⇒
+      473 archivos OK · eslint por archivo (workers y refutadores) sin hallazgos · `pnpm docs:check` ⇒ ver W6.1.
+- [x] W5.13 [Fable] Juicio de W5 (10-09): workflow `wf_e00aa8ba-68c` (4 escritores Opus + 4 refutadores; un BLOQUEA real,
+      en web: el evento se emitía por cambio de tab) + remate `wf_a144b79c-97f` (3 lanes + 3 refutadores, 0 rondas). Los
+      19 archivos tocados calzan con las listas de los lanes. Decisiones del jefe: **(ah)** nombre del smoke: manda TASKS
+      (`…_media_generic_rollback.sql`), DATA §10.3 alineado; **(ai)** copys: `student.{sheetGenericsTitle,sheetBrandsTitle,
+      photoCredit}` + quinta clave `student.sheetPhotoSource` (por fila, `accessibilityLabel`/tooltip) — SPEC §9.3, §16.1 y
+      el glosario alineados; **(aj)** evento 5 = exactamente cuatro llaves (`has_photos`/`searched` del borrador quedan
+      fuera; DATA §11 corregido), `set` con `systemOf({ groupCode }, 'smae')` en las dos superficies (un grupo propio cuenta
+      como `smae`: límite conocido), guard de una emisión por FRANJA (cambiar de tab no re-emite), medición sobre el target
+      resuelto y la lista sin buscador; **(ak)** canarios `'media'`/`'category'` con comillas SQL, umbral B1 = 20 (26 medidos
+      en PCT), nota de rollback en dos pasos — migración y DATA §8.2 siguen byte-idénticos; **(al)** el test de paridad de la
+      URL vive en `tests/` (raíz), nunca un import de `apps/mobile` dentro de `apps/web`; **(am)** el chip «Valores
+      referenciales» en RN depende solo de `macrosConfirmed`, como la web (el set chileno no lo muestra porque el seed lo
+      sembró confirmado, R8, no por un gate de código); **(an)** `version` nula ⇒ `?v=0` en los dos helpers; `isGeneric`
+      cae a `brand == null` solo cuando la llave no viene (RPC viejo o cache pre-W5). MEJORA diferidas en «Backlog heredado».
 
 ## W6 · Cierre (0,5 d)
 
@@ -753,7 +788,7 @@ _(vacía: se llena si aparece un reporte después del cierre, con `### <fecha> �
 | 2026-09-09 | W2 · picker, bump, tap-to-edit, Legumbres | worktree `porciones-chilenas`, sin push (`564a2d2c` + remate) | vitest 92/1.578 · typecheck · tsc mobile · tokens · boundaries 460 · eslint por archivo | 18 + 8 agentes (2 rondas por lane + remate del overlay); decisiones (q)–(x) en W2.13; QA device W2.11 pendiente |
 | 2026-09-09 | W3 · conversión SMAE → chileno | worktree `porciones-chilenas`, sin push (`6e2b37cb` (checkpoint) + remate y docs (este commit)) | vitest paquete + engine + `_quick-edit` + repo + tests RN · typecheck · tsc mobile · tokens · boundaries · eslint por archivo | 18 + remate; decisiones (ad)–(ag) en W3.10; QA device W3.8 pendiente; corrige el `legacySystems` de W1.3 (solo grupos del sistema) |
 | 2026-09-09 | W4 · metas por día | worktree `porciones-chilenas`, sin push (`383e4a74` (checkpoint) + `20769987` (remate 1) + remate 2 y docs (este commit)) | vitest paquete + `_quick-edit` + tests RN · typecheck · tsc mobile · tokens · boundaries · eslint por archivo | 10 + 12 + remate 2 agentes; decisiones (y)–(ac) en W4.9; QA device W4.7 pendiente (aviso inline RN, KeyboardDoneBar iOS, plan de Pame con «Ir a Base») |
-| | W5 · equivalencias | | | |
+| 2026-09-10 | W5 · equivalencias del alumno | worktree `porciones-chilenas`, sin push (`a4fe68b4` (checkpoint) + remate y docs (este commit)) | vitest 112/1.897 · typecheck (fixture W3 corregido) · tsc mobile · tokens · boundaries 473 · eslint por archivo · SQL W5.2 + W5.3 tx-rollback en LIVE | **RPC `get_nutrition_today_v2` parcheado en LIVE: versión `20260910015432`** (21.119 → 22.470 chars); Today 93.907 → 132.878 B (W5.10); 10 + 6 agentes; decisiones (ah)–(an) en W5.13; QA device W5.11 pendiente |
 | | W6 · cierre | | | |
 
 ## Backlog heredado
@@ -797,6 +832,21 @@ _(vacía: se llena si aparece un reporte después del cierre, con `### <fecha> �
   §16.1 «con {n}» ⇒ regenerar (D-8). (8) Para W3: en quick-edit clásico el catálogo entra solo al abrir el picker
   (primera apertura sin encabezados y alfabética, luego se reordena) ⇒ precargar al montar; RN `EditablePortionsSection.tsx`
   pinta «Legado» con `sectioned === false`; web titula «Sistema chileno» sin catálogo (RN no).
+
+- **MEJORA diferidas de W5 (refutadores 10-09).** (1) RN `PortionEquivalencesSheet.tsx`: `groupHasGeneric` se memoiza sobre
+  `[foods, groupFoods, sections]` y mientras el alumno teclea vuelve a partir las 60 filas por tecla; la web usa
+  `useMemo(() => split(groupFoods)…, [groupFoods])` — copiar ese idioma. (2) El reset del guard del evento es `!open || !target`
+  en las dos superficies: si `orderedTargets` queda vacío un render por una revalidación, la misma apertura emite dos veces;
+  endurecer a `!open` solo. (3) RN duplica a mano el `paddingHorizontal: 20` del `Sheet` (`SHEET_SIDE_PADDING`) para el
+  encabezado sticky: exportar la constante desde `Sheet.tsx`. (4) `foodMediaThumbnailUrl` (RN) no trimea el path y
+  `foodImageUrl` (web) sí: para `' off/a.jpg'` divergen; teórico (el path viene de la DB), pero vale un caso de test o trimear
+  en RN. (5) Ningún test monta el sheet RN (pie condicional, guard y encabezados se refutaron leyendo). (6) La migración no
+  es idempotente: re-aplicarla falla con «el ancla … no aparece exactamente una vez», mensaje que sugiere corrupción; un
+  `if position(v_agg_new in v_src) > 0 then raise notice 'ya aplicada'` lo haría legible. (7) Web: el encabezado sticky lleva
+  `-mx-4`; mirar en el QA de device (punto 8) que no se coma el borde del panel. (8) La nota de rollback cita «jsonb_agg en
+  la posición 11247»: es el ORDER del agg (11245); cosmético. (9) El `alt` de la miniatura web compone `${name} · ${fuente}`
+  en el componente: único separador de UI fuera del paquete (`student.sheetPhotoAlt(name)` lo cerraría). (10) SPEC §9.1
+  estimaba +29 % de payload y el medido fue +41 % (el `object_path` pesa más que la estimación): sigue 5,6× bajo el tope.
 
 ## Decisiones del jefe post-críticos
 

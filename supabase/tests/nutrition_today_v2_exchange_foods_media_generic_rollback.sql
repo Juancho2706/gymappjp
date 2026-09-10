@@ -30,7 +30,7 @@ begin
     raise exception 'el criterio genericos-primero no entro al row_number(): el cap rn <= 60 vuelve a cortar alfabeticamente';
   end if;
   if position('public.exchange_group_foods egf' in v_def) = 0 then raise exception 'canario 20260804091000 roto'; end if;
-  if position('media' in v_def) = 0 or position('category' in v_def) = 0 then raise exception 'canario 20260720120000 roto'; end if;
+  if position('''media''' in v_def) = 0 or position('''category''' in v_def) = 0 then raise exception 'canario 20260720120000 roto'; end if;
   if (length(v_def) - length(replace(v_def, 'cl.coach_id from public.clients cl', '')))
      / length('cl.coach_id from public.clients cl') < 3 then
     raise exception 'canario B1 roto: falta el filtro de tenant en alguna rama';
@@ -89,8 +89,10 @@ begin
   from ranked;
 
   -- N = cuantos genericos con medida casera cargo el script en PCT (§4.6 bloque 1).
-  -- El piso es la lista minima obligatoria del OUTLINE §5.3: 5 filas.
-  if v_cand > 60 and v_gen_en_60 < 5 then
+  -- El piso es 20 porque el script cargo 26 genericos con medida casera en PCT
+  -- (DATA §4.6). En LIVE PCT tiene 707 candidatos y 116 genericos, y con el orden
+  -- nuevo los 26 entran a los 60: menos de 20 ya significa que el orden se rompio.
+  if v_cand > 60 and v_gen_en_60 < 20 then
     raise exception 'B1: solo % genericos con medida casera entraron a los 60 de PCT (candidatos: %)', v_gen_en_60, v_cand;
   end if;
   if v_faltan is not null then
