@@ -1168,6 +1168,41 @@ Además, el builder baja `progression_mode: 'double'` → `'weekly_linear'` al a
 `_data/workout-execution.queries.ts:277-282`). **Aditivo, 0 queries nuevas.** Sin él, el coach que
 entra por «Vive tu app» (`apps/mobile/lib/vive-tu-app.ts:8-16`) como su alumno demo vería el modal.
 
+### 4.3.a W4.9 — Verificación (sin tocar) de las 12 RPC restantes con `reps_done NULL`
+
+**Ejecutada el 2026-09-10 contra LIVE por MCP** (solo lectura: `pg_get_functiondef` sobre `pg_proc` +
+evaluación de los predicados con `NULL`; **cero escrituras**). Cierra W4.9: ninguna de las 12 necesita
+cambio de código, y las 2 que sí cambiaban ya se movieron en W0 (M2) y W4.8 (C1).
+
+Semántica de Postgres verificada en la misma corrida —es de donde sale el «0 diff» de toda la tabla—:
+
+```
+SELECT (NULL::int > 0) IS NOT TRUE, (COALESCE(NULL::int,0) > 0), 10 * COALESCE(NULL::int,0);
+⇒  true (la fila se descarta) · false (se descarta) · 0 (el hold no infla el tonelaje)
+```
+
+| # | RPC (LIVE) | ¿Mira `reps_done`? | Filtro real verificado | Diff con `reps_done NULL` |
+|---|---|---|---|---|
+| 1 | `get_client_daily_tonnage` | sí | `WHERE e.reps_eff > 0` (`reps_eff` cae a `reps_done` sin `metadata` válida) — `20260903212700` | **0**: `NULL > 0` es NULL ⇒ fila descartada; el tonelaje no se infla |
+| 2 | `get_client_muscle_volume` | sí | `WHERE (weight × COALESCE(reps_eff, 0)) > 0` — `20260903212800:65-75` | **0**: `0 > 0` es falso ⇒ descartada |
+| 3 | `get_client_strength_series` | sí | `AND wl.reps_done IS NOT NULL AND wl.reps_done > 0` — `20260701140000:197-198` | **0**: descartada explícitamente |
+| 4 | `get_client_weekly_prs` | sí | `AND l.reps_done IS NOT NULL AND l.reps_done > 0 AND l.reps_done <= 30` — `20260701140000:278` | **0**: descartada explícitamente |
+| 5 | `get_client_current_streak` | **no** | días distintos con ≥ 1 log (`logdays`/`anylog`, `20260903212441:157-165`) | **0**: la racha suma el día igual |
+| 6 | `get_client_activity_dates` | **no** | `SELECT DISTINCT … logged_at::date` — `20260612052000:24-26` | **0** |
+| 7 | `get_client_workout_day_counts` | **no** | `count(*)` por día — `20260612051000:20-22` | **0** |
+| 8 | `get_clients_last_workout_date` | **no** | `max(logged_at)` por alumno — `20260616165712:83` | **0** |
+| 9 | `get_coach_workout_sessions_30d` | **no** | `SELECT DISTINCT` sobre `workout_logs` — baseline `:314-317` | **0** |
+| 10 | `get_platform_workout_sessions_30d` | **no** | `count(DISTINCT client_id)` — baseline `:613-615` | **0** |
+| 11 | `get_admin_coaches_paginated` | **no** | `LEFT JOIN workout_logs` por `logged_at` (30 d) — `20260826042748:60-62` | **0** |
+| 12 | `client_start_workout_program` | **no** | escribe `workout_programs.start_date`; no lee logs | **0** |
+
+Las dos que **sí** cambiaban, para cerrar el mapa (no son parte de las 12):
+
+| RPC / cliente | Antes | Ahora | Dónde |
+|---|---|---|---|
+| `get_client_exercise_prs` | solo `weight_kg > 0` ⇒ récord «20 kg × 0 reps» | `reps_done IS NOT NULL AND reps_done > 0` — **confirmado en LIVE 10-09** | **M2**, W0.2 (`20260910205101`) |
+| `apps/web/src/app/api/pr-card/route.tsx` | solo `.not('weight_kg','is',null)` | `+ .gt('reps_done', 0)` | **C1**, W4.8 (+ `route.test.ts`) |
+
 ---
 
 ## 5. Paridad web ↔ RN del payload (R15)

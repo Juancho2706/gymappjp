@@ -43,9 +43,13 @@ import {
 } from '@eva/workout-engine'
 import {
     buildStrengthPayload,
+    buildStrengthTimePayload,
     formatStrengthSetLine,
+    holdSidesFor,
     sideRepsFromMetadata,
+    type HoldSource,
     type OptimisticLogPayload,
+    type WorkoutLogMetadata,
 } from '@eva/workout-engine'
 import { usePostHog } from 'posthog-js/react'
 import { cn } from '@/lib/utils'
@@ -262,7 +266,7 @@ interface Props {
      * NO cambia el motor de logging. En per_side usa `leftSec`/`rightSec` (dos inputs); bilateral usa
      * `holdSec`. Sólo el flujo movilidad V3 lo pasa; sin él la fila no cambia.
      */
-    holdPrefill?: { holdSec?: number | null; leftSec?: number | null; rightSec?: number | null; nonce: number }
+    holdPrefill?: HoldPrefill
     /**
      * Auto-registro del CARDIO cronometrado (hallazgo E): al cambiar `nonce`, escribe los minutos medidos
      * en el input `cardio_min` de la fila ACTIVA y —si `submit`— dispara el submit real (`requestSubmit`),
@@ -271,6 +275,38 @@ interface Props {
      * Uncontrolled (mutación de ref) igual que `holdPrefill`; sólo el flujo cardio V3 la pasa.
      */
     cardioAutolog?: { minutesSec: number; submit: boolean; nonce: number }
+    /**
+     * Fuerza POR TIEMPO (specs/cuenta-atras-en-pantalla, D3/R2/W4.2b): este bloque de FUERZA se
+     * prescribe en segundos (`reps_unit === 'sec'` + `duration_sec > 0`). Lo resuelve el llamador con
+     * el predicado ÚNICO del motor `isStrengthTimeBlock(block, exercise)` — nadie compara `reps_unit`
+     * a mano (R3). Sin la prop (o en `false`) la fila de fuerza es **byte-idéntica** a la de siempre.
+     *
+     * Con `true` la fila captura SEGUNDOS en vez de reps: el tile REPS pasa a `actual_hold_sec`
+     * (`hold_left_sec`/`hold_right_sec` en `per_side`), `reps_done` **nunca** viaja (R2: `NULL`,
+     * jamás `0`) y la serie no entra al camino de PR (A4).
+     */
+    strengthTimeMode?: boolean
+}
+
+/**
+ * Auto-llenado del HOLD cronometrado (movilidad y —desde este tren— fuerza por tiempo). Forma FINAL
+ * del contrato (W4.2): la produce el módulo de hold (`HoldModuleV3.onMeasured`) y la consumen las
+ * DOS filas (`StrengthLogSetForm` y `TypedLogSetRow`).
+ *
+ * · `holdSec` (bilateral / `alternating`) o `leftSec`/`rightSec` (`per_side`) — los segundos medidos.
+ * · `submit` — el reloj llegó a 0 y la serie se ENVÍA sola (V2). `false`/ausente ⇒ solo se pre-llena
+ *   y decide el alumno (pausa, «Listo» sin reloj). El envío recorre el MISMO pipeline del botón ✓.
+ * · `source` — qué escribir en `metadata.hold_source`: `'timer'` (venció) o `'manual'` («Listo» antes
+ *   de 0 / tipeo). Se recuerda hasta el submit: el alumno puede tocar ✓ un rato después.
+ * · `nonce` — dispara el efecto (los inputs son uncontrolled: se mutan por ref, sin re-render).
+ */
+export type HoldPrefill = {
+    holdSec?: number | null
+    leftSec?: number | null
+    rightSec?: number | null
+    submit?: boolean
+    source?: HoldSource
+    nonce: number
 }
 
 /** Estado de sincronización de una serie de cara al usuario (contrato a). */
@@ -340,6 +376,8 @@ function StrengthLogSetForm({
     effortExpanded,
     onEffortExpandedChange,
     sideMode,
+    holdPrefill,
+    strengthTimeMode = false,
 }: Props) {
     const params = useParams<{ coach_slug: string; planId: string }>()
     // Teclado numérico custom (Fase L · workstream B). Gate por puntero grueso: en desktop el input
@@ -354,9 +392,14 @@ function StrengthLogSetForm({
     // igual — DOS reps («Izq»/«Der») y UN peso. `reps_done` guarda el mínimo y el desglose viaja en
     // `metadata {left_reps, right_reps}`; la fórmula es la del motor (`buildStrengthPayload`), la misma
     // que RN. Sin `side_mode` la fila es byte-idéntica a la de siempre.
-    const perSideReps = sideMode === 'per_side' || sideMode === 'alternating'
-    // La rueda dual (kg/reps) no sabe de lados: en fuerza por lado se usa el teclado de 3 pasos.
-    const useWheel = v3 && coarse && !perSideReps
+    // Fuerza por TIEMPO (W4.2b/R34): el eje ya no son reps, así que la rama por lado del eje REPS no
+    // aplica —`alternating` NO es por lado para el eje tiempo (H7)— y los lados salen de la regla
+    // única del motor `holdSidesFor(sideMode)`, jamás de una comparación local.
+    const perSideReps = !strengthTimeMode && (sideMode === 'per_side' || sideMode === 'alternating')
+    const perSideHold = strengthTimeMode && holdSidesFor(sideMode).length === 2
+    // La rueda dual (kg/reps) no sabe de lados ni de segundos: en fuerza por lado y en modo tiempo se
+    // usa el teclado.
+    const useWheel = v3 && coarse && !perSideReps && !strengthTimeMode
     // Escala de RIR: en V3 baja a 0 (RIR 0 = al fallo). En V2 queda en 1 (comportamiento histórico).
     const rirMin = v3 ? 0 : 1
     // Día objetivo (Ola 1): si el ejecutor se abrió con `?fecha=…` (editar un día pasado), viaja en
@@ -446,6 +489,18 @@ function StrengthLogSetForm({
     const repsRef = useRef<HTMLInputElement>(null)
     /** Reps del lado DERECHO (sólo montado con `perSideReps`); `repsRef` pasa a ser el izquierdo. */
     const repsRightRef = useRef<HTMLInputElement>(null)
+    // Fuerza por TIEMPO (W4.2b): las MISMAS keys que movilidad (R2) para que el motor las lea con una
+    // sola rama. Bilateral/`alternating` ⇒ `actual_hold_sec`; `per_side` ⇒ izquierdo + derecho.
+    const holdRef = useRef<HTMLInputElement>(null)
+    const holdLeftRef = useRef<HTMLInputElement>(null)
+    const holdRightRef = useRef<HTMLInputElement>(null)
+    /**
+     * Fuente del hold de ESTA serie (`metadata.hold_source`, A3). La escribe el módulo de hold por
+     * `holdPrefill.source` y se recuerda HASTA el submit: entre el fin del reloj y el ✓ del alumno
+     * puede pasar un rato, y la marca tiene que viajar igual. `null` ⇒ la serie sale sin marca (nunca
+     * `'manual'` por defecto: `undefined` significa «no se sabe», no «lo tipeó a mano»).
+     */
+    const holdSourceRef = useRef<HoldSource | null>(null)
     const formRef = useRef<HTMLFormElement>(null)
     // Analítica de producto (sin PII): `set_logged_per_side` sólo cuando la serie lleva desglose.
     const ph = usePostHog()
@@ -458,10 +513,17 @@ function StrengthLogSetForm({
         const w = weightRef.current?.value.trim() ?? ''
         const r = repsRef.current?.value.trim() ?? ''
         const rr = perSideReps ? (repsRightRef.current?.value.trim() ?? '') : ''
-        setEmptyCapture(w === '' && r === '' && rr === '')
+        // Modo tiempo: el eje de captura son los SEGUNDOS (una caja o dos), no las reps.
+        const h = strengthTimeMode
+            ? [holdRef, holdLeftRef, holdRightRef].map((ref) => ref.current?.value.trim() ?? '').join('')
+            : ''
+        setEmptyCapture(w === '' && r === '' && rr === '' && h === '')
     }
     /** Id estable del hint de serie vacía (`aria-describedby` del CTA inerte). Único por fila. */
     const emptyHintId = `empty-capture-${blockId}-${setNumber}`
+    // En modo tiempo el eje son los segundos ⇒ el motivo del CTA inerte es el del hold (mismo copy que
+    // movilidad, palabra por palabra); en reps queda byte-idéntico al de siempre.
+    const emptyCaptureHint = strengthTimeMode ? EMPTY_CAPTURE_HINT.mobility : EMPTY_CAPTURE_HINT.strength
     // Celebraciones sobrias (M1): al cerrar la serie el chip hace un settle (check elástico); si el
     // peso alcanza el máximo histórico, un pulso dorado 300ms. Refs (no state) porque el chip se
     // MONTA de nuevo al colapsar y lee el valor vigente sin disparar un re-render extra. En logs ya
@@ -543,6 +605,31 @@ function StrengthLogSetForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [prefill?.nonce])
 
+    // Auto-registro del HOLD de FUERZA POR TIEMPO (W4.2b · V2). Espejo EXACTO del efecto de la fila
+    // tipada (movilidad) y del de cardio: al cambiar `nonce` vuelca los segundos medidos en los inputs
+    // uncontrolled y —si el reloj llegó a 0 (`submit`)— dispara el submit real por `requestSubmit()`,
+    // que recorre el MISMO pipeline del botón ✓ (guard, cola offline, descanso, `onLogged`).
+    //
+    // ⚠ Gate `|| isLogged` (el que ya tiene cardio): sin `submit` era inofensivo; con `submit`
+    // permitiría RE-ENVIAR una serie ya logueada. Sin este efecto, la fuerza por tiempo —que se pinta
+    // en ESTA fila, no en la tipada— no auto-guardaba en web y el fallo era silencioso (H1).
+    const holdPrefillNonce = holdPrefill?.nonce
+    useEffect(() => {
+        if (holdPrefillNonce == null || isLogged) return
+        if (perSideHold) {
+            if (holdPrefill?.leftSec != null && holdLeftRef.current) holdLeftRef.current.value = String(Math.round(holdPrefill.leftSec))
+            if (holdPrefill?.rightSec != null && holdRightRef.current) holdRightRef.current.value = String(Math.round(holdPrefill.rightSec))
+        } else if (holdPrefill?.holdSec != null && holdRef.current) {
+            holdRef.current.value = String(Math.round(holdPrefill.holdSec))
+        }
+        if (holdPrefill?.source) holdSourceRef.current = holdPrefill.source
+        keypad?.refreshDisplay()
+        // La mutación por ref no dispara `input`: el flag de serie vacía se sincroniza a mano.
+        syncEmptyCapture()
+        if (holdPrefill?.submit) formRef.current?.requestSubmit()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [holdPrefillNonce])
+
     // Deshacer (quick-win E2-4): reabre esta fila para corregir la última serie logueada.
     useEffect(() => {
         if (reopenNonce == null) return
@@ -584,15 +671,27 @@ function StrengthLogSetForm({
         // guarda el segundo lado (seguimiento B19 — la cola offline sí lo conserva una vez confirmado).
         const rrEl = repsRightRef.current
         const onRepsRight = () => syncEmptyCapture()
+        // Fuerza por TIEMPO: las cajas de segundos alimentan el MISMO flag (el borrador local sigue
+        // guardando solo kg/reps — seguimiento B19; la cola offline sí conserva el hold confirmado).
+        // Tipear los segundos a mano marca la serie como `manual` (A3): el reloj no la midió.
+        const holdEls = strengthTimeMode
+            ? [holdRef.current, holdLeftRef.current, holdRightRef.current].filter((el): el is HTMLInputElement => el != null)
+            : []
+        const onHold = () => {
+            holdSourceRef.current = 'manual'
+            syncEmptyCapture()
+        }
         wEl?.addEventListener('input', onWeight)
         rEl?.addEventListener('input', onReps)
         rrEl?.addEventListener('input', onRepsRight)
+        for (const el of holdEls) el.addEventListener('input', onHold)
         // Estado inicial: `defaultValue` + borrador rehidratado (su efecto corre antes que éste).
         syncEmptyCapture()
         return () => {
             wEl?.removeEventListener('input', onWeight)
             rEl?.removeEventListener('input', onReps)
             rrEl?.removeEventListener('input', onRepsRight)
+            for (const el of holdEls) el.removeEventListener('input', onHold)
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isLogged, editing, existingLog, queuedInit])
@@ -658,8 +757,14 @@ function StrengthLogSetForm({
     const buildRest = () => {
         // Editar una serie ya cerrada no toca el descanso en curso.
         if (isLogged) return
-        // Auto-skip (M2 · 4): con auto-timer OFF, registrar la serie corta cualquier descanso manual en curso.
-        if (!autoTimerEnabled) { cancelRest(); return }
+        // Canal de supresión del descanso (W4.6 · CA-80). Con la preferencia OFF no se arranca ningún
+        // descanso —eso ya era así— y **tampoco se corta el que ya corre**: con el CTA «Descansar N s»
+        // de R24, OFF pasó a significar «no arranco uno nuevo», no «mato el que hay». El `cancelRest()`
+        // que vivía acá mataba justo el descanso que el alumno acababa de pedir a mano (bastaba cerrar
+        // la serie siguiente, o un re-render que dispare `buildRest()`).
+        // Consecuencia directa: un submit disparado por el reloj (`hold_source === 'timer'`) con la
+        // pref apagada hace CERO llamadas a `startRest` — el descanso lo decide el alumno.
+        if (!autoTimerEnabled) return
         triggerHaptic(50)
         if (supersetRest) {
             // Superserie: descanso completo del grupo SOLO al cerrar la ronda (semántica intacta);
@@ -678,11 +783,43 @@ function StrengthLogSetForm({
     // Abre el teclado numérico custom en el campo tocado (solo pointer coarse + provider presente).
     // El objetivo prescrito viaja en el header del keypad (DB-5); "Listo" solo CIERRA el teclado
     // (decisión CEO 2026-07-25) — la serie se concluye con el CTA de la fila.
-    const openKeypadFor = (initialField: 'weight' | 'reps' | 'reps_right') => {
+    const openKeypadFor = (initialField: 'weight' | 'reps' | 'reps_right' | 'actual_hold_sec' | 'hold_left_sec' | 'hold_right_sec') => {
         if (!useKeypad || !keypad) return
         // El input pudo montar como number (punto decimal) antes del gate coarse; normaliza a coma.
         const w = weightRef.current
         if (w && w.value.includes('.')) w.value = w.value.replace('.', ',')
+        // Fuerza por TIEMPO: peso → segundos (o peso → izq → der). Mismas KEYS y mismos rótulos que
+        // `STRENGTH_TIME_KEYPAD_STEPS` / `STRENGTH_TIME_PER_SIDE_KEYPAD_STEPS` del motor (W1.7) y que
+        // el keypad de movilidad, para que RN y web pidan exactamente lo mismo. Sin esta rama los
+        // inputs de segundos quedan `readOnly` sin teclado que los llene: el camino MANUAL de R8
+        // (tipear los segundos sin usar el reloj) sería imposible en móvil.
+        if (strengthTimeMode) {
+            keypad.openKeypad({
+                fields: perSideHold
+                    ? [
+                          { key: 'weight', label: 'Kg', unit: 'kg', allowDecimal: true, weightChips: true, maxIntDigits: 3 },
+                          { key: 'hold_left_sec', label: 'Izq', unit: 'seg', allowDecimal: false, maxIntDigits: 3 },
+                          { key: 'hold_right_sec', label: 'Der', unit: 'seg', allowDecimal: false, maxIntDigits: 3 },
+                      ]
+                    : [
+                          { key: 'weight', label: 'Kg', unit: 'kg', allowDecimal: true, weightChips: true, maxIntDigits: 3 },
+                          { key: 'actual_hold_sec', label: 'Seg', unit: 'seg', allowDecimal: false, maxIntDigits: 3 },
+                      ],
+                fieldRefs: perSideHold
+                    ? { weight: weightRef, hold_left_sec: holdLeftRef, hold_right_sec: holdRightRef }
+                    : { weight: weightRef, actual_hold_sec: holdRef },
+                initialFieldKey: initialField,
+                target: {
+                    sets: totalSets ?? null,
+                    reps: targetReps ?? null,
+                    suggestedWeightKg: suggestedWeightKg ?? null,
+                    lastWeightKg: lastSet?.weightKg ?? null,
+                    lastReps: lastSet?.reps ?? null,
+                    exerciseName: nextUpLabel,
+                },
+            })
+            return
+        }
         keypad.openKeypad({
             fields: perSideReps
                 ? [
@@ -817,6 +954,41 @@ function StrengthLogSetForm({
         // es columna: se retira del payload. Sin lados tipeados no viaja metadata (la serie sigue siendo
         // «reps_done» a secas, nunca un `null` que borre lo guardado).
         let sideMeta: { left_reps?: number | null; right_reps?: number | null } | null = null
+        // ── Fuerza POR TIEMPO (W4.4 · R37): rama PROPIA, nunca la del eje reps ─────────────────────
+        // No pasa por `buildStrengthPayload` (devolvería `left_reps`/`right_reps`, que acá no existen)
+        // ni por su `formData.delete('metadata')`, que es justo el que borraría la marca del hold. Los
+        // segundos, los lados y `hold_source` los arma el MISMO builder del motor que usa RN
+        // (`buildStrengthTimePayload`) ⇒ paridad de payload por construcción (R15), y la metadata se
+        // escribe UNA sola vez: el UPDATE reemplaza el jsonb entero, así que dos escritores se pisarían.
+        let holdMeta: WorkoutLogMetadata | null = null
+        let holdSec: number | null = null
+        if (strengthTimeMode) {
+            const timePayload = buildStrengthTimePayload(
+                {
+                    weight: weightRaw == null ? '' : String(weightRaw),
+                    actual_hold_sec: String(formData.get('actual_hold_sec') ?? ''),
+                    hold_left_sec: String(formData.get('hold_left_sec') ?? ''),
+                    hold_right_sec: String(formData.get('hold_right_sec') ?? ''),
+                },
+                blockId,
+                setNumber,
+                { sideMode, holdSource: holdSourceRef.current },
+            )
+            // Los inputs por lado no son columnas: viajan resumidos en `actual_hold_sec` + `metadata`.
+            formData.delete('hold_left_sec')
+            formData.delete('hold_right_sec')
+            // R2: una serie por tiempo lleva `reps_done = NULL`, JAMÁS `0` — un 0 la metería como
+            // «serie de cero reps» en las RPC de récords y tonelaje.
+            formData.delete('reps_done')
+            formData.delete('reps_right')
+            r = null
+            holdSec = timePayload.actualHoldSec ?? null
+            if (holdSec != null) formData.set('actual_hold_sec', String(holdSec))
+            else formData.delete('actual_hold_sec')
+            holdMeta = (timePayload.metadata as WorkoutLogMetadata | null | undefined) ?? null
+            if (holdMeta != null) formData.set('metadata', JSON.stringify(holdMeta))
+            else formData.delete('metadata')
+        }
         if (perSideReps) {
             const rightRaw = formData.get('reps_right')
             const side = buildStrengthPayload(
@@ -845,7 +1017,10 @@ function StrengthLogSetForm({
         // kg y reps NULL se escribía igual y contaba como serie hecha). El CTA ya está inerte; esto es
         // el cinturón contra un submit programático o un estado de UI rezagado. Se lee del FormData —
         // la verdad del DOM — y no del flag, que puede ir un frame atrás.
-        if (w == null && r == null) return
+        //
+        // ⚠ El HOLD entra al guard (W4.3): una serie de fuerza POR TIEMPO llega con `reps_done` nulo y
+        // SOLO segundos, así que el guard de kg+reps se tragaba el auto-guardado del reloj EN SILENCIO.
+        if (w == null && r == null && holdSec == null) return
 
         // Write-through SIEMPRE: el valor tipeado entra a la cola ANTES de tocar la red. Así una
         // request abortada/tragada en 4G inestable (navigator.onLine=true pero sin conectividad real)
@@ -859,8 +1034,13 @@ function StrengthLogSetForm({
             rpe,
             rir,
             note: noteTrimmed,
+            // Fuerza por TIEMPO (W4.5): los segundos viajan EN el item o el flush sube la serie SIN el
+            // hold (el módulo de cola ya sabe serializarlos: `workout-offline-queue.ts:146,154` — el
+            // hueco estaba en este call site). Sin modo tiempo la key ni se agrega (item byte-idéntico).
+            ...(strengthTimeMode ? { actualHoldSec: holdSec } : {}),
             // Reps POR LADO: el desglose viaja EN el item → el flush reenvía exactamente lo tipeado.
-            metadata: sideMeta,
+            // En modo tiempo el mismo campo lleva `{left_sec, right_sec, hold_source}`.
+            metadata: strengthTimeMode ? holdMeta : sideMeta,
             planId: params.planId,
             coachSlug: params.coach_slug,
             timestamp: Date.now(),
@@ -880,7 +1060,12 @@ function StrengthLogSetForm({
         // series sin semilla (ese día no se hicieron) y con el criterio por-fila igualar el máximo ahí
         // seguía celebrando. Fuera del modo repetir, el umbral queda exactamente como siempre.
         const strictPr = isRepeatSession ?? seed != null
-        const hitPr = prThresholdKg != null && w != null && w > 0 && (strictPr ? w > prThresholdKg : w >= prThresholdKg)
+        // Fuerza por TIEMPO fuera del camino de PR (A4): `reps_done` es NULL, así que
+        // `classifyThresholdPr` recibiría `r = null` y el e1RM no significa nada sobre una plancha.
+        // Es la misma decisión que ya toma el motor (`pr-detect.ts` filtra `reps_done > 0`) y la
+        // migración M2 en la RPC de récords: acá se cierra el tercer camino, el de la celebración.
+        const hitPr =
+            !strengthTimeMode && prThresholdKg != null && w != null && w > 0 && (strictPr ? w > prThresholdKg : w >= prThresholdKg)
         prRef.current = hitPr
         // PR en vivo V3 (E4.2): el disparo es el umbral de arriba; el EJE (weight/e1rm) lo clasifica el
         // engine (`detectPR` vía adaptador de borde). Presentación dorada + háptico (pref) por el
@@ -934,8 +1119,11 @@ function StrengthLogSetForm({
             rpe,
             rir,
             note: noteTrimmed,
+            // Fuerza por TIEMPO: el optimismo preserva los segundos (sin esto la fila se re-renderiza
+            // vacía al confirmar, el mismo bug forense del hold de movilidad).
+            ...(strengthTimeMode ? { actualHoldSec: holdSec } : {}),
             // El optimismo del padre conserva el desglose por lado (chip «10 / 10» sin esperar al server).
-            ...(sideMeta ? { metadata: sideMeta } : {}),
+            ...(strengthTimeMode ? (holdMeta ? { metadata: holdMeta } : {}) : sideMeta ? { metadata: sideMeta } : {}),
         })
 
         // Devolver la promesa mantiene abierta la transición del form mientras dura la petición: el
@@ -1076,6 +1264,19 @@ function StrengthLogSetForm({
         sideRepsFromMetadata(seedValues?.metadata)
     const repsLeftDefault = sideDefault?.left ?? repsDefaultValue
     const repsRightDefault = sideDefault?.right ?? ''
+    // Fuerza por TIEMPO: siembra los segundos con la MISMA prioridad (log > cola > semilla). En
+    // `per_side` los lados viven en `metadata {left_sec, right_sec}` y `actual_hold_sec` es la suma.
+    const holdMetaDefault = existingLog?.metadata ?? queuedInit?.metadata ?? seedValues?.metadata ?? null
+    const holdDefaultValue = existingLog?.actual_hold_sec ?? queuedInit?.actualHoldSec ?? seedValues?.actualHoldSec ?? ''
+    const holdLeftDefault = holdMetaDefault?.left_sec ?? ''
+    const holdRightDefault = holdMetaDefault?.right_sec ?? ''
+    /**
+     * Identidad del `<form>` (W4.5). La clave histórica era `log-${peso}-${reps}` y **no cambiaba** al
+     * editar solo los segundos ⇒ el form no se re-montaba y los inputs uncontrolled quedaban rancios
+     * tras la reconciliación. Se suma el eje TIEMPO, espejo de lo que la fila tipada ya hace con sus
+     * ejes. Sin `existingLog` la clave sigue siendo `'new'`, byte-idéntica.
+     */
+    const formIdentityKey = `log-${existingLog?.weight_kg ?? ''}-${existingLog?.reps_done ?? ''}-${existingLog?.actual_hold_sec ?? ''}`
 
     // ── Captura HERO de fuerza (informe 03 · BLOCKER). Reusa los mismos inputs (refs/handlers/gesto),
     //    estado rpe/rir y `handleSubmit` — el motor NO cambia, sólo el render. Se renderiza para TODA
@@ -1095,7 +1296,7 @@ function StrengthLogSetForm({
         return (
             <div className="exec-v3-hero space-y-3">
                 <form
-                    key={existingLog ? `log-${existingLog.weight_kg}-${existingLog.reps_done}` : 'new'}
+                    key={existingLog ? formIdentityKey : 'new'}
                     ref={formRef}
                     action={handleSubmit}
                     className="space-y-3"
@@ -1140,6 +1341,81 @@ function StrengthLogSetForm({
                             />
                             <span className="exec-v3-valu">KG</span>
                         </label>
+                        {strengthTimeMode ? (
+                            // Fuerza por TIEMPO (W4.14): el tile REPS conmuta a SEG conservando
+                            // `.exec-v3-val` / `.exec-v3-valinput` / `.exec-v3-valu` ⇒ cero drift
+                            // visual. Los lados salen de `holdSidesFor` (R34): `alternating` es UNA
+                            // sola caja para el eje tiempo, aunque sea por lado para el eje reps.
+                            perSideHold ? (
+                                <>
+                                    <label className="exec-v3-val">
+                                        <input
+                                            ref={holdLeftRef}
+                                            name="hold_left_sec"
+                                            type={useKeypad ? 'text' : 'number'}
+                                            {...(useKeypad ? { readOnly: true } : { min: '0' })}
+                                            inputMode={useKeypad ? 'none' : 'numeric'}
+                                            defaultValue={holdLeftDefault}
+                                            placeholder="-"
+                                            aria-label="Segundos lado izquierdo"
+                                            onFocus={useKeypad ? () => openKeypadFor('hold_left_sec') : undefined}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault()
+                                                    holdRightRef.current?.focus()
+                                                }
+                                            }}
+                                            className="exec-v3-valinput"
+                                        />
+                                        <span className="exec-v3-valu">IZQ</span>
+                                    </label>
+                                    <label className="exec-v3-val">
+                                        <input
+                                            ref={holdRightRef}
+                                            name="hold_right_sec"
+                                            type={useKeypad ? 'text' : 'number'}
+                                            {...(useKeypad ? { readOnly: true } : { min: '0' })}
+                                            inputMode={useKeypad ? 'none' : 'numeric'}
+                                            defaultValue={holdRightDefault}
+                                            placeholder="-"
+                                            aria-label="Segundos lado derecho"
+                                            onFocus={useKeypad ? () => openKeypadFor('hold_right_sec') : undefined}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault()
+                                                    e.currentTarget.blur()
+                                                }
+                                            }}
+                                            className="exec-v3-valinput"
+                                        />
+                                        <span className="exec-v3-valu">DER</span>
+                                    </label>
+                                </>
+                            ) : (
+                                <label className="exec-v3-val">
+                                    <input
+                                        ref={holdRef}
+                                        name="actual_hold_sec"
+                                        type={useKeypad ? 'text' : 'number'}
+                                        {...(useKeypad ? { readOnly: true } : { min: '0' })}
+                                        inputMode={useKeypad ? 'none' : 'numeric'}
+                                        defaultValue={holdDefaultValue}
+                                        placeholder="-"
+                                        aria-label="Segundos sostenidos"
+                                        onFocus={useKeypad ? () => openKeypadFor('actual_hold_sec') : undefined}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault()
+                                                e.currentTarget.blur()
+                                            }
+                                        }}
+                                        className="exec-v3-valinput"
+                                    />
+                                    <span className="exec-v3-valu">SEG</span>
+                                </label>
+                            )
+                        ) : (
+                        <>
                         <label className="exec-v3-val">
                             <input
                                 ref={repsRef}
@@ -1192,6 +1468,8 @@ function StrengthLogSetForm({
                                 <span className="exec-v3-valu">DER</span>
                             </label>
                         ) : null}
+                        </>
+                        )}
                     </div>
 
                     {/* Panel de esfuerzo compacto y OPCIONAL — COLAPSADO por default (QA2 hallazgo 3): fila
@@ -1276,12 +1554,12 @@ function StrengthLogSetForm({
                         isLogged={Boolean(isLogged)}
                         label={ctaLabel}
                         hero
-                        blockedHint={emptyCapture ? EMPTY_CAPTURE_HINT.strength : null}
+                        blockedHint={emptyCapture ? emptyCaptureHint : null}
                         blockedHintId={emptyHintId}
                     />
                     {emptyCapture && (
                         <p id={emptyHintId} className="text-center text-[11px] font-semibold text-on-dark-muted">
-                            {EMPTY_CAPTURE_HINT.strength}
+                            {emptyCaptureHint}
                         </p>
                     )}
 
@@ -1419,7 +1697,7 @@ function StrengthLogSetForm({
             )}
         >
             <form
-                key={existingLog ? `log-${existingLog.weight_kg}-${existingLog.reps_done}` : 'new'}
+                key={existingLog ? formIdentityKey : 'new'}
                 ref={formRef}
                 action={handleSubmit}
                 className="p-3"
@@ -1480,6 +1758,79 @@ function StrengthLogSetForm({
                             />
                         </label>
                         <span className={cn('shrink-0 text-on-dark-muted', isActive ? 'pb-3 text-xl' : 'pb-2 text-base')}>×</span>
+                        {strengthTimeMode ? (
+                            // Fuerza por TIEMPO en la fila compacta (V2/lista): mismas cajas, otro eje.
+                            perSideHold ? (
+                                <>
+                                    <label className="flex-1">
+                                        <span className="mb-1 block text-[9.5px] font-bold uppercase tracking-[0.08em] text-on-dark-muted">Izq</span>
+                                        <input
+                                            ref={holdLeftRef}
+                                            name="hold_left_sec"
+                                            type={useKeypad ? 'text' : 'number'}
+                                            {...(useKeypad ? { readOnly: true } : { min: '0' })}
+                                            inputMode={useKeypad ? 'none' : 'numeric'}
+                                            defaultValue={holdLeftDefault}
+                                            placeholder="-"
+                                            aria-label="Segundos lado izquierdo"
+                                            onFocus={useKeypad ? () => openKeypadFor('hold_left_sec') : undefined}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault()
+                                                    holdRightRef.current?.focus()
+                                                }
+                                            }}
+                                            className={inputClass}
+                                        />
+                                    </label>
+                                    <span className={cn('shrink-0 text-on-dark-muted', isActive ? 'pb-3 text-xl' : 'pb-2 text-base')}>/</span>
+                                    <label className="flex-1">
+                                        <span className="mb-1 block text-[9.5px] font-bold uppercase tracking-[0.08em] text-on-dark-muted">Der</span>
+                                        <input
+                                            ref={holdRightRef}
+                                            name="hold_right_sec"
+                                            type={useKeypad ? 'text' : 'number'}
+                                            {...(useKeypad ? { readOnly: true } : { min: '0' })}
+                                            inputMode={useKeypad ? 'none' : 'numeric'}
+                                            defaultValue={holdRightDefault}
+                                            placeholder="-"
+                                            aria-label="Segundos lado derecho"
+                                            onFocus={useKeypad ? () => openKeypadFor('hold_right_sec') : undefined}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault()
+                                                    e.currentTarget.blur()
+                                                }
+                                            }}
+                                            className={inputClass}
+                                        />
+                                    </label>
+                                </>
+                            ) : (
+                                <label className="flex-1">
+                                    <span className="mb-1 block text-[9.5px] font-bold uppercase tracking-[0.08em] text-on-dark-muted">Seg</span>
+                                    <input
+                                        ref={holdRef}
+                                        name="actual_hold_sec"
+                                        type={useKeypad ? 'text' : 'number'}
+                                        {...(useKeypad ? { readOnly: true } : { min: '0' })}
+                                        inputMode={useKeypad ? 'none' : 'numeric'}
+                                        defaultValue={holdDefaultValue}
+                                        placeholder="-"
+                                        aria-label="Segundos sostenidos"
+                                        onFocus={useKeypad ? () => openKeypadFor('actual_hold_sec') : undefined}
+                                        onKeyDown={(e) => {
+                                            if (e.key === 'Enter') {
+                                                e.preventDefault()
+                                                e.currentTarget.blur()
+                                            }
+                                        }}
+                                        className={inputClass}
+                                    />
+                                </label>
+                            )
+                        ) : (
+                        <>
                         <label className="flex-1">
                             <span className="mb-1 block text-[9.5px] font-bold uppercase tracking-[0.08em] text-on-dark-muted">
                                 {perSideReps ? 'Izq' : 'Reps'}
@@ -1537,6 +1888,8 @@ function StrengthLogSetForm({
                                 </label>
                             </>
                         ) : null}
+                        </>
+                        )}
                     </div>
                 </div>
 
@@ -1562,13 +1915,13 @@ function StrengthLogSetForm({
                 <div className="mt-3 flex items-center justify-end gap-2">
                     {emptyCapture && isActive && (
                         <span id={emptyHintId} className="text-[11px] font-semibold text-on-dark-muted">
-                            {EMPTY_CAPTURE_HINT.strength}
+                            {emptyCaptureHint}
                         </span>
                     )}
                     <SubmitSetButton
                         isLogged={Boolean(isLogged)}
                         label={isActive ? (isLogged ? 'Guardar' : 'Listo') : undefined}
-                        blockedHint={emptyCapture ? EMPTY_CAPTURE_HINT.strength : null}
+                        blockedHint={emptyCapture ? emptyCaptureHint : null}
                         blockedHintId={isActive ? emptyHintId : undefined}
                     />
                 </div>
@@ -1729,6 +2082,13 @@ function TypedLogSetRow({
     const holdRef = useRef<HTMLInputElement>(null)
     const holdLeftRef = useRef<HTMLInputElement>(null)
     const holdRightRef = useRef<HTMLInputElement>(null)
+    /**
+     * Fuente del hold de ESTA serie (`metadata.hold_source`, A3/CA-28): la escribe el módulo de hold
+     * por `holdPrefill.source` y viaja en el MISMO objeto jsonb que `{left_sec, right_sec}` — el
+     * UPDATE de la action reemplaza la columna entera, así que mandarla sola borraría los lados.
+     * `null` ⇒ la serie sale SIN marca: `undefined` significa «no se sabe», nunca «manual».
+     */
+    const holdSourceRef = useRef<HoldSource | null>(null)
     const durationRef = useRef<HTMLInputElement>(null)
     const passesRef = useRef<HTMLInputElement>(null)
     const refByKey: Record<string, RefObject<HTMLInputElement | null>> = {
@@ -1794,19 +2154,26 @@ function TypedLogSetRow({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [suggestedHrNonce])
 
-    // Auto-llenado del HOLD cronometrado (QA4 · movilidad): el anillo vuelca los segundos sostenidos en el
-    // input del lado correspondiente al cambiar `nonce`. Uncontrolled (mutación de ref) = sin re-render;
-    // mismo patrón que el prefill roller/HR. El alumno sólo revisa y confirma (o corrige). NO toca submit.
+    // Auto-llenado + AUTO-REGISTRO del HOLD cronometrado (QA4 · movilidad; W4.2a · V2): el anillo vuelca
+    // los segundos sostenidos en el input del lado correspondiente al cambiar `nonce` y —si el reloj
+    // llegó a 0 (`submit`)— dispara el submit real por `requestSubmit()`, el MISMO camino del botón ✓
+    // (cola offline, optimismo, `onLogged`, CueBar). Uncontrolled (mutación de ref) = sin re-render.
+    //
+    // ⚠ Gate `|| isLogged` (copiado del efecto de cardio, que ya lo tenía): sin `submit` daba igual;
+    // con `submit` permitiría RE-ENVIAR una serie ya logueada.
     const holdPrefillNonce = holdPrefill?.nonce
     useEffect(() => {
-        if (holdPrefillNonce == null) return
+        if (holdPrefillNonce == null || isLogged) return
         if (perSide) {
             if (holdPrefill?.leftSec != null && holdLeftRef.current) holdLeftRef.current.value = String(Math.round(holdPrefill.leftSec))
             if (holdPrefill?.rightSec != null && holdRightRef.current) holdRightRef.current.value = String(Math.round(holdPrefill.rightSec))
         } else if (holdPrefill?.holdSec != null && holdRef.current) {
             holdRef.current.value = String(Math.round(holdPrefill.holdSec))
         }
+        // Marca de fuente (A3): se recuerda hasta el submit, que puede llegar bastante después.
+        if (holdPrefill?.source) holdSourceRef.current = holdPrefill.source
         syncEmptyCapture()
+        if (holdPrefill?.submit) formRef.current?.requestSubmit()
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [holdPrefillNonce])
 
@@ -1912,27 +2279,44 @@ function TypedLogSetRow({
         // Movilidad per_side (E3.2): dos campos hold (izq/der) → el engine los suma en `actual_hold_sec`
         // y arma `metadata {left_sec, right_sec}`. Se reusa la MISMA fuente pura que el keypad/RN
         // (`typedLogValues`) para cero drift. Los inputs por lado no son columnas → se eliminan del payload.
-        if (perSide) {
-            const { actualHoldSec, metadata } = typedLogValues(
-                'mobility',
-                {
-                    hold_left_sec: String(formData.get('hold_left_sec') ?? ''),
-                    hold_right_sec: String(formData.get('hold_right_sec') ?? ''),
-                },
-                'per_side',
-            )
-            formData.delete('hold_left_sec')
-            formData.delete('hold_right_sec')
-            if (actualHoldSec != null) formData.set('actual_hold_sec', String(actualHoldSec))
-            else formData.delete('actual_hold_sec')
-            if (metadata != null) formData.set('metadata', JSON.stringify(metadata))
+        // Movilidad: los lados (si los hay) + la marca de fuente del hold viajan en UN SOLO objeto
+        // (W4.4c · CA-28/CA-84). Antes la metadata se escribía **solo** en `per_side` y en bilateral
+        // esta rama ni se pisaba ⇒ un hold bilateral salía SIN marca y la consulta de adopción quedaba
+        // ciega justo donde vive la mayoría de los holds.
+        if (mode === 'mobility') {
+            const holdSource = holdSourceRef.current
+            let sideMeta: { left_sec?: number | null; right_sec?: number | null } | null = null
+            if (perSide) {
+                const { actualHoldSec, metadata } = typedLogValues(
+                    'mobility',
+                    {
+                        hold_left_sec: String(formData.get('hold_left_sec') ?? ''),
+                        hold_right_sec: String(formData.get('hold_right_sec') ?? ''),
+                    },
+                    'per_side',
+                )
+                formData.delete('hold_left_sec')
+                formData.delete('hold_right_sec')
+                if (actualHoldSec != null) formData.set('actual_hold_sec', String(actualHoldSec))
+                else formData.delete('actual_hold_sec')
+                sideMeta = metadata ?? null
+            }
+            const merged =
+                sideMeta != null || holdSource != null
+                    ? { ...(sideMeta ?? {}), ...(holdSource != null ? { hold_source: holdSource } : {}) }
+                    : null
+            // Sin lados ni fuente NO se manda la key: no se ensucia el jsonb de quien registra a mano
+            // sin reloj, y el UPDATE deja la columna intacta.
+            if (merged != null) formData.set('metadata', JSON.stringify(merged))
             else formData.delete('metadata')
         }
-        // movilidad bilateral usa actual_hold_sec directo; roller usa actual_duration_sec + reps_done
+        // roller usa actual_duration_sec + reps_done
     }
 
-    /** Lee la `metadata` per_side (JSON puesto por `normalizeFormData`) o null. */
-    const collectMetadata = (formData: FormData): { left_sec?: number | null; right_sec?: number | null } | null => {
+    /** Lee la `metadata` del hold (lados y/o `hold_source`, JSON puesto por `normalizeFormData`) o null. */
+    const collectMetadata = (
+        formData: FormData,
+    ): { left_sec?: number | null; right_sec?: number | null; hold_source?: HoldSource | null } | null => {
         const raw = formData.get('metadata')
         if (raw == null || String(raw).trim() === '') return null
         try {
@@ -2032,7 +2416,11 @@ function TypedLogSetRow({
         // Descanso + auto-skip (M2 · 4): editar una serie ya cerrada no toca el descanso en curso.
         if (!isLogged) {
             if (!autoTimerEnabled) {
-                cancelRest()
+                // Canal de supresión (W4.6 · CA-80), espejo exacto del `buildRest` de la fila de
+                // fuerza: con la pref OFF no se arranca ningún descanso — y **tampoco se corta el que
+                // ya corre**. Un submit por reloj (`hold_source === 'timer'`) con la pref apagada hace
+                // CERO llamadas a `startRest`; el `cancelRest()` que vivía acá mataba el descanso que
+                // el alumno acababa de pedir a mano con «Descansar N s».
             } else if (supersetRest) {
                 // Superserie: descanso completo del grupo SOLO al cerrar la ronda (semántica intacta).
                 triggerHaptic(50)

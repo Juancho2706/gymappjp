@@ -161,6 +161,210 @@ describe('useExecCountdown — pestaña oculta', () => {
     })
 })
 
+// ── W4.1 / R27 — `started`, `endAtMs`, `expiredWhileAway` y `prime` ─────────────────────────────
+
+describe('useExecCountdown — `started` (W4.1)', () => {
+    it('los 3 caminos: idle sin arrancar, corriendo tras `toggle`, y sigue `started` al pausar', () => {
+        const { result } = renderHook(() => useExecCountdown(30, { autoStart: false }))
+        // (1) nunca arrancó
+        expect(result.current.started).toBe(false)
+        expect(result.current.isActive).toBe(false)
+
+        // (2) arrancado
+        act(() => {
+            result.current.toggle()
+        })
+        expect(result.current.started).toBe(true)
+        expect(result.current.isActive).toBe(true)
+
+        // (3) pausado: `isActive` cae pero `started` NO — es lo que distingue «pausado» de «nunca
+        // arrancó» y lo que hace posible alternar «Iniciar hold» / «Pausar».
+        act(() => {
+            result.current.toggle()
+        })
+        expect(result.current.started).toBe(true)
+        expect(result.current.isActive).toBe(false)
+    })
+
+    it('`autoStart` nace arrancado y `resetKey` lo devuelve a «nunca arrancó»', () => {
+        const { result, rerender } = renderHook(
+            ({ key }: { key: number }) => useExecCountdown(30, { autoStart: true, resetKey: key }),
+            { initialProps: { key: 1 } },
+        )
+        expect(result.current.started).toBe(true)
+
+        rerender({ key: 2 })
+        expect(result.current.started).toBe(true) // autoStart: la fase nueva vuelve a arrancar
+
+        const idle = renderHook(
+            ({ key }: { key: number }) => useExecCountdown(30, { autoStart: false, resetKey: key }),
+            { initialProps: { key: 1 } },
+        )
+        act(() => {
+            idle.result.current.toggle()
+        })
+        expect(idle.result.current.started).toBe(true)
+        idle.rerender({ key: 2 })
+        expect(idle.result.current.started).toBe(false)
+    })
+
+    it('`endAtMs` publica el fin absoluto mientras corre y se limpia al terminar', () => {
+        const { result } = renderHook(() => useExecCountdown(10, { autoStart: false }))
+        expect(result.current.endAtMs).toBeNull()
+
+        const t0 = Date.now()
+        act(() => {
+            result.current.toggle()
+        })
+        expect(result.current.endAtMs).toBe(t0 + 10_000)
+
+        act(() => {
+            vi.advanceTimersByTime(10_500)
+        })
+        expect(result.current.done).toBe(true)
+        expect(result.current.endAtMs).toBeNull()
+    })
+})
+
+describe('useExecCountdown — `expiredWhileAway` (R27): la señal sale de la EVIDENCIA', () => {
+    /** Monta un hold de 30 s ya corriendo y devuelve el `onDone` espía. */
+    function mountRunning(seconds = 30) {
+        const onDone = vi.fn()
+        const hook = renderHook(() => useExecCountdown(seconds, { autoStart: true, onDone }))
+        return { ...hook, onDone }
+    }
+
+    it('(a) gana el TICK: el `setInterval` de la pestaña oculta se throttlea, no se congela ⇒ true', () => {
+        const { result, onDone } = mountRunning()
+
+        // El reloj de pared corrió 60 s sin ticks (throttling) y recién ahí llega el tick pendiente,
+        // con la pestaña ya visible: leer «quién disparó» diría `false`; la evidencia dice `true`.
+        act(() => {
+            vi.setSystemTime(Date.now() + 60_000)
+            vi.advanceTimersByTime(250)
+        })
+
+        expect(result.current.done).toBe(true)
+        expect(onDone).toHaveBeenCalledTimes(1)
+        expect(onDone).toHaveBeenCalledWith({ expiredWhileAway: true })
+    })
+
+    it('(b) gana el `visibilitychange`: MISMO resultado que por tick', () => {
+        const { result, onDone } = mountRunning()
+
+        act(() => {
+            vi.setSystemTime(Date.now() + 60_000)
+            document.dispatchEvent(new Event('visibilitychange'))
+        })
+
+        expect(result.current.done).toBe(true)
+        expect(onDone).toHaveBeenCalledWith({ expiredWhileAway: true })
+    })
+
+    it('(c) fin en foreground, dentro de la gracia de 1500 ms ⇒ false', () => {
+        const { onDone } = mountRunning(3)
+
+        act(() => {
+            vi.advanceTimersByTime(3_500)
+        })
+
+        expect(onDone).toHaveBeenCalledWith({ expiredWhileAway: false })
+    })
+
+    it('(c bis) fin en foreground pero con la pestaña OCULTA al disparar ⇒ true', () => {
+        const { onDone } = mountRunning(3)
+        const spy = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden')
+
+        act(() => {
+            vi.advanceTimersByTime(3_500)
+        })
+
+        expect(onDone).toHaveBeenCalledWith({ expiredWhileAway: true })
+        spy.mockRestore()
+    })
+
+    it('(d) `restart` re-arma el disparo y el fin siguiente vuelve a evaluarse limpio', () => {
+        const { result, onDone } = mountRunning(3)
+        act(() => {
+            vi.setSystemTime(Date.now() + 60_000)
+            vi.advanceTimersByTime(250)
+        })
+        expect(onDone).toHaveBeenNthCalledWith(1, { expiredWhileAway: true })
+
+        act(() => {
+            result.current.restart()
+        })
+        expect(result.current.done).toBe(false)
+        expect(result.current.started).toBe(true)
+
+        act(() => {
+            vi.advanceTimersByTime(3_500)
+        })
+        expect(onDone).toHaveBeenCalledTimes(2)
+        expect(onDone).toHaveBeenNthCalledWith(2, { expiredWhileAway: false })
+    })
+})
+
+describe('useExecCountdown — `prime` (R27): armado en idle, sin arrancar', () => {
+    it('deja el reloj en `idle` con el objetivo y NO dispara `onDone` por más que avance el reloj', () => {
+        const onDone = vi.fn()
+        const { result } = renderHook(() => useExecCountdown(30, { autoStart: false, onDone }))
+
+        act(() => {
+            result.current.prime(45)
+        })
+
+        expect(result.current.started).toBe(false)
+        expect(result.current.isActive).toBe(false)
+        expect(result.current.done).toBe(false)
+        expect(result.current.timeLeft).toBe(45)
+        expect(result.current.endAtMs).toBeNull()
+
+        act(() => {
+            vi.advanceTimersByTime(120_000)
+        })
+        expect(onDone).not.toHaveBeenCalled()
+        expect(result.current.timeLeft).toBe(45)
+
+        // Recién el toque lo arranca (es el «Iniciar lado derecho» de R6).
+        act(() => {
+            result.current.toggle()
+        })
+        expect(result.current.isActive).toBe(true)
+        expect(result.current.started).toBe(true)
+        act(() => {
+            vi.advanceTimersByTime(45_500)
+        })
+        expect(onDone).toHaveBeenCalledTimes(1)
+    })
+
+    it('sin argumento arma el objetivo del hook, y tras un fin previo re-arma el disparo', () => {
+        const onDone = vi.fn()
+        const { result } = renderHook(() => useExecCountdown(20, { autoStart: true, onDone }))
+        act(() => {
+            vi.advanceTimersByTime(20_500)
+        })
+        expect(result.current.done).toBe(true)
+        expect(onDone).toHaveBeenCalledTimes(1)
+
+        act(() => {
+            result.current.prime()
+        })
+        expect(result.current.timeLeft).toBe(20)
+        expect(result.current.done).toBe(false)
+        expect(result.current.started).toBe(false)
+        expect(result.current.isActive).toBe(false)
+
+        act(() => {
+            result.current.toggle()
+        })
+        act(() => {
+            vi.advanceTimersByTime(20_500)
+        })
+        expect(onDone).toHaveBeenCalledTimes(2)
+    })
+})
+
 describe('formatCountdown', () => {
     it('mm:ss con segundos siempre en dos dígitos', () => {
         expect(formatCountdown(0)).toBe('0:00')

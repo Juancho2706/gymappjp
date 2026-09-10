@@ -291,6 +291,39 @@ interface Props {
      * racha (jamás dato falso).
      */
     weekStatusDays?: WeekStatusDaySource[] | null
+    /**
+     * Id del alumno dueño de la sesión (**R32/CA-93**, `specs/cuenta-atras-en-pantalla`): namespacea la
+     * preferencia «Pasar solo al descanso» y su marca de «modal visto». Aditivo y con **0 queries**:
+     * `page.tsx` ya resuelve `rootUser` para la racha semanal.
+     *
+     * ⚠ **Puede llegar `null`** y el fallback es OBLIGATORIO: `getClientRootUser()` es nullable y los
+     * redirects que abortan miran `data.user`/`data.plan`, no `rootUser`. `page.tsx` lo resuelve como
+     * `rootUser?.id ?? data.user?.id ?? null`; con `null` la preferencia cae al carril legacy POR
+     * DISPOSITIVO (`omni_autotimer`, se lee y se escribe, sin crear ninguna clave namespaceada) y el
+     * modal **no se muestra** — preguntar sin poder guardar la respuesta por alumno es peor que no
+     * preguntar. Sin este fallback la clave sería `eva:exec-autorest-v1:undefined`, es decir UNA
+     * preferencia compartida por todos los alumnos de ese navegador.
+     */
+    clientId?: string | null
+}
+
+/**
+ * Puente al provider de timers para el ORQUESTADOR (W4.7). `WorkoutTimerProvider` se monta DENTRO del
+ * render de `WorkoutExecutionClient`, así que el cuerpo del componente no puede llamar
+ * `useWorkoutTimer()` (estaría fuera del contexto). Este componente vive dentro del provider, no
+ * pinta nada y publica la API en un ref para que `startPendingRoundRest()` —que sí vive en el
+ * orquestador, con el estado `pendingRoundRest`— pueda invocar el MISMO `startRest` de siempre.
+ * La escritura va en un efecto (no en render): las funciones del provider son `useCallback` estables.
+ */
+function WorkoutTimerBridge({ apiRef }: { apiRef: React.RefObject<ReturnType<typeof useWorkoutTimer> | null> }) {
+    const api = useWorkoutTimer()
+    useEffect(() => {
+        apiRef.current = api
+        return () => {
+            apiRef.current = null
+        }
+    }, [api, apiRef])
+    return null
 }
 
 function ManualTimerButton({ defaultTime }: { defaultTime: string | null }) {
@@ -659,6 +692,28 @@ export interface SupersetInfo {
     groupRestSeconds: number
     /** Rondas = max de series entre los miembros. */
     maxSets: number
+}
+
+/**
+ * Descanso de GRUPO diferido de una superserie (**R9/R28/D2**, `specs/cuenta-atras-en-pantalla`).
+ *
+ * Con la preferencia «Pasar solo al descanso» APAGADA, cerrar la ronda **no** arranca nada: el
+ * orquestador guarda acá el contexto y el alumno decide con «Ronda lista · Descansar N s».
+ *
+ * Se construye **en el commit** (R28) y no al tocar el CTA: `members`, la ronda y el «qué sigue» solo
+ * existen ahí; calcularlo después dejaría el rótulo vacío. **En web NO existe `countKind`**
+ * (`RestOptions` acepta solo `{label, warmup}`), así que el rótulo «Ronda N de M · siguiente» viaja
+ * entero dentro de `label` — no se inventa una key que el provider no tiene (deuda B13).
+ */
+export interface PendingRoundRest {
+    /** Identidad del grupo = id del PRIMER miembro (`SupersetInfo` no lleva key propia). */
+    groupId: string
+    round: number
+    totalRounds: number
+    /** Descanso completo del grupo, en segundos (`SupersetInfo.groupRestSeconds`). */
+    seconds: number
+    /** Rótulo COMPLETO de la barra de descanso: «Ronda N de M · <siguiente>». */
+    label: string
 }
 
 /** Orden de presentación intercalado: ronda 1 (A,B,C…), ronda 2 (A,B,C…)… saltando miembros sin serie. */
@@ -1175,6 +1230,11 @@ export function WorkoutExecutionClient({
     repeatDate = null,
     executorV3 = false,
     weekStatusDays = null,
+    // La prop se cablea en W4.7 con su fallback obligatorio (R32/CA-93) y la CONSUME W5, que
+    // namespacea la preferencia «Pasar solo al descanso» por alumno. Se declara acá —y no en W5— para
+    // que el fallback quede cerrado en el mismo commit que la prop, no después.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    clientId = null,
 }: Props) {
     const router = useRouter()
     const captureWorkoutCompleted = useCaptureStudentWorkoutCompleted()
@@ -1217,6 +1277,24 @@ export function WorkoutExecutionClient({
         }
     }, [])
     const [nextCue, setNextCue] = useState<{ blockId: string; set: number } | null>(null)
+    /**
+     * Descanso de GRUPO diferido (**R9/D2**): vive en el ORQUESTADOR, nunca en la fila — la fila se
+     * desmonta al avanzar de miembro y se llevaría el estado. `null` = no hay ronda esperando.
+     */
+    const [pendingRoundRest, setPendingRoundRest] = useState<PendingRoundRest | null>(null)
+    /** API del provider de timers, publicada por `WorkoutTimerBridge` (montado dentro del provider). */
+    const timerApiRef = useRef<ReturnType<typeof useWorkoutTimer> | null>(null)
+    /**
+     * CTA «Ronda lista · Descansar N s» (D2, R28). Llama al **mismo** `startRest` del provider que usa
+     * el camino automático — `startRest(String(seconds), { label })`, la firma REAL de `RestOptions`
+     * en web: `countKind`/`setIndex`/`setTotal` son exclusivos de RN y acá NO se inventan.
+     */
+    const startPendingRoundRest = useCallback(() => {
+        setPendingRoundRest((pending) => {
+            if (pending) timerApiRef.current?.startRest(String(pending.seconds), { label: pending.label })
+            return null
+        })
+    }, [])
     const blocks = useMemo(() => [...plan.workout_blocks].sort((a, b) => a.order_index - b.order_index), [plan.workout_blocks])
     const [showTechnique, setShowTechnique] = useState(false)
     const [autoTimerEnabled, setAutoTimerEnabled] = useState(true)
@@ -1231,6 +1309,14 @@ export function WorkoutExecutionClient({
     // `currentStepIndex` = paso visible del pager (swipe/rail/botones + auto-avance lo mueven).
     const [stepperEnabled, setStepperEnabled] = useState(false)
     const [currentStepIndex, setCurrentStepIndex] = useState(0)
+    // Limpieza (2/4) del descanso de ronda diferido: CAMBIO DE PASO. Un solo punto para todos los call
+    // sites que mueven el pager (toggle del modo, «Ver todo» / volver, auto-avance y el salto al primer
+    // incompleto): la ronda que quedó esperando en el paso anterior ya no tiene CTA donde vivir. Los
+    // otros 3 casos: commit de cualquier miembro (`handleLogged`), omitir bloque (`commitSkip`) y
+    // finalizar el entreno (`handleFinish`).
+    useEffect(() => {
+        setPendingRoundRest(null)
+    }, [currentStepIndex])
     const [showTimerSettings, setShowTimerSettings] = useState(false)
     // Ejecutor V3 (E2.1): arranca con la prop `executorV3` (hoy siempre `true` — el flag `executor_v3`
     // se eliminó). QA3: arrancar con este valor mantiene SSR=cliente determinístico. Antes arrancaba
@@ -1919,6 +2005,9 @@ export function WorkoutExecutionClient({
         const prev = sessionLogs
         const nextLogs = applyOptimisticSessionLog(prev, payload)
         const info = supersetInfo.get(payload.blockId)
+        // Limpieza (1/4): un commit NUEVO de cualquier miembro invalida la ronda que estaba esperando;
+        // si esta serie vuelve a cerrar ronda con la pref OFF, se re-arma unas líneas más abajo.
+        setPendingRoundRest(null)
 
         if (info) {
             // Superserie: la "siguiente" respeta el orden intercalado (tras A1 apunta a B1).
@@ -1927,6 +2016,24 @@ export function WorkoutExecutionClient({
             setNextCue(nextPos)
             const round = payload.setNumber
             const roundClosed = isRoundComplete(info.members, round, nextLogs)
+            // D2 + R24 + R28: con la pref «Pasar solo al descanso» APAGADA nadie arranca el descanso de
+            // grupo — se guarda ACÁ, en el commit, el contexto COMPLETO de la ronda (es el único punto
+            // donde existen `members`, la ronda y el «qué sigue») y el alumno decide con el CTA
+            // «Ronda lista · Descansar N s». Con la pref ON el camino automático de `LogSetForm` sigue
+            // exactamente igual que hoy y no se arma nada. Sin descanso de grupo (`rest_time` 0, A7) no
+            // hay nada que ofrecer.
+            if (roundClosed && !autoTimerEnabled && info.groupRestSeconds > 0) {
+                const nextBlock = nextPos ? blocks.find((b) => b.id === nextPos.blockId) : null
+                const nextName = nextBlock ? getExercise(nextBlock)?.name ?? null : null
+                setPendingRoundRest({
+                    groupId: info.members[0]?.id ?? payload.blockId,
+                    round,
+                    totalRounds: info.maxSets,
+                    seconds: info.groupRestSeconds,
+                    // El rótulo entero viaja en `label`: en web no hay `countKind` (R28).
+                    label: `Ronda ${round} de ${info.maxSets}${nextName ? ` · ${nextName}` : ''}`,
+                })
+            }
             if (nextPos) {
                 // QA3: en V3 el aviso es la barra "¡Sigue sin detenerte!" del paso — el toast duplicado
                 // "(i) Sin descanso" queda SOLO para V2/legacy.
@@ -1984,6 +2091,9 @@ export function WorkoutExecutionClient({
      */
     const commitSkip = (blockId: string, reason: SkipReason | null) => {
         setSkipSheetBlockId(null)
+        // Limpieza (3/4): omitir un bloque resuelve la ronda por otro camino — el CTA de descanso de
+        // grupo que hubiera quedado esperando ya no corresponde.
+        setPendingRoundRest(null)
         const block = blocks.find((b) => b.id === blockId)
         if (!block) return
         const logged = new Set(sessionLogs.filter((l) => l.block_id === blockId).map((l) => l.set_number))
@@ -2054,6 +2164,8 @@ export function WorkoutExecutionClient({
     const handleFinish = async () => {
         if (finishingRef.current) return
         finishingRef.current = true
+        // Limpieza (4/4): la sesión terminó — ninguna ronda queda esperando su descanso.
+        setPendingRoundRest(null)
         const pending = readWorkoutOfflineQueueForPlan(plan.id)
 
         // ── 1) Cierre local inmediato (todo síncrono y barato) ──
@@ -2185,6 +2297,9 @@ export function WorkoutExecutionClient({
                         openTechnique={openTechnique}
                         registerRowRef={registerRowRef}
                         getExercise={getExercise}
+                        // D2/R28: la ronda que cerró con la pref OFF espera acá su CTA (W4.11).
+                        pendingRoundRest={pendingRoundRest?.groupId === info.members[0]?.id ? pendingRoundRest : null}
+                        onStartPendingRoundRest={startPendingRoundRest}
                     />
                 )
             }
@@ -2609,6 +2724,9 @@ export function WorkoutExecutionClient({
             value={{ items: execListMapItems, next: execInterstitialNext, round: execInterstitialRound }}
         >
         <WorkoutTimerProvider v3={execV3Active}>
+          {/* Publica `startRest` para el orquestador (W4.7): el provider se monta ACÁ, así que el
+              cuerpo del componente no puede usar el hook. No pinta nada. */}
+          <WorkoutTimerBridge apiRef={timerApiRef} />
           <WorkoutKeypadProvider>
             <div
                 ref={execRootRef}

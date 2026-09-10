@@ -309,6 +309,52 @@ describe('workout-offline-queue', () => {
             expect(workoutLogToFormData(q[0]).get('metadata')).toBe('{"left_reps":12,"right_reps":10}')
         })
 
+        /**
+         * W4.5 / W4.T3 (`specs/cuenta-atras-en-pantalla`) — una serie de FUERZA POR TIEMPO guardada en
+         * avión sube COMPLETA al drenar: los segundos y la marca de fuente. El módulo de cola ya sabía
+         * serializar `actual_hold_sec` y `metadata`; el hueco estaba en el call site de fuerza de
+         * `LogSetForm`, que no los encolaba. Sin esto la serie subía sin el hold — y el fallo era
+         * silencioso, porque la fila igual se marcaba como registrada.
+         */
+        it('W4.T3: fuerza por tiempo en avión ⇒ al drenar llegan `actual_hold_sec` y `metadata`', () => {
+            const item = make({
+                blockId: BLOCK_UUID,
+                weightKg: 10,
+                // R2: la serie por tiempo NO lleva reps (`NULL`, jamás 0).
+                repsDone: null,
+                rir: 2,
+                actualHoldSec: 58,
+                metadata: { left_sec: 30, right_sec: 28, hold_source: 'timer' },
+            })
+            expect(enqueueWorkoutLog(item)).toBe(true)
+
+            const fd = workoutLogToFormData(readWorkoutOfflineQueue()[0])
+            expect(fd.get('actual_hold_sec')).toBe('58')
+            expect(fd.has('reps_done')).toBe(false)
+            expect(JSON.parse(String(fd.get('metadata')))).toEqual({ left_sec: 30, right_sec: 28, hold_source: 'timer' })
+
+            // Mismo parseo que hace `logSetAction` con el FormData del flush: las tres claves de la
+            // metadata sobreviven a Zod (W0.4) y `reps_done` queda ausente ⇒ la columna NULL.
+            const parsed = WorkoutLogSetSchema.safeParse({
+                block_id: fd.get('block_id'),
+                set_number: fd.get('set_number'),
+                weight_kg: fd.get('weight_kg'),
+                rir: fd.get('rir'),
+                actual_hold_sec: fd.get('actual_hold_sec'),
+                metadata: JSON.parse(String(fd.get('metadata'))),
+            })
+            expect(parsed.success).toBe(true)
+            expect(parsed.success && parsed.data.metadata).toEqual({ left_sec: 30, right_sec: 28, hold_source: 'timer' })
+            expect(parsed.success && parsed.data.reps_done).toBeUndefined()
+        })
+
+        it('W4.T3: el ítem de fuerza CLÁSICA sigue byte-idéntico (sin hold ni metadata)', () => {
+            const fd = workoutLogToFormData(make({ blockId: BLOCK_UUID, weightKg: 20, repsDone: 10 }))
+            expect(fd.has('actual_hold_sec')).toBe(false)
+            expect(fd.has('metadata')).toBe(false)
+            expect(fd.get('reps_done')).toBe('10')
+        })
+
         it('Q3: un item legacy sin metadata drena sin inventar la key', () => {
             // Item tal como quedó en localStorage antes de este tren (sin `metadata`).
             localStorage.setItem(

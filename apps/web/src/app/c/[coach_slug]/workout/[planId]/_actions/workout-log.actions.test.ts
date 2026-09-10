@@ -447,6 +447,73 @@ describe('logSetAction — metadata: la key se OMITE cuando no viene (W2.3)', ()
         expect(logs.inserts[0]).toMatchObject({ metadata: { left_reps: 12, right_reps: 10 } })
     })
 
+    // ── W4.T2 · `hold_source` en el MISMO objeto que los lados (specs/cuenta-atras-en-pantalla) ────
+    //
+    // La aceptación literal de R37 es «tres claves en `metadata`»: una serie de fuerza `per_side` POR
+    // TIEMPO guardada por la web deja el jsonb con `left_sec`, `right_sec` y `hold_source`, las tres,
+    // en el MISMO objeto. Mandarlas por separado no es una opción: el UPDATE reemplaza el jsonb
+    // entero, así que un segundo escritor borraría al primero.
+
+    it('W4.T2 · `hold_source` sola (hold bilateral) llega a la fila', async () => {
+        const logs = makeWorkoutLogsMock({ selectResults: [{ data: [] }], insertResult: { error: null } })
+        wireSupabase(logs)
+
+        const result = await logSetAction({}, buildFormWithMetadata({ hold_source: 'timer' }))
+
+        expect(result.success).toBe(true)
+        expect(logs.inserts[0]).toMatchObject({ metadata: { hold_source: 'timer' } })
+    })
+
+    it('W4.T2 · las TRES claves de una serie `per_side` por tiempo viajan juntas', async () => {
+        const logs = makeWorkoutLogsMock({
+            selectResults: [{ data: [{ id: 'hold-row' }] }],
+            updateResult: { error: null },
+        })
+        wireSupabase(logs)
+        const f = buildFormWithMetadata({ left_sec: 30, right_sec: 28, hold_source: 'timer' })
+        // Contrato R2 de la fuerza por tiempo: `reps_done` NO viaja (la columna queda NULL, nunca 0).
+        f.delete('reps_done')
+        f.set('actual_hold_sec', '58')
+
+        const result = await logSetAction({}, f)
+
+        expect(result.success).toBe(true)
+        expect(logs.updates[0]).toMatchObject({
+            metadata: { left_sec: 30, right_sec: 28, hold_source: 'timer' },
+            actual_hold_sec: 58,
+            reps_done: null,
+        })
+        // Las tres, ni una más ni una menos.
+        expect(Object.keys(logs.updates[0].metadata as object).sort()).toEqual(['hold_source', 'left_sec', 'right_sec'])
+    })
+
+    it('W4.T2 · `hold_source` fuera del enum se rechaza (Zod cerrado, W0.4)', async () => {
+        const logs = makeWorkoutLogsMock({ selectResults: [{ data: [] }] })
+        wireSupabase(logs)
+
+        const result = await logSetAction({}, buildFormWithMetadata({ hold_source: 'reloj' }))
+
+        expect(result.code).toBe('validation')
+        expect(logs.inserts).toHaveLength(0)
+    })
+
+    it('W4.T2 · sin la key `metadata` la columna NO se toca (un hold ya marcado conserva su fuente)', async () => {
+        const logs = makeWorkoutLogsMock({
+            selectResults: [{ data: [{ id: 'hold-row' }] }],
+            updateResult: { error: null },
+        })
+        wireSupabase(logs)
+        const f = buildForm()
+        f.delete('reps_done')
+        f.set('actual_hold_sec', '30')
+
+        const result = await logSetAction({}, f)
+
+        expect(result.success).toBe(true)
+        expect(Object.keys(logs.updates[0])).not.toContain('metadata')
+        expect(logs.updates[0]).toMatchObject({ actual_hold_sec: 30, reps_done: null })
+    })
+
     it('metadata con JSON inválido se ignora ⇒ la key tampoco viaja (no pisa el jsonb existente)', async () => {
         const logs = makeWorkoutLogsMock({
             selectResults: [{ data: [{ id: 'row' }] }],

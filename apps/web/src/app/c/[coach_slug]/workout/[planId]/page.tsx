@@ -92,6 +92,13 @@ export default async function WorkoutExecutionPage({ params, searchParams }: Pro
             repeatDate={repeatDate}
             executorV3={true}
             weekStatusDays={weekStatusDays}
+            // Preferencia «Pasar solo al descanso» por ALUMNO (R32/CA-93): `getClientRootUser()` es
+            // nullable y los redirects de arriba miran `data.user`/`data.plan`, no `rootUser`, así que
+            // `rootUser.id` a secas produciría la clave `eva:exec-autorest-v1:undefined` — una
+            // preferencia (y una marca de «modal visto») COMPARTIDA por todos los alumnos de ese
+            // navegador. Con los dos nulos el cliente cae al carril legacy por dispositivo y no
+            // muestra el modal. Cuesta 0 queries: `rootUser` ya se resolvió para la racha.
+            clientId={rootUser?.id ?? user?.id ?? null}
         />
     )
 }

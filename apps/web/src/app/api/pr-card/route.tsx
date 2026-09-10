@@ -81,6 +81,12 @@ async function computePr(
             .eq('client_id', clientId)
             .eq('exercise_id', exerciseId)
             .not('weight_kg', 'is', null)
+            // Fuerza POR TIEMPO (specs/cuenta-atras-en-pantalla, W4.8 · A4): una serie por tiempo lleva
+            // `reps_done = NULL` y peso real (la plancha con disco), así que sin este filtro el hold
+            // entraría a la curva de récords como si fuera un levantamiento. Es el cliente hermano de
+            // la migración M2, que puso el MISMO filtro en `get_client_exercise_prs`: los dos caminos
+            // que listan récords tienen que decidir igual. `NULL > 0` es NULL ⇒ la fila se descarta.
+            .gt('reps_done', 0)
             .order('logged_at', { ascending: true })
             .limit(2000),
         admin.from('exercises').select('name').eq('id', exerciseId).maybeSingle(),

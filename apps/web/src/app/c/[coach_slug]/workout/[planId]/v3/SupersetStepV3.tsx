@@ -28,6 +28,7 @@ import {
     type WorkoutSessionLog,
     type SupersetInfo,
     type SessionSubstitution,
+    type PendingRoundRest,
     RUT_TYPE_META,
 } from '../WorkoutExecutionClient'
 import { resolveExecMedia } from './exec-media'
@@ -65,6 +66,20 @@ interface SupersetStepV3Props {
     openTechnique: (exercise: ExerciseType | null) => void
     registerRowRef: (blockId: string, setNumber: number, el: HTMLDivElement | null) => void
     getExercise: (block: BlockType) => ExerciseType | null
+    /**
+     * Descanso de GRUPO diferido (**D2/R28**, `specs/cuenta-atras-en-pantalla`, W4.7). Lo arma el
+     * ORQUESTADOR en el commit cuando la ronda cierra con la preferencia «Pasar solo al descanso»
+     * APAGADA: acá nadie llamó a `startRest`, así que este paso pinta el CTA
+     * **«Ronda lista · Descansar N s»** (W4.11, `[UI · Fable]`). `null` ⇒ no hay ronda esperando
+     * (pref ON, la ronda no cerró, o el descanso ya arrancó).
+     */
+    pendingRoundRest?: PendingRoundRest | null
+    /**
+     * Handler del CTA de arriba: llama al **mismo** `startRest` del provider —
+     * `startRest(String(seconds), { label })`, con «Ronda N de M · siguiente» dentro de `label`
+     * porque en web no existe `countKind` (R28)— y limpia el estado pendiente.
+     */
+    onStartPendingRoundRest?: () => void
 }
 
 const SUBSTITUTION_REASON = 'Máquina ocupada'
@@ -111,6 +126,12 @@ export function SupersetStepV3({
     openTechnique,
     registerRowRef,
     getExercise,
+    // W4.7 — el paso los RECIBE ya (interfaz + pase desde el orquestador); el CTA
+    // «Ronda lista · Descansar N s» que los consume es la tarea de pantalla W4.11.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    pendingRoundRest = null,
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    onStartPendingRoundRest,
 }: SupersetStepV3Props) {
     const { members, letterByBlock, groupLetter, groupRestSeconds, maxSets } = info
 
