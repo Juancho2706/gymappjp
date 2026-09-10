@@ -14,14 +14,17 @@ import type { ImplausibleEventReason, ImplausibleSurface, KcalBucket } from '@ev
 import {
     conversionAppliedPayload,
     conversionPreviewedPayload,
+    equivalencesOpenedPayload,
     PORTIONS_EVENT_CONVERSION_APPLIED,
     PORTIONS_EVENT_CONVERSION_PREVIEWED,
+    PORTIONS_EVENT_EQUIVALENCES_OPENED,
     PORTIONS_EVENT_GROUP_BUMPED,
     portionGroupBumpedPayload,
     TARGETS_EVENT_SCOPE,
     targetsScopePayload,
     type PortionConversionAppliedProps,
     type PortionConversionPreviewedProps,
+    type PortionEquivalencesOpenedProps,
     type PortionGroupBumpedProps,
     type QeTargetsScope,
     type TargetsScopeFrom,
@@ -669,6 +672,30 @@ export function useCaptureNutritionPortionConversionApplied() {
     return useCallback(
         (props: PortionConversionAppliedProps) => {
             ph?.capture(PORTIONS_EVENT_CONVERSION_APPLIED, conversionAppliedPayload('web', props))
+        },
+        [ph]
+    )
+}
+
+/**
+ * Tren «Porciones a la chilena» (W5.9) — el ALUMNO abrió el sheet «1 porción equivale a»
+ * (`PortionEquivalencesSheet`, web y RN). Mide si D4-A cumple: cuántas aperturas ven una lista con
+ * genéricos del INTA/UDD arriba, sobre qué set y con cuántas filas.
+ *
+ * ES UN EVENTO DEL ALUMNO, y por eso el payload tiene EXACTAMENTE cuatro llaves y **no lleva
+ * `group_code`** (a diferencia del bump del coach): el código del grupo atado al distinct_id del
+ * alumno es su pauta nutricional, o sea un dato de salud (Ley 21.719 + SPEC §17). Tampoco viajan
+ * nombres de alimento ni cifras: el conteo de filas sale ya convertido en TRAMO
+ * (`rows_bucket`) por `equivalencesOpenedPayload`, que es el MISMO constructor que llama RN.
+ */
+export function useCaptureNutritionEquivalencesOpened() {
+    const ph = usePostHog()
+    return useCallback(
+        (props: PortionEquivalencesOpenedProps) => {
+            ph?.capture(
+                PORTIONS_EVENT_EQUIVALENCES_OPENED,
+                equivalencesOpenedPayload('web', props)
+            )
         },
         [ph]
     )

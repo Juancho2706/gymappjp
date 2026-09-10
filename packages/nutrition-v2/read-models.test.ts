@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { expandComposedGroups, macrosForTargets, type ExchangeGroup } from '@eva/nutrition-engine'
 import {
+  NUTRITION_READ_MODEL_SCHEMA_VERSION,
   FoodBarcodeLookupReadModelSchema,
   FoodCatalogSearchReadModelSchema,
+  NutritionExchangeFoodReadSchema,
   NutritionExchangeGroupReadSchema,
   NutritionHistoryDaySchema,
   NutritionIntakeReadItemSchema,
@@ -965,5 +967,66 @@ describe('nutrition V2 linaje de ítems — originalPrescriptionItemId (W3.1 «C
         originalPrescriptionItemId: 'item-anterior',
       }),
     ).toThrow()
+  })
+})
+
+// ── W5 · foto y genéricos en el sheet «1 porción equivale a» (DATA §8.4) ──────
+describe('nutrition V2 porciones — NutritionExchangeFoodReadSchema con foto y origen (W5)', () => {
+  /** Fila mínima, tal cual la emitía el RPC ANTES de W5 (7 llaves, sin foto). */
+  const legacyRow = {
+    foodId: '77777777-7777-4777-8777-777777777777',
+    exchangeGroupId: '55555555-5555-4555-8555-555555555555',
+    groupCode: 'PCT',
+    name: 'Marraqueta',
+    brand: null,
+    portionLabel: '½ unidad',
+    portionGrams: 50,
+  }
+
+  it('parsea una fila CON las cuatro llaves nuevas', () => {
+    const parsed = NutritionExchangeFoodReadSchema.parse({
+      ...legacyRow,
+      isGeneric: true,
+      imagePath: 'off/3/012/345/front.jpg',
+      imageVersion: 2,
+      imageLicense: 'cc_by_sa',
+    })
+    expect(parsed.isGeneric).toBe(true)
+    expect(parsed.imagePath).toBe('off/3/012/345/front.jpg')
+    expect(parsed.imageVersion).toBe(2)
+    expect(parsed.imageLicense).toBe('cc_by_sa')
+  })
+
+  it('parsea una fila SIN las llaves nuevas (binario RN viejo / RPC viejo)', () => {
+    const parsed = NutritionExchangeFoodReadSchema.parse(legacyRow)
+    expect(parsed.isGeneric).toBeUndefined()
+    expect(parsed.imagePath).toBeUndefined()
+    expect(parsed.imageVersion).toBeUndefined()
+    expect(parsed.imageLicense).toBeUndefined()
+  })
+
+  it('acepta las tres llaves de foto en null (alimento sin foto en food_media)', () => {
+    const parsed = NutritionExchangeFoodReadSchema.parse({
+      ...legacyRow,
+      isGeneric: false,
+      imagePath: null,
+      imageVersion: null,
+      imageLicense: null,
+    })
+    expect(parsed.imagePath).toBeNull()
+    expect(parsed.imageVersion).toBeNull()
+    expect(parsed.imageLicense).toBeNull()
+  })
+
+  it('rechaza imageVersion 0, negativa o con decimales (el ?v= sale de un entero positivo)', () => {
+    for (const imageVersion of [0, -1, 1.5]) {
+      expect(() =>
+        NutritionExchangeFoodReadSchema.parse({ ...legacyRow, imageVersion }),
+      ).toThrow()
+    }
+  })
+
+  it('NO sube la versión del read model: las cuatro llaves son aditivas y opcionales', () => {
+    expect(NUTRITION_READ_MODEL_SCHEMA_VERSION).toBe(1)
   })
 })

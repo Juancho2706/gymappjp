@@ -123,5 +123,65 @@ BEGIN
 END $t6$;
 
 RESET role;
+
+-- ===== T7: la FOTO no puede saltarse el filtro de tenant (regresion B1, W5.3) =====
+-- 20260909130000 cuelga un `left join lateral` de public.food_media del bloque
+-- `select ... into v_exchange_foods` de get_nutrition_today_v2. El lateral es
+-- seguro SOLO porque cuelga de `ranked`, o sea de filas que YA pasaron por el
+-- filtro de tenant de las dos ramas del union all. Si alguien lo reescribe
+-- colgandolo de public.foods directo, o lo sube por encima de los filtros, el
+-- alumno de un coach vuelve a ver alimentos de otro. Se verifica sobre la
+-- DEFINICION porque get_nutrition_today_v2 es VOLATILE y materializa snapshots
+-- del dia: no se la invoca en un test.
+DO $t7$
+DECLARE
+  v_def text := pg_get_functiondef('public.get_nutrition_today_v2(uuid,date,text)'::regprocedure);
+  v_ini constant text := '    into v_exchange_foods';
+  v_fin constant text := '    where ranked.rn <= 60;';
+  v_lateral constant text := 'public.food_media fm';
+  v_tenant constant text := 'cl.coach_id from public.clients cl';
+  v_pos_ini int; v_pos_fin int; v_pos_lat int;
+  v_block text; v_pre text; v_hits int;
+BEGIN
+  -- El filtro de tenant vive en las dos ramas del union all mas el resto de la
+  -- funcion: menos de 3 apariciones globales ya es fuga (canario heredado).
+  v_hits := (length(v_def) - length(replace(v_def, v_tenant, ''))) / length(v_tenant);
+  IF v_hits < 3 THEN
+    RAISE EXCEPTION 'T7 FAIL: el filtro de tenant aparece % veces en la definicion (minimo 3)', v_hits;
+  END IF;
+
+  v_pos_ini := position(v_ini in v_def);
+  v_pos_fin := position(v_fin in v_def);
+  IF v_pos_ini = 0 OR v_pos_fin = 0 OR v_pos_fin <= v_pos_ini THEN
+    RAISE EXCEPTION 'T7 FAIL: no se pudo delimitar el bloque select ... into v_exchange_foods (ini=%, fin=%)', v_pos_ini, v_pos_fin;
+  END IF;
+  v_block := substr(v_def, v_pos_ini, v_pos_fin - v_pos_ini + length(v_fin));
+
+  -- El lateral tiene que estar DENTRO del mismo select ... into v_exchange_foods,
+  -- es decir entre el `into` y el cap `rn <= 60` que cierra la sentencia.
+  v_pos_lat := position(v_lateral in v_block);
+  IF v_pos_lat = 0 THEN
+    RAISE EXCEPTION 'T7 FAIL: falta el lateral de food_media dentro del bloque (¿se aplico 20260909130000_nutrition_today_v2_exchange_foods_media_generic.sql?)';
+  END IF;
+  IF (length(v_block) - length(replace(v_block, v_lateral, ''))) / length(v_lateral) <> 1 THEN
+    RAISE EXCEPTION 'T7 FAIL: el lateral de food_media aparece mas de una vez en el bloque';
+  END IF;
+
+  -- Y las filas base sobre las que cuelga ya tienen que venir filtradas: todo el
+  -- texto ANTERIOR al lateral, dentro del bloque, contiene los 3 filtros de tenant
+  -- (egf + foods de la rama 1, foods de la rama 2). Si el lateral se escribiera
+  -- sin ellos, o antes de ellos, este conteo cae y el test se pone rojo.
+  v_pre := left(v_block, v_pos_lat - 1);
+  v_hits := (length(v_pre) - length(replace(v_pre, v_tenant, ''))) / length(v_tenant);
+  IF v_hits < 3 THEN
+    RAISE EXCEPTION 'T7 FAIL: el lateral de food_media cuelga de filas sin filtro de tenant (% de 3 filtros antes del lateral) — FUGA CROSS-TENANT', v_hits;
+  END IF;
+
+  -- El lateral llavea por el alimento ya rankeado, no por public.foods crudo.
+  IF position('fm.food_id = ranked.id' in v_block) = 0 THEN
+    RAISE EXCEPTION 'T7 FAIL: el lateral no llavea por ranked.id (se solto del bloque filtrado)';
+  END IF;
+END $t7$;
+
 SELECT 'ALL PASSED' AS resultado;
 ROLLBACK;

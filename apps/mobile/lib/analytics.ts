@@ -11,14 +11,17 @@ import type { ImplausibleEventReason, ImplausibleSurface, KcalBucket } from '@ev
 import {
     PORTIONS_EVENT_CONVERSION_APPLIED,
     PORTIONS_EVENT_CONVERSION_PREVIEWED,
+    PORTIONS_EVENT_EQUIVALENCES_OPENED,
     PORTIONS_EVENT_GROUP_BUMPED,
     TARGETS_EVENT_SCOPE,
     conversionAppliedPayload,
     conversionPreviewedPayload,
+    equivalencesOpenedPayload,
     portionGroupBumpedPayload,
     targetsScopePayload,
     type PortionConversionAppliedProps,
     type PortionConversionPreviewedProps,
+    type PortionEquivalencesOpenedProps,
     type PortionGroupBumpedProps,
     type QeTargetsScope,
     type TargetsScopeFrom,
@@ -279,4 +282,29 @@ export function captureNutritionTargetsScope(props: {
         surface: 'rn',
         ...targetsScopePayload(props.scope, props.from),
     })
+}
+
+/**
+ * `nutrition_equivalences_opened` — el ALUMNO abrió el sheet «1 porción equivale a» (D4-A, W5.9).
+ * Responde UNA pregunta de producto: si la lista con genéricos INTA/UDD arriba llega de verdad al
+ * alumno, o si el sheet se sigue abriendo sobre puras marcas (`has_generic: false`).
+ *
+ * ES EL ÚNICO DE LOS CINCO QUE DISPARA EL ALUMNO, y por eso es el único SIN `group_code`
+ * (DATA §11 evento 5, fix S-07): los otros cuatro los emite el COACH sobre su herramienta, donde
+ * 'PCT' es jerga de dominio; acá el código del grupo sería la PAUTA NUTRICIONAL del alumno atada a
+ * su `distinct_id`. Si mañana hace falta saber en qué grupo se abre más, se mide del lado del coach.
+ *
+ * LEY 21.719: el payload es EXHAUSTIVO —las CUATRO llaves de DATA §11 evento 5 (`surface`, `set`,
+ * `has_generic`, `rows_bucket`) y ninguna más— y lo arma el paquete compartido, que además convierte
+ * el conteo de filas en TRAMO (`portionRowsBucket`): «cuántas equivalencias vio» con precisión de a
+ * uno es, sumado al `distinct_id`, una huella de su pauta. Ni nombres de alimento, ni de grupo, ni
+ * kcal, ni gramos, ni porciones, ni ids. `equivalencesOpenedPayload('rn', …)` es el MISMO
+ * constructor que va a llamar la web con `'web'`.
+ *
+ * Se emite UNA vez por APERTURA, no por cambio de tab de grupo dentro del sheet: sin `group_code`
+ * el segundo evento no aportaría nada y solo multiplicaría el ruido. Ese guard vive en el consumidor
+ * (`PortionEquivalencesSheet`).
+ */
+export function captureNutritionEquivalencesOpened(props: PortionEquivalencesOpenedProps): void {
+    captureAppEvent(PORTIONS_EVENT_EQUIVALENCES_OPENED, equivalencesOpenedPayload('rn', props))
 }

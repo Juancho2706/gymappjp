@@ -56,6 +56,39 @@ export function foodMediaThumbnailUrl(
   return `${base}/storage/v1/object/public/${encodeURIComponent(media.bucket)}/${encodedPath}?v=${media.version}`
 }
 
+/** Bucket UNICO de las fotos del catalogo. Es constante por CHECK en la tabla (20260714220000:9-10). */
+export const FOOD_MEDIA_BUCKET = 'food-media'
+
+/** Lo que el sheet de equivalencias recibe del RPC: el path y la version, sin el bucket. */
+export interface FoodMediaPathLike {
+  objectPath: string | null | undefined
+  version: number | null | undefined
+}
+
+/**
+ * URL publica del thumbnail a partir del PATH suelto, para el sheet «1 porcion equivale a» del
+ * alumno (W5.6). `get_nutrition_today_v2` emite `imagePath` + `imageVersion` y NO el objeto
+ * `media` —mandarlo entero sube el payload +136 % y el cache offline de RN descarta toda entrada
+ * > 750 kB (nutrition-v2-cache.ts:6)—, asi que `foodMediaThumbnailUrl` no se puede reutilizar tal
+ * cual: exige un `bucket` que no viaja. Este helper lo FIJA en `food-media` y encodea el path
+ * igual, segmento a segmento, para que las dos URLs sean identicas byte a byte para el mismo media.
+ *
+ * null si falta la base (env sin cargar) o el path (alimento sin foto). Si llega un path CON
+ * `version` nula —el RPC las resuelve en el mismo `left join lateral`, asi que no deberia pasar—
+ * se usa `?v=0`: la URL sigue siendo valida y el cache-busting queda estable, en vez de emitir
+ * `?v=undefined`.
+ */
+export function foodMediaThumbnailUrlFromPath(
+  media: FoodMediaPathLike | null | undefined,
+  supabaseUrl: string | null | undefined = process.env.EXPO_PUBLIC_SUPABASE_URL,
+): string | null {
+  if (!media?.objectPath) return null
+  return foodMediaThumbnailUrl(
+    { bucket: FOOD_MEDIA_BUCKET, objectPath: media.objectPath, version: media.version ?? 0 },
+    supabaseUrl,
+  )
+}
+
 /** Emoji local por categoria del catalogo (espejo de `FOOD_ICON_CATEGORIES` de web). */
 const FOOD_CATEGORY_EMOJI: Record<string, string> = {
   proteina: '🍗',

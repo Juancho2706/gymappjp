@@ -285,9 +285,21 @@ export const NutritionSlotExchangeTargetReadSchema = z.object({
 /**
  * Alimento de equivalencia por grupo (SPEC UX-b / hallazgo F3): la lista "1 porción
  * equivale a" viaja DENTRO del read-model del Today (security-definer) — el sheet
- * nunca consulta `exchange_groups` ni `foods` desde el cliente. Solo trae foods del
- * catálogo con `exchange_group_id` + `exchange_portion_grams` poblados (pipeline R8);
- * catálogo sin clasificar ⇒ lista vacía y el sheet muestra su estado vacío.
+ * nunca consulta `exchange_groups` ni `foods` desde el cliente.
+ *
+ * FUENTE (corregida en W5; antes este bloque decía "las columnas `foods.exchange_*`",
+ * que dejó de ser cierto en 20260804091000): la lista sale de `exchange_group_foods`
+ * —la tabla CON DUEÑO, donde la fila del coach le gana a la del sistema— y las columnas
+ * `foods.exchange_*` quedaron como rama LEGACY del `union all`, con el `owner_rank` más
+ * alto, hasta que F5 las retire. `portionLabel`/`portionGrams` son, entonces,
+ * `egf.portion_label`/`egf.portion_grams` cuando hay fila con dueño, y las columnas del
+ * alimento solo cuando no la hay. Sin nada clasificado ⇒ lista vacía y el sheet muestra
+ * su estado vacío.
+ *
+ * Las cuatro llaves de foto/origen (W5, DATA §8.4) son OPCIONALES a propósito, mismo
+ * criterio que `media` más arriba: un binario RN viejo con el RPC nuevo sigue parseando,
+ * y un binario nuevo con el RPC viejo también. Por eso `NUTRITION_READ_MODEL_SCHEMA_VERSION`
+ * NO sube.
  */
 export const NutritionExchangeFoodReadSchema = z.object({
   foodId: z.string().uuid(),
@@ -296,10 +308,32 @@ export const NutritionExchangeFoodReadSchema = z.object({
   groupCode: z.string(),
   name: z.string(),
   brand: z.string().nullable(),
-  /** Etiqueta casera de la porción (`foods.exchange_portion_label`), p.ej. "1 taza". */
+  /** Etiqueta casera de la porción (`egf.portion_label`; legacy: `foods.exchange_portion_label`), p.ej. "1 taza". */
   portionLabel: z.string().nullable(),
-  /** Gramos de UNA porción del grupo (`foods.exchange_portion_grams`). */
+  /** Gramos de UNA porción del grupo (`egf.portion_grams`; legacy: `foods.exchange_portion_grams`). */
   portionGrams: z.number().finite().positive().nullable(),
+  /**
+   * ¿Genérico (sin marca)? Lo calcula el RPC como `f.brand is null` y es lo que ordena la
+   * lista: genéricos primero (D4-A). Opcional: el RPC viejo no la emite.
+   */
+  isGeneric: z.boolean().optional(),
+  /**
+   * `food_media.object_path` de la foto ganadora. Viaja el PATH, no el objeto `media`
+   * completo (+136 % de payload y el cache offline de RN descarta > 750 kB): la URL pública
+   * la arma el cliente con `foodMediaThumbnailUrlFromPath`, que fija el bucket `food-media`.
+   */
+  imagePath: z.string().nullable().optional(),
+  /**
+   * `food_media.version`: el `?v=` del cache-busting (R-02). Sin ella, reemplazar una foto
+   * in-place dejaría al alumno viendo la vieja hasta que expire el cache.
+   */
+  imageVersion: z.number().int().positive().nullable().optional(),
+  /**
+   * `food_media.license` (`cc_by_sa`, `eva_owned`, `supplier_authorized`…): decide el pie de
+   * atribución, que es CONDICIONAL (S-08). Un pie fijo "Fotos: Open Food Facts (CC BY-SA)"
+   * sobre una ilustración propia declara una licencia falsa en las dos direcciones.
+   */
+  imageLicense: z.string().nullable().optional(),
 })
 
 /**

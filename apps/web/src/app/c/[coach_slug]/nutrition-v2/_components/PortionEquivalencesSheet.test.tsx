@@ -1,11 +1,20 @@
-import { cleanup, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
+  NutritionExchangeFoodRead,
   NutritionMealSlotRead,
   NutritionSlotExchangeTargetRead,
 } from '@eva/nutrition-v2'
 import { PortionEquivalencesSheet } from './PortionEquivalencesSheet'
 import type { PortionMarksApi } from './PortionMarks'
+
+/**
+ * Se mockea el CLIENTE de PostHog, no `@/lib/posthog/events` (misma regla que
+ * `PortionConversionDialog.test.tsx`): así corre la cadena entera —sheet → hook →
+ * `equivalencesOpenedPayload` del paquete → `capture`— y lo que se afirma es el payload REAL.
+ */
+const captureMock = vi.hoisted(() => vi.fn())
+vi.mock('posthog-js/react', () => ({ usePostHog: () => ({ capture: captureMock }) }))
 
 /**
  * W2.9 — la cabecera del sheet del alumno imprime UNA porción con los grupos COMPUESTOS ya
@@ -130,5 +139,181 @@ describe('PortionEquivalencesSheet — cabecera «1 porción» (W2.9)', () => {
     )
 
     expect(headerLine()).toBe('≈ 70 kcal · P 2 g · C 15 g · G 0 g')
+  })
+})
+
+/* ── W5.7 / W5.9 — dos secciones, miniatura de 36 px y pie condicional ─────────────────────── */
+
+const SUPABASE_URL = 'https://proj.supabase.co'
+const GENERICS_TITLE = 'Genéricos · INTA · UDD'
+const BRANDS_TITLE = 'Marcas y productos'
+const PHOTO_CREDIT = 'Fotos: Open Food Facts (CC BY-SA)'
+
+/** Fila del read model del sheet: las cuatro llaves nuevas son OPCIONALES a propósito. */
+function food(overrides: Partial<NutritionExchangeFoodRead> = {}): NutritionExchangeFoodRead {
+  return {
+    foodId: '0000e8c0-0000-0000-0000-0000000000f1',
+    exchangeGroupId: '0000e8c0-0000-0000-0000-000000000001',
+    groupCode: 'LEG',
+    name: 'Poroto cocido',
+    brand: null,
+    portionLabel: '¾ taza',
+    portionGrams: 130,
+    ...overrides,
+  }
+}
+
+/** Fila de marca (`brand` no nula ⇒ va a la sección de abajo). */
+function brandFood(overrides: Partial<NutritionExchangeFoodRead> = {}): NutritionExchangeFoodRead {
+  return food({
+    foodId: '0000e8c0-0000-0000-0000-0000000000f2',
+    name: 'Porotos Wasil',
+    brand: 'Wasil',
+    portionLabel: null,
+    portionGrams: 60,
+    ...overrides,
+  })
+}
+
+function renderSheet(exchangeFoods: NutritionExchangeFoodRead[]) {
+  render(
+    <PortionEquivalencesSheet
+      slot={slotWith([target()])}
+      initialGroupCode="LEG"
+      exchangeFoods={exchangeFoods}
+      api={api}
+      onClose={() => {}}
+      onRegister={null}
+    />,
+  )
+}
+
+describe('PortionEquivalencesSheet — secciones y buscador (W5.7)', () => {
+  const prevUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = SUPABASE_URL
+    captureMock.mockClear()
+  })
+  afterEach(() => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = prevUrl
+  })
+
+  it('con genéricos y marcas dibuja las DOS secciones, genéricos primero', () => {
+    renderSheet([food(), brandFood()])
+
+    expect(screen.getAllByRole('heading', { level: 4 }).map((h) => h.textContent)).toEqual([
+      GENERICS_TITLE,
+      BRANDS_TITLE,
+    ])
+  })
+
+  it('un buscador que solo matchea marcas NO dibuja el encabezado de genéricos', () => {
+    renderSheet([food(), brandFood()])
+
+    fireEvent.change(screen.getByLabelText('Buscar alimento equivalente'), {
+      target: { value: 'wasil' },
+    })
+
+    expect(screen.queryByText(GENERICS_TITLE)).toBeNull()
+    expect(screen.getByText(BRANDS_TITLE)).toBeTruthy()
+    expect(screen.queryByText('Poroto cocido')).toBeNull()
+  })
+
+  it('la medida casera manda y los gramos van debajo; sin medida casera manda el gramaje', () => {
+    renderSheet([food(), brandFood()])
+
+    expect(screen.getByText('¾ taza')).toBeTruthy()
+    expect(screen.getByText('130 g')).toBeTruthy()
+    // La marca no trae `portionLabel`: los gramos suben al lugar de la medida casera (una vez).
+    expect(screen.getAllByText('60 g')).toHaveLength(1)
+  })
+})
+
+describe('PortionEquivalencesSheet — foto, fallback y atribución (W5.9)', () => {
+  const prevUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+  beforeEach(() => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = SUPABASE_URL
+    captureMock.mockClear()
+  })
+  afterEach(() => {
+    process.env.NEXT_PUBLIC_SUPABASE_URL = prevUrl
+  })
+
+  it('sin ninguna licencia `cc_by*` NO pinta el pie de Open Food Facts', () => {
+    renderSheet([
+      food({ imagePath: 'coach/poroto.webp', imageVersion: 1, imageLicense: 'eva_owned' }),
+      brandFood({ imagePath: 'coach/wasil.webp', imageVersion: 1, imageLicense: 'supplier_authorized' }),
+    ])
+
+    expect(screen.queryByText(PHOTO_CREDIT)).toBeNull()
+  })
+
+  it('con una sola fila `cc_by_sa` pinta el pie UNA vez y la fila nombra su fuente', () => {
+    renderSheet([
+      food({ imagePath: 'coach/poroto.webp', imageVersion: 1, imageLicense: 'eva_owned' }),
+      brandFood({ imagePath: 'off/3/012/345/front.jpg', imageVersion: 4, imageLicense: 'cc_by_sa' }),
+    ])
+
+    expect(screen.getAllByText(PHOTO_CREDIT)).toHaveLength(1)
+    const photo = screen.getByRole('img', { name: 'Porotos Wasil · Foto: Open Food Facts (CC BY-SA)' })
+    // La URL trae el `?v=` del cache-busting y apunta al objeto público del bucket.
+    expect(photo.getAttribute('src')).toBe(
+      `${SUPABASE_URL}/storage/v1/object/public/food-media/off/3/012/345/front.jpg?v=4`,
+    )
+    // La ilustración propia NO declara fuente.
+    expect(screen.getByRole('img', { name: 'Poroto cocido' })).toBeTruthy()
+  })
+
+  it('la fila sin `imagePath` cae al marcador del grupo, no a un <img> roto', () => {
+    renderSheet([food()])
+
+    expect(screen.queryAllByRole('img')).toHaveLength(0)
+    // Dos círculos con el código del grupo: el de la cabecera y el de la fila sin foto.
+    expect(screen.getAllByText('LEG')).toHaveLength(2)
+  })
+
+  it('captura `nutrition_equivalences_opened` al abrir, sin nombres ni cifras', () => {
+    renderSheet([food(), brandFood()])
+
+    expect(captureMock).toHaveBeenCalledTimes(1)
+    expect(captureMock).toHaveBeenCalledWith('nutrition_equivalences_opened', {
+      surface: 'web',
+      // 'LEG' no es uno de los 13 códigos chilenos ⇒ set legado (decisión W5.7).
+      set: 'smae',
+      has_generic: true,
+      rows_bucket: '1-10',
+    })
+  })
+
+  /**
+   * DATA §11 (evento 5): «se dispara al abrir, UNA vez por apertura, no por cada cambio de tab de
+   * grupo». Con el guard atado al grupo, una franja de 5 grupos emitía hasta 5 aperturas y el
+   * embudo de D4-A quedaba inflado.
+   */
+  it('cambiar de tab de grupo NO emite una segunda apertura', () => {
+    render(
+      <PortionEquivalencesSheet
+        slot={slotWith([
+          target(),
+          target({
+            id: '0000e8c0-0000-0000-0000-000000000102',
+            groupCode: 'C',
+            groupName: 'Cereales',
+            ref: REF_C,
+            composedOf: null,
+            orderIndex: 1,
+          }),
+        ])}
+        initialGroupCode="LEG"
+        exchangeFoods={[food(), brandFood()]}
+        api={api}
+        onClose={() => {}}
+        onRegister={null}
+      />,
+    )
+
+    expect(captureMock).toHaveBeenCalledTimes(1)
+    fireEvent.click(screen.getByRole('button', { name: 'C · Cereales' }))
+    expect(captureMock).toHaveBeenCalledTimes(1)
   })
 })

@@ -81,6 +81,8 @@ export * from './exchange-visibility'
 export * from './portions-analytics'
 // Tren «Porciones a la chilena» (W3): conversion PURA del BORRADOR del set SMAE al chileno — jamas toca una version publicada (T-05).
 export * from './exchange-conversion'
+// Tren «Porciones a la chilena» (W5): split genericos/marcas y credito CONDICIONAL de foto del sheet «1 porcion equivale a» del alumno.
+export * from './exchange-foods-origin'
 export {
   NUTRITION_V2_PERMISSION_DENIED,
   NUTRITION_V2_PERMISSION_DENIED_CODE,

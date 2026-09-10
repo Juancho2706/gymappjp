@@ -193,3 +193,71 @@ export type TargetsScopePayload = {
 export function targetsScopePayload(scope: QeTargetsScope, from: TargetsScopeFrom): TargetsScopePayload {
   return { scope, from }
 }
+
+/**
+ * 5. El ALUMNO abre el sheet «1 porcion equivale a» (D4-A, W5.9).
+ *
+ * SIN `group_code`, y es el unico de los cinco al que le falta (DATA §11, fix S-07): los otros
+ * cuatro los dispara el COACH sobre su herramienta de trabajo, donde 'PCT' es jerga de dominio;
+ * este lo dispara el cliente del ALUMNO, y ahi el codigo del grupo es su PAUTA NUTRICIONAL atada
+ * a su `distinct_id`. Si mañana hace falta saber en que grupo se abre mas el sheet, se mide desde
+ * el lado del coach, no agregandole `group_code` a este evento.
+ *
+ * Se emite UNA vez por APERTURA, no por cambio de tab de grupo dentro del sheet: sin `group_code`
+ * el segundo evento no aportaria nada y solo multiplicaria el ruido. El guard es de la superficie.
+ */
+export const PORTIONS_EVENT_EQUIVALENCES_OPENED = 'nutrition_equivalences_opened'
+
+/**
+ * TRAMO de filas de la lista, jamas el numero: «cuantas equivalencias vio» con precision de a uno
+ * es, sumado al `distinct_id`, una huella de la pauta del alumno. El tope es 31-60 porque el RPC
+ * corta en 60 (`where ranked.rn <= 60`).
+ */
+export type PortionRowsBucket = '0' | '1-10' | '11-30' | '31-60'
+
+/**
+ * Los tramos se calculan ACA y no en cada componente (DATA §11, «reglas de implementacion»): con
+ * un helper por superficie, web y RN terminan con cortes distintos y el embudo compara peras con
+ * manzanas. Negativos y no-finitos caen en '0'; > 60 se clampea al ultimo tramo.
+ */
+export function portionRowsBucket(rows: number): PortionRowsBucket {
+  if (!Number.isFinite(rows) || rows <= 0) return '0'
+  if (rows <= 10) return '1-10'
+  if (rows <= 30) return '11-30'
+  return '31-60'
+}
+
+/** Lo que la superficie sabe de la apertura, en camelCase; el snake_case lo pone el payload. */
+export type PortionEquivalencesOpenedProps = {
+  /** Set de porciones del grupo abierto: chileno o SMAE. NO es el codigo del grupo. */
+  readonly set: PortionSystem
+  /** ¿La lista trae al menos un generico? Es la metrica de D4-A. */
+  readonly hasGeneric: boolean
+  /** CONTEO crudo de filas; el payload lo convierte en TRAMO y el numero no sale de aca. */
+  readonly rows: number
+}
+
+/**
+ * Payload de la apertura. EXHAUSTIVO: estas 4 llaves y ninguna mas (TASKS W5.9 + instruccion del
+ * jefe en W5). DATA §11 dibuja ademas `has_photos` y `searched`; quedaron FUERA del contrato de
+ * esta wave — si se agregan, se agregan aca y en las dos superficies a la vez, nunca con un spread
+ * en el componente.
+ */
+export type PortionEquivalencesOpenedPayload = {
+  surface: PortionSurface
+  set: PortionSystem
+  has_generic: boolean
+  rows_bucket: PortionRowsBucket
+}
+
+export function equivalencesOpenedPayload(
+  surface: PortionSurface,
+  props: PortionEquivalencesOpenedProps,
+): PortionEquivalencesOpenedPayload {
+  return {
+    surface,
+    set: props.set,
+    has_generic: props.hasGeneric,
+    rows_bucket: portionRowsBucket(props.rows),
+  }
+}

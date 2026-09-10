@@ -69,6 +69,31 @@ export function foodImageUrl(path: string | null | undefined): string | null {
 }
 
 /**
+ * URL publica del thumbnail del sheet «1 porcion equivale a» del alumno (W5.6), a partir del
+ * PATH y la VERSION sueltos que emite `get_nutrition_today_v2` (`imagePath` / `imageVersion`).
+ *
+ * Por que no alcanza `foodImageUrl`: le falta el `?v=` del cache-busting (R-02). Si alguna vez
+ * se reemplaza una foto in-place, sin `?v=` el alumno ve la vieja hasta que expire el cache del
+ * navegador. Este helper es el GEMELO exacto de `foodMediaThumbnailUrlFromPath` de RN
+ * (apps/mobile/lib/nutrition-v2-food-media.ts): misma base, mismo bucket fijo `food-media`,
+ * mismo encode segmento a segmento y el mismo `?v=`, para que la URL sea identica byte a byte en
+ * las dos superficies (y el CDN sirva un solo objeto).
+ *
+ * `version` nula ⇒ `?v=0`: el RPC resuelve path y version en el MISMO lateral, asi que no
+ * deberia pasar, pero una URL con `?v=undefined` seria peor que una estable.
+ *
+ * null si falta el path (alimento sin foto) o `NEXT_PUBLIC_SUPABASE_URL`.
+ */
+export function foodMediaThumbnailUrlFromPath(media: {
+  objectPath: string | null | undefined
+  version: number | null | undefined
+}): string | null {
+  const url = foodImageUrl(media?.objectPath)
+  if (!url) return null
+  return `${url}?v=${media.version ?? 0}`
+}
+
+/**
  * Ruta del icono estatico por categoria. Siempre devuelve una ruta valida:
  * cae a `otro` si la categoria es desconocida, null o vacia.
  */

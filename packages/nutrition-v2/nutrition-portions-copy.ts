@@ -163,6 +163,33 @@ export const PORTIONS_COPY = {
     sheetNoResults: 'Sin resultados para tu búsqueda.',
     sheetEmpty:
       'Aún no hay alimentos clasificados en este grupo. Igual puedes marcar tu porción o registrar lo que comiste.',
+    /**
+     * Encabezados de las DOS secciones del sheet (D4-A / W5.9): el genérico del INTA y del manual
+     * UDD va ARRIBA —es lo que reemplaza al PDF de la nutricionista— y las marcas abajo. Sticky en
+     * las dos superficies; con el buscador activo, la sección que queda vacía NO dibuja su
+     * encabezado.
+     *
+     * NOMBRE DE LAS LLAVES: SPEC §16.1 las lista como `equivalences.generic` / `equivalences.brands`
+     * y TASKS W5.9 como `student.sheetGenericsTitle` / `sheetBrandsTitle`. Mandan las de TASKS
+     * (decisión del jefe en W5), que además calzan con el prefijo `sheet*` que ya usan las otras
+     * seis claves del mismo sheet; el texto es idéntico en las dos fuentes.
+     */
+    sheetGenericsTitle: 'Genéricos · INTA · UDD',
+    sheetBrandsTitle: 'Marcas y productos',
+    /**
+     * Pie de atribución del sheet, CONDICIONAL (S-08): solo se pinta si alguna fila VISIBLE trae
+     * una licencia `cc_by_sa`/`cc_by` —lo decide `photoCreditNeeded`—. Sobre una ilustración propia
+     * este texto sería una declaración de licencia falsa, y omitirlo sobre una foto de Open Food
+     * Facts incumple la de ellos. Va UNA vez al pie, nunca por fila.
+     */
+    photoCredit: 'Fotos: Open Food Facts (CC BY-SA)',
+    /**
+     * Gemelo SINGULAR del anterior, para el `accessibilityLabel`/tooltip de LA fila que sí tiene
+     * foto acreditada (regla W5 (5): «la fila con foto nombra su fuente»). TASKS W5.9 solo nombra
+     * las tres claves de arriba; esta cuarta existe porque la regla pide el crédito por fila y el
+     * texto no puede vivir hardcodeado en el helper.
+     */
+    sheetPhotoSource: 'Foto: Open Food Facts (CC BY-SA)',
     close: 'Cerrar',
     saving: 'Guardando…',
     undoFailed: 'No se pudo deshacer la porción.',
