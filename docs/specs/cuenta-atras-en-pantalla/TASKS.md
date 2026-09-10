@@ -906,7 +906,7 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
 > nuevo: es re-encuadrarla, hacerla por alumno, cambiar el default **solo para quien recién entra** y
 > agregar el modal.
 
-- [ ] W5.1 **(Opus)** `apps/mobile/components/alumno/workout/v3/auto-rest-pref.ts` y
+- [x] W5.1 **(Opus)** (10-09, commit `1b93d58e`: núcleo puro en `packages/workout-engine/auto-rest-pref.ts` + carriles RN/web con las 2 claves, migración de lectura de `omni_autotimer`, `clientId` nulo ⇒ carril legacy leído y escrito, sin claves nuevas; `resetAutoRestPref()` en SIGNED_OUT desde `lib/auth-actions.ts`; tests W5.T2/W5.T3 verdes) `apps/mobile/components/alumno/workout/v3/auto-rest-pref.ts` y
       `apps/web/src/app/c/[coach_slug]/workout/[planId]/v3/auto-rest-pref.ts` (**nuevos**): claves
       `eva:exec-autorest-v1:<clientId>` (`'1'`/`'0'`) y `eva:exec-autorest-seen-v1:<clientId>`. Patrón
       calcado de `v3/exec-settings.ts` (RN `:30-110`: cache + `useSyncExternalStore` + hidratación
@@ -939,7 +939,7 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
       otro); una lectura pre-hidratación **no** pisa lo guardado; `clientId` nulo ⇒ **0 accesos a las
       claves nuevas** y lectura/escritura de `omni_autotimer` (un OFF previo del dispositivo se
       respeta), sin modal.
-- [ ] W5.2 **(Opus)** `resolveAutoRestDefault` como **función pura con test** — default **por cohorte**
+- [x] W5.2 **(Opus)** (10-09, commit `1b93d58e`: `resolveAutoRestDefault`/`resolveShowAutoRestModal` en el motor, `AUTOREST_DEFAULT_STRATEGY='cohort'` declarada UNA sola vez en `packages/workout-engine/auto-rest-pref.ts` y re-exportada por las dos plataformas — decisión del jefe sobre la letra de R25, misma «una línea»; W1.T4 con la fila `'off'` y el caso `clientId` nulo, 701 tests del motor verdes) `resolveAutoRestDefault` como **función pura con test** — default **por cohorte**
       (**R1**): (a) existe la clave nueva ⇒ su valor; (b) no existe pero sí `omni_autotimer` ⇒
       **copiarla** (migración de lectura); (c) sin clave y **con** historial ⇒ **ON** (es lo que viven
       hoy: cero regresión para la base viva); (d) sin clave y **sin** historial ⇒ **OFF + modal**
@@ -966,7 +966,7 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
       `strategy: 'off'`** (que no puede ser rama muerta: entra como fila de la tabla de cohortes, no
       como código sin cubrir) + storage inaccesible ⇒ no mostrar el modal y conservar el default
       vigente (fail-safe) + **un caso con `clientId` nulo** (sumarlo también al test puro W1.T4).
-- [ ] W5.3 **(Opus)** Reemplazo de la preferencia vieja: **4 lecturas + 3 escrituras/estado**, no
+- [x] W5.3 **(Opus)** (10-09, commit `1b93d58e`: RN 2 lecturas síncronas por `readAutoRest()` + 2 props reactivas por `useAutoRestPref`; web estado del orquestador resuelto post-montaje + `toggleAutoTimer` por `writeAutoRestPref`; tuerca RN/web escribe la clave nueva; **modelo puro `resolveRestAfterCommit`** (`packages/workout-engine/rest-after-commit.ts`) cableado en las dos ramas RN y en la superserie web; **CA-80** aplicado en RN (la rama OFF ya no cancela) y confirmado en web (ya era no-op); W5.T5 RN `tests/mobile/exec-autorest-matrix.test.ts` + web `v3/auto-rest-matrix.test.tsx` con assert de paridad por celda) Reemplazo de la preferencia vieja: **4 lecturas + 3 escrituras/estado**, no
       «4 puntos». Si solo se repuntan las lecturas, apenas el modal escribe
       `eva:exec-autorest-v1:<clientId>` la regla (b) de **R1** deja de copiar `omni_autotimer` y **el
       toggle de la tuerca queda inerte** (cambia de rótulo pero ya no gobierna nada) ⇒ rompería D5.
@@ -1004,7 +1004,7 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
       siguiente** se comporta según lo elegido (es el criterio 3 de W5 y el que probaría que la tuerca
       sigue gobernando después del modal); **más el caso CA-80**: con la pref **OFF**, cerrar una serie
       **no** llama `cancelRest` sobre un descanso arrancado a mano con el CTA de R24.
-- [ ] W5.4 **(Opus)** Señal de «primer entreno» (**R14**) como función pura con test:
+- [x] W5.4 **(Opus)** (10-09, commit `1b93d58e`: `isFirstWorkout` en el motor; modo `past-date`/`repeat`/`recover` derivado de `editDate`/`repeatDate`/`recoverDate` en RN y `targetDate`/`repeatDate`/`recoverDate` en web; marca «visto» al responder o al cerrar sin responder ⇒ OFF) Señal de «primer entreno» (**R14**) como función pura con test:
       `esPrimerEntreno = previousHistory vacío && exerciseMaxes vacío && sessionLogs.length === 0`.
       Las tres **ya viajan en el bundle** (web `page.tsx:81` ← `_data/workout-execution.queries.ts:245-297`;
       RN `lib/workout-session.ts:257,1203`) ⇒ **0 queries, offline-safe**. Marca «visto» escrita **al
@@ -1012,7 +1012,7 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
       un alumno veterano con un plan de ejercicios 100 % nuevos vería el modal una vez en su vida.
       Excluidos por construcción: personas E2E (reciben historial sembrado) y los modos `?fecha` /
       `?repetir` / `?recuperar` (RN `app/alumno/workout/[planId].tsx:44-48`, web `page.tsx`).
-- [ ] W5.5 **(Opus)** Exclusión del alumno demo (**A7/R14/R32**): `is_demo` se lee **en el fetch raíz
+- [x] W5.5 **(Opus)** (10-09, commit `1b93d58e`: RN `is_demo` en `RICH`/`MIN` de `lib/client.ts` → `isDemo` en `useWorkoutSession`; web `getStudentScopeRow` + `StudentModuleScope.is_demo` → prop `isDemo` desde `page.tsx`; fallback `false`) Exclusión del alumno demo (**A7/R14/R32**): `is_demo` se lee **en el fetch raíz
       del alumno**, no en un select condicional. **RN**: sumarlo al select ya existente de
       `apps/mobile/lib/client.ts:17` (`RICH`/`MIN`). **Web**: sumarlo al fetch raíz de
       `apps/web/src/app/c/[coach_slug]/_data/client-root.queries.ts` — `getClientRootUser` (`:33-42`)
@@ -1026,7 +1026,7 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
       como su alumno demo por «Vive tu app» (`apps/mobile/lib/vive-tu-app.ts:8-16`) y **no** debe ver
       el modal. Si `is_demo` no llega, el fallback es confiar en el historial. **Test**: con
       `is_demo: true` el resolver devuelve «no mostrar».
-- [ ] W5.6 **[UI · Fable]** `apps/mobile/components/alumno/workout/v3/AutoRestModalV3.tsx` (**nuevo**),
+- [x] W5.6 **[UI · Fable]** (10-09, commit `1b93d58e`: `Sheet` nativo `forceDark` + `ExecToggle` extraído + `JuicyButton` «Listo»; copys de `AUTOREST_MODAL_COPY`; **momento** = `phase === 'session' && !startExiting && !morphOverlayOpen` + ningún sheet/overlay abierto, con la señal nueva `isMorphOverlayOpen`/`subscribeMorphOverlayOpen` en `session-morph.tsx` (cierre REAL del overlay del Despegue); la resolución de datos espera `loading === false` porque la sesión setea `clientId` antes que el historial — hallazgo del jefe al juzgar el diff) `apps/mobile/components/alumno/workout/v3/AutoRestModalV3.tsx` (**nuevo**),
       montado junto a la tuerca en `v3/ExecutorV3.tsx:2107-2120` (ahí ya están `exec`,
       `motion.reduced` e `insets`), con guard de una sola vez por montaje (`useRef`). `Sheet` con
       `nativeModal` + `forceDark` y `snapPoints` chico. Copys de M.2.
@@ -1043,7 +1043,7 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
       comportamiento, no del momento del modal). Con **`clientId` nulo** el modal **no se muestra** y la
       preferencia cae a la clave legacy por dispositivo `omni_autotimer`, que **sí** se lee y se escribe
       (**R32**, igual que W5.1 y W5.7).
-- [ ] W5.7 **[UI · Fable]** `apps/web/.../v3/AutoRestModalV3.tsx` (**nuevo**), montado en
+- [x] W5.7 **[UI · Fable]** (10-09, commit `1b93d58e`: `framer-motion` + `useReducedMotion`, clases `.exec-v3-settings*`/`.exec-v3-tog` + `.exec-v3-autorest*` nuevas en `globals.css`, sin portal; **momento** = `autoRestMomentOk` (espera `data-exec-ceremony` fuera del DOM con `waitForCeremonyEnd`, re-armado) + `execV3Phase === 'session'` + sin sheets/overlays; Escape y scrim = cerrar sin responder) `apps/web/.../v3/AutoRestModalV3.tsx` (**nuevo**), montado en
       `WorkoutExecutionClient.tsx:3034-3041` dentro de `[data-exec-v3]` **sin portal**, con
       `framer-motion` + `useReducedMotion` como el sheet de ajustes y `.exec-v3-tog` /
       `.exec-v3-tog-knob` (`globals.css:5232,5246`) para el toggle interno. Disparo en efecto
@@ -1053,19 +1053,21 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
       `rootUser === null`, contemplado en `page.tsx`): la preferencia cae a la clave **legacy por
       dispositivo** `omni_autotimer` —que se **lee y se escribe**, sin clave nueva— y el modal **no se
       muestra** (**R32**; idéntico a W5.1 y W4.7).
-- [ ] W5.8 **[UI · Fable]** Filas de la tuerca renombradas: RN `v3/ExecSettingsSheet.tsx:198-221` y
+- [x] W5.8 **[UI · Fable]** (10-09, commit `1b93d58e`: nombre y sublabels desde `AUTOREST_MODAL_COPY`/`autoRestSublabel` en las dos tuercas, `danger` retirado, `testID="setting-autotimer"` intacto) Filas de la tuerca renombradas: RN `v3/ExecSettingsSheet.tsx:198-221` y
       web `v3/ExecSettingsSheet.tsx:179-207` ⇒ **«Pasar solo al descanso»** con los sublabels de R11b
       (hoy dicen «Cronómetro automático» / «El descanso empieza solo al guardar cada serie»). **Sin
       fila nueva** (dos switches que gobiernan el mismo `startRest` es duplicidad semántica) y **sin
       el `danger` rojo** del OFF. ⚠ **Esta tarea es solo de copy**: el cableado del switch a la clave
       nueva lo hace **W5.3** (puntos 5–7). Una tuerca que cambie de rótulo sin ese cableado sigue
       escribiendo `omni_autotimer` y deja de gobernar la sesión.
-- [ ] W5.9 **(Opus)** Evento `rest_autostart_pref_set {source: 'first_modal' | 'settings_sheet',
+- [x] W5.9 **(Opus)** (10-09, commit `1b93d58e`: emitido desde los handlers del orquestador — `toggleAutoTimer`/Toggle de la tuerca ⇒ `settings_sheet`, `dismissAutoRestModal(boolean)` ⇒ `first_modal`; cerrar sin responder no emite) Evento `rest_autostart_pref_set {source: 'first_modal' | 'settings_sheet',
       enabled}` en las dos superficies (ver W6.1). **Test**: se emite una sola vez por cambio.
 
 **Gate de W5**: `pnpm exec vitest run tests/mobile "apps/web/src/app/c/[coach_slug]/workout/[planId]"`
 + `pnpm --filter @eva/mobile exec tsc --noEmit` +
 `pnpm --filter @eva/mobile exec expo export --platform android` + `pnpm typecheck`.
+
+**Gate de W5 — ejecución real 10-09 (sobre `1b93d58e`, jefe):** `vitest --project mobile-node --project mobile-dom tests/mobile` ⇒ 86 archivos / 1161 tests verdes · `vitest packages/workout-engine` ⇒ 38 / 701 · `vitest --project web-dom --project web-node ".../workout/[planId]"` ⇒ 18 / 248 · `tsc --noEmit` mobile ⇒ 0 · `pnpm typecheck` ⇒ 0 · `pnpm lint:mobile` ⇒ 0 · `pnpm lint` ⇒ 0 errores / 572 warnings preexistentes · `check:tokens` OK · `docs:check` OK · `expo export --platform android` ⇒ Exported.
 
 ---
 
@@ -1084,7 +1086,7 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
       `captureException(err, { tags: { area: 'hold-autolog' }, extra: { blockId, exerciseType } })`,
       patrón `apps/mobile/components/alumno/workout/v3/session-morph.tsx:311`. **Umbral de alarma**:
       > 2 % de auto-envíos con error en 72 h. **Aceptación**: un error forzado aparece con ese tag.
-- [ ] W6.3 **(Opus)** Consulta de adopción a 72 h, declarada en `DATA-TESTING.md` como **la** fuente
+- [x] W6.3 **(Opus)** (10-09: ya declarada en DATA-TESTING §8.2 con la nota de «sin índice sobre `metadata`» y la consulta hermana de fuerza por tiempo; se corre a las 72 h del deploy, D15) Consulta de adopción a 72 h, declarada en `DATA-TESTING.md` como **la** fuente
       de verdad: `SELECT metadata->>'hold_source', count(*) FROM workout_logs WHERE logged_at >=
       <fecha del deploy> AND actual_hold_sec IS NOT NULL GROUP BY 1`. Declarar también que **no hay
       índice sobre `metadata`** ⇒ la consulta va **acotada por fecha** y no es un dashboard (backlog
@@ -1114,7 +1116,7 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
       android/ios y `run id`). **Aceptación**: las dos corridas citadas y verdes.
 - [ ] W6.9 **Gates completos, ejecución real** (tabla abajo). **Aceptación**: ninguna casilla verde sin
       salida de consola.
-- [ ] W6.10 Playwright del caso canónico **solo al cierre**, 1 navegador: superserie «Dia B» ⇒ el
+- [x] W6.10 (10-09, commit `47b640ad`, worker Opus juzgado por el jefe: seed `seedHoldCanonicalPlan` solo para el alumno standalone, idempotente por título, `duration_sec = 5` para reloj real sin reloj falso; spec propio `tests/exec-hold-superset.spec.ts` en el project `chromium`, `--list` ⇒ 2 tests, `tsc` del spec limpio, `docs:check` verde; assert de DB con anon key + login del alumno, gateado por `E2E_SUPABASE_URL/ANON_KEY`. **Pendiente del owner**: correr `pnpm seed:e2e-personas` contra LIVE con su doble gate → copiar `E2E_HOLD_PLAN_ID` → correr el spec; hasta ahí NO se declara verde. Hooks sin `data-testid` que el spec usa por clase: `.exec-v3-excard.is-active`, `.exec-v3-media`, `.exec-v3-slot.is-active` — deuda chica.) Playwright del caso canónico **solo al cierre**, 1 navegador: superserie «Dia B» ⇒ el
       reloj corre bajo el video (V1), llega a 0, la serie aparece guardada sin tocar nada (V2) y la
       tarjeta salta al miembro siguiente (V4). **Entra con seed sintético**: se amplía
       `seed:e2e-personas` (`tests/separation/personas.ts`, `docs/testing/E2E_PERSONAS.md`) con un

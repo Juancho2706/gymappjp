@@ -1992,3 +1992,56 @@ ve **idéntico** a antes del deploy; y comparar la movilidad sola contra una cap
   la línea de flota mixta de §7.4 (devices sin la OTA ven la fila de fuerza clásica con
   `reps = "30s"`). (owner)
 
+---
+
+## 11. Avisos del cierre (W6.13 y W6.14) — textos citados, los manda el owner
+
+Orden duro (§0.2): **deploy web → avisos → OTA**. Los dos textos van tal cual; si el owner los edita,
+la versión enviada reemplaza a esta.
+
+### 11.1 W6.13 · Aviso a Gerardo (Movens), mensaje directo (IG/WhatsApp)
+
+> Hola Gerardo, te cuento las novedades de EVA que salen de tu feedback:
+>
+> 1) **Reloj en pantalla dentro de las superseries.** Tus bloques de movilidad con tiempo (plancha
+> lateral y compañía) ahora muestran la cuenta atrás debajo del video, también cuando están dentro de
+> una superserie. Al llegar a 0 la serie se guarda sola y la tarjeta pasa al siguiente ejercicio de la
+> ronda. Vale para tus 21 bloques de movilidad en superserie tal como están: no tenés que tocar nada.
+>
+> 2) **Fuerza por tiempo.** En el editor de bloques, dentro de Fuerza, ahora podés elegir
+> «Reps | Segundos». Es la forma correcta de cargar isometrías con carga como la plancha frontal
+> mantenida: segundos por serie + peso + RIR, con progresión «+ Segundos» o «+ Peso». Hoy la tenés
+> como Cardio 3 × 1 min; si querés, convertila vos desde el editor (Fuerza → Segundos). Nosotros no
+> tocamos tus planes.
+>
+> 3) **Alumnos en Android.** La app está en prueba cerrada mientras Google aprueba la publicación
+> (esperamos respuesta alrededor del 13-09). Mientras tanto, pasame el Gmail de los alumnos Android
+> y los agrego como testers; con esa misma cuenta abren el link de invitación, aceptan y ya pueden
+> instalar. Alternativa inmediata sin depender de Google: la app web desde Chrome («Instalar la app»
+> en su perfil).
+>
+> Un detalle: un alumno que todavía no actualizó la app ve el bloque en modo segundos como fuerza
+> clásica con «30s» de objetivo y registra a mano. No se rompe nada y se actualiza solo al reabrir.
+
+### 11.2 W6.14 · Novedad general a coaches (`news_items`, tipo `announcement`, sin fijar)
+
+Reglas del canal (memoria del owner): markdown propio con **negrita**, `##`, viñetas `- ` y `---`,
+sin links; `published_at` siempre seteado; pedir el borrador al owner ANTES de publicar (este es el
+borrador). Título: **Cuenta atrás en pantalla y fuerza por tiempo**.
+
+```md
+## Reloj en pantalla, también en superseries
+- Los bloques de movilidad con tiempo muestran la cuenta atrás debajo del video, ahora también dentro de una superserie. Al llegar a 0 la serie se guarda sola y la tarjeta pasa al siguiente ejercicio de la ronda.
+- **Fuerza por tiempo**: en el editor, dentro de Fuerza, elegí «Reps | Segundos» para planchas y otras isometrías con carga (segundos por serie + peso + RIR, con progresión «+ Segundos» o «+ Peso»).
+
+## Dos cambios que conviene saber
+- **Récords**: los récords de un ejercicio ahora cuentan solo series con repeticiones. Un «récord» que en realidad era un hold con disco y 0 repeticiones deja de figurar como PR, así que en algunos alumnos un récord ya listado cambia o desaparece.
+- **Descanso**: tus alumnos tienen un ajuste nuevo, «Pasar solo al descanso» (⚙ del entrenamiento). Con el ajuste apagado, un descanso que el alumno arrancó a mano ya no se corta al guardar la serie siguiente.
+
+---
+Los alumnos que todavía no actualizaron la app ven los bloques en segundos como fuerza clásica con «30s» de objetivo y registran a mano. Se actualiza solo al reabrir la app.
+```
+
+Las dos líneas obligatorias de D17 (R35) están en «Dos cambios que conviene saber»; la línea de flota
+mixta de §7.4 es el cierre.
+
