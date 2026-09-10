@@ -734,9 +734,12 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
       0 fallos** (116,6 s) · `pnpm lint` ⇒ exit 0 (0 errores, 565 warnings preexistentes) · `pnpm typecheck` ⇒ exit 0 · tsc
       mobile ⇒ exit 0 · `check:tokens` ⇒ OK (86 + 5) · `check:nutrition-v2-boundaries` ⇒ 473 OK · `docs:check` ⇒ OK (CURRENT
       14,5 KB). Salida completa en [TEST_STATUS](../../testing/TEST_STATUS.md) § «Porciones a la chilena».
-- [ ] W6.6 [owner] OK explícito para push a `rnmobiledenuevo` = `master`, deploy, aplicación de migraciones, OTA y
+- [x] W6.6 [owner] OK explícito para push a `rnmobiledenuevo` = `master`, deploy, aplicación de migraciones, OTA y
       **encendido del set chileno** (W6.8).
       **Criterio**: la frase del owner citada con fecha y hora.
+      **Owner, 2026-09-10 02:18Z (09-09 23:18 Chile), respondiendo al informe del artifact 8494a516: «Q1 a, Q2 a, Q3 a,
+      Q4 a»** = Q1 push + deploy + OTA android/ios ahora · Q2 encendido apenas deploy READY + dos OTAs · Q3 banner y
+      mensajes listos por el jefe, los manda el owner · Q4 las 10 MEJORA quedan en el backlog.
 - [ ] W6.7 [Fable] Deploy Vercel READY + OTA 1.1.2 android/ios desde `.github/workflows/mobile-ota.yml` con `message`
       descriptivo. **Criterio**: ids de deploy y de ambas OTAs (con su `run`) registrados en W6.10.
 - [ ] W6.8 [jefe] **Encendido del set chileno** por MCP, recién con el deploy READY y **las dos OTAs publicadas** (las
