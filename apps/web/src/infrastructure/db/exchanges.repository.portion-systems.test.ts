@@ -171,6 +171,11 @@ describe('findUsedPortionSystemsForCoach', () => {
         const versions = calls.find((call) => call.table === 'nutrition_plan_versions_v2')
         expect(versions?.filters['nutrition_plans_v2.coach_id']).toBe(COACH)
         expect(versions?.filters['nutrition_plans_v2.lifecycle_status!neq']).toBe('archived')
+        // Regresion del incidente 2026-09-10: entre versiones y planes hay dos FKs y el embed
+        // sin pista devuelve 300 PGRST201 en PostgREST (el mock no lo ve, por eso se fija el texto).
+        expect(versions?.select).toContain(
+            'nutrition_plans_v2!nutrition_plan_versions_v2_plan_id_fkey!inner(current_published_version_id)'
+        )
         const v1 = calls.find((call) => call.table === 'meal_exchange_targets')
         expect(v1?.filters['nutrition_meals.nutrition_plans.coach_id']).toBe(COACH)
     })

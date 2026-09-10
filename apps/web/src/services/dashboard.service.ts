@@ -244,6 +244,14 @@ function planMeta(program: any, now: Date) {
 export interface DirectoryPulseRow {
     clientId: string;
     clientName: string;
+    /**
+     * Alumno de ejemplo del onboarding v2 (`clients.is_demo`). Sigue entrando al pulse para que
+     * las listas del dia 1 no esten vacias (va etiquetado como ejemplo en la UI), pero los KPIs
+     * del hero (Adherencia, Nutricion, deltas) y el snapshot diario lo excluyen: un coach nuevo
+     * con 0 alumnos reales mostraba «Adherencia 78 %» con tendencia (reporte del owner 2026-09-10).
+     * Opcional para no romper fixtures: ausente = no es demo.
+     */
+    isDemo?: boolean;
     percentage: number;
     lastPlan: string;
     completedSets: number;
@@ -306,6 +314,15 @@ export function mapDirectoryPulseToClientStats(
         : mapDirectoryPulseToNutritionStats(pulse);
 }
 
+/**
+ * Filas del pulse SIN el alumno de ejemplo. Se usa solo para los agregados (avgAdherence,
+ * avgNutrition, deltas del hero y `avg_adherence` del snapshot diario): las listas siguen
+ * recibiendo el pulse completo, con el demo etiquetado como ejemplo. Pura, sin red.
+ */
+export function excludeDemoClientsFromPulse(pulse: DirectoryPulseRow[]): DirectoryPulseRow[] {
+    return pulse.filter((p) => !p.isDemo);
+}
+
 export function mapDirectoryPulseToAdherenceStats(pulse: DirectoryPulseRow[]) {
     return pulse.map((p) => ({
         ...baseClientStatFields(p),
@@ -356,7 +373,7 @@ export class DashboardService {
                 : { orgId: scopeArg, teamId: null }
         let clientsQuery = this.supabase
             .from('clients')
-            .select('id, full_name')
+            .select('id, full_name, is_demo')
             .eq('is_archived', false)
 
         // Team workspaces are collaborative pools: the active team scopes the rows,
@@ -751,6 +768,7 @@ export class DashboardService {
             rows.push({
                 clientId: id,
                 clientName: client.full_name,
+                isDemo: Boolean((client as { is_demo?: unknown }).is_demo),
                 percentage,
                 lastPlan: lastPlanName,
                 completedSets: logsCount,

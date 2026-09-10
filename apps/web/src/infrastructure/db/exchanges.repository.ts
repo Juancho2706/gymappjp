@@ -196,7 +196,13 @@ const USED_SYSTEMS_VERSION_WINDOW_LIMIT = 1000
 async function findUsedPortionSystemsV2(db: DB, coachId: string): Promise<PortionSystem[]> {
     const { data: versions, error: versionsError } = await db
         .from('nutrition_plan_versions_v2')
-        .select('id, status, nutrition_plans_v2!inner(current_published_version_id)')
+        // Pista de FK OBLIGATORIA: entre versiones y planes hay DOS relaciones
+        // (`nutrition_plan_versions_v2_plan_id_fkey` y la inversa
+        // `nutrition_plans_v2_current_version_fkey` por `current_published_version_id`).
+        // Sin la pista PostgREST responde 300 PGRST201 («more than one relationship»),
+        // la promesa rechaza y el loader cae en modo degradado: el picker muestra los dos
+        // sets sin «Legado» (incidente en produccion 2026-09-10). Verificado contra LIVE.
+        .select('id, status, nutrition_plans_v2!nutrition_plan_versions_v2_plan_id_fkey!inner(current_published_version_id)')
         .eq('nutrition_plans_v2.coach_id', coachId)
         .neq('nutrition_plans_v2.lifecycle_status', 'archived')
         .limit(USED_SYSTEMS_VERSION_WINDOW_LIMIT)

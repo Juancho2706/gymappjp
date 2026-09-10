@@ -1,6 +1,6 @@
 import { countCoachClients, upsertCoachKpiSnapshots, type CoachKpiSnapshotInsert } from '@/infrastructure/db'
 import type { DbClient } from '@/infrastructure/db/interfaces'
-import { DashboardService, mapDirectoryPulseToAdherenceStats } from '@/services/dashboard.service'
+import { DashboardService, excludeDemoClientsFromPulse, mapDirectoryPulseToAdherenceStats } from '@/services/dashboard.service'
 import { averageAdherence, countUniqueClientDays, santiagoYmd } from '../_lib/kpi-snapshot'
 import { applyJoinedClientOwnerScope, resolveCoachDashboardScope, splitRiskClients } from './dashboard.queries'
 
@@ -62,7 +62,8 @@ export async function computeCoachKpiSnapshot(
         // Mismo predicado que el KPI vivo: conteo COMPLETO, no el top 5 de la card.
         risk_count: splitRiskClients(pulse).riskCount,
         active_clients: clientsCount,
-        avg_adherence: averageAdherence(mapDirectoryPulseToAdherenceStats(pulse)),
+        // Sin el alumno de ejemplo, igual que el KPI vivo del hero (si no, el delta T−7 mentiría).
+        avg_adherence: averageAdherence(mapDirectoryPulseToAdherenceStats(excludeDemoClientsFromPulse(pulse))),
         sessions_7d: countUniqueClientDays(logs, santiagoYmd),
     }
 }

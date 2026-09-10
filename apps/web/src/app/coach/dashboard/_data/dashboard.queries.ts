@@ -11,6 +11,7 @@ import {
 import {
     DashboardService,
     type AttentionFlag,
+    excludeDemoClientsFromPulse,
     mapDirectoryPulseToAdherenceStats,
     mapDirectoryPulseToNutritionStats,
     type DashboardClientScope,
@@ -276,7 +277,7 @@ export async function getCoachDashboardDataV2(userId: string) {
                 areaData: base.areaData,
                 todayKey: areaTodayKey,
                 yesterdayKey: areaYesterdayKey,
-                adherenceStats: base.adherenceStats,
+                adherenceStats: base.kpiAdherenceStats,
                 signupDates: _rawSignupDates,
                 nowIso: new Date().toISOString(),
                 riskCount: base.riskCount,
@@ -322,7 +323,7 @@ export async function getCoachDashboardDataV2WithClient(userId: string, supabase
                 areaData: base.areaData,
                 todayKey: areaTodayKey,
                 yesterdayKey: areaYesterdayKey,
-                adherenceStats: base.adherenceStats,
+                adherenceStats: base.kpiAdherenceStats,
                 signupDates: _rawSignupDates,
                 nowIso: new Date().toISOString(),
                 riskCount: base.riskCount,
@@ -541,12 +542,19 @@ async function getCoachDashboardDataInner(
 
     const adherenceStats = mapDirectoryPulseToAdherenceStats(pulse)
     const nutritionStats = mapDirectoryPulseToNutritionStats(pulse)
+    // KPIs del hero SIN el alumno de ejemplo: las listas de arriba lo conservan (va etiquetado),
+    // pero los promedios y los deltas no. Un coach nuevo con 0 alumnos reales mostraba
+    // «Adherencia 78 % · +2 pts» a partir de los datos sembrados del demo (owner, 2026-09-10).
+    const kpiPulse = excludeDemoClientsFromPulse(pulse)
+    const kpiAdherenceStats = mapDirectoryPulseToAdherenceStats(kpiPulse)
+    const kpiNutritionStats = mapDirectoryPulseToNutritionStats(kpiPulse)
     // Misma fórmula de siempre, ahora en `_lib/kpi-snapshot`: el cron que ESCRIBE `avg_adherence`
-    // usa esta misma función, así que el KPI vivo y la fila guardada no pueden redondear distinto.
-    const avgAdherence = averageAdherence(adherenceStats)
+    // usa esta misma función (y el mismo filtro de demo), así que el KPI vivo y la fila guardada
+    // no pueden redondear distinto.
+    const avgAdherence = averageAdherence(kpiAdherenceStats)
     const avgNutrition =
-        nutritionStats.length > 0
-            ? Math.round(nutritionStats.reduce((acc, s) => acc + s.percentage, 0) / nutritionStats.length)
+        kpiNutritionStats.length > 0
+            ? Math.round(kpiNutritionStats.reduce((acc, s) => acc + s.percentage, 0) / kpiNutritionStats.length)
             : 0
 
     const rawRecentClients = recentClientsRaw || []
@@ -720,6 +728,8 @@ async function getCoachDashboardDataInner(
         avgAdherence,
         avgNutrition,
         adherenceStats,
+        /** Solo para los deltas del hero: sin el alumno de ejemplo (ver `excludeDemoClientsFromPulse`). */
+        kpiAdherenceStats,
         nutritionStats,
         recentActivities,
         pendingCheckinsCount,

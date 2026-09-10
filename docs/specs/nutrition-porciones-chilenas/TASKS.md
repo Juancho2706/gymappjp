@@ -817,7 +817,34 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
 
 ## Fixes post-cierre
 
-_(vacía: se llena si aparece un reporte después del cierre, con `### <fecha> — <síntoma> (reporte de <slug>)`)_
+### 2026-09-10 — el picker muestra los 22 grupos mezclados, sin «Legado» (reporte del owner en el QA en device)
+
+**Síntoma:** web con los grupos SMAE bajo el encabezado «Sistema chileno»; Android con la lista plana, sin encabezados ni
+chip «Legado (SMAE)», SMAE primero. Le pasaba a todos los coaches, incluido uno recién registrado. La OTA y el deploy
+estaban bien: el resto de W2–W5 se veía.
+
+**Causa (confirmada contra PostgREST con la clave pública):** `findUsedPortionSystemsV2`
+(`apps/web/src/infrastructure/db/exchanges.repository.ts`) embebía `nutrition_plans_v2!inner(current_published_version_id)`
+desde `nutrition_plan_versions_v2`, y entre esas dos tablas hay **dos FKs** (`nutrition_plan_versions_v2_plan_id_fkey` y la
+inversa `nutrition_plans_v2_current_version_fkey`). PostgREST responde **300 `PGRST201`**, la promesa rechaza, el loader web
+(`.catch(() => undefined)`) y la ruta móvil (`visibility: null`) entran en modo degradado y `visibleExchangeGroupsForCoach`
+con `usedSystems` undefined pinta los dos sets con `legacy: false`. Los tests no lo vieron porque mockean supabase-js.
+
+**Fix:** pista de FK en el embed (`nutrition_plans_v2!nutrition_plan_versions_v2_plan_id_fkey!inner(...)`; verificado 200 con
+los mismos filtros) + aserción del texto del select en `exchanges.repository.portion-systems.test.ts`. Solo web (la ruta RN
+vive en el server): **sin OTA**. Gotcha 19 del tren: todo embed entre tablas con FK bidireccional lleva pista, y hace falta un
+smoke real contra PostgREST en el gate (backlog).
+
+### 2026-09-10 — «Adherencia 78 % · +2 pts» en el dashboard de un coach nuevo con 0 alumnos (reporte del owner)
+
+**Causa:** el pulse del dashboard incluye a propósito al alumno de ejemplo del onboarding v2 (`is_demo`, con datos sembrados)
+para que las listas del día 1 tengan contenido, y los KPIs agregados del hero (`avgAdherence`, `avgNutrition`, deltas) y el
+snapshot diario lo promediaban también. «Activos» sí lo excluía, de ahí el 0 / 78 %.
+
+**Fix:** `DirectoryPulseRow.isDemo` (opcional; el select del pulse suma `is_demo`) + `excludeDemoClientsFromPulse` en
+`services/dashboard.service.ts`, aplicado a los promedios y deltas de `dashboard.queries.ts` (las listas siguen con el demo
+etiquetado) y a `avg_adherence` del cron de snapshots (`kpi-snapshot.queries.ts`). Test `dashboard.service.demo.test.ts`.
+Hoy un coach sin alumnos reales ve «0 %» sin tendencia; el «—» en el hero (web + RN) va con la OTA del bug de marca cruzada.
 
 ## Registro de cierres
 
