@@ -12,6 +12,17 @@ source_of_truth: apps/web responsive + apps/mobile
 
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
 
+> **2026-09-10 04:07Z (fix P1 «marca cruzada tras logout» + hero «Adherencia —» — EN PRODUCCIÓN: `master` = `rnmobiledenuevo` =
+> `d5d7d188`, deploy `dpl_D8pDehbVdMrdLvChsQSVWYPwxE3z` READY, OTA 1.1.2 `production` android `e1f8b60a-e148-418d-8f06-e8cd2a14bb1c`
+> (run 34435728469) / ios `66ffaf5d-c7be-4218-983f-b7e941ef2399` (run 34435730513); QA del owner PENDIENTE)**: cerrar sesión de un
+> coach con white-label y entrar con otro coach en el mismo teléfono mostraba logo, colores, loader y nombre del anterior. La cache
+> `eva_coach_branding` ahora lleva `storedForUserId`, `loadStoredBranding` ignora y borra la de otro usuario con sesión viva,
+> `signOutAndCleanup` la borra si es del saliente, `bootstrapOwnCoachBranding` pinta EVA neutro para el coach sin marca y el
+> `ThemeContext` apaga la marca en `SIGNED_OUT`; el pre-login del alumno por código sigue igual. Paridad web + RN del hero: sin
+> alumnos reales «Adherencia» muestra «—» con caption «sin alumnos todavía» (RN `adherenceHeroStat`, web `PulseHero` y
+> `DesktopBento`), y la tarjeta «Adherencia promedio < 60 %» no sale con 0 alumnos. Deuda: la tipografía de marca de
+> `app/_layout.tsx` se lee sin guard en cold start; el id del saliente en el logout viene de `getUser()` (red).
+>
 > **2026-09-10 (tren «Porciones a la chilena», Nutrición V2 — W0–W6 EN PRODUCCIÓN 02:29Z: `master` = `rnmobiledenuevo` =
 > `95a1d39a`, deploy `dpl_xuHL7Mrs7Rxqf9WEky7sRSELVX98` READY, RPC `get_nutrition_today_v2` `20260910015432` (aditivo), OTA 1.1.2
 > `production` android `9e844b15-bf9a-4e05-b192-2c565e64e593` (run 34429335195) / ios `8de637b3-1d45-42f7-b7af-9267de3301da`
