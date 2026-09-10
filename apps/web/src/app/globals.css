@@ -6403,3 +6403,179 @@ html[data-exec-v3-entered] [data-exec-v3] .exec-v3-splash {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.4; transform: scale(0.7); }
 }
+
+/* ---- Módulo de hold + par «Descansar / Siguiente» (specs/cuenta-atras-en-pantalla, R33) ----
+   Familia PROPIA del tren: `.exec-v3-holdwrap` / `.exec-v3-holdnum` / `.exec-v3-hold-fill` son de
+   cardio (`CardioStepV3`) y NO se tocan. El tamaño vive en `--exec-hold-size` (80 / 130 / 214 px por
+   `data-size`) y el acento en `--exec-hold-accent` (marca por defecto; aqua en movilidad). */
+[data-exec-v3] .exec-v3-holdmod {
+  --exec-hold-size: 214px;
+  --exec-hold-accent: var(--exec-brand);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+[data-exec-v3] .exec-v3-holdmod[data-size='ss'] {
+  --exec-hold-size: 80px;
+  gap: 8px;
+}
+[data-exec-v3] .exec-v3-holdmod[data-size='solo130'] {
+  --exec-hold-size: 130px;
+}
+[data-exec-v3] .exec-v3-holdmod-ringrow {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+[data-exec-v3] .exec-v3-holdmod-ring {
+  position: relative;
+  width: var(--exec-hold-size);
+  height: var(--exec-hold-size);
+  max-width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+[data-exec-v3] .exec-v3-holdmod-svg {
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+[data-exec-v3] .exec-v3-holdmod-track {
+  stroke: #26262f;
+}
+[data-exec-v3] .exec-v3-holdmod-fill {
+  stroke: var(--exec-hold-accent);
+  transition: stroke-dashoffset 0.5s linear;
+}
+[data-exec-v3] .exec-v3-holdmod-txt {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  color: #eef4f6;
+}
+[data-exec-v3] .exec-v3-holdmod-num {
+  font-size: calc(var(--exec-hold-size) * 0.28);
+  font-weight: 900;
+  letter-spacing: -0.04em;
+  line-height: 1;
+}
+[data-exec-v3] .exec-v3-holdmod-done {
+  font-size: calc(var(--exec-hold-size) * 0.15);
+  font-weight: 900;
+  letter-spacing: -0.02em;
+}
+[data-exec-v3] .exec-v3-holdmod-check {
+  width: calc(var(--exec-hold-size) * 0.2);
+  height: calc(var(--exec-hold-size) * 0.2);
+  color: var(--exec-hold-accent);
+}
+[data-exec-v3] .exec-v3-holdmod-sidepill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--exec-hold-accent) 15%, #16161d);
+  border: 2px solid color-mix(in srgb, var(--exec-hold-accent) 36%, transparent);
+  font-size: 19px;
+  font-weight: 900;
+  letter-spacing: -0.01em;
+  color: color-mix(in srgb, var(--exec-hold-accent) 90%, #fff);
+}
+[data-exec-v3] .exec-v3-holdmod[data-size='ss'] .exec-v3-holdmod-sidepill {
+  gap: 7px;
+  padding: 5px 12px;
+  font-size: 13px;
+}
+[data-exec-v3] .exec-v3-holdmod-sidedot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--exec-hold-accent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--exec-hold-accent) 22%, transparent);
+}
+[data-exec-v3] .exec-v3-holdmod[data-size='ss'] .exec-v3-holdmod-sidedot {
+  width: 9px;
+  height: 9px;
+  box-shadow: none;
+}
+[data-exec-v3] .exec-v3-holdmod-saved {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  background: color-mix(in srgb, var(--exec-hold-accent) 12%, #16161d);
+  border: 1.5px solid color-mix(in srgb, var(--exec-hold-accent) 30%, transparent);
+  color: color-mix(in srgb, var(--exec-hold-accent) 95%, #fff);
+}
+[data-exec-v3] .exec-v3-holdmod-ctas,
+[data-exec-v3] .exec-v3-restoffer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+[data-exec-v3] .exec-v3-holdmod[data-size='ss'] .exec-v3-holdmod-ctas {
+  gap: 6px;
+}
+/* CTA juicy del módulo: toma el acento del hold (aqua en movilidad, marca en fuerza por tiempo). */
+[data-exec-v3] .exec-v3-holdmod-cta,
+[data-exec-v3] .exec-v3-restoffer-cta {
+  --exec-brand: var(--exec-hold-accent, var(--exec-brand));
+  width: 100%;
+  height: 52px;
+  font-size: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+}
+[data-exec-v3] .exec-v3-holdmod-cta.is-done {
+  height: 58px;
+}
+[data-exec-v3] .exec-v3-holdmod[data-size='ss'] .exec-v3-holdmod-cta {
+  height: 44px;
+  font-size: 15px;
+  border-radius: 14px;
+}
+[data-exec-v3] .exec-v3-holdmod-btn2 {
+  width: 100%;
+  height: 52px;
+  border-radius: 15px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border: 2px solid #2f2f3a;
+  background: #1c1c24;
+  color: #e8e8ee;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+}
+[data-exec-v3] .exec-v3-holdmod[data-size='ss'] .exec-v3-holdmod-btn2 {
+  height: 44px;
+  font-size: 15px;
+}
+[data-exec-v3] .exec-v3-holdmod-btn2:focus-visible,
+[data-exec-v3] .exec-v3-holdmod-cta:focus-visible,
+[data-exec-v3] .exec-v3-restoffer-cta:focus-visible {
+  outline: 2px solid var(--exec-hold-accent, var(--exec-brand));
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-exec-v3] .exec-v3-holdmod-fill {
+    transition: none;
+  }
+}

@@ -45,6 +45,7 @@ import {
     buildStrengthPayload,
     buildStrengthTimePayload,
     formatStrengthSetLine,
+    formatStrengthTimeSetLine,
     holdSidesFor,
     sideRepsFromMetadata,
     type HoldSource,
@@ -1144,9 +1145,17 @@ function StrengthLogSetForm({
                 : chipValues?.l != null || chipValues?.rr != null
                   ? { left_reps: chipValues?.l ?? null, right_reps: chipValues?.rr ?? null }
                   : null
-        const sideLine = perSideReps
-            ? formatStrengthSetLine({ weight_kg: dispW, reps_done: dispR, metadata: chipSideMeta })
-            : null
+        // Fuerza POR TIEMPO (D3, W2.11): «10 kg × 30 s» lo arma el motor dentro de la rama de fuerza; sin
+        // hold cae a la línea peso × reps de siempre (over/under, «PC» y RPE/RIR intactos).
+        const holdLine =
+            strengthTimeMode || existingLog?.actual_hold_sec != null
+                ? formatStrengthTimeSetLine({ weight_kg: dispW, actual_hold_sec: existingLog?.actual_hold_sec ?? null, metadata: existingLog?.metadata })
+                : null
+        const sideLine =
+            holdLine ??
+            (perSideReps
+                ? formatStrengthSetLine({ weight_kg: dispW, reps_done: dispR, metadata: chipSideMeta })
+                : null)
         // Se celebra sólo la serie recién cerrada en esta sesión (refs en false para logs cargados).
         const isPending = syncStatus === 'pending'
         const settleAnim = !isPending && settleRef.current && !reducedMotion

@@ -7,6 +7,8 @@ import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { Info, Dumbbell, Check, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import {
+    isStrengthTimeBlock,
+    type HoldSource,
     buildRoundOrder,
     firstIncompleteInRounds,
     isRoundComplete,
@@ -21,7 +23,7 @@ import {
 import { computeEffectiveTarget } from '@/lib/workout/progression'
 import { effectiveExerciseType } from '@/lib/workout-exercise-type'
 import type { ExerciseType as WorkoutKind } from '@/domain/workout/types'
-import { LogSetForm, type SetSyncResult } from '../LogSetForm'
+import { LogSetForm, type HoldPrefill, type SetSyncResult } from '../LogSetForm'
 import {
     type BlockType,
     type ExerciseType,
@@ -33,6 +35,8 @@ import {
 } from '../WorkoutExecutionClient'
 import { resolveExecMedia } from './exec-media'
 import { ExecMediaCard } from './ExecMediaCard'
+import { HoldModuleV3, type HoldModuleStatus } from './HoldModuleV3'
+import { RestOfferV3 } from './RestOfferV3'
 import { WheelHint } from './WheelHint'
 
 /** Mejor sesión previa por ejercicio (fila "Anterior" + autollenado del keypad). */
@@ -126,18 +130,21 @@ export function SupersetStepV3({
     openTechnique,
     registerRowRef,
     getExercise,
-    // W4.7 — el paso los RECIBE ya (interfaz + pase desde el orquestador); el CTA
-    // «Ronda lista · Descansar N s» que los consume es la tarea de pantalla W4.11.
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     pendingRoundRest = null,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     onStartPendingRoundRest,
 }: SupersetStepV3Props) {
     const { members, letterByBlock, groupLetter, groupRestSeconds, maxSets } = info
 
     // Aviso "¡Sigue sin detenerte!" (overlay efímero) + prefill "= última vez" del miembro activo. Ambos
     // son estado LOCAL de UI: no rozan el motor de guardado/cola.
-    const [cue, setCue] = useState<{ name: string; nonce: number } | null>(null)
+    const [cue, setCue] = useState<{ name: string; nonce: number; long?: boolean } | null>(null)
+    // Puente módulo de hold ↔ fila del miembro activo (W4.11): lo medido va a `holdPrefill` de la fila
+    // (por nonce, uncontrolled); el estado del reloj oculta la fila con `hidden` + `inert` mientras
+    // corre (R26: NUNCA se desmonta — el `<form>` es el destino del auto-envío); la fuente del último
+    // envío alarga el CueBar cuando salió sin gesto (R23).
+    const [holdPrefill, setHoldPrefill] = useState<HoldPrefill | null>(null)
+    const [holdStatus, setHoldStatus] = useState<HoldModuleStatus>('idle')
+    const lastHoldSourceRef = useRef<HoldSource | null>(null)
     const [fill, setFill] = useState<{ weight: number | null; reps: number | null; nonce: number } | null>(null)
     const cueNonceRef = useRef(0)
     // Edición de un miembro YA HECHO de la ronda (QA2 #3): tap en su tarjeta colapsada abre un sheet oscuro
@@ -148,8 +155,9 @@ export function SupersetStepV3({
 
     useEffect(() => {
         if (!cue) return
-        // 1650ms > animación CSS de 1600ms (la barra ya salió de pantalla cuando se desmonta).
-        const t = setTimeout(() => setCue(null), 1650)
+        // 1650ms > animación CSS de 1600ms (la barra ya salió de pantalla cuando se desmonta). R23: cuando
+        // el origen es el RELOJ el aviso sale sin gesto del alumno ⇒ se sostiene más (2400 ms).
+        const t = setTimeout(() => setCue(null), cue.long ? 2400 : 1650)
         return () => clearTimeout(t)
     }, [cue])
 
@@ -212,7 +220,11 @@ export function SupersetStepV3({
     // el autollenado al siguiente ejercicio.
     useEffect(() => {
         setFill(null)
-    }, [activeBlockId])
+        // El puente del módulo es por miembro activo Y por ronda (la ronda 2 arranca en 0).
+        setHoldPrefill(null)
+        setHoldStatus('idle')
+        lastHoldSourceRef.current = null
+    }, [activeBlockId, currentRound])
 
     if (memberVMs.length < 2) return null
 
@@ -241,10 +253,12 @@ export function SupersetStepV3({
         const esSerieActiva = payload.blockId === activeBlockId && payload.setNumber === currentRound
         if (esSerieActiva && nextInRound) {
             const nextVM = memberVMs.find((v) => v.block.id === nextInRound.blockId)
-            if (nextVM) setCue({ name: nextVM.exercise.name, nonce: ++cueNonceRef.current })
+            if (nextVM) setCue({ name: nextVM.exercise.name, nonce: ++cueNonceRef.current, long: lastHoldSourceRef.current === 'timer' })
         }
+        lastHoldSourceRef.current = null
         onLogged(payload)
     }
+    const nextMemberName = nextInRound ? memberVMs.find((v) => v.block.id === nextInRound.blockId)?.exercise.name ?? null : null
 
     return (
         <div className="exec-v3-step exec-v3-ss space-y-3">
@@ -316,6 +330,40 @@ export function SupersetStepV3({
                                             openTechnique={openTechnique}
                                         />
 
+                                        {/* Módulo de hold compacto (80 px) DEBAJO de la media (W4.11, V1). Predicado único
+                                            R29: movilidad con `duration_sec > 0` o fuerza por tiempo; sin reloj que montar la
+                                            fila manual de siempre queda tal cual. A 0 guarda solo por `holdPrefill.submit` y
+                                            el miembro avanza (V4); el último de la ronda espera el toque (D2). */}
+                                        {(() => {
+                                            const holdKind =
+                                                m.effType === 'mobility' && (m.block.duration_sec ?? 0) > 0
+                                                    ? ('mobility' as const)
+                                                    : m.effType === 'strength' && isStrengthTimeBlock(m.block, m.exercise)
+                                                      ? ('strength_time' as const)
+                                                      : null
+                                            if (!holdKind) return null
+                                            return (
+                                                <HoldModuleV3
+                                                    kind={holdKind}
+                                                    size="ss"
+                                                    prescribedSec={m.block.duration_sec ?? 0}
+                                                    sideMode={m.block.side_mode}
+                                                    context="superset"
+                                                    closesRound={!nextInRound}
+                                                    resetKey={`${m.block.id}:${currentRound}`}
+                                                    suspended={false}
+                                                    accent={holdKind === 'mobility' ? 'var(--exec-recovery, #18abd4)' : undefined}
+                                                    nextLabel={nextMemberName}
+                                                    onMeasured={(hm) => {
+                                                        lastHoldSourceRef.current = hm.submit ? hm.source : null
+                                                        setHoldPrefill({ holdSec: hm.holdSec, leftSec: hm.leftSec, rightSec: hm.rightSec, submit: hm.submit, source: hm.source, nonce: hm.nonce })
+                                                    }}
+                                                    onStatusChange={setHoldStatus}
+                                                    testIdPrefix={`hold-ss-${m.block.id}`}
+                                                />
+                                            )
+                                        })()}
+
                                         <div className="exec-v3-rx tabular-nums">{m.rxLabel}</div>
 
                                         {m.bestPrev && (m.bestPrev.weight_kg != null || m.bestPrev.reps_done != null) && (
@@ -345,11 +393,16 @@ export function SupersetStepV3({
 
                                         <WheelHint />
 
-                                        <div className="exec-v3-setlist">
+                                        {/* R8/R26: con el reloj CORRIENDO la fila se oculta con `hidden` + `inert`, NUNCA se
+                                            desmonta — si el `<form>` desapareciera, `holdPrefill.submit` no tendría a quién llamar y
+                                            el guardado automático se perdería en silencio. En `paused` vuelve a verse, editable. */}
+                                        <div className="exec-v3-setlist" hidden={holdStatus === 'running'} inert={holdStatus === 'running' ? true : undefined}>
                                             <LogSetForm
                                                 key={`${m.block.id}-${currentRound}`}
                                                 blockId={m.block.id}
                                                 sideMode={m.block.side_mode}
+                                                strengthTimeMode={m.effType === 'strength' && isStrengthTimeBlock(m.block, m.exercise)}
+                                                holdPrefill={holdPrefill ?? undefined}
                                                 setNumber={currentRound}
                                                 restTimeStr={m.block.rest_time}
                                                 warmupRestTimeStr={m.block.warmup_rest_time}
@@ -469,8 +522,14 @@ export function SupersetStepV3({
                 })}
             </div>
 
+            {/* D2 / R24: la ronda cerró con la preferencia «Pasar solo al descanso» apagada ⇒ el descanso de
+                grupo quedó ARMADO en el orquestador y el alumno lo arranca acá («Ronda N de M» viaja en `label`). */}
+            {pendingRoundRest && onStartPendingRoundRest ? (
+                <RestOfferV3 kind="ronda" seconds={pendingRoundRest.seconds} onRest={onStartPendingRoundRest} testIdPrefix="rest-offer-round" />
+            ) : null}
+
             {/* Nota: el descanso completo llega al cerrar la ronda (no entre miembros). */}
-            {!groupComplete && groupRestSeconds > 0 && (
+            {!pendingRoundRest && !groupComplete && groupRestSeconds > 0 && (
                 <div className="exec-v3-ss-restnote">
                     <span className="exec-v3-ss-clk" aria-hidden />
                     Descanso <b className="tabular-nums">{groupRestSeconds}s</b> al cerrar la ronda

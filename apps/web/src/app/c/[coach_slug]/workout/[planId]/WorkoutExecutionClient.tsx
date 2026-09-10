@@ -14,6 +14,7 @@ import { useCaptureStudentWorkoutCompleted } from '@/lib/posthog/events'
 import { LogSetForm, type SetSyncResult } from './LogSetForm'
 import { SingleExerciseCard } from './SingleExerciseCard'
 import {
+    formatProgressionTag,
     formatTypedObjective,
     buildStepModel,
     firstIncompleteStepIndex,
@@ -801,7 +802,8 @@ function overloadChipLabel(
     if (block.progression_type === 'weight' && block.target_weight_kg == null) return null
     const v = block.progression_value
     if (block.progression_type !== 'weight' || !eff?.modeImplemented) {
-        return block.progression_type === 'weight' ? `+${v} kg/sem` : `+${v} rep/ses`
+        // «+ Segundos» (D4, W2.13) reusa `progression_type = 'reps'`: el motor resuelve seg/ses vs rep/ses.
+        return formatProgressionTag(block) ?? `+${v} rep/ses`
     }
     if (eff.mode === 'double') {
         return eff.status === 'holding' ? `Mantén ${eff.weightKg} kg` : `Objetivo ${eff.weightKg} kg`

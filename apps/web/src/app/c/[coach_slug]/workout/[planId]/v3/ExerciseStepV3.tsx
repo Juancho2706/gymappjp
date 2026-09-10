@@ -4,8 +4,8 @@ import { useEffect, useRef, useState } from 'react'
 import type { Dispatch, SetStateAction } from 'react'
 import { Keyboard, Pencil } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { LogSetForm, type SetSyncResult } from '../LogSetForm'
-import { SIDE_LABEL, sessionLogKey, type OptimisticLogPayload, type RepeatSeedEntry } from '@eva/workout-engine'
+import { LogSetForm, type HoldPrefill, type SetSyncResult } from '../LogSetForm'
+import { SIDE_LABEL, compactDuration, isStrengthTimeBlock, sessionLogKey, type OptimisticLogPayload, type RepeatSeedEntry } from '@eva/workout-engine'
 import type { ExerciseType as WorkoutKind } from '@/domain/workout/types'
 import {
     type BlockType,
@@ -15,6 +15,9 @@ import {
 } from '../WorkoutExecutionClient'
 import { BlockActionsV3 } from './SkipBlockV3'
 import { ExecMediaCard } from './ExecMediaCard'
+import { HoldModuleV3 } from './HoldModuleV3'
+import { RestOfferV3 } from './RestOfferV3'
+import { parseRestTime, useWorkoutTimer } from '../WorkoutTimerProvider'
 import { WheelHint } from './WheelHint'
 
 /** Mejor sesión previa (para "Anterior" + autollenado). */
@@ -122,6 +125,29 @@ export function ExerciseStepV3({
     const heroWrapRef = useRef<HTMLDivElement>(null)
     const note = block.notes?.trim() || null
 
+    // ── Fuerza POR TIEMPO (specs/cuenta-atras-en-pantalla, D3 / W4.14) ────────────────────────────
+    // Predicado único del motor (R29). Con él: anillo de 130 px en color de marca bajo la media, tile
+    // SEG en la fila (`strengthTimeMode`), prescripción «N × 30s» y guardado solo a 0 con el KG del tile
+    // por `holdPrefill.submit`. Descansar o seguir lo toca el alumno (R24) salvo preferencia encendida.
+    const strengthTime = isStrengthTimeBlock(block, exercise)
+    const holdSeconds = strengthTime ? (block.duration_sec ?? 0) : 0
+    const restSeconds = parseRestTime(block.rest_time)
+    const { startRest } = useWorkoutTimer()
+    const [holdPrefill, setHoldPrefill] = useState<HoldPrefill | null>(null)
+    const [restOffer, setRestOffer] = useState<{ setNumber: number; seconds: number } | null>(null)
+    useEffect(() => {
+        setHoldPrefill(null)
+    }, [firstUnlogged])
+    const onLogged = (payload: OptimisticLogPayload) => {
+        handleLogged(payload)
+        if (!autoTimerEnabled) setRestOffer({ setNumber: payload.setNumber, seconds: restSeconds })
+    }
+    const startOfferedRest = () => {
+        if (!restOffer) return
+        startRest(String(restOffer.seconds), { label: exercise.name })
+        setRestOffer(null)
+    }
+
     // Deshacer (reopenSignal): la serie a corregir vive tras el lápiz — al reabrirla, mostramos el panel.
     useEffect(() => {
         if (reopenSignal?.blockId === block.id) setShowPrev(true)
@@ -173,9 +199,26 @@ export function ExerciseStepV3({
             {/* Media SIEMPRE visible + chips glass colapsables (componente compartido con la superserie) */}
             <ExecMediaCard exercise={exercise} note={note} openTechnique={openTechnique} />
 
+            {/* Fuerza POR TIEMPO: anillo 130 px DEBAJO de la media (V1), en color de marca. */}
+            {strengthTime && holdSeconds > 0 && firstUnlogged != null && (
+                <HoldModuleV3
+                    kind="strength_time"
+                    size="solo130"
+                    prescribedSec={holdSeconds}
+                    sideMode={block.side_mode}
+                    context="solo"
+                    closesRound={false}
+                    resetKey={`${block.id}:${firstUnlogged}:1`}
+                    onMeasured={(m) =>
+                        setHoldPrefill({ holdSec: m.holdSec, leftSec: m.leftSec, rightSec: m.rightSec, submit: m.submit, source: m.source, nonce: m.nonce })
+                    }
+                    testIdPrefix="hold-strength"
+                />
+            )}
+
             {/* Prescripción compacta (mockup a3a-rx: "4 × 8 · 60 kg · RIR 2 · desc 90s", sin extras) */}
             <div className="exec-v3-rx tabular-nums">
-                {block.sets} × {block.reps}
+                {block.sets} × {strengthTime ? compactDuration(holdSeconds) : block.reps}
                 {block.target_weight_kg != null && (
                     <>
                         {' · '}
@@ -231,6 +274,8 @@ export function ExerciseStepV3({
                             <LogSetForm
                                 blockId={block.id}
                                 sideMode={block.side_mode}
+                                strengthTimeMode={strengthTime}
+                                holdPrefill={strengthTime && setNumber === firstUnlogged && holdPrefill ? holdPrefill : undefined}
                                 setNumber={setNumber}
                                 restTimeStr={block.rest_time}
                                 warmupRestTimeStr={block.warmup_rest_time}
@@ -257,13 +302,20 @@ export function ExerciseStepV3({
                                 heroV3
                                 effortExpanded={effortExpanded}
                                 onEffortExpandedChange={setEffortExpanded}
-                                onLogged={handleLogged}
+                                onLogged={onLogged}
                                 onResult={handleResult}
                             />
                         </div>
                     )
                 })}
             </div>
+
+            {/* R24: con la preferencia «Pasar solo al descanso» APAGADA, tras cerrar cualquier serie (tocada
+                o por reloj) el alumno elige «Descansar N s» o «Siguiente serie». Con la preferencia ON el
+                `LogSetForm` ya arrancó el descanso y este par no se pinta. */}
+            {restOffer && !autoTimerEnabled && (
+                <RestOfferV3 seconds={restOffer.seconds} onRest={startOfferedRest} onNext={() => setRestOffer(null)} testIdPrefix="rest-offer-strength" />
+            )}
 
             {/* Pie: cuadraditos de serie (izq) + herramientas teclado/lápiz (der) — mockup a3a-foot */}
             <div className="exec-v3-foot">

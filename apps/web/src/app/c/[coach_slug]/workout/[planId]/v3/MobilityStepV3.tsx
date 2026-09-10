@@ -1,14 +1,16 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Move, Pause, Play, RotateCcw } from 'lucide-react'
+import { Move } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { LogSetForm, type SetSyncResult } from '../LogSetForm'
+import { LogSetForm, type HoldPrefill, type SetSyncResult } from '../LogSetForm'
 import { formatTypedObjective, sessionLogKey, type OptimisticLogPayload, type RepeatSeedEntry } from '@eva/workout-engine'
 import type { BlockType, ExerciseType, WorkoutSessionLog } from '../WorkoutExecutionClient'
+import { parseRestTime, useWorkoutTimer } from '../WorkoutTimerProvider'
 import { BlockActionsV3 } from './SkipBlockV3'
 import { ExecTypedMedia } from './ExecTypedMedia'
-import { useExecCountdown, formatCountdown } from './useExecCountdown'
+import { HoldModuleV3, type HoldModuleStatus } from './HoldModuleV3'
+import { RestOfferV3 } from './RestOfferV3'
 
 interface MobilityStepV3Props {
     block: BlockType
@@ -37,15 +39,20 @@ interface MobilityStepV3Props {
 
 /**
  * Ejecutor V3 (E3.2) — pantalla de MOVILIDAD, tono sereno (acento recovery/aqua fijo en ambos temas,
- * decisión Ola 0). Traducción del mockup `concepto-a-v3-tipos` (pantalla Movilidad): identidad + media
- * calmada, anillo de HOLD grande que se llena lineal (sin rebotes) reusando la disciplina de conteo del
- * `HoldTimer` existente (endTime-based, beep + haptic al llegar a 0), y — cuando el bloque es
- * `side_mode='per_side'` — SECUENCIA lado izquierdo → (haptic) → lado derecho. Sin RPE/RIR (no aplican).
+ * decisión Ola 0): identidad + media calmada, anillo de HOLD grande y —en `per_side`— secuencia lado
+ * izquierdo → derecho. Sin RPE/RIR (no aplican).
+ *
+ * Tren «cuenta atrás en pantalla» (W4.12/W4.13): el anillo es el `HoldModuleV3` (214 px, V1) y a 0 la
+ * serie **se guarda sola** (V2) por `holdPrefill.submit` → `requestSubmit()` del `LogSetForm`; el
+ * arranque es un botón grande «Iniciar hold» (punto B del mockup, paridad RN) y «Listo» antes de 0
+ * guarda lo transcurrido con `hold_source = 'manual'`. La fila del registro NUNCA se desmonta mientras
+ * el módulo está montado (R26): corriendo se deshabilita (`inert`), no se oculta. Tras guardar, con la
+ * preferencia «Pasar solo al descanso» APAGADA aparece «Descansar N s» / «Siguiente serie» (R24); con
+ * la preferencia ENCENDIDA el `LogSetForm` arranca el descanso como siempre.
  *
  * INTOCABLE: el registro va por el `LogSetForm` tipado REUSADO (capa de guardado/cola/reconciliación
- * intacta). En per_side, ese form captura DOS holds (`hold_left_sec`/`hold_right_sec`) que el engine
- * suma en `actual_hold_sec` + arma `metadata {left_sec,right_sec}`. El anillo es la GUÍA visual/háptica;
- * las filas son el registro. `bilateral` (u otro side_mode) = un solo hold, flujo de siempre.
+ * intacta). En per_side captura DOS holds (`hold_left_sec`/`hold_right_sec`) que el engine suma en
+ * `actual_hold_sec` + arma `metadata {left_sec,right_sec, hold_source}`.
  */
 export function MobilityStepV3({
     block,
@@ -68,44 +75,29 @@ export function MobilityStepV3({
     const perSide = block.side_mode === 'per_side'
     const holdSeconds = block.duration_sec ?? 0
     const activeSet = firstUnlogged ?? block.sets
-    // Lado activo (per_side): arranca izquierdo; al terminar el hold del izquierdo, salta al derecho.
-    const [side, setSide] = useState<'left' | 'right'>('left')
-    // Segundos sostenidos por lado (QA4): el anillo los vuelca en la fila activa al completar/detener cada
-    // lado. `hpNonce` dispara el prefill uncontrolled de `LogSetForm` (revisar y confirmar; NO toca submit).
-    const [timed, setTimed] = useState<{ left?: number; right?: number; single?: number }>({})
-    const [hpNonce, setHpNonce] = useState(0)
-    // Registra el hold de un lado y empuja el prefill a la fila activa.
-    const recordSide = (key: 'left' | 'right' | 'single', seconds: number) => {
-        setTimed((t) => ({ ...t, [key]: seconds }))
-        setHpNonce((n) => n + 1)
-    }
+    const restSeconds = parseRestTime(block.rest_time)
+    const { startRest } = useWorkoutTimer()
 
-    // Al pasar a la siguiente serie, el ciclo de lados vuelve a empezar por el izquierdo y se limpia lo medido.
+    // Lo que midió el módulo para la serie activa → `holdPrefill` de su fila (uncontrolled, por nonce).
+    const [holdPrefill, setHoldPrefill] = useState<HoldPrefill | null>(null)
+    const [holdStatus, setHoldStatus] = useState<HoldModuleStatus>('idle')
+    // R24: tras guardar con la preferencia OFF, el par «Descansar N s» / «Siguiente serie».
+    const [restOffer, setRestOffer] = useState<{ setNumber: number; seconds: number } | null>(null)
     useEffect(() => {
-        setSide('left')
-        setTimed({})
+        setHoldPrefill(null)
     }, [activeSet])
 
-    const countdown = useExecCountdown(holdSeconds, {
-        // Eyes-free (mockup): el segundo lado arranca solo tras el primero; el primero lo inicia el alumno.
-        autoStart: perSide && side === 'right',
-        resetKey: `${activeSet}-${side}`,
-        onDone: () => {
-            // Completó el hold: vuelca el objetivo íntegro al input del lado y (per_side) avanza al derecho.
-            if (perSide) {
-                if (side === 'left') { recordSide('left', holdSeconds); setSide('right') }
-                else recordSide('right', holdSeconds)
-            } else {
-                recordSide('single', holdSeconds)
-            }
-        },
-    })
+    const onLogged = (payload: OptimisticLogPayload) => {
+        handleLogged(payload)
+        if (!autoTimerEnabled) setRestOffer({ setNumber: payload.setNumber, seconds: restSeconds })
+    }
+    const startOfferedRest = () => {
+        if (!restOffer) return
+        startRest(String(restOffer.seconds), { label: exercise.name })
+        setRestOffer(null)
+    }
 
-    // Segundos efectivamente sostenidos AHORA (completado ⇒ objetivo; detenido antes ⇒ lo transcurrido).
-    const heldSecondsNow = () => (countdown.done ? holdSeconds : Math.max(0, holdSeconds - countdown.timeLeft) || holdSeconds)
-
-    const DASH = 2 * Math.PI * 92
-    const dashoffset = DASH * (1 - countdown.frac)
+    const running = holdStatus === 'running'
 
     return (
         <div className="exec-v3-step exec-v3-calm space-y-3">
@@ -128,7 +120,7 @@ export function MobilityStepV3({
             </div>
 
             {/* Media calmada — mismo tratamiento que fuerza: chips "Instrucciones" + "Nota del coach" DENTRO
-                de la media (overlay superior-izquierdo), precedencia + audio en video (QA4). */}
+                de la media (overlay superior-izquierdo), precedencia + audio en video (QA4). NUNCA se colapsa. */}
             <ExecTypedMedia
                 exercise={exercise}
                 note={coachNote}
@@ -137,110 +129,38 @@ export function MobilityStepV3({
                 fallbackIcon={<Move className="h-9 w-9" />}
             />
 
-            {/* Anillo de HOLD (guía). Sólo si el coach prescribió duración. */}
-            {holdSeconds > 0 && (
-                <div className="flex flex-col items-center gap-2.5">
-                    {perSide && (
-                        <div className="exec-v3-sidepill" aria-live="polite">
-                            <span className="exec-v3-sidedot" aria-hidden />
-                            Lado {side === 'left' ? 'izquierdo' : 'derecho'}
-                        </div>
-                    )}
-
-                    <div className="exec-v3-ringrow">
-                    <button
-                        type="button"
-                        onClick={countdown.done ? countdown.restart : countdown.toggle}
-                        className="exec-v3-holdwrap"
-                        aria-label={
-                            countdown.done
-                                ? 'Reiniciar el hold'
-                                : countdown.isActive
-                                    ? 'Pausar el hold'
-                                    : 'Iniciar el hold'
-                        }
-                    >
-                        <svg className="exec-v3-hold-svg" viewBox="0 0 208 208" aria-hidden>
-                            <circle cx="104" cy="104" r="92" className="exec-v3-hold-track" fill="none" strokeWidth="23" />
-                            <circle
-                                cx="104"
-                                cy="104"
-                                r="92"
-                                className="exec-v3-hold-fill"
-                                fill="none"
-                                strokeWidth="23"
-                                strokeLinecap="round"
-                                strokeDasharray={DASH}
-                                strokeDashoffset={dashoffset}
-                            />
-                        </svg>
-                        <div className="exec-v3-holdtxt">
-                            <div className={cn('exec-v3-holdnum tabular-nums', countdown.done && 'is-done')}>
-                                {countdown.done ? '¡Listo!' : formatCountdown(countdown.timeLeft)}
-                            </div>
-                            {/* Affordance de tap DENTRO del anillo (QA4): Play/Pause 18px justo bajo el número. */}
-                            <span className="exec-v3-hold-icon" aria-hidden>
-                                {countdown.done ? (
-                                    <RotateCcw className="h-[18px] w-[18px]" />
-                                ) : countdown.isActive ? (
-                                    <Pause className="h-[18px] w-[18px]" />
-                                ) : (
-                                    <Play className="h-[18px] w-[18px]" />
-                                )}
-                            </span>
-                            {/* El estado "Sostén" se removió del centro (decisión CEO): el estado vive en el
-                                texto guía de abajo; el centro sólo lleva número + affordance + guía de tap. */}
-                            {!countdown.isActive && (
-                                <div className="exec-v3-holdlbl">
-                                    {countdown.done ? 'Registra abajo' : 'Tocar para iniciar'}
-                                </div>
-                            )}
-                        </div>
-                    </button>
-                        {/* QA5 h3: reinicia el hold del lado actual a su valor prescrito (mecanismo `restart`
-                            del hook — no toca el motor de guardado). */}
-                        <button
-                            type="button"
-                            onClick={countdown.restart}
-                            className="exec-v3-restart"
-                            aria-label="Reiniciar el contador"
-                        >
-                            <RotateCcw className="h-4 w-4" aria-hidden />
-                        </button>
-                    </div>
-
-                    {perSide && (
-                        <p className="exec-v3-then">
-                            {side === 'left' ? (
-                                <>luego: <b>lado derecho</b></>
-                            ) : (
-                                <>último lado — <b>registra los dos holds</b></>
-                            )}
-                        </p>
-                    )}
-
-                    {/* CTA juicy "Listo este lado" (como RN): avance eyes-free del lado; en el último, pausa. */}
-                    {firstUnlogged != null && (
-                        <button
-                            type="button"
-                            onClick={() => {
-                                // Vuelca lo sostenido en la fila y avanza (per_side izq → der) o pausa (último lado).
-                                if (perSide && side === 'left') { recordSide('left', heldSecondsNow()); setSide('right') }
-                                else {
-                                    recordSide(perSide ? 'right' : 'single', heldSecondsNow())
-                                    if (countdown.isActive) countdown.toggle()
-                                }
-                            }}
-                            className="exec-v3-juicy exec-v3-mob-cta"
-                        >
-                            {perSide && side === 'left' ? 'Listo este lado' : 'Listo'}
-                        </button>
-                    )}
-                </div>
+            {/* Módulo de hold (guía que guarda sola a 0). Predicado R29: sólo si el coach prescribió duración;
+                sin `duration_sec` la fila manual de siempre queda tal cual, sin anillo ni CTA. */}
+            {holdSeconds > 0 && firstUnlogged != null && (
+                <HoldModuleV3
+                    kind="mobility"
+                    size="solo214"
+                    prescribedSec={holdSeconds}
+                    sideMode={block.side_mode}
+                    context="solo"
+                    closesRound={false}
+                    resetKey={`${block.id}:${activeSet}:1`}
+                    onMeasured={(m) =>
+                        setHoldPrefill({ holdSec: m.holdSec, leftSec: m.leftSec, rightSec: m.rightSec, submit: m.submit, source: m.source, nonce: m.nonce })
+                    }
+                    onStatusChange={setHoldStatus}
+                    testIdPrefix="hold-mobility"
+                />
             )}
 
-            {/* Registro tipado REUSADO — captura de siempre (per_side ⇒ dos holds → metadata). */}
-            <div className="exec-v3-setlist space-y-1.5">
+            {restOffer && !autoTimerEnabled && (
+                <RestOfferV3
+                    seconds={restOffer.seconds}
+                    onRest={startOfferedRest}
+                    onNext={() => setRestOffer(null)}
+                    testIdPrefix="rest-offer-mobility"
+                />
+            )}
+
+            {/* Registro tipado REUSADO — captura de siempre (per_side ⇒ dos holds → metadata). R8/R26: con el
+                reloj corriendo se deshabilita (`inert`), nunca se desmonta: el `<form>` de la fila activa es el
+                destino del auto-envío. */}
+            <div className={cn('exec-v3-setlist space-y-1.5', running && 'opacity-55')} inert={running ? true : undefined}>
                 {Array.from({ length: block.sets }).map((_, i) => {
                     const setNumber = i + 1
                     const log = blockLogs.find((entry) => entry.set_number === setNumber)
@@ -261,11 +181,7 @@ export function MobilityStepV3({
                             typedObjective={formatTypedObjective(block, 'mobility')}
                             sideMode={block.side_mode}
                             isActive={setNumber === firstUnlogged}
-                            holdPrefill={
-                                setNumber === activeSet
-                                    ? { holdSec: timed.single, leftSec: timed.left, rightSec: timed.right, nonce: hpNonce }
-                                    : undefined
-                            }
+                            holdPrefill={setNumber === activeSet && holdPrefill ? holdPrefill : undefined}
                             reopenNonce={
                                 reopenSignal?.blockId === block.id && reopenSignal?.setNumber === setNumber
                                     ? reopenSignal.nonce
@@ -273,7 +189,7 @@ export function MobilityStepV3({
                             }
                             substitution={substitution ?? null}
                             v3
-                            onLogged={handleLogged}
+                            onLogged={onLogged}
                             onResult={handleResult}
                         />
                     )

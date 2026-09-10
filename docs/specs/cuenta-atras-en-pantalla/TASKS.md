@@ -425,7 +425,7 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
       `isTyped = kind !== 'strength'` ⇒ un bloque en modo tiempo muestra la fila «Objetivo» con
       `3 × 30 s` (hoy diría «Series × reps»). El SELECT ya trae `duration_sec`
       (`apps/web/src/services/client/client-detail.service.ts:129`).
-- [ ] W2.11 **[UI · Fable]** Ficha del coach — logs: los **4 call sites** de la línea de serie pasan
+- [x] W2.11 **[UI · Fable]** (jefe, 10-09: 4 sitios en fe2f8fee (TrainingTabB4Panels, AnalisisTab + coach-client-detail, SetRow) y `LogSetForm` chip en el commit de W4 UI) Ficha del coach — logs: los **4 call sites** de la línea de serie pasan
       por `formatStrengthTimeSetLine` (W1.8) **dentro de su rama de fuerza**, conservando over/under,
       «PC» y RPE/RIR: `apps/web/src/app/coach/clients/[clientId]/TrainingTabB4Panels.tsx:680-693,739`,
       `apps/mobile/components/coach/clientDetail/AnalisisTab.tsx:607-637` (+ el gate
@@ -437,7 +437,7 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
       `WeeklyPlanBuilder.tsx:960` ⇒ «Hay ejercicios con datos incompletos (revisa series,
       repeticiones o segundos, duración o distancia).» y `apps/mobile/app/coach/program-builder.tsx:1939`
       ⇒ «Revisa "X": faltan datos (series y reps o segundos, duración o distancia según el tipo).»
-- [ ] W2.13 **[UI · Fable]** **«rep/ses» → «seg/ses» en los 5 lugares que quedan** (**R30**): el
+- [x] W2.13 **[UI · Fable]** (jefe, 10-09: 4 sitios en fe2f8fee (ExerciseBlock, PrintProgramDialog, workout-ui.ts, program-pdf.ts) y `WorkoutExecutionClient.overloadChipLabel` en el commit de W4 UI; todos por `formatProgressionTag`) **«rep/ses» → «seg/ses» en los 5 lugares que quedan** (**R30**): el
       sufijo de progresión de `BlockEditSheet.tsx:1190` ya lo cubre W2.7, pero el mismo texto vive en
       otros **5** archivos y **dos de ellos son de cara al alumno**, no del coach:
       `apps/web/src/app/c/[coach_slug]/workout/[planId]/WorkoutExecutionClient.tsx:749` y su espejo RN
@@ -668,7 +668,7 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
 
 ### Datos y guardado (Opus)
 
-- [ ] W4.1 **(Opus)** `apps/web/src/app/c/[coach_slug]/workout/[planId]/v3/useExecCountdown.ts:21-31,34-116`:
+- [x] W4.1 **(Opus)** (worker Opus, 10-09, commit 2645aa32 (+10 casos)) `apps/web/src/app/c/[coach_slug]/workout/[planId]/v3/useExecCountdown.ts:21-31,34-116`:
       agregar **`started: boolean`** (hoy **no existe**; sin él la web no distingue «nunca arrancó» de
       «pausado» y el botón juicy no puede alternar) y **`expiredWhileAway`** en el `onDone`, espejo
       exacto de W3.1(a): en web el `setInterval` de la pestaña oculta **no se congela, se throttlea**
@@ -683,7 +683,7 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
       `v3/useExecCountdown.test.ts` (ampliar) — `started` en los 3 caminos; `expiredWhileAway` **igual
       por los dos caminos de disparo** con reloj falso (el caso `:118` ya existe); `prime()` deja el
       contador en `idle` con el objetivo, sin arrancar.
-- [ ] W4.2 **(Opus)** Auto-envío web — **son DOS componentes, no uno**. `LogSetForm.tsx` exporta un
+- [x] W4.2 **(Opus)** (worker Opus, commit 2645aa32: `HoldPrefill` con `submit`/`source` en las DOS filas, `LogSetForm.test.tsx` 17 casos; tile SEG + keypad de modo tiempo cableados ahí mismo) Auto-envío web — **son DOS componentes, no uno**. `LogSetForm.tsx` exporta un
       dispatcher (`:307`) sobre `StrengthLogSetForm` (`:316`–`:1658`) y `TypedLogSetRow` (`:1660`+).
       Hoy `holdPrefill` **solo existe en la fila TIPADA**: se destructura en `:1677`, su efecto vive en
       `:1800-1811` y los refs `holdRef`/`holdLeftRef`/`holdRightRef` en `:1729-1731`. La **fuerza por
@@ -702,13 +702,13 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
       **re-enviar una serie ya logueada**. **Test**: un `holdPrefill` con `submit` dispara **un solo**
       submit en cada uno de los dos componentes; con `isLogged` no dispara ninguno; el gate de cardio
       (`:1820`, `mode !== 'cardio'`) queda intacto.
-- [ ] W4.3 **(Opus)** `LogSetForm.tsx:848`: el guard de serie vacía de fuerza
+- [x] W4.3 **(Opus)** (worker Opus, commit 2645aa32) `LogSetForm.tsx:848`: el guard de serie vacía de fuerza
       (`if (w == null && r == null) return`, con el comentario «cinturón contra un submit
       programático») **bloquea el auto-guardado de fuerza por tiempo** (reps `null`, solo segundos).
       Pasa a `w == null && r == null && hold == null`. ⚠ Sin esto C no guarda nada y **el fallo es
       silencioso**. **Test**: submit programático con solo `actual_hold_sec` guarda; sin ningún valor
       sigue sin guardar.
-- [ ] W4.4 **(Opus)** **Metadata del hold en web — tarea de CÓDIGO, no de documentación** (**R37**).
+- [x] W4.4 **(Opus)** (worker Opus, commit 2645aa32: tres claves en `metadata` verificadas (W4.T2)) **Metadata del hold en web — tarea de CÓDIGO, no de documentación** (**R37**).
       Regla
       transversal: **`hold_source` viaja en el MISMO objeto que `{left_sec, right_sec}`** — el jsonb se
       reemplaza entero en `_actions/workout-log.actions.ts:150-178`, así que mandarlo solo borraría los
@@ -736,13 +736,13 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
       `{"hold_source":"timer"}` llega a la fila; con lados + `hold_source` el jsonb queda con **las
       tres** claves; **sin** la key `metadata` la columna **no se toca**; y un `reps_done` **no** viaja
       en el FormData de fuerza por tiempo. Mismo assert repetido en **W4.T2**.
-- [ ] W4.5 **(Opus)** `LogSetForm.tsx:854-874` (encolado de fuerza) y `:1098` (`key` del form): la cola
+- [x] W4.5 **(Opus)** (worker Opus, commit 2645aa32) `LogSetForm.tsx:854-874` (encolado de fuerza) y `:1098` (`key` del form): la cola
       offline de **fuerza** hoy no encola `actualHoldSec` ni `metadata` ⇒ se agregan
       (`apps/web/src/lib/workout-offline-queue.ts:146` ya los serializa y `session-logs.optimistic.ts:21,54`
       ya los preserva). La `key` (`log-${weight}-${reps}`) no cambia al cambiar solo los segundos ⇒ el
       input uncontrolled queda rancio tras la reconciliación: se suma el eje tiempo. **Test**: serie de
       fuerza por tiempo en avión ⇒ al drenar llegan `actual_hold_sec` y `metadata`.
-- [ ] W4.6 **(Opus)** `LogSetForm.tsx:662` (**fila de FUERZA**, `buildRest` de `StrengthLogSetForm`,
+- [x] W4.6 **(Opus)** (worker Opus, commit 2645aa32: matriz §11.2 (pref OFF ⇒ ni `startRest` ni `cancelRest`; pref ON ⇒ arranca solo también tras el reloj), misma lectura que RN) `LogSetForm.tsx:662` (**fila de FUERZA**, `buildRest` de `StrengthLogSetForm`,
       `:316`–`:1658`) y `:2033-2047` (**fila TIPADA**, `TypedLogSetRow` desde `:1660`, incluida la
       rama `supersetRest` de `:2036-2040`) — ⚠ las etiquetas estaban **invertidas** en el plan
       original: canal de supresión del descanso. Con
@@ -750,7 +750,7 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
       ronda cerrada tampoco (**D2**). ⚠ Sin este canal, **V2 rompe V3 y D2 en el mismo commit**: hoy
       cualquier submit de una fila no logueada arranca el descanso, que en V3 es un interstitial a
       pantalla completa. **Test**: submit por reloj con la pref apagada ⇒ 0 llamadas a `startRest`.
-- [ ] W4.7 **(Opus)** `WorkoutExecutionClient.tsx`: `pendingRoundRest` en el orquestador (**R9**,
+- [x] W4.7 **(Opus)** (worker Opus, commit 2645aa32: `pendingRoundRest` + `startPendingRoundRest()` vía `WorkoutTimerBridge`, `clientId` con fallback R32) `WorkoutExecutionClient.tsx`: `pendingRoundRest` en el orquestador (**R9**,
       espejo de W3.3) y `clientId` como prop nueva desde `page.tsx` (hoy el archivo **no tiene**
       `clientId`: verificado con grep ⇒ 0 hits; es aditivo y cuesta 0 queries).
       ⚠ **`rootUser` es nullable**: `page.tsx:61` lo resuelve con `getClientRootUser()` y `:68` ya lo
@@ -773,11 +773,11 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
       verifica el banner). Ampliar `RestOptions` web queda como **deuda B13**, sin costo en este tren. `:1967-1973` (salto de paso) **sin cambio** (R5). **Test**: el path del estado
       pendiente se limpia en los 4 casos; con `rootUser` nulo la pref sale de `omni_autotimer` (lectura
       y escritura) y **nunca** se toca una clave `eva:exec-autorest-*`, sin modal.
-- [ ] W4.8 **(Opus)** `apps/web/src/app/api/pr-card/route.tsx:79-85`: agregar `.gt('reps_done', 0)` al
+- [x] W4.8 **(Opus)** (worker Opus, commit 2645aa32, `route.test.ts`) `apps/web/src/app/api/pr-card/route.tsx:79-85`: agregar `.gt('reps_done', 0)` al
       select de la curva (hoy filtra **solo** por `weight_kg`) ⇒ el peso de un hold no entra a la
       PR-card. Complementa la migración W0.2. **Test**: un log `{weight_kg:10, reps_done:null}` no
       aparece en la serie.
-- [ ] W4.9 **(Opus)** Verificar (sin tocar) que las 12 RPC restantes dan **0 diff** con
+- [x] W4.9 **(Opus)** (worker Opus, commit 2645aa32: tabla en DATA-TESTING §4.3.a, verificado contra LIVE) Verificar (sin tocar) que las 12 RPC restantes dan **0 diff** con
       `reps_done NULL`: `get_client_daily_tonnage` y `get_client_muscle_volume` descartan por
       `reps_eff > 0`; `get_client_strength_series` y `get_client_weekly_prs` por `reps_done > 0`; las
       8 de presencia/conteo suman el día igual. **Aceptación**: la tabla consumidor × diff queda en
@@ -785,7 +785,7 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
 
 ### Pantallas (UI · Fable — mockup v2 secciones A, B y C, ya aprobado)
 
-- [ ] W4.10 **[UI · Fable]** `apps/web/.../v3/HoldModuleV3.tsx` (**nuevo**): misma pieza visual y
+- [x] W4.10 **[UI · Fable]** (jefe, 10-09: `v3/HoldModuleV3.tsx` web sobre `useExecCountdown` + `decideHoldAutolog` + `holdSidesFor`; única salida `onMeasured` → `holdPrefill`) `apps/web/.../v3/HoldModuleV3.tsx` (**nuevo**): misma pieza visual y
       mismos estados que RN, con `HoldModuleSize = 'ss' | 'solo130' | 'solo214'`. **Contrato de
       no-regresión**: nunca llama `logSetAction`, `enqueueWorkoutLog` ni `startRest`; su única salida
       es `onMeasured({holdSec?, leftSec?, rightSec?, submit, source, nonce})`, que el consumidor
@@ -795,7 +795,7 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
       la fila manual de hoy queda **intacta**, sin módulo; y «Listo» desde `idle` siembra el objetivo
       sin enviar (**CA-90**). Los lados salen de **`holdSidesFor(sideMode)`** (W1.5b, R34), nunca de
       una regla local del componente.
-- [ ] W4.11 **[UI · Fable]** `v3/SupersetStepV3.tsx`: `<HoldModuleV3 size="ss">` **entre
+- [x] W4.11 **[UI · Fable]** (jefe, 10-09: módulo `ss` bajo `ExecMediaCard`, reset por miembro + ronda, fila oculta con `hidden` + `inert` mientras corre (nunca desmontada), CueBar 2400 ms con origen timer, CTA «Ronda lista · Descansar N s» por `pendingRoundRest`) `v3/SupersetStepV3.tsx`: `<HoldModuleV3 size="ss">` **entre
       `<ExecMediaCard/>` (`:292-296`) y `.exec-v3-rx` (`:298`)**, dentro de `.exec-v3-ss-body-in`
       (`:291`, que ya anima `grid-template-rows 0fr→1fr` ⇒ el contenido nuevo se anima gratis). El
       estado del reloj resetea por `activeBlockId` **+ `currentRound`** (hoy `:192-194` resetea solo
@@ -812,19 +812,19 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
       bloques de Movens y 6 de sus 9 alumnos entran por PWA. Se oculta con **`hidden` / `aria-hidden` +
       `inert`**, nunca con un condicional de render. **Test web-dom**: con el módulo en `running` el
       `<form>` sigue en el DOM y `holdPrefill.submit` produce **exactamente un** `logSetAction`.
-- [ ] W4.12 **[UI · Fable]** `v3/MobilityStepV3.tsx:223-238` (**punto B del mockup**): el CTA único de
+- [x] W4.12 **[UI · Fable]** (jefe, 10-09: `MobilityStepV3` reescrita sobre el módulo (214 px): «Iniciar hold» juicy + «Pausar/Reanudar» secundario + «Listo» (CA-90 desde idle)) `v3/MobilityStepV3.tsx:223-238` (**punto B del mockup**): el CTA único de
       hoy se parte en **dos botones apilados** (paridad con RN `MobilityScreenV3.tsx:272-321`; regla
       del repo: nunca dos `w-full` en fila) — arriba el control (**«Iniciar hold»** juicy sin arrancar
       / «Pausar»–«Reanudar» secundario de 52 px corriendo), abajo el cierre («Listo este lado» /
       «Listo», juicy de 58-60 px). El rótulo de 10 px **«Tocar para iniciar»** (`:193-197`) deja de
       tener sentido; el anillo sigue tappable como afordancia redundante.
-- [ ] W4.13 **[UI · Fable]** `v3/MobilityStepV3.tsx:141-240`: panel post-guardado — anillo «¡Listo!» +
+- [x] W4.13 **[UI · Fable]** (jefe, 10-09: «¡Listo!» + «Guardado · N s» en el módulo; `RestOfferV3` («Descansar N s» / «Siguiente serie») tras guardar con la preferencia OFF; fila siempre montada, `inert` corriendo) `v3/MobilityStepV3.tsx:141-240`: panel post-guardado — anillo «¡Listo!» +
       chip «Guardado · 30 s» + **«Descansar N s»** / **«Siguiente serie»** con la pref **APAGADA** (con
       la pref ON el descanso arranca solo y el par no se pinta, R24 / W4.17; N sale de
       `parseRestTime(block.rest_time)`, `WorkoutTimerProvider.tsx:58-85`). Componente compartido
       `HoldDoneActions` reusado por `v3/ExerciseStepV3.tsx` para no triplicar copy. La fila logueada
       sigue montada y editable (`SubmitSetButton`, `LogSetForm.tsx:2435-2454`).
-- [ ] W4.14 **[UI · Fable]** `v3/ExerciseStepV3.tsx`: `<HoldModuleV3 size="solo130">` **entre
+- [x] W4.14 **[UI · Fable]** (jefe, 10-09: `ExerciseStepV3` con `isStrengthTimeBlock` ⇒ módulo `solo130`, prescripción `N × 30s`, `strengthTimeMode` + `holdPrefill` a la fila activa) `v3/ExerciseStepV3.tsx`: `<HoldModuleV3 size="solo130">` **entre
       `<ExecMediaCard/>` (`:174`) y `.exec-v3-rx` (`:177`)**; la prescripción (`:177-187`) imprime
       `{sets} × {compactDuration(duration_sec)} · {kg} · RIR · desc`; el tile REPS conmuta a **SEG**
       (`LogSetForm.tsx:1143-1170`) con `name="actual_hold_sec"`, conservando `.exec-v3-val` /
@@ -835,7 +835,7 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
       mientras el reloj no se haya arrancado, el submit de la fila queda disponible **solo** si el
       alumno escribió los SEG a mano (camino manual de R8); tras el guardado ⇒ **«Descansar N s»** /
       **«Siguiente serie»** (R24, W4.17).
-- [ ] W4.15 **[UI · Fable]** `apps/web/src/app/globals.css` — **clase nueva, cardio intacto**
+- [x] W4.15 **[UI · Fable]** (jefe, 10-09: familia `.exec-v3-holdmod*` con `--exec-hold-size` (80/130/214) y `--exec-hold-accent`; `.exec-v3-holdwrap`/`-holdnum`/`-hold-fill` de cardio intactas (diff de `globals.css` solo agrega al final)) `apps/web/src/app/globals.css` — **clase nueva, cardio intacto**
       (**R33**). `.exec-v3-holdwrap` está **fijo en 214×214 px** (`:5417-5424`) y `.exec-v3-holdnum` en
       60 px (`:5449`), y **las dos las usa `CardioStepV3`** (`:518`, `:538`, `:689`, `:711`, `:722`),
       que es **intocable** (CA-14): el propio archivo lo dice en `globals.css:5416` («Anillo de HOLD /
@@ -852,12 +852,12 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
       porque es coordenada de viewBox, no px de pantalla. **Aceptación**: un diff de `globals.css` que
       **no toca ninguna línea** de `.exec-v3-holdwrap` / `.exec-v3-holdnum` / `.exec-v3-hold-fill`, y
       el render de cardio comparado contra la captura previa al deploy (DATA-TESTING §7.2 punto 15).
-- [ ] W4.16 **(Opus)** **Regla de hidratación (EVA-NEXTJS-18)**, verificada en revisión: toda lectura
+- [x] W4.16 **(Opus)** (worker Opus, commit 2645aa32; UI del jefe sin `localStorage` en initializers ni `Date.now()` en render) **Regla de hidratación (EVA-NEXTJS-18)**, verificada en revisión: toda lectura
       de `localStorage` va en `useEffect`, **nunca** en el initializer de `useState` (patrón vigente en
       `WorkoutExecutionClient.tsx:1222-1227` y `v3/exec-settings.ts:82-98`); tampoco `Date.now()` en el
       cuerpo del render (hoy solo se usa en handlers, `SupersetStepV3.tsx:307`,
       `ExerciseStepV3.tsx:145`). **Aceptación**: sin warnings de hidratación en el ejecutor.
-- [ ] W4.17 **[UI · Fable]** **Par de CTAs «Descansar N s» / «Siguiente serie» con la preferencia
+- [x] W4.17 **[UI · Fable]** (jefe, 10-09: `RestOfferV3` web en fuerza clásica, movilidad, fuerza por tiempo y fin de ronda («Ronda lista · Descansar N s» con el rótulo en `label`)) **Par de CTAs «Descansar N s» / «Siguiente serie» con la preferencia
       APAGADA — espejo web de W3.16** (**R24**, +0,25 d-a). En la web el hueco es aún más visible: el
       único botón manual de descanso que existe hoy es el `ManualTimerButton`
       (`WorkoutExecutionClient.tsx:296`), y **solo se pinta en la barra legacy** `!execV3Active`
@@ -873,7 +873,7 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
       pref ON, ninguno. **Test**: `W5.T5` de [DATA-TESTING §6.2](DATA-TESTING.md) (matriz 2×4 +
       extremo a extremo del toggle + caso CA-80). **Punto de QA**: DATA-TESTING §7.2 punto 13.
 
-**Gate de W4**: `pnpm exec vitest run "apps/web/src/app/c/[coach_slug]/workout/[planId]" packages/workout-engine`
+**Gate de W4** — corrido 10-09 (jefe) tras la UI: vitest ejecutor web + motor + pr-card verde (salida en el commit), `pnpm typecheck` 0, `pnpm check:tokens` OK, eslint 0 errores. Original: `pnpm exec vitest run "apps/web/src/app/c/[coach_slug]/workout/[planId]" packages/workout-engine`
 + `pnpm typecheck` + `pnpm check:tokens`.
 
 ---
