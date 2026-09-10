@@ -1437,6 +1437,8 @@ Tres filas del JSON no salen literal de una lámina (`Queso cottage 1%` en LD, `
 
 ## 6. `packages/nutrition-v2/exchange-conversion.ts`
 
+> **Corrección W3 (jefe, 09-09, decisión (ad)).** Donde este capítulo dice `catalog.filter((g) => isClGroup(g, coachSystem))`, el código real usa `makeIsClDestination(catalog)`: manda el `portionSystem` explícito de cada fila y `CL_CODES` solo se usa cuando ninguna fila declara set. Con la firma literal, un grupo propio con código `FR`/`PCT` era destino y los customs de josefit y Pame se proponían como reemplazo de sí mismos para un coach `cl`. `coachSystem` no participa del filtro. La identidad del reemplazo S5 es por `exchangeGroupId`. Además `draftUsesLegacySmae(variants, groups, coachSystem)` (banner) cuenta solo grupos con `isSystem !== false` y `systemOf === 'smae'`.
+
 ```ts
 /**
  * Conversion de un borrador de plan del set SMAE al set chileno (D1-A, S4).
@@ -2064,6 +2066,8 @@ export function comparePickerGroups(
 ```
 
 ### 7.1 `findUsedPortionSystemsForCoach(db, coachId)` — el dato que hoy NO EXISTE
+
+> **Corrección W3 (jefe, 09-09, decisión (af)).** `findUsedPortionSystemsForCoach` cuenta **solo grupos del sistema** (`exchange_groups!inner(portion_system, is_system)` y `collectSystems` ignora `is_system !== true`): los grupos propios nacen con `portion_system = 'smae'` por el default de W0.1 y, sin el filtro, cualquier coach con un propio en un plan recibía `legacySystems: ['smae']` (sección «Legado» y banner de conversión falsos). Los propios se siguen mostrando siempre (`visibleExchangeGroupsForCoach` ya los deja `legacy: false`).
 
 **Corrección obligatoria (B-02 / db-datos:B5 / R14).** `visibleExchangeGroupsForCoach` pide `usedSystems` y **hoy nadie lo calcula**: `findExchangeGroupsForScope` (`exchanges.repository.ts:89-104`) y `api/mobile/nutrition-v2/exchange-groups/route.ts:111-117` solo leen grupos y conteos. Es el único insumo que hace desaparecer el bloque «Legado» sin un write (S1), y sin él W1 no se puede implementar. **Nombre canónico único en todo el SDD: `findUsedPortionSystemsForCoach`**, con el parámetro `usedSystems` del lado de la función pura (OUTLINE §13 + D-6: no hay alias ni variantes, tampoco como «reemplaza a…»).
 

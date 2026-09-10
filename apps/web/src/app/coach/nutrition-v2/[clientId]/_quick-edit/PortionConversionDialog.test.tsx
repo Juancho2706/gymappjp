@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { QePortionGroup, QePortionTarget, QeSlot, QeVariant } from '@eva/nutrition-v2'
+import type { QePickerGroup, QePortionGroup, QePortionTarget, QeSlot, QeVariant } from '@eva/nutrition-v2'
 import { PortionConversionBanner, PortionConversionDialog } from './PortionConversionDialog'
 
 /**
@@ -17,8 +17,7 @@ import { PortionConversionBanner, PortionConversionDialog } from './PortionConve
  */
 
 const ctx = vi.hoisted(() => ({ value: {} as Record<string, unknown> }))
-const previewedMock = vi.hoisted(() => vi.fn())
-const appliedMock = vi.hoisted(() => vi.fn())
+const captureMock = vi.hoisted(() => vi.fn())
 const toastMock = vi.hoisted(() => vi.fn())
 
 vi.mock('./QuickEditProvider', () => ({
@@ -26,10 +25,17 @@ vi.mock('./QuickEditProvider', () => ({
   genQuickEditKey: () => 'key-nueva',
 }))
 vi.mock('sonner', () => ({ toast: toastMock }))
-vi.mock('@/lib/posthog/events', () => ({
-  useCaptureNutritionPortionConversionPreviewed: () => previewedMock,
-  useCaptureNutritionPortionConversionApplied: () => appliedMock,
-}))
+/**
+ * Lo mockeado es el CLIENTE de PostHog, no `@/lib/posthog/events` (E4 del jefe, 09-09).
+ *
+ * Antes se mockeaban los dos hooks y el test solo veía los argumentos que el diálogo les pasaba:
+ * la web podía capturar con dos números sueltos, sin `surface` y con otro shape que RN, y la
+ * suite seguía verde. Mockeando `usePostHog` corre la cadena entera —diálogo → hook →
+ * `conversionPreviewedPayload` del paquete → `capture`— y lo que se afirma es el payload REAL que
+ * sale a PostHog.
+ */
+const posthogStub = vi.hoisted(() => ({ capture: captureMock }))
+vi.mock('posthog-js/react', () => ({ usePostHog: () => posthogStub }))
 
 const BANNER_TITLE = 'Este plan usa las porciones anteriores (SMAE)'
 
@@ -40,7 +46,7 @@ function group(
   groupName: string,
   ref: readonly [number, number, number, number],
   portionSystem: 'smae' | 'cl' | undefined,
-): QePortionGroup {
+): QePickerGroup {
   const [calories, proteinG, carbsG, fatsG] = ref
   return {
     exchangeGroupId: `id-${groupCode}`,
@@ -50,11 +56,15 @@ function group(
     ref: { calories, proteinG, carbsG, fatsG },
     composedOf: null,
     macrosConfirmed: true,
+    // Todo el catálogo del fixture es del SISTEMA: `draftUsesLegacySmae` falla cerrado
+    // (`isSystem === true`, decisión (af)), así que sin este metadato el banner nunca se
+    // pintaría. Los grupos propios del fixture se arman con `picker(source, false)`.
+    isSystem: true,
     ...(portionSystem ? { portionSystem } : {}),
   }
 }
 
-const CATALOG: QePortionGroup[] = [
+const CATALOG: QePickerGroup[] = [
   group('C', 'Carbohidratos/Cereales', [70, 2, 15, 0], 'smae'),
   group('LAC', 'Lácteo', [95, 9, 12, 2], 'smae'),
   group('ARL', 'Alimento rico en lípidos', [45, 0, 0, 5], 'smae'),
@@ -172,9 +182,23 @@ function row(destino: string): HTMLElement {
   return node
 }
 
+/** Payloads capturados de un evento, en orden. */
+function capturas(evento: string): Record<string, unknown>[] {
+  return captureMock.mock.calls
+    .filter((call) => call[0] === evento)
+    .map((call) => call[1] as Record<string, unknown>)
+}
+
+const PREVIEWED = 'nutrition_portion_conversion_previewed'
+const APPLIED = 'nutrition_portion_conversion_applied'
+
+/** El mismo grupo, con el `isSystem` que el overlay del catálogo vivo le pegaría por id. */
+function picker(source: QePortionGroup, isSystem: boolean): QePickerGroup {
+  return { ...source, isSystem }
+}
+
 beforeEach(() => {
-  previewedMock.mockClear()
-  appliedMock.mockClear()
+  captureMock.mockClear()
   toastMock.mockClear()
   window.localStorage.clear()
 })
@@ -214,9 +238,18 @@ describe('PortionConversionDialog — diff por franja', () => {
       'false',
     )
 
-    // Y el preview se anuncia UNA vez, con los dos conteos y ninguna cifra del plan.
-    expect(previewedMock).toHaveBeenCalledTimes(1)
-    expect(previewedMock).toHaveBeenCalledWith(1, 1)
+    // Y el preview se anuncia UNA vez, con los conteos y ninguna cifra del plan.
+    expect(capturas(PREVIEWED)).toEqual([
+      {
+        surface: 'web',
+        slots: 1,
+        rows: 2,
+        rows_review: 1,
+        has_dairy: true,
+        has_collapse: false,
+        has_custom_match: false,
+      },
+    ])
   })
 
   it('elegir «Entero» recalcula el destino: 5,5 LAC ⇒ 5 LE (DATA §6.4 caso 12)', () => {
@@ -235,7 +268,7 @@ describe('PortionConversionDialog — diff por franja', () => {
     expect(within(entero).getByText('Revisar')).toBeInTheDocument()
     expect(dialog().queryByText('Lácteos descremados')).toBeNull()
     // Cambiar de lácteo NO es abrir otro preview: el evento sigue en uno.
-    expect(previewedMock).toHaveBeenCalledTimes(1)
+    expect(capturas(PREVIEWED)).toHaveLength(1)
   })
 
   it('«ARL × 1» + «G × 1» en la misma franja dan UNA sola fila AG con sus dos orígenes (R2)', () => {
@@ -271,7 +304,9 @@ describe('PortionConversionDialog — aplicar', () => {
     // T-05: publicar sigue siendo un paso aparte. Ni el publish directo ni el confirm se tocan.
     expect(publishNow).not.toHaveBeenCalled()
     expect(openConfirm).not.toHaveBeenCalled()
-    expect(appliedMock).toHaveBeenCalledWith(1)
+    expect(capturas(APPLIED)).toEqual([
+      { surface: 'web', slots: 1, rows: 2, dairy_choice: 'LD', custom_replaced: 0 },
+    ])
     expect(onOpenChange).toHaveBeenCalledWith(false)
   })
 
@@ -423,7 +458,7 @@ describe('PortionConversionDialog — el evento cuenta previews, no aperturas', 
       dialog().getByText('Este borrador ya usa el sistema chileno: no hay nada que convertir.'),
     ).toBeInTheDocument()
     expect(dialog().getByRole('button', { name: 'Convertir borrador' })).toBeDisabled()
-    expect(previewedMock).not.toHaveBeenCalled()
+    expect(capturas(PREVIEWED)).toHaveLength(0)
   })
 })
 
@@ -486,6 +521,103 @@ describe('PortionConversionDialog — selector de lácteo con teclado', () => {
     expect(dialog().getByRole('radio', { name: 'Entero' })).toHaveAttribute('aria-checked', 'true')
 
     // Y mover la elección con el teclado tampoco abre otro preview.
-    expect(previewedMock).toHaveBeenCalledTimes(1)
+    expect(capturas(PREVIEWED)).toHaveLength(1)
+  })
+})
+
+describe('PortionConversionBanner — «SMAE en uso» es SOLO el set del sistema (E1)', () => {
+  /**
+   * El grupo PROPIO del coach nace con `portion_system = 'smae'` por el default de la columna
+   * (W0.1), no porque el coach eligiera el set viejo. Contarlo como legado le pintaba «tu plan usa
+   * las porciones anteriores» a un coach que nunca prescribió un grupo del sistema, y el botón del
+   * aviso le abría un preview sin una sola fila: todo lo suyo cae a «se conserva tal cual».
+   *
+   * La decisión la toma `draftUsesLegacySmae` en el paquete y RN pregunta lo mismo (E2).
+   */
+  const PROPIO_SMAE = group('MIS', 'Mi cereal', [70, 2, 15, 0], 'smae')
+
+  it('un borrador con puros grupos PROPIOS marcados «smae» no ve el banner', () => {
+    setContext([propioTarget(PROPIO_SMAE, '2')], {
+      // Los 13 destinos chilenos SÍ están: lo único que decide acá es `isSystem === false`.
+      portionGroupChoices: [...CATALOG.map((g) => picker(g, true)), picker(PROPIO_SMAE, false)],
+    })
+
+    render(<PortionConversionBanner />)
+
+    expect(screen.queryByText(BANNER_TITLE)).toBeNull()
+  })
+
+  it('con un grupo del SISTEMA «C» y un destino chileno vivo el banner sí se monta', () => {
+    setContext([target('C', '2')], {
+      portionGroupChoices: CATALOG.map((g) => picker(g, true)),
+    })
+
+    render(<PortionConversionBanner />)
+
+    expect(screen.getByText(BANNER_TITLE)).toBeInTheDocument()
+  })
+})
+
+describe('PortionConversionDialog — el payload es el del paquete, con `surface: web` (E4)', () => {
+  it('`previewed` sale con las 7 llaves de DATA §11 y las banderas del caso', () => {
+    // ARL + G colapsan en una fila (has_collapse) y el grupo propio que calza ofrece reemplazo
+    // (has_custom_match). Sin lácteo en la franja, `has_dairy` queda en false.
+    setContext([target('ARL', '1'), target('G', '1'), propioTarget(PROPIO_QUE_CALZA, '1')], {
+      portionGroupChoices: [...CATALOG, PROPIO_QUE_CALZA],
+    })
+
+    render(<PortionConversionDialog open onOpenChange={vi.fn()} />)
+
+    const [payload] = capturas(PREVIEWED)
+    expect(Object.keys(payload).sort()).toEqual([
+      'has_collapse',
+      'has_custom_match',
+      'has_dairy',
+      'rows',
+      'rows_review',
+      'slots',
+      'surface',
+    ])
+    expect(payload).toEqual({
+      surface: 'web',
+      slots: 1,
+      rows: 1,
+      rows_review: 0,
+      has_dairy: false,
+      has_collapse: true,
+      has_custom_match: true,
+    })
+  })
+
+  it('`applied` sale con las 5 llaves, el lácteo elegido y cuántos grupos propios se reemplazaron', () => {
+    setContext([target('LAC', '1'), propioTarget(PROPIO_QUE_CALZA, '1')], {
+      portionGroupChoices: [...CATALOG, PROPIO_QUE_CALZA],
+    })
+
+    render(<PortionConversionDialog open onOpenChange={vi.fn()} />)
+
+    fireEvent.click(dialog().getByRole('radio', { name: 'Entero' }))
+    fireEvent.click(
+      dialog().getByRole('checkbox', {
+        name: 'Reemplazar «Carbohidratos 140/30» por «Panes, cereales y tubérculos»',
+      }),
+    )
+    fireEvent.click(dialog().getByRole('button', { name: 'Convertir borrador' }))
+
+    const [payload] = capturas(APPLIED)
+    expect(Object.keys(payload).sort()).toEqual([
+      'custom_replaced',
+      'dairy_choice',
+      'rows',
+      'slots',
+      'surface',
+    ])
+    expect(payload).toEqual({
+      surface: 'web',
+      slots: 1,
+      rows: 2,
+      dairy_choice: 'LE',
+      custom_replaced: 1,
+    })
   })
 })

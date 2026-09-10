@@ -3,6 +3,7 @@ import {
   CL_CONVERSION_MAP,
   CL_DAIRY_FACTORS,
   convertPortionsToCl,
+  draftUsesLegacySmae,
   hasClDestinations,
   matchCustomGroupToCl,
   round05,
@@ -11,7 +12,13 @@ import {
   type ClKeyMacro,
 } from './exchange-conversion'
 import { parsePortionsValue } from './editor-state'
-import type { QePortionGroup, QePortionTarget, QeSlot, QeVariant } from './editor-state'
+import type {
+  QePickerGroup,
+  QePortionGroup,
+  QePortionTarget,
+  QeSlot,
+  QeVariant,
+} from './editor-state'
 
 /**
  * W3.1–W3.3 — tabla de casos de DATA §6.4 (el caso 30, `isClGroup` con el campo ausente,
@@ -96,6 +103,15 @@ const CUSTOM_DESCREMADO = group('LDES', [70, 7, 10, 0], { groupName: 'Mi lácteo
 const CUSTOM_FR = group('FR', [60, 0, 15, 0], {
   exchangeGroupId: 'id-FR-propio',
   groupName: 'Frutas de la casa',
+})
+/**
+ * El mismo caso pero marcado 'cl' EXPLICITO: asi SI es destino, o sea que comparte bucket con
+ * el 'FR' del sistema. Es la unica forma de meter dos targets distintos en un mismo bucket.
+ */
+const CUSTOM_FR_CL = group('FR', [60, 0, 15, 0], {
+  exchangeGroupId: 'id-FR-propio-cl',
+  groupName: 'Frutas de la casa (cl)',
+  portionSystem: 'cl',
 })
 
 // `CUSTOM_FR` NO entra al catalogo compartido: repite el `code` 'FR' y los tests que lo usan
@@ -557,6 +573,101 @@ describe('grupos propios del coach — propuesta con match unico, y el custom ja
     expect(result.diff[0].from.map((origin) => origin.code)).toEqual(['F'])
   })
 
+  it('el reemplazo S5 de un propio que REPITE el codigo del destino SI se aplica (identidad por id)', () => {
+    // El bug: la guarda de identidad comparaba `origins[0].code === code`, o sea por CODIGO. Un
+    // grupo PROPIO 'FR' mandado al 'FR' del sistema entraba por ahi y salia INTACTO: el coach
+    // aceptaba el reemplazo, el sheet se cerraba y el borrador no cambiaba. La identidad se
+    // decide por `exchange_group_id`, igual que `sameGroup` unas lineas mas arriba.
+    const catalog = [...CATALOG, CUSTOM_FR]
+    const result = convertPortionsToCl({
+      variants: [variantWith([targetOf(CUSTOM_FR, '2')])],
+      catalog,
+      coachSystem: 'cl',
+      customReplacements: { [CUSTOM_FR.exchangeGroupId]: 'FR' },
+    })
+    expect(result.unresolved).toHaveLength(0)
+    expect(result.diff).toHaveLength(1)
+    expect(result.diff[0].toCode).toBe('FR')
+    expect(result.diff[0].from.map((origin) => origin.code)).toEqual(['FR'])
+    expect(result.diff[0].toPortions).toBe(2) // refs identicos ⇒ factor 1
+    // El target del borrador quedo apuntando al FR del SISTEMA, no al propio.
+    expect(outTargets(result)).toHaveLength(1)
+    expect(outTargets(result)[0].exchangeGroupId).toBe(byCode('FR').exchangeGroupId)
+    expect(outTargets(result)[0].exchangeGroupId).not.toBe(CUSTOM_FR.exchangeGroupId)
+    expect(outTargets(result)[0].portions).toBe('2')
+  })
+
+  it('… y con el FR del SISTEMA tambien en la franja, los dos se funden en una sola fila', () => {
+    // Los dos caen en el mismo bucket: emitir dos targets con el mismo `exchange_group_id`
+    // reventaria el RPC con el 23505 de `unique (meal_slot_id, exchange_group_id)`.
+    const catalog = [...CATALOG, CUSTOM_FR]
+    const result = convertPortionsToCl({
+      variants: [variantWith([targetOf(CUSTOM_FR, '2'), target('FR', '1')])],
+      catalog,
+      coachSystem: 'cl',
+      customReplacements: { [CUSTOM_FR.exchangeGroupId]: 'FR' },
+    })
+    expect(result.diff).toHaveLength(1)
+    expect(result.diff[0].from.map((origin) => origin.portions)).toEqual([2, 1])
+    expect(result.diff[0].toPortions).toBe(3)
+    expect(outTargets(result)).toHaveLength(1)
+    expect(outTargets(result)[0].exchangeGroupId).toBe(byCode('FR').exchangeGroupId)
+    expect(outTargets(result)[0].portions).toBe('3')
+  })
+
+  it('dos chilenos del MISMO code sin cantidad NO se vuelven adyacentes (R-08)', () => {
+    // El bucket se llavea por `code`, asi que un grupo PROPIO marcado 'cl' con code 'FR' cae en
+    // el mismo bucket que el FR del sistema. Si ninguno de los dos convierte nada, los dos
+    // sobreviven —eso ya estaba— pero cada uno tiene que salir EN SU LUGAR: emitirlos juntos en
+    // la posicion del primero reordena la franja sin que el preview diga una palabra.
+    const catalog = [...CATALOG, CUSTOM_FR_CL]
+    const result = convertPortionsToCl({
+      variants: [
+        variantWith([targetOf(CUSTOM_FR_CL, ''), target('PPRO', '1'), target('FR', 'abc')]),
+      ],
+      catalog,
+      coachSystem: 'cl',
+    })
+    expect(result.diff).toHaveLength(0)
+    expect(outTargets(result).map((row) => row.exchangeGroupId)).toEqual([
+      CUSTOM_FR_CL.exchangeGroupId,
+      CUSTOM_JOSEFIT.exchangeGroupId,
+      byCode('FR').exchangeGroupId,
+    ])
+    expect(outTargets(result).map((row) => row.portions)).toEqual(['', '1', 'abc'])
+  })
+
+  it('… y si alguien SI convierte a ese code, las dos fuentes se funden en una sola fila', () => {
+    // La contracara: con un origen real en el bucket no puede sobrevivir ninguna de las dos
+    // fuentes por su cuenta, o la franja terminaria con dos targets del mismo grupo ⇒ 23505.
+    const catalog = [...CATALOG, CUSTOM_FR_CL]
+    const result = convertPortionsToCl({
+      variants: [
+        variantWith([
+          targetOf(CUSTOM_FR_CL, ''),
+          target('PPRO', '1'),
+          target('FR', 'abc'),
+          target('F', '1'),
+        ]),
+      ],
+      catalog,
+      coachSystem: 'cl',
+    })
+    expect(result.diff).toHaveLength(1)
+    expect(outTargets(result).map((row) => row.groupCode)).toEqual(['FR', 'PPRO'])
+    expect(outTargets(result)[0].portions).toBe('1')
+  })
+
+  it('un PCT del sistema ya prescrito sigue saliendo INTACTO (la identidad real no se toco)', () => {
+    const result = convert([target('PCT', '2', 'Arroz')])
+    expect(result.diff).toHaveLength(0)
+    expect(result.unresolved).toHaveLength(0)
+    const salida = outTargets(result)[0]
+    expect(salida.id).toBe('row-PCT') // no es un alta nueva: es el MISMO target
+    expect(salida.notes).toBe('Arroz')
+    expect(salida.portions).toBe('2')
+  })
+
   it('un unresolved con match unico viaja con `suggestedCode`, sin aplicar nada', () => {
     const result = convert([target('CARB', '1')])
     expect(result.unresolved[0].reason).toBe('custom_sin_match')
@@ -755,5 +866,100 @@ describe('bordes del conversor', () => {
       target('G', '1', 'Aceite de oliva'),
     ])
     expect(outTargets(result)[0].notes).toBe('Palta · Aceite de oliva')
+  })
+})
+
+// ── 31-35 · `draftUsesLegacySmae` — la decision del banner (E1/E2 del jefe) ────
+
+describe('draftUsesLegacySmae — «SMAE en uso» es SOLO el set del sistema (E1)', () => {
+  /**
+   * Grupo del picker: el del catalogo mas los metadatos que solo trae el catalogo vivo.
+   * `isSystem` va OBLIGATORIO en el fixture —aunque el tipo lo declare opcional— para que
+   * ningun caso pruebe sin querer la rama de la ausencia: esa tiene su propio caso (37).
+   */
+  function picker(
+    source: QePortionGroup,
+    meta: Partial<QePickerGroup> & { isSystem: boolean },
+  ): QePickerGroup {
+    return { ...source, ...meta }
+  }
+
+  it('caso 31 · plan SOLO con grupos propios (portionSystem smae por default) ⇒ false', () => {
+    // El default de la columna (W0.1) deja a todo grupo propio en 'smae'. Contarlo como legado
+    // le pintaba el banner «tu plan usa el set anterior» a un coach que no usa un solo grupo
+    // SMAE del sistema, y al tocarlo se le abria un preview sin una sola fila.
+    const groups = [picker(CUSTOM_JOSEFIT, { isSystem: false, portionSystem: 'smae' })]
+    const variants = [variantWith([targetOf(CUSTOM_JOSEFIT, '2')])]
+    expect(draftUsesLegacySmae(variants, groups, 'cl')).toBe(false)
+  })
+
+  it('caso 32 · plan con un C del SISTEMA ⇒ true', () => {
+    const groups = [picker(byCode('C'), { isSystem: true })]
+    const variants = [variantWith([target('C', '2')])]
+    expect(draftUsesLegacySmae(variants, groups, 'cl')).toBe(true)
+  })
+
+  it('caso 33 · plan solo chileno ⇒ false', () => {
+    const groups = [
+      picker(byCode('PCT'), { isSystem: true }),
+      picker(byCode('FR'), { isSystem: true }),
+    ]
+    const variants = [variantWith([target('PCT', '2'), target('FR', '1')])]
+    expect(draftUsesLegacySmae(variants, groups, 'cl')).toBe(false)
+  })
+
+  it('caso 34 · un target cuyo grupo NO esta en la lista no cuenta', () => {
+    // Sin el grupo no hay con que afirmar que es del sistema: no se inventa.
+    const variants = [variantWith([target('C', '2')])]
+    expect(draftUsesLegacySmae(variants, [], 'cl')).toBe(false)
+    const otros = [picker(byCode('PCT'), { isSystem: true })]
+    expect(draftUsesLegacySmae(variants, otros, 'cl')).toBe(false)
+  })
+
+  it('caso 35 · grupo del sistema SIN portionSystem y coach cl ⇒ false (R18: nadie inventa smae)', () => {
+    const sinSet = group('C', [70, 2, 15, 0], { exchangeGroupId: 'id-C-sin-set' })
+    const groups = [picker(sinSet, { isSystem: true })]
+    const variants = [variantWith([targetOf(sinSet, '2')])]
+    expect(draftUsesLegacySmae(variants, groups, 'cl')).toBe(false)
+    // … y con el coach en 'smae' el MISMO grupo si cae al set viejo: el fallback es el del coach.
+    expect(draftUsesLegacySmae(variants, groups, 'smae')).toBe(true)
+  })
+
+  it('caso 36 · plan MIXTO (propios smae + un C del sistema) ⇒ true por el del sistema', () => {
+    // La forma real de un coach de Pame: sus grupos propios (todos 'smae' por el default de la
+    // columna) mas uno o dos del set viejo del sistema. El banner tiene que encenderse por los
+    // del SISTEMA y por nada mas: si mañana el coach borra el C, se apaga.
+    const groups = [
+      picker(CUSTOM_JOSEFIT, { isSystem: false, portionSystem: 'smae' }),
+      picker(CUSTOM_PAME, { isSystem: false, portionSystem: 'smae' }),
+      picker(byCode('C'), { isSystem: true }),
+    ]
+    const conC = [
+      variantWith([targetOf(CUSTOM_JOSEFIT, '1'), targetOf(CUSTOM_PAME, '2'), target('C', '1')]),
+    ]
+    expect(draftUsesLegacySmae(conC, groups, 'cl')).toBe(true)
+    const sinC = [variantWith([targetOf(CUSTOM_JOSEFIT, '1'), targetOf(CUSTOM_PAME, '2')])]
+    expect(draftUsesLegacySmae(sinC, groups, 'cl')).toBe(false)
+  })
+
+  it('caso 37 · la lista SIN el metadato (la forma real que pasaba RN) falla CERRADA', () => {
+    // ESTA es la forma que el tipo deja entrar sin un error: `QePickerGroup` declara `isSystem`
+    // opcional, asi que el catalogo crudo de `catalogToPortionGroups` —que no lo propaga—
+    // llegaba con TODO en `undefined`. Contando la ausencia como «del sistema», un plan de puros
+    // grupos propios (todos 'smae' por el default de la columna) encendia el banner y abria un
+    // sheet vacio. Sin evidencia no se afirma: el banner calla.
+    const crudo: QePortionGroup[] = [
+      { ...CUSTOM_JOSEFIT, portionSystem: 'smae' },
+      { ...byCode('C'), portionSystem: 'smae' },
+    ]
+    const variants = [variantWith([targetOf(CUSTOM_JOSEFIT, '2'), target('C', '1')])]
+    expect(draftUsesLegacySmae(variants, crudo, 'cl')).toBe(false)
+    // Con el metadato encima —la lista que da `applyCatalogMetaToPickerGroups`— el mismo plan
+    // enciende el banner por el C del SISTEMA, y solo por el.
+    const conMeta = [
+      picker(CUSTOM_JOSEFIT, { isSystem: false, portionSystem: 'smae' }),
+      picker(byCode('C'), { isSystem: true }),
+    ]
+    expect(draftUsesLegacySmae(variants, conMeta, 'cl')).toBe(true)
   })
 })

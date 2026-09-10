@@ -491,60 +491,57 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
 
 ## W3 · Conversión SMAE → chileno (2 d)
 
-- [ ] W3.1 [Opus] `packages/nutrition-v2/exchange-conversion.ts`: `CL_CONVERSION_MAP` (los 9 orígenes de DATA),
-      `round05`, `convertPortionsToCl(draft, { dairyChoiceBySlot })` ⇒ `{ draft, diff }` con delta de macros por día vía
-      `dayTotalsByVariant`. **Depende de W1.4**: la primera línea es `catalog.filter((g) => isClGroup(g, coachSystem))`, con `isClGroup`,
-      `systemOf` y `CL_CODES` **importados de `packages/nutrition-v2/exchange-visibility.ts`** (DATA §6 los importa así)
-      — **no** se redefinen acá, y la firma es de **dos** parámetros. El campo que leen es
-      `QePortionGroup.portionSystem?` (W1.2).
-      **Criterio**: archivo de tests con tabla — `2 C ⇒ 1 PCT`, `3 P ⇒ 2 CB`, `1 F ⇒ 1 FR`,
-      `7,5 V ⇒ 6 VG`, `5,5 LAC ⇒ 7,5 LD` (y `LS`/`LE` con su factor), `1 LEG ⇒ 0,5 LGS`, `1 SP ⇒ 1 SCP`, piso 0,5 y
-      tope 99.
-- [ ] W3.2 [Opus] Colapso `ARL` + `G` → `AG` **antes** del payload. **Criterio**: test que arma una franja con ambos y
-      verifica **un** solo target destino con la suma; el test falla si se emiten dos (violaría
-      `unique (meal_slot_id, exchange_group_id)`).
-- [ ] W3.3 [Opus] Propuesta de reemplazo de grupos custom con match único (±5 kcal, ±1 g). **Criterio**: el grupo
-      «Carbohidratos 140/30» de `nutricionista-pame-cid` matchea `PCT`; el «Proteinapro» de `josefit` no matchea nada y
-      queda intacto; ningún custom se soft-borra.
-- [ ] W3.4 [Opus] `REPLACE_PORTION_GROUPS` en `editor-state.ts` para aplicar el resultado al borrador en un solo
-      dispatch, **materializando cada destino en la posición de su primer origen**: `map` sobre la lista original de
-      `slot.portionTargets` reemplazando in situ, con `ARL` + `G` colapsados sobre la posición del primero de los dos y
-      el segundo descartado (nada de `[...convertidos, ...intactos]`, que empuja lo convertido al principio de la franja
-      justo en la pantalla que prometía mostrar el antes y el después). **Criterio**: el orden de `slot.portionTargets`
-      es idéntico antes y después **salvo por el colapso**, y la nota se conserva concatenada cuando dos orígenes caen
-      en el mismo destino; test propio que arma una franja intercalando targets convertibles y no convertibles (custom
-      sin match) y compara la secuencia de `key`. Ojo: `QePortionTarget` (`editor-state.ts:228-239`) **no tiene**
-      `orderIndex` — el orden es la posición del array; `orderIndex` solo existe en el read model del alumno
-      (`read-models.ts:277`), así que no hay nada que «conservar» a ese nivel.
-- [ ] W3.5 [Opus] `PortionConversionSheet.tsx` (RN, `Sheet nativeModal snapPoints={['85%']}`) y
-      `PortionConversionDialog.tsx` (web, `QeBottomSheet size="lg"`) con el preview del mockup M2: fila origen → destino
-      con kcal antes/después, marca «Revisar», selector de lácteo por franja, total del día y los dos botones.
-      **Criterio**: nada se escribe hasta «Convertir borrador»; publicar sigue siendo un paso aparte.
-- [ ] W3.6 [Opus] **Cablear** el banner del plan legado (RN y web) —la carcasa la montó W2.4/W2.7— con «Ver conversión»
-      (abre el sheet/diálogo de W3.5) y «Ahora no». **Criterio**: «Ahora no» lo esconde 30 días **por plan** (clave
-      local por `planId`: `AsyncStorage` en RN, `localStorage` en web; no sobrevive al cambio de dispositivo y se acepta
-      así, sin columna nueva) y no se muestra a coaches sin targets SMAE.
-      **Corregido 09-09 (jefe), contra lo escrito arriba:** el diff de W3 sobre `EditablePortionsSection.tsx` (RN) y
-      `EditablePortionsCard.tsx` (web) **no es «pasar el handler»: es RETIRAR la carcasa de W2**. Las dos se montan una
-      vez por FRANJA y el banner es **uno por PLAN** (SPEC §7.2/§8.3, mockup M2), y la card web ni siquiera recibe
-      `planId`, que es la clave del «Ahora no». El banner vive en `PortionConversionSheet.tsx` / `PortionConversionDialog.tsx`
-      y lo montan `QuickEditMode` / `QuickEditPlanView` una sola vez. Se cae con esto el test de W2.7 «con
-      `onConvertClick` se monta» (la prop ya no existe) y se suma **guard de destinos**: sin ni un grupo `cl` vivo en la
-      lista (`hasClDestinations`) el banner no se pinta, porque hasta W6.8 los 13 chilenos tienen `deleted_at` y el
-      diálogo solo podría ofrecer un callejón sin salida con el botón primario apagado.
-- [ ] W3.7 [Sonnet] Copys `convert.*` y PostHog `nutrition_portion_conversion_previewed { slots, rows_review }` /
-      `…_applied { slots }`. **Criterio**: sin cifras de kcal ni nombres.
-      **Decisión 09-09 (W3.5, ratificada): `previewed` cuenta PREVIEWS, no aperturas.** Con `diff` vacío el evento
-      **no se emite**: abrir un diálogo que dice «no hay nada que convertir» no es un preview, y hasta W6.8 (los 13
-      chilenos con `deleted_at`) ese sería el caso mayoritario — el embudo mediría el bug, no el uso. Consecuencia a
-      tener presente al leerlo: `previewed` **no** es «cuántos abrieron el aviso»; si el embudo necesita esa otra
-      pregunta, es un evento aparte, no un cambio de este. Anotado también en DATA §11. Las once llaves `convert.*`
-      que escribió W3.5/W3.6 (`dairyLabel`, `keptTitle`, `keptCustom`, `keptUnknown`, `keptMissingTarget`, `replace`,
-      `replaceHint`, `empty`, `emptyNoAmount`, `applied`) ya están en la tabla canónica de SPEC §16.1.
-- [ ] W3.8 [owner] QA en device del punto 5 del checklist final.
-- [ ] W3.9 Gates W3 (<fecha>): vitest paquete + engine (tabla completa) · RTL del diálogo · `pnpm typecheck` · tsc
-      mobile · eslint por archivo · `pnpm check:tokens`.
-- [ ] W3.10 [Fable] Juicio de W3: `<…>`.
+- [x] W3.1 [Opus] `packages/nutrition-v2/exchange-conversion.ts`: `CL_CONVERSION_MAP` (los 9 orígenes de DATA §6),
+      `CL_DAIRY_FACTORS`, `round05`, `convertPortionsToCl(input)` ⇒ `{ variants, diff, unresolved, dayDeltas }` con
+      `isClGroup` / `CL_CODES` **importados** de `exchange-visibility.ts`. **Cerrado 09-09** con la **decisión (ad)**:
+      el filtro de destinos NO es `catalog.filter((g) => isClGroup(g, coachSystem))` sino `makeIsClDestination` (manda el
+      `portionSystem` explícito de la fila; `CL_CODES` solo para catálogos que no declaran set en ninguna fila) — con la
+      firma del SDD los grupos propios de josefit y Pame se proponían como reemplazo de sí mismos para un coach `cl`.
+      `coachSystem` no participa del filtro. Tabla en `exchange-conversion.test.ts`: casos 1–29 de DATA §6.4 + extras
+      (`2 C ⇒ 1 PCT`, `3 P ⇒ 2 CB`, `1 F ⇒ 1 FR`, `7,5 V ⇒ 6 VG`, `5,5 LAC ⇒ 7,5 LD` y `LS`/`LE`, `1 LEG ⇒ 0,5 LGS`,
+      `1 SP ⇒ 1 SCP`, piso 0,5, tope 99). Un target sin cantidad legible viaja intacto y nunca duplica su grupo.
+- [x] W3.2 [Opus] Colapso `ARL` + `G` → `AG` **antes** del payload. **Cerrado 09-09**: un solo target destino con la
+      suma, en la posición del primer origen (casos 14/15/29); dos filas al mismo grupo violarían
+      `unique (meal_slot_id, exchange_group_id)`.
+- [x] W3.3 [Opus] Propuesta de reemplazo de grupos custom con match único (±5 kcal, ±1 g). **Cerrado 09-09**:
+      «Carbohidratos 140/30» matchea `PCT`; «Proteinapro» no matchea y queda intacto; ningún custom se soft-borra.
+      **Remate**: la identidad del reemplazo aceptado es por `exchangeGroupId`, nunca por código (un propio que repite el
+      código del destino dejaba el reemplazo en no-op silencioso), remate `wf_bb008643-c13` (14 agentes: paquete 1 ronda, repo 0, RN 2, web 0) con el repro del custom `FR`.
+- [x] W3.4 [Opus] `REPLACE_PORTION_GROUPS` en `editor-state.ts`: materializa cada destino en la posición de su primer
+      origen, conserva las notas concatenadas y los no convertibles en su lugar. **Cerrado 09-09**:
+      `editor-state.replace-portion-groups.test.ts` compara la secuencia de `key` antes y después.
+- [x] W3.5 [Opus] `PortionConversionSheet.tsx` (RN, `Sheet nativeModal snapPoints={['85%']}`) y
+      `PortionConversionDialog.tsx` (web, `QeBottomSheet size="lg"`): filas origen → destino con kcal antes/después
+      (`formatMacroEsCl` en las dos), «Revisar», selector Descremado/Semi/Entero por franja que re-corre el motor,
+      reemplazos S5 con confirmación explícita, «se conserva» con su motivo, delta del día **solo de los días tocados**
+      (decisión (ae)), botones Cancelar / «Convertir borrador» ⇒ `REPLACE_PORTION_GROUPS` + toast «Deshacer»
+      (`RESTORE_DRAFT`). **Cerrado 09-09**: nada se escribe hasta «Convertir borrador»; publicar sigue aparte; RTL del
+      diálogo web + test de tabla del banner RN.
+- [x] W3.6 [Opus] Banner del plan legado (RN y web) con «Ver conversión» y «Ahora no» (30 días por `planId`:
+      `AsyncStorage` / `localStorage`, sin columna nueva). **Cerrado 09-09**, UNO POR PLAN: la carcasa por franja de
+      W2.4/W2.7 se retiró y el banner lo montan `QuickEditMode` (RN) / `QuickEditPlanView` (web) una sola vez (SPEC
+      §7.2/§8.3, mockup M2); **guard de destinos** (`hasClDestinations`: sin un grupo `cl` vivo no se pinta, porque hasta
+      W6.8 los 13 chilenos tienen `deleted_at`); y **decisión (af)**: «SMAE en uso» son grupos del SISTEMA con `smae`
+      prescritos — los grupos PROPIOS nunca cuentan (nacen con `portion_system = 'smae'` por el default de W0.1) — con la
+      decisión pura `draftUsesLegacySmae(variants, groups, coachSystem)` en el paquete y el repo
+      `findUsedPortionSystemsForCoach` filtrando `is_system = true` (defecto de W1.3 corregido acá).
+- [x] W3.7 [Sonnet→Opus] Copys `convert.*` (las once llaves nuevas ya en SPEC §16.1; el botón secundario reusa
+      `groupEditor.cancel`) y PostHog `nutrition_portion_conversion_previewed` / `…_applied` con el shape COMPLETO de
+      DATA §11 (eventos 2 y 3, con `surface`) construido SOLO por `portions-analytics.ts` (decisión (ag)); `previewed`
+      cuenta previews (se emite una vez por apertura y solo con `diff` no vacío), no aperturas. **Cerrado 09-09**: sin
+      kcal ni nombres; `portions-analytics.test.ts` afirma las llaves de los cuatro constructores.
+- [ ] W3.8 [owner] QA en device del punto 5 del checklist final (incluye: el banner no aparece con solo grupos propios;
+      hasta W6.8 tampoco aparece porque no hay destinos vivos; `ensureLoaded` al montar suma un request por apertura
+      del editor clásico).
+- [x] W3.9 Gates W3 (09-09, sobre `6e2b37cb` (checkpoint) + remate y docs (este commit)): `pnpm exec vitest run packages/nutrition-v2 packages/nutrition-engine "apps/web/src/app/coach/nutrition-v2/[clientId]/_quick-edit" "apps/web/src/app/c/[coach_slug]/nutrition-v2" apps/web/src/infrastructure/db apps/web/src/app/api/mobile/nutrition-v2/exchange-groups apps/web/src/app/coach/nutrition-v2/_actions tests/mobile-nutrition-v2-portions.test.ts tests/mobile-nutrition-v2-targets-switch.test.ts tests/mobile-nutrition-v2-conversion-banner.test.ts tests/mobile-nutrition-exchange-groups-api.test.ts tests/nutrition-portions` ⇒ **109 archivos / 1.843 tests verdes** (tras corregir el fixture del RTL del diálogo: el catálogo del test no traía `isSystem` y `draftUsesLegacySmae` falla cerrado) · `pnpm typecheck` ⇒ exit 0 · `pnpm --filter @eva/mobile exec tsc --noEmit` ⇒ exit 0 · `pnpm check:tokens` ⇒ OK (86 + 5) · `pnpm check:nutrition-v2-boundaries` ⇒ 471 archivos OK · eslint por archivo sin hallazgos (workers). Tests nuevos: `exchange-conversion.test.ts` (tabla 1–29 + extras, S5 por id, `draftUsesLegacySmae` 31–37), `editor-state.replace-portion-groups.test.ts`, `portions-analytics.test.ts` (12), RTL `PortionConversionDialog.test.tsx` (22), `tests/mobile-nutrition-v2-conversion-banner.test.ts` (21), repo `exchanges.repository.portion-systems.test.ts` (+4). Smoke SQL `exchange_groups_portion_system_rollback.sql` alineado (`d_sets_en_uso` solo grupos del sistema).
+- [x] W3.10 [Fable] Juicio de W3, 09-09: workflow `wf_6efc8f00-3c9` (conversor → RN ∥ web → 3 refutadores, 2 rondas por
+      lane, 18 agentes; los tres lanes terminaron con 1 BLOQUEA real cada uno) + remate `wf_bb008643-c13` (paquete →
+      repo ∥ RN ∥ web → 4 refutadores). Commits: `6e2b37cb` (checkpoint) + remate y docs (este commit). Decisiones del jefe: (ad) `makeIsClDestination`
+      manda sobre el filtro literal del SDD; (ae) paridad de presentación (kcal con `formatMacroEsCl`, delta solo de días
+      tocados); (af) «SMAE en uso» = grupos del sistema (repo + helper puro), los propios jamás; (ag) eventos 2 y 3 con
+      shape completo y `surface` desde el paquete. MEJORA diferidas al backlog: referencias de línea en JSDoc del
+      conversor, separador `' · '` de `mergeNotes`, `origins.length === 0` con dos fuentes (inalcanzable por la
+      `unique`), test RN del sheet de conversión (hoy solo el de tabla del banner).
 
 ## W4 · Metas por día (1 d)
 
@@ -749,7 +746,7 @@ _(vacía: se llena si aparece un reporte después del cierre, con `### <fecha> �
 | 2026-09-09 | W0 · datos (W0a + W0b) | worktree `porciones-chilenas`, sin push (`02db17b7` + commit del apply) | tx-rollback + smoke A–G + Q1–Q9 + dry-run ×3 + apply ×2 | 120000/120500 en LIVE (`20260909163802` / `20260909163812`), seed apagado, **2.499 equivalencias + 5 foods en LIVE**; OK del owner citado en W0.9 |
 | 2026-09-09 | W1 · motor y visibilidad | worktree `porciones-chilenas`, sin push | vitest 90/1.446 · typecheck · tsc mobile · boundaries 454 · eslint por archivo | 4 workers + 4 refutadores + ronda de fixes; decisiones (k)–(p) en W1.14 |
 | 2026-09-09 | W2 · picker, bump, tap-to-edit, Legumbres | worktree `porciones-chilenas`, sin push (`564a2d2c` + remate) | vitest 92/1.578 · typecheck · tsc mobile · tokens · boundaries 460 · eslint por archivo | 18 + 8 agentes (2 rondas por lane + remate del overlay); decisiones (q)–(x) en W2.13; QA device W2.11 pendiente |
-| | W3 · conversión | | | |
+| 2026-09-09 | W3 · conversión SMAE → chileno | worktree `porciones-chilenas`, sin push (`6e2b37cb` (checkpoint) + remate y docs (este commit)) | vitest paquete + engine + `_quick-edit` + repo + tests RN · typecheck · tsc mobile · tokens · boundaries · eslint por archivo | 18 + remate; decisiones (ad)–(ag) en W3.10; QA device W3.8 pendiente; corrige el `legacySystems` de W1.3 (solo grupos del sistema) |
 | 2026-09-09 | W4 · metas por día | worktree `porciones-chilenas`, sin push (`383e4a74` (checkpoint) + `20769987` (remate 1) + remate 2 y docs (este commit)) | vitest paquete + `_quick-edit` + tests RN · typecheck · tsc mobile · tokens · boundaries · eslint por archivo | 10 + 12 + remate 2 agentes; decisiones (y)–(ac) en W4.9; QA device W4.7 pendiente (aviso inline RN, KeyboardDoneBar iOS, plan de Pame con «Ir a Base») |
 | | W5 · equivalencias | | | |
 | | W6 · cierre | | | |

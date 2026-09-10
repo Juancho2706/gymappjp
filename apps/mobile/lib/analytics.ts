@@ -17,7 +17,8 @@ import {
     conversionPreviewedPayload,
     portionGroupBumpedPayload,
     targetsScopePayload,
-    type ClDairyCode,
+    type PortionConversionAppliedProps,
+    type PortionConversionPreviewedProps,
     type PortionGroupBumpedProps,
     type QeTargetsScope,
     type TargetsScopeFrom,
@@ -217,32 +218,19 @@ export function captureNutritionPortionGroupBumped(props: PortionGroupBumpedProp
  * ni gramos, ni porciones, ni nombres de grupo o de alimento, ni ids: el evento mide la pantalla,
  * no la pauta del alumno.
  *
- * La forma la fija DATA.md §11 evento 2 —fuente ÚNICA (fix S-07)—: `surface`, `slots`, `rows`,
- * `rows_review`, `has_dairy`, `has_collapse`, `has_custom_match`. `surface` se agrega ACÁ, igual
- * que en `captureNutritionTargetsScope`, porque `conversionPreviewedPayload` todavía no lo toma
- * por parámetro como su hermano `portionGroupBumpedPayload('rn', …)`; sin él, RN y web quedan
- * indistinguibles bajo el mismo evento. Las tres banderas y `rows` viajan explícitas por la misma
- * razón: PENDIENTE del paquete, y cuando el constructor las tome, este helper vuelve a un spread.
+ * La forma la fija DATA.md §11 evento 2 —fuente ÚNICA (fix S-07)— y la ARMA EL PAQUETE:
+ * `conversionPreviewedPayload('rn', props)` devuelve las SIETE llaves, `surface` incluida. Acá no
+ * se pega ni una a mano ni con un spread. Cuando RN completaba `rows` y las tres banderas por su
+ * cuenta, la web las escribía distinto y el mismo evento llegaba con dos formas —que es
+ * exactamente lo que el constructor compartido existe para impedir—.
  *
  * Se emite UNA vez por apertura; cambiar el selector de lácteo re-corre el motor pero NO vuelve a
  * emitir (esa decisión vive en el consumidor, `PortionConversionSheet`).
  */
-export function captureNutritionPortionConversionPreviewed(props: {
-    slots: number
-    rows: number
-    rowsReview: number
-    hasDairy: boolean
-    hasCollapse: boolean
-    hasCustomMatch: boolean
-}): void {
-    captureAppEvent(PORTIONS_EVENT_CONVERSION_PREVIEWED, {
-        surface: 'rn',
-        ...conversionPreviewedPayload(props.slots, props.rowsReview),
-        rows: props.rows,
-        has_dairy: props.hasDairy,
-        has_collapse: props.hasCollapse,
-        has_custom_match: props.hasCustomMatch,
-    })
+export function captureNutritionPortionConversionPreviewed(
+    props: PortionConversionPreviewedProps,
+): void {
+    captureAppEvent(PORTIONS_EVENT_CONVERSION_PREVIEWED, conversionPreviewedPayload('rn', props))
 }
 
 /**
@@ -251,23 +239,14 @@ export function captureNutritionPortionConversionPreviewed(props: {
  * visto nada: dice que el coach aceptó el preview.
  *
  * LEY 21.719: conteos y una elección, ninguna cifra de salud. La forma la fija DATA.md §11 evento
- * 3: `surface`, `slots`, `rows`, `dairy_choice` (QUÉ eligió, jamás cuánto) y `custom_replaced`
- * (CUÁNTOS grupos propios reemplazó, nunca cuáles). `surface` y las llaves que el constructor
- * compartido todavía no toma se agregan acá — misma deuda declarada en el hermano `previewed`.
+ * 3 —`surface`, `slots`, `rows`, `dairy_choice` (QUÉ eligió, jamás cuánto) y `custom_replaced`
+ * (CUÁNTOS grupos propios reemplazó, nunca cuáles)— y la arma `conversionAppliedPayload('rn', …)`,
+ * el MISMO constructor que llama la web. Mismo trato que su hermano `previewed`.
  */
-export function captureNutritionPortionConversionApplied(props: {
-    slots: number
-    rows: number
-    dairyChoice: ClDairyCode | 'mixed'
-    customReplaced: number
-}): void {
-    captureAppEvent(PORTIONS_EVENT_CONVERSION_APPLIED, {
-        surface: 'rn',
-        ...conversionAppliedPayload(props.slots),
-        rows: props.rows,
-        dairy_choice: props.dairyChoice,
-        custom_replaced: props.customReplaced,
-    })
+export function captureNutritionPortionConversionApplied(
+    props: PortionConversionAppliedProps,
+): void {
+    captureAppEvent(PORTIONS_EVENT_CONVERSION_APPLIED, conversionAppliedPayload('rn', props))
 }
 
 /**

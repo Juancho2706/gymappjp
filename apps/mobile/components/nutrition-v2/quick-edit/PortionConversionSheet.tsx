@@ -3,15 +3,17 @@ import type { ReactNode } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import {
   convertPortionsToCl,
+  draftUsesLegacySmae,
+  formatMacroEsCl,
   formatPortionsEsCl,
   isDairy,
-  systemOf,
   type ClConversionDayDelta,
   type ClConversionResult,
   type ClConversionRow,
   type ClConversionUnresolved,
   type ClDairyCode,
   type PortionSystem,
+  type QePickerGroup,
   type QePortionGroup,
   type QeVariant,
 } from '@eva/nutrition-v2'
@@ -51,6 +53,16 @@ import {
  * «se conserva» con dos redacciones distintas y nadie los leería juntos—.
  */
 
+/**
+ * Lista del picker CON el metadato del sistema ya resuelto: es lo único que `draftUsesLegacySmae`
+ * acepta (E2). El `isSystem` de `QePickerGroup` es OPCIONAL —`applyCatalogMetaToPickerGroups`
+ * devuelve `{...group}` sin él cuando el catálogo vivo no cargó o no cubre al grupo (uno creado
+ * en la sesión)—, y esa ausencia no es «del sistema»: el borde RN la baja a `false` ANTES de
+ * preguntar, y este tipo obliga a que ese paso exista. Espejo estructural del contrato del
+ * paquete: si mañana exporta el alias con nombre propio, esto sigue encajando sin tocar nada.
+ */
+export type ConversionLegacyGroup = QePickerGroup & { isSystem: boolean }
+
 /** Orden del selector del eje lácteo: descremado primero, que es el default (R3, Q3). */
 const DAIRY_ORDER: readonly ClDairyCode[] = ['LD', 'LS', 'LE'] as const
 
@@ -87,9 +99,14 @@ type DayBlock = {
   delta: ClConversionDayDelta | null
 }
 
-/** kcal del preview: enteras. El motor ya redondea a un decimal; acá no se muestra el decimal. */
+/**
+ * kcal del preview: enteras y con el separador de miles es-CL, igual que el diálogo web y que la
+ * card de metas. Con `String(Math.round(…))` esta hoja era la ÚNICA superficie que escribía
+ * «1850» donde el resto del editor escribe «1.850»: dos formatos para la misma cifra en la misma
+ * pauta. El motor ya redondea a un decimal; acá el decimal no se muestra.
+ */
 function kcalText(value: number): string {
-  return String(Math.round(value))
+  return formatMacroEsCl(Math.round(value))
 }
 
 /**
@@ -307,6 +324,7 @@ export function PortionConversionSheet({
   onClose,
   variants,
   catalog,
+  pickerGroups,
   coachSystem,
   activeVariantKey,
   disabled = false,
@@ -321,6 +339,19 @@ export function PortionConversionSheet({
    * grupos chilenos: sin él el motor no tiene destinos y todo cae a «se conserva».
    */
   catalog: readonly QePortionGroup[]
+  /**
+   * Lista del picker YA enriquecida (`applyCatalogMetaToPickerGroups`): la ÚNICA que trae
+   * `isSystem` y `portionSystem`. Existe aparte de `catalog` porque las dos preguntas no son la
+   * misma: `catalog` es «¿a qué grupos chilenos puedo convertir?» (el input del motor) y esta es
+   * «¿los grupos que el plan prescribe son del SISTEMA en SMAE?» (E1). `catalog` viaja proyectado
+   * con `catalogToPortionGroups`, que NO declara `isSystem`, así que preguntarle a él por el
+   * legado contaba los grupos PROPIOS del coach —que nacen con `portion_system = 'smae'` por el
+   * default de W0.1— y felicitaba/alarmaba al revés.
+   *
+   * Viaja como `ConversionLegacyGroup`, o sea con `isSystem` OBLIGATORIO: el host lo normaliza
+   * en su borde (`legacyCheckGroups`) y acá ya no hay «ausente» que interpretar.
+   */
+  pickerGroups: readonly ConversionLegacyGroup[]
   /** `coaches.portion_system`; sin dato, el default de la columna ('cl'), igual que el motor. */
   coachSystem: PortionSystem
   /** Variante que el editor está mostrando: su bloque va PRIMERO. Los demás días igual se pintan. */
@@ -361,6 +392,9 @@ export function PortionConversionSheet({
    * Los conteos del evento (DATA §11, evento 2 — la ÚNICA fuente de la forma). Se cuentan sobre
    * TODO el plan, no sobre el día visible: es lo que la conversión va a tocar. Ni kcal, ni
    * porciones, ni nombres de grupo — el evento mide fricción, no la pauta.
+   *
+   * Su forma es EXACTAMENTE `PortionConversionPreviewedProps` (camelCase), así que viaja entera
+   * al constructor del paquete: `surface` y el snake_case los pone él, acá no se arma un objeto.
    */
   const counts = useMemo(() => {
     const slotKeys = new Set<string>()
@@ -406,14 +440,7 @@ export function PortionConversionSheet({
     // ceros (el banner puede abrirse sobre un plan que no tiene nada que mover).
     if (countsRef.current.rows === 0) return
     previewedRef.current = true
-    captureNutritionPortionConversionPreviewed({
-      slots: countsRef.current.slots,
-      rows: countsRef.current.rows,
-      rowsReview: countsRef.current.rowsReview,
-      hasDairy: countsRef.current.hasDairy,
-      hasCollapse: countsRef.current.hasCollapse,
-      hasCustomMatch: countsRef.current.hasCustomMatch,
-    })
+    captureNutritionPortionConversionPreviewed(countsRef.current)
   }, [open, counts])
 
   /** Cada apertura empieza limpia: las elecciones de la vez anterior no son un default honesto. */
@@ -473,6 +500,10 @@ export function PortionConversionSheet({
         delta,
       })
     }
+    // Único punto donde RN y la web NO coinciden a propósito: acá el día ACTIVO va primero
+    // (en el celular el coach entra mirando ese día y el scroll es caro), en la web el diálogo
+    // deja el orden del plan. El armado por día/franja sí es idéntico —una franja entra si
+    // convierte O si conserva— y los números salen de las mismas funciones (E5). No es drift.
     return days.sort((a, b) => {
       if (a.variantKey === activeKey) return -1
       if (b.variantKey === activeKey) return 1
@@ -481,10 +512,19 @@ export function PortionConversionSheet({
   }, [result.diff, result.unresolved, result.dayDeltas, activeKey, variants])
 
   /**
-   * ¿El BORRADOR todavía prescribe con el set viejo? Espejo exacto de `draftUsesSmae` (web): se
-   * pregunta grupo por grupo con `systemOf`, la misma función que parte el picker, sobre el
-   * catálogo ya enriquecido; un target cuyo grupo ya no está se resuelve por su `groupCode`
-   * congelado, que es lo único que quedó de él.
+   * ¿El BORRADOR todavía prescribe con el set viejo? La pregunta NO se responde acá: es
+   * `draftUsesLegacySmae` del paquete (E2), la MISMA función que pregunta el diálogo web para
+   * elegir este mismo copy —y la misma que decide el banner en `QuickEditMode`—. La copia local
+   * que vivía acá recorría el borrador con `systemOf` por su cuenta: tres criterios para una sola
+   * pregunta, y bastaba tocar uno para que las superficies se contradijeran.
+   *
+   * Y se le pasa `pickerGroups`, NO `catalog`: el tipo lo EXIGE. `draftUsesLegacySmae` pide
+   * `isSystem` en cada grupo y `catalogToPortionGroups` no lo declara, así que el `catalog` de
+   * acá ni siquiera entra por la puerta. La lista buena es la del picker, ya enriquecida por
+   * `applyCatalogMetaToPickerGroups` y normalizada en el host; la web le da su equivalente
+   * (`useConversionGroups()`). Misma función y misma clase de lista en las dos superficies: ahí
+   * sí hay paridad. Y la normalización falla CERRADO: sin catálogo vivo nadie es «del sistema»,
+   * el copy vacío cae en «ya migraste» y el banner de arriba tampoco se pinta — coherentes.
    *
    * Existe por UNA razón: el preview vacío tiene dos causas y solo una es «ya migraste». Un
    * target SMAE con `portions` vacío o ilegible («» mientras el coach tipea, «abc») sale INTACTO
@@ -492,17 +532,10 @@ export function PortionConversionSheet({
    * llegar acá sin una sola sección. Felicitarlo ahí por una migración que no hizo —justo abajo
    * del banner que le dijo lo contrario— es el peor texto posible.
    */
-  const draftUsesSmae = useMemo(() => {
-    const byId = new Map(catalog.map((group) => [group.exchangeGroupId, group]))
-    return variants.some((variant) =>
-      variant.slots.some((slot) =>
-        slot.portionTargets.some((target) => {
-          const group = byId.get(target.exchangeGroupId)
-          return systemOf(group ?? { groupCode: target.groupCode }, coachSystem) === 'smae'
-        }),
-      ),
-    )
-  }, [variants, catalog, coachSystem])
+  const draftUsesSmae = useMemo(
+    () => draftUsesLegacySmae(variants, pickerGroups, coachSystem),
+    [variants, pickerGroups, coachSystem],
+  )
 
   /**
    * Qué eligió el coach en el eje lácteo, para el evento del aplicado (DATA §11, evento 3): un

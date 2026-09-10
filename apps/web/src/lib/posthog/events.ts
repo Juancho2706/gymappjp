@@ -20,6 +20,8 @@ import {
     portionGroupBumpedPayload,
     TARGETS_EVENT_SCOPE,
     targetsScopePayload,
+    type PortionConversionAppliedProps,
+    type PortionConversionPreviewedProps,
     type PortionGroupBumpedProps,
     type QeTargetsScope,
     type TargetsScopeFrom,
@@ -629,17 +631,25 @@ export function useCaptureNutritionTargetsScope() {
  * Tren «Porciones a la chilena» (W3.7) — el coach ABRE el preview de la conversión SMAE →
  * chileno (`PortionConversionDialog` en web, `PortionConversionSheet` en RN).
  *
- * Mide dos cosas y ninguna más: cuántas franjas toca la conversión y cuántas filas salen
- * marcadas «Revisar». Es la friccion de la PANTALLA, no el contenido del plan: **cero kcal, cero
- * gramos, cero porciones, cero nombres de grupo o de alimento, cero ids** (Ley 21.719 + SPEC §17
- * no-negociable 9). El constructor del payload vive en `packages/nutrition-v2/portions-analytics.ts`
- * y RN importa el mismo: dos superficies, un solo shape (DATA §11).
+ * Mide FRICCION de la PANTALLA y nada mas: cuantas franjas toca la conversión, cuantas filas
+ * salen, cuantas van marcadas «Revisar» y tres banderas de forma (eje lácteo, colapso ARL + G,
+ * propuesta de reemplazo de un grupo propio). **Cero kcal, cero gramos, cero porciones, cero
+ * nombres de grupo o de alimento, cero ids** (Ley 21.719 + SPEC §17 no-negociable 9).
+ *
+ * Las 7 llaves las arma `conversionPreviewedPayload` en
+ * `packages/nutrition-v2/portions-analytics.ts` y RN llama al MISMO constructor (E4 del jefe): la
+ * superficie entrega los conteos en camelCase y el paquete decide el shape. Antes esta web
+ * capturaba con dos numeros sueltos y SIN `surface` — el mismo evento llegaba a PostHog con dos
+ * formas distintas y el embudo no sabía de donde venía cada mitad.
+ *
+ * CUANDO se emite lo decide la superficie (decisión W3.5): una vez por apertura y solo con `diff`
+ * no vacío.
  */
 export function useCaptureNutritionPortionConversionPreviewed() {
     const ph = usePostHog()
     return useCallback(
-        (slots: number, rowsReview: number) => {
-            ph?.capture(PORTIONS_EVENT_CONVERSION_PREVIEWED, conversionPreviewedPayload(slots, rowsReview))
+        (props: PortionConversionPreviewedProps) => {
+            ph?.capture(PORTIONS_EVENT_CONVERSION_PREVIEWED, conversionPreviewedPayload('web', props))
         },
         [ph]
     )
@@ -650,13 +660,15 @@ export function useCaptureNutritionPortionConversionPreviewed() {
  * publicación sigue siendo un paso aparte por el camino de siempre (T-05), así que este evento
  * mide la intención de migrar, no la migración consumada.
  *
- * Un solo conteo (`slots`) por la misma razón que arriba: la forma la manda DATA §11.
+ * Las 5 llaves (DATA §11, evento 3) tambien las arma el paquete con `surface: 'web'`.
+ * `dairy_choice` dice QUE eligió el coach en el eje lácteo ('mixed' si eligió distinto en
+ * distintas franjas) y `custom_replaced` CUANTOS grupos propios reemplazó: que, no cuanto.
  */
 export function useCaptureNutritionPortionConversionApplied() {
     const ph = usePostHog()
     return useCallback(
-        (slots: number) => {
-            ph?.capture(PORTIONS_EVENT_CONVERSION_APPLIED, conversionAppliedPayload(slots))
+        (props: PortionConversionAppliedProps) => {
+            ph?.capture(PORTIONS_EVENT_CONVERSION_APPLIED, conversionAppliedPayload('web', props))
         },
         [ph]
     )

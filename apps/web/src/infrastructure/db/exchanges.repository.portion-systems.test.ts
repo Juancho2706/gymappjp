@@ -90,9 +90,21 @@ function version(id: string, status: string, currentPublishedVersionId: string |
     return { id, status, nutrition_plans_v2: { current_published_version_id: currentPublishedVersionId } }
 }
 
-/** Fila de targets con el grupo embebido (`exchange_groups!inner(portion_system)`). */
+/**
+ * Fila de targets con un grupo DEL SISTEMA embebido
+ * (`exchange_groups!inner(portion_system, is_system)`).
+ */
 function target(portionSystem: string | null) {
-    return { exchange_groups: { portion_system: portionSystem } }
+    return { exchange_groups: { portion_system: portionSystem, is_system: true } }
+}
+
+/**
+ * Igual, pero con un grupo PROPIO del coach. Nace con `portion_system = 'smae'` por el
+ * default de la columna (W0.1), asi que la fila se ve identica a la de un grupo SMAE del
+ * sistema salvo por `is_system`: por eso el descarte se decide con esa columna (E1).
+ */
+function ownTarget(portionSystem: string | null) {
+    return { exchange_groups: { portion_system: portionSystem, is_system: false } }
 }
 
 describe('findUsedPortionSystemsForCoach', () => {
@@ -161,6 +173,49 @@ describe('findUsedPortionSystemsForCoach', () => {
         expect(versions?.filters['nutrition_plans_v2.lifecycle_status!neq']).toBe('archived')
         const v1 = calls.find((call) => call.table === 'meal_exchange_targets')
         expect(v1?.filters['nutrition_meals.nutrition_plans.coach_id']).toBe(COACH)
+    })
+
+    // E1 — «SMAE en uso» = grupos DEL SISTEMA prescritos en planes. Los grupos propios del
+    // coach nacen con `portion_system = 'smae'` por el default de W0.1 y jamas son legado:
+    // si contaran, el picker encenderia el bloque «Legado» y el banner de conversion abriria
+    // un sheet sin una sola fila para un coach que solo usa grupos suyos.
+    it('un target V2 sobre un grupo PROPIO con portion_system "smae" NO cuenta ⇒ []', async () => {
+        const { db } = fakeDb({
+            nutrition_plan_versions_v2: [ok([version(DRAFT, 'draft', null)])],
+            nutrition_slot_exchange_targets_v2: [ok([ownTarget('smae'), ownTarget('smae')])],
+            meal_exchange_targets: [ok([])],
+        })
+        expect(await findUsedPortionSystemsForCoach(db, COACH)).toEqual([])
+    })
+
+    it('propio "smae" + grupo del sistema "smae" ⇒ ["smae"] (cuenta el del sistema)', async () => {
+        const { db } = fakeDb({
+            nutrition_plan_versions_v2: [ok([version(PLAN_CURRENT, 'published', PLAN_CURRENT)])],
+            nutrition_slot_exchange_targets_v2: [ok([ownTarget('smae'), target('smae')])],
+            meal_exchange_targets: [ok([])],
+        })
+        expect(await findUsedPortionSystemsForCoach(db, COACH)).toEqual(['smae'])
+    })
+
+    it('la rama V1 tampoco cuenta los grupos propios (S-04 + E1)', async () => {
+        const { db } = fakeDb({
+            nutrition_plan_versions_v2: [ok([])],
+            meal_exchange_targets: [ok([ownTarget('smae'), ownTarget('cl')])],
+        })
+        expect(await findUsedPortionSystemsForCoach(db, COACH)).toEqual([])
+    })
+
+    it('las dos ramas piden la columna `is_system` en el embed (insumo del descarte E1)', async () => {
+        const { db, calls } = fakeDb({
+            nutrition_plan_versions_v2: [ok([version(DRAFT, 'draft', null)])],
+            nutrition_slot_exchange_targets_v2: [ok([])],
+            meal_exchange_targets: [ok([])],
+        })
+        await findUsedPortionSystemsForCoach(db, COACH)
+        const v2 = calls.find((call) => call.table === 'nutrition_slot_exchange_targets_v2')
+        expect(v2?.select).toContain('is_system')
+        const v1 = calls.find((call) => call.table === 'meal_exchange_targets')
+        expect(v1?.select).toContain('is_system')
     })
 
     it('LANZA si falla una lectura (el borde lo traduce a fail-open, no a "no usa nada")', async () => {

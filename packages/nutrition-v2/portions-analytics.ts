@@ -18,12 +18,21 @@
 
 import type { PortionSystem } from './exchange-visibility'
 import type { QeTargetsScope } from './editor-state'
+// El eje lacteo se declara UNA vez, en el conversor: `dairy_choice` no puede aceptar un
+// codigo que `dairyChoiceBySlot` no acepta.
+import type { ClDairyCode } from './exchange-conversion'
 
 /** Tocar un grupo ya presente en la franja suma media porcion en vez de no hacer nada (D2-A). */
 export const PORTIONS_EVENT_GROUP_BUMPED = 'nutrition_portion_group_bumped'
 
-/** Superficie donde ocurrio la interaccion. No hay una tercera: el alumno no hace bump. */
-export type PortionBumpSurface = 'rn' | 'web'
+/**
+ * Superficie donde ocurrio la interaccion. No hay una tercera. Es la MISMA en los cinco
+ * eventos de DATA §11, asi que se declara una sola vez.
+ */
+export type PortionSurface = 'rn' | 'web'
+
+/** Alias historico del evento 1 (`portionGroupBumpedPayload`); es el mismo tipo. */
+export type PortionBumpSurface = PortionSurface
 
 /** Desde donde se sumo: la fila del picker (D2-A) o el stepper de la franja (M3). */
 export type PortionBumpFrom = 'picker' | 'stepper'
@@ -69,32 +78,101 @@ export const PORTIONS_EVENT_CONVERSION_PREVIEWED = 'nutrition_portion_conversion
 /** El coach APLICA la conversion al borrador. Publicar sigue siendo un paso aparte (T-05). */
 export const PORTIONS_EVENT_CONVERSION_APPLIED = 'nutrition_portion_conversion_applied'
 
+/** Lo que la superficie sabe del preview, en camelCase; el snake_case lo pone el payload. */
+export type PortionConversionPreviewedProps = {
+  /** Franjas afectadas. CONTEO, jamas contenido. */
+  readonly slots: number
+  /** Filas del diff. */
+  readonly rows: number
+  /** Filas marcadas «Revisar»: cuanta friccion tiene el preview. */
+  readonly rowsReview: number
+  /** ¿Hay eje lacteo (el selector de 3)? */
+  readonly hasDairy: boolean
+  /** ¿Alguna fila colapso ARL + G (R2)? */
+  readonly hasCollapse: boolean
+  /** ¿Se propuso reemplazar un grupo propio del coach (S5)? */
+  readonly hasCustomMatch: boolean
+}
+
 /**
- * Payload del preview. EXHAUSTIVO: dos CONTEOS y ninguna cifra mas.
+ * Payload del preview. EXHAUSTIVO: estas 7 llaves y ninguna mas (DATA.md §11, evento 2).
  *
- * `slots` = franjas afectadas, `rows_review` = filas marcadas «Revisar». Ni kcal, ni gramos,
- * ni porciones, ni nombres de grupo o de alimento, ni ids: el evento cuenta cuanta friccion
- * tuvo la pantalla, no que come el alumno (Ley 21.719 + SPEC §17 no-negociable 9).
+ * Son CONTEOS y BANDERAS. Ni kcal, ni gramos, ni porciones, ni nombres de grupo o de
+ * alimento, ni ids: el evento cuenta cuanta friccion tuvo la pantalla, no que come el
+ * alumno (Ley 21.719 + SPEC §17 no-negociable 9).
+ *
+ * `surface` viaja por PARAMETRO, igual que en `portionGroupBumpedPayload`: cuando cada
+ * superficie lo pegaba por su cuenta con un spread, RN y la web mandaban el mismo evento con
+ * dos formas distintas —y la web lo mandaba sin `surface`, o sea el embudo no sabia de donde
+ * venia—. Se construye ACA o no se construye.
  */
 export type PortionConversionPreviewedPayload = {
+  surface: PortionSurface
   slots: number
+  rows: number
   rows_review: number
+  has_dairy: boolean
+  has_collapse: boolean
+  has_custom_match: boolean
 }
 
+/**
+ * CUANDO se emite (decision W3.5, ratificada 09-09): UNA vez por apertura y SOLO si el `diff`
+ * trae algo. Con `diff` vacio no sale: abrir un dialogo que dice «no hay nada que convertir» no
+ * es un preview, y hasta W6.8 ese seria el caso mayoritario. El guard es de la superficie (un
+ * ref que sube cuando el evento sale), pero se escribe aca para que nadie lo reinvente al reves.
+ */
 export function conversionPreviewedPayload(
-  slots: number,
-  rowsReview: number,
+  surface: PortionSurface,
+  props: PortionConversionPreviewedProps,
 ): PortionConversionPreviewedPayload {
-  return { slots, rows_review: rowsReview }
+  return {
+    surface,
+    slots: props.slots,
+    rows: props.rows,
+    rows_review: props.rowsReview,
+    has_dairy: props.hasDairy,
+    has_collapse: props.hasCollapse,
+    has_custom_match: props.hasCustomMatch,
+  }
 }
 
-/** Payload del aplicado. EXHAUSTIVO: un solo conteo. */
+/**
+ * Que eligio el coach en el eje lacteo. 'mixed' = eligio distinto en distintas franjas
+ * (la eleccion es por (VARIANTE, franja), ver `ClConversionInput.dairyChoiceBySlot`).
+ */
+export type PortionDairyChoice = ClDairyCode | 'mixed'
+
+/** Lo que la superficie sabe del aplicado, en camelCase. */
+export type PortionConversionAppliedProps = {
+  readonly slots: number
+  readonly rows: number
+  /** QUE eligio, nunca cuanto. */
+  readonly dairyChoice: PortionDairyChoice
+  /** Cuantos grupos PROPIOS reemplazo (S5). Conteo, sin ids ni nombres. */
+  readonly customReplaced: number
+}
+
+/** Payload del aplicado. EXHAUSTIVO: estas 5 llaves y ninguna mas (DATA.md §11, evento 3). */
 export type PortionConversionAppliedPayload = {
+  surface: PortionSurface
   slots: number
+  rows: number
+  dairy_choice: PortionDairyChoice
+  custom_replaced: number
 }
 
-export function conversionAppliedPayload(slots: number): PortionConversionAppliedPayload {
-  return { slots }
+export function conversionAppliedPayload(
+  surface: PortionSurface,
+  props: PortionConversionAppliedProps,
+): PortionConversionAppliedPayload {
+  return {
+    surface,
+    slots: props.slots,
+    rows: props.rows,
+    dairy_choice: props.dairyChoice,
+    custom_replaced: props.customReplaced,
+  }
 }
 
 /**

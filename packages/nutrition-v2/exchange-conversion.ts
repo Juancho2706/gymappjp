@@ -19,6 +19,7 @@ import {
   qeExchangeGroups,
   qeGroupRefPerPortionFromDict,
   type QeExchangeGroup,
+  type QePickerGroup,
   type QePortionGroup,
   type QePortionTarget,
   type QeVariant,
@@ -26,7 +27,7 @@ import {
 // `isClGroup` y `CL_CODES` NO se definen aca: nacen en `exchange-visibility.ts` (W1.4)
 // y este archivo (W3) los IMPORTA (fix consistencia X-07). La firma canonica de
 // `isClGroup` es de DOS parametros: `(group, coachSystem)`.
-import { CL_CODES, isClGroup, type PortionSystem } from './exchange-visibility'
+import { CL_CODES, isClGroup, systemOf, type PortionSystem } from './exchange-visibility'
 
 // ---------------------------------------------------------------------------
 // Mapa fijo 9 → 13 (DATA §6). El factor NO se calcula en runtime: se escribe.
@@ -350,6 +351,56 @@ export function hasClDestinations(catalog: readonly QePortionGroup[]): boolean {
   return catalog.some(isClDestination)
 }
 
+/**
+ * ¿El borrador prescribe grupos SMAE **del sistema**? Es la decision PURA del banner de
+ * conversion, y vive aca para que RN y la web pregunten LO MISMO (E2 del jefe): sin este
+ * helper cada superficie se escribia su propio `planUsesLegacy` y las dos mentian distinto.
+ *
+ * E1 (decision del jefe, 09-09): «SMAE en uso» = grupos del SISTEMA con
+ * `portion_system = 'smae'` prescritos en el plan. Los grupos PROPIOS del coach NUNCA cuentan
+ * como legado, aunque su fila traiga `portion_system = 'smae'` — nacen asi por el default de la
+ * columna (W0.1), no porque el coach eligiera el set viejo. Es la misma regla que
+ * `findUsedPortionSystemsForCoach` aplica para `legacySystems` y la misma que
+ * `visibleExchangeGroupsForCoach` aplica para el chip «Legado (SMAE)»: un custom no se filtra
+ * ni se marca NUNCA por set. Sin esto, un coach cuyo plan solo usa grupos propios veia el
+ * banner «tu plan usa el set anterior» y al tocarlo se le abria un preview sin una sola fila.
+ *
+ * `groups` es la lista del picker YA con los metadatos del catalogo vivo encima
+ * (`applyCatalogMetaToPickerGroups`): de ahi salen `isSystem` y `portionSystem`. Un grupo
+ * AUSENTE de la lista no cuenta —no hay con que afirmar que es del sistema— y uno con
+ * `isSystem === false` tampoco. El set se resuelve con `systemOf` (R18: sin dato explicito y
+ * sin codigo chileno cae al set del COACH, nadie inventa 'smae').
+ *
+ * `isSystem` AUSENTE tampoco cuenta, y esa es la parte que hay que leer despacio: el tipo lo
+ * declara opcional, asi que una lista sin el metadato —el catalogo crudo de
+ * `catalogToPortionGroups`, o cualquier grupo del plan que el catalogo vivo no cubra (borrado,
+ * o catalogo que no cargo)— entra sin un solo error de tipo. Interpretar esa ausencia como «del
+ * sistema» era el bug: con el default 'smae' de la columna (W0.1), un plan de puros grupos
+ * PROPIOS encendia el banner «tu plan usa el set anterior» y abria un sheet sin una sola fila.
+ * Falla CERRADO, que es la misma regla de R18: sin evidencia de que el grupo sea del sistema,
+ * el banner calla. Un banner que no aparece es un empujon que falta; uno que aparece de mas es
+ * una mentira con una pantalla vacia detras.
+ */
+export function draftUsesLegacySmae(
+  variants: readonly QeVariant[],
+  groups: readonly QePickerGroup[],
+  coachSystem: PortionSystem,
+): boolean {
+  const legacyIds = new Set<string>()
+  for (const group of groups) {
+    // Un grupo PROPIO del coach nunca es legado (E1) — y sin `isSystem` no hay con que afirmar
+    // que sea del sistema, asi que tampoco: solo el `true` EXPLICITO entra.
+    if (group.isSystem !== true) continue
+    if (systemOf(group, coachSystem) === 'smae') legacyIds.add(group.exchangeGroupId)
+  }
+  if (legacyIds.size === 0) return false
+  return variants.some((variant) =>
+    variant.slots.some((slot) =>
+      slot.portionTargets.some((target) => legacyIds.has(target.exchangeGroupId)),
+    ),
+  )
+}
+
 function resolveDestinationCode(
   target: QePortionTarget,
   slotKey: string,
@@ -487,6 +538,11 @@ export function convertPortionsToCl(input: ClConversionInput): ClConversionResul
       type Slotted =
         | { readonly kind: 'kept'; readonly target: QePortionTarget }
         | { readonly kind: 'bucket'; readonly code: string }
+        // Fuente SIN cantidad que cayo en un bucket YA abierto: guarda su propio lugar. Si al
+        // final el bucket no convirtio nada, ese target sale intacto ACA y no pegado al primero
+        // (dos 'FR' separados por otro grupo no se vuelven adyacentes, R-08). Si el bucket si
+        // convirtio, la entrada no imprime nada: la fuente ya viaja fundida en el target nuevo.
+        | { readonly kind: 'source'; readonly code: string; readonly target: QePortionTarget }
       const layout: Slotted[] = []
 
       /** Bucket del destino, reservando su lugar en la franja si es el primero que cae ahi. */
@@ -521,7 +577,13 @@ export function convertPortionsToCl(input: ClConversionInput): ClConversionResul
           if (clGroup == null) {
             layout.push({ kind: 'kept', target })
           } else {
-            bucketFor(clGroup.groupCode, clGroup).sources.push(target)
+            const code = clGroup.groupCode
+            // `bucketFor` reserva el lugar SOLO del primero que abre el bucket; los que caen
+            // despues se guardan el suyo por si nadie convierte nada.
+            const opened = buckets.has(code)
+            const bucket = bucketFor(code, clGroup)
+            if (opened) layout.push({ kind: 'source', code, target })
+            bucket.sources.push(target)
           }
           continue
         }
@@ -591,23 +653,34 @@ export function convertPortionsToCl(input: ClConversionInput): ClConversionResul
 
       // 2) Materializar los buckets como targets nuevos, indexados por code para que el
       //    layout los ponga en el lugar de su primer origen.
-      const convertedByCode = new Map<string, QePortionTarget>()
+      const convertedByCode = new Map<string, readonly QePortionTarget[]>()
       for (const [code, bucket] of buckets) {
-        // SIN ORIGENES: el bucket lo abrio un target chileno sin cantidad util y nadie mas cayo
-        // ahi. No se convirtio nada: el primero viaja TAL CUAL, con su texto crudo y su `id`.
+        // SIN ORIGENES: el bucket lo abrio un target chileno sin cantidad util. No se convirtio
+        // nada, asi que los sources viajan TAL CUAL, con su texto crudo y su `id`. Viajan TODOS
+        // y ninguno se pierde —el bucket se llavea por `code` y un catalogo que repite un codigo
+        // chileno (un grupo PROPIO marcado 'cl' con code 'FR') mete dos targets distintos en el
+        // mismo bucket—, pero cada uno EN SU LUGAR: aca sale el que abrio el bucket y el resto
+        // lo imprime su propia entrada `source` del layout (R-08).
         if (bucket.origins.length === 0) {
-          convertedByCode.set(code, bucket.sources[0])
+          const opener = bucket.sources[0]
+          convertedByCode.set(code, opener == null ? [] : [opener])
           continue
         }
         // IDENTIDAD: el grupo ya era chileno y nadie mas cayo en su bucket. No se convirtio
         // nada, asi que el target viaja TAL CUAL —con su `id`, su key y su nota— y no
         // ensucia el preview con una fila «PCT → PCT» que no dice nada.
+        //
+        // Se compara por `exchange_group_id`, JAMAS por codigo (misma regla que `sameGroup`
+        // arriba): el `code` es unico por SCOPE, asi que un grupo PROPIO puede llamarse igual
+        // que su destino del sistema. Comparando por codigo, el reemplazo S5 de un custom 'FR'
+        // hacia el 'FR' del sistema entraba por aca y salia INTACTO — el coach aceptaba el
+        // reemplazo, el sheet se cerraba y el borrador no cambiaba: un no-op silencioso.
         if (
           bucket.origins.length === 1 &&
           bucket.sources.length === 1 &&
-          bucket.origins[0].code === code
+          bucket.sources[0].exchangeGroupId === bucket.group.exchangeGroupId
         ) {
-          convertedByCode.set(code, bucket.sources[0])
+          convertedByCode.set(code, bucket.sources)
           continue
         }
         // El re-round05 despues de sumar dos origenes es un cinturon, no una correccion:
@@ -638,7 +711,7 @@ export function convertPortionsToCl(input: ClConversionInput): ClConversionResul
           review: bucket.review || driftUnknown || capped || drift > REVIEW_KCAL_TOLERANCE,
         })
 
-        convertedByCode.set(code, {
+        convertedByCode.set(code, [{
           key: `cl:${slot.key}:${code}`,
           id: null, // alta nueva: el target viejo no se re-usa
           exchangeGroupId: bucket.group.exchangeGroupId,
@@ -648,7 +721,7 @@ export function convertPortionsToCl(input: ClConversionInput): ClConversionResul
           macrosConfirmed: bucket.group.macrosConfirmed,
           portions: formatPortions05(portions),
           notes: mergeNotes(bucket.sources.map((source) => source.notes)),
-        })
+        }])
       }
 
       // 3) Reconstruir la franja EN ORDEN (R-08): cada destino en el lugar de su primer
@@ -659,8 +732,15 @@ export function convertPortionsToCl(input: ClConversionInput): ClConversionResul
           portionTargets.push(entry.target)
           continue
         }
+        if (entry.kind === 'source') {
+          // Sobrevive en su lugar SOLO si su bucket no convirtio nada; si convirtio, ya viaja
+          // fundido en el target nuevo (emitirlo aca duplicaria el `exchange_group_id` ⇒ 23505).
+          const bucket = buckets.get(entry.code)
+          if (bucket != null && bucket.origins.length === 0) portionTargets.push(entry.target)
+          continue
+        }
         const built = convertedByCode.get(entry.code)
-        if (built != null) portionTargets.push(built)
+        if (built != null) portionTargets.push(...built)
       }
 
       return { ...slot, portionTargets }

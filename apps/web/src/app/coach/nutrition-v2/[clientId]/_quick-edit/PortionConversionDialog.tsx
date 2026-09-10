@@ -31,18 +31,20 @@ import { toast } from 'sonner'
 import {
   applyCatalogMetaToPickerGroups,
   convertPortionsToCl,
+  draftUsesLegacySmae,
   formatMacroEsCl,
   formatPortionsEsCl,
+  hasClDestinations,
   isClGroup,
   isDairy,
-  systemOf,
   type ClConversionResult,
   type ClConversionRow,
   type ClConversionUnresolved,
   type ClDairyCode,
+  type PortionDairyChoice,
   type PortionSystem,
+  type QePickerGroup,
   type QePortionGroup,
-  type QeVariant,
 } from '@eva/nutrition-v2'
 import { PORTIONS_COPY } from '@/lib/nutrition-portions-copy'
 import {
@@ -55,6 +57,9 @@ import { QE_COPY } from './microcopy'
 
 /** Orden del selector segmentado del eje lacteo (R3): Descremado preseleccionado. */
 const DAIRY_ORDER: readonly ClDairyCode[] = ['LD', 'LS', 'LE']
+
+/** El default del eje lacteo (R3, Q3). Es el mismo que asume el motor cuando la franja no elige. */
+const DEFAULT_DAIRY: ClDairyCode = 'LD'
 
 /** Duracion del toast con Deshacer, la misma que usa el resto del quick-edit. */
 const UNDO_TOAST_MS = 8000
@@ -79,7 +84,7 @@ const EMPTY_RESULT: ClConversionResult = { variants: [], diff: [], unresolved: [
  * Sin catalogo (`portionCatalog === null`) el overlay no superpone nada (R18: nadie inventa un
  * set que no se leyo) y la conversion no encuentra destinos ⇒ todo cae a `unresolved`.
  */
-export function useConversionGroups(): QePortionGroup[] {
+export function useConversionGroups(): QePickerGroup[] {
   const { portionGroupChoices, portionCatalog } = useQuickEdit()
   return useMemo(
     () => applyCatalogMetaToPickerGroups(portionGroupChoices, portionCatalog),
@@ -88,49 +93,21 @@ export function useConversionGroups(): QePortionGroup[] {
 }
 
 /**
- * ¿El BORRADOR todavia prescribe con el set viejo? Se pregunta grupo por grupo con `systemOf`
- * (la misma funcion que parte el picker), sobre la lista ya enriquecida.
+ * La decision del banner NO se escribe aca (E2 del jefe, 09-09). `draftUsesLegacySmae` y
+ * `hasClDestinations` viven en `packages/nutrition-v2/exchange-conversion.ts` y RN pregunta LO
+ * MISMO: mientras cada superficie tuvo su copia (`draftUsesSmae` aca, `planUsesLegacy` en RN),
+ * las dos mintieron distinto sobre el mismo plan.
  *
- * Un target cuyo grupo no esta en la lista se resuelve por su `groupCode` congelado, que es lo
- * unico que quedo de el. Y sin catalogo `systemOf` cae al set del COACH: para un coach 'cl' eso
- * da 'cl' y el banner no aparece — correcto, R18: sin dato no se afirma que el plan es legado.
- */
-export function draftUsesSmae(
-  variants: readonly QeVariant[],
-  groups: readonly QePortionGroup[],
-  coachSystem: PortionSystem,
-): boolean {
-  const byId = new Map(groups.map((group) => [group.exchangeGroupId, group]))
-  return variants.some((variant) =>
-    variant.slots.some((slot) =>
-      slot.portionTargets.some((target) => {
-        const group = byId.get(target.exchangeGroupId)
-        return systemOf(group ?? { groupCode: target.groupCode }, coachSystem) === 'smae'
-      }),
-    ),
-  )
-}
-
-/**
- * Fallback conservador de `isClGroup` para PREGUNTAR SI HAY DESTINO, el mismo que usa el motor
- * (`exchange-conversion.ts:305`, `NO_CLAIM_SYSTEM`): sin `portionSystem` explicito y sin codigo
- * chileno, el grupo NO cuenta. Con el set del COACH ('cl') cualquier grupo propio sin dato se
- * haria pasar por destino y el guard de abajo no filtraria nada.
- */
-const NO_CLAIM_SYSTEM: PortionSystem = 'smae'
-
-/**
- * ¿La lista trae al menos UN destino chileno vivo?
+ * Y mienten en un caso concreto (E1): «SMAE en uso» son los grupos del SISTEMA con
+ * `portion_system = 'smae'`. Los PROPIOS del coach nunca cuentan como legado aunque su fila
+ * traiga 'smae' —nacen asi por el default de la columna (W0.1)—, asi que el helper del paquete
+ * los descarta por `isSystem === false`. La copia local preguntaba solo por `systemOf` y a un
+ * coach con puros grupos propios le pintaba «tu plan usa el set anterior» para abrirle despues un
+ * preview sin una sola fila.
  *
- * Entre el deploy y W6.8 los 13 grupos `cl` nacen con `deleted_at` (TASKS W0.3), asi que el
- * catalogo no los trae: `convertPortionsToCl` no puede emitir ni una fila y el preview solo sabe
- * decir «su equivalente chileno todavia no esta disponible» con el boton primario apagado.
- * Prometer «Puedes convertir el borrador» para abrir un callejon sin salida es peor que callar,
- * asi que en ese estado el banner no se pinta.
+ * `groups` es `useConversionGroups()`: la lista del picker YA enriquecida por id con los
+ * metadatos del catalogo vivo, que es de donde salen `isSystem` y `portionSystem`.
  */
-export function hasClDestinations(groups: readonly QePortionGroup[]): boolean {
-  return groups.some((group) => isClGroup(group, NO_CLAIM_SYSTEM))
-}
 
 // ---------------------------------------------------------------------------
 // Banner del plan legado (W3.6)
@@ -191,7 +168,7 @@ export function PortionConversionBanner() {
    * esta editando, asi que la fuente es `state.variants`.
    */
   const usesSmae = useMemo(
-    () => draftUsesSmae(state.variants, groups, portionSystem),
+    () => draftUsesLegacySmae(state.variants, groups, portionSystem),
     [state.variants, groups, portionSystem],
   )
   // Memoizado igual que el de arriba: los dos recorren el arbol en CADA render del provider, y el
@@ -303,11 +280,49 @@ export function PortionConversionDialog({
     [open, state.variants, groups, portionSystem, dairyBySlot, replacements],
   )
 
-  const slotCount = useMemo(
-    () => new Set(result.diff.map((row) => row.slotKey)).size,
-    [result.diff],
-  )
-  const rowsReview = useMemo(() => result.diff.filter((row) => row.review).length, [result.diff])
+  /**
+   * Los conteos de los dos eventos (DATA §11, eventos 2 y 3), calculados sobre TODO el plan y no
+   * sobre el dia visible: es lo que la conversion va a tocar. Conteos y banderas; ni kcal, ni
+   * porciones, ni nombres de grupo — el evento mide friccion de pantalla, no la pauta del alumno.
+   *
+   * La llave de `slots` es `variantKey:slotKey` y no `slotKey` pelado: `slot.key` es unico POR
+   * VARIANTE (`editor-state.ts`), asi que en un plan de siete dias dos franjas de dias distintos
+   * pueden repetirlo y el conteo se comia franjas reales. RN cuenta con la misma llave.
+   */
+  const counts = useMemo(() => {
+    const slotKeys = new Set<string>()
+    let rowsReview = 0
+    let hasDairy = false
+    let hasCollapse = false
+    for (const row of result.diff) {
+      slotKeys.add(`${row.variantKey}:${row.slotKey}`)
+      if (row.review) rowsReview += 1
+      if (isDairy(row.toCode)) hasDairy = true
+      // Colapso ARL + G ⇒ una sola fila con DOS origenes (R2).
+      if (row.from.length > 1) hasCollapse = true
+    }
+    return {
+      slots: slotKeys.size,
+      rows: result.diff.length,
+      rowsReview,
+      hasDairy,
+      hasCollapse,
+      hasCustomMatch: result.unresolved.some((entry) => entry.suggestedCode != null),
+    }
+  }, [result.diff, result.unresolved])
+
+  /**
+   * Que eligio el coach en el eje lacteo, para el evento del aplicado: un solo destino ⇒ ese
+   * codigo; dos o mas ⇒ 'mixed'. Sin eje lacteo en el plan viaja el default vigente, que es el
+   * que el motor uso. Es QUE eligio, nunca cuanto.
+   */
+  const appliedDairyChoice = useMemo<PortionDairyChoice>(() => {
+    const codes = new Set<ClDairyCode>()
+    for (const row of result.diff) if (isDairy(row.toCode)) codes.add(row.toCode)
+    if (codes.size === 0) return DEFAULT_DAIRY
+    if (codes.size > 1) return 'mixed'
+    return [...codes][0] ?? DEFAULT_DAIRY
+  }, [result.diff])
 
   /**
    * `nutrition_portion_conversion_previewed` UNA vez por apertura, y SOLO si hubo algo que
@@ -326,10 +341,19 @@ export function PortionConversionDialog({
       previewedRef.current = false
       return
     }
-    if (previewedRef.current || result.diff.length === 0) return
+    if (previewedRef.current || counts.rows === 0) return
     previewedRef.current = true
-    capturePreviewed(slotCount, rowsReview)
-  }, [open, result.diff.length, slotCount, rowsReview, capturePreviewed])
+    // El payload lo arma el paquete (E4): aca solo viajan los conteos en camelCase. Ni `surface`
+    // ni las llaves en snake_case se escriben a mano — RN llama al MISMO constructor.
+    capturePreviewed({
+      slots: counts.slots,
+      rows: counts.rows,
+      rowsReview: counts.rowsReview,
+      hasDairy: counts.hasDairy,
+      hasCollapse: counts.hasCollapse,
+      hasCustomMatch: counts.hasCustomMatch,
+    })
+  }, [open, counts, capturePreviewed])
 
   // Al cerrar se olvidan las elecciones: reabrir el preview empieza de cero (el borrador pudo
   // cambiar entremedio y una eleccion vieja apuntaria a una franja que ya no existe).
@@ -367,7 +391,7 @@ export function PortionConversionDialog({
    * del borrador —lo mismo que decide el banner— para no felicitarlo por una migracion que no hizo.
    */
   const usesSmae = useMemo(
-    () => draftUsesSmae(state.variants, groups, portionSystem),
+    () => draftUsesLegacySmae(state.variants, groups, portionSystem),
     [state.variants, groups, portionSystem],
   )
 
@@ -400,7 +424,12 @@ export function PortionConversionDialog({
     // (N dias × N franjas), y el reducer solo sabe deshacerla entera con `RESTORE_DRAFT`.
     const before = state
     dispatch({ type: 'REPLACE_PORTION_GROUPS', variants: result.variants })
-    captureApplied(slotCount)
+    captureApplied({
+      slots: counts.slots,
+      rows: counts.rows,
+      dairyChoice: appliedDairyChoice,
+      customReplaced: Object.keys(replacements).length,
+    })
     onOpenChange(false)
     toast(PORTIONS_COPY.convert.applied, {
       duration: UNDO_TOAST_MS,
@@ -443,7 +472,7 @@ export function PortionConversionDialog({
                     <ConversionRowView
                       key={`${row.slotKey}:${row.toCode}`}
                       row={row}
-                      dairy={dairyBySlot[row.slotKey] ?? 'LD'}
+                      dairy={dairyBySlot[row.slotKey] ?? DEFAULT_DAIRY}
                       onDairy={(code) => setDairy(row.slotKey, code)}
                     />
                   ))}
@@ -475,7 +504,12 @@ export function PortionConversionDialog({
 
       {/* Delta del dia: lo unico que le dice a la nutricionista si el redondeo la movio del
           objetivo. Solo de los dias que la conversion toca — en un plan de siete dias, seis
-          lineas «620 → 620» son ruido. */}
+          lineas «620 → 620» son ruido.
+
+          E5 del jefe (paridad de presentacion, 09-09): las DOS superficies imprimen las kcal con
+          `formatMacroEsCl` (coma decimal y punto de miles chilenos) y las DOS muestran el delta
+          SOLO de los dias tocados. RN filtra por dia en `DayDeltaRow`; aca el filtro es
+          `touchedVariantKeys`, que sale de las secciones que el diff realmente pinto. */}
       {result.dayDeltas.filter((delta) => touchedVariantKeys.has(delta.variantKey)).length > 0 ? (
         <div className="space-y-1 border-t border-border-subtle pt-2">
           {result.dayDeltas

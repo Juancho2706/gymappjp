@@ -127,10 +127,13 @@ end $$;
 -- «Legado» del picker aparece y desaparece segun quien pregunte, y un coach con
 -- porciones V1 (meal_exchange_targets, todavia en produccion) se queda sin ver
 -- los 9 grupos SMAE que su plan usa.
+-- Decision (af) del jefe (W3, 09-09): «SMAE en uso» son grupos del SISTEMA. Los grupos
+-- propios nacen con portion_system = 'smae' por el default de W0.1 y NO cuentan (el repo
+-- filtra is_system = true en findUsedPortionSystemsForCoach; este predicado dice lo mismo).
 create temporary view d_sets_en_uso as
 select c.id as coach_id, g.portion_system
 from public.coaches c
-join public.exchange_groups g on true
+join public.exchange_groups g on g.is_system
 where exists (
     select 1
     from public.nutrition_slot_exchange_targets_v2 t

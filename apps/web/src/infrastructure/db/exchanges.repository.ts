@@ -152,7 +152,7 @@ type VersionWindowRow = {
     status: string
     nutrition_plans_v2: EmbeddedPlanWindow | EmbeddedPlanWindow[] | null
 }
-type EmbeddedGroupSystem = { portion_system: string | null }
+type EmbeddedGroupSystem = { portion_system: string | null; is_system?: unknown }
 type TargetGroupRow = { exchange_groups: EmbeddedGroupSystem | EmbeddedGroupSystem[] | null }
 
 /** supabase-js tipa un embed to-one como objeto y uno to-many como arreglo segun la FK; se
@@ -162,10 +162,20 @@ function firstEmbed<T>(value: T | T[] | null): T | null {
     return Array.isArray(value) ? (value[0] ?? null) : value
 }
 
+/**
+ * SOLO cuentan los grupos del SISTEMA (E1). Un grupo PROPIO del coach jamas es «Legado»,
+ * por mas que su fila traiga `portion_system = 'smae'`: los propios nacen con ese valor por
+ * el default de la columna que puso W0.1, no porque el coach este usando el set mexicano.
+ * Contarlos encenderia el bloque «Legado» del picker —y el banner de conversion— para un
+ * coach que solo tiene grupos suyos, y el sheet de conversion abriria sin una sola fila.
+ * `is_system` viaja en el embed justamente para poder descartarlos aca.
+ */
 function collectSystems(rows: TargetGroupRow[]): PortionSystem[] {
     const out: PortionSystem[] = []
     for (const row of rows) {
-        const system = toPortionSystem(firstEmbed(row.exchange_groups)?.portion_system)
+        const group = firstEmbed(row.exchange_groups)
+        if (group?.is_system !== true) continue
+        const system = toPortionSystem(group.portion_system)
         if (system && !out.includes(system)) out.push(system)
         if (out.length === 2) break
     }
@@ -202,7 +212,7 @@ async function findUsedPortionSystemsV2(db: DB, coachId: string): Promise<Portio
 
     const { data, error } = await db
         .from('nutrition_slot_exchange_targets_v2')
-        .select('exchange_groups!inner(portion_system)')
+        .select('exchange_groups!inner(portion_system, is_system)')
         .in('version_id', versionIds)
     if (error) throw new Error(error.message)
     return collectSystems((data ?? []) as unknown as TargetGroupRow[])
@@ -212,7 +222,9 @@ async function findUsedPortionSystemsV2(db: DB, coachId: string): Promise<Portio
 async function findUsedPortionSystemsV1(db: DB, coachId: string): Promise<PortionSystem[]> {
     const { data, error } = await db
         .from('meal_exchange_targets')
-        .select('exchange_groups!inner(portion_system), nutrition_meals!inner(nutrition_plans!inner(coach_id))')
+        .select(
+            'exchange_groups!inner(portion_system, is_system), nutrition_meals!inner(nutrition_plans!inner(coach_id))'
+        )
         .eq('nutrition_meals.nutrition_plans.coach_id', coachId)
     if (error) throw new Error(error.message)
     return collectSystems((data ?? []) as unknown as TargetGroupRow[])
@@ -221,6 +233,9 @@ async function findUsedPortionSystemsV1(db: DB, coachId: string): Promise<Portio
 /**
  * Sets de porciones que el coach TIENE EN USO HOY (DATA §7.1). A lo sumo dos elementos.
  * Union de las dos ramas —V2 y V1— deduplicada en TypeScript.
+ *
+ * «En uso» = grupos del SISTEMA prescritos en planes (E1). Los grupos propios del coach no
+ * entran nunca, ni siquiera con `portion_system = 'smae'` en su fila: ver `collectSystems`.
  */
 export async function findUsedPortionSystemsForCoach(db: DB, coachId: string): Promise<PortionSystem[]> {
     const [v2, v1] = await Promise.all([findUsedPortionSystemsV2(db, coachId), findUsedPortionSystemsV1(db, coachId)])

@@ -54,10 +54,11 @@ import {
   dayWarningCopy,
   daysForCopyPreset,
   defaultQeVariant,
+  draftUsesLegacySmae,
   findPortionTargetByGroup,
   formatNutritionDayOfWeek,
   formatPortionsEsCl,
-  isClGroup,
+  hasClDestinations,
   kcalBucket,
   mergePortionGroupChoices,
   nextDaysFrom,
@@ -75,7 +76,6 @@ import {
   qeTargetsGapBar,
   qeVariantTotalWithPortions,
   quickEditReducer,
-  CL_CODES,
   PORTION_MAX,
   PORTION_STEP,
   QE_TARGET_FIELDS,
@@ -128,7 +128,7 @@ import {
   type PublishEffectiveFromChoice,
 } from '../../../lib/nutrition-v2-quick-edit'
 import type { PortionPickerGroup, QuickEditGroupAdmin } from './EditablePortionsSection'
-import { PortionConversionSheet } from './PortionConversionSheet'
+import { PortionConversionSheet, type ConversionLegacyGroup } from './PortionConversionSheet'
 import {
   captureNutritionItemImplausible,
   captureNutritionPortionGroupBumped,
@@ -1224,43 +1224,51 @@ export function QuickEditMode({
   }, [editorMode])
 
   /**
-   * ¿ESTE plan usa el set viejo? Lo decide el BORRADOR, no el coach. `legacySystems` habla de
+   * El BORDE: la lista del picker con `isSystem` ya resuelto a un booleano. `QePickerGroup` lo
+   * declara OPCIONAL y `applyCatalogMetaToPickerGroups` devuelve `{...group}` tal cual cuando el
+   * catálogo vivo no cargó o no cubre a ese grupo (uno creado en esta sesión), así que la lista
+   * real llega con huecos. Acá se decide qué significa el hueco UNA vez, y significa `false`:
+   * sin evidencia de que el grupo sea del sistema no se afirma que lo sea (R18/E1). De ahí para
+   * adentro —banner y hoja— nadie vuelve a interpretar ausencias.
+   *
+   * Consecuencia asumida: el catálogo se lee best-effort y su fetch se traga el error, así que un
+   * coach con un plan SMAE legítimo y una lectura fallida NO ve el banner. Es el mismo apagón que
+   * ya hace `hasClDestinations` (sin catálogo tampoco hay destinos chilenos), o sea que el banner
+   * no aparecería igual; queda como caso de QA en device (red caída al abrir el editor).
+   */
+  const legacyCheckGroups = useMemo<readonly ConversionLegacyGroup[]>(
+    () => portionGroups.map((group) => ({ ...group, isSystem: group.isSystem ?? false })),
+    [portionGroups],
+  )
+
+  /**
+   * ¿ESTE plan usa el set viejo? Lo decide el BORRADOR, no el coach: `legacySystems` habla de
    * TODOS los planes del coach (W1), así que usarlo como atajo pintaba «Este plan usa las
    * porciones anteriores (SMAE)» —y abría un preview vacío— sobre un plan 100 % chileno recién
    * creado, con solo que el coach tuviera OTRO plan legado. El copy de §16.1 dice «Este plan».
    *
-   * El borde entra SOLO como desempate, y solo donde el borrador no puede decidir: un target sin
-   * `portionSystem` explícito y con un código que no está en `CL_CODES` cae al set del coach por
-   * R18, o sea `systemOf` responde por el coach y no por el plan. Ahí —y nada más que ahí— vale
-   * preguntar si el coach tiene SMAE vivo. Con `portionGroups` (la lista YA enriquecida por
-   * `applyCatalogMetaToPickerGroups`) ese caso es raro: el overlay trae la columna del catálogo
-   * vivo. Un grupo que el catálogo ya no tiene sigue sin dato y no se inventa 'smae'.
+   * El criterio NO se escribe acá: es `draftUsesLegacySmae` del paquete (E2), la MISMA función
+   * que pregunta el diálogo web. Cuando cada superficie tenía su copia, las dos mentían distinto.
+   * Y ese criterio es E1: «SMAE en uso» = grupos del SISTEMA con `portion_system = 'smae'`. Un
+   * grupo PROPIO del coach NUNCA cuenta como legado, aunque su fila traiga 'smae' —nace así por
+   * el default de la columna (W0.1), no porque el coach eligiera el set viejo—. La copia local
+   * anterior sí los contaba: a un coach cuyo plan solo usa grupos propios le pintaba el banner y
+   * al tocarlo le abría un sheet sin una sola fila.
+   *
+   * `portionGroups` es la lista del picker YA enriquecida por `applyCatalogMetaToPickerGroups`:
+   * de ahí salen `isSystem` y `portionSystem`, la columna que el snapshot congelado del plan no
+   * guarda (R18). Sin catálogo vivo no hay con qué afirmar que un grupo es del sistema y el
+   * banner calla, que es la respuesta honesta.
    */
-  const planUsesLegacy = useMemo(() => {
-    const effective: PortionSystem = portionSystem === 'smae' ? 'smae' : 'cl'
-    const byId = new Map(portionGroups.map((group) => [group.exchangeGroupId, group]))
-    let draftLegacy = false
-    let draftUndecided = false
-    for (const variant of state.variants) {
-      for (const slot of variant.slots) {
-        for (const target of slot.portionTargets) {
-          const group = byId.get(target.exchangeGroupId)
-          const declared = group?.portionSystem
-          // Sin dato explícito y sin código chileno, `systemOf` cae al set del COACH: el
-          // borrador no sabe y no se lo hace hablar.
-          if (declared !== 'cl' && declared !== 'smae' && !CL_CODES.has(target.groupCode)) {
-            draftUndecided = true
-            continue
-          }
-          if (systemOf(group ?? { groupCode: target.groupCode }, effective) === 'smae') {
-            draftLegacy = true
-          }
-        }
-      }
-    }
-    if (draftLegacy) return true
-    return draftUndecided && (portionLegacySystems?.includes('smae') ?? false)
-  }, [portionLegacySystems, portionSystem, portionGroups, state.variants])
+  const planUsesLegacy = useMemo(
+    () =>
+      draftUsesLegacySmae(
+        state.variants,
+        legacyCheckGroups,
+        portionSystem === 'smae' ? 'smae' : 'cl',
+      ),
+    [portionSystem, legacyCheckGroups, state.variants],
+  )
 
   /**
    * Catálogo VIVO proyectado para el motor de conversión: de ahí salen los 13 grupos chilenos
@@ -1279,14 +1287,12 @@ export function QuickEditMode({
    * (`deleted_at`), así que sin este guard el banner ofrecía una conversión imposible: todo caía
    * a `unresolved`, el CTA quedaba deshabilitado y el sheet era un callejón sin salida.
    *
-   * Se pregunta con `isClGroup` y el fallback conservador ('smae'), EXACTAMENTE como el motor
-   * (`NO_CLAIM_SYSTEM`): con el set del coach, un grupo propio sin dato de un coach 'cl' contaría
-   * como destino chileno y el guard no guardaría nada.
+   * Lo responde `hasClDestinations` del paquete —el MISMO guard que usa el diálogo web—, que
+   * aplica el criterio del motor: si NINGÚN grupo del catálogo declara set, se cae al fallback
+   * conservador; si alguno lo declara, solo cuenta el `portionSystem === 'cl'` explícito. La
+   * copia local preguntaba `isClGroup(g, 'smae')` grupo a grupo y se salía de esa regla.
    */
-  const convertHasClTargets = useMemo(
-    () => convertCatalog.some((group) => isClGroup(group, 'smae')),
-    [convertCatalog],
-  )
+  const convertHasClTargets = useMemo(() => hasClDestinations(convertCatalog), [convertCatalog])
 
   const showConvertBanner = planUsesLegacy && convertHasClTargets && convertDismissed === false
 
@@ -2990,6 +2996,11 @@ export function QuickEditMode({
         onClose={() => setConvertOpen(false)}
         variants={state.variants}
         catalog={convertCatalog}
+        // Dos listas porque son dos preguntas: `catalog` son los DESTINOS que come el motor y
+        // `pickerGroups` la lista enriquecida con `isSystem` —la única con la que se puede decir
+        // que un grupo es del SISTEMA (E1)—, que es la misma que decide el banner de acá arriba.
+        // Va NORMALIZADA (`legacyCheckGroups`): el ausente ya se resolvió a `false` en el borde.
+        pickerGroups={legacyCheckGroups}
         coachSystem={portionSystem === 'smae' ? 'smae' : 'cl'}
         activeVariantKey={activeVariant?.variantKey ?? null}
         disabled={publishing}
