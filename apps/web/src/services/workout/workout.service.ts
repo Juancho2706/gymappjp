@@ -176,8 +176,13 @@ function scopedSectionTemplateIdFor(
  * Columnas polimórficas de workout_blocks (specs/movida-entrenamiento, M2).
  * Acepta tanto el payload Zod del builder como filas crudas de DB (duplicate/assign/sync):
  * los nombres de campo coinciden 1:1. Bloques legacy ⇒ todo null (byte-identical, AC3).
+ *
+ * Exportada SÓLO para el test (`strength-time-roundtrip.test.ts`, W2.5): esta whitelist es el
+ * cuello de botella por donde pasa todo guardado, y `reps_unit`/`duration_sec` —las dos columnas
+ * del modo tiempo (D3)— tienen que sobrevivirlo. El servicio no es testeable de punta a punta
+ * (Server Action + RLS), así que se prueba la función pura, igual que `resolveProgramScheduleDates`.
  */
-function polymorphicBlockColumns(block: Record<string, unknown>) {
+export function polymorphicBlockColumns(block: Record<string, unknown>) {
     return {
         is_unilateral: (block.is_unilateral ?? null) as boolean | null,
         side_mode: (block.side_mode ?? null) as string | null,
@@ -1371,7 +1376,12 @@ function mergeBlocksForSync(clientBlocks: any[] | null | undefined, templateBloc
     return out
 }
 
-function mapDbBlockToWorkoutInput(b: any): WorkoutBlockInput {
+/**
+ * Fila de `workout_blocks` → payload del builder, para el sync desde plantilla. Exportada SÓLO
+ * para el test (W2.4): sin `reps_unit`/`duration_sec` acá, sincronizar un programa con su plantilla
+ * borraría la prescripción por tiempo en silencio.
+ */
+export function mapDbBlockToWorkoutInput(b: any): WorkoutBlockInput {
     const progType = b.progression_type === 'reps' || b.progression_type === 'weight' ? b.progression_type : null
     return {
         exercise_id: b.exercise_id,

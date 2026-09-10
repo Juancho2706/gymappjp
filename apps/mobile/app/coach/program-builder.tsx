@@ -44,7 +44,7 @@ import { exportProgramPdf } from '../../lib/program-pdf'
 import { EvaLoaderScreen } from '../../components/EvaLoader'
 import {
   EXIT_GUARD_BODY, EXIT_GUARD_LEAVE, EXIT_GUARD_STAY, EXIT_GUARD_TITLE,
-  resolveBuilderBack, shouldConfirmExit,
+  isBlockComplete, resolveBuilderBack, shouldConfirmExit,
 } from '@eva/plan-builder'
 import { usePlanBuilder } from '../../lib/plan-builder/reducer'
 import { buildDaySkeleton } from '../../lib/plan-builder/skeleton'
@@ -72,22 +72,12 @@ import { apiFetch } from '../../lib/api'
 const DAY_SHORT = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 const SLIDE = Math.round(Dimensions.get('window').width * 0.22) // desplazamiento del slide de día
 
-// Completitud POR TIPO (E5-07, espejo de WeeklyPlanBuilder.blockIncomplete de web): strength
-// exige sets+reps; cardio duración/distancia/intervalos; movilidad sets + (duración/reps);
-// roller duración/reps. Evita persistir bloques tipados sin prescripción mínima.
+// Completitud POR TIPO (E5-07): la regla ya no se copia acá — vive en `@eva/plan-builder`
+// (`isBlockComplete`, W2.1) y la comparten los TRES guards (este, el guardado web y el sheet de
+// bloque). Fuerza clásica exige sets+reps; fuerza por tiempo, sets + segundos en rango; cardio
+// duración/distancia/intervalos; movilidad sets + (duración/reps); roller duración/reps.
 function blockIncomplete(b: BuilderBlock): boolean {
-  const type = effectiveExerciseType(b, { exercise_type: b.exercise_type })
-  if (type === 'cardio') {
-    const dist = parseFloat((b.distance_value || '').replace(',', '.'))
-    return !((b.duration_sec ?? 0) > 0 || (Number.isFinite(dist) && dist > 0) || !!b.interval_config)
-  }
-  if (type === 'mobility') {
-    return !b.sets || b.sets < 1 || !((b.duration_sec ?? 0) > 0 || (b.reps_value ?? 0) > 0 || !!b.reps?.trim())
-  }
-  if (type === 'roller') {
-    return !((b.duration_sec ?? 0) > 0 || (b.reps_value ?? 0) > 0 || !!b.reps?.trim())
-  }
-  return !b.sets || b.sets < 1 || !b.reps?.trim()
+  return !isBlockComplete(b, effectiveExerciseType(b, { exercise_type: b.exercise_type }))
 }
 
 function emptyDays(): DayState[] {
@@ -1936,7 +1926,7 @@ export default function ProgramBuilderScreen() {
     // cardio/movilidad/roller: su prescripción mínima). Espeja el blockIncomplete de la web.
     const allBlocks = [...days, ...(abMode ? otherDays : [])].flatMap((d) => d.blocks)
     const invalid = allBlocks.find(blockIncomplete)
-    if (invalid) { Alert.alert('Ejercicio incompleto', `Revisa "${invalid.exercise_name}": faltan datos (series/reps, duración o distancia según el tipo).`); return }
+    if (invalid) { Alert.alert('Ejercicio incompleto', `Revisa "${invalid.exercise_name}": faltan datos (series y reps o segundos, duración o distancia según el tipo).`); return }
     setSaving(true)
     let currentCoachId: string | null = null
     try {

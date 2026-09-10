@@ -16,7 +16,7 @@ import type { ExerciseType, IntervalConfig, SideMode } from '@/domain/workout/ty
 import { EXERCISE_TYPE_META, effectiveExerciseType } from '@/lib/workout-exercise-type'
 import { exerciseThumbnailUrl, extractYoutubeVideoId } from '@/lib/youtube'
 import { INTERVAL_TEMPLATES, repsUnitForModality, cardioRepsUnitShort } from '@eva/workout-engine'
-import { stripFieldsForType, applyStrengthModeChange } from '@eva/plan-builder'
+import { stripFieldsForType, applyStrengthModeChange, isBlockComplete } from '@eva/plan-builder'
 import { STRENGTH_TIME_MIN_SEC, STRENGTH_TIME_MAX_SEC } from '@eva/schemas'
 import { HR_ZONES } from '@eva/cardio'
 
@@ -551,9 +551,6 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
         return { label: parts.join(' '), date: dateStr }
     })()
 
-    const distanceNumber = parseFloat((block.distance_value || '').replace(',', '.'))
-    const hasDistance = Number.isFinite(distanceNumber) && distanceNumber > 0
-
     // Unidad del objetivo rep-based según la MODALIDAD del ejercicio (Fase C): 'jumps' (cuerda),
     // 'floors' (escaladora), 'reps' (HIIT). null en run/bike/row/elíptica/genérica ⇒ el campo no
     // se renderiza y el formulario de cardio queda EXACTAMENTE como hoy.
@@ -587,22 +584,10 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
         if (next !== block) onChange(next)
     }
 
-    const blockIsValid = (() => {
-        if (effectiveType === 'cardio') {
-            return (block.duration_sec ?? 0) > 0 || hasDistance || !!block.interval_config
-        }
-        if (effectiveType === 'mobility') {
-            return !!block.sets && block.sets >= 1 && ((block.duration_sec ?? 0) > 0 || (block.reps_value ?? 0) > 0)
-        }
-        if (effectiveType === 'roller') {
-            return (block.duration_sec ?? 0) > 0 || (block.reps_value ?? 0) > 0
-        }
-        if (strengthTimeMode) {
-            const sec = block.duration_sec ?? 0
-            return !!block.sets && block.sets >= 1 && sec >= STRENGTH_TIME_MIN_SEC && sec <= STRENGTH_TIME_MAX_SEC
-        }
-        return !!block.sets && block.sets >= 1 && !!block.reps?.trim()
-    })()
+    // Validez POR TIPO: la regla vive en `@eva/plan-builder` (W2.1) y la comparten los tres guards
+    // —este sheet, el guardado web y el guardado RN—, así el modo Segundos no puede quedar «válido»
+    // en una pantalla e «incompleto» en la otra.
+    const blockIsValid = isBlockComplete(block, effectiveType)
 
     const setOverride = (type: ExerciseType) => {
         onChange(applyBlockTypeChange(block, type))

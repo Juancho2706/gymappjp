@@ -18,7 +18,7 @@
  *
  * TypeScript puro (sin React / Next / Supabase / React Native).
  */
-import { effectiveExerciseType, type ExerciseType } from '@eva/workout-engine'
+import { effectiveExerciseType, type ExerciseType, type TypedBlockFields } from '@eva/workout-engine'
 import type { BuilderBlock } from './types'
 
 /**
@@ -188,4 +188,86 @@ export function applyStrengthModeChange(block: BuilderBlock, mode: StrengthPresc
     if (next === block) return block
     if (mode === 'reps' && STRENGTH_TIME_REPS_MIRROR.test(next.reps ?? '')) return { ...next, reps: '8-12' }
     return next
+}
+
+// ─── Validez del bloque: ¿tiene la prescripción MÍNIMA para guardarse? (W2.1) ─
+
+/**
+ * Rango duro de los segundos por serie en modo tiempo (R11). **Espejo local** de
+ * `STRENGTH_TIME_MIN_SEC` / `STRENGTH_TIME_MAX_SEC` (`packages/schemas/workout.ts`), re-declarado
+ * acá con el MISMO criterio con que `types.ts` re-declara `RepsUnit`: `@eva/plan-builder` es
+ * self-contained y no depende de `@eva/schemas` (que arrastra zod), porque el paquete también entra
+ * al grafo de Metro del builder RN.
+ *
+ * La paridad no queda librada a la buena fe: `block-type-fields.test.ts` importa las dos constantes
+ * del schema y las compara con éstas ⇒ moverlas de un lado sin el otro sale en rojo.
+ */
+const STRENGTH_TIME_MIN_SEC = 5
+const STRENGTH_TIME_MAX_SEC = 600
+
+/** Series: el único campo que comparten fuerza (clásica y por tiempo) y movilidad. */
+function hasSets(block: BuilderBlock): boolean {
+    return !!block.sets && block.sets >= 1
+}
+
+/** La distancia del builder es texto tipeado ("5", "2,5"): positiva y finita ⇒ hay prescripción. */
+function hasDistanceValue(block: BuilderBlock): boolean {
+    const n = parseFloat((block.distance_value || '').replace(',', '.'))
+    return Number.isFinite(n) && n > 0
+}
+
+function isPositive(value: number | null | undefined): boolean {
+    return (value ?? 0) > 0
+}
+
+/**
+ * ¿El bloque tiene la prescripción mínima de SU tipo? Fuente ÚNICA de los tres guards que hasta
+ * W2.1 copiaban la regla a mano —el sheet web (`BlockEditSheet.blockIsValid`), el guardado web
+ * (`WeeklyPlanBuilder.handleSave`) y el guardado RN (`program-builder.blockIncomplete`)—, que es
+ * justo lo que hacía falta para que el modo Segundos no diera **falso positivo** (el coach en modo
+ * tiempo ve «Datos incompletos» y no puede guardar) ni **falso negativo** (un bloque sin reps y sin
+ * segundos se guarda igual).
+ *
+ * **Fuerza** (D3): con `reps_unit === 'sec'` manda el reloj —series + segundos dentro del rango—;
+ * si no, la regla histórica de siempre (series + texto de reps), byte a byte. El discriminante es
+ * `reps_unit === 'sec'` SOLO, no `isStrengthTimeBlock` (que además exige `duration_sec > 0`): en el
+ * builder el bloque puede estar a medio tipear y caer a la rama de reps diría «completo» por el
+ * texto viejo del coach, que es exactamente el falso negativo que esta función viene a cerrar.
+ *
+ * **Cardio / movilidad / roller**: los tres guards NO coincidían —los dos de guardado (web y RN)
+ * aceptaban además `!!reps?.trim()` como prescripción de movilidad y roller; el sheet web no—. Se
+ * unifica hacia la PERMISIVA (decisión del jefe, W2.1): en LIVE hay 94 bloques de movilidad de 58
+ * coaches sin `duration_sec` ni `reps_value` pero con texto en `reps`, que hoy se guardan; la regla
+ * estricta los dejaría sin poder reguardar el programa («Hay ejercicios con datos incompletos»). Un
+ * tren que arregla no puede bloquear lo que ya funciona. El sheet gana la misma tolerancia.
+ */
+export function isBlockComplete(block: BuilderBlock, type: ExerciseType): boolean {
+    if (type === 'cardio') {
+        return isPositive(block.duration_sec) || hasDistanceValue(block) || !!block.interval_config
+    }
+    if (type === 'mobility') {
+        return hasSets(block) && (isPositive(block.duration_sec) || isPositive(block.reps_value) || !!block.reps?.trim())
+    }
+    if (type === 'roller') {
+        return isPositive(block.duration_sec) || isPositive(block.reps_value) || !!block.reps?.trim()
+    }
+    if (strengthPrescriptionMode(block) === 'sec') {
+        const sec = block.duration_sec ?? 0
+        return hasSets(block) && sec >= STRENGTH_TIME_MIN_SEC && sec <= STRENGTH_TIME_MAX_SEC
+    }
+    return hasSets(block) && !!block.reps?.trim()
+}
+
+/**
+ * Vista `TypedBlockFields` de un bloque del builder. En el editor `distance_value` y `load_value` son
+ * strings de input (se parsean al guardar) y el motor los quiere numéricos; para el predicado y los
+ * formatos de fuerza por tiempo (`isStrengthTimeBlock`, `formatStrengthTimeObjective*`,
+ * `formatProgressionTag`) esos dos ejes no cuentan, así que van parseados o en `null` — la misma
+ * normalización que los chips ya hacen a mano antes de llamar `typedBlockSummary`.
+ */
+export function builderTypedFields(
+    block: BuilderBlock,
+): Omit<BuilderBlock, 'distance_value' | 'load_value'> & TypedBlockFields & { distance_value: number | null; load_value: null } {
+    const dist = Number.parseFloat((block.distance_value ?? '').replace(',', '.'))
+    return { ...block, distance_value: Number.isFinite(dist) ? dist : null, load_value: null }
 }

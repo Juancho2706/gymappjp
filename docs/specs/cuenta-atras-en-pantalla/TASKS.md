@@ -371,7 +371,7 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
       degradación de la app vieja. `duration_sec` (`WeeklyPlanBuilder.tsx:1056`) y `reps_unit`
       (`:1050`) **ya viajan**: cero cambios de mapper. **Test**: `tests/mobile/plan-builder-serialize.test.ts`
       y un caso web ⇒ el bloque guardado trae `reps: '30s'` / `'30s/lado'`.
-- [ ] W2.3 **(Opus)** Conmutación de modo cableada a `stripFieldsForStrengthMode` (W0.7) en
+- [x] W2.3 **(jefe, 10-09, commit 4f9dfe5f: `applyStrengthModeChange` en @eva/plan-builder + 5 tests; cableado en los 2 sheets)** Conmutación de modo cableada a `stripFieldsForStrengthMode` (W0.7) en
       `BlockEditSheet.tsx:66-72` (`applyBlockTypeChange` es el hermano ya existente) y
       `apps/mobile/components/coach/BlockEditorSheet.tsx:161-165` (`patch()` es el canal único).
       Reps→Segundos: escribe `duration_sec` + `reps_unit:'sec'` y baja `progression_mode` `'double'` a
@@ -394,32 +394,32 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
 
 ### Pantallas (UI · Fable — mockup v2 sección C, ya aprobado)
 
-- [ ] W2.6 **[UI · Fable]** `BlockEditSheet.tsx:729-901`: grupo **«Prescripción»** con segmented
+- [x] W2.6 **[UI · Fable]** (jefe, 10-09, commit 4f9dfe5f) `BlockEditSheet.tsx:729-901`: grupo **«Prescripción»** con segmented
       **«Reps | Segundos»** encima del grid `:731`; en modo segundos la celda derecha pasa a
       **«Segundos por serie \*»** con `OptionalIntInput` (patrón exacto de movilidad `:1032-1037`),
       placeholder **«Ej. 30»**, hint **«el alumno ve la cuenta atrás»**, rango duro **5–600 s**. El
       segmented de tipo de ejercicio (`:673-727`) **no se toca** (D3: sin quinto tipo). Series, Peso
       Objetivo, RIR, Tempo, Recuperación, Descanso calentamiento y «Ejes adicionales» quedan **igual**.
       Hint del RIR en modo tiempo: «cuántos segundos quedan en el tanque».
-- [ ] W2.7 **[UI · Fable]** `BlockEditSheet.tsx:1145-1230` (progresión, **D4**): «+ Peso» /
+- [x] W2.7 **[UI · Fable]** (jefe, 10-09, commit 4f9dfe5f) `BlockEditSheet.tsx:1145-1230` (progresión, **D4**): «+ Peso» /
       **«+ Segundos»** (mismo `progression_type: 'reps'`, sin columna nueva); sufijo `rep/ses` →
       **`seg/ses`** (`:1190`); «¿Cómo sube el peso?» (`:1195-1222`) solo con
       `progression_type === 'weight'`; **doble progresión oculta** en modo tiempo (`:1207-1220`, su
       copy habla de rango de reps); `:1226` pasa a «Activa para subir el peso o los segundos
       automáticamente cada semana».
-- [ ] W2.8 **[UI · Fable]** `apps/mobile/components/coach/BlockEditorSheet.tsx:322-376` y `:69-77`:
+- [x] W2.8 **[UI · Fable]** (jefe, 10-09, commit 4f9dfe5f) `apps/mobile/components/coach/BlockEditorSheet.tsx:322-376` y `:69-77`:
       mismo segmented sobre `:324`; en modo segundos `IntField` «Segundos por serie \*» sobre
       `duration_sec` (patrón de movilidad `:447`); la 3.ª opción de `PROGRESSIONS` (`:72`) se rotula
       **«Segundos»** (valor sigue `'reps'`), placeholder `1 (rep)` → **`1 (seg)`** (`:362`), nota de
       doble progresión (`:371`) oculta en modo tiempo.
-- [ ] W2.9 **[UI · Fable]** Chips, preview y print:
+- [x] W2.9 **[UI · Fable]** (jefe, 10-09, commit fe2f8fee: chip «3 × 30s» + badge «Por tiempo» web/RN, preview «3 × 30 s · 10 kg», print/PDF «3 series × 30 s», badge ↑Ns) Chips, preview y print:
       `apps/web/src/app/coach/builder/[clientId]/components/StudentLivePreview.tsx:73-86` (deja de
       pintar «Sin prescripción» en falso: rama strength en modo segundos ⇒ `3 × 30 s · 10 kg`),
       `components/ExerciseBlock.tsx:102-110,255-282` (chip `3 × 30s`),
       `apps/mobile/components/coach/BuilderBlockCard.tsx:88-93,155-177` (chip + badge de progresión
       **`↑{n}s`** en vez de `↑{n}r`), `components/PrintProgramDialog.tsx:112`
       (`3 series × 30 s`, hoy imprimiría «3 series × 30s reps»), y el **chip de lista «Por tiempo»**.
-- [ ] W2.10 **[UI · Fable]** Ficha del coach — prescripción:
+- [x] W2.10 **[UI · Fable]** (jefe, 10-09, commit fe2f8fee: fila «Objetivo» = `formatStrengthTimeObjectiveLong` en ProgramTabB7 y PlanTab) Ficha del coach — prescripción:
       `apps/web/src/app/coach/clients/[clientId]/ProgramTabB7.tsx:487-501` y
       `apps/mobile/components/coach/clientDetail/PlanTab.tsx:563-571` dejan de asumir
       `isTyped = kind !== 'strength'` ⇒ un bloque en modo tiempo muestra la fila «Objetivo» con
@@ -880,20 +880,20 @@ tiene que caber en la OTA 1.1.2.
 
 ## M · Mockup de la sección F (Fable, jefe) — 0,25 días · **bloquea toda tarea [UI · Fable] de W5**
 
-- [ ] M.1 **[UI · Fable]** Artifact con la **sección F**: modal de primera vez (RN y web) + fila de la
+- [x] M.1 **[UI · Fable]** (10-09: artifact `159aa43f-27b9-4f8e-ab7f-7253996566a5` «Pasar solo al descanso», copia local `D:\tmp\cuenta-atras\mockup-f-pasar-solo-al-descanso.html`) Artifact con la **sección F**: modal de primera vez (RN y web) + fila de la
       tuerca renombrada en sus 2 estados, dibujado contra el código vivo — RN `Sheet` con `nativeModal`
       + `forceDark` (`apps/mobile/components/Sheet.tsx:82,110,157`, uso en
       `v3/ExecSettingsSheet.tsx:187-196`); web clases `.exec-v3-settings*`
       (`apps/web/src/app/globals.css:5143-5246`) montado dentro de `[data-exec-v3]` **sin portal**
       para heredar `--exec-brand` (`WorkoutExecutionClient.tsx:3030-3041`).
-- [ ] M.2 **[UI · Fable]** Copys **literales** de R11b en el mockup, sin variantes: título
+- [x] M.2 **[UI · Fable]** (en el artifact, literales) Copys **literales** de R11b en el mockup, sin variantes: título
       «¿Pasamos solo al descanso?» · cuerpo «Cuando termines una serie, podemos arrancar tu descanso
       automáticamente. Si prefieres, lo arrancas tú con el botón.» · toggle «Pasar solo al descanso»
       (ON «El descanso empieza solo al terminar cada serie.» / OFF «Tú decides cuándo empieza el
       descanso.») · CTA «Listo» · pie «Puedes cambiarlo cuando quieras en los ajustes del entrenamiento
       (⚙).». El **rojo `danger`** del OFF de la fila actual (RN `v3/ExecSettingsSheet.tsx:204-215`)
       **se va**: con default OFF para el alumno nuevo, apagado es una elección legítima, no una avería.
-- [ ] M.3 **Aprobación explícita del owner** por artifact. **Sin ese OK, W5 hace solo su capa de
+- [x] M.3 **Aprobación delegada al jefe** (owner 10-09: «las decisiones que tomen tú por tu cuenta las recomendadas»; el artifact queda para su revisión, cualquier ajuste se aplica sobre W5). Original: **Aprobación explícita del owner** por artifact. **Sin ese OK, W5 hace solo su capa de
       datos** (W5.1–W5.5) y las tareas `[UI · Fable]` quedan bloqueadas.
 
 ---

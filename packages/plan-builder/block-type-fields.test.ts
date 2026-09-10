@@ -8,8 +8,10 @@
  */
 import { describe, expect, it } from 'vitest'
 import { typedBlockSummary, type TypedBlockFields } from '@eva/workout-engine'
+import { STRENGTH_TIME_MAX_SEC, STRENGTH_TIME_MIN_SEC } from '@eva/schemas'
 import {
     applyStrengthModeChange,
+    isBlockComplete,
     POLYMORPHIC_BLOCK_FIELDS,
     defaultBlockForType,
     stripFieldsForStrengthMode,
@@ -343,5 +345,103 @@ describe('applyStrengthModeChange — conmutación del segmented «Reps | Segund
         expect(applyStrengthModeChange(base, 'reps')).toBe(base)
         const timed = { ...base, reps_unit: 'sec', duration_sec: 30 } as BuilderBlock
         expect(applyStrengthModeChange(timed, 'sec')).toBe(timed)
+    })
+})
+
+/**
+ * W2.1 — `isBlockComplete`: la ÚNICA regla de «¿tiene la prescripción mínima?», compartida por los
+ * tres guards que antes la copiaban a mano. El cableado de esos tres call sites lo vigila
+ * `apps/web/src/app/coach/builder/[clientId]/block-complete-callsites.test.ts`; acá se fija la
+ * regla en sí, con el MISMO fixture que usa ese test.
+ */
+describe('isBlockComplete — fuerza clásica (regla histórica, byte a byte)', () => {
+    it('series ≥ 1 + texto de reps ⇒ completo', () => {
+        expect(isBlockComplete(strengthBlock(), 'strength')).toBe(true)
+    })
+
+    it('sin series ⇒ incompleto', () => {
+        expect(isBlockComplete(strengthBlock({ sets: 0 }), 'strength')).toBe(false)
+        expect(isBlockComplete(strengthBlock({ sets: undefined }), 'strength')).toBe(false)
+    })
+
+    it('sin texto de reps (vacío o sólo espacios) ⇒ incompleto', () => {
+        expect(isBlockComplete(strengthBlock({ reps: '' }), 'strength')).toBe(false)
+        expect(isBlockComplete(strengthBlock({ reps: '   ' }), 'strength')).toBe(false)
+    })
+
+    it('un `duration_sec` suelto NO alcanza mientras el bloque siga en modo Reps', () => {
+        expect(isBlockComplete(strengthBlock({ reps: '', duration_sec: 30 }), 'strength')).toBe(false)
+    })
+})
+
+describe('isBlockComplete — fuerza POR TIEMPO (D3)', () => {
+    /** El bloque tal como lo deja el segmented al pasar a Segundos: `reps` sigue con el texto viejo. */
+    const timed = (overrides: Partial<BuilderBlock> = {}) =>
+        strengthBlock({ reps_unit: 'sec', duration_sec: 30, ...overrides })
+
+    it('series + 30 segundos ⇒ completo', () => {
+        expect(isBlockComplete(timed(), 'strength')).toBe(true)
+    })
+
+    it('3 segundos (bajo el mínimo) ⇒ incompleto', () => {
+        expect(isBlockComplete(timed({ duration_sec: 3 }), 'strength')).toBe(false)
+    })
+
+    it('sin segundos ⇒ incompleto AUNQUE `reps` conserve el texto del coach (falso negativo cerrado)', () => {
+        expect(isBlockComplete(timed({ duration_sec: null }), 'strength')).toBe(false)
+        expect(isBlockComplete(timed({ duration_sec: 0 }), 'strength')).toBe(false)
+    })
+
+    it('sin reps y sin segundos ⇒ incompleto', () => {
+        expect(isBlockComplete(timed({ reps: '', duration_sec: null }), 'strength')).toBe(false)
+    })
+
+    it('sin series ⇒ incompleto aunque los segundos estén bien', () => {
+        expect(isBlockComplete(timed({ sets: 0 }), 'strength')).toBe(false)
+    })
+
+    it('el rango es EXACTAMENTE el del schema (@eva/schemas), no una copia que derivó', () => {
+        expect(isBlockComplete(timed({ duration_sec: STRENGTH_TIME_MIN_SEC }), 'strength')).toBe(true)
+        expect(isBlockComplete(timed({ duration_sec: STRENGTH_TIME_MIN_SEC - 1 }), 'strength')).toBe(false)
+        expect(isBlockComplete(timed({ duration_sec: STRENGTH_TIME_MAX_SEC }), 'strength')).toBe(true)
+        expect(isBlockComplete(timed({ duration_sec: STRENGTH_TIME_MAX_SEC + 1 }), 'strength')).toBe(false)
+    })
+})
+
+describe('isBlockComplete — cardio / movilidad / roller (regla canónica del sheet web)', () => {
+    it('cardio: duración, distancia (texto con coma) o intervalos alcanzan', () => {
+        const base = fullBlock('cardio')
+        expect(isBlockComplete(base, 'cardio')).toBe(true)
+        const soloDistancia = { ...base, duration_sec: null, interval_config: null, distance_value: '2,5' }
+        expect(isBlockComplete(soloDistancia, 'cardio')).toBe(true)
+        const soloIntervalos = { ...base, duration_sec: null, distance_value: '' }
+        expect(isBlockComplete(soloIntervalos, 'cardio')).toBe(true)
+        const vacio = { ...base, duration_sec: null, distance_value: '', interval_config: null }
+        expect(isBlockComplete(vacio, 'cardio')).toBe(false)
+    })
+
+    it('movilidad: series + (duración o conteo)', () => {
+        const base = { ...fullBlock('mobility'), duration_sec: 30, reps_value: null, interval_config: null }
+        expect(isBlockComplete(base, 'mobility')).toBe(true)
+        expect(isBlockComplete({ ...base, duration_sec: null, reps_value: 8 }, 'mobility')).toBe(true)
+        expect(isBlockComplete({ ...base, sets: 0 }, 'mobility')).toBe(false)
+        expect(isBlockComplete({ ...base, duration_sec: null }, 'mobility')).toBe(false)
+    })
+
+    it('roller: duración o pasadas, sin exigir series', () => {
+        const base = { ...fullBlock('roller'), duration_sec: null, reps_value: 10 }
+        expect(isBlockComplete(base, 'roller')).toBe(true)
+        expect(isBlockComplete({ ...base, sets: undefined }, 'roller')).toBe(true)
+        expect(isBlockComplete({ ...base, reps_value: null }, 'roller')).toBe(false)
+    })
+
+    it('el texto de `reps` SÍ rescata a movilidad y a roller (no-regresión: 94 bloques de 58 coaches en LIVE se guardan así)', () => {
+        const mob = { ...fullBlock('mobility'), duration_sec: null, reps_value: null, reps: '30s' }
+        expect(isBlockComplete(mob, 'mobility')).toBe(true)
+        const roller = { ...fullBlock('roller'), duration_sec: null, reps_value: null, reps: '10 pasadas' }
+        expect(isBlockComplete(roller, 'roller')).toBe(true)
+        // Sin ningún eje (ni duración, ni cantidad, ni texto) sigue incompleto.
+        expect(isBlockComplete({ ...mob, reps: '' }, 'mobility')).toBe(false)
+        expect(isBlockComplete({ ...roller, reps: '   ' }, 'roller')).toBe(false)
     })
 })

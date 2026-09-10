@@ -13,7 +13,7 @@
 //      fuerza (byte-identico al payload legacy).
 //
 // Modulo puro (sin react-native / expo) para poder testearlo con el runner del repo.
-import { effectiveExerciseType, legacyRepsSummaryFor, type ExerciseType, type TypedBlockFields } from '@eva/workout-engine'
+import { effectiveExerciseType, isStrengthTimeBlock, legacyRepsSummaryFor, type ExerciseType, type TypedBlockFields } from '@eva/workout-engine'
 import type { BuilderBlock } from './types'
 
 // Columnas/relaciones que NUNCA deben viajar a un INSERT nuevo: identidad de la fila
@@ -81,7 +81,14 @@ function editedBaseColumns(b: BuilderBlock, type: ExerciseType, distanceValue: n
     sets: b.sets ?? null,
     reps: b.reps ?? null,
   }
-  const reps = type === 'strength' ? (b.reps || '8-10') : legacyRepsSummaryFor(summaryInput, type)
+  // W2.2 — fuerza POR TIEMPO: el espejo legacy lo escribe el reloj ("30s" / "30s/lado"), no el
+  // texto del coach ni el fallback '8-10'. `workout_blocks.reps` es NOT NULL, y ese espejo es lo
+  // que ven la app vieja del alumno, los chips, el print y `target_reps_at_log`: sin esto un bloque
+  // que pasó de Reps a Segundos seguiría anunciando "8-12" en todas esas superficies.
+  const strengthTime = isStrengthTimeBlock(summaryInput, { exercise_type: b.exercise_type })
+  const reps = type === 'strength' && !strengthTime
+    ? (b.reps || '8-10')
+    : legacyRepsSummaryFor(summaryInput, type)
   return {
     exercise_id: b.exercise_id,
     sets: Number.isFinite(b.sets as number) && (b.sets as number) >= 1

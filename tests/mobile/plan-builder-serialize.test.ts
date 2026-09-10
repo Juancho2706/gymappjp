@@ -2,6 +2,7 @@
 // El modulo bajo test es puro (sin react-native/expo), asi que corre con el runner
 // del repo aunque viva en apps/mobile. Vitest lo colecta por el glob `tests/**`.
 import { describe, it, expect } from 'vitest'
+import { applyStrengthModeChange } from '@eva/plan-builder'
 import {
   passthroughBlockColumns,
   serializeBlockInsert,
@@ -275,5 +276,86 @@ describe('serializeBlockInsert — bloques tipados (cardio/movilidad/roller)', (
     expect(payload.reps_value).toBe(10)
     expect(payload.reps_unit).toBe('passes')
     expect(payload.reps).toBe('10 pasadas')
+  })
+})
+
+/**
+ * W2.2 — el espejo legacy de `workout_blocks.reps` en fuerza POR TIEMPO.
+ *
+ * `reps` es NOT NULL y Zod le exige `min(1)`, así que el bloque SIEMPRE lo escribe. Lo que cambia
+ * en modo Segundos es QUÉ escribe: el resumen del reloj («30s» / «30s/lado») en vez del texto del
+ * coach o del fallback '8-10'. Ese espejo es lo que ven la app vieja del alumno, los chips, el
+ * print, el historial y `target_reps_at_log`: dejarlo en «8-12» hace que un bloque que el coach
+ * pasó a Segundos siga anunciando repeticiones en todas esas superficies.
+ */
+describe('serializeBlockInsert — fuerza por tiempo (W2.2)', () => {
+  const plancha = (over: Partial<BuilderBlock> = {}): BuilderBlock => ({
+    uid: 'block-hold',
+    exercise_id: 'ex-99',
+    exercise_name: 'Plancha frontal mantenida',
+    muscle_group: 'Core',
+    section: 'main',
+    sets: 3,
+    reps: '8-12',
+    target_weight_kg: '10',
+    rir: '2',
+    rest_time: '90',
+    duration_sec: 30,
+    reps_unit: 'sec',
+    ...over,
+  })
+
+  it('bilateral: reps espejo "30s" y las dos columnas del modo tiempo viajan', () => {
+    const payload = serializeBlockInsert(plancha(), 0, 'plan-new')
+
+    expect(payload.reps).toBe('30s')
+    expect(payload.duration_sec).toBe(30)
+    expect(payload.reps_unit).toBe('sec')
+    // D3: la prescripción de fuerza NO se pierde por prescribir en segundos.
+    expect(payload.sets).toBe(3)
+    expect(payload.target_weight_kg).toBe(10)
+    expect(payload.rir).toBe('2')
+  })
+
+  it('per_side: reps espejo "30s/lado"', () => {
+    const payload = serializeBlockInsert(plancha({ side_mode: 'per_side' }), 0, 'plan-new')
+    expect(payload.reps).toBe('30s/lado')
+    expect(payload.side_mode).toBe('per_side')
+  })
+
+  it('fuerza clásica NO cambia: manda el texto del coach (y el fallback 8-10 sigue vivo)', () => {
+    const clasico = plancha({ duration_sec: undefined, reps_unit: undefined })
+    expect(serializeBlockInsert(clasico, 0, 'plan-new').reps).toBe('8-12')
+    expect(serializeBlockInsert({ ...clasico, reps: '' }, 0, 'plan-new').reps).toBe('8-10')
+  })
+
+  it('un `duration_sec` suelto sin `reps_unit: sec` NO enciende el espejo (AND de R3)', () => {
+    const residuo = plancha({ reps_unit: undefined })
+    expect(serializeBlockInsert(residuo, 0, 'plan-new').reps).toBe('8-12')
+  })
+
+  it('volver a Reps: los `null` EXPLÍCITOS del strip llegan al payload y pisan a `_raw`', () => {
+    // La fila vieja en DB ya estaba en modo tiempo: si el strip no viajara, `_raw` repondría el
+    // reloj y el alumno seguiría viendo la cuenta atrás en un bloque que el coach volvió a Reps.
+    const raw = {
+      id: 'blk-hold',
+      plan_id: 'plan-old',
+      order_index: 2,
+      exercise_id: 'ex-99',
+      sets: 3,
+      reps: '30s',
+      duration_sec: 30,
+      reps_unit: 'sec',
+    }
+    const vueltoAReps = applyStrengthModeChange({ ...plancha(), _raw: raw } as BuilderBlock, 'reps')
+
+    // El strip deja `null` explícito (no `undefined`): es lo único que sobrevive al passthrough.
+    expect(vueltoAReps.duration_sec).toBeNull()
+    expect(vueltoAReps.reps_unit).toBeNull()
+
+    const payload = serializeBlockInsert(vueltoAReps, 0, 'plan-new')
+    expect(payload.duration_sec).toBeNull()
+    expect(payload.reps_unit).toBeNull()
+    expect(payload.reps).toBe('8-12')
   })
 })

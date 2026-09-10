@@ -60,11 +60,11 @@ import { ExerciseBlock } from './components/ExerciseBlock'
 import { DraggableExerciseCatalog, type ExerciseOwnerScope } from './DraggableExerciseCatalog'
 import type { BuilderBlock, BuilderCardioContext, DayState, ProgramPhase } from './types'
 import type { WorkoutArea } from '@/domain/workout/types'
-import { effectiveExerciseType, legacyRepsSummaryFor } from '@/lib/workout-exercise-type'
+import { effectiveExerciseType, isStrengthTimeBlock, legacyRepsSummaryFor } from '@/lib/workout-exercise-type'
 import { effectiveAreaKey, orderedAreaIds, sanitizeSupersets } from '@eva/workout-engine'
 import {
     EXIT_GUARD_BODY, EXIT_GUARD_LEAVE, EXIT_GUARD_STAY, EXIT_GUARD_TITLE, builderBackHref,
-    shouldConfirmExit,
+    isBlockComplete, shouldConfirmExit,
 } from '@eva/plan-builder'
 import { buildAreaVMs } from './area-ui'
 import { parseProgramPhases, mapDbBlockToBuilderBlock, enrichDaysWithExerciseMedia, createDefaultBlock, reconcileDaysWithExercise } from './program-read-mappers'
@@ -941,24 +941,14 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, programIs
         const allDaysToCheck = isABMode ? [...builderA.days, ...builderB.days] : days
         const hasExercises = allDaysToCheck.some(d => d.blocks.length > 0)
         if (!hasExercises) { toast.error('Debes añadir al menos un ejercicio al programa.'); return }
-        // Completitud POR TIPO: strength exige sets+reps EXACTAMENTE como hoy (AC3);
-        // los tipos nuevos exigen su prescripción mínima (duración/distancia/intervalos/pasadas).
-        const blockIncomplete = (b: BuilderBlock): boolean => {
-            const type = effectiveExerciseType(b, { exercise_type: b.exercise_type })
-            if (type === 'cardio') {
-                const dist = parseFloat((b.distance_value || '').replace(',', '.'))
-                return !((b.duration_sec ?? 0) > 0 || (Number.isFinite(dist) && dist > 0) || !!b.interval_config)
-            }
-            if (type === 'mobility') {
-                return !b.sets || b.sets < 1 || !((b.duration_sec ?? 0) > 0 || (b.reps_value ?? 0) > 0 || !!b.reps?.trim())
-            }
-            if (type === 'roller') {
-                return !((b.duration_sec ?? 0) > 0 || (b.reps_value ?? 0) > 0 || !!b.reps?.trim())
-            }
-            return !b.sets || b.sets < 1 || !b.reps?.trim()
-        }
+        // Completitud POR TIPO: la regla es única y vive en `@eva/plan-builder` (W2.1) — la misma
+        // que usan el sheet de bloque y el guardado del builder RN. Fuerza clásica exige sets+reps
+        // EXACTAMENTE como hoy (AC3); en modo Segundos exige sets + segundos en rango; los tipos
+        // nuevos, su prescripción mínima (duración/distancia/intervalos/pasadas).
+        const blockIncomplete = (b: BuilderBlock): boolean =>
+            !isBlockComplete(b, effectiveExerciseType(b, { exercise_type: b.exercise_type }))
         const missingData = allDaysToCheck.some(d => d.blocks.some(blockIncomplete))
-        if (missingData) { toast.error('Hay ejercicios con datos incompletos (revisa series, repeticiones, duración o distancia).'); return }
+        if (missingData) { toast.error('Hay ejercicios con datos incompletos (revisa series, repeticiones o segundos, duración o distancia).'); return }
 
         // Acepta `null` además de `undefined`: el strip por cambio de tipo (R32) limpia
         // `load_value`/`distance_value` con `null` EXPLÍCITO. El `== null` ya cubría los dos.
@@ -1015,14 +1005,19 @@ export function WeeklyPlanBuilder({ client, exercises, initialProgram, programIs
                     const type = effectiveExerciseType(b, { exercise_type: b.exercise_type })
                     const distanceValue = parseOptionalKg(b.distance_value)
                     const loadValue = parseOptionalKg(b.load_value)
-                    // Coexistencia (decisión #3): reps SIEMPRE poblado. En strength manda el
-                    // texto del coach; en tipos nuevos se genera el resumen legacy ≤20 chars.
-                    const reps = type === 'strength'
+                    // Coexistencia (decisión #3): reps SIEMPRE poblado (`workout_blocks.reps` es
+                    // NOT NULL y Zod exige min(1)). En fuerza clásica manda el texto del coach; en
+                    // tipos nuevos se genera el resumen legacy ≤20 chars.
+                    //
+                    // W2.2: en fuerza POR TIEMPO manda el resumen del reloj ("30s" / "30s/lado") y
+                    // NO el texto del coach — si no, un bloque que pasó de Reps a Segundos seguiría
+                    // arrastrando "8-12" como espejo legacy por toda la app (chips, preview, print,
+                    // `target_reps_at_log`, historial) y por la app vieja del alumno.
+                    const summaryInput = { ...b, distance_value: distanceValue, load_value: loadValue }
+                    const strengthTime = isStrengthTimeBlock(summaryInput, { exercise_type: b.exercise_type })
+                    const reps = type === 'strength' && !strengthTime
                         ? (b.reps || '')
-                        : legacyRepsSummaryFor(
-                            { ...b, distance_value: distanceValue, load_value: loadValue },
-                            type,
-                        )
+                        : legacyRepsSummaryFor(summaryInput, type)
                     return {
                         exercise_id: b.exercise_id,
                         sets: Number.isFinite(b.sets as number) && (b.sets as number) >= 1 ? Math.round(b.sets as number) : type === 'strength' ? 3 : 1,
