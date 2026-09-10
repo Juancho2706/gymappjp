@@ -655,7 +655,7 @@ Además: `database.types.ts` se edita **a mano** (`portion_system` en `exchange_
 | `builder.setChile` | Sistema chileno · INTA 1999 · UDD 2019 |
 | `builder.setLegacy(n?, surface)` | Legado (SMAE) · Lo usas en {n} plan/planes · Toca para ver *(sin `n` —hoy, porque el loader no devuelve el conteo—: «Legado (SMAE) · Toca para ver»; web: «Clic para ver»)* |
 | `builder.setOwn` | Propios *(encabezado, solo si el coach tiene grupos propios)* |
-| `builder.groupAtMax(franja)` | Ya está en {franja} con 99 · es el máximo *(99 = `PORTION_MAX` formateado; texto provisional del jefe, OK del owner pendiente)* |
+| `builder.groupAtMax(franja)` | Ya está en {franja} con 99 · es el máximo *(99 = `PORTION_MAX` formateado; texto provisional del jefe, OK del owner por delegación 10-09 («el que tú recomiendes» ⇒ se mantienen))* |
 | `builder.portionsInputAria(grupo)` | Porciones de {grupo} *(solo accesibilidad del `TextInput`)* |
 | `builder.legacyBadge` | Legado (SMAE) |
 | `builder.groupUsedBump` | Ya está en {franja} con {n} · Toca para sumar ½ *(web: «Clic para sumar ½»)* |
@@ -679,8 +679,8 @@ Además: `database.types.ts` se edita **a mano** (`portion_system` en `exchange_
 | `convert.emptyNoAmount` | Este borrador usa las porciones anteriores, pero ninguna tiene una cantidad válida: revísalas y vuelve a intentarlo. *(el OTRO vacío: un target SMAE con `portions` vacío o ilegible sale intacto del motor y no entra ni a `diff` ni a `unresolved`, así que un borrador 100 % SMAE puede llegar sin secciones; `convert.empty` ahí mentiría)* |
 | `convert.applied` | Borrador convertido *(toast con «Deshacer», que restaura el árbol con `RESTORE_DRAFT`)* |
 | `targets.onlyThisDay` | Solo el {día} |
-| `targets.backToBase(día)` | {Día} vuelve a la meta de todos los días *(al apagar el switch con base con kcal; provisional del jefe, OK del owner pendiente)* |
-| `targets.appliedToAll` | Ahora vale para toda la semana *(al apagar el switch con base sin kcal: propaga la meta del día; provisional, OK pendiente)* |
+| `targets.backToBase(día)` | {Día} vuelve a la meta de todos los días *(al apagar el switch con base con kcal; provisional del jefe, OK del owner por delegación 10-09 («el que tú recomiendes» ⇒ se mantienen))* |
+| `targets.appliedToAll` | Ahora vale para toda la semana *(al apagar el switch con base sin kcal: propaga la meta del día; provisional, OK del owner por delegación 10-09 («el que tú recomiendes» ⇒ se mantienen))* |
 | `targets.undo` | Deshacer |
 | `targets.dayNoTarget` | sin meta *(cinta del editor)* |
 | `targets.onlyThisDayOff` | Apagado: se guarda en «Todos los días» y vale para toda la semana. |

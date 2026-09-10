@@ -186,7 +186,7 @@ en dos.
       seis EXPLAIN ✔ · `supabase/tests/exchange_groups_portion_system_rollback.sql` **A–G OK** en LIVE con ROLLBACK ✔ ·
       Q1–Q3 ✔ (Q4–Q9 recién tras el `--apply`) · `node --check` del script ✔ · `pnpm docs:check` OK (el SDD ya vive en
       `docs/specs/nutrition-porciones-chilenas/` desde W0.0, así que sí verificó el tren). W0b: dry-run ✔ (cero escrituras),
-      `--apply` pendiente del OK del owner (W0.9).
+      `--apply` OK del owner por delegación 10-09 («el que tú recomiendes» ⇒ se mantienen) (W0.9).
 - [x] W0.14 [Fable] Juicio de W0 sobre el diff real: 7 archivos, **0 BLOQUEA** al cierre (el refutador de W0.7 levantó 2,
       corregidos en una ronda: control del corte de carnes sobre el universo curado COMPLETO —no sobre «los que resolvieron»—
       y dedupe ARL+G antes de contar); MEJORA aplicadas por el jefe: ruta del SDD y runner `jiti` en la cabecera del script,
@@ -429,7 +429,7 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
       legacyBadge,groupUsedBump,groupBumped,groupBumpedUndo,groupAtMax,stepperEditHint,portionsInputAria}` en tuteo
       (SPEC §16.1). **Cerrado 09-09**: `groupUsed` intacto; `setLegacy(n?, surface)` pluraliza «1 plan / N planes», sin `n`
       dice «Legado (SMAE) · Toca para ver» (web «Clic para ver»); `groupAtMax(franja)` = «Ya está en {franja} con 99 · es el
-      máximo» (99 = `PORTION_MAX` formateado; texto del worker aprobado por el jefe, **pendiente del OK del owner**, decisión (u)).
+      máximo» (99 = `PORTION_MAX` formateado; texto del worker aprobado por el jefe, **OK del owner por delegación 10-09 («el que tú recomiendes» ⇒ se mantienen)**, decisión (u)).
 - [x] W2.4 [Opus A · RN] `EditablePortionsSection.tsx`: fila usada sin `disabled` ni `opacity-50` (salvo tope 99),
       subtítulo `groupUsedBump`, secciones «Sistema chileno» / «Propios» / «Legado (SMAE)» colapsable y **sticky**
       (`stickyHeaderIndices`), chip `legacyBadge`. Partición en el consumidor sobre la lista mergeada
@@ -482,7 +482,7 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
       inventar set (R18) y el merge no se toca (R17); el catálogo vivo pega `portionSystem`/`sortOrder`/`isSystem` por id.
       (t) **`setLegacy()` sin conteo de planes** en RN y web: el loader de W1 no devuelve el conteo y pedirlo sería alcance
       nuevo; fila añadida a SPEC §16.1 («Legado (SMAE) · Toca/Clic para ver»).
-      (u) `groupAtMax` sin fila en §16.1: texto del worker aprobado provisionalmente, **OK del owner pendiente**.
+      (u) `groupAtMax` sin fila en §16.1: texto del worker aprobado provisionalmente, OK del owner por delegación 10-09 («el que tú recomiendes» ⇒ se mantienen).
       (v) Tests del reducer en el paquete, no en `_quick-edit`.
       (w) Web usa el `isSystem` real del catálogo; la inferencia por código queda solo como fallback sin catálogo.
       (x) **Banner legado**: la carcasa de W2 vive por franja en las dos superficies; W3.6 la levanta a nivel plan
@@ -579,7 +579,7 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
       { surface, scope, from }` (DATA §11 evento 4) desde el switch y «Ir a Base». **Cerrado 09-09** con la **decisión (z)**:
       el título de la hoja queda FIJO «Metas del día» en RN y web (mockup M4 aprobado + SPEC §7.5 «decisión del
       writer»); el criterio «deja de decir Metas del día cuando escribe en todos» queda superado — la verdad del
-      alcance la dice la ayuda del switch. **OK del owner pendiente** sobre esa decisión y sobre los copys nuevos
+      alcance la dice la ayuda del switch. OK del owner por delegación 10-09 («el que tú recomiendes» ⇒ se mantienen) sobre esa decisión y sobre los copys nuevos
       (`backToBase`, `appliedToAll`; filas en SPEC §16.1).
 - [ ] W4.7 [owner] QA en device de los puntos 6 y 7 del checklist final (incluido: en RN el aviso con «Deshacer» es
       INLINE dentro del sheet porque el `Toaster` raíz queda detrás del `nativeModal`; en iOS confirmar que el
@@ -591,7 +591,7 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
       agentes) + remate 2 `wf_0ad946ab-3f5`. Commits: `383e4a74` (checkpoint) + `20769987` (remate 1) + remate 2 y docs (este commit). Decisiones del jefe:
       (y) apagar el switch nunca borra (propaga con base vacío / copia el base con base con kcal), lógica pura en el
       paquete (`qeSwitchOffPlan`), «Deshacer» por snapshot de las variantes tocadas;
-      (z) título fijo «Metas del día» (mockup + SPEC §7.5 mandan sobre TASKS W4.6), pendiente del OK del owner;
+      (z) título fijo «Metas del día» (mockup + SPEC §7.5 mandan sobre TASKS W4.6), OK del owner por delegación 10-09 («el que tú recomiendes» ⇒ se mantienen);
       (aa) DATA §11 evento 4 lleva `surface`; (ab) `applyBaseTargets` solo rellena vacíos y no toca días con kcal;
       (ac) el aviso de RN es inline (toast detrás del `Sheet nativeModal`, gotcha de `WorkoutShareComposer`).
       MEJORA diferidas al backlog: `TARGET_FIELD_KEYS`/`TARGET_ROWS`/`TARGET_KEYS` (cuarta copia de la lista de campos ⇒
@@ -710,6 +710,11 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
       no con el 9 de STATS), mensaje a `nutricionista-pame-cid`, a `dudu` y a
       `josefit` (textos en [PLAN](PLAN.md) §Docs y cierre). **Criterio**: enviado y anotado acá con fecha; nada de push
       masivo.
+
+## Decisiones del owner 10-09 (tras el reporte de W0–W4 + W3)
+
+- **1 = a**: seguir con W5 + W6 ahora y dejar el informe final; push/deploy/OTA/encendido solo con OK explícito posterior.
+- **2 = «el que tú recomiendes»** ⇒ el jefe mantiene los copys provisionales: `builder.groupAtMax` («Ya está en {franja} con 99 · es el máximo»), título fijo «Metas del día» (decisión (z)), `targets.backToBase(día)` («{Día} vuelve a la meta de todos los días») y `targets.appliedToAll` («Ahora vale para toda la semana»). Quedan como aprobados por delegación en SPEC §16.1.
 
 ## Checklist de QA en device (se completa al cierre)
 
