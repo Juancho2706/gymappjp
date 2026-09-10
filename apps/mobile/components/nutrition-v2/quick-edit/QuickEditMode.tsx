@@ -57,6 +57,7 @@ import {
   findPortionTargetByGroup,
   formatNutritionDayOfWeek,
   formatPortionsEsCl,
+  isClGroup,
   kcalBucket,
   mergePortionGroupChoices,
   nextDaysFrom,
@@ -74,6 +75,7 @@ import {
   qeTargetsGapBar,
   qeVariantTotalWithPortions,
   quickEditReducer,
+  CL_CODES,
   PORTION_MAX,
   PORTION_STEP,
   QE_TARGET_FIELDS,
@@ -110,6 +112,7 @@ import { Sheet } from '../../Sheet'
 import { toast } from '../../Toast'
 import { useTheme } from '../../../context/ThemeContext'
 import { resolveEffectiveCoachBrandTheme } from '../../../lib/theme'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { supabase } from '../../../lib/supabase'
 import {
   MAX_DAY_VARIANTS,
@@ -125,6 +128,7 @@ import {
   type PublishEffectiveFromChoice,
 } from '../../../lib/nutrition-v2-quick-edit'
 import type { PortionPickerGroup, QuickEditGroupAdmin } from './EditablePortionsSection'
+import { PortionConversionSheet } from './PortionConversionSheet'
 import {
   captureNutritionItemImplausible,
   captureNutritionPortionGroupBumped,
@@ -199,6 +203,14 @@ const UNDO_TIMEOUT_MS = 8000
  * seguir visible con una captura ya vencida —o al revés— y «Deshacer» devolvería otro valor.
  */
 const PORTION_BUMP_TOAST_MS = 4000
+
+/**
+ * «Ahora no» del banner de conversión: clave local POR PLAN y su vigencia (30 días, SPEC §7.2).
+ * Storage local a propósito — no sobrevive al cambio de dispositivo y eso se acepta (§C.3 de
+ * RESOLUCIONES-2): una columna nueva por un descarte de UI no vale una migración.
+ */
+const PORTION_CONVERT_DISMISS_PREFIX = 'nutrition-v2:portion-conversion-dismissed:'
+const PORTION_CONVERT_DISMISS_MS = 30 * 24 * 60 * 60 * 1000
 
 /** Respiro entre el borde inferior del campo enfocado y la barrera (teclado + PublishBar). */
 const KEYBOARD_GAP = 12
@@ -1141,6 +1153,188 @@ export function QuickEditMode({
     }),
     [scope, ownGroupIds, state.variants],
   )
+
+  /* ── Conversión SMAE → chileno (W3.6, SPEC §7.2) ──────────────────────────────────
+   * El banner es UNO POR PLAN, al inicio del lienzo. La carcasa de W2.4 vivía dentro de
+   * `EditablePortionsSection`, o sea una por FRANJA: un plan de cinco franjas pintaba cinco
+   * banners idénticos y ninguno de ellos podía saber el `planId` (para el «Ahora no» de 30 días)
+   * ni los `legacySystems` del borde. Acá sí. */
+
+  /** Hoja del preview abierta. Nada se escribe hasta «Convertir borrador» (T-05). */
+  const [convertOpen, setConvertOpen] = useState(false)
+  /**
+   * «Ahora no»: `null` = todavía no se leyó el storage (el banner NO se pinta mientras tanto: un
+   * banner que aparece y desaparece medio segundo después es peor que uno que tarda), `true` =
+   * descartado y vigente, `false` = mostrar.
+   */
+  const [convertDismissed, setConvertDismissed] = useState<boolean | null>(null)
+
+  /**
+   * Clave local del descarte, POR PLAN. Sin `planId` (creación / plantilla) no hay clave estable,
+   * así que el descarte dura lo que la sesión — y se dice acá, no se finge persistencia.
+   */
+  const convertDismissKey = baseline ? `${PORTION_CONVERT_DISMISS_PREFIX}${baseline.planId}` : null
+
+  useEffect(() => {
+    if (convertDismissKey == null) {
+      setConvertDismissed(false)
+      return
+    }
+    let active = true
+    void AsyncStorage.getItem(convertDismissKey)
+      .then((raw) => {
+        if (!active || !mountedRef.current) return
+        const savedAt = raw == null ? Number.NaN : Number(raw)
+        // Best-effort: basura, ausencia o vencimiento ⇒ el banner se muestra. Nunca al revés.
+        const alive =
+          Number.isFinite(savedAt) && Date.now() - savedAt < PORTION_CONVERT_DISMISS_MS
+        setConvertDismissed(alive)
+      })
+      .catch(() => {
+        if (!active || !mountedRef.current) return
+        setConvertDismissed(false)
+      })
+    return () => {
+      active = false
+    }
+  }, [convertDismissKey])
+
+  /**
+   * Catálogo VIVO precargado AL MONTAR también en el quick-edit clásico (remate W2). Ahí el
+   * único camino que lo traía era `ensureLoaded` al abrir el picker, así que la primera apertura
+   * salía alfabética y sin encabezados y se reordenaba sola a la vista. Y sin catálogo el banner
+   * de conversión NO puede decidir: el snapshot congelado del plan no guarda `portionSystem`
+   * (R18) y `systemOf` caería al set del coach, dejándolo mudo justo para el coach 'cl' con plan
+   * SMAE — el único al que este tren apunta. `ensureLoaded` es idempotente (guard por ref), así
+   * que abrir el picker después no vuelve a pedir nada.
+   */
+  /**
+   * `ensureLoaded` estabilizado en un ref: `portionGroupAdmin` es un `useMemo` con
+   * `state.variants` en sus deps, así que su identidad cambia en CADA tecla y el efecto de abajo
+   * se re-corría con ella. Era no-op (el guard `ownGroupsRequestedRef`), pero un efecto que se
+   * dispara por tecla es una trampa esperando a que alguien le saque el guard.
+   */
+  const ensureCatalogLoadedRef = useRef(portionGroupAdmin.ensureLoaded)
+  useEffect(() => {
+    ensureCatalogLoadedRef.current = portionGroupAdmin.ensureLoaded
+  }, [portionGroupAdmin])
+  useEffect(() => {
+    if (editorMode) return
+    ensureCatalogLoadedRef.current()
+  }, [editorMode])
+
+  /**
+   * ¿ESTE plan usa el set viejo? Lo decide el BORRADOR, no el coach. `legacySystems` habla de
+   * TODOS los planes del coach (W1), así que usarlo como atajo pintaba «Este plan usa las
+   * porciones anteriores (SMAE)» —y abría un preview vacío— sobre un plan 100 % chileno recién
+   * creado, con solo que el coach tuviera OTRO plan legado. El copy de §16.1 dice «Este plan».
+   *
+   * El borde entra SOLO como desempate, y solo donde el borrador no puede decidir: un target sin
+   * `portionSystem` explícito y con un código que no está en `CL_CODES` cae al set del coach por
+   * R18, o sea `systemOf` responde por el coach y no por el plan. Ahí —y nada más que ahí— vale
+   * preguntar si el coach tiene SMAE vivo. Con `portionGroups` (la lista YA enriquecida por
+   * `applyCatalogMetaToPickerGroups`) ese caso es raro: el overlay trae la columna del catálogo
+   * vivo. Un grupo que el catálogo ya no tiene sigue sin dato y no se inventa 'smae'.
+   */
+  const planUsesLegacy = useMemo(() => {
+    const effective: PortionSystem = portionSystem === 'smae' ? 'smae' : 'cl'
+    const byId = new Map(portionGroups.map((group) => [group.exchangeGroupId, group]))
+    let draftLegacy = false
+    let draftUndecided = false
+    for (const variant of state.variants) {
+      for (const slot of variant.slots) {
+        for (const target of slot.portionTargets) {
+          const group = byId.get(target.exchangeGroupId)
+          const declared = group?.portionSystem
+          // Sin dato explícito y sin código chileno, `systemOf` cae al set del COACH: el
+          // borrador no sabe y no se lo hace hablar.
+          if (declared !== 'cl' && declared !== 'smae' && !CL_CODES.has(target.groupCode)) {
+            draftUndecided = true
+            continue
+          }
+          if (systemOf(group ?? { groupCode: target.groupCode }, effective) === 'smae') {
+            draftLegacy = true
+          }
+        }
+      }
+    }
+    if (draftLegacy) return true
+    return draftUndecided && (portionLegacySystems?.includes('smae') ?? false)
+  }, [portionLegacySystems, portionSystem, portionGroups, state.variants])
+
+  /**
+   * Catálogo VIVO proyectado para el motor de conversión: de ahí salen los 13 grupos chilenos
+   * destino. En el editor único ya existe (`catalogGroups`); en el quick-edit clásico ese estado
+   * NO se toca a propósito (el picker sigue ofreciendo solo los grupos del plan), así que se
+   * proyecta del catálogo crudo. Sin catálogo la lista va vacía y la hoja lo dice: no hay
+   * destinos, no se inventa ninguno.
+   */
+  const convertCatalog = useMemo<readonly QePortionGroup[]>(
+    () => catalogGroups ?? (catalog ? catalogToPortionGroups(catalog) : []),
+    [catalogGroups, catalog],
+  )
+
+  /**
+   * ¿Hay destinos chilenos en el catálogo? Hasta W6.8 los 13 grupos `cl` viven APAGADOS en LIVE
+   * (`deleted_at`), así que sin este guard el banner ofrecía una conversión imposible: todo caía
+   * a `unresolved`, el CTA quedaba deshabilitado y el sheet era un callejón sin salida.
+   *
+   * Se pregunta con `isClGroup` y el fallback conservador ('smae'), EXACTAMENTE como el motor
+   * (`NO_CLAIM_SYSTEM`): con el set del coach, un grupo propio sin dato de un coach 'cl' contaría
+   * como destino chileno y el guard no guardaría nada.
+   */
+  const convertHasClTargets = useMemo(
+    () => convertCatalog.some((group) => isClGroup(group, 'smae')),
+    [convertCatalog],
+  )
+
+  const showConvertBanner = planUsesLegacy && convertHasClTargets && convertDismissed === false
+
+  /**
+   * Aplicar la conversión al BORRADOR, con la misma cortesía que el resto del editor: un toast
+   * con «Deshacer». La conversión toca N franjas de N días de una sola vez y hasta acá cerraba la
+   * hoja sin decir nada; el bump y el «quitar grupo» sí avisan. Deshacer es un segundo
+   * `REPLACE_PORTION_GROUPS` con la foto previa: esa acción solo lee `portionTargets`, así que
+   * devuelve las porciones y no pisa nada que el coach haya tocado en el medio. Publicar sigue
+   * siendo un paso aparte (T-05): esto va y viene entero dentro del borrador.
+   */
+  /**
+   * La foto del borrador para el «Deshacer» viaja en un REF, no en las deps del handler. Con
+   * `state.variants` en el `useCallback`, `handleApplyConversion` cambiaba de identidad en cada
+   * tecla del editor y con él la prop `onApply`, así que la hoja de conversión se re-renderizaba
+   * por tecla aun estando cerrada. Mismo truco que `portionBumpBaselineRef`. El ref se escribe
+   * en un efecto (nunca durante el render) y para cuando el coach toca «Convertir borrador» ya
+   * está al día: el commit del render que lo dejó viejo pasó hace rato.
+   */
+  const conversionUndoRef = useRef(state.variants)
+  useEffect(() => {
+    conversionUndoRef.current = state.variants
+  }, [state.variants])
+
+  const handleApplyConversion = useCallback(
+    (nextVariants: QeVariant[]) => {
+      const before = conversionUndoRef.current
+      dispatch({ type: 'REPLACE_PORTION_GROUPS', variants: nextVariants })
+      toast.info(PORTIONS_COPY.convert.applied, {
+        id: 'portion-conversion-applied',
+        duration: UNDO_TIMEOUT_MS,
+        action: {
+          label: PORTIONS_COPY.builder.groupBumpedUndo,
+          onPress: () => dispatch({ type: 'REPLACE_PORTION_GROUPS', variants: before }),
+        },
+      })
+    },
+    [],
+  )
+
+  /** «Ahora no»: esconde el banner 30 días PARA ESTE PLAN. Sin columna nueva (§C.3). */
+  const dismissConvert = useCallback(() => {
+    setConvertDismissed(true)
+    if (convertDismissKey == null) return
+    void AsyncStorage.setItem(convertDismissKey, String(Date.now())).catch(() => {
+      // Best-effort: si el storage falla, el descarte dura la sesión y nada se rompe.
+    })
+  }, [convertDismissKey])
 
   const handleRemoveSlot = useCallback(
     (variantKey: string, slotKey: string) => {
@@ -2259,6 +2453,44 @@ export function QuickEditMode({
             <Text className="text-xs font-medium text-danger-600">{errors['plan.dayVariants']}</Text>
           ) : null}
 
+          {/* Banner del plan legado (SPEC §7.2): UNO por PLAN, al inicio del lienzo — encima de
+              cualquier `AddActionButton`. Habla del plan entero, así que no puede colgar de una
+              franja: la carcasa de W2.4 se montaba una vez por franja y un plan de cinco pintaba
+              cinco banners iguales. */}
+          {showConvertBanner ? (
+            <View className="gap-2 rounded-card border border-subtle bg-surface-card p-3">
+              <Text className="text-sm font-semibold text-strong">
+                {PORTIONS_COPY.convert.bannerTitle}
+              </Text>
+              <Text className="text-xs leading-4 text-muted">{PORTIONS_COPY.convert.bannerBody}</Text>
+              {/* Gotcha del proyecto: dos botones en fila SIEMPRE cada uno en su `flex-1`. */}
+              <View className="flex-row items-center gap-2">
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={PORTIONS_COPY.convert.bannerCta}
+                  disabled={publishing}
+                  onPress={() => setConvertOpen(true)}
+                  className="min-h-11 flex-1 items-center justify-center rounded-control bg-primary px-3 active:opacity-80"
+                >
+                  <Text className="text-sm font-semibold text-white">
+                    {PORTIONS_COPY.convert.bannerCta}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={PORTIONS_COPY.convert.bannerDismiss}
+                  disabled={publishing}
+                  onPress={dismissConvert}
+                  className="min-h-11 flex-1 items-center justify-center rounded-control border border-subtle px-3 active:bg-surface-sunken"
+                >
+                  <Text className="text-sm font-semibold text-muted">
+                    {PORTIONS_COPY.convert.bannerDismiss}
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
+
           {visibleVariants.map((variant, variantIndex) => (
             <View
               key={variant.key}
@@ -2749,6 +2981,20 @@ export function QuickEditMode({
         }}
       />
       <PublishBlockedSheet message={publishBlocked} onClose={() => setPublishBlocked(null)} />
+
+      {/* Preview de la conversión SMAE → chileno (W3.5/W3.6). El motor es PURO: acá solo se
+          despacha `REPLACE_PORTION_GROUPS` sobre el borrador en memoria — publicar sigue siendo
+          un paso aparte por el camino de siempre (S4/T-05). */}
+      <PortionConversionSheet
+        open={convertOpen}
+        onClose={() => setConvertOpen(false)}
+        variants={state.variants}
+        catalog={convertCatalog}
+        coachSystem={portionSystem === 'smae' ? 'smae' : 'cl'}
+        activeVariantKey={activeVariant?.variantKey ?? null}
+        disabled={publishing}
+        onApply={handleApplyConversion}
+      />
 
       {/* T3.v Cabina (V3.3): «Metas ▾» del header — hospeda el MISMO `TargetsEditorCard` y los
           MISMOS dispatches (`SET_TARGET`) que antes vivían en el lienzo; solo cambia el host.

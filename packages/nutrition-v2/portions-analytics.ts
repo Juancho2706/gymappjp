@@ -61,6 +61,43 @@ export function portionGroupBumpedPayload(
 }
 
 /**
+ * El coach ABRE el preview de la conversion SMAE → chileno (W3). Mide cuantos lo miran y
+ * cuanta friccion tiene el preview (filas que exigen revision), NUNCA que contiene el plan.
+ */
+export const PORTIONS_EVENT_CONVERSION_PREVIEWED = 'nutrition_portion_conversion_previewed'
+
+/** El coach APLICA la conversion al borrador. Publicar sigue siendo un paso aparte (T-05). */
+export const PORTIONS_EVENT_CONVERSION_APPLIED = 'nutrition_portion_conversion_applied'
+
+/**
+ * Payload del preview. EXHAUSTIVO: dos CONTEOS y ninguna cifra mas.
+ *
+ * `slots` = franjas afectadas, `rows_review` = filas marcadas «Revisar». Ni kcal, ni gramos,
+ * ni porciones, ni nombres de grupo o de alimento, ni ids: el evento cuenta cuanta friccion
+ * tuvo la pantalla, no que come el alumno (Ley 21.719 + SPEC §17 no-negociable 9).
+ */
+export type PortionConversionPreviewedPayload = {
+  slots: number
+  rows_review: number
+}
+
+export function conversionPreviewedPayload(
+  slots: number,
+  rowsReview: number,
+): PortionConversionPreviewedPayload {
+  return { slots, rows_review: rowsReview }
+}
+
+/** Payload del aplicado. EXHAUSTIVO: un solo conteo. */
+export type PortionConversionAppliedPayload = {
+  slots: number
+}
+
+export function conversionAppliedPayload(slots: number): PortionConversionAppliedPayload {
+  return { slots }
+}
+
+/**
  * El coach eligio en que alcance se guarda una meta del dia (W4). Mide si el default del
  * switch acierta; JAMAS lleva la cifra de la meta — eso seria un dato de salud (§17.9).
  */

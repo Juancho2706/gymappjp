@@ -9,10 +9,15 @@ import type { ImplausibleEventReason, ImplausibleSurface, KcalBucket } from '@ev
 // tipos: el nombre del evento y el constructor del payload viven en el paquete compartido para que
 // web y RN no puedan mandar props distintas bajo el mismo evento.
 import {
+    PORTIONS_EVENT_CONVERSION_APPLIED,
+    PORTIONS_EVENT_CONVERSION_PREVIEWED,
     PORTIONS_EVENT_GROUP_BUMPED,
     TARGETS_EVENT_SCOPE,
+    conversionAppliedPayload,
+    conversionPreviewedPayload,
     portionGroupBumpedPayload,
     targetsScopePayload,
+    type ClDairyCode,
     type PortionGroupBumpedProps,
     type QeTargetsScope,
     type TargetsScopeFrom,
@@ -200,6 +205,69 @@ export function captureNutritionItemImplausible(props: {
  */
 export function captureNutritionPortionGroupBumped(props: PortionGroupBumpedProps): void {
     captureAppEvent(PORTIONS_EVENT_GROUP_BUMPED, portionGroupBumpedPayload('rn', props))
+}
+
+/**
+ * `nutrition_portion_conversion_previewed` — el coach ABRIÓ el preview de la conversión SMAE →
+ * chileno (W3.5). Responde UNA pregunta de producto: cuántos coaches con plan legado llegan a
+ * mirar la conversión, y cuánta fricción tiene esa pantalla (`rows_review` = filas que exigen
+ * revisión, o sea redondeos que movieron el día).
+ *
+ * LEY 21.719: el payload es EXHAUSTIVO y son CONTEOS y BANDERAS, ninguna cifra de salud. Ni kcal,
+ * ni gramos, ni porciones, ni nombres de grupo o de alimento, ni ids: el evento mide la pantalla,
+ * no la pauta del alumno.
+ *
+ * La forma la fija DATA.md §11 evento 2 —fuente ÚNICA (fix S-07)—: `surface`, `slots`, `rows`,
+ * `rows_review`, `has_dairy`, `has_collapse`, `has_custom_match`. `surface` se agrega ACÁ, igual
+ * que en `captureNutritionTargetsScope`, porque `conversionPreviewedPayload` todavía no lo toma
+ * por parámetro como su hermano `portionGroupBumpedPayload('rn', …)`; sin él, RN y web quedan
+ * indistinguibles bajo el mismo evento. Las tres banderas y `rows` viajan explícitas por la misma
+ * razón: PENDIENTE del paquete, y cuando el constructor las tome, este helper vuelve a un spread.
+ *
+ * Se emite UNA vez por apertura; cambiar el selector de lácteo re-corre el motor pero NO vuelve a
+ * emitir (esa decisión vive en el consumidor, `PortionConversionSheet`).
+ */
+export function captureNutritionPortionConversionPreviewed(props: {
+    slots: number
+    rows: number
+    rowsReview: number
+    hasDairy: boolean
+    hasCollapse: boolean
+    hasCustomMatch: boolean
+}): void {
+    captureAppEvent(PORTIONS_EVENT_CONVERSION_PREVIEWED, {
+        surface: 'rn',
+        ...conversionPreviewedPayload(props.slots, props.rowsReview),
+        rows: props.rows,
+        has_dairy: props.hasDairy,
+        has_collapse: props.hasCollapse,
+        has_custom_match: props.hasCustomMatch,
+    })
+}
+
+/**
+ * `nutrition_portion_conversion_applied` — el coach APLICÓ la conversión al BORRADOR (W3.5).
+ * Publicar sigue siendo un paso aparte (T-05), así que este evento NO dice que el alumno haya
+ * visto nada: dice que el coach aceptó el preview.
+ *
+ * LEY 21.719: conteos y una elección, ninguna cifra de salud. La forma la fija DATA.md §11 evento
+ * 3: `surface`, `slots`, `rows`, `dairy_choice` (QUÉ eligió, jamás cuánto) y `custom_replaced`
+ * (CUÁNTOS grupos propios reemplazó, nunca cuáles). `surface` y las llaves que el constructor
+ * compartido todavía no toma se agregan acá — misma deuda declarada en el hermano `previewed`.
+ */
+export function captureNutritionPortionConversionApplied(props: {
+    slots: number
+    rows: number
+    dairyChoice: ClDairyCode | 'mixed'
+    customReplaced: number
+}): void {
+    captureAppEvent(PORTIONS_EVENT_CONVERSION_APPLIED, {
+        surface: 'rn',
+        ...conversionAppliedPayload(props.slots),
+        rows: props.rows,
+        dairy_choice: props.dairyChoice,
+        custom_replaced: props.customReplaced,
+    })
 }
 
 /**

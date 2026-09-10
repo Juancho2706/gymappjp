@@ -61,6 +61,7 @@ import {
 import { MAX_DAY_VARIANTS } from '@eva/nutrition-v2'
 import { QeBottomSheet } from './QeBottomSheet'
 import { EditableSlotCard } from './EditableSlotCard'
+import { PortionConversionBanner } from './PortionConversionDialog'
 import { TargetsEditorCard } from './TargetsEditorCard'
 import { PublishBar } from './PublishBar'
 import { PublishConfirmSheet } from './PublishConfirmSheet'
@@ -501,6 +502,13 @@ export function QuickEditPlanView() {
             <p className="text-xs font-semibold leading-relaxed text-primary">{QE_COPY.templateBanner}</p>
           </div>
         ) : null}
+
+        {/* Tren «Porciones a la chilena» (W3.6): aviso del plan legado + preview de la conversión.
+            Va acá, en el lienzo, y UNA sola vez: `EditablePortionsCard` se monta una vez por FRANJA
+            y el banner se habría repetido en cada comida (SPEC §7.2 lo quiere uno por PLAN, y
+            «Ahora no» tiene que apagar el del plan entero, no el de una comida). El componente se
+            calla solo si el borrador no usa el set viejo. */}
+        <PortionConversionBanner />
 
         {/* Editor unico (T3.x): cabecera de metadatos del plan. Solo existe con `state.meta`
             (ruta /editor); en el quick-edit clasico este bloque no se pinta. */}

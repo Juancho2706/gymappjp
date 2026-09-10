@@ -21,6 +21,10 @@
  * deja de estar `disabled` y sumar media porcion (D2-A), y la etiqueta «1 porción =» expande los
  * grupos compuestos con `qeGroupRefPerPortion` (Legumbres decia «0 kcal»).
  *
+ * El banner del plan legado NO vive aca (W3.6): esta card se monta una vez POR FRANJA, asi que el
+ * aviso se habria repetido en cada comida contra SPEC §7.2 («uno por PLAN»). Vive en
+ * `PortionConversionDialog.tsx` y lo monta `QuickEditPlanView` una sola vez.
+ *
  * Los cambios cuentan en la barra "N cambios sin publicar" y publican por el pipeline
  * existente (persistAndPublishDraft congela snapshots server-side; cero RPC nuevo).
  * Plan sin porciones => la seccion NO se pinta (capa invisible, SPEC UX-c).
@@ -190,7 +194,6 @@ export function EditablePortionsCard({
   variantKey,
   slot,
   tourTarget = false,
-  onConvertClick,
 }: {
   variantKey: string
   slot: QeSlot
@@ -202,12 +205,6 @@ export function EditablePortionsCard({
    * enseñar ahí.
    */
   tourTarget?: boolean
-  /**
-   * CARCASA del banner del plan legado (W2.7; el cableado es de W3.6). Sin este handler el banner
-   * NO se monta: antes de que exista el conversor no hay nada que ofrecer y un banner con un CTA
-   * muerto es peor que ningún banner.
-   */
-  onConvertClick?: () => void
 }) {
   const {
     portionGroups,
@@ -224,19 +221,6 @@ export function EditablePortionsCard({
   // Antes del early-return de abajo: los hooks no pueden quedar detrás de un `return null`.
   const brandHex = useBrandPrimaryHex()
   const reduceMotion = useReducedMotion()
-  /**
-   * «Ahora no» apaga el banner SOLO en esta instancia y en esta vida del componente.
-   *
-   * TODO(W3.6) — dos deudas, no una, y las dos se pagan cuando el conversor exista (en W2 nadie
-   * pasa `onConvertClick`: esto es carcasa muerta, por eso no se resuelve antes):
-   *  1. `EditablePortionsCard` se monta UNA VEZ POR FRANJA (`EditableSlotCard`), asi que apenas
-   *     llegue el handler el banner se repetiria en cada comida y «Ahora no» apagaria solo esa.
-   *     SPEC §7.2 lo quiere UNA sola vez por plan ⇒ el banner tiene que subir a la superficie que
-   *     conoce el plan entero, o al menos su estado tiene que vivir arriba de las franjas.
-   *  2. SPEC §7.2 pide esconderlo 30 dias por `planId` en `localStorage`; el `planId` no esta en
-   *     este contexto. Sin (1) resuelto, persistir por franja seria una persistencia a medias.
-   */
-  const [bannerDismissed, setBannerDismissed] = useState(false)
 
   useEffect(() => {
     if (!bump) return
@@ -249,7 +233,6 @@ export function EditablePortionsCard({
   if (portionGroups.length === 0 && slot.portionTargets.length === 0) return null
 
   const groupOrder = new Map(portionGroups.map((group, index) => [group.exchangeGroupId, index]))
-  const showBanner = onConvertClick != null && !bannerDismissed
 
   return (
     <section
@@ -259,29 +242,6 @@ export function EditablePortionsCard({
     >
       <p className="text-sm font-medium text-strong">{PORTIONS_COPY.builder.sectionTitle}</p>
       <p className="mt-0.5 text-xs text-muted">{PORTIONS_COPY.builder.sectionHint}</p>
-
-      {showBanner ? (
-        <div className="mt-2 rounded-card border border-border-subtle bg-surface-card p-3">
-          <p className="text-sm font-semibold text-strong">{PORTIONS_COPY.convert.bannerTitle}</p>
-          <p className="mt-1 text-xs leading-relaxed text-muted">{PORTIONS_COPY.convert.bannerBody}</p>
-          <div className="mt-2 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={onConvertClick}
-              className="inline-flex h-11 items-center justify-center rounded-control bg-primary px-3 text-sm font-semibold text-white transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {PORTIONS_COPY.convert.bannerCta}
-            </button>
-            <button
-              type="button"
-              onClick={() => setBannerDismissed(true)}
-              className="inline-flex h-11 items-center justify-center rounded-control px-3 text-sm font-medium text-muted transition-colors hover:bg-surface-sunken hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {PORTIONS_COPY.convert.bannerDismiss}
-            </button>
-          </div>
-        </div>
-      ) : null}
 
       {slot.portionTargets.length > 0 ? (
         <div className="mt-2 space-y-2">
@@ -412,7 +372,7 @@ function PortionTargetRow({
         {/* Stepper de ancho fijo (SPEC UX-a: en <380px trunca el nombre, nunca el stepper). */}
         <div className="w-36 shrink-0">
           <StepperField
-            label={`Porciones de ${target.groupName}`}
+            label={PORTIONS_COPY.builder.portionsInputAria(target.groupName)}
             value={target.portions}
             invalid={Boolean(portionsError)}
             disabled={isPending}
@@ -440,8 +400,8 @@ function PortionTargetRow({
         />
         <button
           type="button"
-          aria-label={`Quitar porciones de ${target.groupName}`}
-          title="Quitar grupo"
+          aria-label={PORTIONS_COPY.builder.removePortionsAria(target.groupName)}
+          title={PORTIONS_COPY.builder.removePortionsAria(target.groupName)}
           disabled={isPending}
           onClick={handleRemove}
           className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-control border border-border-subtle bg-surface-card text-muted transition-colors hover:bg-surface-sunken hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:hover:text-rose-400"

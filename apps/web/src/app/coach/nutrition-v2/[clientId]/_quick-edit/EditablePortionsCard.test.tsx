@@ -7,8 +7,10 @@ import { EditablePortionsCard } from './EditablePortionsCard'
 /**
  * RTL de la sección «Porciones a elección» del quick-edit web tras el tren «Porciones a la
  * chilena» (W2.7/W2.8): picker partido en tres secciones, fila ya usada VIVA (D2-A: tocarla suma
- * media porción en vez de estar deshabilitada), etiqueta «1 porción» que expande los compuestos y
- * carcasa del banner del plan legado.
+ * media porción en vez de estar deshabilitada) y etiqueta «1 porción» que expande los compuestos.
+ *
+ * El banner del plan legado ya NO se prueba acá: W3.6 lo sacó de esta card (que se monta una vez
+ * por franja) y lo subió al lienzo. Sus casos viven en `PortionConversionDialog.test.tsx`.
  *
  * Archivo NUEVO a propósito: los 87 tests del reducer web (`quick-edit-state.test.ts` 58 +
  * `.meta` 22 + `publish-guards` 7) siguen verdes SIN editarse — es la invariante de conteo del
@@ -423,26 +425,14 @@ describe('EditablePortionsCard — secciones del picker', () => {
   })
 })
 
-describe('EditablePortionsCard — carcasa del banner del plan legado (W3 lo cablea)', () => {
-  it('sin onConvertClick el banner NO se monta', () => {
+describe('EditablePortionsCard — el banner del plan legado ya no vive acá (W3.6)', () => {
+  it('la card no lo monta en NINGÚN caso: se repetiría una vez por franja', () => {
     const pct = group({ exchangeGroupId: 'g-pct' })
-    setContext({ portionGroups: [pct], portionGroupChoices: [pct] })
+    setContext({ portionGroups: [pct], portionGroupChoices: [pct], portionLegacySystems: ['smae'] })
 
-    render(<EditablePortionsCard variantKey="v1" slot={slotWith([])} />)
+    render(<EditablePortionsCard variantKey="v1" slot={slotWith([target({ exchangeGroupId: 'g-pct' })])} />)
 
     expect(screen.queryByText(BANNER_TITLE)).toBeNull()
-  })
-
-  it('con onConvertClick se monta y «Ver conversión» llama al handler', () => {
-    const pct = group({ exchangeGroupId: 'g-pct' })
-    setContext({ portionGroups: [pct], portionGroupChoices: [pct] })
-    const onConvertClick = vi.fn()
-
-    render(<EditablePortionsCard variantKey="v1" slot={slotWith([])} onConvertClick={onConvertClick} />)
-
-    expect(screen.getByText(BANNER_TITLE)).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Ver conversión' }))
-    expect(onConvertClick).toHaveBeenCalledTimes(1)
   })
 })
 

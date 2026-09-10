@@ -70,11 +70,33 @@ describe('applyCatalogMetaToPickerGroups — overlay de metadatos del catalogo (
     expect(salida.macrosConfirmed).toBe(true)
   })
 
+  it('NO muta la entrada: devuelve copias y el grupo del plan sigue sin metadatos', () => {
+    // El overlay corre en el render del picker, sobre la MISMA lista que el consumidor
+    // memoiza. Si mutara en el lugar, `portionSystem` y `sortOrder` se quedarian pegados al
+    // grupo del plan y el segundo render pintaria un set que el snapshot nunca guardo (R18).
+    const entrada = [planGroup('C'), planGroup('LD')]
+    const salida = applyCatalogMetaToPickerGroups(entrada, [
+      catalogGroup('C', { portionSystem: 'smae', sortOrder: 20, isSystem: true }),
+    ])
+
+    expect(salida[0]).not.toBe(entrada[0])
+    expect(salida[1]).not.toBe(entrada[1])
+    expect(entrada[0].portionSystem).toBeUndefined()
+    expect(entrada[1].portionSystem).toBeUndefined()
+    // `sortOrder` e `isSystem` ni siquiera existen en `QePortionGroup`: el overlay los suma
+    // en la copia, jamas en el original.
+    expect(entrada[0]).not.toHaveProperty('sortOrder')
+    expect(entrada[0]).not.toHaveProperty('isSystem')
+    expect(salida[0].sortOrder).toBe(20)
+  })
+
   it('catalogo null ⇒ la entrada sale igual y portionSystem sigue undefined (nadie inventa smae)', () => {
     const entrada = [planGroup('C'), planGroup('P')]
     const salida = applyCatalogMetaToPickerGroups(entrada, null)
 
     expect(salida).toEqual(entrada)
+    // Sin catalogo tambien COPIA: la salida no comparte objetos con la entrada.
+    expect(salida[0]).not.toBe(entrada[0])
     expect(salida[0].portionSystem).toBeUndefined()
     expect(salida[0].sortOrder).toBeUndefined()
     expect(salida[0].isSystem).toBeUndefined()

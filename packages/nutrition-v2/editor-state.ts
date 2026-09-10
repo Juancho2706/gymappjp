@@ -1160,6 +1160,24 @@ export type QuickEditAction =
    */
   | { type: 'BUMP_PORTION_TARGET'; variantKey: string; slotKey: string; exchangeGroupId: string; by?: number }
   /**
+   * Aplica el resultado de `convertPortionsToCl` (tren «Porciones a la chilena», W3.4) al
+   * borrador en UN solo dispatch: reemplaza `slot.portionTargets` de cada franja por la lista
+   * ya convertida, machando por `variant.key` + `slot.key`.
+   *
+   * Es UN dispatch a proposito. La conversion toca N dias × M franjas y despacharla fila por
+   * fila dejaria estados intermedios con `ARL` y `AG` conviviendo en la misma franja —
+   * exactamente el par que `unique (meal_slot_id, exchange_group_id)` prohibe— y N pasos de
+   * «Deshacer» para algo que el coach vivio como una sola accion. El deshacer es
+   * `RESTORE_DRAFT` con el arbol previo.
+   *
+   * SOLO el borrador (T-05): esto no publica nada. Publicar sigue siendo el paso aparte de
+   * siempre, por el camino normal.
+   *
+   * Las franjas que el resultado no menciona quedan EXACTAMENTE como estaban, y todo lo demas
+   * del estado (items, metas, notas visibles, meta del plan) viaja intacto.
+   */
+  | { type: 'REPLACE_PORTION_GROUPS'; variants: readonly QeVariant[] }
+  /**
    * Baja las porciones del dia base a los dias que se quedaron sin ellas (defecto B4). Sin
    * payload a proposito: los huecos se recalculan del estado en el momento de aplicar, asi
    * que jamas se copia contra un diagnostico viejo. Deshacer: `RESTORE_DRAFT` con el arbol
@@ -2469,6 +2487,32 @@ export function quickEditReducer(state: QuickEditState, action: QuickEditAction)
         ...prev,
         portions: String(next),
       }))
+    }
+    case 'REPLACE_PORTION_GROUPS': {
+      // Indexado por variante+franja: el resultado de la conversion es un arbol COMPLETO
+      // (`convertPortionsToCl` mapea todas las variantes), pero se toma de el UNICAMENTE
+      // `portionTargets`. Asi, si entre el preview y el «Convertir borrador» el coach
+      // toco un item o una meta, ese cambio NO se pisa con la foto vieja del arbol.
+      // Clave compuesta variante+franja. El separador es un espacio, que ninguna `key`
+      // generada contiene (se arman con ':' y sufijos), asi que dos pares distintos no
+      // pueden producir la misma cadena.
+      const bySlot = new Map<string, QePortionTarget[]>()
+      for (const variant of action.variants) {
+        for (const slot of variant.slots) bySlot.set(`${variant.key} ${slot.key}`, slot.portionTargets)
+      }
+      if (bySlot.size === 0) return state
+      return {
+        ...state,
+        variants: state.variants.map((variant) => ({
+          ...variant,
+          slots: variant.slots.map((slot) => {
+            const next = bySlot.get(`${variant.key} ${slot.key}`)
+            // Misma referencia = franja sin porciones que convertir: se devuelve el MISMO
+            // objeto para no ensuciar identidades que la UI memoiza.
+            return next === undefined || next === slot.portionTargets ? slot : { ...slot, portionTargets: next }
+          }),
+        })),
+      }
     }
     case 'APPLY_BASE_PORTIONS':
       return applyBasePortions(state)

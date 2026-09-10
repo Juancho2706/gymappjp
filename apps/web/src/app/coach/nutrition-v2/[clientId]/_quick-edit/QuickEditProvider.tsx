@@ -143,6 +143,13 @@ interface QuickEditContextValue {
   clientId: string
   clientName: string
   /**
+   * Id del plan en edicion, o `null` cuando todavia no existe (modo creacion) o la superficie
+   * no tiene plan (plantilla). Lo expone W3.6: el banner del plan legado se esconde 30 dias POR
+   * PLAN y su clave de `localStorage` es `nutrition-v2:portion-conversion-dismissed:<planId>`
+   * (SPEC §7.2). Sin `planId` no hay clave que escribir y el «Ahora no» dura lo que la sesion.
+   */
+  planId: string | null
+  /**
    * Fecha local del alumno (YYYY-MM-DD) resuelta server-side. La usa la tira Lu-Do de cada
    * dia para marcar cual aplica HOY (QW-4): sin esto el coach edita "Día de entrenamiento"
    * sin saber a que dia de la semana corresponde.
@@ -960,6 +967,7 @@ export function QuickEditProvider({
     dispatch,
     clientId,
     clientName,
+    planId,
     today,
     strategy,
     protocolNotes: planModel.protocolNotes,

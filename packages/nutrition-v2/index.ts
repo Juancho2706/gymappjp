@@ -79,6 +79,8 @@ export * from './coach-notes'
 export * from './exchange-visibility'
 // Tren «Porciones a la chilena» (W2.10): eventos PostHog de porciones, con payload cerrado y sin una sola cifra de salud (Ley 21.719).
 export * from './portions-analytics'
+// Tren «Porciones a la chilena» (W3): conversion PURA del BORRADOR del set SMAE al chileno — jamas toca una version publicada (T-05).
+export * from './exchange-conversion'
 export {
   NUTRITION_V2_PERMISSION_DENIED,
   NUTRITION_V2_PERMISSION_DENIED_CODE,

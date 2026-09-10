@@ -63,6 +63,12 @@ export const PORTIONS_COPY = {
      * `EditablePortionsSection.tsx` — el drift invisible que esta tabla existe para impedir.
      */
     portionsInputAria: (groupName: string) => `Porciones de ${groupName}`,
+    /**
+     * Label a11y del boton que quita el grupo de la franja. Mismo caso que
+     * `portionsInputAria`: vivia como template suelto en `EditablePortionsSection.tsx` (RN) y
+     * en `EditablePortionsCard.tsx` (web), o sea dos copias que nadie lee juntas.
+     */
+    removePortionsAria: (groupName: string) => `Quitar porciones de ${groupName}`,
     notePlaceholder: 'Nota (opcional)',
     // ── Tren «Porciones a la chilena» (W2.3) — textos EXACTOS de SPEC §16.1, en TUTEO ──
     // El artifact de mockups venia en voseo («Tocá», «Podés», «Escribí») dentro de un editor
@@ -302,9 +308,10 @@ export const PORTIONS_COPY = {
     foodUnavailable: 'Ese alimento ya no está disponible.',
   },
   /**
-   * Conversion SMAE → set chileno (tren «Porciones a la chilena»). Solo las CUATRO llaves del
-   * BANNER: la carcasa se monta en W2 (colision declarada W2/W3 en TASKS) y W3 la cablea al
-   * conversor, sumando aca `title`/`intro`/`footer`/`cta`/`review` de SPEC §16.1.
+   * Conversion SMAE → set chileno (tren «Porciones a la chilena»). Las cuatro llaves del
+   * BANNER las monto W2 (colision declarada W2/W3 en TASKS) y W3 suma las del preview:
+   * `title`/`intro`/`footer`/`cta`/`review`/`dairyChoice`, textos EXACTOS de SPEC §16.1 y en
+   * TUTEO — el artifact de mockups venia en voseo y §16.1 manda (R-04).
    */
   convert: {
     bannerTitle: 'Este plan usa las porciones anteriores (SMAE)',
@@ -312,6 +319,58 @@ export const PORTIONS_COPY = {
       'Ahora EVA trae el sistema chileno (INTA/UDD): cereales a 140 kcal y 30 g, lácteos por grasa, carnes bajas y altas. Puedes convertir el borrador y revisar antes de publicar.',
     bannerCta: 'Ver conversión',
     bannerDismiss: 'Ahora no',
+    /** Titulo del sheet (RN) y del dialogo (web) del preview. */
+    title: 'Convertir a porciones chilenas',
+    intro:
+      'Reescalamos cada porción por su nutriente crítico (carbohidrato, proteína o kcal) y redondeamos a 0,5. Revisa las filas marcadas.',
+    /**
+     * Pie del preview. Es la promesa dura del tren (T-05): la conversion toca el BORRADOR y
+     * nada mas; publicar sigue siendo un paso aparte que el coach da a mano.
+     */
+    footer: 'Cambia el borrador. No se publica nada hasta que toques Publicar.',
+    cta: 'Convertir borrador',
+    /** Chip de la fila cuyo delta hay que mirar (destino lácteo o drift > 10 %). */
+    review: 'Revisar',
+    /**
+     * Etiquetas del selector de tres del eje lácteo, POR FRANJA (R3). Van por código y no como
+     * lista suelta para que la UI no tenga que acordarse del orden ni traducir 'LS' a mano.
+     */
+    dairyChoice: {
+      LD: 'Descremado',
+      LS: 'Semi',
+      LE: 'Entero',
+    },
+    /**
+     * Rotulo accesible del selector de tres del eje lacteo. No tiene texto visible (el eyebrow
+     * repetido en cada fila de lacteo seria ruido), pero el `radiogroup` necesita nombre.
+     */
+    dairyLabel: 'Tipo de lácteo',
+    /** Cabecera del bloque de grupos que la conversion NO toca dentro de una franja. */
+    keptTitle: 'Se conservan tal cual',
+    /**
+     * Las TRES razones de `ClConversionUnresolvedReason` tienen su propia linea: decirle «es
+     * tuyo» a «Cereales (SMAE)» —que es del sistema y solo esta esperando a que los 13 chilenos
+     * se publiquen (W6.8)— es mentirle al coach sobre su propio catalogo.
+     */
+    keptCustom: (grupo: string) => `${grupo}: es tuyo y no tiene equivalente chileno.`,
+    /** `sin_regla`: el grupo ya no esta en el catalogo (congelado en el snapshot del plan). */
+    keptUnknown: (grupo: string) => `${grupo}: ya no está en tu catálogo, así que se conserva.`,
+    /** `destino_ausente_en_catalogo`: hay regla, pero el destino chileno todavia no se publico. */
+    keptMissingTarget: (grupo: string) =>
+      `${grupo}: su equivalente chileno todavía no está disponible.`,
+    replace: (grupo: string, destino: string) => `Reemplazar «${grupo}» por «${destino}»`,
+    replaceHint: 'El grupo no se borra: solo deja de usarse en este borrador.',
+    empty: 'Este borrador ya usa el sistema chileno: no hay nada que convertir.',
+    /**
+     * El OTRO vacio, y no es el mismo. Un target SMAE cuyo `portions` quedo vacio o ilegible («»
+     * mientras el coach tipea, «abc») el motor lo deja INTACTO y no lo cuenta ni en `diff` ni en
+     * `unresolved` (`exchange-conversion.ts:453-468`): el preview queda sin secciones sobre un
+     * borrador 100 % SMAE. Decirle ahi «ya usas el sistema chileno» es mentirle sobre su plan.
+     */
+    emptyNoAmount:
+      'Este borrador usa las porciones anteriores, pero ninguna tiene una cantidad válida: revísalas y vuelve a intentarlo.',
+    /** Toast del deshacer: la conversion entra en UN dispatch y sale en uno solo. */
+    applied: 'Borrador convertido',
   },
   coach: {
     dayCoverage: 'Porciones',

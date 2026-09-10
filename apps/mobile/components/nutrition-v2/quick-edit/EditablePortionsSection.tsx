@@ -27,7 +27,6 @@ import {
   qeExchangeGroups,
   qeGroupRefLabel,
   qeGroupRefPerPortionFromDict,
-  systemOf,
   visibleExchangeGroupsForCoach,
   type QeExchangeGroup,
   type QePickerGroup,
@@ -458,7 +457,7 @@ function PortionTargetRow({
         </Pressable>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel={`Quitar porciones de ${target.groupName}`}
+          accessibilityLabel={PORTIONS_COPY.builder.removePortionsAria(target.groupName)}
           disabled={disabled}
           onPress={() => onRemove(target, index)}
           hitSlop={6}
@@ -852,7 +851,6 @@ export function EditablePortionsSection({
   onRemove,
   onAdd,
   onBumpGroup,
-  onConvertPress,
   groupAdmin,
 }: {
   targets: QePortionTarget[]
@@ -905,11 +903,6 @@ export function EditablePortionsSection({
    * componente no toca el merge ni conoce el `targetKey`.
    */
   onBumpGroup?: (exchangeGroupId: string) => void
-  /**
-   * Carcasa del banner del plan legado (colisión W2/W3 declarada en TASKS): sin este handler el
-   * banner NO se monta, así que hasta que W3 lo cablee no hay nada visible.
-   */
-  onConvertPress?: () => void
   /** Porciones propias (FD6a). Ausente = picker sin altas/edición de grupos (comportamiento previo). */
   groupAdmin?: QuickEditGroupAdmin
 }) {
@@ -917,8 +910,6 @@ export function EditablePortionsSection({
   // Marca real del coach para el acento de la pastilla (ver nota en `EditableSlotCard`).
   const brandColor = resolveEffectiveCoachBrandTheme(branding).brandColor
   const [pickerOpen, setPickerOpen] = useState(false)
-  /** «Ahora no» del banner legado: oculta la carcasa por lo que dure la sesión de edición. */
-  const [convertDismissed, setConvertDismissed] = useState(false)
   /**
    * Un solo pick por apertura del sheet. En Android dos taps en el mismo frame despachaban dos
    * veces antes de que el `Modal` terminara de cerrarse; el ref se resetea en `onClose`.
@@ -938,28 +929,6 @@ export function EditablePortionsSection({
     () => new Map(groups.map((group) => [group.exchangeGroupId, group.sortOrder ?? 0])),
     [groups],
   )
-  /**
-   * ¿Este plan prescribe porciones del set viejo? Se mira lo PRESCRITO (los `targets`), no el
-   * catálogo entero: el banner habla del plan, no de lo que el coach podría elegir.
-   *
-   * Funciona porque `groups` YA viene enriquecido por `applyCatalogMetaToPickerGroups`: el
-   * snapshot congelado del plan no guarda el set (R18) y `mergePortionGroupChoices` lo pone
-   * PRIMERO, así que sin el overlay `systemOf` caía al set del coach y para el coach 'cl' con
-   * plan SMAE esto daba `false` — el banner nacía muerto. Un grupo que el catálogo ya no tiene
-   * (borrado) sigue sin dato y sigue sin disparar el banner: no se inventa 'smae'.
-   *
-   * TODO(W3.6): el flag DEFINITIVO viene del borde (`legacySystems` de la ruta móvil), que sabe
-   * de todos los planes del coach y no solo del que está abierto; y el «Ahora no» pasa a durar
-   * 30 días por `planId` en vez de lo que dura esta sesión de edición (`convertDismissed`).
-   */
-  const planUsesLegacy = useMemo(
-    () =>
-      targets.some((target) => {
-        const group = groups.find((g) => g.exchangeGroupId === target.exchangeGroupId)
-        return systemOf(group ?? { groupCode: target.groupCode }, effectiveSystem) !== effectiveSystem
-      }),
-    [targets, groups, effectiveSystem],
-  )
 
   // Plan sin capa de porciones: CERO UI nueva (SPEC UX-c). Los grupos elegibles derivan
   // del read model, asi que un plan sin targets nunca pinta esta seccion.
@@ -970,33 +939,10 @@ export function EditablePortionsSection({
       <Text className="text-sm font-medium text-strong">{PORTIONS_COPY.builder.sectionTitle}</Text>
       <Text className="mt-0.5 text-xs text-muted">{PORTIONS_COPY.builder.sectionHint}</Text>
 
-      {/* Carcasa del banner del plan legado (W2.4). Se monta SOLO si llega `onConvertPress` —lo
-          cablea W3.6— y el plan realmente usa SMAE. Antes de eso no hay nada que ver. */}
-      {onConvertPress && planUsesLegacy && !convertDismissed ? (
-        <View className="mt-2 gap-2 rounded-card border border-subtle bg-surface-card p-3">
-          <Text className="text-sm font-semibold text-strong">{PORTIONS_COPY.convert.bannerTitle}</Text>
-          <Text className="text-xs leading-4 text-muted">{PORTIONS_COPY.convert.bannerBody}</Text>
-          <View className="flex-row items-center gap-2">
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={PORTIONS_COPY.convert.bannerCta}
-              disabled={disabled}
-              onPress={onConvertPress}
-              className="min-h-11 items-center justify-center rounded-control bg-primary px-3 active:opacity-80"
-            >
-              <Text className="text-sm font-semibold text-white">{PORTIONS_COPY.convert.bannerCta}</Text>
-            </Pressable>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={PORTIONS_COPY.convert.bannerDismiss}
-              onPress={() => setConvertDismissed(true)}
-              className="min-h-11 items-center justify-center rounded-control px-3 active:bg-surface-sunken"
-            >
-              <Text className="text-sm font-semibold text-muted">{PORTIONS_COPY.convert.bannerDismiss}</Text>
-            </Pressable>
-          </View>
-        </View>
-      ) : null}
+      {/* El banner del plan legado NO vive acá (W3.6). La carcasa de W2.4 se montaba UNA VEZ POR
+          FRANJA —cinco franjas, cinco banners idénticos— y SPEC §7.2 pide uno por PLAN, al inicio
+          del lienzo: se levantó a `QuickEditMode`, que además es el único que conoce el `planId`
+          para el «Ahora no» de 30 días y los `legacySystems` del borde. */}
 
       {targets.length > 0 ? (
         <View className="mt-2 gap-2">

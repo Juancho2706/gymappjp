@@ -123,7 +123,6 @@ export function EditableSlotCard({
   onPortionRemove,
   onPortionAdd,
   onPortionBumpGroup,
-  onPortionConvertPress,
   portionCoachSystem,
   portionUsedSystems,
   portionCatalogKnown = false,
@@ -183,8 +182,6 @@ export function EditableSlotCard({
    * orquestador, que es quien tiene el `dispatch` y el `variantKey`.
    */
   onPortionBumpGroup?: (exchangeGroupId: string) => void
-  /** Carcasa del banner del plan legado: sin handler no se monta (W3.6 la cablea). */
-  onPortionConvertPress?: () => void
   /** Set del coach y sets con targets vivos en otros planes suyos (visibilidad del picker). */
   portionCoachSystem?: PortionSystem | null
   portionUsedSystems?: readonly PortionSystem[]
@@ -498,7 +495,6 @@ export function EditableSlotCard({
               onRemove={onPortionRemove}
               onAdd={onPortionAdd}
               onBumpGroup={onPortionBumpGroup}
-              onConvertPress={onPortionConvertPress}
               groupAdmin={portionGroupAdmin}
             />
           </TourTarget>

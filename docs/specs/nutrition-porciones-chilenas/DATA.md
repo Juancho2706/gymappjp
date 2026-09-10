@@ -3030,6 +3030,12 @@ type NutritionPortionConversionPreviewed = {
   has_collapse: boolean       // ¿alguna fila colapsó ARL + G?
   has_custom_match: boolean   // ¿se propuso reemplazar un grupo propio?
 }
+// CUÁNDO se emite (decisión W3.5, 09-09): una vez por apertura y SOLO si el `diff` trae algo.
+// Con `diff` vacío NO sale: abrir un diálogo que dice «no hay nada que convertir» no es un
+// preview, y hasta W6.8 (los 13 grupos `cl` con `deleted_at`) ese sería el caso mayoritario, así
+// que el embudo estaría midiendo el bug. Al leerlo: `previewed` NO es «cuántos abrieron el
+// aviso»; esa pregunta, si hace falta, es un evento aparte. Si el coach acepta un reemplazo y el
+// diff deja de estar vacío, ahí sí se emite (el guard es un ref que sube cuando el evento sale).
 
 /** 3. El coach aplica la conversión al borrador. */
 type NutritionPortionConversionApplied = {

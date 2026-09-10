@@ -12,6 +12,10 @@ import type { ImplausibleEventReason, ImplausibleSurface, KcalBucket } from '@ev
 // constructor del payload viven en el paquete compartido y se IMPORTAN — web no declara su
 // propia copia. Ver el JSDoc de `useCaptureNutritionPortionGroupBumped`.
 import {
+    conversionAppliedPayload,
+    conversionPreviewedPayload,
+    PORTIONS_EVENT_CONVERSION_APPLIED,
+    PORTIONS_EVENT_CONVERSION_PREVIEWED,
     PORTIONS_EVENT_GROUP_BUMPED,
     portionGroupBumpedPayload,
     TARGETS_EVENT_SCOPE,
@@ -616,6 +620,43 @@ export function useCaptureNutritionTargetsScope() {
     return useCallback(
         (scope: QeTargetsScope, from: TargetsScopeFrom) => {
             ph?.capture(TARGETS_EVENT_SCOPE, { surface: 'web', ...targetsScopePayload(scope, from) })
+        },
+        [ph]
+    )
+}
+
+/**
+ * Tren «Porciones a la chilena» (W3.7) — el coach ABRE el preview de la conversión SMAE →
+ * chileno (`PortionConversionDialog` en web, `PortionConversionSheet` en RN).
+ *
+ * Mide dos cosas y ninguna más: cuántas franjas toca la conversión y cuántas filas salen
+ * marcadas «Revisar». Es la friccion de la PANTALLA, no el contenido del plan: **cero kcal, cero
+ * gramos, cero porciones, cero nombres de grupo o de alimento, cero ids** (Ley 21.719 + SPEC §17
+ * no-negociable 9). El constructor del payload vive en `packages/nutrition-v2/portions-analytics.ts`
+ * y RN importa el mismo: dos superficies, un solo shape (DATA §11).
+ */
+export function useCaptureNutritionPortionConversionPreviewed() {
+    const ph = usePostHog()
+    return useCallback(
+        (slots: number, rowsReview: number) => {
+            ph?.capture(PORTIONS_EVENT_CONVERSION_PREVIEWED, conversionPreviewedPayload(slots, rowsReview))
+        },
+        [ph]
+    )
+}
+
+/**
+ * El coach APLICA la conversión al BORRADOR (`REPLACE_PORTION_GROUPS`). No es un publish: la
+ * publicación sigue siendo un paso aparte por el camino de siempre (T-05), así que este evento
+ * mide la intención de migrar, no la migración consumada.
+ *
+ * Un solo conteo (`slots`) por la misma razón que arriba: la forma la manda DATA §11.
+ */
+export function useCaptureNutritionPortionConversionApplied() {
+    const ph = usePostHog()
+    return useCallback(
+        (slots: number) => {
+            ph?.capture(PORTIONS_EVENT_CONVERSION_APPLIED, conversionAppliedPayload(slots))
         },
         [ph]
     )

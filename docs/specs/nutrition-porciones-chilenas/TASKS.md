@@ -451,6 +451,9 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
       `applyCatalogMetaToPickerGroups` (`SYSTEM_EXCHANGE_CODES` solo como fallback sin catálogo, decisión (w)).
       **Cerrado 09-09**: RTL `EditablePortionsCard.test.tsx` 16 casos (a–d + SMAE prescrito ⇒ Legado, propio «C» ⇒ Propios,
       orden por `sortOrder`, sin catálogo sin títulos, porciones ilegibles); `pnpm exec vitest run "…/_quick-edit"` ⇒ 6/128.
+      **Corrección 09-09 (jefe):** la carcasa del banner y la prop `onConvertClick` que dejó esta tarea **se retiraron en
+      W3.6** —con su test «con `onConvertClick` se monta»—: la card se monta una vez POR FRANJA y el aviso es por PLAN
+      (SPEC §7.2 y §8.3, mockup M2). El diff neto de W2.7 sobre el banner es cero; todo lo demás de W2.7 sigue en pie.
 - [x] W2.8 [Opus B] D5 en las etiquetas «1 porción ≈» del coach (RN y web) con `qeGroupRefPerPortionFromDict` (dict
       memoizado por apertura). **Cerrado 09-09**: Legumbres SMAE deja de decir «0 kcal»; cubierto por
       `editor-state.portions-ref.test.ts` (la etiqueta usa los `ref_*` congelados del snapshot, no el catálogo vivo).
@@ -520,11 +523,24 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
 - [ ] W3.6 [Opus] **Cablear** el banner del plan legado (RN y web) —la carcasa la montó W2.4/W2.7— con «Ver conversión»
       (abre el sheet/diálogo de W3.5) y «Ahora no». **Criterio**: «Ahora no» lo esconde 30 días **por plan** (clave
       local por `planId`: `AsyncStorage` en RN, `localStorage` en web; no sobrevive al cambio de dispositivo y se acepta
-      así, sin columna nueva) y no se muestra a coaches sin targets SMAE; el diff de W3 sobre
-      `EditablePortionsSection.tsx` y `EditablePortionsCard.tsx` se limita a pasar el handler (sin rebase encima de lo
-      que W2 reescribió).
+      así, sin columna nueva) y no se muestra a coaches sin targets SMAE.
+      **Corregido 09-09 (jefe), contra lo escrito arriba:** el diff de W3 sobre `EditablePortionsSection.tsx` (RN) y
+      `EditablePortionsCard.tsx` (web) **no es «pasar el handler»: es RETIRAR la carcasa de W2**. Las dos se montan una
+      vez por FRANJA y el banner es **uno por PLAN** (SPEC §7.2/§8.3, mockup M2), y la card web ni siquiera recibe
+      `planId`, que es la clave del «Ahora no». El banner vive en `PortionConversionSheet.tsx` / `PortionConversionDialog.tsx`
+      y lo montan `QuickEditMode` / `QuickEditPlanView` una sola vez. Se cae con esto el test de W2.7 «con
+      `onConvertClick` se monta» (la prop ya no existe) y se suma **guard de destinos**: sin ni un grupo `cl` vivo en la
+      lista (`hasClDestinations`) el banner no se pinta, porque hasta W6.8 los 13 chilenos tienen `deleted_at` y el
+      diálogo solo podría ofrecer un callejón sin salida con el botón primario apagado.
 - [ ] W3.7 [Sonnet] Copys `convert.*` y PostHog `nutrition_portion_conversion_previewed { slots, rows_review }` /
       `…_applied { slots }`. **Criterio**: sin cifras de kcal ni nombres.
+      **Decisión 09-09 (W3.5, ratificada): `previewed` cuenta PREVIEWS, no aperturas.** Con `diff` vacío el evento
+      **no se emite**: abrir un diálogo que dice «no hay nada que convertir» no es un preview, y hasta W6.8 (los 13
+      chilenos con `deleted_at`) ese sería el caso mayoritario — el embudo mediría el bug, no el uso. Consecuencia a
+      tener presente al leerlo: `previewed` **no** es «cuántos abrieron el aviso»; si el embudo necesita esa otra
+      pregunta, es un evento aparte, no un cambio de este. Anotado también en DATA §11. Las once llaves `convert.*`
+      que escribió W3.5/W3.6 (`dairyLabel`, `keptTitle`, `keptCustom`, `keptUnknown`, `keptMissingTarget`, `replace`,
+      `replaceHint`, `empty`, `emptyNoAmount`, `applied`) ya están en la tabla canónica de SPEC §16.1.
 - [ ] W3.8 [owner] QA en device del punto 5 del checklist final.
 - [ ] W3.9 Gates W3 (<fecha>): vitest paquete + engine (tabla completa) · RTL del diálogo · `pnpm typecheck` · tsc
       mobile · eslint por archivo · `pnpm check:tokens`.

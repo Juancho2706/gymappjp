@@ -411,7 +411,11 @@ Ya cumple D2-A: tocar el valor lo convierte en `<input inputMode="decimal">` con
 
 ### 8.3 `PortionConversionDialog.tsx` (nuevo en `_quick-edit`)
 
-Mismo contenido que el sheet RN en un `QeBottomSheet size="lg"`; banner en `EditablePortionsCard.tsx:100`, bajo `sectionHint`. Los cálculos son los mismos (`convertPortionsToCl`), así que el diff no puede divergir.
+Mismo contenido que el sheet RN en un `QeBottomSheet size="lg"`. Los cálculos son los mismos (`convertPortionsToCl`), así que el diff no puede divergir.
+
+**Dónde vive el banner — corregido en W3.6 (ratificado por el jefe, 09-09).** Este párrafo decía «banner en `EditablePortionsCard.tsx:100`, bajo `sectionHint`», y esa ubicación contradecía a §7.2 y al mockup M2: `EditablePortionsCard` se monta **una vez por FRANJA**, así que el aviso se repetía en cada comida y «Ahora no» —que es por `planId`— apagaba solo una. El banner vive en `PortionConversionDialog.tsx` (`PortionConversionBanner`) y lo monta **`QuickEditPlanView` una sola vez, al inicio del lienzo**; la card no recibe ni `planId` ni prop `onConvertClick`, y el diff de W3 sobre `EditablePortionsCard.tsx` es **cero** (la carcasa y la prop que montó W2.7 se retiran). RN hace exactamente lo mismo con `EditablePortionsSection` / `QuickEditMode`.
+
+**Guard de destinos (W3.6).** El banner tampoco se pinta si la lista de grupos no trae **ni un destino chileno vivo** (`hasClDestinations`, `isClGroup` con el fallback conservador `'smae'` del motor). Entre el deploy y W6.8 los 13 grupos `cl` viven con `deleted_at`: sin el guard el aviso prometía «Puedes convertir el borrador» y abría un diálogo que solo sabe decir «su equivalente chileno todavía no está disponible» con el botón primario apagado.
 
 ### 8.4 `TargetsEditorCard` web + `PublishBar` web
 
@@ -638,7 +642,7 @@ Además: `database.types.ts` se edita **a mano** (`portion_system` en `exchange_
 **Ruta móvil** · `GET /api/mobile/nutrition-v2/exchange-groups` → `{ groups, foodCounts, portionSystem, legacySystems }` (las tres llaves nuevas **opcionales** en el cliente), con `portionSystem?` **por grupo** y `legacy` **derivado en cliente** con `systemOf`; mapeador `apps/mobile/lib/nutrition-v2-exchange-groups.api.ts` (`toGroup`, `NutritionV2ExchangeGroupsResult`).
 **UI RN** · `EditablePortionsSection.tsx` · `QuickEditMode.tsx` · `PortionConversionSheet.tsx` (nuevo) · `TargetsEditorCard.tsx`. **UI web** · `EditablePortionsCard.tsx` · `PortionConversionDialog.tsx` (nuevo en `_quick-edit`) · `TargetsEditorCard` web · `PublishBar` web · `StepperField.tsx` (**sin cambios**).
 **Alumno** · `PortionEquivalencesSheet.tsx` (RN y web) · `NutritionExchangeFoodReadSchema.imagePath` / `.imageVersion` / `.isGeneric` / `.imageLicense` (las cuatro **opcionales**) · `splitExchangeFoodsByOrigin` · helper nuevo `foodMediaThumbnailUrlFromPath` (RN) y su gemelo en `apps/web/src/lib/food-image.ts`.
-**Copys** · `EDITOR_TARGETS_COPY` (`packages/nutrition-v2/editor-copy-targets.ts`: `targets.{onlyThisDay,onlyThisDayOff,onlyThisDayOn,backToBase,appliedToAll,undo,dayNoTarget}`, `publish.{partialTargets,anyway,goToBase}`; RN y web reexportan) · `PORTIONS_COPY.builder.{setChile,setLegacy,setOwn,legacyBadge,groupUsedBump,groupBumped,groupBumpedUndo,groupAtMax,stepperEditHint,portionsInputAria}` · `PORTIONS_COPY.convert.{title,intro,footer,cta,review,dairyChoice,bannerTitle,bannerBody,bannerCta,bannerDismiss}` · `EDITOR_COPY.targets.{onlyThisDay,onlyThisDayOff,onlyThisDayOn}` · `EDITOR_COPY.publish.{partialTargets,anyway,goToBase}` · `STUDENT_COPY.equivalences.{generic,brands}`.
+**Copys** · `EDITOR_TARGETS_COPY` (`packages/nutrition-v2/editor-copy-targets.ts`: `targets.{onlyThisDay,onlyThisDayOff,onlyThisDayOn,backToBase,appliedToAll,undo,dayNoTarget}`, `publish.{partialTargets,anyway,goToBase}`; RN y web reexportan) · `PORTIONS_COPY.builder.{setChile,setLegacy,setOwn,legacyBadge,groupUsedBump,groupBumped,groupBumpedUndo,groupAtMax,stepperEditHint,portionsInputAria}` · `PORTIONS_COPY.convert.{title,intro,footer,cta,review,dairyChoice,dairyLabel,keptTitle,keptCustom,keptUnknown,keptMissingTarget,replace,replaceHint,empty,emptyNoAmount,applied,bannerTitle,bannerBody,bannerCta,bannerDismiss}` · `EDITOR_COPY.targets.{onlyThisDay,onlyThisDayOff,onlyThisDayOn}` · `EDITOR_COPY.publish.{partialTargets,anyway,goToBase}` · `STUDENT_COPY.equivalences.{generic,brands}`.
 **PostHog** · constructores en `packages/nutrition-v2/portions-analytics.ts` (shape = DATA §11) · `nutrition_portion_group_bumped` · `nutrition_portion_conversion_previewed` · `nutrition_portion_conversion_applied` · `nutrition_targets_scope` · `nutrition_equivalences_opened`.
 **SDD** · `docs/specs/nutrition-porciones-chilenas/{SPEC,PLAN,TASKS,DATA}.md` (`status: draft`, `canonical: false`).
 
@@ -664,6 +668,18 @@ Además: `database.types.ts` se edita **a mano** (`portion_system` en `exchange_
 | `convert.intro` | Reescalamos cada porción por su nutriente crítico (carbohidrato, proteína o kcal) y redondeamos a 0,5. Revisa las filas marcadas. |
 | `convert.footer` | Cambia el borrador. No se publica nada hasta que toques Publicar. |
 | `convert.cta` / `convert.review` | Convertir borrador / Revisar |
+| `convert.dairyChoice.{LD,LS,LE}` | Descremado / Semi / Entero |
+| `convert.dairyLabel` | Tipo de lácteo *(solo accesibilidad: rótulo del `radiogroup` de tres, sin texto visible)* |
+| `convert.keptTitle` | Se conservan tal cual *(cabecera del bloque de grupos que la conversión no toca, dentro de la franja)* |
+| `convert.keptCustom(grupo)` | {grupo}: es tuyo y no tiene equivalente chileno. *(`custom_sin_match`)* |
+| `convert.keptMissingTarget(grupo)` | {grupo}: su equivalente chileno todavía no está disponible. *(`destino_ausente_en_catalogo` — el estado real hasta W6.8)* |
+| `convert.keptUnknown(grupo)` | {grupo}: ya no está en tu catálogo, así que se conserva. *(`sin_regla`: grupo congelado en el snapshot del plan)* |
+| `convert.replace(grupo, destino)` / `convert.replaceHint` | Reemplazar «{grupo}» por «{destino}» / El grupo no se borra: solo deja de usarse en este borrador. *(S5: el custom nunca se borra)* |
+| `convert.empty` | Este borrador ya usa el sistema chileno: no hay nada que convertir. |
+| `convert.emptyNoAmount` | Este borrador usa las porciones anteriores, pero ninguna tiene una cantidad válida: revísalas y vuelve a intentarlo. *(el OTRO vacío: un target SMAE con `portions` vacío o ilegible sale intacto del motor y no entra ni a `diff` ni a `unresolved`, así que un borrador 100 % SMAE puede llegar sin secciones; `convert.empty` ahí mentiría)* |
+| `convert.applied` | Borrador convertido *(toast con «Deshacer», que restaura el árbol con `RESTORE_DRAFT`)* |
+
+> El botón secundario del preview reusa `groupEditor.cancel` («Cancelar»): no hay `convert.cancel` y no se agrega uno: sería el mismo string duplicado por prefijo. Los `convert.*` de arriba son la lista COMPLETA (las seis primeras filas las fijó el megaplan; las once que siguen las escribió W3.5/W3.6 y quedan canónicas acá para que la próxima superficie no las reinvente).
 | `targets.onlyThisDay` | Solo el {día} |
 | `targets.backToBase(día)` | {Día} vuelve a la meta de todos los días *(al apagar el switch con base con kcal; provisional del jefe, OK del owner pendiente)* |
 | `targets.appliedToAll` | Ahora vale para toda la semana *(al apagar el switch con base sin kcal: propaga la meta del día; provisional, OK pendiente)* |
