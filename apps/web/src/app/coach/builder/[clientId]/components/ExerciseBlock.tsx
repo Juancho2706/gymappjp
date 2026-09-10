@@ -9,7 +9,8 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils'
 import { getMuscleColor } from '../muscle-colors'
 import { buildAreaVMs, type BuilderAreaVM } from '../area-ui'
-import { effectiveAreaKey, sideSuffix } from '@eva/workout-engine'
+import { effectiveAreaKey, formatProgressionTag, formatStrengthTimeObjective, isStrengthTimeBlock, sideSuffix } from '@eva/workout-engine'
+import { builderTypedFields } from '@eva/plan-builder'
 import { EXERCISE_TYPE_LABEL, EXERCISE_TYPE_META, effectiveExerciseType, typedBlockSummary } from '@/lib/workout-exercise-type'
 import { exerciseThumbnailUrl } from '@/lib/youtube'
 import type { BuilderBlock } from '../types'
@@ -100,14 +101,16 @@ function ExerciseBlockInner({
     // Resumen por tipo (specs/movida-entrenamiento): null en bloques strength ⇒ el chip
     // legacy "sets × reps" se renderiza EXACTAMENTE igual que hoy (AC3).
     const blockType = effectiveExerciseType(block, { exercise_type: block.exercise_type })
+    // Fuerza por tiempo (D3, W2.9): chip compacto «3 × 30s» (R11) por el carril del resumen tipado.
+    const strengthTime = blockType === 'strength' && isStrengthTimeBlock(builderTypedFields(block), { exercise_type: block.exercise_type })
     const typedSummary = useMemo(() => {
-        if (blockType === 'strength') return null
+        if (blockType === 'strength') return strengthTime ? formatStrengthTimeObjective(builderTypedFields(block)) : null
         const dist = parseFloat((block.distance_value || '').replace(',', '.'))
         return typedBlockSummary(
             { ...block, distance_value: Number.isFinite(dist) ? dist : null, load_value: null },
             blockType
         )
-    }, [block, blockType])
+    }, [block, blockType, strengthTime])
 
     function handleQuickSave() {
         if (onUpdate) {
@@ -282,6 +285,14 @@ function ExerciseBlockInner({
                                         Incompleto
                                     </div>
                                 )}
+                                {strengthTime && (
+                                    <div
+                                        className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-widest border border-border bg-black/5 text-muted-foreground dark:border-white/10 dark:bg-white/10"
+                                        title="Fuerza por tiempo: el alumno ve la cuenta atrás y la serie se guarda sola a 0"
+                                    >
+                                        Por tiempo
+                                    </div>
+                                )}
                                 {block.rest_time && (
                                     <div className="flex items-center gap-1 bg-black/5 dark:bg-white/10 px-1.5 py-0.5 rounded text-[10px] font-bold text-muted-foreground">
                                         ⏱ {block.rest_time}
@@ -304,9 +315,9 @@ function ExerciseBlockInner({
                                 {block.progression_type && (
                                     <div
                                         className="px-1.5 py-0.5 rounded text-[10px] font-bold bg-primary/10 border border-primary/20 text-primary"
-                                        title={`Progresión: +${block.progression_value ?? '?'}${block.progression_type === 'weight' ? 'kg/sem' : ' rep/ses'}`}
+                                        title={`Progresión: ${formatProgressionTag(builderTypedFields(block), { exercise_type: block.exercise_type }) ?? ''}`}
                                     >
-                                        ↑{block.progression_type === 'weight' ? `${block.progression_value ?? '?'}kg` : `${block.progression_value ?? '?'}r`}
+                                        ↑{block.progression_type === 'weight' ? `${block.progression_value ?? '?'}kg` : `${block.progression_value ?? '?'}${strengthTime ? 's' : 'r'}`}
                                     </div>
                                 )}
                                 <div

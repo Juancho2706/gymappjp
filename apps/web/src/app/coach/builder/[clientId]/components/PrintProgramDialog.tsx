@@ -3,7 +3,8 @@
 import { useRef } from 'react'
 import { X, Printer } from 'lucide-react'
 import { getMuscleColor } from '../muscle-colors'
-import { groupContiguousSupersetRuns } from '@eva/workout-engine'
+import { formatProgressionTag, formatStrengthTimeObjectiveLong, groupContiguousSupersetRuns, isStrengthTimeBlock } from '@eva/workout-engine'
+import { builderTypedFields } from '@eva/plan-builder'
 import type { DayState, BuilderBlock } from '../types'
 
 interface PrintProgramDialogProps {
@@ -109,7 +110,9 @@ export function PrintProgramDialog({ open, onClose, programName, clientName, coa
     function renderBlock(block: BuilderBlock, idx: number, ordinal?: string) {
         const color = getMuscleColor(block.muscle_group)
         const metaParts: string[] = []
-        if (block.sets && block.reps) metaParts.push(`${block.sets} series × ${block.reps} reps`)
+        // Fuerza por tiempo (D3, W2.9): «3 series × 30 s», nunca «× 30s reps».
+        if (isStrengthTimeBlock(builderTypedFields(block), { exercise_type: block.exercise_type })) metaParts.push(formatStrengthTimeObjectiveLong(builderTypedFields(block)).replace(' × ', ' series × '))
+        else if (block.sets && block.reps) metaParts.push(`${block.sets} series × ${block.reps} reps`)
         if (block.target_weight_kg) metaParts.push(`${block.target_weight_kg} kg`)
         if (block.rest_time) metaParts.push(`Descanso: ${block.rest_time}`)
         if (block.rir != null && block.rir !== '' && block.rir !== '0') metaParts.push(`RIR ${block.rir}`)
@@ -148,7 +151,7 @@ export function PrintProgramDialog({ open, onClose, programName, clientName, coa
                         <div className="block-tags" style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px' }}>
                             {block.progression_type && (
                                 <span className="tag tag-progression" style={{ fontSize: '8px', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '0.1em', padding: '2px 6px', borderRadius: '3px', background: '#dcfce7', color: '#15803d' }}>
-                                    Progresión: +{block.progression_value ?? '?'}{block.progression_type === 'weight' ? ' kg/sem' : ' rep/ses'}
+                                    Progresión: {formatProgressionTag(builderTypedFields(block), { exercise_type: block.exercise_type })}
                                 </span>
                             )}
                         </div>

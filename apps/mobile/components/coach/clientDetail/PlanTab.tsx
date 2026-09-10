@@ -19,7 +19,9 @@ import {
 import type { LucideIcon } from 'lucide-react-native'
 import {
   effectiveExerciseType,
+  formatStrengthTimeObjectiveLong,
   groupContiguousSupersetRuns,
+  isStrengthTimeBlock,
   programDayLabel,
   sideSuffix,
   typedBlockSummary,
@@ -562,7 +564,12 @@ function ExerciseDetail({ block }: { block: ProgramBlock }) {
   // Tipo EFECTIVO del bloque (override del coach ?? catálogo) y resumen tipado: un cardio o una
   // movilidad ya no se leen como «Series × reps» (P2 del feedback Movens; paridad web ProgramTabB7).
   const blockType = effectiveExerciseType(block, { exercise_type: block.exerciseType ?? null })
-  const typedSummary = blockType !== 'strength' ? typedBlockSummary(block, blockType) : null
+  // Fuerza por tiempo (D3, W2.10): la fila «Objetivo» dice «3 × 30 s», no «Series × reps».
+  const typedSummary = blockType !== 'strength'
+    ? typedBlockSummary(block, blockType)
+    : isStrengthTimeBlock(block, { exercise_type: block.exerciseType ?? null })
+      ? formatStrengthTimeObjectiveLong(block)
+      : null
   const sideLabel = block.side_mode ? (SIDE_LABEL[block.side_mode] ?? null) : null
   const rows: { label: string; value: string; Icon: LucideIcon }[] = [
     typedSummary

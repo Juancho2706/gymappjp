@@ -267,6 +267,18 @@ export function typedBlockSummary(block: TypedBlockFields, type: ExerciseType): 
  * chip/header. Las líneas largas de log y resumen usan `30 s` con espacio
  * (`formatStrengthTimeSetLine`, `logged-set-summary.ts`).
  */
+/**
+ * Forma LARGA del objetivo de fuerza por tiempo (R11: con espacio, para líneas de ficha, preview y
+ * PDF): «3 × 30 s» / «3 × 30 s por lado». La compacta (`formatStrengthTimeObjective`, «3 × 30s») es
+ * para chips de ≤ 20 caracteres. Mismas reglas de `sets` y de lado que la compacta.
+ */
+export function formatStrengthTimeObjectiveLong(block: TypedBlockFields): string {
+    const sets = block.sets && block.sets > 0 ? block.sets : 1
+    const seconds = Math.max(0, Math.round(block.duration_sec ?? 0))
+    const perSide = block.side_mode === 'per_side' || block.side_mode === 'alternating'
+    return `${sets} × ${seconds} s${perSide ? ' por lado' : ''}`
+}
+
 export function formatStrengthTimeObjective(block: TypedBlockFields): string {
     const sets = block.sets && block.sets > 0 ? block.sets : 1
     const seconds = compactDuration(block.duration_sec ?? 0)

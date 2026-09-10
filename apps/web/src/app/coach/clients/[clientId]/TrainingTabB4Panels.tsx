@@ -22,6 +22,9 @@ import {
     effectiveExerciseType,
     typedBlockSummary,
     formatLoggedSetLine,
+    formatStrengthTimeObjectiveLong,
+    formatStrengthTimeSetLine,
+    isStrengthTimeBlock,
     sideRepsFromMetadata,
     EMPTY_LOGGED_SET_LABEL,
     EXERCISE_TYPE_LABEL,
@@ -681,9 +684,18 @@ function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
                     const metaTempo = block?.tempo as string | null | undefined
                     // En bloques tipados el `reps` persistido es un resumen legacy ("20min Z2") →
                     // imprimirlo como "×20min Z2" se lee mal; el motor arma la prescripción real.
+                    // Fuerza por tiempo (D3, W2.11): la meta dice «3 × 30 s · 10kg», la serie «10 kg × 30 s».
+                    const strengthTime = !isTyped && !!block && isStrengthTimeBlock(block, { exercise_type: kind })
                     const metaParts = isTyped
                         ? [block ? typedBlockSummary(block, kind) : null].filter(Boolean)
-                        : [
+                        : strengthTime
+                          ? [
+                                block ? formatStrengthTimeObjectiveLong(block) : null,
+                                metaWeight != null ? `· ${metaWeight}kg` : null,
+                                metaRir ? `· RIR ${metaRir}` : null,
+                                metaTempo ? `· tempo ${metaTempo}` : null,
+                            ].filter(Boolean)
+                          : [
                               metaWeight != null ? `${metaWeight}kg` : null,
                               metaReps ? `×${metaReps}` : null,
                               metaSets != null ? `· ${metaSets} series` : null,
@@ -749,6 +761,23 @@ function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
                                                 style={{ fontFamily: 'var(--font-mono)' }}
                                             >
                                                 {s.set_number ?? si + 1}: {typedLine}
+                                            </span>
+                                        )
+                                    }
+                                    // Fuerza POR TIEMPO (D3): «10 kg × 30 s» lo arma el motor dentro de la rama de
+                                    // fuerza; sin hold cae a la línea peso × reps de siempre (over/under, «PC» intactos).
+                                    const holdLine =
+                                        strengthTime || s.actual_hold_sec != null ? formatStrengthTimeSetLine(s) : null
+                                    if (holdLine != null) {
+                                        return (
+                                            <span
+                                                key={si}
+                                                className="rounded-[var(--radius-xs)] border border-subtle bg-surface-sunken px-1.5 py-[3px] text-[11.5px] text-strong"
+                                                style={{ fontFamily: 'var(--font-mono)' }}
+                                            >
+                                                {s.set_number ?? si + 1}: {holdLine}
+                                                {s.rpe != null ? ` · RPE ${s.rpe}` : ''}
+                                                {s.rir != null ? ` · RIR ${s.rir}` : ''}
                                             </span>
                                         )
                                     }

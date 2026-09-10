@@ -2,6 +2,8 @@ import * as Print from 'expo-print'
 import * as Sharing from 'expo-sharing'
 import { getMuscleColor } from './muscle-colors'
 import type { BuilderBlock, DayState } from './plan-builder/types'
+import { formatProgressionTag, formatStrengthTimeObjectiveLong, isStrengthTimeBlock } from '@eva/workout-engine'
+import { builderTypedFields } from '@eva/plan-builder'
 
 // Export a PDF idéntico al PrintProgramDialog web (mismo HTML/CSS) vía expo-print + expo-sharing.
 
@@ -45,14 +47,16 @@ body { font-family: -apple-system, 'Segoe UI', sans-serif; color: #111; backgrou
 function blockHtml(b: BuilderBlock, idx: number): string {
   const color = getMuscleColor(b.muscle_group)
   const meta: string[] = []
-  if (b.sets && b.reps) meta.push(`${b.sets} series × ${esc(b.reps)} reps`)
+  // Fuerza por tiempo (D3, W2.9): «3 series × 30 s», nunca «× 30s reps».
+  if (isStrengthTimeBlock(builderTypedFields(b), { exercise_type: b.exercise_type })) meta.push(formatStrengthTimeObjectiveLong(builderTypedFields(b)).replace(' × ', ' series × '))
+  else if (b.sets && b.reps) meta.push(`${b.sets} series × ${esc(b.reps)} reps`)
   if (b.target_weight_kg) meta.push(`${esc(b.target_weight_kg)} kg`)
   if (b.rest_time) meta.push(`Descanso: ${esc(b.rest_time)}`)
   if (b.rir != null && b.rir !== '' && b.rir !== '0') meta.push(`RIR ${esc(b.rir)}`)
   if (b.tempo) meta.push(`Tempo ${esc(b.tempo)}`)
   const tags: string[] = []
   if (b.superset_group) tags.push(`<span class="tag tag-superset">Superset ${esc(b.superset_group)}</span>`)
-  if (b.progression_type) tags.push(`<span class="tag tag-progression">Progresión: +${b.progression_value ?? '?'}${b.progression_type === 'weight' ? ' kg/sem' : ' rep/ses'}</span>`)
+  if (b.progression_type) tags.push(`<span class="tag tag-progression">Progresión: ${esc(formatProgressionTag(builderTypedFields(b), { exercise_type: b.exercise_type }) ?? '')}</span>`)
   return `<div class="block">
     <div class="block-accent" style="background:${color}"></div>
     <div class="block-num">${String(idx + 1).padStart(2, '0')}</div>

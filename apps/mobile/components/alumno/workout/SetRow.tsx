@@ -16,6 +16,7 @@ import {
   // fecha no hay nada que reintentar ni que corregir → la fila de error se pinta SIN acciones.
   PAST_SET_NOT_FOUND_ERROR,
   formatStrengthSetLine,
+  formatStrengthTimeSetLine,
 } from '@eva/workout-engine'
 import type { HrMetadataV1 } from '@eva/cardio'
 import { FONT, TYPE, textStyle } from '../../../lib/typography'
@@ -451,7 +452,10 @@ export function SetRow({
             <Text style={CHIP_MARK_STYLE} className="text-on-dark">
               {/* Fuerza POR LADO (R19): «20 kg × 10 / 10» lo arma el motor (`formatStrengthSetLine`) sólo
                   con desglose en `metadata`; sin lados la línea es la de siempre (misma regla que la web). */}
-              {formatStrengthSetLine({ weight_kg: log?.weight_kg ?? null, reps_done: log?.reps_done ?? null, metadata: log?.metadata }) ?? (
+              {/* Fuerza POR TIEMPO (D3, W2.11): «10 kg × 30 s» con hold; sin hold, la rama de siempre. */}
+              {(log?.actual_hold_sec != null
+                ? formatStrengthTimeSetLine({ weight_kg: log?.weight_kg ?? null, actual_hold_sec: log?.actual_hold_sec ?? null, metadata: log?.metadata })
+                : null) ?? formatStrengthSetLine({ weight_kg: log?.weight_kg ?? null, reps_done: log?.reps_done ?? null, metadata: log?.metadata }) ?? (
                 <>
                   {log?.weight_kg ?? '–'}
                   <Text className="text-on-dark-muted"> × </Text>

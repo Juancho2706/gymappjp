@@ -48,7 +48,7 @@ import {
   type ModuleKey,
   type NutritionSectionKey,
 } from '@eva/feature-prefs'
-import { effectiveExerciseType, sideRepsFromMetadata, typedBlockSummary, type ExerciseType } from '@eva/workout-engine'
+import { effectiveExerciseType, sideRepsFromMetadata, formatStrengthTimeObjectiveLong, isStrengthTimeBlock, typedBlockSummary, type ExerciseType } from '@eva/workout-engine'
 
 // Coach-side client detail data. Reads via Supabase (RLS: coach sees own clients).
 // Mutations (update/archive/review) also use the coach session. Service-role never runs in RN.
@@ -1294,7 +1294,12 @@ export async function getCoachClientDayDetail(
       blockTempo: block?.tempo ?? null,
       // En bloques tipados el `reps` persistido es un resumen legacy ("20min Z2") → el motor arma
       // la prescripción real; en fuerza queda null y manda la línea peso × reps de siempre.
-      typedMeta: kind === 'strength' || !block ? null : typedBlockSummary(block, kind),
+      typedMeta: !block
+        ? null
+        : kind === 'strength'
+          // Fuerza por tiempo (D3, W2.11): la meta dice «3 × 30 s», no «×30s» como si fueran reps.
+          ? isStrengthTimeBlock(block, { exercise_type: kind }) ? formatStrengthTimeObjectiveLong(block) : null
+          : typedBlockSummary(block, kind),
       progressionMode: block?.progression_mode ?? null,
       progressionValue: block?.progression_value ?? null,
       planTitle: block?.workout_plans?.title ?? null,

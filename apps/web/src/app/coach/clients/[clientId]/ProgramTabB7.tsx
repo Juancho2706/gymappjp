@@ -33,7 +33,9 @@ import {
 import { resolveEffectiveWeekVariant } from '@/lib/workout/programWeekVariant'
 import {
     effectiveExerciseType,
+    formatStrengthTimeObjectiveLong,
     groupContiguousSupersetRuns,
+    isStrengthTimeBlock,
     programDayLabel,
     sideSuffix,
     typedBlockSummary,
@@ -485,7 +487,14 @@ export function ProgramTabB7({
     // Tipo EFECTIVO del bloque (override del coach ?? catálogo) y resumen tipado: un cardio o una
     // movilidad ya no se leen como «Series × reps» (P2 del feedback Movens). Fuerza conserva su fila.
     const sheetType = sheetBlock ? effectiveExerciseType(sheetBlock, ex ?? null) : 'strength'
-    const sheetTypedSummary = sheetBlock && sheetType !== 'strength' ? typedBlockSummary(sheetBlock, sheetType) : null
+    // Fuerza por tiempo (D3, W2.10): la fila «Objetivo» dice «3 × 30 s», no «Series × reps».
+    const sheetTypedSummary = sheetBlock
+        ? sheetType !== 'strength'
+            ? typedBlockSummary(sheetBlock, sheetType)
+            : isStrengthTimeBlock(sheetBlock, ex ?? null)
+              ? formatStrengthTimeObjectiveLong(sheetBlock)
+              : null
+        : null
     const sheetSideLabel = sheetBlock?.side_mode ? (SIDE_LABEL[sheetBlock.side_mode] ?? null) : null
     const prescriptionRows: PrescriptionRow[] = sheetBlock
         ? ([

@@ -5,6 +5,7 @@ import {
     effectiveExerciseType,
     formatProgressionTag,
     formatStrengthTimeObjective,
+    formatStrengthTimeObjectiveLong,
     hasTypedPrescription,
     isStrengthTimeBlock,
     legacyRepsSummaryFor,
@@ -318,5 +319,15 @@ describe('formatProgressionTag — la unidad correcta (D4/R30)', () => {
                 { exercise_type: 'mobility' },
             ),
         ).toBe('+5 rep/ses')
+    })
+})
+
+describe('formatStrengthTimeObjectiveLong (R11, forma larga)', () => {
+    it('imprime «3 × 30 s» con espacio y «por lado» en per_side', () => {
+        expect(formatStrengthTimeObjectiveLong({ sets: 3, reps_unit: 'sec', duration_sec: 30 })).toBe('3 × 30 s')
+        expect(formatStrengthTimeObjectiveLong({ sets: 3, reps_unit: 'sec', duration_sec: 30, side_mode: 'per_side' })).toBe('3 × 30 s por lado')
+    })
+    it('no compacta a minutos: 90 s queda en segundos', () => {
+        expect(formatStrengthTimeObjectiveLong({ sets: 2, reps_unit: 'sec', duration_sec: 90 })).toBe('2 × 90 s')
     })
 })

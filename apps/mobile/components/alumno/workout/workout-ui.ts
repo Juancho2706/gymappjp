@@ -6,6 +6,7 @@
 import {
   EMPTY_LOGGED_SET_LABEL,
   formatLoggedSetLine,
+  formatProgressionTag,
   type ReconciledSessionLog,
   type TypedKeypadMode,
 } from '@eva/workout-engine'
@@ -16,6 +17,10 @@ interface OverloadBlock {
   progression_type: 'weight' | 'reps' | null
   progression_value: number | null
   target_weight_kg: number | null
+  // Fuerza por tiempo (D3/D4, W2.13): con `reps_unit = 'sec'` el eje `reps` se lee como segundos.
+  reps_unit?: string | null
+  duration_sec?: number | null
+  exercise_type_override?: string | null
 }
 
 /** Chip compacto de sobrecarga progresiva. null ⇒ sin chip. */
@@ -28,7 +33,8 @@ export function overloadChipLabel(
   if (block.progression_type === 'weight' && block.target_weight_kg == null) return null
   const v = block.progression_value
   if (block.progression_type !== 'weight' || !eff?.modeImplemented) {
-    return block.progression_type === 'weight' ? `+${v} kg/sem` : `+${v} rep/ses`
+    // «+ Segundos» (D4) reusa `progression_type = 'reps'`: el motor resuelve seg/ses vs rep/ses.
+    return formatProgressionTag(block) ?? `+${v} rep/ses`
   }
   if (eff.mode === 'double') {
     return eff.status === 'holding' ? `Mantén ${eff.weightKg} kg` : `Objetivo ${eff.weightKg} kg`

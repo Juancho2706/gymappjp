@@ -25,7 +25,7 @@ import {
 import { FONT } from '../../../lib/typography'
 import { getTodayInSantiago } from '../../../lib/date-utils'
 import { themeLucideIcons } from '../../../lib/themed-lucide'
-import { EMPTY_LOGGED_SET_LABEL, EXERCISE_TYPE_LABEL, formatLoggedSetLine, sideRepsFromMetadata } from '@eva/workout-engine'
+import { EMPTY_LOGGED_SET_LABEL, EXERCISE_TYPE_LABEL, formatLoggedSetLine, formatStrengthTimeSetLine, sideRepsFromMetadata } from '@eva/workout-engine'
 
 // QA2 A1: `className` en un icono lucide solo pinta si el componente está registrado en
 // nativewind (RN no tiene `currentColor`); sin esto el glyph cae al negro por defecto.
@@ -618,6 +618,20 @@ function ExerciseSession({ name, muscle, kind, sets, last }: { name: string; mus
               <View key={`${set.setNumber ?? index}-${index}`} className="border border-subtle bg-surface-sunken" style={styles.setPill}>
                 <Text className={typedLine === EMPTY_LOGGED_SET_LABEL ? 'text-muted' : 'text-strong'} style={styles.setText}>
                   {set.setNumber ?? index + 1}: {typedLine}
+                </Text>
+              </View>
+            )
+          }
+          // Fuerza POR TIEMPO (D3, W2.11): «10 kg × 30 s» lo arma el motor dentro de la rama de fuerza;
+          // sin hold cae a la línea peso × reps de siempre (paridad web TrainingTabB4Panels).
+          const holdLine = set.actualHoldSec != null
+            ? formatStrengthTimeSetLine({ weight_kg: set.weightKg, actual_hold_sec: set.actualHoldSec, metadata: set.metadata })
+            : null
+          if (holdLine != null) {
+            return (
+              <View key={`${set.setNumber ?? index}-${index}`} className="border border-subtle bg-surface-sunken" style={styles.setPill}>
+                <Text className="text-strong" style={styles.setText}>
+                  {set.setNumber ?? index + 1}: {holdLine}{set.rpe != null ? ` · RPE ${set.rpe}` : ''}{set.rir != null ? ` · RIR ${set.rir}` : ''}
                 </Text>
               </View>
             )

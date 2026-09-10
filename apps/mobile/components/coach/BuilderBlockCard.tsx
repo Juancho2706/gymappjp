@@ -3,7 +3,8 @@ import { Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View }
 import { Image } from 'expo-image'
 import { Check, ChevronDown, ChevronUp, CircleHelp, GripVertical, Link2, Minus, Play, Plus, Trash2 } from 'lucide-react-native'
 import { ScaleDecorator } from 'react-native-draggable-flatlist'
-import { effectiveExerciseType, sideSuffix, typedBlockSummary } from '@eva/workout-engine'
+import { effectiveExerciseType, formatStrengthTimeObjective, isStrengthTimeBlock, sideSuffix, typedBlockSummary } from '@eva/workout-engine'
+import { builderTypedFields } from '@eva/plan-builder'
 import { useTheme } from '../../context/ThemeContext'
 import { FONT } from '../../lib/typography'
 import { exerciseThumb, type ExerciseRow } from '../../lib/exercises'
@@ -86,11 +87,13 @@ function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpda
 
   // Resumen por tipo (specs/movida-entrenamiento): null en strength ⇒ chip legacy sets×reps.
   const blockType = effectiveExerciseType(block, { exercise_type: block.exercise_type })
+  // Fuerza por tiempo (D3, W2.9): chip compacto «3 × 30s» (R11) por el carril del resumen tipado.
+  const strengthTime = blockType === 'strength' && isStrengthTimeBlock(builderTypedFields(block), { exercise_type: block.exercise_type })
   const typedSummary = useMemo(() => {
-    if (blockType === 'strength') return null
+    if (blockType === 'strength') return strengthTime ? formatStrengthTimeObjective(builderTypedFields(block)) : null
     const dist = parseFloat((block.distance_value || '').replace(',', '.'))
     return typedBlockSummary({ ...block, distance_value: Number.isFinite(dist) ? dist : null, load_value: null }, blockType)
-  }, [block, blockType])
+  }, [block, blockType, strengthTime])
   const TypeIcon = EXERCISE_TYPE_META[blockType].Icon
   const typeColor = exerciseTypeColor(blockType, theme.primary)
 
@@ -168,6 +171,9 @@ function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpda
               </TouchableOpacity>
             )}
 
+            {strengthTime ? (
+              <View style={[styles.badge, { backgroundColor: hexToRgba(theme.foreground, 0.06) }]}><Text style={[styles.badgeT, { color: theme.mutedForeground }]}>Por tiempo</Text></View>
+            ) : null}
             {block.rest_time ? (
               <View style={[styles.badge, { backgroundColor: hexToRgba(theme.foreground, 0.06) }]}><Text style={[styles.badgeT, { color: theme.mutedForeground, fontFamily: FONT.uiBold, fontSize: 10, textTransform: 'none' }]}>⏱ {block.rest_time}</Text></View>
             ) : null}
@@ -175,7 +181,7 @@ function BuilderBlockCardInner({ block, drag, isActive, onEdit, onRemove, onUpda
               <TouchableOpacity onPress={() => onToggleSuperset(block.uid)} style={[styles.badge, { backgroundColor: hexToRgba(theme.primary, 0.1), borderColor: hexToRgba(theme.primary, 0.3) }]}><Text style={[styles.badgeT, { color: theme.primary }]}>SS·{block.superset_group}</Text></TouchableOpacity>
             ) : null}
             {block.progression_type ? (
-              <View style={[styles.badge, { backgroundColor: hexToRgba(theme.primary, 0.1), borderColor: hexToRgba(theme.primary, 0.25) }]}><Text style={[styles.badgeT, { color: theme.primary, fontSize: 10, textTransform: 'none' }]}>↑{block.progression_type === 'weight' ? `${block.progression_value ?? '?'}kg` : `${block.progression_value ?? '?'}r`}</Text></View>
+              <View style={[styles.badge, { backgroundColor: hexToRgba(theme.primary, 0.1), borderColor: hexToRgba(theme.primary, 0.25) }]}><Text style={[styles.badgeT, { color: theme.primary, fontSize: 10, textTransform: 'none' }]}>↑{block.progression_type === 'weight' ? `${block.progression_value ?? '?'}kg` : `${block.progression_value ?? '?'}${strengthTime ? 's' : 'r'}`}</Text></View>
             ) : null}
             <View style={[styles.badge, { backgroundColor: muscle, borderColor: 'transparent', maxWidth: 120 }]}><Text style={[styles.badgeT, { color: '#fff' }]} numberOfLines={1}>{block.muscle_group}</Text></View>
 
