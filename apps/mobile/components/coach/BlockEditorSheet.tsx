@@ -21,7 +21,8 @@ import {
   type ExerciseType,
   type IntervalConfig,
 } from '@eva/workout-engine'
-import { stripFieldsForType } from '@eva/plan-builder'
+import { stripFieldsForType, applyStrengthModeChange } from '@eva/plan-builder'
+import { STRENGTH_TIME_MIN_SEC, STRENGTH_TIME_MAX_SEC } from '@eva/schemas'
 import { HR_ZONES } from '@eva/cardio'
 import { EXERCISE_TYPE_META, exerciseTypeColor } from '../../lib/exercise-type-meta'
 import { buildMobileAreaVMs, type MobileAreaVM } from '../../lib/builder-area-vm'
@@ -66,11 +67,19 @@ interface Props {
   catalogRow?: ExerciseRow | null
 }
 
-const PROGRESSIONS: { value: 'none' | 'weight' | 'reps'; label: string }[] = [
-  { value: 'none', label: 'Ninguna' },
-  { value: 'weight', label: 'Peso' },
+/** Modos de prescripción DENTRO de Fuerza (specs/cuenta-atras-en-pantalla, D3): sin quinto tipo. */
+const PRESCRIPTION_MODES: { value: 'reps' | 'sec'; label: string }[] = [
   { value: 'reps', label: 'Reps' },
+  { value: 'sec', label: 'Segundos' },
 ]
+/** «+ Segundos» reusa `progression_type = 'reps'` (D4): cambia el rótulo, no la columna. */
+function progressionOptions(strengthTimeMode: boolean): { value: 'none' | 'weight' | 'reps'; label: string }[] {
+  return [
+    { value: 'none', label: 'Ninguna' },
+    { value: 'weight', label: 'Peso' },
+    { value: 'reps', label: strengthTimeMode ? 'Segundos' : 'Reps' },
+  ]
+}
 const PROGRESSION_MODE_OPTS: { value: 'weekly_linear' | 'double'; label: string }[] = [
   { value: 'weekly_linear', label: 'Cada semana' },
   { value: 'double', label: 'Al completar reps' },
@@ -169,6 +178,12 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
   }
 
   const progression = draft.progression_type ?? 'none'
+  // Fuerza por tiempo (D3): la marca del modo Segundos en el builder es `reps_unit === 'sec'`.
+  const strengthTimeMode = draftType === 'strength' && draft.reps_unit === 'sec'
+  function setStrengthMode(mode: 'reps' | 'sec') {
+    const next = applyStrengthModeChange(draft!, mode)
+    if (next !== draft) patch(next)
+  }
   // Multimedia del ejercicio: el catálogo manda (trae `image_url` y el recorte del coach, que el
   // `BuilderBlock` no transporta) y el bloque queda de respaldo. Antes `image_url` iba hardcodeado
   // en null, así que un ejercicio con SOLO imagen caía al icono de mancuerna.
@@ -321,9 +336,18 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
         {/* ── Campos por TIPO ─────────────────────────────────────────── */}
         {draftType === 'strength' ? (
           <>
+            {/* Prescripción «Reps | Segundos» (specs/cuenta-atras-en-pantalla, D3): la fuerza por tiempo
+                vive DENTRO de Fuerza y conserva peso, RIR, tempo, descanso y lado. */}
+            <Label theme={theme}>Prescripción</Label>
+            <Segmented theme={theme} options={PRESCRIPTION_MODES} value={strengthTimeMode ? 'sec' : 'reps'}
+              onChange={(v) => setStrengthMode(v as 'reps' | 'sec')} />
             <View style={styles.row2}>
               <StepperField theme={theme} label="Series *" help="Cuántas rondas del ejercicio hace el alumno." value={draft.sets ?? 0} onChange={(n: number) => patch({ sets: n || undefined })} />
-              <Field theme={theme} label="Repeticiones *" help="Reps por serie. Acepta rangos (8-10) o esquemas (10x10)." value={draft.reps ?? ''} onChangeText={(v: string) => patch({ reps: v })} placeholder="8-10" />
+              {strengthTimeMode ? (
+                <IntField theme={theme} label="Segundos por serie *" help={`El alumno ve la cuenta atrás y la serie se guarda sola al llegar a 0. Entre ${STRENGTH_TIME_MIN_SEC} y ${STRENGTH_TIME_MAX_SEC} segundos.`} value={draft.duration_sec ?? null} onCommit={(s) => patch({ duration_sec: s })} placeholder="30" />
+              ) : (
+                <Field theme={theme} label="Repeticiones *" help="Reps por serie. Acepta rangos (8-10) o esquemas (10x10)." value={draft.reps ?? ''} onChangeText={(v: string) => patch({ reps: v })} placeholder="8-10" />
+              )}
             </View>
             <View style={styles.row2}>
               <Field theme={theme} label="Peso objetivo (kg)" help="Peso sugerido. El alumno lo ve como referencia y registra el real." value={draft.target_weight_kg ?? ''} keyboardType="decimal-pad" onChangeText={(v: string) => patch({ target_weight_kg: v })} placeholder="opcional" />
@@ -331,7 +355,7 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
             </View>
             <View style={styles.row2}>
               <Field theme={theme} label="Tempo" help="Ritmo en 4 tiempos: bajada-pausa abajo-subida-pausa arriba. 3-0-1-0 = baja en 3s y sube en 1s." value={draft.tempo ?? ''} onChangeText={(v: string) => patch({ tempo: v })} placeholder="3-0-1-0" />
-              <Field theme={theme} label="RIR / RPE" help="RIR: reps que quedan en reserva al terminar la serie (0 = al fallo). RPE: esfuerzo percibido del 1 al 10." value={draft.rir ?? ''} onChangeText={(v: string) => patch({ rir: v })} placeholder="2" />
+              <Field theme={theme} label="RIR / RPE" help={strengthTimeMode ? 'RIR: cuántos segundos quedan en el tanque al terminar la serie (0 = al fallo). RPE: esfuerzo percibido del 1 al 10.' : 'RIR: reps que quedan en reserva al terminar la serie (0 = al fallo). RPE: esfuerzo percibido del 1 al 10.'} value={draft.rir ?? ''} onChangeText={(v: string) => patch({ rir: v })} placeholder="2" />
             </View>
             <Field theme={theme} label="Descanso calentamiento" help="Descanso entre series de calentamiento (aproximación). Vacío = usa la misma recuperación de arriba." value={draft.warmup_rest_time ?? ''} onChangeText={(v: string) => patch({ warmup_rest_time: v })} placeholder="opcional — vacío = mismo descanso" />
 
@@ -355,13 +379,14 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
 
             {/* Progresión */}
             <Label theme={theme}>Progresión</Label>
-            <Segmented theme={theme} options={PROGRESSIONS} value={progression}
+            <Segmented theme={theme} options={progressionOptions(strengthTimeMode)} value={progression}
               onChange={(v) => patch({ progression_type: v === 'none' ? null : (v as 'weight' | 'reps') })} />
             {progression !== 'none' ? (
               <DecimalField theme={theme} label="Valor por semana" value={typeof draft.progression_value === 'number' ? draft.progression_value : null}
-                onCommit={(n: number | null) => patch({ progression_value: n })} placeholder={progression === 'weight' ? '2,5 (kg)' : '1 (rep)'} />
+                onCommit={(n: number | null) => patch({ progression_value: n })} placeholder={progression === 'weight' ? '2,5 (kg)' : strengthTimeMode ? '1 (seg)' : '1 (rep)'} />
             ) : null}
-            {progression === 'weight' ? (
+            {/* En modo Segundos no hay rango de reps que completar ⇒ la doble progresión se oculta (D4). */}
+            {progression === 'weight' && !strengthTimeMode ? (
               <>
                 <Label theme={theme}>¿Cómo sube el peso?</Label>
                 <Segmented theme={theme} options={PROGRESSION_MODE_OPTS} value={draft.progression_mode === 'double' ? 'double' : 'weekly_linear'}

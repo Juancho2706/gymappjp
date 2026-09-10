@@ -168,3 +168,24 @@ export function stripFieldsForStrengthMode(
             : block.progression_mode ?? null,
     }
 }
+
+/**
+ * Espejo legible que el builder escribe en `reps` cuando el bloque está en modo Segundos
+ * (`legacyRepsSummaryFor` del motor: «30s», «1m30s», «30s/lado»). Sirve para reconocerlo al volver a
+ * Reps y no dejarlo como «repeticiones» del coach.
+ */
+const STRENGTH_TIME_REPS_MIRROR = /^\d+(m\d+)?s(\/lado)?$/
+
+/**
+ * Conmutación del segmented «Reps | Segundos» del builder (web `BlockEditSheet` y RN
+ * `BlockEditorSheet`): strip por modo + una sola política de UI, compartida para que las dos
+ * plataformas no diverjan — al volver a Reps, si `reps` quedó con el espejo del reloj se propone un
+ * rango tipeable («8-12») sin pisar un texto propio del coach. Idempotente como el strip: en el modo
+ * pedido devuelve el mismo objeto.
+ */
+export function applyStrengthModeChange(block: BuilderBlock, mode: StrengthPrescriptionMode): BuilderBlock {
+    const next = stripFieldsForStrengthMode(block, mode)
+    if (next === block) return block
+    if (mode === 'reps' && STRENGTH_TIME_REPS_MIRROR.test(next.reps ?? '')) return { ...next, reps: '8-12' }
+    return next
+}

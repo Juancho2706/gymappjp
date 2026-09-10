@@ -9,6 +9,7 @@
 import { describe, expect, it } from 'vitest'
 import { typedBlockSummary, type TypedBlockFields } from '@eva/workout-engine'
 import {
+    applyStrengthModeChange,
     POLYMORPHIC_BLOCK_FIELDS,
     defaultBlockForType,
     stripFieldsForStrengthMode,
@@ -308,5 +309,39 @@ describe('defaultBlockForType: espejo de createDefaultBlock (program-read-mapper
             reps_unit: 'passes',
             rest_time: '',
         })
+    })
+})
+
+describe('applyStrengthModeChange — conmutación del segmented «Reps | Segundos»', () => {
+    const base = { exercise_id: 'e1', exercise_name: 'Plancha', sets: 3, reps: '8-12', order_index: 0 } as BuilderBlock
+
+    it('Reps → Segundos deja reps intacto y marca reps_unit sec', () => {
+        const next = applyStrengthModeChange(base, 'sec')
+        expect(next.reps_unit).toBe('sec')
+        expect(next.reps).toBe('8-12')
+    })
+
+    it('Segundos → Reps con el espejo del reloj en reps propone 8-12', () => {
+        const timed = { ...base, reps: '30s', reps_unit: 'sec', duration_sec: 30 } as BuilderBlock
+        const next = applyStrengthModeChange(timed, 'reps')
+        expect(next.reps).toBe('8-12')
+        expect(next.reps_unit).toBeNull()
+        expect(next.duration_sec).toBeNull()
+    })
+
+    it('Segundos → Reps con el espejo por lado también propone 8-12', () => {
+        const timed = { ...base, reps: '30s/lado', reps_unit: 'sec', duration_sec: 30, side_mode: 'per_side' } as BuilderBlock
+        expect(applyStrengthModeChange(timed, 'reps').reps).toBe('8-12')
+    })
+
+    it('Segundos → Reps NO pisa un texto propio del coach', () => {
+        const timed = { ...base, reps: 'AMRAP', reps_unit: 'sec', duration_sec: 30 } as BuilderBlock
+        expect(applyStrengthModeChange(timed, 'reps').reps).toBe('AMRAP')
+    })
+
+    it('es idempotente: en el modo pedido devuelve el mismo objeto', () => {
+        expect(applyStrengthModeChange(base, 'reps')).toBe(base)
+        const timed = { ...base, reps_unit: 'sec', duration_sec: 30 } as BuilderBlock
+        expect(applyStrengthModeChange(timed, 'sec')).toBe(timed)
     })
 })

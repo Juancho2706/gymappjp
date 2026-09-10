@@ -16,7 +16,8 @@ import type { ExerciseType, IntervalConfig, SideMode } from '@/domain/workout/ty
 import { EXERCISE_TYPE_META, effectiveExerciseType } from '@/lib/workout-exercise-type'
 import { exerciseThumbnailUrl, extractYoutubeVideoId } from '@/lib/youtube'
 import { INTERVAL_TEMPLATES, repsUnitForModality, cardioRepsUnitShort } from '@eva/workout-engine'
-import { stripFieldsForType } from '@eva/plan-builder'
+import { stripFieldsForType, applyStrengthModeChange } from '@eva/plan-builder'
+import { STRENGTH_TIME_MIN_SEC, STRENGTH_TIME_MAX_SEC } from '@eva/schemas'
 import { HR_ZONES } from '@eva/cardio'
 
 interface ExerciseHistory {
@@ -577,6 +578,15 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
             : null
     const mediaPlayable = !!(block.gif_url || mediaDirectVideo || mediaYoutubeId)
 
+    // Fuerza por tiempo (specs/cuenta-atras-en-pantalla, D3): la marca del modo Segundos en el builder
+    // es `reps_unit === 'sec'` (el predicado del ejecutor, `isStrengthTimeBlock`, exige además
+    // `duration_sec > 0`, pero acá el bloque puede estar a medio tipear y el selector no puede saltar).
+    const strengthTimeMode = effectiveType === 'strength' && block.reps_unit === 'sec'
+    const setStrengthMode = (mode: 'reps' | 'sec') => {
+        const next = applyStrengthModeChange(block, mode)
+        if (next !== block) onChange(next)
+    }
+
     const blockIsValid = (() => {
         if (effectiveType === 'cardio') {
             return (block.duration_sec ?? 0) > 0 || hasDistance || !!block.interval_config
@@ -586,6 +596,10 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
         }
         if (effectiveType === 'roller') {
             return (block.duration_sec ?? 0) > 0 || (block.reps_value ?? 0) > 0
+        }
+        if (strengthTimeMode) {
+            const sec = block.duration_sec ?? 0
+            return !!block.sets && block.sets >= 1 && sec >= STRENGTH_TIME_MIN_SEC && sec <= STRENGTH_TIME_MAX_SEC
         }
         return !!block.sets && block.sets >= 1 && !!block.reps?.trim()
     })()
@@ -728,6 +742,41 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
 
                     {effectiveType === 'strength' && (
                         <>
+                    {/* Prescripción «Reps | Segundos» (specs/cuenta-atras-en-pantalla, D3): la fuerza por
+                        tiempo vive DENTRO de Fuerza, sin quinto tipo; conserva peso, RIR, tempo, descanso y lado. */}
+                    <div className="space-y-2">
+                        <label className="text-[12.5px] font-semibold text-foreground flex items-center gap-1.5">
+                            Prescripción
+                            <InfoTooltip content="Reps: series × repeticiones. Segundos: series × segundos con carga; el alumno ve una cuenta atrás y la serie se guarda sola al llegar a 0." />
+                        </label>
+                        <div
+                            role="radiogroup"
+                            aria-label="Modo de prescripción"
+                            className="grid grid-cols-2 overflow-hidden rounded-control border border-border text-[10px] font-bold uppercase tracking-widest dark:border-white/10"
+                        >
+                            <button
+                                type="button"
+                                role="radio"
+                                aria-checked={!strengthTimeMode}
+                                onClick={() => setStrengthMode('reps')}
+                                className={`px-3 py-2.5 transition-colors ${!strengthTimeMode ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
+                            >
+                                Reps
+                            </button>
+                            <button
+                                type="button"
+                                role="radio"
+                                aria-checked={strengthTimeMode}
+                                onClick={() => setStrengthMode('sec')}
+                                className={`px-3 py-2.5 transition-colors ${strengthTimeMode ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
+                            >
+                                Segundos
+                            </button>
+                        </div>
+                        <p className="text-[10px] text-muted-foreground/50">
+                            {strengthTimeMode ? 'series × segundos, con carga · el alumno ve la cuenta atrás' : 'series × repeticiones'}
+                        </p>
+                    </div>
                     <div className="grid grid-cols-2 gap-6">
                         <div className="space-y-3">
                             <label className="text-[12.5px] font-semibold text-foreground flex items-center gap-1.5">
@@ -748,6 +797,23 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
                             )}
                             <p className="text-[10px] text-muted-foreground/50 text-center">1–20 series</p>
                         </div>
+                        {strengthTimeMode ? (
+                        <div className="space-y-3">
+                            <label className="text-[12.5px] font-semibold text-foreground flex items-center gap-1.5">
+                                Segundos por serie
+                                <span className="text-[var(--danger-500)]">*</span>
+                            </label>
+                            <OptionalIntInput
+                                value={block.duration_sec}
+                                onCommit={(sec) => onChange({ ...block, duration_sec: sec })}
+                                placeholder="Ej. 30"
+                                max={STRENGTH_TIME_MAX_SEC}
+                            />
+                            <p className="text-[10px] text-muted-foreground/50 text-center">
+                                el alumno ve la cuenta atrás · {STRENGTH_TIME_MIN_SEC}–{STRENGTH_TIME_MAX_SEC} segundos
+                            </p>
+                        </div>
+                        ) : (
                         <div className="space-y-3">
                             <label className="text-[12.5px] font-semibold text-foreground flex items-center gap-1.5">
                                 Repeticiones
@@ -763,6 +829,7 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
                             />
                             <p className="text-[10px] text-muted-foreground/50 text-center">número, rango o AMRAP</p>
                         </div>
+                        )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-6">
@@ -794,7 +861,9 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
                                 autoComplete="off"
                                 className="h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground font-bold focus:border-primary placeholder:text-muted-foreground"
                             />
-                            <p className="text-[10px] text-muted-foreground/50">cuántas reps quedan en el tanque</p>
+                            <p className="text-[10px] text-muted-foreground/50">
+                                {strengthTimeMode ? 'cuántos segundos quedan en el tanque' : 'cuántas reps quedan en el tanque'}
+                            </p>
                         </div>
                     </div>
 
@@ -1177,7 +1246,7 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
                                         onClick={() => onChange({...block, progression_type: 'reps'})}
                                         className={`px-3 py-2 transition-colors ${block.progression_type === 'reps' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'}`}
                                     >
-                                        + Reps
+                                        {strengthTimeMode ? '+ Segundos' : '+ Reps'}
                                     </button>
                                 </div>
                                 <div className="flex min-w-0 items-center gap-1.5 sm:flex-1">
@@ -1187,12 +1256,13 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
                                         onCommit={(n) => onChange({ ...block, progression_value: n })}
                                     />
                                     <span className="shrink-0 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-                                        {block.progression_type === 'weight' ? 'kg/sem' : 'rep/ses'}
+                                        {block.progression_type === 'weight' ? 'kg/sem' : strengthTimeMode ? 'seg/ses' : 'rep/ses'}
                                     </span>
                                 </div>
                             </div>
-                            {/* Modo de progresión POR-EJERCICIO (solo peso). Motor: lib/workout/progression.ts */}
-                            {block.progression_type === 'weight' && (
+                            {/* Modo de progresión POR-EJERCICIO (solo peso). Motor: lib/workout/progression.ts.
+                                En modo Segundos no hay rango de reps que completar ⇒ la doble progresión se oculta (D4). */}
+                            {block.progression_type === 'weight' && !strengthTimeMode && (
                                 <div className="mt-3 space-y-1.5 rounded-lg border border-border/60 p-2.5 dark:border-white/10">
                                     <label className="text-[9px] font-bold uppercase tracking-[0.2em] text-muted-foreground">¿Cómo sube el peso?</label>
                                     <div className="grid grid-cols-2 overflow-hidden rounded-lg border border-border dark:border-white/10">
@@ -1223,7 +1293,7 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
                         </>)}
                         {!block.progression_type && (
                             <p className="text-[9px] text-muted-foreground/50 uppercase tracking-widest">
-                                Activa para incrementar peso o reps automáticamente cada semana
+                                {strengthTimeMode ? 'Activa para subir el peso o los segundos automáticamente cada semana' : 'Activa para incrementar peso o reps automáticamente cada semana'}
                             </p>
                         )}
                     </div>
