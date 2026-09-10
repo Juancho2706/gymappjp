@@ -68,6 +68,16 @@ const PROGRAM_BASE_NAME = 'E2E-SEED Programa Base'
 const PROGRAM_MEMBER_NAME = 'E2E-SEED Programa Member'
 const NUTRITION_PLAN_NAME = 'E2E-SEED Plan Nutricional'
 
+/**
+ * Plan canonico del HOLD (specs/cuenta-atras-en-pantalla, W6.10 · DATA-TESTING 6.5). Titulo unico:
+ * es la clave de idempotencia del arbol y el `E2E_HOLD_PLAN_ID` que consume
+ * `tests/exec-hold-superset.spec.ts`. Datos 100% SINTETICOS: nunca se copia el plan de Movens ni de
+ * ningun coach real (regla del jefe / DECISIONS-2 PLAN-1).
+ */
+const HOLD_PLAN_TITLE = 'E2E-SEED Dia B (hold)'
+/** Se llena al sembrar (o al reencontrar) el plan del hold; se imprime al final para el env de E2E. */
+let holdPlanId = null
+
 const TIER_MAX = { pro: 30, elite: 60, scale: 500 }
 
 // ---------------------------------------------------------------------------
@@ -426,6 +436,135 @@ async function seedWorkoutProgram(admin, { clientId, coachId, orgId, name, planD
     track('workout_logs', true, logRows.length)
 }
 
+/**
+ * Plan CANONICO del hold (specs/cuenta-atras-en-pantalla, W6.10; escenario de DATA-TESTING 6.5).
+ * Un plan suelto (sin programa) con 3 bloques, todos en `section = 'main'` y con `order_index`
+ * CONTIGUO —requisito de `groupContiguousSupersetRuns` (packages/workout-engine/workout-block-grouping.ts:50-60):
+ * dos bloques solo forman superserie si comparten `superset_group` Y sus `order_index` son consecutivos.
+ *
+ *   0 · superserie B, miembro 1 — MOVILIDAD por lado, 3 x 5 s/lado, sin descanso propio
+ *   1 · superserie B, miembro 2 — FUERZA clasica por lado, 3 x 8-12, descanso de GRUPO 90 s
+ *   2 · bloque suelto            — FUERZA POR TIEMPO (`reps_unit='sec'`), 3 x 5 s con 10 kg, descanso 90 s
+ *
+ * Duraciones de 5 s a proposito (minimo del rango duro 5..600 de `WorkoutBlockSchema.superRefine`,
+ * packages/schemas/workout.ts): el Playwright espera el reloj REAL llegar a 0 sin reloj falso.
+ *
+ * SIN logs: el alumno E2E tiene que poder registrar las series en la corrida del spec. El spec NO
+ * borra nada; las filas de `workout_logs` que deja se quedan (o las reconcilia una corrida futura).
+ *
+ * Idempotente por TITULO de plan, igual que `seedWorkoutProgram` lo es por nombre de programa.
+ * `orgId` viaja en el ctx pero NO se usa: ni `workout_plans` ni `workout_blocks` tienen columna
+ * `org_id` (supabase/migrations/00000000000001_baseline.sql:1485-1505 y :1545-1559).
+ *
+ * @returns {Promise<string>} el `id` del plan (el `E2E_HOLD_PLAN_ID` del spec).
+ */
+async function seedHoldCanonicalPlan(admin, { clientId, coachId, exercises, exerciseNameById, label }) {
+    const existing = must(
+        await admin
+            .from('workout_plans')
+            .select('id')
+            .eq('client_id', clientId)
+            .eq('title', HOLD_PLAN_TITLE)
+            .limit(1),
+        `workout_plans select hold (${label})`
+    )
+    if (existing.length > 0) {
+        console.log(`  = ${label}: plan "${HOLD_PLAN_TITLE}" ya existe — skip arbol completo`)
+        track('workout_plans', false)
+        holdPlanId = existing[0].id
+        return existing[0].id
+    }
+
+    if (exercises.length < 3) throw new Error(`El plan del hold necesita >=3 ejercicios; hay ${exercises.length}`)
+    const [mobilityEx, strengthEx, timeEx] = exercises
+
+    const plan = must(
+        await admin
+            .from('workout_plans')
+            .insert({
+                coach_id: coachId,
+                client_id: clientId,
+                // Plan SUELTO: sin `program_id` no entra a la rotacion del programa base ni le mueve
+                // la semana al alumno; el ejecutor se abre por URL directa con su id.
+                program_id: null,
+                title: HOLD_PLAN_TITLE,
+                day_of_week: null,
+            })
+            .select('id')
+            .single(),
+        `workout_plans insert hold (${label})`
+    )
+    track('workout_plans', true)
+
+    const blockRows = [
+        {
+            plan_id: plan.id,
+            exercise_id: mobilityEx.id,
+            order_index: 0,
+            section: 'main',
+            superset_group: 'B',
+            // El tipo EFECTIVO sale del override del bloque (effectiveExerciseType, override > catalogo
+            // > 'strength'): asi el caso no depende de que el ejercicio del catalogo sea de movilidad.
+            exercise_type_override: 'mobility',
+            side_mode: 'per_side',
+            sets: 3,
+            // Espejo legacy que escribe el builder para movilidad por lado
+            // (packages/plan-builder/block-type-fields.ts:65 + STRENGTH_TIME_REPS_MIRROR :177). NOT NULL.
+            reps: '5s/lado',
+            duration_sec: 5,
+            // Sin descanso propio: `parseRestTime('')` = 0 (WorkoutTimerProvider.tsx:58-84), asi que el
+            // descanso del GRUPO lo fija el miembro de fuerza (max de los rest_time de los miembros).
+            rest_time: '',
+            target_weight_kg: null,
+        },
+        {
+            plan_id: plan.id,
+            exercise_id: strengthEx.id,
+            order_index: 1,
+            section: 'main',
+            superset_group: 'B',
+            exercise_type_override: 'strength',
+            side_mode: 'per_side',
+            sets: 3,
+            reps: '8-12',
+            rest_time: '90',
+            // Sin peso objetivo: la serie se cierra con las reps por lado y ninguna carga puede
+            // disparar la celebracion de PR encima del panel que el spec tiene que ver.
+            target_weight_kg: null,
+        },
+        {
+            plan_id: plan.id,
+            exercise_id: timeEx.id,
+            order_index: 2,
+            section: 'main',
+            superset_group: null,
+            exercise_type_override: 'strength',
+            // FUERZA POR TIEMPO (D3): `reps_unit='sec'` + `duration_sec` es el predicado unico
+            // `isStrengthTimeBlock` (packages/workout-engine/workout-exercise-type.ts:118-124). El
+            // CHECK `workout_blocks_poly_check` acepta 'sec' desde la migracion 20260910205046.
+            reps_unit: 'sec',
+            duration_sec: 5,
+            sets: 3,
+            reps: '5s',
+            rest_time: '90',
+            target_weight_kg: 10,
+        },
+    ]
+    const blocks = must(
+        await admin.from('workout_blocks').insert(blockRows).select('id, order_index, exercise_id'),
+        `workout_blocks insert hold (${label})`
+    )
+    track('workout_blocks', true, blocks.length)
+
+    const roleOf = ['movilidad per_side', 'fuerza per_side', 'fuerza por tiempo']
+    for (const b of [...blocks].sort((a, z) => a.order_index - z.order_index)) {
+        console.log(`  + ${label}: hold[${b.order_index}] ${roleOf[b.order_index]} — ${exerciseNameById.get(b.exercise_id) ?? '(sin nombre)'}`)
+    }
+
+    holdPlanId = plan.id
+    return plan.id
+}
+
 async function seedNutrition(admin, { clientId, coachId, orgId, foods, label }) {
     const existing = must(
         await admin
@@ -580,7 +719,7 @@ async function seedDailyHabits(admin, clientId, label) {
 }
 
 async function seedFullAlumnoContent(admin, ctx) {
-    const { clientId, coachId, orgId, exercises, exerciseNameById, foods, label } = ctx
+    const { clientId, coachId, orgId, exercises, exerciseNameById, foods, label, withHoldPlan = false } = ctx
     console.log(`-- Contenido alumno: ${label}`)
     await seedIntake(admin, clientId, label)
     await seedWorkoutProgram(admin, {
@@ -594,6 +733,10 @@ async function seedFullAlumnoContent(admin, ctx) {
         exerciseNameById,
         label,
     })
+    // Plan canonico del hold (W6.10): SOLO la persona 2 (`soloAlumno`). Es el unico alumno con el que
+    // corre `tests/exec-hold-superset.spec.ts`, y sembrarlo en los otros dos les ensuciaria la matriz
+    // de separacion de flujos sin que nadie lo use.
+    if (withHoldPlan) await seedHoldCanonicalPlan(admin, ctx)
     await seedNutrition(admin, { clientId, coachId, orgId, foods, label })
     await seedCheckIns(admin, clientId, label)
     await seedDailyHabits(admin, clientId, label)
@@ -694,6 +837,8 @@ async function main() {
         coachId: soloCoachUser.id,
         orgId: null,
         label: 'solo-alumno',
+        // Persona 2 = el alumno del Playwright del hold (W6.10 / DATA-TESTING 6.5).
+        withHoldPlan: true,
     })
 
     // ----- Flujo 2: enterprise (org owner + org coach + org alumno) -------------
@@ -982,10 +1127,14 @@ async function main() {
         ],
         orgs: [{ slug: ORG.slug, id: org.id, name: ORG.name }],
         teams: [{ slug: TEAM.slug, id: team.id, name: TEAM.name }],
+        holdPlan: { title: HOLD_PLAN_TITLE, id: holdPlanId, owner: EMAILS.soloAlumno },
         counts,
     }
     console.log('\n=== INVENTARIO E2E PERSONAS ===')
     console.log(JSON.stringify(inventory, null, 2))
+    // Linea copiable al env del Playwright del hold (docs/testing/E2E_PERSONAS.md). No es un secreto:
+    // es el id de un plan sintetico de una cuenta @evatest.cl.
+    console.log(`\nE2E_HOLD_PLAN_ID=${holdPlanId ?? '(no sembrado)'}`)
 }
 
 main().catch((e) => {
