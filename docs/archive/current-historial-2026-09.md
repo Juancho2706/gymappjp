@@ -114,3 +114,24 @@ device VERDE 02-09** (11 puntos). **Ola 2 chica + higiene EN CÓDIGO 02-09 noche
 8 commits, RPC `substitutions` ya aplicado en LIVE): salió con el push del tren «Ciclo real y por lado» (03-09).
 **QA en device de lo nuevo y del acumulado de 18: VERDE 05-09** (artifact `6bd32370`) ⇒
 `docs/testing/QA_DEVICE_PENDIENTE.md` queda **sin pendientes**. [MOBILE_PARITY](../status/MOBILE_PARITY.md)
+
+## Corte del 2026-09-10 ~20:30Z (tren «Cuenta atrás en pantalla» entra a CURRENT)
+
+Texto de `CURRENT.md` al momento del corte, movido acá para que el archivo siga bajo 16 KB.
+
+### Fila «Web/PWA» de la tabla de estado (texto de CURRENT al 10-09 20:30Z)
+
+| Web/PWA | Pricing v3 productivo: Free = 1 alumno + white-label + sello «Hecho con EVA»; Pro 25 sin sello. **Deploy vigente 10-09 19:03Z: `master` = `rnmobiledenuevo` = `27132cb9`, `dpl_EjxDinR2…` READY** — tren «Señales honestas para el coach» (4 reportes de Movens): agenda «Pendientes de hoy» honesta, chip 7 d, nutrición honesta, FAB sobre la cápsula ([SDD](../specs/senales-honestas-coach/SPEC.md); sin migraciones; E2E `prod-suave` 9/9 run `34518331924`; QA del owner Q1–Q24 VERDE 10-09 ⇒ SDD `done`). Anterior 08-09 03:05Z `95817804` / `dpl_HNXWcBmC…` — plan vivo y guardado honesto: aviso de plan desactivado en el builder con salto a la rutina vigente, «Plan de …» vs «Plantilla» con su copia citada, «Guardar cambios» y guard del «atrás» ([SDD](../specs/plan-vivo-y-guardado/SPEC.md); sin migraciones). | [Runbook](../operations/RUNBOOK.md) · [spec](../specs/pricing-v3/SPEC.md) |
+
+### Fila «App nativa (RN)» de la tabla de estado (texto de CURRENT al 10-09 20:30Z)
+
+| App nativa (RN) | 1.1.2 es el piso OTA; canal `production` recibe android e ios por separado sobre el mismo commit. **OTA 10-09 04:07Z** desde `master` @`d5d7d188` (android `e1f8b60a` / ios `66ffaf5d`): fix P1 marca cruzada tras logout + hero «Adherencia —» sin alumnos ([MOBILE_PARITY](MOBILE_PARITY.md)); antes, **OTA 10-09 02:27Z** @`95a1d39a` (android `9e844b15` / ios `8de637b3`) con «Porciones a la chilena». **Hotfix 04-09** íconos de alimentos al reabrir una plantilla (endpoint móvil `plan-templates` no enviaba `category` + RN no derivaba del nombre como web): OTA 1.1.2 publicada el 04-09 desde `rnmobiledenuevo` @`7395b4fb` (android `e09935cb`, ios `22c32aed`) y deploy web `dpl_Gjh6Wbrhhkk8FDKZE2qvqspTRhwS` READY (`master` = `rnmobiledenuevo` = `e9c48127`). **OTA 05-09 23:02Z** desde `master` @`9c24815d` (retiro de Starter S1/S2 + tanda 05-09): android `ea487622` / ios `59f92afe`, runtime 1.1.2. **QA del owner en device VERDE 05-09** (sesión única, artifact `6bd32370`, Android 1.1.2+86 / iOS 1.1.2+59 con OTA 04-09, web `f9ba8a3f`). **OTA 10-09 19:08Z** desde `master` @`27132cb9` (android `a95c9e11` / ios `bd329833`, runtime 1.1.2): tren «Señales honestas para el coach» — agenda, chip 7 d, nutrición honesta, FAB ([SDD](../specs/senales-honestas-coach/SPEC.md)); QA del owner Q1–Q24 VERDE 10-09 ⇒ SDD `done`. | [Mobile parity](MOBILE_PARITY.md) · [OTA](../operations/MOBILE_RELEASES_OTA.md) |
+
+### Ítems 1 y 2 de «Prioridades vigentes»: «Señales honestas para el coach» y «Porciones a la chilena» (texto de CURRENT al 10-09 20:30Z)
+
+1. **Tren «Señales honestas para el coach» (4 reportes de Movens 10-09) — EN PRODUCCIÓN 10-09 19:08Z** ([tareas](../specs/senales-honestas-coach/TASKS.md) · [QA](../specs/senales-honestas-coach/TESTING-QA.md)): `master` = `rnmobiledenuevo` = `27132cb9`, deploy `dpl_EjxDinR2…` READY, OTA 1.1.2 android `a95c9e11` / ios `bd329833`, E2E `prod-suave` 9/9 (run `34518331924`); W1–W4 = nutrición honesta, FAB, agenda «Pendientes de hoy», chip 7 d. **QA del owner Q1–Q24 VERDE 10-09 ⇒ SDD `done`; aviso a Movens enviado 10-09.** Tren cerrado; deuda en TASKS § Backlog.
+2. **Tren «Porciones a la chilena» (Nutrición V2, caso Pame Cid) — EN PRODUCCIÓN 10-09 02:29Z** ([SDD](../specs/nutrition-porciones-chilenas/SPEC.md)):
+   `master` = `rnmobiledenuevo` = `95a1d39a`, deploy `dpl_xuHL7Mrs…` READY, RPC `20260910015432` en LIVE, OTA 1.1.2 android
+   `9e844b15` / ios `8de637b3`, **set chileno INTA/UDD ENCENDIDO (22 grupos del sistema vivos)**: picker con secciones y bump ½,
+   conversión SMAE → chileno, metas «Solo el {día}», sheet del alumno con foto y genéricos primero. **QA del owner en device
+   VERDE 10-09 ⇒ SDD `done`** (fixes post-cierre `653bd760`). Queda W6.11: avisos a coaches y respuesta a Pame (textos listos).

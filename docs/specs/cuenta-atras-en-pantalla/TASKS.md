@@ -1126,7 +1126,7 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
       `metadata.hold_source`), sin escribir nada fuera del seed. **Aceptación**: verde, o —si no
       cabe— **es el último recorte del tren** (R38) y queda con **causa anotada** y decisión del owner
       (precedente: en el tren anterior faltaban las vars `E2E_*` y se corrió por GitHub Actions).
-- [ ] W6.11 **Verificar que M1 y M2 ya están aplicadas** antes de desplegar (se aplicaron en **W0.9**,
+- [x] W6.11 (10-09 ~20:20Z, jefe, por MCP de solo lectura: `list_migrations` muestra `20260910205046 workout_blocks_reps_unit_sec` y `20260910205101 get_client_exercise_prs_reps_filter`; `has_function_privilege('public.get_client_exercise_prs(uuid)')` ⇒ anon `false` / authenticated `true` / service_role `true`, idéntica a la ACL previa de §0.5; `pg_get_constraintdef(workout_blocks_poly_check)` contiene `'sec'`; 1 sola sobrecarga de la función) **Verificar que M1 y M2 ya están aplicadas** antes de desplegar (se aplicaron en **W0.9**,
       no acá). Sigue valiendo **R4**: un cliente nuevo que escriba `'sec'` contra una DB vieja recibe
       `23514`; con las migraciones ya en LIVE desde W0, el deploy web y la OTA nunca se adelantan al
       esquema. **Aceptación**: `list_migrations` muestra las 2 con su timestamp y
