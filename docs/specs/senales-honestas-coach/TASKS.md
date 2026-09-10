@@ -1,5 +1,5 @@
 ---
-status: active
+status: done
 owner: product-engineering
 last_verified: "2026-09-10"
 canonical: false
@@ -107,8 +107,8 @@ No son tareas: son el marco que ya decidió el owner. **Por eso van sin checkbox
 - [x] E5 Commit en `rnmobiledenuevo` con los cuatro carriles y los docs.
 - [x] E6 **Solo a pedido del owner**: push a `rnmobiledenuevo` y `master`, deploy web (`dpl_…` READY) y OTA 1.1.2 canal `production` desde el piso Apple (`docs/operations/MOBILE_RELEASES_OTA.md`); verificar con `eas update:list --branch production --limit 8 --json` un grupo por plataforma con `runtimeVersion` 1.1.2.
 - [x] E7 E2E `prod-suave` tras el deploy: `pnpm qa:prod:suave` (un solo navegador), registrar resultado y run.
-- [ ] E8 **Owner**: QA según [TESTING-QA](TESTING-QA.md) **completo, Q1–Q24**. Q1–Q22 en device (RN) y **Q23–Q24 en web**, que no son opcionales: Q23 firma la ficha web con el dominio apagado y el copy `Sin plan vigente` (A25/A26, R1) y Q24 la hidratación de `/coach/dashboard` en Safari iOS (gotcha `EVA-NEXTJS-18`, riesgo declarado del carril C). Sin Q23 y Q24 el SDD no pasa a `done` aunque el device esté verde.
-- [ ] E9 **Owner**: aviso a Movens con el texto de [TESTING-QA](TESTING-QA.md) § Aviso a coaches. Lo manda el owner, nunca la sesión.
+- [x] E8 **Owner**: QA según [TESTING-QA](TESTING-QA.md) **completo, Q1–Q24**. **VERDE 10-09 (owner, aprobación explícita del tren completo; evidencia en TESTING-QA § Checklist).** Q1–Q22 en device (RN) y **Q23–Q24 en web**, que no son opcionales: Q23 firma la ficha web con el dominio apagado y el copy `Sin plan vigente` (A25/A26, R1) y Q24 la hidratación de `/coach/dashboard` en Safari iOS (gotcha `EVA-NEXTJS-18`, riesgo declarado del carril C). Sin Q23 y Q24 el SDD no pasa a `done` aunque el device esté verde.
+- [ ] E9 **Owner**: aviso a Movens con el texto de [TESTING-QA](TESTING-QA.md) § Aviso a coaches (texto final listo el 10-09). Lo manda el owner, nunca la sesión.
 
 ## Backlog
 
@@ -125,6 +125,8 @@ Deuda declarada, fuera de alcance de este tren (se anota también en `docs/statu
 - **Pulse de nutrición sobre V2 (R15).** El pulse de nutrición (`apps/web/src/services/dashboard.service.ts:548-560, :679-748`) lee SOLO tablas V1 (`daily_nutrition_logs` / `nutrition_meal_logs`). V1 está congelada y V2 es la canónica, así que hoy **todo** alumno que registra en V2 (o que no tiene plan) recibe un `NUTRICION_RIESGO` falso y sus +20 puntos de atención. Con el `null` de A24b ese falso positivo desaparece. **Efecto secundario aceptado**: un alumno con plan V1 activo y cero registros en 35 días deja de llevar el flag de nutrición (sigue con los de entreno y check-in). Queda como deuda llevar el pulse a V2: hoy el service no conoce `nutrition_plans_v2` (`apps/web/src/app/coach/dashboard/_data/dashboard.queries.ts:986` solo lo usa para el demo).
 
 ## Cierre
+
+**QA del owner 2026-09-10 (tarde): Q1–Q24 VERDES ⇒ SDD `done` (los cuatro docs). Queda E9.**
 
 **Ejecución 2026-09-10 (sesión «Asistente Principal», jefe Fable + workers Opus/Sonnet vía Workflow).** W1 (4 workers Opus/Sonnet por lote de archivos), W2 (2 líneas, jefe), W3 (package → web ∥ RN, Opus), W4 (Sonnet), W5 (docs Sonnet). Base `f93378c3`; commit del tren en `rnmobiledenuevo`, **sin push** (E6/E7 a pedido del owner).
 
