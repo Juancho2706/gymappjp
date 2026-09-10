@@ -464,7 +464,7 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
 
 ### Motor de tiempo y estado (Opus)
 
-- [ ] W3.1 **(Opus)** `apps/mobile/components/alumno/workout/v3/timing.ts:39-100` — **~15 líneas + test**
+- [x] W3.1 **(Opus)** (worker Opus, 10-09, commit ecfa9fd8; incluye el fix del intervalo que no se re-armaba (`runId`)) `apps/mobile/components/alumno/workout/v3/timing.ts:39-100` — **~15 líneas + test**
       (el OUTLINE presupuestaba «~3 líneas» contando solo `viaAppState`). Tres cambios:
       - **(a) La señal de R6 se deriva de la EVIDENCIA, no del emisor.** `viaAppState` definido por
         «quién disparó el fin» es **falsable**: hay **dos** caminos a `triggerDone` — el tick del
@@ -488,12 +488,12 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
       **el mismo** `expiredWhileAway: true` (el resultado **no** puede depender de quién ganó la
       carrera); y con `expiredWhileAway: true`, `prime(30)` deja el lado derecho en **idle mostrando el
       objetivo**, no en `done`.
-- [ ] W3.1c **(Opus, tarea nueva del jefe 10-09)** `apps/mobile/lib/workout/progression.ts` (port RN de
+- [x] W3.1c **(Opus, tarea nueva del jefe 10-09)** (worker Opus, commit ecfa9fd8, test espejo del web) `apps/mobile/lib/workout/progression.ts` (port RN de
       `apps/web/src/lib/workout/progression.ts`, consumido por `ExecutorV3.tsx` vía `computeEffectiveTarget`):
       espejo exacto del guard D4 de W1.16 (`ProgressionBlockInput += reps_unit, duration_sec`; en modo tiempo
       `case 'double'` cae a `weekly_linear`, comentario en `parseRepsTop`). Sin esto un bloque por tiempo con
       doble progresión queda en `holding` para siempre en RN. **Test**: espejo del de web en `tests/mobile/`.
-- [ ] W3.2 **(Opus)** `apps/mobile/components/alumno/workout/v3/use-hold-module.ts` (**nuevo**): hook
+- [x] W3.2 **(Opus)** (worker Opus, commit ecfa9fd8; contrato fijado por el jefe + `seedObjective()` para CA-90 (jefe, 3 tests)) `apps/mobile/components/alumno/workout/v3/use-hold-module.ts` (**nuevo**): hook
       fino que compone `useCountdown` + la secuencia de lados —**`holdSidesFor(sideMode)` del motor**
       (W1.5b, R34), que `mobilitySides` (`typed-screen-model.ts:146`) pasa a delegar para no tener dos
       reglas— + `decideHoldAutolog`. **No re-implementa la cuenta.**
@@ -511,7 +511,7 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
       `tests/mobile/executor-v3-typed-screens.test.ts` (ampliar) sobre la parte pura del hook, con un
       caso que verifica que el payload de un hold bilateral guardado por reloj trae
       `metadata.hold_source === 'timer'`.
-- [ ] W3.3 **(Opus)** `apps/mobile/components/alumno/workout/v3/ExecutorV3.tsx:754-843`
+- [x] W3.3 **(Opus)** (worker Opus, commit ecfa9fd8; regla en `shouldDeferRoundRest` alineada a la matriz §11.2 por el jefe: pref OFF ⇒ CTA, pref ON ⇒ arranca solo también tras el reloj) `apps/mobile/components/alumno/workout/v3/ExecutorV3.tsx:754-843`
       (`maybeStartRest`): estado nuevo **`pendingRoundRest`** en el orquestador (**R9**), nunca en la
       fila. **Forma ampliada** respecto de R9 (`{groupId, round, seconds}` no alcanza):
       **`{groupId, round, totalRounds, seconds, label, roundContext} | null`**. Motivo verificado:
@@ -531,19 +531,19 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
       `tests/mobile/executor-v3-superset.test.ts` (ampliar) — cerrar la ronda por reloj **no** arranca
       descanso; al tocar el CTA el interstitial recibe `countKind:'ronda'`, `setTotal` y el
       `roundContext` **completo** (banner + dots); el estado pendiente se limpia en los 4 casos.
-- [ ] W3.4 **(Opus)** `apps/mobile/components/alumno/workout/v3/ExecutorV3.tsx:556-586` (`openSet`,
+- [x] W3.4 **(Opus)** (worker Opus, commit ecfa9fd8 (`holdEditValues`, roller y KeypadHost con marca `'manual'`)) `apps/mobile/components/alumno/workout/v3/ExecutorV3.tsx:556-586` (`openSet`,
       **R7**): pasar `sideMode` al `typedCtx` y sembrar `hold_left_sec`/`hold_right_sec` desde
       `metadata`. Hoy el archivo declara en `:556-559` que **deliberadamente no** lo pasa porque
       «confirmar borraría el hold guardado»: con V2 la edición pasa a ser el camino normal, así que la
       deuda se vuelve bug visible. Toda edición manual reescribe `metadata.hold_source = 'manual'`
       **junto con los lados** (el UPDATE reemplaza el jsonb entero). **Test**: editar un hold
       `per_side` guardado por reloj conserva los dos lados y cambia `hold_source` a `'manual'`.
-- [ ] W3.5 **(Opus)** `apps/mobile/components/alumno/workout/v3/ExecutorV3.tsx:1798-1811`: **sin
+- [x] W3.5 **(Opus)** (worker Opus, commit ecfa9fd8, test de no-regresión) `apps/mobile/components/alumno/workout/v3/ExecutorV3.tsx:1798-1811`: **sin
       cambio** (**R5**). El salto de paso a los ~350 ms al cerrar la última serie del bloque se
       mantiene igual que hoy, también cuando el disparador fue el reloj. Se declara como
       interpretación de V3 en el SPEC (V3 gobierna el descanso y la serie siguiente, no el salto de
       paso). **Test de no-regresión**: el guard `autoAdvancedRef` sigue impidiendo el doble salto.
-- [ ] W3.6 **(Opus)** `apps/mobile/components/alumno/workout/timers/hold-notification.ts` (**nuevo**,
+- [x] W3.6 **(Opus)** (worker Opus, commit ecfa9fd8: `hold-notification.ts` con las 4 reglas QA-10, piso 10 s, 14 tests) `apps/mobile/components/alumno/workout/timers/hold-notification.ts` (**nuevo**,
       **R18**): **clon de `cardio-notification.ts`**, no una versión recortada. Aviso local «Terminó tu
       hold», id estable **`eva-hold-end`**, `data.type = 'hold-end'` (para no barrer las del descanso
       ni las de cardio, `rest-notification.ts:52-53,239-243`), **solo si ya hay permiso concedido**
@@ -565,13 +565,13 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
       DATA-TESTING §6.3): se programa solo con permiso; se cancela en el umbral de 2 s; una carrera
       `cancel`+`schedule` deja **una sola** programada; cambiar de lado cancela y reprograma. Sumar
       además un punto al checklist de DATA-TESTING §7.1.
-- [ ] W3.7 **(Opus)** Verificación (sin cambio de código) de la cola offline:
+- [x] W3.7 **(Opus)** (worker Opus, commit ecfa9fd8: `offline-queue-hold-source.test.ts`) Verificación (sin cambio de código) de la cola offline:
       `apps/mobile/lib/offline-cache.ts:25-51` ya declara `actual_hold_sec` (`:42`),
       `actual_duration_sec` (`:39`) y `metadata: WorkoutLogMetadata` (`:51`), y el drain spreadea el
       ítem entero (`:130-133`); `apps/mobile/lib/workout-session.ts:952,968,974,1091-1101` ya escribe
       `reps_done: null`, `actual_hold_sec` y `metadata`. **Test**: `tests/mobile/` — un log de hold
       encolado en avión llega al drenado con `hold_source` en el jsonb y con los dos lados.
-- [ ] W3.8 **(Opus)** Háptica a 0: `timerHaptics.holdDone()` (`apps/mobile/lib/haptics.ts:83-86`) se
+- [x] W3.8 **(Opus)** (worker Opus (háptica en foreground desde el hook) + SPEC §12 ya lleva la lista; CA-96 decidido por el jefe: keep-awake con tag `hold-module` mientras corre) Háptica a 0: `timerHaptics.holdDone()` (`apps/mobile/lib/haptics.ts:83-86`) se
       mantiene en foreground. **El criterio de salida de este tren es «vibra y avisa a 0», nunca
       «suena a 0»** (**R31**). **No se promete** sonido (`sound.ts:23-27` dice que la reproducción real
       «se confirma en device») ni vibración con la pantalla apagada (el JS está congelado). Copiar la
@@ -583,7 +583,7 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
 
 ### Pantallas (UI · Fable — mockup v2 secciones A y B, ya aprobado)
 
-- [ ] W3.9 **[UI · Fable]** `apps/mobile/components/alumno/workout/v3/HoldModuleV3.tsx` (**nuevo**):
+- [x] W3.9 **[UI · Fable]** (jefe, 10-09, commit 2c9d1f38: `HoldModuleV3.tsx` con 3 tamaños, pastilla de lado, «luego: …», CTAs apilados, chip «Guardado · N s», re-medir, keep-awake) `apps/mobile/components/alumno/workout/v3/HoldModuleV3.tsx` (**nuevo**):
       `ProgressRing` + `formatClock` + pastilla de lado + «luego: {lado}» + CTAs.
       `HoldModuleKind = 'mobility' | 'strength_time'` (roller **fuera**, R12);
       `HoldModuleSize = 'ss' | 'solo130' | 'solo214'` (80 / 130 / 214 px). `reducedMotion` baja como
@@ -595,20 +595,20 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
       fila manual de hoy queda **tal cual**, sin módulo, sin anillo y sin CTA de reloj. Y desde `idle`,
       «Listo» conserva el comportamiento de hoy (**CA-90**): siembra el objetivo en la fila y **no**
       envía.
-- [ ] W3.10 **[UI · Fable]** `SupersetScreenV3.tsx`: montar `<HoldModuleV3 size="ss">` **justo después
+- [x] W3.10 **[UI · Fable]** (jefe, commit 2c9d1f38: montado bajo `ExecMediaV3` con predicado R29, reset por miembro + ronda, `suspended={restingNow}`) `SupersetScreenV3.tsx`: montar `<HoldModuleV3 size="ss">` **justo después
       de `<ExecMediaV3 …/>` (`:453-459`) y antes de la prescripción compacta (`:462`)** cuando el
       miembro activo tiene reloj (**V1**: el media de 150 px queda intacto arriba). Reset del módulo en
       el `useEffect` de `:239-243` **por `activeBlockId` y por ronda**; suspensión de la cuenta
       mientras corre el descanso de grupo (`restingNow`, `:152-153`).
-- [ ] W3.11 **[UI · Fable]** `SupersetScreenV3.tsx:325-333`: el commit del módulo entra por el
+- [x] W3.11 **[UI · Fable]** (jefe, commit 2c9d1f38: commit por `handleCommit(payload, source)`, CueBar a 2400 ms con origen timer) `SupersetScreenV3.tsx:325-333`: el commit del módulo entra por el
       `handleCommit` **local** (no por `onCommitSet` directo) para que el CueBar se dispare
       (`:327-330`). **R23**: con V4 el CueBar sale **sin gesto** ⇒ su auto-dismiss sube de **1650 ms a
       2400 ms** solo cuando el origen es `timer` (`:167-172`); el marquee «CONTINÚA SIN DESCANSO»
       (`:409`, `:541`) se mantiene.
-- [ ] W3.12 **[UI · Fable]** `SupersetScreenV3.tsx:638-660`: la nota «Descanso {N}s al cerrar la
+- [x] W3.12 **[UI · Fable]** (jefe, commit 2c9d1f38: `RestOfferV3 kind="ronda"` cuando `pendingRoundRest.groupId === members[0].id`) `SupersetScreenV3.tsx:638-660`: la nota «Descanso {N}s al cerrar la
       ronda» se convierte en el CTA **«Ronda lista · Descansar 90 s»** cuando `pendingRoundRest` apunta
       a este grupo (**D2**). `groupRestSec` ya se calcula en `:231-234`.
-- [ ] W3.13 **[UI · Fable]** Visibilidad de la fila de captura (**R8**), 3 estados en superserie:
+- [x] W3.13 **[UI · Fable]** (jefe, commit 2c9d1f38: corriendo ⇒ la fila del miembro activo se oculta con `display: 'none'` (nunca se desmonta); en pantalla sola se deshabilita (opacity + pointerEvents)) Visibilidad de la fila de captura (**R8**), 3 estados en superserie:
       **sin arrancar** ⇒ módulo + fila de cajas (`ActiveSetRow` con `typedMode`, `:503-545` →
       `SetRow.tsx:1163-1400`) — el camino manual de hoy **sigue existiendo** (29 de 32 holds de Movens
       se escribieron así); **corriendo** ⇒ solo módulo; **guardado** ⇒ tarjeta del miembro «hecho» con
@@ -618,14 +618,14 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
       `HoldModuleV3` esté montado — es el mismo invariante que en web (W4.11), donde desmontar deja
       `formRef` en `null` y **V2 no guarda nada, en silencio**. En `paused` la fila **vuelve a verse**
       (editable + «Reanudar»); solo en `running` se oculta.
-- [ ] W3.14 **[UI · Fable]** `MobilityScreenV3.tsx:120-138` y `:221-323`: el módulo reemplaza el bloque
+- [x] W3.14 **[UI · Fable]** (jefe, commit 2c9d1f38: `MobilityScreenV3` reescrita sobre el módulo (214 px), guardado a 0, «Listo» desde idle siembra (CA-90), fila siempre visible) `MobilityScreenV3.tsx:120-138` y `:221-323`: el módulo reemplaza el bloque
       de hold conservando el anillo **214 px** (V1). A 0 se **guarda solo** (V2). Post-guardado: anillo
       **«¡Listo!»** + chip **«Guardado · 30 s»** + CTAs **«Descansar 30 s»** (juicy) y **«Siguiente
       serie»** (secundario) — **nada arranca solo** (V3) con la pref **APAGADA**; con la pref **ON** el
       descanso arranca solo y ese par **no se pinta** (R24, W3.16). La fila de captura tipada (`:327-351`) sigue
       **siempre visible** (QA4 h8b); corriendo se **deshabilita, no se oculta**. «Listo» antes de 0
       guarda lo transcurrido con `hold_source: 'manual'` (A2/R22) y con 0 s **no envía**.
-- [ ] W3.15 **[UI · Fable]** `ExerciseScreenV3.tsx`: variante **fuerza por tiempo** — `<HoldModuleV3
+- [x] W3.15 **[UI · Fable]** (jefe, commit 2c9d1f38: `ExerciseScreenV3` con `isStrengthTimeBlock` ⇒ módulo 130 px, tile SEG (`SetRow strengthTimeMode`, Izq/Der en per_side), prescripción `N × 30s`, rueda apagada, «Aplastar serie» inerte sin segundos) `ExerciseScreenV3.tsx`: variante **fuerza por tiempo** — `<HoldModuleV3
       size="solo130">` **después de `<ExecMediaV3 …/>` (`:329-335`), antes de la prescripción
       (`:338-350`)**; prescripción `{sets} × {compactDuration(duration_sec)} · {kg} · RIR · desc`; el
       segundo `ValueTile` conmuta de «Reps» a **«SEG»** (`SetRow.tsx:1056-1065`) por prop nueva
@@ -636,7 +636,7 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
       reloj **no** se haya arrancado, **«Aplastar serie»** queda disponible **solo** si el alumno
       escribió los SEG a mano (camino manual de R8); tras el guardado ⇒ **«Descansar N s»** /
       **«Siguiente serie»** (R24, W3.16).
-- [ ] W3.16 **[UI · Fable]** **Par de CTAs «Descansar N s» / «Siguiente serie» con la preferencia
+- [x] W3.16 **[UI · Fable]** (jefe, commit 2c9d1f38: `RestOfferV3` («Descansar N s» / «Siguiente serie») en fuerza clásica, movilidad y fuerza por tiempo con `autoRestEnabled` desde `ExecutorV3`; en superserie colapsa en «Ronda lista · Descansar N s») **Par de CTAs «Descansar N s» / «Siguiente serie» con la preferencia
       APAGADA** (**R24**, +0,25 d-a). Hoy **no existe** un botón manual de descanso en V3: RN solo
       tiene los dos `startRest` **automáticos** de `v3/ExecutorV3.tsx:796` (superserie) y `:830`
       (bloque suelto), y el `ManualTimerButton` de la web vive únicamente en la barra legacy
@@ -660,7 +660,7 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
 **Gate de W3**: `pnpm --filter @eva/mobile exec tsc --noEmit` +
 `pnpm --filter @eva/mobile exec expo export --platform android` +
 `pnpm exec vitest run tests/mobile` sin rojos nuevos. **Sin dependencias nativas nuevas**: el tren
-tiene que caber en la OTA 1.1.2.
+tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile 0 · `expo export --platform android` OK (bundle 20 MB) · `vitest --project mobile-node tests/mobile` **80 archivos / 1 105 tests verdes** (+3 de CA-90 corridos aparte, 34/34 en `executor-v3-hold-module.test.ts`) · eslint mobile 0.
 
 ---
 
