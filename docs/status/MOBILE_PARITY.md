@@ -93,8 +93,10 @@ source_of_truth: apps/web responsive + apps/mobile
 > Los 11 puntos nuevos del tren «cierre de backlog 02-09» quedaron **VERDES con el owner el 02-09**
 > (Android e iOS, claro y oscuro): sección «Verificado» del mismo archivo.
 
-> **2026-09-10 (tren «Señales honestas para el coach», 4 reportes de Movens — EN CÓDIGO en
-> `rnmobiledenuevo`, push/deploy/OTA a pedido del owner, QA del owner Q1–Q24 pendiente)**: paridad web ↔
+> **2026-09-10 (tren «Señales honestas para el coach», 4 reportes de Movens — EN PRODUCCIÓN 19:08Z: `master` =
+> `rnmobiledenuevo` = `27132cb9`, deploy `dpl_EjxDinR2GY5NzLNTTDfGEX9HjG18` READY, OTA 1.1.2 android
+> `a95c9e11-fada-42b6-8a11-c6f3b7c15975` (run 34518305909) / ios `bd329833-d012-4b0e-a45c-49a9df4effe4` (run 34518316108),
+> E2E `prod-suave` 9/9 run 34518331924; QA del owner Q1–Q24 pendiente)**: paridad web ↔
 > RN en los cuatro carriles. **Agenda** «Pendientes de hoy» (web `AgendaCard`, RN `MobileTodayAgenda`): sin
 > horas de relleno ni «0 de N hechas», contador = filas reales (`agendaTotal`, antes del tope de 8), orden
 > por urgencia (danger → warning → none; programas por `daysLeft`), label armado UNA vez con
