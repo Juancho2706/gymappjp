@@ -38,10 +38,18 @@ import {
     isUsableAutoRestClientId,
     resolveAutoRestDefault,
 } from '@eva/workout-engine'
-import { isRestAutoTimerEnabled, setRestAutoTimerEnabled, subscribeRestTimerPrefs } from '../timers'
-// `OMNI_AUTOTIMER_KEY` no sale por el barrel de `timers` (sólo los getters/setters), y acá hace falta
-// la clave cruda para la MIGRACIÓN DE LECTURA del paso 2 de `resolveAutoRestDefault`.
-import { OMNI_AUTOTIMER_KEY } from '../timers/rest-timer-preferences'
+// Import DIRECTO del módulo de preferencias, NUNCA del barrel `../timers`: el barrel re-exporta
+// `TimerProvider`/`RestTimerBar`/… y con ellos `react-native` entero, y este archivo lo importa
+// `lib/auth-actions.ts` (janitor del logout), que a su vez lo cargan tests del project `web-node`
+// (`tests/mobile-branding-identity.test.ts`) donde Vite no parsea `react-native/index.js`
+// (`import typeof …`). `rest-timer-preferences.ts` sólo depende de AsyncStorage. Además acá hace
+// falta `OMNI_AUTOTIMER_KEY`, que el barrel no expone (migración de lectura del paso 2).
+import {
+    isRestAutoTimerEnabled,
+    OMNI_AUTOTIMER_KEY,
+    setRestAutoTimerEnabled,
+    subscribeRestTimerPrefs,
+} from '../timers/rest-timer-preferences'
 
 // Re-export para que las dos plataformas compartan la MISMA constante y el toggle Q1 siga costando
 // una línea en `packages/workout-engine/auto-rest-pref.ts` (R25).
