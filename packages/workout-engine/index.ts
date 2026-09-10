@@ -44,6 +44,12 @@ export * from './celebration'
 export * from './cardio-progress'
 export * from './cardio-autolog'
 export * from './hold-autolog'
+// D5 «Pasar solo al descanso» (W5): estrategia del default + resolvers puros de cohorte y de modal.
+export * from './auto-rest-pref'
+// Matriz 2×4 «quién arranca el descanso al cerrar la serie» (W5.T5): una regla para web y RN.
+export * from './rest-after-commit'
+// Copys literales del modal D5 y de la fila de la tuerca (R11b / W5.6–W5.8), compartidos web ↔ RN.
+export * from './auto-rest-copy'
 export * from './pr-detect'
 export * from './repeat-seed'
 export * from './day-completion'

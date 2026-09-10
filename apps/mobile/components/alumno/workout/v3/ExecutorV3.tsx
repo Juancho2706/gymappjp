@@ -31,6 +31,8 @@ import {
   metersToDistanceCapture,
   PAST_SET_NOT_FOUND_ERROR,
   repsUnitForModality,
+  resolveRestAfterCommit,
+  resolveShowAutoRestModal,
   sessionLogKey,
   skippedBlockIdsFromLogs,
   typedTargetFor,
@@ -42,6 +44,7 @@ import {
   type SummaryBlock,
   type TypedKeypadContext,
   type TypedPayloadContext,
+  type AutoRestModalMode,
   type WorkoutCelebrationEvent,
   sideRepsFromMetadata,
 } from '@eva/workout-engine'
@@ -84,17 +87,26 @@ import { ImportWatchSheet, type WatchImportTarget } from './ImportWatchSheet'
 import { isHealthAvailable } from '../../../../lib/health-aggregators'
 import { RecoveryBanner } from '../RecoveryBanner'
 import { WorkoutTimerProvider, useWorkoutTimers } from '../timers/TimerProvider'
-import { isRestAutoTimerEnabled, parseRestTime, type RestInterstitialRenderer } from '../timers'
+import { parseRestTime, type RestInterstitialRenderer } from '../timers'
 import { SubstituteSheetV3 } from './SubstituteSheetV3'
 import { SkipBlockSheetV3 } from './exercise-actions'
 import { SUBSTITUTION_REASON } from '../../../../lib/workout/substitution'
+import { captureAppEvent } from '../../../../lib/analytics'
 import { bestPrevOf, fmtElapsed, fmtVolume } from '../workout-ui'
 import { EXERCISE_TYPE_META, exerciseTypeColor } from '../../../../lib/exercise-type-meta'
 import { ExecHeaderV3, type ExecDotState } from './ExecHeaderV3'
 import { resolveExecTheme } from './exec-theme'
 import { SessionIntro } from './SessionIntro'
 import { SessionStart, type StartChip, type StartExercisePreview } from './SessionStart'
-import { consumeMorphLaunch, consumeMorphStartConfirmed, signalMorphSceneReady, subscribeMorphStartConfirmed } from './session-morph'
+import {
+  consumeMorphLaunch,
+  consumeMorphStartConfirmed,
+  isMorphOverlayOpen,
+  signalMorphSceneReady,
+  subscribeMorphOverlayOpen,
+  subscribeMorphStartConfirmed,
+} from './session-morph'
+import { AutoRestModalV3 } from './AutoRestModalV3'
 import { ExerciseScreenV3, strengthSeedValues } from './ExerciseScreenV3'
 import { SupersetScreenV3, type SupersetMemberSub } from './SupersetScreenV3'
 import { supersetGroupLetter, memberLetter, roundRestStartArgs, shouldDeferRoundRest } from './superset-screen-model'
@@ -107,6 +119,15 @@ import { RestInterstitialV3, type PendingRoundRest, type RestInterstitialData, t
 import { ExecSettingsSheet } from './ExecSettingsSheet'
 import { FinishSparks } from './finish-sparks'
 import { useExecSettings } from './exec-settings'
+// Preferencia D5 «Pasar solo al descanso» (W5): la verdad vive acá, namespaceada por alumno.
+import {
+  hasSeenAutoRestModal,
+  hydrateAutoRestPref,
+  markAutoRestSeen,
+  readAutoRestPref,
+  useAutoRestPref,
+  writeAutoRestPref,
+} from './auto-rest-pref'
 import { useCelebrations } from './use-celebrations'
 import { CelebrationHost } from './celebration-host'
 import { computeLivePr } from './pr-live'
@@ -355,9 +376,95 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
 
   const {
     loading, loadError, planTitle, programName, phaseName, activeWeekVariant, currentWeek, weeksToRepeat, programStructure,
-    dayOfWeek, clientId, blocks, sections, supersetMembersByBlock, sessionLogs, previousHistory, lastSessionByBlock,
+    dayOfWeek, clientId, isDemo, blocks, sections, supersetMembersByBlock, sessionLogs, previousHistory, lastSessionByBlock,
     exerciseMaxes, repeatSeed, elapsedSec, isOnline, restoredDraft, saveDraft, logSet, finishSession, retry,
   } = session
+
+  // ── Preferencia D5 «Pasar solo al descanso» (W5 · R1/R25/R32/R36 + F5) ────────────────────────────
+  //
+  // Orden OBLIGATORIO: primero se resuelve el MODAL y recién después la cohorte, porque
+  // `hasHistory := !showModal` (F5). Con la definición ingenua —las 3 señales del bundle, que están
+  // acotadas a los ejercicios de ESTE plan— un veterano con mesociclo nuevo, el alumno demo o
+  // `stepIndex > 0` quedarían en OFF sin haber decidido nada (regresión T9).
+  const autoRestMode: AutoRestModalMode = editDate ? 'past-date' : repeatDate ? 'repeat' : recoverDate ? 'recover' : 'normal'
+  /**
+   * ¿Toca abrir el modal de una sola vez? **Se resuelve UNA vez por montaje**, en cuanto la caché de
+   * la preferencia terminó de hidratar con el `clientId` de la sesión. `null` = todavía sin resolver
+   * (ahí `hasHistory` vale `true`, o sea el comportamiento de hoy).
+   *
+   * ⚠ **Todavía NO incluye la condición del Despegue/overlays**: el modal se muestra DESPUÉS de que
+   * el overlay de lanzamiento se retira y la pantalla es interactiva (R32). Esa condición la agrega
+   * el jefe al montar `<AutoRestModalV3 …/>` en W5.6; acá sólo vive la decisión de datos.
+   */
+  const [autoRestModalOpen, setAutoRestModalOpen] = useState(false)
+  const [autoRestResolved, setAutoRestResolved] = useState(false)
+  /** Guard de «una sola resolución por alumno y montaje» (el efecto corre con cada bundle nuevo). */
+  const autoRestResolvedForRef = useRef<string | null>(null)
+  useEffect(() => {
+    // Gate por `loading` (jefe, 10-09): la sesión setea `clientId` ANTES de traer el historial y los
+    // máximos (varios `await` después en `useWorkoutSession`). Resolver acá con el bundle a medias
+    // leería `previousHistory = {}` y un veterano vería el modal y nacería en OFF (la regresión T9).
+    // Con `loading === false` el bundle está completo, y el guard de abajo garantiza UNA resolución.
+    if (!clientId || loading) return undefined
+    if (autoRestResolvedForRef.current === clientId) return undefined
+    let alive = true
+    void hydrateAutoRestPref({ clientId }).then(() => {
+      if (!alive || autoRestResolvedForRef.current === clientId) return
+      autoRestResolvedForRef.current = clientId
+      const show = resolveShowAutoRestModal({
+        seen: hasSeenAutoRestModal(clientId),
+        // Las 3 señales viajan en el bundle ya cargado ⇒ 0 queries, offline-safe (R14).
+        previousHistoryCount: Object.keys(previousHistory).length,
+        exerciseMaxesCount: Object.keys(exerciseMaxes).length,
+        sessionLogsCount: sessionLogs.length,
+        isDemo,
+        mode: autoRestMode,
+        stepIndex,
+        // AsyncStorage roto no lanza acá: la hidratación lo tragó y dejó el default. Si hubiera
+        // fallado, `hasSeenAutoRestModal` devuelve `true` y el modal no sale igual (fail-safe T8).
+        storageAvailable: true,
+        clientId,
+      })
+      setAutoRestModalOpen(show)
+      setAutoRestResolved(true)
+    })
+    return () => { alive = false }
+    // Depende de `clientId` + `loading`: el guard de arriba hace que una re-ejecución (recarga
+    // silenciosa, bundle nuevo) no vuelva a abrir el modal (el «primer ejercicio» es un instante, no
+    // una condición vigente).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientId, loading])
+  /**
+   * **F5 literal**: `hasHistory := !showModal`. Hasta que el modal se resuelve vale `true`, que es el
+   * comportamiento de hoy (ON) — nunca se apaga el descanso de nadie mientras se lee el disco.
+   */
+  const autoRestHasHistory = !autoRestResolved || !autoRestModalOpen
+  /** Valor REACTIVO de la preferencia: mover el switch de la tuerca pega sin recargar (W5.T5 b). */
+  const autoRestEnabled = useAutoRestPref(clientId, autoRestHasHistory)
+  /** Lectura síncrona para la decisión de descanso, que corre ANTES del `await` de red (R36). */
+  const autoRestHasHistoryRef = useRef(autoRestHasHistory)
+  autoRestHasHistoryRef.current = autoRestHasHistory
+  const readAutoRest = useCallback(
+    () => readAutoRestPref({ clientId, hasHistory: autoRestHasHistoryRef.current }),
+    [clientId],
+  )
+  /**
+   * Cierre del modal de una sola vez. `null` = el alumno lo cerró SIN responder ⇒ marca «visto» y
+   * deja la preferencia en OFF (D5 literal). Un booleano ⇒ escribe la preferencia, marca «visto» y
+   * emite el evento con `source: 'first_modal'` (W5.9).
+   */
+  // Lo consume `<AutoRestModalV3 …/>` (W5.6); vive acá porque la escritura de la preferencia, la
+  // marca «visto» y el evento son del ORQUESTADOR, no del componente del modal.
+  const dismissAutoRestModal = useCallback((enabled: boolean | null) => {
+    setAutoRestModalOpen(false)
+    markAutoRestSeen(clientId)
+    if (enabled == null) {
+      writeAutoRestPref({ clientId, enabled: false })
+      return
+    }
+    writeAutoRestPref({ clientId, enabled })
+    captureAppEvent('rest_autostart_pref_set', { source: 'first_modal', enabled })
+  }, [clientId])
 
   // Via-morph (Despegue): avisa al overlay de lanzamiento que la escena de Inicio ya cargó → habilita el
   // tap "TOCA PARA COMENZAR". Se emite en cuanto `loading` cae a false (o de inmediato si ya venía listo).
@@ -374,6 +481,29 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
     if (!viaMorphRef.current) return undefined
     return subscribeMorphStartConfirmed(() => setPhase('session'))
   }, [])
+
+  // ── Momento del modal D5 (W5.6 · R32): DESPUÉS del Despegue y sin nada encima ─────────────────────
+  // `phase === 'session'` no alcanza: vía morph el ejecutor entra a la sesión mientras el overlay del
+  // Despegue todavía hace su despedida, y el modal quedaría DEBAJO de la ceremonia justo en el primer
+  // entreno, que es su único momento. Se escucha el cierre REAL del overlay (`session-morph`) y se
+  // exige que ningún sheet/overlay del ejecutor esté abierto. La decisión de DATOS (`autoRestModalOpen`)
+  // es una sola por montaje; esta es sólo la condición de CUÁNDO.
+  const [morphOverlayOpen, setMorphOverlayOpen] = useState(isMorphOverlayOpen)
+  useEffect(() => subscribeMorphOverlayOpen(() => setMorphOverlayOpen(isMorphOverlayOpen())), [])
+  const autoRestModalVisible =
+    autoRestModalOpen &&
+    !loading &&
+    !loadError &&
+    phase === 'session' &&
+    !startExiting &&
+    !morphOverlayOpen &&
+    !listOpen &&
+    !settingsOpen &&
+    !summaryOpen &&
+    !watchImportOpen &&
+    substituteBlockId == null &&
+    skipBlockId == null &&
+    keypadTarget == null
 
   const { hasModule } = useEntitlements()
   const planHasHrZone = useMemo(() => blocks.some((b) => b.hr_zone != null), [blocks])
@@ -830,7 +960,8 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
             }
           }
           if (!wasLogged) {
-            const autoRest = isRestAutoTimerEnabled()
+            // Lectura SÍNCRONA y previa al `await` de red (R36) de la preferencia por alumno.
+            const autoRest = readAutoRest()
             const plan = buildRoundRestPlan()
             // R24 (matriz §11.2, paridad web): el descanso de grupo queda ARMADO, no arranca, cuando
             // la preferencia «Pasar solo al descanso» está apagada — también si la ronda la cerró el
@@ -843,18 +974,27 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
               autoRestEnabled: autoRest,
             })
             if (deferred && plan) setPendingRoundRest(plan)
-            if (!autoRest) {
-              timers.cancelRest()
-            } else if (roundClosed) {
-              if (plan && !deferred) {
-                restRoundContextRef.current = plan.roundContext
-                // En superserie `payload.setNumber` es una RONDA, no una serie: el contexto viaja con
-                // `countKind: 'ronda'` para que la notificación imprima "Ronda 2 de 4" en vez de la
-                // lectura falsa "Serie 2 de 4" (por eso antes esta rama no mandaba contexto alguno).
-                // Es la ronda RECIÉN cerrada sobre el total del grupo — nunca la próxima.
-                timers.startRest(plan.seconds, roundRestStartArgs(plan))
-              }
-            } else {
+            // Matriz 2×4 del motor (W5.T5 a): UNA sola regla para web y RN. `superset-mid` ⇒ `none`
+            // (V4 manda entre miembros de la ronda); sin descanso de grupo ⇒ `none` (A7).
+            const decision = resolveRestAfterCommit({
+              autoRestEnabled: autoRest,
+              context: roundClosed ? 'superset-last' : 'superset-mid',
+              restSec: plan?.seconds ?? 0,
+              holdSource,
+            })
+            // CA-80: la rama OFF ya NO llama `timers.cancelRest()`. OFF pasó a significar «no arranco
+            // uno nuevo», no «mato el que hay» — y el que hay lo arrancó el alumno con el CTA
+            // «Descansar N s» de R24, así que cancelarlo mataba el único camino que le dejamos.
+            if (decision === 'auto-start' && plan && !deferred) {
+              restRoundContextRef.current = plan.roundContext
+              // En superserie `payload.setNumber` es una RONDA, no una serie: el contexto viaja con
+              // `countKind: 'ronda'` para que la notificación imprima "Ronda 2 de 4" en vez de la
+              // lectura falsa "Serie 2 de 4" (por eso antes esta rama no mandaba contexto alguno).
+              // Es la ronda RECIÉN cerrada sobre el total del grupo — nunca la próxima.
+              timers.startRest(plan.seconds, roundRestStartArgs(plan))
+            } else if (decision === 'none' && autoRest) {
+              // Intra-ronda (o grupo sin descanso) con la preferencia ENCENDIDA: se sigue sin
+              // detenerse y el descanso en curso se corta, como siempre. Con la pref OFF no se toca.
               timers.cancelRest()
             }
           }
@@ -864,8 +1004,8 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         }
 
         // Bloque suelto. V3 (pantalla sola): con la preferencia APAGADA nada arranca solo tampoco
-        // cuando la serie la cerró el reloj (`holdSource === 'timer'`) — la rama `!isRestAutoTimerEnabled()`
-        // de abajo ya es la que gobierna, y el descanso sale del CTA «Descansar N s» (R24, W3.16).
+        // cuando la serie la cerró el reloj (`holdSource === 'timer'`) — la matriz `resolveRestAfterCommit`
+        // de abajo es la que gobierna, y el descanso sale del CTA «Descansar N s» (R24, W3.16).
         const ex = block ? resolveExercise(block) : null
         // QA4: en V3 se ELIMINA la snackbar "Serie registrada" (el alumno corrige después con el lápiz o
         // desde la tarjeta ya hecha, "Deshacer" de cada card). V2 la conserva (ExecutorV2.tsx). El resto del
@@ -874,9 +1014,15 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
           const useWarmup = !!block?.warmup_rest_time && payload.setNumber === 1 && (block?.sets ?? 0) >= 3
           const restStr = useWarmup ? block!.warmup_rest_time! : block?.rest_time
           const secs = parseRestTime(restStr)
-          if (!isRestAutoTimerEnabled()) {
-            timers.cancelRest()
-          } else if (secs > 0) {
+          // Lectura SÍNCRONA y previa al `await` de red (R36) + matriz 2×4 del motor (W5.T5 a).
+          const autoRest = readAutoRest()
+          const decision = resolveRestAfterCommit({
+            autoRestEnabled: autoRest,
+            context: 'solo',
+            restSec: secs,
+            holdSource,
+          })
+          if (decision === 'auto-start') {
             // `setIndex`/`setTotal` viajan SOLO como contexto de la notificación del descanso
             // (QA-11 fase 2: "Serie 3 de 4" en la bandeja). Es la serie recién registrada sobre el
             // total del bloque — no la próxima, para no imprimir "Serie 5 de 4" al cerrar la última.
@@ -890,7 +1036,10 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
               setTotal: block?.sets,
               countKind: 'serie',
             })
-          } else {
+          } else if (decision === 'none' && autoRest) {
+            // Sin `rest_time` (A7) y con la preferencia ENCENDIDA se corta el descanso en curso, como
+            // siempre. CA-80: con la preferencia APAGADA ya NO se cancela nada — el descanso que
+            // corre lo pidió el alumno con el CTA «Descansar N s» (R24).
             timers.cancelRest()
           }
         }
@@ -919,7 +1068,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
       }
       signalCommitted(payload.blockId, payload.setNumber, isPrLive && !error)
     },
-    [blocks, getSubstitution, logSet, timers, sessionLogs, supersetMembersByBlock, signalCommitted, effByBlock, cel, previousHistory, exerciseMaxes],
+    [blocks, getSubstitution, logSet, timers, sessionLogs, supersetMembersByBlock, signalCommitted, effByBlock, cel, previousHistory, exerciseMaxes, readAutoRest],
   )
 
   const retryCommit = useCallback(
@@ -1540,7 +1689,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         return (
           <ExerciseScreenV3
             key={block.id}
-            autoRestEnabled={isRestAutoTimerEnabled()}
+            autoRestEnabled={autoRestEnabled}
             block={block}
             exercise={exercise}
             eff={effByBlock.get(block.id) ?? null}
@@ -1579,7 +1728,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         return (
           <MobilityScreenV3
             key={block.id}
-            autoRestEnabled={isRestAutoTimerEnabled()}
+            autoRestEnabled={autoRestEnabled}
             block={block}
             exercise={exercise}
             blockLogs={blockLogs}
@@ -1694,7 +1843,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         />
       )
     },
-    [supersetMembersByBlock, sessionLogs, skippedBlockIds, skipReasonByBlock, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, getSubstitution, openSet, hrZones, hrProfile, restoredDraft, repeatSeed, motion.reduced, exec, execSettings.showRpeRir, handleCommit, handleRpeUpdate, saveActiveDraft, recentSet, syncErrors, retryCommit, pendingRoundRest, startPendingRoundRest],
+    [supersetMembersByBlock, sessionLogs, skippedBlockIds, skipReasonByBlock, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, getSubstitution, openSet, hrZones, hrProfile, restoredDraft, repeatSeed, motion.reduced, exec, execSettings.showRpeRir, handleCommit, handleRpeUpdate, saveActiveDraft, recentSet, syncErrors, retryCommit, pendingRoundRest, startPendingRoundRest, autoRestEnabled],
   )
 
   // ── Modelo de pasos (engine) + vistas del rail + auto-avance ──
@@ -2190,14 +2339,29 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         reducedMotion={motion.reduced}
       />
 
-      {/* Tuerca del ejecutor V3 (E3.7) — ajustes del entrenamiento device-scoped. */}
+      {/* Tuerca del ejecutor V3 (E3.7) — ajustes del entrenamiento. Todo device-scoped salvo «Pasar
+          solo al descanso», que va por ALUMNO (D5/W5): por eso baja `clientId`. */}
       <ExecSettingsSheet
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
         exec={exec}
+        clientId={clientId}
+        autoRestHasHistory={autoRestHasHistory}
         onFinish={handleFinish}
         finishing={finishing}
         finishArmed={finishArmed}
+      />
+
+      {/* Modal de UNA sola vez de la preferencia «Pasar solo al descanso» (D5 · W5.6, mockup F).
+          `autoRestModalOpen` es la decisión de DATOS (una por montaje, `resolveShowAutoRestModal`);
+          `autoRestModalVisible` le suma el MOMENTO (R32): Despegue retirado, sesión interactiva y
+          ningún sheet/overlay encima. `dismissAutoRestModal(enabled | null)` escribe la pref, marca
+          «visto» y emite `rest_autostart_pref_set`; cerrar sin responder cuenta como respondido (OFF). */}
+      <AutoRestModalV3
+        open={autoRestModalVisible}
+        exec={exec}
+        reducedMotion={motion.reduced}
+        onDismiss={dismissAutoRestModal}
       />
 
       <SubstituteSheetV3

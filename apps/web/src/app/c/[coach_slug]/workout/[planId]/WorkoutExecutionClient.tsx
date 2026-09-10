@@ -39,6 +39,9 @@ import {
     type SkipReason,
     type WorkoutLogMetadata,
     SIDE_LABEL,
+    resolveRestAfterCommit,
+    resolveShowAutoRestModal,
+    type AutoRestModalMode,
 } from '@eva/workout-engine'
 import { StepperExecution, type StepperStepView } from './StepperExecution'
 import { ExecHeaderV3, type ExecDotState } from './v3/ExecHeaderV3'
@@ -55,9 +58,20 @@ import { SessionCompleteV3, type FinishSyncState } from './v3/SessionCompleteV3'
 import { TechniqueSheetV3 } from './v3/TechniqueSheetV3'
 import { computeWeeklyStreak, type WeekStatusDaySource } from './v3/weekly-streak'
 import { ExecSettingsSheet } from './v3/ExecSettingsSheet'
+import { AutoRestModalV3 } from './v3/AutoRestModalV3'
 import { RestInterstitialDataProvider, type InterstitialNext, type InterstitialRound } from './v3/RestInterstitialV3'
 import { resolveExecMedia } from './v3/exec-media'
 import { useExecSettings } from './v3/exec-settings'
+// Preferencia «Pasar solo al descanso» por ALUMNO (D5/W5). La verdad vive ACÁ, en el orquestador:
+// `LogSetForm` sólo consume la prop `autoTimerEnabled` y no lee storage (§3.6).
+import {
+    hasSeenAutoRestModal,
+    isAutoRestStorageAvailable,
+    markAutoRestSeen,
+    readAutoRestPref,
+    writeAutoRestPref,
+} from './v3/auto-rest-pref'
+import { usePostHog } from 'posthog-js/react'
 import { STEPPER_MODE_KEY } from './rest-timer-preferences'
 import { SubstituteExerciseSheet } from './_components/SubstituteExerciseSheet'
 import { SubstituteSheetV3 } from './v3/SubstituteSheetV3'
@@ -306,6 +320,15 @@ interface Props {
      * preferencia compartida por todos los alumnos de ese navegador.
      */
     clientId?: string | null
+    /**
+     * `clients.is_demo` del alumno de esta sesión (**W5.5**, `specs/cuenta-atras-en-pantalla`). El
+     * coach entra como su alumno demo por «Vive tu app» y **no** debe ver —ni responder por él— el
+     * modal de una sola vez de D5. Sale del fetch RAÍZ cacheado por request (`getStudentScopeRow`),
+     * no de un select condicional: el `from('clients')` del bundle del ejecutor está gateado por
+     * `areaIds.length > 0`, así que en un plan sin áreas el flag nunca llegaría (T6).
+     * Si no llega ⇒ `false`, y el fallback es confiar en el historial (que el demo trae sembrado).
+     */
+    isDemo?: boolean
 }
 
 /**
@@ -1232,11 +1255,10 @@ export function WorkoutExecutionClient({
     repeatDate = null,
     executorV3 = false,
     weekStatusDays = null,
-    // La prop se cablea en W4.7 con su fallback obligatorio (R32/CA-93) y la CONSUME W5, que
-    // namespacea la preferencia «Pasar solo al descanso» por alumno. Se declara acá —y no en W5— para
-    // que el fallback quede cerrado en el mismo commit que la prop, no después.
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    // Cableada en W4.7 con su fallback obligatorio (R32/CA-93) y CONSUMIDA en W5: namespacea la
+    // preferencia «Pasar solo al descanso» por alumno y su marca de «modal visto».
     clientId = null,
+    isDemo = false,
 }: Props) {
     const router = useRouter()
     const captureWorkoutCompleted = useCaptureStudentWorkoutCompleted()
@@ -1299,13 +1321,68 @@ export function WorkoutExecutionClient({
     }, [])
     const blocks = useMemo(() => [...plan.workout_blocks].sort((a, b) => a.order_index - b.order_index), [plan.workout_blocks])
     const [showTechnique, setShowTechnique] = useState(false)
+    /**
+     * Preferencia «Pasar solo al descanso» (D5/W5). El default de SSR sigue siendo `true` —el
+     * comportamiento de siempre— y el valor real se resuelve POST-MONTAJE, nunca en el initializer,
+     * para no desalinear la hidratación (QA CEO 2026-07-03: el toggle escribía localStorage pero
+     * nunca lo leía y cada entreno arrancaba en ON).
+     */
     const [autoTimerEnabled, setAutoTimerEnabled] = useState(true)
-    // Preferencia persistida (QA CEO 2026-07-03): el toggle escribía localStorage pero nunca lo
-    // leía → cada entreno arrancaba en ON. Se lee post-montaje (no en el initializer) para no
-    // desalinear la hidratación SSR.
+    /** ¿Toca abrir el modal de una sola vez? Resuelto UNA vez por montaje (W5.2/W5.4/W5.5). Es la
+     *  decisión de DATOS; el MOMENTO (después de la ceremonia, sin overlays) lo pone el montaje de
+     *  `<AutoRestModalV3 …/>` dentro de `[data-exec-v3]` (W5.7). */
+    const [showAutoRestModal, setShowAutoRestModal] = useState(false)
+    const autoRestResolvedRef = useRef(false)
+    /** **F5**: `hasHistory := !showModal`. Se guarda en un ref porque `buildRest` lo lee en callbacks. */
+    const autoRestHasHistoryRef = useRef(true)
+    const ph = usePostHog()
+    const autoRestMode: AutoRestModalMode = targetDate
+        ? 'past-date'
+        : repeatDate
+          ? 'repeat'
+          : recoverDate
+            ? 'recover'
+            : 'normal'
     useEffect(() => {
-        if (localStorage.getItem('omni_autotimer') === 'false') setAutoTimerEnabled(false)
+        if (autoRestResolvedRef.current) return
+        autoRestResolvedRef.current = true
+        // ORDEN OBLIGATORIO (F5): primero el modal, después la cohorte. Con la definición ingenua de
+        // `hasHistory` (las 3 señales del bundle, acotadas a los ejercicios de ESTE plan) un veterano
+        // con mesociclo nuevo quedaría OFF sin haber decidido nada — la regresión T9.
+        const show = resolveShowAutoRestModal({
+            seen: hasSeenAutoRestModal(clientId),
+            previousHistoryCount: Object.keys(previousHistory).length,
+            exerciseMaxesCount: Object.keys(exerciseMaxes).length,
+            sessionLogsCount: logs.length,
+            isDemo,
+            mode: autoRestMode,
+            // El modal sale en el PRIMER ejercicio; el momento exacto (después del Despegue) lo pone
+            // W5.7 al montarlo.
+            stepIndex: 0,
+            storageAvailable: isAutoRestStorageAvailable(),
+            clientId,
+        })
+        autoRestHasHistoryRef.current = !show
+        setShowAutoRestModal(show)
+        setAutoTimerEnabled(readAutoRestPref({ clientId, hasHistory: !show }))
+        // Sólo al montar: el «primer ejercicio» es un instante, no una condición vigente.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
+    /**
+     * Cierre del modal de una sola vez. `null` = cerró SIN responder ⇒ marca «visto» y deja la
+     * preferencia en OFF (D5 literal). Un booleano ⇒ escribe la pref, marca «visto» y emite
+     * `rest_autostart_pref_set` con `source: 'first_modal'` (W5.9).
+     */
+    // Lo consume `<AutoRestModalV3 …/>` (W5.7): la escritura de la preferencia, la marca «visto» y el
+    // evento son del ORQUESTADOR, no del componente del modal.
+    const dismissAutoRestModal = useCallback((enabled: boolean | null) => {
+        setShowAutoRestModal(false)
+        markAutoRestSeen(clientId)
+        const next = enabled ?? false
+        setAutoTimerEnabled(next)
+        writeAutoRestPref({ clientId, enabled: next })
+        if (enabled != null) ph?.capture('rest_autostart_pref_set', { source: 'first_modal', enabled })
+    }, [clientId, ph])
     // Modo "paso a paso" (Fase L · workstream A) — opt-in por dispositivo, mismo carril EXACTO que el
     // auto-timer: localStorage 'omni_stepper', leído post-montaje (hidratación-safe), default OFF.
     // `currentStepIndex` = paso visible del pager (swipe/rail/botones + auto-avance lo mueven).
@@ -1800,6 +1877,32 @@ export function WorkoutExecutionClient({
         }
     }, [execV3Active, execV3ViaMorph, execV3Phase, ceremonyOver, enterExecV3Session])
 
+    // ── Momento del modal D5 (W5.7 · R32): DESPUÉS de la ceremonia de entrada y sin nada encima ──
+    // `execV3Phase === 'session'` no alcanza vía morph: se entra a la sesión en el MISMO tick en que el
+    // overlay del Despegue arranca su despedida ('eva:exec-v3-dismiss'), así que el modal de una sola
+    // vez quedaría DEBAJO de la ceremonia justo en el primer entreno. Se espera el fin REAL
+    // (`data-exec-ceremony` fuera del DOM) con la misma válvula y re-armado del efecto de fusión de
+    // arriba; sin ceremonia activa (URL directa / reload) resuelve al instante.
+    const [autoRestMomentOk, setAutoRestMomentOk] = useState(false)
+    useEffect(() => {
+        if (!execV3Active || execV3Phase !== 'session') return
+        let cancelled = false
+        const watch = () => {
+            void waitForCeremonyEnd(CEREMONY_WATCH_MS).then(() => {
+                if (cancelled) return
+                if (isCeremonyActive()) {
+                    watch()
+                    return
+                }
+                setAutoRestMomentOk(true)
+            })
+        }
+        watch()
+        return () => {
+            cancelled = true
+        }
+    }, [execV3Active, execV3Phase])
+
     const registerRowRef = useCallback((blockId: string, setNumber: number, el: HTMLDivElement | null) => {
         const key = `${blockId}:${setNumber}`
         if (el) setRowRefs.current.set(key, el)
@@ -1878,7 +1981,11 @@ export function WorkoutExecutionClient({
     const toggleAutoTimer = () => {
         const newValue = !autoTimerEnabled
         setAutoTimerEnabled(newValue)
-        localStorage.setItem('omni_autotimer', String(newValue))
+        // W5.3: la escritura pasa por el carril por ALUMNO. Sin `clientId` usable cae sola a
+        // `omni_autotimer` (R32), así que este call site no necesita ninguna rama.
+        writeAutoRestPref({ clientId, enabled: newValue })
+        // W5.9 — una sola emisión por cambio, desde el handler (nunca desde el storage).
+        ph?.capture('rest_autostart_pref_set', { source: 'settings_sheet', enabled: newValue })
     }
     // Toggle "Lista / Paso a paso" del header (mirror de `toggleAutoTimer`, persiste device-scoped).
     // Al ENTRAR al modo stepper aterriza en el primer paso incompleto.
@@ -2024,7 +2131,16 @@ export function WorkoutExecutionClient({
             // «Ronda lista · Descansar N s». Con la pref ON el camino automático de `LogSetForm` sigue
             // exactamente igual que hoy y no se arma nada. Sin descanso de grupo (`rest_time` 0, A7) no
             // hay nada que ofrecer.
-            if (roundClosed && !autoTimerEnabled && info.groupRestSeconds > 0) {
+            // Matriz 2×4 del motor (W5.T5 a): UNA sola regla para web y RN. `offer-cta` ⇒ se ARMA el
+            // descanso de grupo y lo arranca el alumno con «Ronda lista · Descansar N s»; `auto-start`
+            // lo sigue arrancando `LogSetForm` con la prop `autoTimerEnabled`, como hoy.
+            const roundRestDecision = resolveRestAfterCommit({
+                autoRestEnabled: autoTimerEnabled,
+                context: roundClosed ? 'superset-last' : 'superset-mid',
+                restSec: info.groupRestSeconds,
+                holdSource: (payload.metadata as { hold_source?: string } | null | undefined)?.hold_source ?? null,
+            })
+            if (roundRestDecision === 'offer-cta') {
                 const nextBlock = nextPos ? blocks.find((b) => b.id === nextPos.blockId) : null
                 const nextName = nextBlock ? getExercise(nextBlock)?.name ?? null : null
                 setPendingRoundRest({
@@ -3158,6 +3274,27 @@ export function WorkoutExecutionClient({
                         onToggleAutoTimer={toggleAutoTimer}
                         onFinish={handleFinish}
                         finishArmed={allDone}
+                    />
+                )}
+
+                {/* Modal de UNA sola vez de la preferencia «Pasar solo al descanso» (D5 · W5.7, mockup F),
+                    DENTRO de [data-exec-v3] y sin portal (hereda --exec-brand; espejo de W5.6 en RN).
+                    `showAutoRestModal` es la decisión de DATOS (una por montaje); `autoRestMomentOk` +
+                    «ningún sheet/overlay abierto» son el MOMENTO (R32). Cerrar sin responder cuenta
+                    como respondido (OFF). */}
+                {execV3Active && (
+                    <AutoRestModalV3
+                        open={
+                            showAutoRestModal &&
+                            autoRestMomentOk &&
+                            execV3Phase === 'session' &&
+                            !showExecV3Settings &&
+                            !showTechnique &&
+                            !showCompleted &&
+                            substituteSheetBlockId == null &&
+                            skipSheetBlockId == null
+                        }
+                        onDismiss={dismissAutoRestModal}
                     />
                 )}
 

@@ -1,7 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useState } from 'react'
 import { ActivityIndicator, AppState, LayoutChangeEvent, Linking, Platform, Pressable, Text, View } from 'react-native'
 import { Check, ChevronDown, Flag, Sparkles } from 'lucide-react-native'
-import { describeNotifPermission } from '@eva/workout-engine'
+import { AUTOREST_MODAL_COPY, autoRestSublabel, describeNotifPermission } from '@eva/workout-engine'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { FONT } from '../../../../lib/typography'
@@ -11,11 +11,9 @@ import { Sheet } from '../../../Sheet'
 import {
   getRestTimerSound,
   getRestTimerVolume,
-  isRestAutoTimerEnabled,
   isRestTimerMuted,
   isRestTimerSystemToneEnabled,
   isRestTimerVibrationEnabled,
-  setRestAutoTimerEnabled,
   setRestTimerMuted,
   setRestTimerSound,
   setRestTimerSystemTone,
@@ -31,6 +29,9 @@ import {
   type RestNotifPermission,
 } from '../timers/rest-notification'
 import { useExecSettings, setKeepAwake, setShowRpeRir, setCelebrationSounds } from './exec-settings'
+// «Pasar solo al descanso» (D5/W5): la única fila del sheet que NO es device-scoped — va por ALUMNO.
+import { useAutoRestPref, writeAutoRestPref } from './auto-rest-pref'
+import { captureAppEvent } from '../../../../lib/analytics'
 import type { ExecTheme } from './exec-theme'
 
 /**
@@ -77,6 +78,8 @@ export function ExecSettingsSheet({
   open,
   onClose,
   exec,
+  clientId = null,
+  autoRestHasHistory = true,
   onFinish,
   finishing = false,
   finishArmed = false,
@@ -84,6 +87,17 @@ export function ExecSettingsSheet({
   open: boolean
   onClose: () => void
   exec: ExecTheme
+  /**
+   * Alumno dueño de la sesión (specs/cuenta-atras-en-pantalla, W5.3). Namespacea «Pasar solo al
+   * descanso»; con `null` la fila cae al carril legacy por dispositivo (`omni_autotimer`), que se
+   * lee y se escribe igual que hoy (R32). Ninguna otra fila del sheet lo usa.
+   */
+  clientId?: string | null
+  /**
+   * **F5**: `!showModal`, resuelto por el orquestador. Sólo importa cuando el alumno todavía no
+   * eligió nada (sin clave nueva ni `omni_autotimer`): ahí decide la cohorte.
+   */
+  autoRestHasHistory?: boolean
   /** Finalizar entrenamiento — decisión CEO (2026-07-22): la barra fija "Finalizar" NO existe en V3, su
    *  acción se movió acá. Al presionar la fila se cierra el sheet y se dispara el MISMO handler de la
    *  barra (`handleFinish`: cierra la sesión y abre el resumen). Aditiva: sin prop, no se pinta. */
@@ -96,9 +110,12 @@ export function ExecSettingsSheet({
 }) {
   const settings = useExecSettings()
 
+  // «Pasar solo al descanso» (D5/W5): estado REACTIVO por alumno. El hook re-renderiza cuando la
+  // preferencia cambia desde cualquier superficie (el modal de una sola vez, otra pestaña del store,
+  // el carril legacy), así que la tuerca no puede quedar desincronizada del ejecutor.
+  const autoTimer = useAutoRestPref(clientId, autoRestHasHistory)
   // Prefs del cronómetro (viven en `rest-timer-preferences`); suscribimos para reflejar cambios externos
   // (barra ↔ tuerca ↔ card del perfil).
-  const [autoTimer, setAutoTimerState] = useState(isRestAutoTimerEnabled())
   const [vibration, setVibrationState] = useState(isRestTimerVibrationEnabled())
   const [soundOn, setSoundOn] = useState(!isRestTimerMuted())
   const [tone, setTone] = useState<TimerSound>(getRestTimerSound())
@@ -112,7 +129,6 @@ export function ExecSettingsSheet({
 
   useEffect(() => {
     const sync = () => {
-      setAutoTimerState(isRestAutoTimerEnabled())
       setVibrationState(isRestTimerVibrationEnabled())
       setSoundOn(!isRestTimerMuted())
       setTone(getRestTimerSound())
@@ -195,28 +211,29 @@ export function ExecSettingsSheet({
       accessibilityLabel="Ajustes del entrenamiento"
     >
       <View style={{ paddingBottom: 8 }}>
-        {/* Cronómetro automático — de vuelta en la tuerca (decisión CEO 2026-07-25): la fila se retiró
-            por fidelidad al mockup y un `omni_autotimer` OFF heredado del ejecutor V2 quedaba atrapado
-            sin UI para revertirlo. OFF ⇒ fila roja + aviso: no habrá cronómetro de descanso. */}
+        {/* «Pasar solo al descanso» (D5 · W5.8, mockup F) — la fila que antes se llamaba «Cronómetro
+            automático» (decisión CEO 2026-07-25: vive en la tuerca para que un OFF heredado no quede
+            atrapado sin UI). Copys literales de R11b compartidos con el modal de una sola vez
+            (`AUTOREST_MODAL_COPY`, motor). El rojo `danger` del OFF SE FUE: con default apagado para el
+            alumno nuevo, apagado es una elección legítima, no una avería. */}
         <SettingRow
           exec={exec}
-          name="Cronómetro automático"
-          sublabel={autoTimer
-            ? 'El descanso empieza solo al guardar cada serie'
-            : 'No habrá cronómetro de descanso al guardar tus series'}
+          name={AUTOREST_MODAL_COPY.toggle}
+          sublabel={autoRestSublabel(autoTimer)}
           first
-          danger={!autoTimer}
           control={
             <Toggle
               testID="setting-autotimer"
               value={autoTimer}
               exec={exec}
-              danger={!autoTimer}
-              accessibilityLabel="Cronómetro automático de descanso"
+              accessibilityLabel={AUTOREST_MODAL_COPY.toggle}
               onChange={(v) => {
                 void haptics.tap()
-                setRestAutoTimerEnabled(v)
-                setAutoTimerState(v)
+                // Escritura optimista por ALUMNO (W5.3). Sin `clientId` cae al carril legacy por
+                // dispositivo; el hook de arriba refleja las dos rutas sin recargar.
+                writeAutoRestPref({ clientId, enabled: v })
+                // W5.9 — una sola emisión por cambio, desde el handler (nunca desde el storage).
+                captureAppEvent('rest_autostart_pref_set', { source: 'settings_sheet', enabled: v })
               }}
             />
           }

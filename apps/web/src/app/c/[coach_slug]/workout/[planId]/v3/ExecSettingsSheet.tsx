@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { Flag, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { describeNotifPermission } from '@eva/workout-engine'
+import { AUTOREST_MODAL_COPY, autoRestSublabel, describeNotifPermission } from '@eva/workout-engine'
 import { playTimerSound, type TimerSound } from '@/lib/audioUtils'
 import { useNotificationPermission } from '@/lib/client/use-notification-permission'
 import {
@@ -177,30 +177,21 @@ export function ExecSettingsSheet({
             </div>
 
             <div className="exec-v3-setrows">
-              {/* Cronómetro automático — de vuelta en la tuerca (decisión CEO 2026-07-25): QA1 la retiró
-                  por fidelidad al mockup y un `omni_autotimer` OFF heredado de la tuerca legacy quedaba
-                  atrapado sin UI. OFF ⇒ fila roja + aviso: no habrá cronómetro de descanso. */}
+              {/* «Pasar solo al descanso» (D5 · W5.8, mockup F) — la fila que antes se llamaba «Cronómetro
+                  automático» (decisión CEO 2026-07-25: vive en la tuerca para que un OFF heredado no quede
+                  atrapado sin UI). Copys literales de R11b compartidos con el modal de una sola vez
+                  (`AUTOREST_MODAL_COPY`, motor). El rojo del OFF SE FUE: con default apagado para el
+                  alumno nuevo, apagado es una elección legítima, no una avería. */}
               {onToggleAutoTimer && (
                 <div className="exec-v3-setrow is-first">
                   <div className="exec-v3-setmain">
-                    <div className="exec-v3-setname" style={autoTimerEnabled ? undefined : { color: '#f87171' }}>
-                      Cronómetro automático
-                    </div>
-                    <div
-                      className="exec-v3-setsub"
-                      style={autoTimerEnabled ? undefined : { color: '#f87171', fontWeight: 700 }}
-                      role={autoTimerEnabled ? undefined : 'alert'}
-                    >
-                      {autoTimerEnabled
-                        ? 'El descanso empieza solo al guardar cada serie'
-                        : 'No habrá cronómetro de descanso al guardar tus series'}
-                    </div>
+                    <div className="exec-v3-setname">{AUTOREST_MODAL_COPY.toggle}</div>
+                    <div className="exec-v3-setsub">{autoRestSublabel(autoTimerEnabled)}</div>
                   </div>
                   <Toggle
                     checked={autoTimerEnabled}
                     onChange={() => onToggleAutoTimer()}
-                    label="Cronómetro automático"
-                    danger={!autoTimerEnabled}
+                    label={AUTOREST_MODAL_COPY.toggle}
                   />
                 </div>
               )}

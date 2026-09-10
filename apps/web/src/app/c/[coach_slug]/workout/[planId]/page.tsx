@@ -5,7 +5,7 @@ import { getWorkoutExecutionData } from './_data/workout-execution.queries'
 import { getExecutorWeekStatusDays } from './_data/week-status.queries'
 import { resolveRepeatDate, validateTargetDate } from '@eva/workout-engine'
 import { getClientBasePath } from '@/lib/client/base-path'
-import { getClientRootUser } from '@/app/c/[coach_slug]/_data/client-root.queries'
+import { getClientRootUser, getStudentScopeRow } from '@/app/c/[coach_slug]/_data/client-root.queries'
 import { getTodayInSantiago } from '@/lib/date-utils'
 
 export const metadata: Metadata = { title: 'Rutina' }
@@ -59,13 +59,19 @@ export default async function WorkoutExecutionPage({ params, searchParams }: Pro
     // así que adelantarla no expone nada: en el peor caso se desperdicia una query en un request que
     // igual iba a redirigir.
     const rootUser = await getClientRootUser()
-    const [base, data, weekStatusDays] = await Promise.all([
+    const [base, data, weekStatusDays, scopeRow] = await Promise.all([
         getClientBasePath(coach_slug),
         getWorkoutExecutionData(planId, targetDate ?? undefined, repeatDate ?? undefined),
         // `catch → null` a propósito: la racha es decorativa y `SessionStart` ya trata `null` como
         // "no mostrar la pieza". Antes, al ir en su propio `await` después de los guards, un fallo
         // acá reventaba la página entera; ahora degrada. NO cambiar por un throw.
         rootUser ? getExecutorWeekStatusDays(rootUser.id).catch(() => null) : Promise.resolve(null),
+        // `is_demo` para el modal de una sola vez de D5 (specs/cuenta-atras-en-pantalla, W5.5).
+        // `getStudentScopeRow` está cacheado por request y ya lo leen los gates del nav ⇒ **0 queries
+        // nuevas**. NO sirve el `from('clients')` del bundle del ejecutor: está condicionado a que el
+        // plan tenga áreas, así que un alumno sin áreas dejaría al demo sin guard (T6). `catch → null`
+        // porque la exclusión es decorativa: sin el flag manda el historial (que el demo trae sembrado).
+        getStudentScopeRow().catch(() => null),
     ])
     const { user, plan } = data
 
@@ -99,6 +105,10 @@ export default async function WorkoutExecutionPage({ params, searchParams }: Pro
             // navegador. Con los dos nulos el cliente cae al carril legacy por dispositivo y no
             // muestra el modal. Cuesta 0 queries: `rootUser` ya se resolvió para la racha.
             clientId={rootUser?.id ?? user?.id ?? null}
+            // Alumno DEMO (W5.5 · A7/R14/R32): el coach entra como su demo por «Vive tu app» y no
+            // debe ver —ni responder— el modal de una sola vez. Sin el flag ⇒ `false` (fallback: el
+            // historial sembrado del demo ya lo excluye).
+            isDemo={scopeRow?.is_demo === true}
         />
     )
 }

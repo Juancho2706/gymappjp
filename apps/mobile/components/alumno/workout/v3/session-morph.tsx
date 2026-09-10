@@ -217,6 +217,30 @@ export function subscribeMorphStartConfirmed(fn: () => void): () => void {
     if (morphStartConfirmedListener === fn) morphStartConfirmedListener = null
   }
 }
+// ── Overlay del Despegue VIVO / CERRADO (specs/cuenta-atras-en-pantalla, W5.6 · R32) ──
+// El modal de una sola vez de la preferencia «Pasar solo al descanso» se muestra DESPUÉS de que el
+// overlay del Despegue se retira y la pantalla es interactiva; `phase === 'session'` no alcanza porque
+// el ejecutor entra a la sesión mientras el overlay todavía hace su despedida (`:363-370`). Esta es la
+// señal del cierre REAL (el `onDone` del overlay), a nivel módulo como el resto del puente.
+let morphOverlayOpen = false
+const morphOverlayListeners = new Set<() => void>()
+function setMorphOverlayOpen(open: boolean): void {
+  if (morphOverlayOpen === open) return
+  morphOverlayOpen = open
+  morphOverlayListeners.forEach((fn) => fn())
+}
+/** ¿El overlay del Despegue está montado ahora mismo? Sin provider / sin morph ⇒ `false`. */
+export function isMorphOverlayOpen(): boolean {
+  return morphOverlayOpen
+}
+/** Suscripción a los cambios de `isMorphOverlayOpen()`; devuelve el unsubscribe. */
+export function subscribeMorphOverlayOpen(fn: () => void): () => void {
+  morphOverlayListeners.add(fn)
+  return () => {
+    morphOverlayListeners.delete(fn)
+  }
+}
+
 /** El ExecutorV3 avisa que la escena de Inicio ya cargó (via-morph). */
 export function signalMorphSceneReady(): void {
   morphSceneReady = true
@@ -293,6 +317,7 @@ export function SessionMorphProvider({ children }: { children: React.ReactNode }
     // El morph NACE del componente clickeado: usa el rect real medido; si el caller no midió, cae al
     // origen sintético centrado-bajo.
     setActive({ nonce: Date.now(), planId, origin: origin ?? syntheticOrigin(), params, label })
+    setMorphOverlayOpen(true)
   }, [])
 
   const navigate = useCallback(() => {
@@ -313,6 +338,7 @@ export function SessionMorphProvider({ children }: { children: React.ReactNode }
         // Sentry no inicializado → no-op silencioso.
       }
       setActive(null)
+      setMorphOverlayOpen(false)
       busyRef.current = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -325,6 +351,7 @@ export function SessionMorphProvider({ children }: { children: React.ReactNode }
     // ejecutor la consumió y este reset es no-op inofensivo.
     if (!leftRouteRef.current) resetMorphLaunch()
     setActive(null)
+    setMorphOverlayOpen(false)
     busyRef.current = false
   }, [])
 

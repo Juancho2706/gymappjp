@@ -6,6 +6,10 @@ import { sessionFlags } from './session-flags'
 import { clearNutritionV2CacheForUser } from './nutrition-v2-cache'
 import { clearNutritionV2QueueForUser } from './nutrition-v2-offline'
 import { clearBranding, loadStoredBranding } from './branding'
+// Preferencia «Pasar solo al descanso» (specs/cuenta-atras-en-pantalla, W5.1): la caché en memoria
+// está namespaceada por alumno, pero un logout tiene que dejarla vacía igual que la marca del coach
+// saliente — es la misma lección del bug de marca cruzada. Las claves en disco NO se tocan.
+import { resetAutoRestPref } from '../components/alumno/workout/v3/auto-rest-pref'
 
 /**
  * Cierre de sesión central (Ola 0): revoca el push token de ESTE dispositivo
@@ -29,7 +33,11 @@ export function registerSessionCacheJanitor(): void {
       lastSeenUserId = session.user.id
       return
     }
-    if (event === 'SIGNED_OUT' && lastSeenUserId) {
+    if (event === 'SIGNED_OUT') {
+      // La caché de la preferencia del ejecutor se limpia SIEMPRE (aunque no hubiera `lastSeenUserId`):
+      // es memoria del alumno saliente y el próximo montaje la re-hidrata con SU `clientId`.
+      resetAutoRestPref()
+      if (!lastSeenUserId) return
       const outgoing = lastSeenUserId
       lastSeenUserId = null
       void Promise.allSettled([

@@ -249,6 +249,13 @@ export interface WorkoutSessionState {
   cycleLength: number | null
   dayOfWeek: number | null
   clientId: string | null
+  /**
+   * `clients.is_demo` del alumno de esta sesión (specs/cuenta-atras-en-pantalla, W5.5). Viene del
+   * MISMO `getClientProfile()` que ya resuelve `clientId` ⇒ **0 queries nuevas**. El coach que entra
+   * como su alumno demo por «Vive tu app» no debe ver el modal de una sola vez de D5. `false` hasta
+   * que el perfil resuelve (fallback: confiar en el historial, que el demo trae sembrado).
+   */
+  isDemo: boolean
   blocks: SessionBlock[]
   sections: SessionSection[]
   /** Mapa blockId → miembros de su superserie (o null si es bloque suelto). */
@@ -334,6 +341,8 @@ export function useWorkoutSession(
   const [cycleLength, setCycleLength] = useState<number | null>(null)
   const [dayOfWeek, setDayOfWeek] = useState<number | null>(null)
   const [clientId, setClientId] = useState<string | null>(null)
+  // `clients.is_demo` (W5.5): sale del mismo perfil que `clientId`, sin query extra.
+  const [isDemo, setIsDemo] = useState(false)
   const [blocks, setBlocks] = useState<SessionBlock[]>([])
   const [areas, setAreas] = useState<WorkoutArea[]>([])
   const [sessionLogs, setSessionLogs] = useState<ReconciledSessionLog[]>([])
@@ -656,6 +665,7 @@ export function useWorkoutSession(
       if (client) {
         setClientId(client.id)
         clientIdRef.current = client.id
+        setIsDemo(client.isDemo)
       }
 
       // Día que esta sesión escribe: hoy, o la fecha objetivo en el editor de día pasado (`?fecha`).
@@ -1196,6 +1206,7 @@ export function useWorkoutSession(
     cycleLength,
     dayOfWeek,
     clientId,
+    isDemo,
     blocks,
     sections,
     supersetMembersByBlock,

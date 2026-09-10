@@ -138,6 +138,14 @@ export type StudentModuleScope = {
     team_id: string | null
     coach_id: string | null
     org_id: string | null
+    /**
+     * Alumno DEMO del coach (`clients.is_demo`). Viaja en la fila de scope —que ya se lee UNA vez por
+     * request— para que el ejecutor pueda excluirlo del modal de una sola vez de D5
+     * (specs/cuenta-atras-en-pantalla, W5.5 · A7/R14/R32): el coach entra como su demo por «Vive tu
+     * app» y no debe responder la preferencia por él. Aditivo, 0 queries nuevas. `null` = columna
+     * ausente ⇒ el fallback es confiar en el historial.
+     */
+    is_demo: boolean | null
 }
 
 /**

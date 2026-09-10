@@ -61,7 +61,7 @@ export const getStudentScopeRow = cache(async (): Promise<StudentModuleScope | n
     const supabase = await createClient()
     const { data, error } = await supabase
         .from('clients')
-        .select('id, full_name, coach_id, team_id, org_id')
+        .select('id, full_name, coach_id, team_id, org_id, is_demo')
         .eq('id', user.id)
         .maybeSingle()
     if (error || !data) return null
