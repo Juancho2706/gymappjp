@@ -740,9 +740,15 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
       **Owner, 2026-09-10 02:18Z (09-09 23:18 Chile), respondiendo al informe del artifact 8494a516: «Q1 a, Q2 a, Q3 a,
       Q4 a»** = Q1 push + deploy + OTA android/ios ahora · Q2 encendido apenas deploy READY + dos OTAs · Q3 banner y
       mensajes listos por el jefe, los manda el owner · Q4 las 10 MEJORA quedan en el backlog.
-- [ ] W6.7 [Fable] Deploy Vercel READY + OTA 1.1.2 android/ios desde `.github/workflows/mobile-ota.yml` con `message`
+- [x] W6.7 [Fable] Deploy Vercel READY + OTA 1.1.2 android/ios desde `.github/workflows/mobile-ota.yml` con `message`
       descriptivo. **Criterio**: ids de deploy y de ambas OTAs (con su `run`) registrados en W6.10.
-- [ ] W6.8 [jefe] **Encendido del set chileno** por MCP, recién con el deploy READY y **las dos OTAs publicadas** (las
+      **Hecho 10-09**: push fast-forward `f93378c3` → `95a1d39a` a `origin/rnmobiledenuevo` y `origin/master` (02:20Z, 15
+      commits); deploy **`dpl_xuHL7Mrs7Rxqf9WEky7sRSELVX98` READY 02:22Z** (target production, `www.eva-app.cl`, home 200 /
+      `/api/health` 200); CI master `34429043071` verde (`quality`, `hygiene`, `unit` ×3; `nutrition-smoke` rojo preexistente,
+      `e2e` skipped por diseño); OTA 1.1.2 canal `production` **android grupo `9e844b15-bf9a-4e05-b192-2c565e64e593`** (run
+      `34429335195`, publicada 02:27:52Z) / **ios grupo `8de637b3-1d45-42f7-b7af-9267de3301da`** (run `34429337419`, 02:27:44Z),
+      mensaje «Porciones a la chilena W0-W6 (master 95a1d39a): …».
+- [x] W6.8 [jefe] **Encendido del set chileno** por MCP, recién con el deploy READY y **las dos OTAs publicadas** (las
       **dos** puertas de **presentación** ya filtran —el loader del picker web (`portions-groups.actions.ts` /
       `QuickEditProvider`) y la ruta móvil `nutrition-v2/exchange-groups`, que **marca** con `portionSystem` +
       `legacySystems`— y el cliente RN ya deriva `legacy` con `systemOf`; `getExchangeGroupsForCoach` y
@@ -755,13 +761,30 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
       encendido, `node --import tsx scripts/nutrition-portions/classify-foods.mjs` (dry-run) vuelve a salir con exit 0: hasta ahí
       `verifyGroupRefs` reporta los 13 chilenos como `missing_in_db` (decisión (p) de W1.14). Y el piso defensivo (l) deja de
       dispararse.
-- [ ] W6.9 [Fable] `pnpm qa:prod:suave` al cierre. **Criterio**: 9/9 o los fallos explicados; run id pegado.
+      **Hecho 10-09 02:29:01Z** (con deploy READY + las dos OTAs de W6.7): `update public.exchange_groups set deleted_at = null,
+      updated_at = now() where is_system and portion_system = 'cl' and deleted_at is not null` ⇒ **22 vivos** (13 `cl` + 9
+      `smae`), **0 códigos duplicados** (el índice parcial no se quejó), **0 chilenos sin equivalencias** (de 10 en `AZ` a 707 en
+      `PCT`), 13 con `macros_confirmed`, 116 coaches en `cl` / 0 en `smae`. La verificación por superficie (coach `cl` ve 13 filas;
+      coach `smae` ve su set + Legado) queda en el QA en device del owner (checklist 1–2). Apagado de emergencia: la misma
+      sentencia con `deleted_at = now()`. Post-check: `node <raíz>/node_modules/jiti/lib/jiti-cli.mjs
+      scripts/nutrition-portions/classify-foods.mjs` (dry-run, 02:30Z) ⇒ **exit 0** (3.857 clasificados, 807 sin clasificar,
+      dataset en `tmp/` ignorado): `verifyGroupRefs` ya no reporta `missing_in_db`.
+- [x] W6.9 [Fable] `pnpm qa:prod:suave` al cierre. **Criterio**: 9/9 o los fallos explicados; run id pegado.
+      **Hecho 10-09**: por `workflow_dispatch` de `ci.yml` desde `master` (el job `e2e` solo corre así; local sin vars `E2E_*`):
+      run **`34429709228`**, job `e2e` `102723329034` ⇒ **9 passed (47,9 s)**, 1 worker, 02:35:09–02:37:41Z, contra
+      `www.eva-app.cl` con el set chileno ya encendido; el resto del CI (`quality`, `hygiene`, `unit` ×3) también verde.
 - [ ] W6.10 [Fable] Completar «Registro de cierres» y el checklist de QA en device con el veredicto del owner.
+      **Parcial 10-09**: registro completado con deploy, OTAs, encendido y E2E; el checklist de QA en device (10 puntos) espera
+      el veredicto del owner y con él el SDD pasa a `done`.
 - [ ] W6.11 [owner] Avisos: banner in-app a **los coaches con porciones SMAE vivas** (9 por V2 al 08-09; **sumar los de
       V1** con la query de W0.6, que recorre las dos generaciones — la lista de destinatarios se cierra con ese número,
       no con el 9 de STATS), mensaje a `nutricionista-pame-cid`, a `dudu` y a
       `josefit` (textos en [PLAN](PLAN.md) §Docs y cierre). **Criterio**: enviado y anotado acá con fecha; nada de push
       masivo.
+      **Estado 10-09 (owner «Q3 a»)**: textos listos por el jefe en `D:\tmp\plan-porciones-chilenas\AVISOS-W6.11.md` (banner
+      para `/admin/novedades` con título y cuerpo, mensaje a Pame —versión larga en `RESPUESTA-PAME.md`— y mensaje a `dudu` /
+      `josefit`), todos tomados del PLAN. Los manda el owner después del encendido (ya hecho, W6.8); al mandarlos se anota acá
+      la fecha.
 
 ## Decisiones del owner 10-09 (tras el reporte de W0–W4 + W3)
 
@@ -806,7 +829,7 @@ _(vacía: se llena si aparece un reporte después del cierre, con `### <fecha> �
 | 2026-09-09 | W3 · conversión SMAE → chileno | worktree `porciones-chilenas`, sin push (`6e2b37cb` (checkpoint) + remate y docs (este commit)) | vitest paquete + engine + `_quick-edit` + repo + tests RN · typecheck · tsc mobile · tokens · boundaries · eslint por archivo | 18 + remate; decisiones (ad)–(ag) en W3.10; QA device W3.8 pendiente; corrige el `legacySystems` de W1.3 (solo grupos del sistema) |
 | 2026-09-09 | W4 · metas por día | worktree `porciones-chilenas`, sin push (`383e4a74` (checkpoint) + `20769987` (remate 1) + remate 2 y docs (este commit)) | vitest paquete + `_quick-edit` + tests RN · typecheck · tsc mobile · tokens · boundaries · eslint por archivo | 10 + 12 + remate 2 agentes; decisiones (y)–(ac) en W4.9; QA device W4.7 pendiente (aviso inline RN, KeyboardDoneBar iOS, plan de Pame con «Ir a Base») |
 | 2026-09-10 | W5 · equivalencias del alumno | worktree `porciones-chilenas`, sin push (`a4fe68b4` (checkpoint) + remate y docs (este commit)) | vitest 112/1.897 · typecheck (fixture W3 corregido) · tsc mobile · tokens · boundaries 473 · eslint por archivo · SQL W5.2 + W5.3 tx-rollback en LIVE | **RPC `get_nutrition_today_v2` parcheado en LIVE: versión `20260910015432`** (21.119 → 22.470 chars); Today 93.907 → 132.878 B (W5.10); 10 + 6 agentes; decisiones (ah)–(an) en W5.13; QA device W5.11 pendiente |
-| 2026-09-10 | W6 · cierre documental (W6.1–W6.5) | worktree `porciones-chilenas`, sin push (docs de W6 = este commit) | suite completa: vitest 760/10.275 · lint 0 errores · typecheck · tsc mobile · tokens · boundaries 473 · docs:check | **Esperando el OK explícito del owner (W6.6)** para push a `rnmobiledenuevo` = `master`, deploy, OTA 1.1.2 android/ios, encendido del set (W6.8 ⇒ 22 vivos), `qa:prod:suave` (W6.9), avisos (W6.11) y respuesta a Pame; W6.7–W6.11 abiertas |
+| 2026-09-10 | W6 · cierre (W6.1–W6.9) — **EN PRODUCCIÓN 02:29Z** | `64c5cc0b` (docs W6.1–W6.5) + `95a1d39a` (OK del owner W6.6) + docs de cierre (este commit); `master` = `rnmobiledenuevo` = `95a1d39a` + docs | suite completa (vitest 760/10.275 · lint 0 errores · typecheck · tsc mobile · tokens · boundaries 473 · docs:check) · CI master `34429043071` · E2E `prod-suave` 9/9 (run `34429709228`) | OK del owner 02:18Z («Q1 a, Q2 a, Q3 a, Q4 a»); deploy `dpl_xuHL7Mrs7Rxqf9WEky7sRSELVX98` READY 02:22Z; OTA 1.1.2 android `9e844b15` (run 34429335195) / ios `8de637b3` (run 34429337419); **set chileno encendido 02:29:01Z ⇒ 22 vivos**; `classify-foods` dry-run exit 0; quedan W6.10 (QA en device del owner ⇒ SDD `done`) y W6.11 (avisos: textos listos, los manda el owner) |
 
 ## Backlog heredado
 

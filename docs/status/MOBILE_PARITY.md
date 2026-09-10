@@ -12,9 +12,11 @@ source_of_truth: apps/web responsive + apps/mobile
 
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
 
-> **2026-09-10 (tren «Porciones a la chilena», Nutrición V2 — W0–W5 EN CÓDIGO en el worktree `porciones-chilenas`, sin push;
-> RPC `get_nutrition_today_v2` parcheado en LIVE `20260910015432` (aditivo), set chileno sembrado APAGADO hasta W6.8; esperando
-> el OK del owner para push/deploy/OTA 1.1.2 y encendido)** ([SDD](../specs/nutrition-porciones-chilenas/SPEC.md), mockups
+> **2026-09-10 (tren «Porciones a la chilena», Nutrición V2 — W0–W6 EN PRODUCCIÓN 02:29Z: `master` = `rnmobiledenuevo` =
+> `95a1d39a`, deploy `dpl_xuHL7Mrs7Rxqf9WEky7sRSELVX98` READY, RPC `get_nutrition_today_v2` `20260910015432` (aditivo), OTA 1.1.2
+> `production` android `9e844b15-bf9a-4e05-b192-2c565e64e593` (run 34429335195) / ios `8de637b3-1d45-42f7-b7af-9267de3301da`
+> (run 34429337419), set chileno ENCENDIDO 02:29Z ⇒ 22 grupos del sistema vivos; QA del owner en device PENDIENTE)**
+> ([SDD](../specs/nutrition-porciones-chilenas/SPEC.md), mockups
 > aprobados por el owner el 09-09). Paridad web + RN: **sheet «1 porción equivale a» del alumno** con secciones «Genéricos · INTA ·
 > UDD» / «Marcas y productos», miniatura 36 px (`FoodThumbnail size="sm"` RN / `next/image unoptimized` web) con fallback del
 > marcador del grupo, medida casera en negrita y gramos debajo, pie «Fotos: Open Food Facts (CC BY-SA)» condicional por

@@ -386,8 +386,11 @@ jefe en el worktree tras el juicio de los workers (salida real):
 - **Consolidado (W6.4, 10-09)**: cada wave corrió vitest proporcional + `pnpm typecheck` + tsc mobile + `check:tokens` +
   `check:nutrition-v2-boundaries` + eslint por archivo (detalle por wave abajo). LIVE recibió tres migraciones (`20260909163802`,
   `20260909163812`, `20260910015432`), el seed chileno APAGADO y 2.499 equivalencias, siempre con tx-rollback + smoke previos.
-  Suite completa una vez en W6.5 (al final de esta sección). **Bloqueador pendiente**: OK del owner (W6.6) para push, deploy,
-  OTA 1.1.2 y encendido del set; `pnpm qa:prod:suave` recién al cierre (W6.9).
+  Suite completa una vez en W6.5 (al final de esta sección). **Salida a producción 10-09**: OK del owner 02:18Z («Q1 a, Q2 a,
+  Q3 a, Q4 a»), push `95a1d39a` a `master` = `rnmobiledenuevo`, deploy `dpl_xuHL7Mrs7Rxqf9WEky7sRSELVX98` READY 02:22Z, CI master
+  `34429043071` verde (`nutrition-smoke` rojo preexistente), OTA 1.1.2 android `9e844b15` (run 34429335195) / ios `8de637b3`
+  (run 34429337419), set chileno encendido 02:29Z (22 vivos, 0 duplicados, 0 sin equivalencias); E2E `prod-suave` por
+  `workflow_dispatch` de `ci.yml` (W6.9, al final de esta sección).
 
 - `pnpm docs:check` ⇒ **OK — 20 canónicos, 257 Markdown activos** con el SDD copiado a `docs/specs/nutrition-porciones-chilenas/`.
 - `node --check scripts/nutrition-portions-cl/derive-cl-equivalences.mjs` ⇒ OK. Sin vitest/typecheck: W0 no toca código de producto.
@@ -428,7 +431,9 @@ jefe en el worktree tras el juicio de los workers (salida real):
   sin uso, `prefer-const`) · `pnpm typecheck` ⇒ exit 0 · `pnpm --filter @eva/mobile exec tsc --noEmit` ⇒ exit 0 ·
   `pnpm check:tokens` ⇒ OK (86 + 5) · `pnpm check:nutrition-v2-boundaries` ⇒ 473 archivos OK · `pnpm docs:check` ⇒ OK — 20
   canónicos, 257 Markdown activos, CURRENT.md 14,5 KB (tope 16 KB).
-- No corrido: `pnpm qa:prod:suave` (W6.9: recién tras el OK del owner y el deploy); E2E local sin vars `E2E_*`.
+- **W6.9 E2E `prod-suave` (10-09, tras deploy READY + OTAs + encendido)**: `gh workflow run ci.yml --ref master` ⇒ run
+  `34429709228`, job `e2e` `102723329034` ⇒ **9 passed (47,9 s)**, 1 worker, 02:35:09–02:37:41Z contra `www.eva-app.cl`; el
+  resto del CI verde (`nutrition-smoke` skipped en dispatch). No corrido: E2E local (sin vars `E2E_*`).
 
 ## Pendientes actuales
 
