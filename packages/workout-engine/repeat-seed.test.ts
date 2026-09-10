@@ -123,3 +123,47 @@ describe('buildRepeatSeedMap — filas tipadas', () => {
         expect(seed.get('b1:1')?.metadata).toBeNull()
     })
 })
+
+describe('buildRepeatSeedMap — hold_source NO se siembra (W1.11)', () => {
+    // Mismo criterio que la nota: la fuente del hold de HOY se decide hoy, en el commit. Que el hold
+    // del lunes lo haya guardado el reloj no dice nada de cómo se va a guardar el de hoy.
+    it('siembra los lados y descarta hold_source', () => {
+        const seed = buildRepeatSeedMap([
+            {
+                block_id: 'b1',
+                set_number: 1,
+                actual_hold_sec: 60,
+                metadata: { left_sec: 30, right_sec: 30, hold_source: 'timer' } as RepeatSeedRow['metadata'],
+            },
+        ])
+
+        const entry = seed.get('b1:1')
+        expect(entry?.actualHoldSec).toBe(60)
+        expect(entry?.metadata).toEqual({ left_sec: 30, right_sec: 30 })
+        expect(entry?.metadata).not.toHaveProperty('hold_source')
+    })
+
+    it('un hold bilateral marcado deja la metadata vacía, sin la clave', () => {
+        const seed = buildRepeatSeedMap([
+            {
+                block_id: 'b1',
+                set_number: 1,
+                actual_hold_sec: 30,
+                metadata: { hold_source: 'manual' } as RepeatSeedRow['metadata'],
+            },
+        ])
+
+        expect(seed.get('b1:1')?.metadata).toEqual({})
+    })
+
+    it('sin la clave, la metadata viaja intacta (cero cambio para el histórico)', () => {
+        const metadata = { left_sec: 30, right_sec: 28 }
+        const seed = buildRepeatSeedMap([{ block_id: 'b1', set_number: 1, metadata }])
+
+        expect(seed.get('b1:1')?.metadata).toBe(metadata)
+        expect(buildRepeatSeedMap([{ block_id: 'b2', set_number: 1 }]).get('b2:1')?.metadata).toBeNull()
+        expect(
+            buildRepeatSeedMap([{ block_id: 'b3', set_number: 1, metadata: null }]).get('b3:1')?.metadata,
+        ).toBeNull()
+    })
+})

@@ -143,4 +143,20 @@ export const DAY_COMPLETION_FIXTURES: readonly DayCompletionFixture[] = [
         },
         expected: { state: 'none', pct: 0, expected: 0, logged: 0 },
     },
+    {
+        // FUERZA POR TIEMPO (D3, specs/cuenta-atras-en-pantalla): esas series se guardan con
+        // `reps_done NULL` + `actual_hold_sec` (R2). La completitud cuenta FILAS, no reps, así que un
+        // día entero de planchas y wall sits tiene que cerrar en `done` igual que uno de reps — si
+        // alguna plataforma filtrara por `reps_done > 0` al armar su `loggedSetsByBlock`, este caso
+        // se pondría rojo ahí, que es exactamente para lo que existe.
+        name: 'día cerrado sólo con holds de fuerza por tiempo (reps_done NULL) => done',
+        input: {
+            blocks: [
+                { id: 'plancha', sets: 3 },
+                { id: 'wall-sit', sets: 3 },
+            ],
+            loggedSetsByBlock: { plancha: 3, 'wall-sit': 3 },
+        },
+        expected: { state: 'done', pct: 1, expected: 6, logged: 6 },
+    },
 ] as const

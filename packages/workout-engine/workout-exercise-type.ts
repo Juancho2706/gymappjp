@@ -45,6 +45,13 @@ export const EXERCISE_TYPE_OPTIONS: readonly { value: ExerciseType; label: strin
     { value: 'roller', label: 'Foam roller (duración o pasadas)' },
 ]
 
+/**
+ * `workout_blocks.reps_unit` que marca el modo «fuerza por tiempo» (D3, specs/cuenta-atras-en-pantalla).
+ * Vive acá porque es el eje del predicado `isStrengthTimeBlock`; el enum completo es
+ * `REPS_UNIT_VALUES` de `@eva/schemas` (superset EXACTO del CHECK `workout_blocks_poly_check`).
+ */
+export const STRENGTH_TIME_REPS_UNIT = 'sec' as const
+
 function asExerciseType(raw: string | null | undefined): ExerciseType | null {
     return raw && (EXERCISE_TYPES as readonly string[]).includes(raw) ? (raw as ExerciseType) : null
 }
@@ -92,6 +99,33 @@ export function hasTypedPrescription(block: TypedBlockFields): boolean {
         block.interval_config != null ||
         (block.reps_value != null && block.reps_unit != null && block.reps_unit !== 'reps')
     )
+}
+
+/**
+ * Los DOS campos que definen el modo tiempo, en un solo lugar. Privado a propósito: el predicado
+ * público es `isStrengthTimeBlock` (que además exige que el tipo efectivo sea `strength`); esta
+ * mitad existe sólo para que la rama strength de `legacyRepsSummaryFor` —que ya recibe el tipo
+ * resuelto— no tenga que volver a comparar `reps_unit === 'sec'` a mano (R3).
+ */
+function hasTimeModeFields(block: TypedBlockFields): boolean {
+    return block.reps_unit === STRENGTH_TIME_REPS_UNIT && (block.duration_sec ?? 0) > 0
+}
+
+/**
+ * Fuente ÚNICA del modo «fuerza por tiempo» (D3/R3): plancha, wall sit, hollow hold — fuerza con
+ * carga, RIR y tempo, prescrita en SEGUNDOS en vez de reps. Nadie compara `reps_unit === 'sec'` a
+ * mano; web y RN consumen este predicado.
+ *
+ * El **AND** es obligatorio, nunca un OR: en LIVE hay 2 bloques de fuerza con `duration_sec`
+ * (600 y 120) y `reps_unit NULL` — residuo de un cambio de tipo. Con un OR esos 2 alumnos verían
+ * una cuenta atrás de 10 min y de 2 min en un ejercicio de fuerza clásica. Test que congela el caso
+ * (H8) en `workout-exercise-type.test.ts`.
+ */
+export function isStrengthTimeBlock(
+    block: TypedBlockFields,
+    exercise?: { exercise_type?: string | null } | null,
+): boolean {
+    return effectiveExerciseType(block, exercise) === 'strength' && hasTimeModeFields(block)
 }
 
 /** "90" → "90s" · "300" → "5min" · "75" → "1m15s". Compacto para chips/cards. */
@@ -181,6 +215,14 @@ export function legacyRepsSummaryFor(block: TypedBlockFields, type: ExerciseType
         return block.reps?.trim() || 'roller'
     }
 
+    // strength EN MODO TIEMPO (D3): el objetivo por segundos manda ANTES que el texto del coach.
+    // Sin esta línea, un bloque que el coach pasó de Reps a Segundos seguiría arrastrando "8-12"
+    // como espejo legacy (`workout_blocks.reps` es NOT NULL) por toda la app — chips, preview,
+    // print, `target_reps_at_log` e historial.
+    if (hasTimeModeFields(block)) {
+        return truncate20(`${compactDuration(block.duration_sec as number)}${side}`)
+    }
+
     // strength: el texto manual del coach manda; el resumen solo cubre distancia (farmer carry)
     if (block.reps?.trim()) return block.reps.trim()
     if (block.distance_value != null && block.distance_value > 0) {
@@ -214,6 +256,68 @@ export function typedBlockSummary(block: TypedBlockFields, type: ExerciseType): 
         return `${block.sets}× ${base}`
     }
     return base
+}
+
+/**
+ * Objetivo del header en modo tiempo: "3 × 30s" · "3 × 30s por lado" (D3).
+ * `formatTypedObjective` no tiene rama strength y `typedBlockSummary` produce el chip corto
+ * ("3×30s"); ésta es la forma larga con "×" espaciado que piden el header del ejecutor y la ficha.
+ *
+ * Convención tipográfica (R11): acá va `30s` SIN espacio, porque el objetivo es un texto corto de
+ * chip/header. Las líneas largas de log y resumen usan `30 s` con espacio
+ * (`formatStrengthTimeSetLine`, `logged-set-summary.ts`).
+ */
+export function formatStrengthTimeObjective(block: TypedBlockFields): string {
+    const sets = block.sets && block.sets > 0 ? block.sets : 1
+    const seconds = compactDuration(block.duration_sec ?? 0)
+    const perSide = block.side_mode === 'per_side' || block.side_mode === 'alternating'
+    return `${sets} × ${seconds}${perSide ? ' por lado' : ''}`
+}
+
+/**
+ * Número del chip de progresión en es-neutro: `2.5 → "2,5"`, `2 → "2"`.
+ *
+ * Copia deliberada y mínima de `formatEsNumber` (`logged-set-summary.ts:46`): ese módulo IMPORTA de
+ * éste (`sideRepsFromMetadata`, `ExerciseType`), así que importarlo de vuelta armaría un ciclo entre
+ * los dos archivos del motor. El incremento de una progresión es un número chico (0,5–10): no
+ * necesita separador de miles, que es justo lo único que `formatEsNumber` agrega de más.
+ */
+function progressionNumber(value: number): string {
+    if (!Number.isFinite(value)) return '?'
+    const fixed = value.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')
+    return fixed.replace('.', ',')
+}
+
+/** Bloque mínimo para el chip de progresión: los campos tipados + las 2 columnas de progresión. */
+export interface ProgressionTagBlock extends TypedBlockFields {
+    progression_type?: string | null
+    progression_value?: number | null
+}
+
+/**
+ * Chip/badge de sobrecarga progresiva, con la UNIDAD correcta (D4/R30):
+ *   `+2,5 kg/sem` · `+5 seg/ses` · `+2 rep/ses`. Sin progresión ⇒ `null`.
+ *
+ * D4 remapea «+ Segundos» sobre el MISMO `progression_type = 'reps'` (sin columna nueva), así que la
+ * unidad no se puede leer de la columna: se resuelve con `isStrengthTimeBlock`. Sin este formateador
+ * los 6 consumidores (2 de ellos de cara al alumno: el ejecutor web y su espejo RN) anuncian una
+ * plancha que sube 5 s por sesión como «+5 rep/ses».
+ *
+ * `progression_value` nulo imprime `?`, igual que hacen hoy el PDF y el chip del builder — es un
+ * plan a medio configurar, no un error.
+ *
+ * ⚠ La progresión por segundos sigue siendo CARTEL, sin motor que suba el objetivo solo, igual que
+ * «+ Reps» hoy (`computeEffectiveTarget` es no-op con `progression_type !== 'weight'`).
+ */
+export function formatProgressionTag(
+    block: ProgressionTagBlock,
+    exercise?: { exercise_type?: string | null } | null,
+): string | null {
+    if (!block.progression_type) return null
+    const value = block.progression_value
+    const n = value == null ? '?' : progressionNumber(value)
+    if (block.progression_type === 'weight') return `+${n} kg/sem`
+    return isStrengthTimeBlock(block, exercise) ? `+${n} seg/ses` : `+${n} rep/ses`
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

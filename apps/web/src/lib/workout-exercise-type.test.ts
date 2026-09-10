@@ -3,11 +3,24 @@ import {
     compactDistance,
     compactDuration,
     effectiveExerciseType,
+    formatProgressionTag,
+    formatStrengthTimeObjective,
     hasTypedPrescription,
+    isStrengthTimeBlock,
     legacyRepsSummaryFor,
     typedBlockSummary,
 } from './workout-exercise-type'
-import { buildIntervalPhases, intervalTotalDurationSec, isTimeableInterval } from '@eva/workout-engine'
+import {
+    buildIntervalPhases,
+    intervalTotalDurationSec,
+    isTimeableInterval,
+    formatProgressionTag as engineFormatProgressionTag,
+    formatStrengthTimeObjective as engineFormatStrengthTimeObjective,
+    hasTypedPrescription as engineHasTypedPrescription,
+    isStrengthTimeBlock as engineIsStrengthTimeBlock,
+    legacyRepsSummaryFor as engineLegacyRepsSummaryFor,
+    typedBlockSummary as engineTypedBlockSummary,
+} from '@eva/workout-engine'
 import type { IntervalConfig } from '@/domain/workout/types'
 
 describe('effectiveExerciseType (decisión #2: override > exercise > strength)', () => {
@@ -167,5 +180,56 @@ describe('buildIntervalPhases (AC5: máquina de fases)', () => {
     it('duración total suma todas las fases', () => {
         // 300 + 3×60 + 2×30 + 120 = 660
         expect(intervalTotalDurationSec(config, 1)).toBe(660)
+    })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// W1.15 — la copia web ES el motor: mismo símbolo, misma salida
+//
+// `hasTypedPrescription` y `typedBlockSummary` eran espejos línea por línea del motor (el mismo
+// drift que ya se había resuelto con `legacyRepsSummaryFor`): un ajuste en una sola de las dos
+// producía planes con resúmenes distintos según dónde se hubieran creado. Este bloque congela que
+// ahora son la MISMA función, no dos que casualmente coinciden.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('paridad web ↔ @eva/workout-engine (W1.15)', () => {
+    /** Bloque canónico del tren: plancha frontal con disco, 3 × 30 s por lado. */
+    const canonical = {
+        sets: 3,
+        reps: '30s',
+        reps_unit: 'sec',
+        duration_sec: 30,
+        side_mode: 'per_side' as const,
+        progression_type: 'reps',
+        progression_value: 5,
+    }
+
+    it('son la misma referencia, no dos copias que coinciden', () => {
+        expect(hasTypedPrescription).toBe(engineHasTypedPrescription)
+        expect(typedBlockSummary).toBe(engineTypedBlockSummary)
+        expect(legacyRepsSummaryFor).toBe(engineLegacyRepsSummaryFor)
+        expect(isStrengthTimeBlock).toBe(engineIsStrengthTimeBlock)
+        expect(formatStrengthTimeObjective).toBe(engineFormatStrengthTimeObjective)
+        expect(formatProgressionTag).toBe(engineFormatProgressionTag)
+    })
+
+    it('el bloque canónico da la misma salida por los dos caminos', () => {
+        expect(typedBlockSummary(canonical, 'strength')).toBe(engineTypedBlockSummary(canonical, 'strength'))
+        expect(typedBlockSummary(canonical, 'strength')).toBe('3×30s')
+        expect(legacyRepsSummaryFor(canonical, 'strength')).toBe('30s/lado')
+        expect(isStrengthTimeBlock(canonical)).toBe(true)
+        expect(formatStrengthTimeObjective(canonical)).toBe('3 × 30s por lado')
+        expect(formatProgressionTag(canonical)).toBe('+5 seg/ses')
+    })
+
+    it('un bloque de fuerza clásico se ve exactamente igual que antes del colapso', () => {
+        const classic = { sets: 3, reps: '8-12' }
+        expect(hasTypedPrescription(classic)).toBe(false)
+        expect(typedBlockSummary(classic, 'strength')).toBeNull()
+        expect(legacyRepsSummaryFor(classic, 'strength')).toBe('8-12')
+        expect(isStrengthTimeBlock(classic)).toBe(false)
+        expect(formatProgressionTag({ ...classic, progression_type: 'reps', progression_value: 2 })).toBe(
+            '+2 rep/ses',
+        )
     })
 })

@@ -192,7 +192,7 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
 
 ## W1 · Motor compartido (`@eva/workout-engine`) — 2 días-agente · **Opus**
 
-- [ ] W1.1 **(Opus)** `packages/workout-engine/hold-autolog.ts` (**nuevo**): `HoldEndReason =
+- [x] W1.1 **(Opus, 10-09)** `packages/workout-engine/hold-autolog.ts` (**nuevo**): `HoldEndReason =
       'expired' | 'done-early' | 'paused' | 'restart'`, `HoldAutologDecision`,
       `decideHoldAutolog({reason, elapsedSec, prescribedSec, side, context, closesRound, expiredWhileAway})`
       — ⚠ el campo del OUTLINE §4 se llamaba `viaAppState`; se **renombra a `expiredWhileAway`** porque
@@ -213,12 +213,12 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
       `fillSeconds: 30`**; `per_side` lado izquierdo ⇒ `submit:false`; `expiredWhileAway:true` ⇒
       `autoStartNextSide:false` (R6), probado con **los dos** caminos de disparo (tick y evento de
       visibilidad) exigiendo el mismo resultado.
-- [ ] W1.2 **(Opus)** `packages/workout-engine/hold-autolog.ts`: hermana `mergeHoldCaptureValues`,
+- [x] W1.2 **(Opus, 10-09)** `packages/workout-engine/hold-autolog.ts`: hermana `mergeHoldCaptureValues`,
       espejo de `mergeCardioCaptureValues` (`cardio-autolog.ts:212-232`), para que **la semilla de la
       fila y el payload del auto-envío sean la MISMA mezcla** — el drift que ese comentario documenta
       como ya vivido en cardio (`:205-207`). **Test**: en `hold-autolog.test.ts`, semilla y payload
       coinciden para bilateral y `per_side`.
-- [ ] W1.3 **(Opus)** `packages/workout-engine/set-log-payload.ts` (tras `:281`): export nuevo
+- [x] W1.3 **(Opus, 10-09)** `packages/workout-engine/set-log-payload.ts` (tras `:281`): export nuevo
       `buildStrengthTimePayload(values, blockId, setNumber, ctx?: {sideMode?, holdSource?})` ⇒
       `weightKg` (con coma es-CL), **`repsDone: null`** (nunca 0), `actualHoldSec` (**suma L+R** en
       `per_side`), **`actualDurationSec` ausente** (es el eje de cardio/roller: usarlo metería el hold
@@ -227,7 +227,7 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
       `strengthHoldValues(values, sideMode)` que reusa la lógica de la rama mobility `per_side` de
       `typedLogValues` (`:121-130`). **Test**: `set-log-payload.strength-time.test.ts` (nuevo) — 5
       casos, incluido «sin `holdSource` ⇒ el payload NO gana la key `metadata`».
-- [ ] W1.3b **(Opus)** `packages/workout-engine/set-log-payload.ts` — **`hold_source` también en
+- [x] W1.3b **(Opus, 10-09)** `packages/workout-engine/set-log-payload.ts` — **`hold_source` también en
       MOVILIDAD** (CA-28, CA-84): hoy `buildTypedPayload` define `metadata` **solo** en la rama
       `per_side` de movilidad (`:120-136`, propagada en `:205-208`) y `TypedPayloadContext`
       (`:140-150`) solo conoce `hrMetadata` ⇒ sin este cambio los **32 holds de movilidad** de Movens
@@ -244,19 +244,19 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
       **byte-idéntico** (no gana la key `metadata`); con `holdSource` bilateral la gana con una sola
       clave; el roller sale siempre con `'manual'`; los 30 asserts de
       `executor-mapping.parity.test.ts` siguen verdes.
-- [ ] W1.4 **(Opus)** `packages/workout-engine/set-log-payload.ts:250-281`: **`buildStrengthPayload`
+- [x] W1.4 **(Opus, 10-09)** `packages/workout-engine/set-log-payload.ts:250-281`: **`buildStrengthPayload`
       NO se toca.** Está congelado por 30+ asserts (`set-log-payload.strength-side.test.ts`,
       `set-log-payload.per-side.test.ts`, `executor-mapping.parity.test.ts:290-330`). Motivo: reusar
       `buildTypedPayload` borraría el disco (`weightKg: null`, `:191`) y el esfuerzo (`rir: null`,
       `:199`). **Test**: test de **identidad byte a byte** del payload de un coach que solo usa reps.
-- [ ] W1.5 **(Opus)** `packages/workout-engine/workout-exercise-type.ts`: tras `:46`
+- [x] W1.5 **(Opus, 10-09)** `packages/workout-engine/workout-exercise-type.ts`: tras `:46`
       `STRENGTH_TIME_REPS_UNIT = 'sec'`; tras `:95` **`isStrengthTimeBlock(block, exercise)`** =
       `effectiveExerciseType(...) === 'strength' && block.reps_unit === 'sec' && (block.duration_sec ??
       0) > 0` (**AND**, nunca OR) — fuente única, nadie compara `reps_unit === 'sec'` a mano.
       **Test**: `workout-exercise-type.test.ts` congela **H8** con los 2 bloques reales de LIVE:
       `{duration_sec: 600, reps_unit: null}` ⇒ **`false`** y `{duration_sec: 120, reps_unit: null}` ⇒
       **`false`**; `{reps_unit:'sec', duration_sec:30}` ⇒ `true`.
-- [ ] W1.5b **(Opus)** `packages/workout-engine/` — **una sola regla de lados para el eje hold:
+- [x] W1.5b **(Opus, 10-09)** `packages/workout-engine/` — **una sola regla de lados para el eje hold:
       `holdSidesFor(sideMode)`** (**R34**, CA-91). Para holds (movilidad y fuerza por tiempo):
       `per_side` ⇒ `['left','right']` (**una sola fila** por serie, `actual_hold_sec = L + R`, lados en
       `metadata`); `alternating` y `null` ⇒ `['single']`, exactamente como hace movilidad hoy
@@ -269,7 +269,7 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
       `holdSidesFor('alternating')` y `holdSidesFor(null)` ⇒ `['single']`; **assert de paridad
       web↔RN** en W1.13 con la columna `alternating`, que hoy es justo donde las dos plataformas
       divergen.
-- [ ] W1.6 **(Opus)** `packages/workout-engine/workout-exercise-type.ts:184-189` (rama strength de
+- [x] W1.6 **(Opus, 10-09)** `packages/workout-engine/workout-exercise-type.ts:184-189` (rama strength de
       `legacyRepsSummaryFor`): devolver `compactDuration(duration_sec) + sideSuffix(side_mode)`
       **antes** del `if (block.reps?.trim())` de `:185`. Sin esto, un bloque que pasó de Reps a
       Segundos conserva `"8-12"` como espejo legacy en toda la app. Y tras `:217`:
@@ -277,7 +277,7 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
       (`:197-217`) **sin cambio** (con `reps = "30s"` la rama `:202` ya produce `"3×30s"`).
       **Test**: `legacyRepsSummaryFor` de un strength-time ⇒ `"30s"` / `"30s/lado"`, y de un strength
       clásico **sigue devolviendo el texto del coach**.
-- [ ] W1.7 **(Opus)** `packages/workout-engine/keypad-flow.ts`: tras `:70` `strengthTimeMode?: boolean`
+- [x] W1.7 **(Opus, 10-09)** `packages/workout-engine/keypad-flow.ts`: tras `:70` `strengthTimeMode?: boolean`
       en `KeypadTarget`; tras `:108` `STRENGTH_TIME_KEYPAD_STEPS = [weight, {key:'actual_hold_sec',
       mode:'integer', unit:'seg', label:'Segundos'}]` y `STRENGTH_TIME_PER_SIDE_KEYPAD_STEPS =
       [weight, hold_left_sec, hold_right_sec]` — **mismas keys que movilidad** (`typed-keypad.ts:102-103`);
@@ -285,20 +285,20 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
       **CERO diff**: `TypedKeypadMode` no gana miembro y `typedTargetFor` (`:132-141`) sigue devolviendo
       `null` en strength. **Test**: `keypad-flow.test.ts` fija los 2 juegos de pasos y que
       `typedTargetFor` de un strength-time sigue siendo `null`.
-- [ ] W1.8 **(Opus)** `packages/workout-engine/logged-set-summary.ts` (tras `:182`): export nuevo
+- [x] W1.8 **(Opus, 10-09)** `packages/workout-engine/logged-set-summary.ts` (tras `:182`): export nuevo
       `formatStrengthTimeSetLine(log)` ⇒ `"10 kg × 30 s"`, `"10 kg × 30 s por lado"`, asimétrico
       `"10 kg × Izq. 30 s · Der. 25 s"`, sin peso `"30 s"`, sin hold `null`. Reusa `loggedSideSeconds`
       (`:76-83`). **`formatLoggedSetLine('strength') sigue devolviendo `null`** (`:154`, interruptor
       documentado en `:167-171`): **no se toca**. **Test**: `logged-set-summary.test.ts` con las 5
       formas + anti-regresión de que `formatLoggedSetLine('strength', …)` devuelve `null` **con y sin**
       `actual_hold_sec`.
-- [ ] W1.9 **(Opus)** `packages/workout-engine/session-summary.ts`: `:35-45` (`SummaryBlock`) +=
+- [x] W1.9 **(Opus, 10-09)** `packages/workout-engine/session-summary.ts`: `:35-45` (`SummaryBlock`) +=
       `reps_unit`; `:201-235` (rama strength, **R16**) un bloque en modo tiempo **no** aporta a
       `strengthVol` (`:233`, es una barra en kg) pero **sí** a `muscleWork` (`:234`) con el mismo proxy
       que movilidad usa en `:195` ⇒ la plancha con disco enciende el core. **Test**:
       `session-summary.test.ts` — `totalVolume === 0`, `strengthMuscleVolume` sin la fila del grupo,
       `muscleWork` **con** el aporte; un bloque strength clásico byte-idéntico.
-- [ ] W1.10 **(Opus)** `packages/workout-engine/session-logs.reconcile.ts`: tras `:11`
+- [x] W1.10 **(Opus, 10-09)** `packages/workout-engine/session-logs.reconcile.ts`: tras `:11`
       `export type HoldSource = 'timer' | 'manual'`; `:13-24` (`WorkoutLogSideMetadata`) +=
       `hold_source?: HoldSource | null`, con el doc de que **`undefined` = log anterior al tren
       (desconocido), nunca «manual»**, y de que el UPDATE web **reemplaza el jsonb entero**
@@ -306,32 +306,32 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
       `:38-41`, `:79`, `:116`, `:156-195` sin cambio (heredan por composición). **Test**:
       `session-logs.reconcile.test.ts` — un ítem de cola con `hold_source` sobrevive el merge y llega
       al `ReconciledSessionLog`.
-- [ ] W1.11 **(Opus)** `packages/workout-engine/repeat-seed.ts:102`: strippear `hold_source` de la
+- [x] W1.11 **(Opus, 10-09)** `packages/workout-engine/repeat-seed.ts:102`: strippear `hold_source` de la
       semilla (la fuente del hold de HOY se decide hoy). Precedente en el mismo archivo: la nota
       tampoco se siembra (`:10-12`). **Test**: `repeat-seed.test.ts` — una fila con
       `{left_sec:30, right_sec:30, hold_source:'timer'}` siembra los lados **sin** `hold_source`.
-- [ ] W1.12 **(Opus)** `packages/workout-engine/superset-rounds.test.ts` (**nuevo — hoy no existe**;
+- [x] W1.12 **(Opus, 10-09)** `packages/workout-engine/superset-rounds.test.ts` (**nuevo — hoy no existe**;
       verificado: el paquete solo tiene `superset-rounds.ts`). V4 y D2 se apoyan enteros en
       `isRoundComplete` / `firstIncompleteInRounds` y no tienen test propio en el motor (la única
       cobertura viva es `tests/mobile/executor-v3-superset.test.ts`). **Aceptación**: con el caso
       canónico «Dia B», `isRoundComplete(members, 1, logs, 'blockA')` tras el hold del miembro de
       movilidad ⇒ `false`; tras el press pallof ⇒ `true`; **doble registro del mismo `(block,set)` da
       el mismo veredicto** (idempotencia); `buildRoundOrder` no cambia de salida.
-- [ ] W1.13 **(Opus)** `packages/workout-engine/superset-holds.parity.test.ts` (**nuevo**): paridad
+- [x] W1.13 **(Opus, 10-09)** `packages/workout-engine/superset-holds.parity.test.ts` (**nuevo**): paridad
       del contrato completo con «Dia B» — `decideHoldAutolog` + `isRoundComplete` +
       `buildStrengthTimePayload`, con el mismo resultado esperado que produce el camino web (el objeto
       que la web manda a `logSetAction`), bilateral, `per_side` y **`alternating`** (**R15** + **R34**:
       el assert de paridad de lados vive acá, y `alternating` tiene que dar **un solo lado** en las dos
       plataformas). Formato de los 30 asserts existentes de `executor-mapping.parity.test.ts:290-330`.
-- [ ] W1.14 **(Opus)** `packages/workout-engine/index.ts` (tras `:45`): `export * from './hold-autolog'`,
+- [x] W1.14 **(Opus, 10-09)** `packages/workout-engine/index.ts` (tras `:45`): `export * from './hold-autolog'`,
       junto a `cardio-autolog`. **Único wave que edita el barrel** (evita colisiones entre los workers
       de W2/W3/W4). **Aceptación**: `pnpm typecheck` y `tsc --noEmit` mobile verdes.
-- [ ] W1.15 **(Opus)** `apps/web/src/lib/workout-exercise-type.ts:80-89,133-152`: **colapsar las
+- [x] W1.15 **(Opus, 10-09)** `apps/web/src/lib/workout-exercise-type.ts:80-89,133-152`: **colapsar las
       copias** re-exportando `hasTypedPrescription`, `typedBlockSummary`, `isStrengthTimeBlock` y
       `formatStrengthTimeObjective` del motor, igual que ya se hizo con `legacyRepsSummaryFor`
       (`:126`). Sin esto hay que replicar la rama strength a mano ⇒ drift garantizado. **Test**: un
       caso que verifica que la copia web y el motor dan **la misma** salida para el bloque canónico.
-- [ ] W1.16 **(Opus)** `apps/web/src/lib/workout/progression.ts:50-59` (`ProgressionBlockInput` +=
+- [x] W1.16 **(Opus, 10-09)** `apps/web/src/lib/workout/progression.ts:50-59` (`ProgressionBlockInput` +=
       `reps_unit`, `duration_sec`) y `:142-149` (**guard D4**: en modo tiempo `case 'double'` cae a
       `weekly_linear`). Es **obligatorio, no cosmético**: `parseRepsTop('30s')` devuelve **30**
       (`:42-48`, regex `\d+`) ⇒ hoy la doble progresión trataría 30 segundos como 30 reps y subiría el
@@ -339,14 +339,16 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
       `apps/web/src/lib/workout/progression.test.ts` — bloque `{reps:'30s', reps_unit:'sec',
       progression_mode:'double'}` con `repsDone:[null,null,null]` **NO** devuelve `holding`; un bloque
       de reps con `'double'` sigue byte-idéntico.
-- [ ] W1.17 **(Opus)** Ampliar `packages/workout-engine/day-completion.test.ts` (+ fixtures) y
+- [x] W1.17 **(Opus, 10-09)** Ampliar `packages/workout-engine/day-completion.test.ts` (+ fixtures) y
       `pr-detect.test.ts`: un log `{reps_done: null, actual_hold_sec: 30}` **cuenta como serie** y el
       día cierra en `done`; un set `{weight_kg: 10, reps_done: null}` ⇒ `isPR:false, kind:null` y **no
       altera `prevBest`** (congela A4). `day-completion.ts`, `cycle-completions.ts`, `pr-detect.ts` y
       `workout-save-reconcile.ts` quedan con **cero diff de código**.
 
-**Gate de W1**:
-`pnpm exec vitest run packages/workout-engine packages/schemas packages/plan-builder apps/web/src/lib/workout/progression.test.ts`.
+**Gate de W1** — corrido 10-09 por el jefe tras los dos workers (A: hold-autolog/payload/keypad/reconcile/barrel/tests de ronda y paridad; B: predicado/formatos/resúmenes/semilla/re-exports web/guard D4):
+`pnpm exec vitest run packages/workout-engine packages/schemas packages/plan-builder apps/web/src/lib/workout/progression.test.ts apps/web/src/lib/workout-exercise-type.test.ts` verde (salida en el commit), `pnpm typecheck` 0, `tsc --noEmit` mobile 0, eslint 0 errores.
+**Decisiones del jefe registradas (desvíos aceptados):** (1) `paused` también lleva el tope `min(elapsed, prescribed)` (una pausa tras el vencimiento en background escribiría el reloj de pared); (2) `expiredWhileAwayFrom({nowMs, endAtMs, visible})` + `HOLD_EXPIRED_AWAY_GRACE_MS = 1500` se exportan del motor para que RN (W3.1) y web (W4.1) no dupliquen la regla R27 — se llama DENTRO de `triggerDone`; (3) `holdSidesFor`/`holdValueKeyFor` viven en `hold-autolog.ts`; (4) `formatProgressionTag` imprime coma decimal (`+2,5 kg/sem`, DATA-TESTING §6.1) y devuelve `null` sin `progression_type`; `isStrengthTimeBlock`/`formatProgressionTag` aceptan `exercise` opcional; (5) `buildTypedPayload` no cambió de firma: el 5.º argumento admite `{ sideMode, holdSource }` y con el `sideMode` suelto la serie sale **sin marca** (W3/W4 pasan el objeto).
+**Hallazgo de W1-B fuera del SDD:** `apps/mobile/lib/workout/progression.ts` es un port 1:1 del web (lo consume `ExecutorV3.tsx` vía `computeEffectiveTarget`) y no tenía el guard D4 ⇒ entra como **W3.1c**.
 
 ---
 
@@ -486,6 +488,11 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
       **el mismo** `expiredWhileAway: true` (el resultado **no** puede depender de quién ganó la
       carrera); y con `expiredWhileAway: true`, `prime(30)` deja el lado derecho en **idle mostrando el
       objetivo**, no en `done`.
+- [ ] W3.1c **(Opus, tarea nueva del jefe 10-09)** `apps/mobile/lib/workout/progression.ts` (port RN de
+      `apps/web/src/lib/workout/progression.ts`, consumido por `ExecutorV3.tsx` vía `computeEffectiveTarget`):
+      espejo exacto del guard D4 de W1.16 (`ProgressionBlockInput += reps_unit, duration_sec`; en modo tiempo
+      `case 'double'` cae a `weekly_linear`, comentario en `parseRepsTop`). Sin esto un bloque por tiempo con
+      doble progresión queda en `holding` para siempre en RN. **Test**: espejo del de web en `tests/mobile/`.
 - [ ] W3.2 **(Opus)** `apps/mobile/components/alumno/workout/v3/use-hold-module.ts` (**nuevo**): hook
       fino que compone `useCountdown` + la secuencia de lados —**`holdSidesFor(sideMode)` del motor**
       (W1.5b, R34), que `mobilitySides` (`typed-screen-model.ts:146`) pasa a delegar para no tener dos

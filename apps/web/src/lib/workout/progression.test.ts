@@ -244,3 +244,121 @@ describe('computeEffectiveTarget — double con reps POR LADO (R3, no-regresión
         expect(parseRepsTop('10-12 por lado')).toBe(12)
     })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Guard D4 / H9 — doble progresión APAGADA en fuerza por tiempo
+// (specs/cuenta-atras-en-pantalla, W1.16)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('computeEffectiveTarget — modo TIEMPO apaga la doble progresión (D4/H9)', () => {
+    /** Plancha con disco: 3 × 30 s, el espejo legacy `reps` dice "30s" (NOT NULL en la DB). */
+    const timeBlock = (over: Partial<ProgressionBlockInput> = {}): ProgressionBlockInput => ({
+        target_weight_kg: 10,
+        progression_type: 'weight',
+        progression_value: 2.5,
+        progression_mode: 'double',
+        reps: '30s',
+        reps_unit: 'sec',
+        duration_sec: 30,
+        sets: 3,
+        ...over,
+    })
+
+    it('el bug que evita: parseRepsTop("30s") lee 30 "reps" que no existen', () => {
+        expect(parseRepsTop('30s')).toBe(30)
+        expect(parseRepsTop('1m30s')).toBe(30)
+    })
+
+    // Sin el guard: `reps_done` NULL ⇒ `repsArr` vacío ⇒ `completed = false` ⇒ `holding` con el peso
+    // de la última sesión, para siempre. El alumno vería «manteniendo peso hasta completar 30 reps»
+    // de un hold de 30 segundos, sin salida posible.
+    it('con repsDone [null, null, null] NO devuelve holding: cae a weekly_linear', () => {
+        const r = computeEffectiveTarget(timeBlock(), {
+            currentWeek: 3,
+            weeksToRepeat: 8,
+            lastSession: { weightKg: 10, repsDone: [null, null, null] },
+        })
+        expect(r.holding).toBe(false)
+        expect(r.status).not.toBe('holding')
+        expect(r.repsTopToUnlock).toBeNull()
+        // weekly_linear de la semana 3: 10 + 2 × 2,5 = 15
+        expect(r.weightKg).toBe(15)
+        expect(r.status).toBe('progressed')
+        // `mode` reporta el modo EFECTIVO, no el declarado — mismo precedente que el fallback ya
+        // existente de `doubleProgression` cuando el rango de reps no se puede parsear (`:196`).
+        expect(r.mode).toBe('weekly_linear')
+    })
+
+    it('idéntico a lo que daría el bloque con progression_mode weekly_linear', () => {
+        const ctx = {
+            currentWeek: 3,
+            weeksToRepeat: 8,
+            lastSession: { weightKg: 10, repsDone: [null, null, null] },
+        }
+        expect(computeEffectiveTarget(timeBlock(), ctx)).toEqual(
+            computeEffectiveTarget(timeBlock({ progression_mode: 'weekly_linear' }), ctx),
+        )
+    })
+
+    it('sin última sesión tampoco se cuelga (semana 1 = base)', () => {
+        const r = computeEffectiveTarget(timeBlock(), { currentWeek: 1, weeksToRepeat: 8 })
+        expect(r.weightKg).toBe(10)
+        expect(r.holding).toBe(false)
+        expect(r.status).toBe('flat')
+    })
+
+    it('el AND del predicado manda: sin reps_unit "sec" el guard NO se activa (H8)', () => {
+        // Los 2 bloques strength de LIVE con `duration_sec` y `reps_unit NULL` son fuerza clásica:
+        // su doble progresión tiene que seguir funcionando exactamente como hoy.
+        const r = computeEffectiveTarget(
+            timeBlock({ reps: '8-12', reps_unit: null, duration_sec: 600 }),
+            { currentWeek: 3, lastSession: { weightKg: 10, repsDone: [12, 12, 12] } },
+        )
+        expect(r.status).toBe('progressed')
+        expect(r.repsTopToUnlock).toBe(12)
+        expect(r.weightKg).toBe(12.5) // desde el peso de la última sesión, no desde la semana
+    })
+
+    it('un bloque de REPS con "double" sigue byte-idéntico (holding y progressed)', () => {
+        const repsBlock = (): ProgressionBlockInput => ({
+            target_weight_kg: 50,
+            progression_type: 'weight',
+            progression_value: 2.5,
+            progression_mode: 'double',
+            reps: '8-12',
+            sets: 3,
+        })
+        const holding = computeEffectiveTarget(repsBlock(), {
+            currentWeek: 4,
+            lastSession: { weightKg: 50, repsDone: [12, 12, 10] },
+        })
+        expect(holding).toEqual({
+            weightKg: 50,
+            baseWeightKg: 50,
+            addedKg: 0,
+            weeksApplied: 0,
+            isProgressed: false,
+            holding: true,
+            repsTopToUnlock: 12,
+            status: 'holding',
+            modeImplemented: true,
+            mode: 'double',
+        })
+        const progressed = computeEffectiveTarget(repsBlock(), {
+            currentWeek: 4,
+            lastSession: { weightKg: 50, repsDone: [12, 12, 12] },
+        })
+        expect(progressed.status).toBe('progressed')
+        expect(progressed.weightKg).toBe(52.5)
+    })
+
+    it('«+ Segundos» (progression_type "reps") sigue siendo cartel sin motor, como «+ Reps» hoy', () => {
+        const r = computeEffectiveTarget(timeBlock({ progression_type: 'reps', progression_value: 5 }), {
+            currentWeek: 3,
+            weeksToRepeat: 8,
+        })
+        expect(r.weightKg).toBe(10)
+        expect(r.addedKg).toBe(0)
+        expect(r.status).toBe('flat')
+    })
+})

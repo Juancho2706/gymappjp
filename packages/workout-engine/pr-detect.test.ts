@@ -154,3 +154,54 @@ describe('detectPR — serie actual invalida', () => {
         })
     })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Fuerza por tiempo (D3, specs/cuenta-atras-en-pantalla — W1.17, congela A4)
+//
+// `pr-detect.ts` queda con CERO diff: `isValidSet` ya exige `reps_done > 0`, así que un hold con
+// disco (10 kg × 0 reps) sale gratis del filtro. Sin estos asserts, cualquier futura relajación de
+// ese guard celebraria un "record" de una plancha y ademas inflaria el techo historico.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('detectPR — un hold de fuerza por tiempo nunca es PR (A4)', () => {
+    it('{weight_kg: 10, reps_done: null} => isPR false, kind null', () => {
+        expect(detectPR({ weight_kg: 10, reps_done: null }, historico)).toEqual({
+            isPR: false,
+            kind: null,
+            prevBest: { weightKg: 105, e1rm: 116.7 },
+        })
+    })
+
+    it('un peso ALTISIMO en un hold tampoco dispara (sin reps no hay 1RM que estimar)', () => {
+        expect(detectPR({ weight_kg: 500, reps_done: null }, historico).isPR).toBe(false)
+    })
+
+    it('en el HISTORICO no altera prevBest: el techo sigue siendo el de las series de reps', () => {
+        const conHolds: PrSet[] = [
+            ...historico,
+            { weight_kg: 200, reps_done: null }, // plancha con 200 kg de trineo: no compara
+            { weight_kg: 10, reps_done: null },
+        ]
+        expect(detectPR({ weight_kg: 106, reps_done: 3 }, conHolds)).toEqual({
+            isPR: true,
+            kind: 'weight',
+            prevBest: { weightKg: 105, e1rm: 116.7 },
+        })
+        // Y el mismo historico sin los holds da EXACTAMENTE lo mismo.
+        expect(detectPR({ weight_kg: 106, reps_done: 3 }, conHolds)).toEqual(
+            detectPR({ weight_kg: 106, reps_done: 3 }, historico),
+        )
+    })
+
+    it('un dia SOLO de holds no deja historico comparable => no hay PR real', () => {
+        const soloHolds: PrSet[] = [
+            { weight_kg: 10, reps_done: null },
+            { weight_kg: 20, reps_done: null },
+        ]
+        expect(detectPR({ weight_kg: 100, reps_done: 5 }, soloHolds)).toEqual({
+            isPR: false,
+            kind: null,
+            prevBest: null,
+        })
+    })
+})

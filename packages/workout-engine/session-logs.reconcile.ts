@@ -2,6 +2,16 @@ import type { HrMetadataV1 } from '@eva/cardio'
 import type { WorkoutSkipMetadata } from './day-completion'
 
 /**
+ * Quién cerró un HOLD (specs/cuenta-atras-en-pantalla, A3/R19). `'timer'` = la cuenta atrás llegó a 0
+ * sola y el auto-envío guardó la serie (V2); `'manual'` = «Listo» antes de 0 (A2), tipeo en la fila o
+ * en el keypad, o edición del valor ya guardado.
+ *
+ * Vive acá —y no solo en el schema Zod— porque RN escribe directo a PostgREST sin pasar por Zod
+ * (`apps/mobile/lib/workout-session.ts:974`): de ese lado el tipo TS es la única barrera.
+ */
+export type HoldSource = 'timer' | 'manual'
+
+/**
  * Metadata jsonb de la serie (`workout_logs.metadata`). Hoy solo transporta el hold de movilidad
  * POR LADO (E0.5 · executor-v3): segundos de sostén izquierdo/derecho de un ejercicio unilateral
  * (`side_mode === 'per_side'`). Espejo VERBATIM de la columna jsonb (keys snake_case `left_sec`/
@@ -21,6 +31,18 @@ export type WorkoutLogSideMetadata = {
      */
     left_reps?: number | null
     right_reps?: number | null
+    /**
+     * Fuente del hold (`timer` | `manual`) de ESTA serie, en TODO hold guardado: movilidad, roller y
+     * fuerza por tiempo (specs/cuenta-atras-en-pantalla, A3/R19 · DECISIONS-2 DATA-2).
+     *
+     * `undefined` = log ANTERIOR a este tren ⇒ **desconocido, NUNCA se lee como `'manual'`** (la
+     * consulta de adopción de §8.2 lo cuenta aparte, no como hold tipeado a mano).
+     *
+     * Viaja en el MISMO objeto que los lados a propósito: el UPDATE de la web reemplaza el jsonb
+     * entero (`workout-log.actions.ts:150-156`), así que escribirlo por separado borraría
+     * `{left_sec, right_sec}`. Lo arma siempre el motor (`buildLogMetadata`), nunca la UI a mano.
+     */
+    hold_source?: HoldSource | null
 }
 
 /**

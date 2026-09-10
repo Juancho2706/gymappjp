@@ -180,3 +180,27 @@ export function formatStrengthSetLine(log: LoggedSetLike): string | null {
     const weight = positive(log.weight_kg)
     return weight != null ? `${formatEsNumber(weight, 1)} kg × ${reps}` : reps
 }
+
+/**
+ * Línea de una serie de FUERZA POR TIEMPO registrada (D3, specs/cuenta-atras-en-pantalla):
+ *   `"10 kg × 30 s"` · `"10 kg × 30 s por lado"` · `"10 kg × Izq. 30 s · Der. 25 s"` · `"30 s"`.
+ * Sin ningún hold registrado ⇒ `null` (la superficie pinta su fila de fuerza de siempre).
+ *
+ * Hermana de `formatStrengthSetLine`, y por el MISMO motivo export separado:
+ * `formatLoggedSetLine('strength')` sigue devolviendo `null` (`:154`) — ese `null` es el interruptor
+ * con que cada superficie elige su render de fuerza (objetivo↔hecho, «PC», RPE/RIR). Los call sites
+ * la llaman DENTRO de su rama de fuerza y sólo reemplazan el «peso × reps», que en modo tiempo
+ * quedaría como «10 kg × —» porque `reps_done` es NULL a propósito (R2).
+ *
+ * Reusa `mobilityParts` —y con él `loggedSideSeconds`— para que el desglose por lado sea EXACTAMENTE
+ * el mismo que ya ve el coach en movilidad: mismo redondeo, mismos rótulos «Izq./Der.», misma regla
+ * de simetría. Convención tipográfica R11: acá es `30 s` CON espacio (línea larga de ficha/log),
+ * mientras que los chips cortos usan `30s` vía `compactDuration`.
+ */
+export function formatStrengthTimeSetLine(log: LoggedSetLike): string | null {
+    const parts = mobilityParts(log)
+    if (parts.length === 0) return null
+    const hold = parts.join(' · ')
+    const weight = positive(log.weight_kg)
+    return weight != null ? `${formatEsNumber(weight, 1)} kg × ${hold}` : hold
+}

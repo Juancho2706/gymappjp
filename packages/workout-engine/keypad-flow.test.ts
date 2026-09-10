@@ -13,10 +13,13 @@ import { describe, it, expect } from 'vitest'
 import {
   STRENGTH_KEYPAD_STEPS,
   STRENGTH_PER_SIDE_KEYPAD_STEPS,
+  STRENGTH_TIME_KEYPAD_STEPS,
+  STRENGTH_TIME_PER_SIDE_KEYPAD_STEPS,
   keypadStepsForTarget,
   typedTargetFor,
   type KeypadTarget,
 } from './keypad-flow'
+import { typedKeypadFields } from './typed-keypad'
 
 const strengthTarget = (over: Partial<KeypadTarget> = {}): KeypadTarget => ({
   blockId: 'b1',
@@ -106,5 +109,84 @@ describe('typedTargetFor — guard R18: la fuerza nunca entra al carril tipado',
     expect(
       typedTargetFor({ exercise_type_override: 'strength' }, { exercise_type: 'cardio' }, 'per_side'),
     ).toBeNull()
+  })
+})
+
+// ── FUERZA POR TIEMPO (specs/cuenta-atras-en-pantalla, W1.7) ──────────────────────────────────────
+describe('STRENGTH_TIME_KEYPAD_STEPS — peso → segundos', () => {
+  it('dos pasos: peso (kg, decimal) → segundos (entero)', () => {
+    expect(STRENGTH_TIME_KEYPAD_STEPS).toEqual([
+      { kind: 'keypad', key: 'weight', mode: 'weight', unit: 'kg', label: 'Peso (kg)' },
+      { kind: 'keypad', key: 'actual_hold_sec', mode: 'integer', unit: 'seg', label: 'Segundos' },
+    ])
+  })
+
+  it('per_side: un solo peso y DOS holds (una fila por serie, `actual_hold_sec` = L + R)', () => {
+    expect(STRENGTH_TIME_PER_SIDE_KEYPAD_STEPS).toEqual([
+      { kind: 'keypad', key: 'weight', mode: 'weight', unit: 'kg', label: 'Peso (kg)' },
+      { kind: 'keypad', key: 'hold_left_sec', mode: 'integer', unit: 'seg', label: 'Hold izq.' },
+      { kind: 'keypad', key: 'hold_right_sec', mode: 'integer', unit: 'seg', label: 'Hold der.' },
+    ])
+    expect(STRENGTH_TIME_PER_SIDE_KEYPAD_STEPS.filter((s) => s.key === 'weight')).toHaveLength(1)
+  })
+
+  it('las keys del hold son las MISMAS que las de movilidad (el motor lee con una sola rama)', () => {
+    expect(STRENGTH_TIME_KEYPAD_STEPS[1].key).toBe(typedKeypadFields('mobility')[0].key)
+    expect(STRENGTH_TIME_PER_SIDE_KEYPAD_STEPS.slice(1).map((s) => s.key)).toEqual(
+      typedKeypadFields('mobility', 'per_side').map((f) => f.key),
+    )
+  })
+})
+
+describe('keypadStepsForTarget — rama de fuerza por tiempo', () => {
+  it('strengthTimeMode ⇒ peso → segundos', () => {
+    expect(keypadStepsForTarget(strengthTarget({ strengthTimeMode: true }))).toEqual([
+      ...STRENGTH_TIME_KEYPAD_STEPS,
+    ])
+  })
+
+  it('strengthTimeMode + per_side ⇒ peso → hold izq → hold der', () => {
+    expect(keypadStepsForTarget(strengthTarget({ strengthTimeMode: true, sideMode: 'per_side' }))).toEqual([
+      ...STRENGTH_TIME_PER_SIDE_KEYPAD_STEPS,
+    ])
+  })
+
+  it('strengthTimeMode + alternating ⇒ UNA sola caja (H7: el eje tiempo no es por lado)', () => {
+    expect(keypadStepsForTarget(strengthTarget({ strengthTimeMode: true, sideMode: 'alternating' }))).toEqual([
+      ...STRENGTH_TIME_KEYPAD_STEPS,
+    ])
+    // …y movilidad con `alternating` sigue pidiendo una sola caja, byte-idéntico a hoy.
+    expect(typedKeypadFields('mobility', 'alternating')).toHaveLength(1)
+  })
+
+  it('el modo tiempo manda sobre la rama por lado del eje REPS (nunca «reps izq/der» en una plancha)', () => {
+    const steps = keypadStepsForTarget(strengthTarget({ strengthTimeMode: true, sideMode: 'per_side' }))
+    expect(steps.some((s) => s.key === 'reps_left' || s.key === 'reps_right')).toBe(false)
+  })
+
+  it('devuelve una COPIA, no la constante', () => {
+    expect(keypadStepsForTarget(strengthTarget({ strengthTimeMode: true }))).not.toBe(STRENGTH_TIME_KEYPAD_STEPS)
+  })
+
+  it('sin strengthTimeMode nada cambia: la fuerza clásica sigue peso → reps', () => {
+    expect(keypadStepsForTarget(strengthTarget({ strengthTimeMode: false }))).toEqual([...STRENGTH_KEYPAD_STEPS])
+    expect(keypadStepsForTarget(strengthTarget({ strengthTimeMode: false, sideMode: 'per_side' }))).toEqual([
+      ...STRENGTH_PER_SIDE_KEYPAD_STEPS,
+    ])
+  })
+
+  it('un bloque TIPADO manda por su tipo aunque le llegue strengthTimeMode (la rama typed va primero)', () => {
+    const typed = typedTargetFor({ exercise_type_override: 'mobility' }, null)
+    expect(keypadStepsForTarget(strengthTarget({ typed: typed ?? undefined, strengthTimeMode: true }))).toEqual([
+      { kind: 'keypad', key: 'actual_hold_sec', mode: 'integer', unit: 'seg', label: 'Hold' },
+    ])
+  })
+})
+
+describe('typedTargetFor — la fuerza por tiempo TAMPOCO entra al carril tipado (R18)', () => {
+  it('un bloque strength con reps_unit `sec` y duration_sec sigue devolviendo null', () => {
+    const strengthTime = { exercise_type_override: null, reps_unit: 'sec', duration_sec: 30, sets: 3 }
+    expect(typedTargetFor(strengthTime, { exercise_type: 'strength' })).toBeNull()
+    expect(typedTargetFor(strengthTime, null, { sideMode: 'per_side' })).toBeNull()
   })
 })

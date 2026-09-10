@@ -12,6 +12,9 @@
  *  - Las series hechas con máquina SUSTITUIDA se DESCARTAN por defecto: sembrar el peso de una
  *    máquina sustituida sobre el ejercicio prescrito engañaría al alumno (cargas no comparables).
  *    Opt-in explícito con `keepSubstituted` para quien quiera verlas igual.
+ *  - `metadata.hold_source` TAMPOCO se siembra (mismo criterio que la nota): que el hold del lunes
+ *    lo haya guardado el reloj no dice nada de cómo se va a guardar el de hoy. La fuente del hold de
+ *    HOY se decide hoy, en el commit. Los lados (`left_sec`/`right_sec`) sí viajan: ésos son el dato.
  *
  * El `rir` fuera de rango se normaliza a `null` (mismo criterio defensivo que el teclado tipado):
  * data histórica sucia no debe sembrar un valor que la UI no puede representar.
@@ -36,7 +39,10 @@ export interface RepeatSeedRow {
     actual_distance_m?: number | null
     actual_hold_sec?: number | null
     actual_avg_hr?: number | null
-    /** Hold POR LADO: espejo del jsonb {left_sec, right_sec}. Viaja intacto a la semilla. */
+    /**
+     * Hold POR LADO: espejo del jsonb {left_sec, right_sec}. Viaja a la semilla SIN `hold_source`
+     * (ver `seedMetadata`); el resto de las claves va intacto.
+     */
     metadata?: WorkoutLogSideMetadata | null
     /** No nulo ⇒ la serie se hizo con otra máquina: se descarta salvo `keepSubstituted`. */
     substituted_exercise_id?: string | null
@@ -65,6 +71,21 @@ export interface RepeatSeedOptions {
 /** Normaliza a `number | null`: descarta `undefined`, `null` y no-finitos (NaN/Infinity). */
 function num(value: number | null | undefined): number | null {
     return typeof value === 'number' && Number.isFinite(value) ? value : null
+}
+
+/**
+ * Copia del jsonb del log SIN `metadata.hold_source` (ver cabecera). Si la fila no traía la clave
+ * —todo log anterior a este tren— devuelve la MISMA referencia: cero cambio de comportamiento para
+ * el histórico existente.
+ */
+function seedMetadata(
+    metadata: WorkoutLogSideMetadata | null | undefined,
+): WorkoutLogSideMetadata | null {
+    if (!metadata) return null
+    if (!('hold_source' in metadata)) return metadata
+    const rest: Record<string, unknown> = { ...metadata }
+    delete rest.hold_source
+    return rest as WorkoutLogSideMetadata
 }
 
 /** `rir` sólo sobrevive dentro de `[rirMin..10]`; cualquier otra cosa es data sucia ⇒ `null`. */
@@ -99,7 +120,7 @@ export function buildRepeatSeedMap(
             actualDistanceM: num(row.actual_distance_m),
             actualHoldSec: num(row.actual_hold_sec),
             actualAvgHr: num(row.actual_avg_hr),
-            metadata: row.metadata ?? null,
+            metadata: seedMetadata(row.metadata),
         })
     }
 

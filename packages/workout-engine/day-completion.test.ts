@@ -364,3 +364,68 @@ describe('ejercicios OMITIDOS — un skip resuelve el bloque sin sumar series', 
         ).toEqual({ state: 'done', pct: 1, expected: 2, logged: 2 })
     })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Fuerza por tiempo (D3, specs/cuenta-atras-en-pantalla — W1.17)
+//
+// `day-completion.ts` queda con CERO diff de código: la regla ya cuenta FILAS, no reps. Estos casos
+// lo CONGELAN, porque en modo tiempo `reps_done` es NULL a propósito (R2) y cualquier filtro futuro
+// por `reps_done > 0` dejaría al alumno con el día abierto para siempre.
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('fuerza por tiempo: un hold sin reps cuenta como serie', () => {
+    // `LoggedSetRow` sólo lee `block_id`/`set_number`/`metadata`; las columnas reales de la fila
+    // viajan igual (el caller selecciona más de lo que la regla mira).
+    const holdRow = (blockId: string, setNumber: number) => ({
+        block_id: blockId,
+        set_number: setNumber,
+        weight_kg: 10,
+        reps_done: null,
+        actual_hold_sec: 30,
+    })
+
+    it('countLoggedSetsByBlock cuenta la fila aunque reps_done sea NULL', () => {
+        expect(countLoggedSetsByBlock([holdRow('b1', 1), holdRow('b1', 2), holdRow('b1', 3)])).toEqual({ b1: 3 })
+    })
+
+    it('el día de 3 planchas cierra en done', () => {
+        const rows = [holdRow('b1', 1), holdRow('b1', 2), holdRow('b1', 3)]
+        expect(
+            deriveDayCompletion({
+                blocks: [{ id: 'b1', sets: 3 }],
+                loggedSetsByBlock: countLoggedSetsByBlock(rows),
+            })
+        ).toEqual({ state: 'done', pct: 1, expected: 3, logged: 3 })
+    })
+
+    it('la marca de fuente no cambia el conteo (se cuentan filas, no metadata)', () => {
+        const rows = [
+            { ...holdRow('b1', 1), metadata: { hold_source: 'timer' } },
+            { ...holdRow('b1', 2), metadata: { left_sec: 30, right_sec: 30, hold_source: 'manual' } },
+            { ...holdRow('b1', 3), metadata: null },
+        ]
+        expect(countLoggedSetsByBlock(rows)).toEqual({ b1: 3 })
+        expect(skippedBlockIdsFromLogs(rows)).toEqual([])
+    })
+
+    it('un hold sigue deduplicando por (bloque, serie) como cualquier otra fila', () => {
+        expect(countLoggedSetsByBlock([holdRow('b1', 1), holdRow('b1', 1)])).toEqual({ b1: 1 })
+    })
+
+    it('mezclado con fuerza clásica, el día suma las dos', () => {
+        const rows = [
+            holdRow('plancha', 1),
+            holdRow('plancha', 2),
+            { block_id: 'press', set_number: 1, weight_kg: 60, reps_done: 10 },
+        ]
+        expect(
+            deriveDayCompletion({
+                blocks: [
+                    { id: 'plancha', sets: 2 },
+                    { id: 'press', sets: 1 },
+                ],
+                loggedSetsByBlock: countLoggedSetsByBlock(rows),
+            })
+        ).toMatchObject({ state: 'done', logged: 3, expected: 3 })
+    })
+})

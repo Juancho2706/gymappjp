@@ -18,6 +18,7 @@
 
 import {
     effectiveExerciseType,
+    isStrengthTimeBlock,
     sideRepsFromMetadata,
     type ExerciseType as WorkoutKind,
 } from './workout-exercise-type'
@@ -37,6 +38,12 @@ export interface SummaryBlock {
     exercises: SummaryExercise | SummaryExercise[] | null
     exercise_type_override?: string | null
     sets?: number | null
+    /**
+     * `workout_blocks.reps_unit`. Con `'sec'` + `duration_sec > 0` el bloque de fuerza está en modo
+     * TIEMPO (D3) y el resumen tiene que tratarlo distinto (R16). Opcional/aditivo: un caller que no
+     * lo seleccione se comporta exactamente como antes.
+     */
+    reps_unit?: string | null
     duration_sec?: number | null
     distance_value?: number | null
     distance_unit?: string | null
@@ -230,8 +237,20 @@ export function summarizeSessionByKind(
             })
         }
         if (exercise.muscle_group) {
-            strengthVol.set(exercise.muscle_group, (strengthVol.get(exercise.muscle_group) ?? 0) + addVol)
-            muscleWork.set(exercise.muscle_group, (muscleWork.get(exercise.muscle_group) ?? 0) + addVol)
+            if (isStrengthTimeBlock(block, exercise)) {
+                // FUERZA POR TIEMPO (R16): `reps_done` es NULL a propósito ⇒ `addVol = w × 0 = 0`, así
+                // que sin esta rama una plancha con disco NO encendería ninguna zona del mapa. No
+                // aporta a `strengthVol` (esa barra es tonelaje en kg y un hold no son kg) pero SÍ a
+                // `muscleWork`, con el MISMO proxy que ya usa movilidad más arriba: el hold real si
+                // lo hay, si no una constante por serie completada.
+                const holds = blockLogs.map((l) => l.actual_hold_sec)
+                const holdSec = holds.some((h) => h != null) ? sumNullable(holds) : null
+                const work = holdSec != null && holdSec > 0 ? holdSec : blockLogs.length * MOBILITY_SET_WORK
+                muscleWork.set(exercise.muscle_group, (muscleWork.get(exercise.muscle_group) ?? 0) + work)
+            } else {
+                strengthVol.set(exercise.muscle_group, (strengthVol.get(exercise.muscle_group) ?? 0) + addVol)
+                muscleWork.set(exercise.muscle_group, (muscleWork.get(exercise.muscle_group) ?? 0) + addVol)
+            }
         }
     }
 

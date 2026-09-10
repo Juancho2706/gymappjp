@@ -83,3 +83,94 @@ describe('summarizeSessionByKind: volumen de fuerza por lado', () => {
         expect(out.strength).toHaveLength(0)
     })
 })
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Fuerza por tiempo y el mapa muscular (R16, specs/cuenta-atras-en-pantalla — W1.9)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('summarizeSessionByKind: fuerza por tiempo enciende el mapa (R16)', () => {
+    const TIME_BLOCK: SummaryBlock = {
+        id: 'blk-hold',
+        exercises: { id: 'ex-plank', name: 'Plancha frontal', muscle_group: 'Core', exercise_type: 'strength' },
+        sets: 3,
+        reps_unit: 'sec',
+        duration_sec: 30,
+    }
+    const holdLog = (setNumber: number, holdSec: number | null): SummaryLogLike => ({
+        block_id: 'blk-hold',
+        set_number: setNumber,
+        weight_kg: 10,
+        reps_done: null, // R2: en modo tiempo `reps_done` es NULL a propósito
+        actual_hold_sec: holdSec,
+    })
+
+    it('el hold NO aporta tonelaje: totalVolume 0 y sin fila en strengthMuscleVolume', () => {
+        const out = summarizeSessionByKind([TIME_BLOCK], [holdLog(1, 30), holdLog(2, 30), holdLog(3, 28)])
+        expect(out.strength[0]?.totalVolume).toBe(0)
+        expect(out.strengthMuscleVolume).toEqual([])
+    })
+
+    it('pero SÍ enciende la zona en muscleWork, con los segundos como proxy', () => {
+        const out = summarizeSessionByKind([TIME_BLOCK], [holdLog(1, 30), holdLog(2, 30), holdLog(3, 28)])
+        expect(out.muscleWork).toEqual([{ group: 'Core', vol: 88 }])
+    })
+
+    it('sin hold registrado cae al mismo proxy por serie que movilidad (20 × series)', () => {
+        const out = summarizeSessionByKind([TIME_BLOCK], [holdLog(1, null), holdLog(2, null)])
+        expect(out.muscleWork).toEqual([{ group: 'Core', vol: 40 }])
+        expect(out.strengthMuscleVolume).toEqual([])
+    })
+
+    it('sigue apareciendo en el desglose de fuerza (es fuerza, no movilidad)', () => {
+        const out = summarizeSessionByKind([TIME_BLOCK], [holdLog(1, 30)])
+        expect(out.strength).toHaveLength(1)
+        expect(out.mobility).toHaveLength(0)
+        expect(out.strength[0]?.name).toBe('Plancha frontal')
+        // Y no contamina los totales de cardio (`actual_duration_sec` sigue ausente, R2).
+        expect(out.totalCardioDurationSec).toBe(0)
+    })
+
+    // H8: los 2 bloques de LIVE con `duration_sec` y `reps_unit NULL` son fuerza CLÁSICA.
+    it('un bloque de fuerza clásico da resultado byte-idéntico (con y sin duration_sec)', () => {
+        const classic: SummaryBlock = {
+            id: 'blk-1',
+            exercises: { id: 'ex-1', name: 'Press banca', muscle_group: 'Pecho', exercise_type: 'strength' },
+            sets: 3,
+        }
+        const logs: SummaryLogLike[] = [
+            { block_id: 'blk-1', set_number: 1, weight_kg: 60, reps_done: 10 },
+            { block_id: 'blk-1', set_number: 2, weight_kg: 60, reps_done: 8 },
+        ]
+        const expected = {
+            totalVolume: 60 * 18,
+            muscleWork: [{ group: 'Pecho', vol: 1080 }],
+            strengthMuscleVolume: [{ group: 'Pecho', vol: 1080 }],
+        }
+        const plain = summarizeSessionByKind([classic], logs)
+        expect(plain.strength[0]?.totalVolume).toBe(expected.totalVolume)
+        expect(plain.muscleWork).toEqual(expected.muscleWork)
+        expect(plain.strengthMuscleVolume).toEqual(expected.strengthMuscleVolume)
+
+        const legacyH8 = summarizeSessionByKind(
+            [{ ...classic, duration_sec: 600, reps_unit: null }],
+            logs,
+        )
+        expect(legacyH8.strength[0]?.totalVolume).toBe(expected.totalVolume)
+        expect(legacyH8.muscleWork).toEqual(expected.muscleWork)
+        expect(legacyH8.strengthMuscleVolume).toEqual(expected.strengthMuscleVolume)
+    })
+
+    it('conviviendo con fuerza clásica del mismo grupo, sólo el clásico suma a las barras de kg', () => {
+        const classic: SummaryBlock = {
+            id: 'blk-crunch',
+            exercises: { id: 'ex-crunch', name: 'Crunch', muscle_group: 'Core', exercise_type: 'strength' },
+            sets: 3,
+        }
+        const out = summarizeSessionByKind(
+            [TIME_BLOCK, classic],
+            [holdLog(1, 30), { block_id: 'blk-crunch', set_number: 1, weight_kg: 5, reps_done: 20 }],
+        )
+        expect(out.strengthMuscleVolume).toEqual([{ group: 'Core', vol: 100 }])
+        expect(out.muscleWork).toEqual([{ group: 'Core', vol: 130 }])
+    })
+})

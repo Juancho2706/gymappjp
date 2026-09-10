@@ -12,7 +12,14 @@
 
 import type { LucideIcon } from 'lucide-react'
 import { Dumbbell, GitCommit, HeartPulse, Move } from 'lucide-react'
-import { legacyRepsSummaryFor } from '@eva/workout-engine'
+import {
+    formatProgressionTag,
+    formatStrengthTimeObjective,
+    hasTypedPrescription,
+    isStrengthTimeBlock,
+    legacyRepsSummaryFor,
+    typedBlockSummary,
+} from '@eva/workout-engine'
 import type { DistanceUnit, ExerciseType, IntervalConfig, SideMode } from '@/domain/workout/types'
 
 export const EXERCISE_TYPES: readonly ExerciseType[] = ['strength', 'cardio', 'mobility', 'roller']
@@ -76,18 +83,6 @@ export function effectiveExerciseType(
     )
 }
 
-/** ¿El bloque tiene prescripción tipada (más allá de sets×reps legacy)? */
-export function hasTypedPrescription(block: TypedBlockFields): boolean {
-    return (
-        (block.duration_sec != null && block.duration_sec > 0) ||
-        (block.distance_value != null && block.distance_value > 0) ||
-        block.hr_zone != null ||
-        block.target_pace_sec_per_km != null ||
-        block.interval_config != null ||
-        (block.reps_value != null && block.reps_unit != null && block.reps_unit !== 'reps')
-    )
-}
-
 /** "90" → "90s" · "300" → "5min" · "75" → "75s". Compacto para presupuesto de 20 chars. */
 export function compactDuration(totalSec: number): string {
     const sec = Math.max(0, Math.round(totalSec))
@@ -109,45 +104,27 @@ export function compactDistance(value: number, unit: DistanceUnit | string | nul
     return `${value}m`
 }
 
-function sideSuffix(sideMode: string | null | undefined): string {
-    return sideMode === 'per_side' || sideMode === 'alternating' ? '/lado' : ''
-}
-
 /**
- * Resumen legacy corto (≤20 chars, es-neutro) para persistir en `reps` cuando el coach prescribe con
- * campos tipados. NO se usa para bloques strength con reps manual (ahí el texto del coach manda —
- * "8-10", "AMRAP").
+ * Semántica compartida con RN: la implementación vive SOLO en `@eva/workout-engine` y acá quedan los
+ * re-exports para no tocar a los consumidores (`ExerciseBlock`, `StudentLivePreview`,
+ * `WeeklyPlanBuilder`, tests de este módulo).
  *
- * G11 (fix duplicación): la implementación vive SOLO en `@eva/workout-engine` — la copia web era un
- * espejo línea por línea y cualquier ajuste en una sola producía planes con resúmenes distintos según
- * dónde se hubieran creado (el builder web escribía por acá, el móvil por el motor). Acá queda el
- * re-export para no tocar a los consumidores (`WeeklyPlanBuilder`, tests de este módulo).
+ * G11 (fix duplicación) empezó con `legacyRepsSummaryFor`: la copia web era un espejo línea por línea
+ * y cualquier ajuste en una sola producía planes con resúmenes distintos según dónde se hubieran
+ * creado (el builder web escribía por acá, el móvil por el motor). `hasTypedPrescription` y
+ * `typedBlockSummary` estaban en la misma situación y se colapsan acá
+ * (specs/cuenta-atras-en-pantalla W1.15) junto con los dos formatos nuevos del modo tiempo y el chip
+ * de progresión: replicar la rama strength a mano era drift garantizado.
+ *
+ * Lo que NO se colapsa y sigue viviendo en este archivo: `EXERCISE_TYPE_META` (iconos lucide =
+ * presentación) y `compactDuration`/`compactDistance` (tipados con los `DistanceUnit` del dominio
+ * web).
  */
-export { legacyRepsSummaryFor }
-
-/**
- * Resumen visible por tipo para chips del builder/preview ("4×400m @ Z4", "30s ×3 por lado").
- * Devuelve null para bloques sin prescripción tipada — el caller renderiza el legacy
- * "sets × reps" EXACTAMENTE como hoy (anti-regresión AC3).
- */
-export function typedBlockSummary(block: TypedBlockFields, type: ExerciseType): string | null {
-    if (type === 'strength' && !hasTypedPrescription(block)) return null
-    if (type === 'strength') {
-        // Fuerza con eje extra (ej. farmer carry): sets × reps + distancia
-        const parts: string[] = []
-        if (block.sets && block.reps) parts.push(`${block.sets}×${block.reps}`)
-        if (block.distance_value != null && block.distance_value > 0) {
-            parts.push(compactDistance(block.distance_value, block.distance_unit) + sideSuffix(block.side_mode))
-        }
-        return parts.length ? parts.join(' · ') : null
-    }
-
-    const base = legacyRepsSummaryFor(block, type)
-    if (type === 'mobility' && block.sets && block.sets > 1) {
-        return `${base} ×${block.sets}`
-    }
-    if (type === 'cardio' && !block.interval_config && block.sets && block.sets > 1) {
-        return `${block.sets}× ${base}`
-    }
-    return base
+export {
+    formatProgressionTag,
+    formatStrengthTimeObjective,
+    hasTypedPrescription,
+    isStrengthTimeBlock,
+    legacyRepsSummaryFor,
+    typedBlockSummary,
 }

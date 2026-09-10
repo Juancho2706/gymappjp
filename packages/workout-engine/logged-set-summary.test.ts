@@ -6,6 +6,7 @@ import {
     formatLoggedPace,
     formatLoggedSetLine,
     formatStrengthSetLine,
+    formatStrengthTimeSetLine,
     loggedSideSeconds,
 } from './logged-set-summary'
 
@@ -199,5 +200,82 @@ describe('formatStrengthSetLine', () => {
         expect(formatStrengthSetLine({ weight_kg: 20, metadata: { left_reps: 10 } })).toBeNull()
         expect(formatStrengthSetLine({ weight_kg: 20, metadata: { left_reps: 10, right_reps: -1 } })).toBeNull()
         expect(formatStrengthSetLine({ weight_kg: 20, metadata: { left_sec: 30, right_sec: 30 } })).toBeNull()
+    })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Fuerza por tiempo (D3, specs/cuenta-atras-en-pantalla — W1.8)
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('formatStrengthTimeSetLine — las 5 formas', () => {
+    it('bilateral: "10 kg × 30 s"', () => {
+        expect(formatStrengthTimeSetLine({ weight_kg: 10, reps_done: null, actual_hold_sec: 30 })).toBe(
+            '10 kg × 30 s',
+        )
+    })
+
+    it('per_side simétrico: "10 kg × 30 s por lado"', () => {
+        expect(
+            formatStrengthTimeSetLine({
+                weight_kg: 10,
+                reps_done: null,
+                actual_hold_sec: 60,
+                metadata: { left_sec: 30, right_sec: 30 },
+            }),
+        ).toBe('10 kg × 30 s por lado')
+    })
+
+    it('per_side asimétrico: "10 kg × Izq. 30 s · Der. 25 s"', () => {
+        expect(
+            formatStrengthTimeSetLine({
+                weight_kg: 10,
+                reps_done: null,
+                actual_hold_sec: 55,
+                metadata: { left_sec: 30, right_sec: 25 },
+            }),
+        ).toBe('10 kg × Izq. 30 s · Der. 25 s')
+    })
+
+    it('sin peso (peso corporal, 0 o null): sólo el hold', () => {
+        expect(formatStrengthTimeSetLine({ reps_done: null, actual_hold_sec: 30 })).toBe('30 s')
+        expect(formatStrengthTimeSetLine({ weight_kg: 0, actual_hold_sec: 30 })).toBe('30 s')
+        expect(formatStrengthTimeSetLine({ weight_kg: null, metadata: { left_sec: 30, right_sec: 30 } })).toBe(
+            '30 s por lado',
+        )
+    })
+
+    it('sin hold registrado => null (la superficie pinta su fila de fuerza de siempre)', () => {
+        expect(formatStrengthTimeSetLine({ weight_kg: 10, reps_done: 8 })).toBeNull()
+        expect(formatStrengthTimeSetLine({ weight_kg: 10, actual_hold_sec: null })).toBeNull()
+        expect(formatStrengthTimeSetLine({ weight_kg: 10, actual_hold_sec: 0 })).toBeNull()
+        expect(formatStrengthTimeSetLine({})).toBeNull()
+    })
+
+    it('un solo lado registrado se rotula igual que en movilidad', () => {
+        expect(formatStrengthTimeSetLine({ weight_kg: 10, metadata: { left_sec: 30 } })).toBe('10 kg × Izq. 30 s')
+        expect(formatStrengthTimeSetLine({ weight_kg: 10, metadata: { right_sec: 25 } })).toBe('10 kg × Der. 25 s')
+    })
+
+    it('el peso conserva 1 decimal en es-neutro', () => {
+        expect(formatStrengthTimeSetLine({ weight_kg: 12.5, actual_hold_sec: 45 })).toBe('12,5 kg × 45 s')
+    })
+})
+
+// ANTI-REGRESIÓN del interruptor `if (kind === 'strength') return null` de `formatLoggedSetLine`:
+// ese `null` es lo que deja a cada superficie elegir su render de fuerza (objetivo↔hecho, «PC»,
+// RPE/RIR). `formatStrengthTimeSetLine` es un export SEPARADO justamente para no tocarlo.
+describe('formatLoggedSetLine("strength") sigue devolviendo null', () => {
+    it('con y sin actual_hold_sec, con y sin lados', () => {
+        expect(formatLoggedSetLine('strength', { weight_kg: 10, reps_done: 8 })).toBeNull()
+        expect(formatLoggedSetLine('strength', { weight_kg: 10, reps_done: null, actual_hold_sec: 30 })).toBeNull()
+        expect(
+            formatLoggedSetLine('strength', {
+                weight_kg: 10,
+                reps_done: null,
+                actual_hold_sec: 60,
+                metadata: { left_sec: 30, right_sec: 30 },
+            }),
+        ).toBeNull()
+        expect(formatLoggedSetLine('strength', {})).toBeNull()
     })
 })

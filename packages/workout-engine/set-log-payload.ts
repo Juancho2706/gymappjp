@@ -14,7 +14,8 @@
  */
 import type { HrMetadataV1 } from '@eva/cardio'
 import type { OptimisticLogPayload } from './session-logs.optimistic'
-import type { WorkoutLogMetadata, WorkoutLogSideMetadata } from './session-logs.reconcile'
+import type { HoldSource, WorkoutLogMetadata, WorkoutLogSideMetadata } from './session-logs.reconcile'
+import { holdSidesFor } from './hold-autolog'
 import {
   distanceCaptureToMeters,
   typedKeypadContext,
@@ -149,6 +150,17 @@ export interface TypedPayloadContext extends TypedKeypadContext {
    * modo `cardio`; SIN esta key el payload es byte-idéntico al previo.
    */
   hrMetadata?: HrMetadataV1 | null
+  /**
+   * Quién cerró el hold (specs/cuenta-atras-en-pantalla, A3/R19): `'timer'` = la cuenta atrás llegó
+   * a 0 sola y el auto-envío guardó (V2); `'manual'` = «Listo» antes de 0, tipeo en la fila/keypad o
+   * edición del valor guardado. Se persiste en `mobility` y en `roller`; **cardio no** (su eje es
+   * `actual_duration_sec`, no un hold, y CA-14 lo congela).
+   *
+   * En `roller` es SIEMPRE `'manual'`: R12 lo deja sin reloj en este tren, pero la métrica de
+   * adopción (§8.2) tiene que ser **una sola** — nada de «holds con marca y holds sin marca según el
+   * tipo». Ausente ⇒ el payload es byte-idéntico al previo (misma garantía que `hrMetadata`).
+   */
+  holdSource?: HoldSource | null
 }
 
 /** `hrMetadata` del contexto (ausente con el 3er argumento histórico `sideMode` suelto). */
@@ -157,17 +169,32 @@ function contextHrMetadata(ctx?: string | null | TypedPayloadContext): HrMetadat
   return ctx.hrMetadata ?? null
 }
 
+/** `holdSource` del contexto (ausente con el 3er argumento histórico `sideMode` suelto). */
+function contextHoldSource(ctx?: string | null | TypedPayloadContext): HoldSource | null {
+  if (ctx == null || typeof ctx === 'string') return null
+  return ctx.holdSource ?? null
+}
+
 /**
- * `workout_logs.metadata` (jsonb) de la serie: hold por lado (movilidad `per_side`) y/o el resumen de
- * FC bajo la clave `hr`. Devuelve `undefined` cuando no hay ninguno de los dos ⇒ el payload NO gana
- * la key `metadata` (paridad byte-idéntica con lo previo).
+ * `workout_logs.metadata` (jsonb) de la serie: hold por lado (movilidad `per_side`), el resumen de
+ * FC bajo la clave `hr` y/o la marca de fuente del hold (`hold_source`). Devuelve `undefined` cuando
+ * no hay ninguno ⇒ el payload NO gana la key `metadata` (paridad byte-idéntica con lo previo).
+ *
+ * `hold_source` se mezcla con la MISMA mecánica que `hr` y viaja **en el mismo objeto** que los
+ * lados: el UPDATE de la web reemplaza el jsonb entero (`workout-log.actions.ts:150-156`), así que
+ * un segundo escritor perdería `{left_sec, right_sec}`.
  */
 function buildLogMetadata(
   side: WorkoutLogSideMetadata | null | undefined,
   hr: HrMetadataV1 | null,
+  holdSource: HoldSource | null,
 ): WorkoutLogMetadata | null | undefined {
-  if (hr == null) return side
-  return { ...(side ?? {}), hr }
+  if (hr == null && holdSource == null) return side
+  return {
+    ...(side ?? {}),
+    ...(hr != null ? { hr } : {}),
+    ...(holdSource != null ? { hold_source: holdSource } : {}),
+  }
 }
 
 /** Payload de una serie TIPADA (cardio/movilidad/roller): peso/rir van null, ejes en `actual_*`. */
@@ -184,7 +211,13 @@ export function buildTypedPayload(
   const pace = derivedPaceSecPerKm(v.actualDurationSec, v.actualDistanceM)
   // FC del bloque: SOLO cardio. Un `hrMetadata` que llegue en movilidad/roller se ignora — esos modos
   // no tienen stream ni import, y escribirlo ensuciaría su `metadata` (donde vive el hold por lado).
-  const metadata = buildLogMetadata(v.metadata, mode === 'cardio' ? contextHrMetadata(ctx) : null)
+  // Fuente del hold: SOLO movilidad y roller (el hold no existe en cardio, CA-14) — es lo que hace
+  // que los 32 holds de movilidad del caso canónico salgan CON marca, bilaterales incluidos.
+  const metadata = buildLogMetadata(
+    v.metadata,
+    mode === 'cardio' ? contextHrMetadata(ctx) : null,
+    mode === 'cardio' ? null : contextHoldSource(ctx),
+  )
   return {
     blockId,
     setNumber,
@@ -276,6 +309,80 @@ export function buildStrengthPayload(
     rpe: int(values.rpe),
     rir: int(values.rir),
     note: note ? note : null,
+    ...(metadata !== undefined ? { metadata } : {}),
+  }
+}
+
+/**
+ * Segundos de un HOLD leídos de la fila/keypad, con la MISMA lógica que la rama `per_side` de
+ * movilidad (`typedLogValues:121-130`) y **una sola regla de lados** (`holdSidesFor`, R34):
+ *  - `per_side` ⇒ dos cajas (`hold_left_sec` / `hold_right_sec`) → `metadata {left_sec, right_sec}` y
+ *    `actual_hold_sec` = **suma L+R** (una sola fila por serie, compatible con todo consumidor que ya
+ *    lee el hold total);
+ *  - `alternating`, `bilateral` y `null` ⇒ **una** caja `actual_hold_sec` (H7: para el eje TIEMPO
+ *    `alternating` NO es por lado, aunque sí lo sea para el eje reps de fuerza).
+ *
+ * `metadata: undefined` ⇒ el payload no gana la key (paridad byte-idéntica); `null` ⇒ `per_side` sin
+ * ningún lado tipeado, exactamente como hoy en movilidad.
+ */
+function strengthHoldValues(
+  values: Record<string, string>,
+  sideMode?: string | null,
+): { actualHoldSec: number | null; metadata?: WorkoutLogSideMetadata | null } {
+  if (holdSidesFor(sideMode).length === 1) {
+    return { actualHoldSec: int(values.actual_hold_sec) }
+  }
+  const left = int(values.hold_left_sec)
+  const right = int(values.hold_right_sec)
+  const hasAny = left != null || right != null
+  return {
+    actualHoldSec: hasAny ? (left ?? 0) + (right ?? 0) : null,
+    metadata: hasAny ? { left_sec: left, right_sec: right } : null,
+  }
+}
+
+/**
+ * Payload de una serie de FUERZA POR TIEMPO (D3/R2) — «plancha frontal mantenida», `3 × 30 s · 10 kg`.
+ * Hermano de `buildStrengthPayload` (que **no se toca**: está congelado por 30+ asserts de paridad
+ * byte-idéntica en `set-log-payload.strength-side.test.ts`, `set-log-payload.per-side.test.ts` y
+ * `executor-mapping.parity.test.ts:290-330`).
+ *
+ * Por qué no `buildTypedPayload`: fuerza `weightKg: null` y `rir: null` ⇒ borraría el disco de la
+ * plancha y el esfuerzo. Es la misma razón por la que la fuerza nunca cruza al carril tipado (R18).
+ *
+ * Contrato de columnas (R2):
+ *   `weight_kg`           = KG del tile (`null` = peso corporal), con coma es-CL.
+ *   `reps_done`           = **`null` SIEMPRE**, nunca `0`: un `0` contaría como serie de 0 reps en
+ *                           las RPC de récords/tonelaje (por eso M2 filtra `reps_done > 0`).
+ *   `actual_hold_sec`     = segundos sostenidos; en `per_side` la **suma** L+R.
+ *   `actual_duration_sec` = **ausente** (es el eje de cardio/roller: escribirlo metería el hold en
+ *                           `totalCardioDurationSec`, `session-summary.ts:251`).
+ *   `metadata`            = `{ left_sec?, right_sec?, hold_source? }` — la key SOLO aparece si hay
+ *                           lados o `holdSource` (misma convención de `buildStrengthPayload`).
+ *
+ * 4º argumento: el contexto del bloque **como objeto** `{ sideMode, holdSource }` (también acepta el
+ * `sideMode` suelto, forma histórica de los hermanos, pero entonces la serie sale sin marca de fuente).
+ */
+export function buildStrengthTimePayload(
+  values: Record<string, string>,
+  blockId: string,
+  setNumber: number,
+  ctx?: string | null | TypedPayloadContext,
+): OptimisticLogPayload {
+  // Nota rápida por serie: misma normalización que `buildStrengthPayload` (`note.trim() || null`).
+  const note = values.note?.trim()
+  const { sideMode } = typedKeypadContext(ctx)
+  const hold = strengthHoldValues(values, sideMode)
+  const metadata = buildLogMetadata(hold.metadata, null, contextHoldSource(ctx))
+  return {
+    blockId,
+    setNumber,
+    weightKg: num(values.weight),
+    repsDone: null,
+    rpe: int(values.rpe),
+    rir: int(values.rir),
+    note: note ? note : null,
+    actualHoldSec: hold.actualHoldSec,
     ...(metadata !== undefined ? { metadata } : {}),
   }
 }

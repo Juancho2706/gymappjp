@@ -189,3 +189,44 @@ describe('reconcileSessionLogs', () => {
         expect(out.every((l) => l._pending === false)).toBe(true)
     })
 })
+
+// ── `hold_source` (specs/cuenta-atras-en-pantalla, W1.10) ────────────────────────────────────────
+describe('hold_source viaja por la cola y el merge (W1.10)', () => {
+    it('un ítem de cola con `hold_source` sobrevive el merge y llega al ReconciledSessionLog', () => {
+        const out = reconcileSessionLogs(
+            [],
+            [
+                queued('b-hold', 1, {
+                    weightKg: 10,
+                    repsDone: null,
+                    actualHoldSec: 58,
+                    metadata: { left_sec: 30, right_sec: 28, hold_source: 'timer' },
+                }),
+            ],
+        )
+        expect(out).toHaveLength(1)
+        expect(out[0].actual_hold_sec).toBe(58)
+        // La marca viaja EN el mismo objeto que los lados: el UPDATE web reemplaza el jsonb entero.
+        expect(out[0].metadata).toEqual({ left_sec: 30, right_sec: 28, hold_source: 'timer' })
+        expect(out[0]._pending).toBe(true)
+    })
+
+    it('el server confirmado conserva su propia marca (no la pisa la cola)', () => {
+        const server = [
+            serverLog('b-hold', 1, {
+                weight_kg: 10,
+                reps_done: null,
+                actual_hold_sec: 30,
+                metadata: { hold_source: 'manual' },
+            }),
+        ]
+        const out = reconcileSessionLogs(server, [queued('b-hold', 1, { metadata: { hold_source: 'timer' } })])
+        expect(out).toHaveLength(1)
+        expect(out[0].metadata).toEqual({ hold_source: 'manual' })
+    })
+
+    it('un log ANTERIOR al tren queda SIN la clave (desconocido, nunca «manual»)', () => {
+        const out = reconcileSessionLogs([], [queued('b-viejo', 1, { actualHoldSec: 30 })])
+        expect(out[0].metadata).toBeNull()
+    })
+})
