@@ -356,7 +356,7 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
 
 ### Datos y validez (Opus)
 
-- [ ] W2.1 **(Opus)** Extraer **`isBlockComplete(block, type)`** al motor y cablearlo en los **tres**
+- [x] W2.1 **(Opus)** (worker Opus, 10-09, commit 98cc48b2: `isBlockComplete` en @eva/plan-builder + 3 call sites; **decisión del jefe: los 3 guards divergían y se unifica hacia la PERMISIVA** (movilidad/roller aceptan texto en `reps`: 94 bloques de 58 coaches en LIVE dependen de eso); rango 5–600 espejado localmente con test que fija los 4 bordes contra @eva/schemas) Extraer **`isBlockComplete(block, type)`** al motor y cablearlo en los **tres**
       guards que hoy copian la misma regla: `apps/web/src/app/coach/builder/[clientId]/components/BlockEditSheet.tsx:580-591`
       (rama strength `:590`), `apps/web/src/app/coach/builder/[clientId]/WeeklyPlanBuilder.tsx:945-959`
       (`:958`) y `apps/mobile/app/coach/program-builder.tsx:78-91` (`:90`). Regla nueva de strength:
@@ -364,7 +364,7 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
       (el coach en modo segundos ve «Datos incompletos» y no puede guardar) o **falso negativo** (un
       bloque sin reps y sin segundos se guarda). **Test**: los 3 call sites con el mismo fixture, más
       un caso «sin reps y sin segundos ⇒ incompleto».
-- [ ] W2.2 **(Opus)** `WeeklyPlanBuilder.tsx:1017-1024` y `apps/mobile/lib/plan-builder/serialize.ts:84`:
+- [x] W2.2 **(Opus)** (worker Opus, 10-09, commit 98cc48b2: espejo `reps` por `legacyRepsSummaryFor` gateado por `isStrengthTimeBlock` en web y RN; `null` explícito llega al UPDATE al volver a Reps (test)) `WeeklyPlanBuilder.tsx:1017-1024` y `apps/mobile/lib/plan-builder/serialize.ts:84`:
       el **`reps` espejo** en modo tiempo se puebla con `legacyRepsSummaryFor(...)` (W1.6) en vez del
       texto del coach (web) o del fallback `'8-10'` (RN). `workout_blocks.reps` es **NOT NULL** y Zod
       exige `min(1)` (`packages/schemas/workout.ts:128`); además ese espejo es lo que salva la
@@ -381,13 +381,13 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
       **Test**: `tests/mobile/plan-builder-type-change.test.ts` y
       `tests/mobile/plan-builder-strip-roundtrip.test.ts` + `BlockEditSheet.test.tsx` — round-trip
       reps→sec→reps y **Fuerza·Segundos → Movilidad** sin residuos.
-- [ ] W2.4 **(Opus)** Plantillas: `apps/web/src/app/coach/builder/[clientId]/components/TemplatePickerDialog.tsx:102-148`
+- [x] W2.4 **(Opus)** (worker Opus, 10-09, commit 98cc48b2: test `strength-time-roundtrip.test.ts` (plantilla + sync)) Plantillas: `apps/web/src/app/coach/builder/[clientId]/components/TemplatePickerDialog.tsx:102-148`
       y `apps/web/src/services/workout/workout.service.ts:1372-1405` (`mapDbBlockToWorkoutInput`) **sin
       cambio de código**, pero **con test**: una plantilla con un bloque en modo tiempo se aplica y se
       sincroniza. ⚠ Sin `'sec'` en el enum (W0.3), re-validar esa plantilla **rompe el plan entero**,
       no solo ese bloque. **Test**: `duration_sec` + `reps_unit` sobreviven la copia de plantilla y el
       sync.
-- [ ] W2.5 **(Opus)** `apps/web/src/services/workout/workout.service.ts:178-198` y
+- [x] W2.5 **(Opus)** (worker Opus, 10-09, commit 98cc48b2: exports solo para testear; round-trip verde) `apps/web/src/services/workout/workout.service.ts:178-198` y
       `program-read-mappers.ts:50-106`: verificar (no tocar) que la whitelist `polymorphicBlockColumns`
       y el mapper de lectura ya incluyen `reps_unit` (`:185` / `:91`) y `duration_sec` (`:191` / `:97`).
       **Aceptación**: test de round-trip guardar→leer de un bloque en modo tiempo.
@@ -433,7 +433,7 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
       `apps/web/src/app/c/[coach_slug]/workout/[planId]/LogSetForm.tsx:960` y
       `apps/mobile/components/alumno/workout/SetRow.tsx:454`. Sin esto un hold de fuerza se pinta
       como «10 kg × —».
-- [ ] W2.12 **[UI · Fable]** Copys de error del guardado:
+- [x] W2.12 **[UI · Fable]** (worker Opus, 10-09, commit 98cc48b2) Copys de error del guardado:
       `WeeklyPlanBuilder.tsx:960` ⇒ «Hay ejercicios con datos incompletos (revisa series,
       repeticiones o segundos, duración o distancia).» y `apps/mobile/app/coach/program-builder.tsx:1939`
       ⇒ «Revisa "X": faltan datos (series y reps o segundos, duración o distancia según el tipo).»
@@ -449,7 +449,7 @@ corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
       `rep/ses` byte-idéntico. La progresión por segundos sigue siendo **cartel, sin motor**, igual que
       hoy «+ Reps» (D4). **Test**: un bloque en modo tiempo imprime `+2 seg/ses` en las 5 superficies y
       uno de reps no cambia.
-- [ ] W2.14 **(Opus)** **Convención tipográfica única** (R11), verificada con test: `30s` (sin
+- [x] W2.14 **(Opus)** (worker Opus, 10-09, commit 98cc48b2: 4 formas fijadas; la prescripción larga con kg la compone el consumidor sobre `formatStrengthTimeObjectiveLong`) **Convención tipográfica única** (R11), verificada con test: `30s` (sin
       espacio, vía `compactDuration`) en chips de ≤ 20 caracteres; `30 s` (con espacio) en líneas
       largas de ficha y resumen; prescripción `3 × 30 s · 10 kg`; log `10 kg × 30 s` /
       `10 kg × 30 s por lado`. Hoy conviven las dos convenciones en el repo
