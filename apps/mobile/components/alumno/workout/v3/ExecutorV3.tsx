@@ -41,6 +41,7 @@ import {
   type SkipReason,
   type SummaryBlock,
   type TypedKeypadContext,
+  type TypedPayloadContext,
   type WorkoutCelebrationEvent,
   sideRepsFromMetadata,
 } from '@eva/workout-engine'
@@ -96,12 +97,13 @@ import { SessionStart, type StartChip, type StartExercisePreview } from './Sessi
 import { consumeMorphLaunch, consumeMorphStartConfirmed, signalMorphSceneReady, subscribeMorphStartConfirmed } from './session-morph'
 import { ExerciseScreenV3, strengthSeedValues } from './ExerciseScreenV3'
 import { SupersetScreenV3, type SupersetMemberSub } from './SupersetScreenV3'
-import { supersetGroupLetter, memberLetter } from './superset-screen-model'
+import { supersetGroupLetter, memberLetter, roundRestStartArgs, shouldDeferRoundRest } from './superset-screen-model'
+import { holdEditValues } from './typed-screen-model'
 import { MobilityScreenV3 } from './MobilityScreenV3'
 import { RollerScreenV3 } from './RollerScreenV3'
 import { CardioScreenV3 } from './CardioScreenV3'
 import { ExerciseListV3, type ExerciseListItem } from './ExerciseListV3'
-import { RestInterstitialV3, type RestInterstitialData, type RestRoundContext } from './RestInterstitialV3'
+import { RestInterstitialV3, type PendingRoundRest, type RestInterstitialData, type RestRoundContext } from './RestInterstitialV3'
 import { ExecSettingsSheet } from './ExecSettingsSheet'
 import { FinishSparks } from './finish-sparks'
 import { useExecSettings } from './exec-settings'
@@ -293,6 +295,12 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
   // de CERRAR una ronda de superserie (banner "Ronda N lista" + dots + siguiente ronda en el interstitial).
   // null para cualquier otro descanso (manual, bloque suelto, intra-ronda no dispara descanso).
   const restRoundContextRef = useRef<RestRoundContext | null>(null)
+  // Descanso de GRUPO armado y sin arrancar (W3.3 · R9 + R28 + D2): la ronda cerró por RELOJ (V2) o
+  // con la preferencia apagada (R24) ⇒ nadie llama `startRest` hasta que el alumno toca «Ronda lista
+  // · Descansar N s». Vive acá, en el orquestador, NUNCA en la fila.
+  const [pendingRoundRest, setPendingRoundRest] = useState<PendingRoundRest | null>(null)
+  const pendingRoundRestRef = useRef<PendingRoundRest | null>(null)
+  pendingRoundRestRef.current = pendingRoundRest
   // PR en vivo (E4.2): true cuando la serie recién cerrada fue récord → el interstitial muestra "+1 serie · ¡PR!".
   const restPrRef = useRef(false)
   // Fase de presentacion V3: arranca en el splash (una vez por apertura) → Inicio → sesion. EXCEPCION
@@ -553,12 +561,15 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
       // (elíptica sin distancia, cuerda/escaladora/HIIT por conteo en `reps_done`). Sin bloque de
       // cardio ambos son null ⇒ comportamiento byte-idéntico al previo.
       //
-      // DELIBERADAMENTE SIN `sideMode`: pasarlo haría que un hold `per_side` abriera DOS campos en el
-      // teclado de edición mientras la siembra de valores sigue escribiendo `actual_hold_sec` (un solo
-      // eje) ⇒ confirmar borraría el hold guardado. Ese cableado es de movilidad, no de esta fase.
+      // `sideMode` SÍ viaja desde el tren «Cuenta atrás en pantalla» (W3.4 · R7). Antes se omitía a
+      // propósito porque el teclado abría DOS campos mientras la siembra escribía `actual_hold_sec`
+      // (un solo eje) ⇒ confirmar borraba el hold guardado. Con V2 (el reloj guarda solo) editar es
+      // el camino NORMAL, así que ahora la siembra usa la MISMA regla de lados que el registro
+      // (`holdEditValues` → `holdSidesFor`, R34) y el desglose sobrevive.
       const typedCtx: TypedKeypadContext = {
         distanceUnit: block.distance_unit ?? null,
         cardioModality: exercise?.cardio_modality ?? null,
+        sideMode: block.side_mode ?? null,
       }
       const typed = typedTargetFor(block, exercise, typedCtx)
       if (typed) {
@@ -582,7 +593,9 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
             }
             if (typedLog.actual_avg_hr != null) vals.actual_avg_hr = String(typedLog.actual_avg_hr)
           } else if (typed.mode === 'mobility') {
-            if (typedLog.actual_hold_sec != null) vals.actual_hold_sec = String(typedLog.actual_hold_sec)
+            // W3.4/R7: los DOS lados vuelven desde `metadata` (`{left_sec, right_sec}`) cuando el
+            // bloque es `per_side`; bilateral/`alternating` siguen con la caja única de siempre.
+            Object.assign(vals, holdEditValues(block.side_mode ?? null, typedLog))
           } else {
             if (typedLog.actual_duration_sec != null) vals.actual_duration_sec = String(typedLog.actual_duration_sec)
             if (typedLog.reps_done != null) vals.reps_done = String(typedLog.reps_done)
@@ -662,16 +675,23 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
    * Contexto de campos del bloque cuyo teclado está abierto — el `KeypadHost` lo necesita para que el
    * COMMIT de una edición use el mismo mapeo que la fila (`buildTypedPayload`): distancia en km ⇒ ×1000
    * a metros, conteo rep-based ⇒ `reps_done`, y nada de inventar la distancia en una modalidad que no la
-   * pide. Espeja exactamente el ctx con que `openSet` armó los campos (sin `sideMode`, ver ahí).
+   * pide. Espeja exactamente el ctx con que `openSet` armó los campos — `sideMode` incluido (W3.4).
    * `undefined` fuera de bloques tipados ⇒ el host se comporta igual que antes.
+   *
+   * `holdSource: 'manual'` (A3/R19): TODA edición por teclado es humana por definición, así que la
+   * marca de fuente se reescribe junto con los lados. Tiene que viajar en el MISMO objeto que
+   * `{left_sec, right_sec}` porque el UPDATE reemplaza el jsonb entero: escribir la marca aparte
+   * borraría el desglose.
    */
-  const keypadTypedContext = useMemo<TypedKeypadContext | undefined>(() => {
+  const keypadTypedContext = useMemo<TypedPayloadContext | undefined>(() => {
     if (!keypadTarget?.typed) return undefined
     const block = blocks.find((b) => b.id === keypadTarget.blockId)
     if (!block) return undefined
     return {
       distanceUnit: block.distance_unit ?? null,
       cardioModality: resolveExercise(block)?.cardio_modality ?? null,
+      sideMode: block.side_mode ?? null,
+      ...(keypadTarget.typed.mode === 'cardio' ? {} : { holdSource: 'manual' as const }),
     }
   }, [keypadTarget, blocks])
 
@@ -694,6 +714,10 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
       restCelebrateRef.current = true
       // Por defecto NO es un cierre de ronda; el branch de superserie lo setea si corresponde (E3.5).
       restRoundContextRef.current = null
+      // Limpieza (1 de 4) del descanso de ronda armado: CUALQUIER commit nuevo lo invalida — el de
+      // otro miembro, el de otra ronda o la corrección de una serie ya guardada. `maybeStartRest` lo
+      // vuelve a armar en la misma pasada si corresponde.
+      setPendingRoundRest(null)
       const projected = [
         ...sessionLogs.filter((l) => !(l.block_id === payload.blockId && l.set_number === payload.setNumber)),
         { block_id: payload.blockId, set_number: payload.setNumber },
@@ -751,6 +775,10 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
       // antes de que montara el overlay. La decisión usa SÓLO datos previos al await (`projected`/
       // `wasLogged` derivados de `sessionLogs`, `payload`, `supersetMembersByBlock`, ajustes) ⇒ adelantarla
       // no cambia el resultado. Lo que depende de la red (errores + `signalCommitted`) sigue post-await.
+      //
+      // Marca de fuente del hold de ESTA serie (A3/R19): `'timer'` ⇒ la cerró la cuenta atrás sola
+      // (V2), no un toque del alumno. Es lo que dispara D2 (el descanso de grupo espera el toque).
+      const holdSource = (payload.metadata as { hold_source?: string } | null | undefined)?.hold_source ?? null
       const maybeStartRest = () => {
         // Superserie: descanso SOLO al cerrar la ronda (paridad ExecutorV2/web).
         const members = supersetMembersByBlock.get(payload.blockId)
@@ -758,48 +786,73 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
           const roundBlocks = members.map((m) => ({ id: m.id, sets: m.sets }))
           const round = payload.setNumber
           const roundClosed = isRoundComplete(roundBlocks, round, projected)
+          /**
+           * Plan del descanso de GRUPO — se construye ACÁ, EN EL COMMIT (R28), porque `members`,
+           * `projected` y `effByBlock` sólo existen en este scope y `restRoundContextRef` se anula en
+           * cada commit (`:696`). Si el descanso se difiere al toque del alumno (D2/R24) y este
+           * contexto no se guardó antes, el interstitial saldría sin banner, sin dots y diciendo
+           * «Serie N de M». `null` ⇒ la ronda no cierra o el grupo no tiene descanso que arrancar.
+           */
+          const buildRoundRestPlan = (): PendingRoundRest | null => {
+            if (!roundClosed) return null
+            const groupRest = members.reduce((mx, m) => Math.max(mx, parseRestTime(m.rest_time)), 0)
+            if (groupRest <= 0) return null
+            // Contexto de "ronda cerrada" (E3.5): el interstitial muestra banner + dots + siguiente
+            // ronda. Se deriva del engine (round = la ronda recién cerrada; total = maxSets del grupo).
+            const totalRounds = members.reduce((mx, m) => Math.max(mx, m.sets), 0)
+            const nextRound = round + 1
+            let next: RestRoundContext['next'] = null
+            if (nextRound <= totalRounds) {
+              const firstMember = members.find((m) => m.sets >= nextRound)
+              if (firstMember) {
+                const prescribed = resolveExercise(firstMember)
+                const nextSub = getSubstitution(firstMember)
+                const nm = nextSub?.name ?? prescribed?.name ?? 'Ejercicio'
+                const eff = effByBlock.get(firstMember.id) ?? null
+                const w = eff?.weightKg ?? firstMember.target_weight_kg
+                const prescription = `${firstMember.sets} × ${firstMember.reps}${w != null ? ` · ${formatWeightEsCl(w)} kg` : ''}`
+                const idx = members.findIndex((m) => m.id === firstMember.id)
+                const exercise: SessionExercise | null = prescribed
+                  ? (nextSub
+                      ? { ...prescribed, id: nextSub.exerciseId ?? prescribed.id, name: nextSub.name, gif_url: nextSub.gif_url, thumbnail_url: nextSub.thumbnail_url, video_url: nextSub.video_url, video_start_time: nextSub.video_start_time, video_end_time: nextSub.video_end_time, instructions: nextSub.instructions }
+                      : prescribed)
+                  : null
+                next = { name: nm, prescription, exercise, tag: `${SUPERSET_MEMBER_LETTERS[idx] ?? ''}${nextRound}` }
+              }
+            }
+            return {
+              groupId: members[0].id,
+              round,
+              totalRounds,
+              seconds: groupRest,
+              label: resolveExercise(members[0])?.name ?? null,
+              roundContext: { roundNumber: round, totalRounds, next },
+            }
+          }
           if (!wasLogged) {
-            if (!isRestAutoTimerEnabled()) {
+            const autoRest = isRestAutoTimerEnabled()
+            const plan = buildRoundRestPlan()
+            // R24 (matriz §11.2, paridad web): el descanso de grupo queda ARMADO, no arranca, cuando
+            // la preferencia «Pasar solo al descanso» está apagada — también si la ronda la cerró el
+            // reloj. Ahí el que llama `startRest` es el CTA «Ronda lista · Descansar N s», con ESTE
+            // contexto. Con la preferencia encendida arranca solo, como hoy.
+            const deferred = shouldDeferRoundRest({
+              roundClosed,
+              groupRestSec: plan?.seconds ?? 0,
+              holdSource,
+              autoRestEnabled: autoRest,
+            })
+            if (deferred && plan) setPendingRoundRest(plan)
+            if (!autoRest) {
               timers.cancelRest()
             } else if (roundClosed) {
-              const groupRest = members.reduce((mx, m) => Math.max(mx, parseRestTime(m.rest_time)), 0)
-              const label = resolveExercise(members[0])?.name
-              if (groupRest > 0) {
-                // Contexto de "ronda cerrada" (E3.5): el interstitial muestra banner + dots + siguiente
-                // ronda. Se deriva del engine (round = la ronda recién cerrada; total = maxSets del grupo).
-                const totalRounds = members.reduce((mx, m) => Math.max(mx, m.sets), 0)
-                const nextRound = round + 1
-                let next: RestRoundContext['next'] = null
-                if (nextRound <= totalRounds) {
-                  const firstMember = members.find((m) => m.sets >= nextRound)
-                  if (firstMember) {
-                    const prescribed = resolveExercise(firstMember)
-                    const nextSub = getSubstitution(firstMember)
-                    const nm = nextSub?.name ?? prescribed?.name ?? 'Ejercicio'
-                    const eff = effByBlock.get(firstMember.id) ?? null
-                    const w = eff?.weightKg ?? firstMember.target_weight_kg
-                    const prescription = `${firstMember.sets} × ${firstMember.reps}${w != null ? ` · ${formatWeightEsCl(w)} kg` : ''}`
-                    const idx = members.findIndex((m) => m.id === firstMember.id)
-                    const exercise: SessionExercise | null = prescribed
-                      ? (nextSub
-                          ? { ...prescribed, id: nextSub.exerciseId ?? prescribed.id, name: nextSub.name, gif_url: nextSub.gif_url, thumbnail_url: nextSub.thumbnail_url, video_url: nextSub.video_url, video_start_time: nextSub.video_start_time, video_end_time: nextSub.video_end_time, instructions: nextSub.instructions }
-                          : prescribed)
-                      : null
-                    next = { name: nm, prescription, exercise, tag: `${SUPERSET_MEMBER_LETTERS[idx] ?? ''}${nextRound}` }
-                  }
-                }
-                restRoundContextRef.current = { roundNumber: round, totalRounds, next }
+              if (plan && !deferred) {
+                restRoundContextRef.current = plan.roundContext
                 // En superserie `payload.setNumber` es una RONDA, no una serie: el contexto viaja con
                 // `countKind: 'ronda'` para que la notificación imprima "Ronda 2 de 4" en vez de la
                 // lectura falsa "Serie 2 de 4" (por eso antes esta rama no mandaba contexto alguno).
                 // Es la ronda RECIÉN cerrada sobre el total del grupo — nunca la próxima.
-                timers.startRest(groupRest, {
-                  autoStart: true,
-                  label,
-                  setIndex: round,
-                  setTotal: totalRounds,
-                  countKind: 'ronda',
-                })
+                timers.startRest(plan.seconds, roundRestStartArgs(plan))
               }
             } else {
               timers.cancelRest()
@@ -810,7 +863,9 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
           return
         }
 
-        // Bloque suelto.
+        // Bloque suelto. V3 (pantalla sola): con la preferencia APAGADA nada arranca solo tampoco
+        // cuando la serie la cerró el reloj (`holdSource === 'timer'`) — la rama `!isRestAutoTimerEnabled()`
+        // de abajo ya es la que gobierna, y el descanso sale del CTA «Descansar N s» (R24, W3.16).
         const ex = block ? resolveExercise(block) : null
         // QA4: en V3 se ELIMINA la snackbar "Serie registrada" (el alumno corrige después con el lápiz o
         // desde la tarjeta ya hecha, "Deshacer" de cada card). V2 la conserva (ExecutorV2.tsx). El resto del
@@ -876,6 +931,22 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
   )
 
   /**
+   * CTA «Ronda lista · Descansar N s» (D2 · W3.3): arranca el descanso de grupo que quedó ARMADO.
+   *
+   * Repone `restRoundContextRef` **antes** de llamar al MISMO `startRest` de siempre — el
+   * interstitial lee ese ref en render (`:1763`), así que sin la reposición saldría sin banner ni
+   * dots. `setIndex`/`setTotal` son la RONDA recién cerrada sobre el total del grupo, con
+   * `countKind: 'ronda'`: sin eso la notificación imprimiría «Serie 2 de 4».
+   */
+  const startPendingRoundRest = useCallback(() => {
+    const pending = pendingRoundRestRef.current
+    if (!pending) return
+    restRoundContextRef.current = pending.roundContext
+    setPendingRoundRest(null)
+    timers.startRest(pending.seconds, roundRestStartArgs(pending))
+  }, [timers])
+
+  /**
    * OMITIR un ejercicio (mockup 3). Escribe UNA fila por el MISMO pipeline que una serie (`logSet`:
    * optimista + snapshot + select-then-update + cola offline) pero SIN valores de ejes: sólo
    * `metadata { skipped, skip_reason }`. Es lo que hace que el coach LO VEA en el registro y que la
@@ -899,6 +970,8 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
       }
       // Un descanso en curso pierde sentido si el alumno abandona el ejercicio.
       timers.cancelRest()
+      // Limpieza (3 de 4): omitir un bloque también tira el descanso de ronda armado.
+      setPendingRoundRest(null)
       void haptics.warning()
       const { error } = await logSet({
         blockId,
@@ -952,6 +1025,8 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
   )
 
   const finalizeSession = useCallback(async () => {
+    // Limpieza (4 de 4): al finalizar el entreno no queda descanso de ronda que ofrecer.
+    setPendingRoundRest(null)
     setFinishedElapsed(elapsedSec)
     // Ventana de la sesión para el import del reloj: el cronómetro del motor ya cuenta desde el
     // `startedAt` REAL (snapshot incluido), así que el inicio se deriva de él en vez de inventar una hora.
@@ -1420,6 +1495,10 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
             recentSet={recentSet}
             syncErrors={syncErrors}
             onRetrySet={retryCommit}
+            // D2/R24 (W3.3): el descanso de grupo quedó ARMADO y lo dispara el CTA de la pantalla.
+            // Se pasa CRUDO (con su `groupId`): la pantalla decide si apunta a ESTE grupo.
+            pendingRoundRest={pendingRoundRest}
+            onStartPendingRoundRest={startPendingRoundRest}
           />
         )
       }
@@ -1613,7 +1692,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         />
       )
     },
-    [supersetMembersByBlock, sessionLogs, skippedBlockIds, skipReasonByBlock, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, getSubstitution, openSet, hrZones, hrProfile, restoredDraft, repeatSeed, motion.reduced, exec, execSettings.showRpeRir, handleCommit, handleRpeUpdate, saveActiveDraft, recentSet, syncErrors, retryCommit],
+    [supersetMembersByBlock, sessionLogs, skippedBlockIds, skipReasonByBlock, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, getSubstitution, openSet, hrZones, hrProfile, restoredDraft, repeatSeed, motion.reduced, exec, execSettings.showRpeRir, handleCommit, handleRpeUpdate, saveActiveDraft, recentSet, syncErrors, retryCommit, pendingRoundRest, startPendingRoundRest],
   )
 
   // ── Modelo de pasos (engine) + vistas del rail + auto-avance ──
@@ -1792,6 +1871,12 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
     didHydrateStepPosRef.current = true
     setStepIndex(firstIncompleteStepIndex(steps, completionLogs))
   }, [loading, steps, completionLogs])
+
+  // Limpieza (2 de 4) del descanso de ronda armado: cambiar de paso lo invalida (el CTA vive en la
+  // pantalla de ESA superserie; ofrecerlo desde otro ejercicio sería un descanso fuera de contexto).
+  useEffect(() => {
+    setPendingRoundRest(null)
+  }, [stepIndex])
 
   // Auto-avance de paso (paridad ExecutorV2): al RESOLVER el paso activo —todas sus series hechas U
   // omitido— reposiciona al primer paso sin resolver; una sola vez por paso (guard).

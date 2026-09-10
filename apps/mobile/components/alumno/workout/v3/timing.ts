@@ -9,9 +9,25 @@
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { AppState } from 'react-native'
-import { isManualPhase, type CardioSegmentReason, type IntervalPhase } from '@eva/workout-engine'
+import { expiredWhileAwayFrom, isManualPhase, type CardioSegmentReason, type IntervalPhase } from '@eva/workout-engine'
 
 // ─── Cuenta regresiva (hold de movilidad · countdown de cardio) ──────────────────────────────────
+
+/**
+ * Payload del fin de la cuenta (specs/cuenta-atras-en-pantalla, W3.1a + R27).
+ *
+ * `expiredWhileAway` se DERIVA DE EVIDENCIA, nunca de quién disparó el fin: hay DOS caminos a
+ * `triggerDone` —el tick del intervalo (`:63-68`) y el listener de `AppState` (`:73-79`)— y **gana el
+ * primero**; al desbloquear la pantalla el intervalo pendiente puede correr antes del evento, con lo
+ * que un hold vencido en background reportaría `false` y el lado 2 arrancaría solo con datos falsos.
+ * Por eso la señal sale de `expiredWhileAwayFrom` (motor) con el fin absoluto que `endRef` ya guarda:
+ * el resultado NO depende de quién ganó la carrera.
+ */
+export interface CountdownDoneEvent {
+  /** El hold venció con la app FUERA (R6/R27) ⇒ el lado 2 queda armado, no arranca solo. */
+  expiredWhileAway: boolean
+}
+
 export interface CountdownApi {
   /** Segundos restantes (entero, clampeado a 0). */
   remaining: number
@@ -23,10 +39,22 @@ export interface CountdownApi {
   done: boolean
   /** Fracción transcurrida [0,1] contra el objetivo actual. */
   progress: number
+  /**
+   * Fin ABSOLUTO del tramo en curso (ms epoch) o `null` cuando no hay cuenta armada. Lo consume el
+   * aviso del SO del hold (`hold-notification`, W3.6) y el cálculo de `expiredWhileAway`.
+   */
+  endAtMs: number | null
   /** Pausa/reanuda. */
   toggle: () => void
   /** Reinicia (opcionalmente con un objetivo nuevo) y vuelve a correr. */
   restart: (seconds?: number) => void
+  /**
+   * ARMA el reloj en `idle` con el objetivo y **sin arrancarlo** (R27). Es lo que hace posible «el
+   * lado derecho espera tu toque» cuando el hold venció con la app fuera (R6): `restart` siempre
+   * arranca, así que sin `prime` el lado 2 quedaría en `0:00 done` en vez de `0:30 idle`.
+   * `restart` NO cambia de comportamiento (sus llamadores actuales siguen byte-idénticos).
+   */
+  prime: (seconds?: number) => void
 }
 
 /**
@@ -34,7 +62,11 @@ export interface CountdownApi {
  * ref → cambiarla no re-arma el timer). El objetivo vive en un ref para que `restart(s)` pueda cambiarlo
  * (secuencia de lados en movilidad). Mirror de `HoldTimer` (endTime + 250 ms + AppState + firedRef).
  */
-export function useCountdown(seconds: number, onDone?: () => void, autoStart = true): CountdownApi {
+export function useCountdown(
+  seconds: number,
+  onDone?: (e: CountdownDoneEvent) => void,
+  autoStart = true,
+): CountdownApi {
   const [remaining, setRemaining] = useState(seconds)
   const [running, setRunning] = useState(autoStart)
   const [started, setStarted] = useState(autoStart)
@@ -43,6 +75,16 @@ export function useCountdown(seconds: number, onDone?: () => void, autoStart = t
   const [target, setTarget] = useState(seconds)
   const targetRef = useRef(seconds)
   const endRef = useRef<number | null>(null)
+  // Espejo en ESTADO del fin absoluto: `endRef` se escribe dentro del efecto (después del render), así
+  // que exponerlo crudo devolvería el valor de un render atrás. Sólo cambia al armar/desarmar la
+  // cuenta (una vez por start/stop), nunca por tick.
+  const [endAtMs, setEndAtMs] = useState<number | null>(null)
+  // Ciclo de la cuenta: lo bumpean `restart` y `prime`. Está en las deps del efecto porque el
+  // invariante «el efecto depende de `remaining`» tiene un hueco: si el objetivo nuevo coincide con
+  // el `remaining` del último render (un hold de 1 s, o re-medir sin haber tickeado), las deps no
+  // cambian, el efecto NO se re-ejecuta y la cuenta queda armada pero SIN intervalo. Aditivo: no
+  // altera el comportamiento de ningún llamador, sólo garantiza el re-armado.
+  const [runId, setRunId] = useState(0)
   const firedRef = useRef(false)
   const onDoneRef = useRef(onDone)
   useEffect(() => { onDoneRef.current = onDone })
@@ -50,15 +92,25 @@ export function useCountdown(seconds: number, onDone?: () => void, autoStart = t
   const triggerDone = useCallback(() => {
     if (firedRef.current) return
     firedRef.current = true
+    // ANTES de anular `endRef`: la evidencia del vencimiento es justamente el fin absoluto.
+    const expiredWhileAway = expiredWhileAwayFrom({
+      nowMs: Date.now(),
+      endAtMs: endRef.current,
+      visible: AppState.currentState === 'active',
+    })
     endRef.current = null
+    setEndAtMs(null)
     setRunning(false)
-    onDoneRef.current?.()
+    onDoneRef.current?.({ expiredWhileAway })
   }, [])
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval> | undefined
     if (running && remaining > 0) {
-      if (!endRef.current) endRef.current = Date.now() + remaining * 1000
+      if (!endRef.current) {
+        endRef.current = Date.now() + remaining * 1000
+        setEndAtMs(endRef.current)
+      }
       interval = setInterval(() => {
         if (!endRef.current) return
         const next = Math.max(0, Math.ceil((endRef.current - Date.now()) / 1000))
@@ -67,9 +119,10 @@ export function useCountdown(seconds: number, onDone?: () => void, autoStart = t
       }, 250)
     } else if (!running) {
       endRef.current = null
+      setEndAtMs(null)
     }
     return () => clearInterval(interval)
-  }, [running, remaining, triggerDone])
+  }, [running, remaining, runId, triggerDone])
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (next) => {
@@ -89,15 +142,32 @@ export function useCountdown(seconds: number, onDone?: () => void, autoStart = t
     if (next != null) targetRef.current = next
     firedRef.current = false
     endRef.current = null
+    setEndAtMs(null)
+    setRunId((n) => n + 1)
     setTarget(targetRef.current)
     setRemaining(targetRef.current)
     setStarted(true)
     setRunning(true)
   }, [])
+  /**
+   * Igual que `restart` salvo lo único que importa: deja `started`/`running` en `false`. El reloj
+   * queda ARMADO mostrando el objetivo y esperando el toque del alumno (R6/R21/R27).
+   */
+  const prime = useCallback((next?: number) => {
+    if (next != null) targetRef.current = next
+    firedRef.current = false
+    endRef.current = null
+    setEndAtMs(null)
+    setRunId((n) => n + 1)
+    setTarget(targetRef.current)
+    setRemaining(targetRef.current)
+    setStarted(false)
+    setRunning(false)
+  }, [])
 
   const done = remaining <= 0
   const progress = target > 0 ? Math.min(1, Math.max(0, (target - remaining) / target)) : 0
-  return { remaining, running, started, done, progress, toggle, restart }
+  return { remaining, running, started, done, progress, endAtMs, toggle, restart, prime }
 }
 
 // ─── Cronómetro count-up (roller opcional · cardio por distancia) ─────────────────────────────────

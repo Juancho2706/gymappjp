@@ -18,7 +18,7 @@ import {
   // Mapeo PURO valores->payload, compartido con la `ActiveSetRow` (sin drift entre superficies).
   buildStrengthPayload,
   buildTypedPayload,
-  type TypedKeypadContext,
+  type TypedPayloadContext,
 } from '@eva/workout-engine'
 import { FONT, textStyle } from '../../../lib/typography'
 import { useEvaMotion } from '../../../lib/motion'
@@ -86,8 +86,12 @@ export function KeypadHost({
    * NO altera el flujo del teclado: los pasos vienen de `target.typed.fields` (que `openSet` ya armó
    * con este mismo contexto) y el botón primario conserva su comportamiento — en RN "Listo"/"Guardar"
    * commitea (divergencia intencional con web, decisión CEO PR #168).
+   *
+   * Desde el tren «Cuenta atrás en pantalla» (W3.4) el tipo es el CONTEXTO DE PAYLOAD, no sólo el de
+   * campos: además de `sideMode` transporta `holdSource`, y toda edición por teclado es humana ⇒
+   * `'manual'`. Va en el MISMO objeto que los lados porque el UPDATE reemplaza el jsonb entero.
    */
-  typedContext?: TypedKeypadContext
+  typedContext?: TypedPayloadContext
   onClose: () => void
   onCommit: (payload: OptimisticLogPayload) => void
   onDraftChange: (values: Record<string, string>, fieldIndex: number) => void

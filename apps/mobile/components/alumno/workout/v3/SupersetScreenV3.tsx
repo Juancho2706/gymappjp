@@ -44,6 +44,7 @@ import { dismissWheelHint } from './wheel-hint'
 import { ExecMediaV3, execMediaKind } from './ExecMediaV3'
 import type { ExecTheme } from './exec-theme'
 import { activeRound, memberLetter, nextMemberIdInRound, roundDotStates, totalRounds } from './superset-screen-model'
+import type { PendingRoundRest } from './RestInterstitialV3'
 
 // Reflow del layout (paridad ExerciseScreenV3 CARD_LAYOUT): anima el reordenamiento / contrae-expande al
 // cambiar de miembro/ronda. Sólo sin reduced-motion.
@@ -118,6 +119,8 @@ export function SupersetScreenV3({
   recentSet,
   syncErrors,
   onRetrySet,
+  pendingRoundRest = null,
+  onStartPendingRoundRest,
 }: {
   /** Letra del grupo superserie (A, B…) para el título del paso. */
   groupLetter: string
@@ -144,6 +147,14 @@ export function SupersetScreenV3({
   recentSet?: { blockId: string; setNumber: number; pr: boolean } | null
   syncErrors?: Record<string, string>
   onRetrySet?: (blockId: string, setNumber: number) => void
+  /**
+   * Descanso de GRUPO armado y sin arrancar (W3.3 · D2/R28). Llega CRUDO desde el orquestador: esta
+   * pantalla lo pinta como el CTA «Ronda lista · Descansar N s» **sólo si apunta a ESTE grupo**
+   * (`pendingRoundRest.groupId === members[0].id`) — la comparación es de la UI, W3.12.
+   */
+  pendingRoundRest?: PendingRoundRest | null
+  /** Dispara el descanso armado: repone el `RestRoundContext` y llama al MISMO `startRest` de hoy. */
+  onStartPendingRoundRest?: () => void
 }) {
   const s = exec.surface
   // Descanso de grupo en curso: mientras el interstitial de descanso está arriba, las bandas marquee

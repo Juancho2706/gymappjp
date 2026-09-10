@@ -6,6 +6,7 @@
  * suite en el paquete — acá solo se valida la capa de presentación que consume esos ejes.
  */
 import { describe, expect, it } from 'vitest'
+import { buildTypedPayload, holdSidesFor } from '@eva/workout-engine'
 import {
   PHASE_COLORS,
   cardioDetailLabel,
@@ -15,6 +16,7 @@ import {
   cardioSequenceRemainingSec,
   cardioTimerMode,
   formatClock,
+  holdEditValues,
   holdSeedValues,
   mobilitySides,
   rollerGoalLabel,
@@ -137,6 +139,14 @@ describe('mobilitySides / sideLabel', () => {
     expect(mobilitySides('bilateral')).toEqual(['single'])
     expect(mobilitySides(null)).toEqual(['single'])
   })
+  // R34 (W3.2): UNA sola regla de lados para el eje TIEMPO. `mobilitySides` es un alias del motor,
+  // no una segunda regla — `alternating` es justo donde las dos plataformas podían divergir.
+  it('delega en `holdSidesFor` del motor, incluido `alternating`', () => {
+    for (const mode of ['per_side', 'alternating', 'bilateral', null, undefined, 'raro']) {
+      expect(mobilitySides(mode)).toEqual(holdSidesFor(mode))
+    }
+    expect(mobilitySides('alternating')).toEqual(['single'])
+  })
   it('etiquetas es-neutro', () => {
     expect(sideLabel('left')).toBe('Lado izquierdo')
     expect(sideLabel('right')).toBe('Lado derecho')
@@ -156,6 +166,54 @@ describe('holdSeedValues', () => {
   })
   it('sin nada cronometrado devuelve objeto vacío', () => {
     expect(holdSeedValues('per_side', {})).toEqual({})
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// W3.4 · R7 — editar un hold YA registrado no borra el desglose y lo marca `manual`
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('holdEditValues (W3.4 / R7)', () => {
+  it('per_side siembra los DOS lados desde el jsonb del log', () => {
+    expect(
+      holdEditValues('per_side', { actual_hold_sec: 58, metadata: { left_sec: 30, right_sec: 28 } }),
+    ).toEqual({ hold_left_sec: '30', hold_right_sec: '28' })
+  })
+
+  it('per_side SIN desglose (log viejo) cae el total al lado izquierdo, no lo pierde', () => {
+    expect(holdEditValues('per_side', { actual_hold_sec: 40, metadata: null })).toEqual({ hold_left_sec: '40' })
+  })
+
+  it('bilateral y `alternating` siguen con la caja única de siempre (R34)', () => {
+    expect(holdEditValues(null, { actual_hold_sec: 30 })).toEqual({ actual_hold_sec: '30' })
+    expect(holdEditValues('alternating', { actual_hold_sec: 30 })).toEqual({ actual_hold_sec: '30' })
+  })
+
+  it('sin hold guardado no siembra nada (cajas vacías, jamás un «0»)', () => {
+    expect(holdEditValues('per_side', {})).toEqual({})
+    expect(holdEditValues(null, { actual_hold_sec: null })).toEqual({})
+  })
+
+  it('round-trip: editar un hold `per_side` guardado por RELOJ conserva los lados y pasa a `manual`', () => {
+    // Lo que dejó el auto-envío del reloj…
+    const guardado = { actual_hold_sec: 58, metadata: { left_sec: 30, right_sec: 28, hold_source: 'timer' } }
+    // …se reabre en el teclado con `sideMode` (el ctx que arma `openSet` desde W3.4)…
+    const values = holdEditValues('per_side', guardado)
+    // …y al confirmar, el commit del keypad usa el MISMO builder con `holdSource: 'manual'`.
+    const payload = buildTypedPayload('mobility', values, 'blk-1', 1, {
+      sideMode: 'per_side',
+      holdSource: 'manual',
+    })
+    expect(payload.actualHoldSec).toBe(58)
+    // El UPDATE reemplaza el jsonb ENTERO: la marca y los lados viajan en el mismo objeto o se pierde uno.
+    expect(payload.metadata).toEqual({ left_sec: 30, right_sec: 28, hold_source: 'manual' })
+  })
+
+  it('editar un hold BILATERAL también reescribe la marca (sin inventar lados)', () => {
+    const values = holdEditValues(null, { actual_hold_sec: 30, metadata: { hold_source: 'timer' } })
+    const payload = buildTypedPayload('mobility', values, 'blk-1', 1, { sideMode: null, holdSource: 'manual' })
+    expect(payload).toMatchObject({ actualHoldSec: 30, metadata: { hold_source: 'manual' } })
+    expect(payload.metadata).not.toHaveProperty('left_sec')
   })
 })
 

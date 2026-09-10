@@ -55,6 +55,32 @@ export interface RestRoundContext {
   next: { name: string; prescription: string; exercise: SessionExercise | null; tag: string } | null
 }
 
+/**
+ * Descanso de GRUPO **armado y sin arrancar** (specs/cuenta-atras-en-pantalla, W3.3 · R9 + R28 + D2).
+ *
+ * Vive en el orquestador (`ExecutorV3`), nunca en la fila. Lleva el `RestRoundContext` COMPLETO
+ * porque `restRoundContextRef` se anula en cada commit y sólo se puede construir dentro de la rama
+ * del commit (donde están `members`, `projected` y `effByBlock`): si el descanso se difiere al toque
+ * del alumno y el contexto no viaja acá, el interstitial saldría sin banner, sin dots y con «Serie N
+ * de M» en vez de «Ronda N de M».
+ *
+ * Lo pinta `SupersetScreenV3` como el CTA «Ronda lista · Descansar N s»; al tocarlo, el orquestador
+ * repone `restRoundContextRef` y llama al MISMO `startRest` de siempre.
+ */
+export interface PendingRoundRest {
+  /** Id del PRIMER miembro del grupo: identifica la superserie sin inventar una clave nueva. */
+  groupId: string
+  /** Ronda recién cerrada (1-based) — va como `setIndex` del descanso. */
+  round: number
+  /** Total de rondas del grupo — va como `setTotal`. */
+  totalRounds: number
+  /** Segundos del descanso de grupo (el máximo `rest_time` de los miembros). */
+  seconds: number
+  /** Nombre del primer miembro, para el rótulo del descanso. */
+  label: string | null
+  roundContext: RestRoundContext
+}
+
 export interface RestInterstitialData {
   /** Ejercicio/serie que retoma al terminar el descanso (para la tarjeta SIGUIENTE + mini-media). */
   next: { name: string; prescription: string; exercise: SessionExercise | null } | null

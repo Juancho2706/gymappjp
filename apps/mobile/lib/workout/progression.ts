@@ -9,6 +9,8 @@
 //  - session_linear / adaptive: reservados (sin motor → no-op seguro).
 // Conservador: ante dato faltante/raro devuelve el peso base (nunca rompe el plan).
 
+import { isStrengthTimeBlock } from '@eva/workout-engine'
+
 export const PROGRESSION_MODES = ['weekly_linear', 'double', 'session_linear', 'adaptive'] as const
 export type ProgressionMode = (typeof PROGRESSION_MODES)[number]
 
@@ -27,7 +29,15 @@ export function normalizeProgressionMode(v: unknown): ProgressionMode {
   return isProgressionMode(v) ? v : DEFAULT_PROGRESSION_MODE
 }
 
-/** Tope del rango de reps: "8-12" → 12, "12" → 12. Sin número (AMRAP) → null. */
+/**
+ * Tope del rango de reps: "8-12" → 12, "12" → 12. Sin número (AMRAP) → null.
+ *
+ * ⚠ FUERZA POR TIEMPO (D3): el regex `\d+` NO distingue unidades — con el espejo legacy `"30s"` de
+ * un bloque en modo Segundos esta función devuelve **30**, y esos 30 NO son reps: son segundos. Es
+ * un número que el alumno nunca va a "completar", porque `reps_done` es NULL en modo tiempo. Por eso
+ * `computeEffectiveTarget` apaga la doble progresión con un guard ANTES de llegar acá; no se
+ * "arregla" el parser (el espejo legacy tiene que seguir siendo texto corto y libre).
+ */
 export function parseRepsTop(reps: string | null | undefined): number | null {
   if (!reps) return null
   const nums = String(reps).match(/\d+/g)
@@ -43,6 +53,13 @@ export interface ProgressionBlockInput {
   progression_mode?: ProgressionMode | string | null
   reps?: string | null
   sets?: number | null
+  /**
+   * `workout_blocks.reps_unit`. Con `'sec'` + `duration_sec > 0` el bloque está en modo TIEMPO
+   * (D3) y la doble progresión se apaga (D4/H9, ver `computeEffectiveTarget`). Los dos campos van
+   * juntos porque el predicado `isStrengthTimeBlock` exige el AND de ambos.
+   */
+  reps_unit?: string | null
+  duration_sec?: number | null
 }
 
 export interface LastSessionForBlock {
@@ -108,7 +125,17 @@ export function computeEffectiveTarget(
     case 'weekly_linear':
       return weeklyLinear(base, value, ctx, mode)
     case 'double':
-      return doubleProgression(block, base, value, ctx, mode)
+      // GUARD D4/H9 — en modo TIEMPO la doble progresión está APAGADA, y no sólo por copy del
+      // builder. `parseRepsTop("30s")` lee 30 "reps" que no existen y `reps_done` es NULL, así
+      // que `repsArr` queda vacío ⇒ `completed = false` ⇒ `doubleProgression` devolvería
+      // `holding` PARA SIEMPRE: el alumno vería «manteniendo peso hasta completar 30 reps» de
+      // un hold de 30 segundos, sin salida posible. Cae a `weekly_linear`, que sí es sensato.
+      // Segunda red del mismo problema: `stripFieldsForStrengthMode` (W0) baja
+      // `progression_mode` de 'double' a 'weekly_linear' al activar Segundos en el builder;
+      // este guard cubre los bloques que ya estuvieran en 'double' (RN, plantilla, SQL).
+      return isStrengthTimeBlock(block)
+        ? weeklyLinear(base, value, ctx, 'weekly_linear')
+        : doubleProgression(block, base, value, ctx, mode)
     default:
       return noop
   }

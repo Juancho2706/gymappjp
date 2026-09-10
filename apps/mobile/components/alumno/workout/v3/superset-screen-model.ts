@@ -78,6 +78,65 @@ export function closedRoundDots(roundNumber: number, total: number): ClosedRound
   return out
 }
 
+// ── Descanso de grupo DIFERIDO (specs/cuenta-atras-en-pantalla, W3.3 · D2 + R24) ─────────────────
+
+/**
+ * ¿El descanso de grupo queda ARMADO en vez de arrancar solo?
+ *
+ * Regla única, consumida por `ExecutorV3.maybeStartRest` para no dejarla escrita a mano dentro de un
+ * componente de 2000 líneas, y ESPEJO de la web (`WorkoutExecutionClient.handleLogged`):
+ *  · **Preferencia «Pasar solo al descanso» APAGADA** (R24 / matriz de SPEC §11.2) ⇒ nada arranca
+ *    solo, sea cual sea la fuente del cierre; el CTA «Ronda lista · Descansar N s» es el único camino.
+ *  · **Preferencia ENCENDIDA** ⇒ el orquestador arranca el descanso de ronda como hoy, TAMBIÉN cuando
+ *    la cerró el reloj: D2 («el descanso arranca cuando el alumno toca») se decidió antes de que
+ *    existiera D5, y la matriz de W5 la reconcilia — quien dejó la preferencia encendida pidió
+ *    justamente que el descanso arranque solo. Decisión del jefe 10-09 para no divergir de la web.
+ * Sin ronda cerrada o sin `rest_time` del grupo no hay nada que armar (A7).
+ */
+export function shouldDeferRoundRest(input: {
+  roundClosed: boolean
+  /** Máximo `rest_time` de los miembros, en segundos. */
+  groupRestSec: number
+  /**
+   * `metadata.hold_source` de la serie que acaba de cerrarse (`null` = no fue un hold). Se recibe
+   * para telemetría/QA pero NO decide: la preferencia manda (matriz §11.2, paridad web).
+   */
+  holdSource: string | null
+  autoRestEnabled: boolean
+}): boolean {
+  if (!input.roundClosed || input.groupRestSec <= 0) return false
+  return !input.autoRestEnabled
+}
+
+/** Opciones de `startRest` para un descanso de RONDA (las mismas que hoy arma `maybeStartRest`). */
+export interface RoundRestStartArgs {
+  autoStart: true
+  label: string | undefined
+  /** La ronda RECIÉN cerrada — nunca la próxima. */
+  setIndex: number
+  setTotal: number
+  /** Discriminador explícito: sin él la bandeja imprimiría «Serie 2 de 4» en una superserie. */
+  countKind: 'ronda'
+}
+
+/**
+ * Traduce el descanso de ronda ARMADO a los argumentos del **mismo** `startRest` de siempre. Existe
+ * para que el camino diferido (CTA) y el automático no puedan divergir en `countKind`/`setTotal`.
+ */
+export function roundRestStartArgs(pending: {
+  round: number
+  totalRounds: number
+  label: string | null
+}): RoundRestStartArgs {
+  return {
+    autoStart: true,
+    label: pending.label ?? undefined,
+    setIndex: pending.round,
+    setTotal: pending.totalRounds,
+    countKind: 'ronda',
+  }
+}
+
 /** Letra del grupo superserie por su orden entre superseries del plan (0 → A, 1 → B…). */
 export function supersetGroupLetter(index: number): string {
   return LETTERS[index] ?? LETTERS[LETTERS.length - 1]

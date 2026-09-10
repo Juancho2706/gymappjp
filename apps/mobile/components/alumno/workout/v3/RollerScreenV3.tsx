@@ -150,7 +150,16 @@ export function RollerScreenV3({
     const values: Record<string, string> = { reps_done: String(count) }
     if (stopwatch.started && stopwatch.elapsed > 0) values.actual_duration_sec = String(stopwatch.elapsed)
     haptics.setDone()
-    onCommitSet(buildTypedPayload('roller', values, block.id, activeSet, block.side_mode ?? null))
+    // Métrica ÚNICA de `hold_source` (W1.3b): el roller NO gana reloj en este tren (R12), pero sí
+    // marca fuente — siempre `'manual'`, nunca `'timer'`. Sin esto la consulta de adopción (§8.2)
+    // tendría un tercer estado «sin marca» que nadie sabe leer. Contexto como OBJETO: con el
+    // `sideMode` suelto la marca no llega al jsonb.
+    onCommitSet(
+      buildTypedPayload('roller', values, block.id, activeSet, {
+        sideMode: block.side_mode ?? null,
+        holdSource: 'manual',
+      }),
+    )
   }
 
   const loggedRows = Array.from({ length: block.sets }).map((_, i) => {

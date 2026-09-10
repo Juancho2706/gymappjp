@@ -12,8 +12,10 @@
 import {
   compactDistance,
   compactDuration,
+  holdSidesFor,
   intervalTimerKind,
   isManualPhase,
+  loggedSideSeconds,
   type IntervalConfig,
   type IntervalPhase,
   type IntervalPhaseKind,
@@ -141,10 +143,16 @@ export function cardioDetailLabel(block: {
   return 'Continuo'
 }
 
-/** Lados de una prescripción de movilidad: dos (per_side) o uno (bilateral/alternating). */
+/**
+ * Lados de una prescripción de movilidad: dos (per_side) o uno (bilateral/alternating).
+ *
+ * R34: **una sola regla de lados** para el eje TIEMPO. Delega en `holdSidesFor` del motor —el mismo
+ * que consumen `buildStrengthTimePayload`, `keypadStepsForTarget`, `use-hold-module` y las dos UIs—
+ * para que nadie compare `sideMode` a mano y web y RN no puedan divergir en `alternating`.
+ */
 export type MobilitySide = 'left' | 'right' | 'single'
 export function mobilitySides(sideMode: string | null | undefined): MobilitySide[] {
-  return sideMode === 'per_side' ? ['left', 'right'] : ['single']
+  return holdSidesFor(sideMode)
 }
 
 /** Etiqueta es-neutro del lado grande de movilidad. */
@@ -171,6 +179,41 @@ export function holdSeedValues(
   } else if (timed.single != null) {
     out.actual_hold_sec = String(Math.round(timed.single))
   }
+  return out
+}
+
+/**
+ * Valores del teclado de EDICIÓN de un hold YA REGISTRADO (specs/cuenta-atras-en-pantalla, W3.4/R7).
+ *
+ * Hasta este tren `openSet` deliberadamente NO pasaba `sideMode` al contexto tipado: el teclado
+ * abría UNA caja (`actual_hold_sec`) mientras el bloque era `per_side`, así que confirmar borraba el
+ * desglose guardado. Con V2 (el reloj guarda solo) la edición pasa a ser el camino NORMAL y esa
+ * deuda se vuelve un bug visible, así que la siembra se hace con la MISMA regla de lados que el
+ * registro (`holdSidesFor`, R34):
+ *  · un solo lado ⇒ `{ actual_hold_sec }`;
+ *  · `per_side` ⇒ `{ hold_left_sec, hold_right_sec }` leídos del jsonb (`loggedSideSeconds`);
+ *  · `per_side` SIN desglose (log viejo o bilateral migrado) ⇒ el total cae en el IZQUIERDO, el
+ *    mismo fallback que ya usa la fuerza por lado (`ExecutorV3.tsx`, `sideRepsFromMetadata`).
+ *
+ * Sólo devuelve las claves que tienen valor: una caja sin dato queda vacía, nunca en «0».
+ */
+export function holdEditValues(
+  sideMode: string | null | undefined,
+  log: { actual_hold_sec?: number | null; metadata?: unknown },
+): Record<string, string> {
+  const out: Record<string, string> = {}
+  const total = log.actual_hold_sec
+  if (holdSidesFor(sideMode).length === 1) {
+    if (total != null) out.actual_hold_sec = String(Math.round(total))
+    return out
+  }
+  const sidesSec = loggedSideSeconds(log.metadata)
+  if (sidesSec) {
+    if (sidesSec.left != null) out.hold_left_sec = String(Math.round(sidesSec.left))
+    if (sidesSec.right != null) out.hold_right_sec = String(Math.round(sidesSec.right))
+    return out
+  }
+  if (total != null) out.hold_left_sec = String(Math.round(total))
   return out
 }
 
