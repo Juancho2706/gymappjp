@@ -1,13 +1,13 @@
 ---
-status: active
+status: done
 owner: product-engineering
-last_verified: "2026-09-06"
+last_verified: "2026-09-10"
 canonical: false
 ---
 
 # SPEC — Cantidades honestas (Nutrición V2: unidad «un», medida casera, republicación y ojos del coach)
 
-> **Activa.** Origen: alumno de prueba de Jean (coach `jotap-coach`) con **5.637 kcal** en un día (06-09) por
+> **Cerrada (`done`): QA del owner en device VERDE el 2026-09-10 (8/8, checklist en TASKS); W1–W4 en producción desde el 06-09.** Origen: alumno de prueba de Jean (coach `jotap-coach`) con **5.637 kcal** en un día (06-09) por
 > «Huevo revuelto 30 un» (= 30 porciones de 100 g = 4.470 kcal) más 5 registros huérfanos de una versión anterior
 > del plan que sumaban sin verse. Impacto real en planes activos de Alberto Piedrahita (pan pita «60 un» = 9.576
 > kcal) y del propio Jean. Plan aprobado por el owner el 06-09 (artifact `5091b8db`, copia local

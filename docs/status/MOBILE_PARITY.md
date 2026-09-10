@@ -43,7 +43,7 @@ source_of_truth: apps/web responsive + apps/mobile
 > **2026-09-06 (tren «Cantidades honestas», Nutrición V2 — W1–W4 EN PRODUCCIÓN ~23:07Z: `master` = `rnmobiledenuevo` =
 > `2fe28d61`, deploy `dpl_C95u9ArNCBx8VwvaZfnRLpdRijkm` READY, 3 migraciones en LIVE `20260906230222`/`230357`/`230411`, OTA 1.1.2
 > `production` android `27028d0f-2025-48d5-b6fa-30e5dfeaf7e5` (run 34065842472) / ios `ddf839b8-42b6-4a01-98e0-2117add5da92`
-> (run 34065844358); QA del owner en device PENDIENTE)**
+> (run 34065844358); QA del owner en device VERDE 10-09 ⇒ SDD `done`)**
 > ([SDD](../specs/nutrition-cantidades-honestas/SPEC.md), mockups M1–M4 aprobados por el owner el 06-09). Paridad web + RN:
 > **editor único y wizards** convierten la cantidad al cambiar de unidad (`convertQuantityTextOnUnitChange`, un solo helper para
 > el reductor compartido, el wizard web y el wizard RN), caption «1 un = {porción} g» bajo el selector, aviso ámbar

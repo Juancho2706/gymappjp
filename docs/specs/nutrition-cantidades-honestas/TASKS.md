@@ -1,7 +1,7 @@
 ---
-status: active
+status: done
 owner: product-engineering
-last_verified: "2026-09-06"
+last_verified: "2026-09-10"
 canonical: false
 ---
 
@@ -192,11 +192,17 @@ corresponde, tocá «Usar huevos». Cualquier duda, escribime.»
       desplegado ⇒ **9/9 verdes en 45,6 s** (23:11Z). CI del push (`34065484308`) verde salvo `nutrition-smoke` preexistente.
 - [x] C3 Resumen al owner con checklist de QA en device (mensaje final de la sesión 06-09).
 - [x] C4 Memoria del proyecto actualizada (`project_nutricion_cantidades_honestas_20260906.md`).
-- [ ] C5 [owner] `git pull --ff-only` en el checkout principal (`D:\Proyectos\Antigravity\gymappjp`, hoy en `f5d50cdc`) y borrar
-      la carpeta del worktree `.claude/worktrees/nutrition-cantidades-honestas` (luego `git worktree prune` + `git branch -D`);
-      correr el dry-run de `scripts/nutrition-household/backfill-usda-household.mjs` desde ahí (`USDA_FDC_API_KEY` obligatoria).
+- [x] C5 [owner] `git pull --ff-only` en el checkout principal y borrado del worktree `nutrition-cantidades-honestas`:
+      **hecho 06-09 ~23:45Z** (checkout en `95a384de`, carpeta borrada por el owner + `git worktree prune` + `git branch -D`).
+- [ ] C6 [owner] dry-run de `scripts/nutrition-household/backfill-usda-household.mjs` desde el checkout principal
+      (`USDA_FDC_API_KEY` obligatoria). Backlog: no bloquea el `done`.
+- [ ] C7 [owner] avisos a `jotap-coach` y `olympuswolf` (texto en `docs/audits/cantidades-honestas-revisar-unidad-2026-09.md`)
+      y a Alberto/Jean (W0). Backlog: no bloquea el `done`.
+- [x] C8 **QA del owner en device VERDE 2026-09-10 (8/8) ⇒ SDD `done`** (SPEC, PLAN, TASKS, AUDIT-W2.0).
 
 ## Checklist de QA en device (se completa al cierre)
+
+> **Resultado 2026-09-10: los 8 puntos VERDES** (QA del owner en device sobre la OTA 1.1.2 vigente, aprobación explícita en sesión: «QA de cantidades listo»). Ningún punto volvió al carril. **SDD `done`.**
 
 1. Editor RN/web: 30 g → un convierte a 0,3; un → g convierte; caption «1 un = 100 g».
 2. Editor: «Huevo revuelto 30 un» muestra el aviso ámbar; «Cambiar a 30 g» y «Usar huevos» hacen lo dicho; publicar sigue en un tap.

@@ -97,5 +97,5 @@ Cuando el aviso se mande con el tren ya en producción, cambiar «sale en la pr�
 
 > «Gracias por el detalle, nos sirve mucho. Cuatro cosas: (1) La agenda no es algo que marcaste: es una lista automática de alumnos que llevan una semana sin registrar entrenos. Las horas eran de relleno, ya las sacamos. (2) El «Entró hace 8 d» es el día en que cada alumno entró por primera vez a la app, no la última vez. La actividad real es el «Hoy» que aparece al lado, y ese sí calza con lo que registraron. Ese chip ahora se ve solo la primera semana. (3) Lo de nutrición era un error nuestro: apagaste el módulo y la ficha lo seguía mostrando con 0 %. Ya está corregido. (4) El botón de «Nuevo alumno» que quedaba tapado por la barra en iPhone ya quedó arriba de ella. Todo esto ya está en la app: si no lo ves, ciérrala del todo y vuelve a abrirla para que tome la actualización.»
 
-Envío: _pendiente_ (fecha · canal · destinatario se anotan acá cuando el owner lo mande).
+Envío: **hecho el 2026-09-10 por el owner** (destinatario: Movens; canal: el del owner, no informado a la sesión). E9 cerrado.
 

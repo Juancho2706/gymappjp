@@ -108,7 +108,7 @@ No son tareas: son el marco que ya decidió el owner. **Por eso van sin checkbox
 - [x] E6 **Solo a pedido del owner**: push a `rnmobiledenuevo` y `master`, deploy web (`dpl_…` READY) y OTA 1.1.2 canal `production` desde el piso Apple (`docs/operations/MOBILE_RELEASES_OTA.md`); verificar con `eas update:list --branch production --limit 8 --json` un grupo por plataforma con `runtimeVersion` 1.1.2.
 - [x] E7 E2E `prod-suave` tras el deploy: `pnpm qa:prod:suave` (un solo navegador), registrar resultado y run.
 - [x] E8 **Owner**: QA según [TESTING-QA](TESTING-QA.md) **completo, Q1–Q24**. **VERDE 10-09 (owner, aprobación explícita del tren completo; evidencia en TESTING-QA § Checklist).** Q1–Q22 en device (RN) y **Q23–Q24 en web**, que no son opcionales: Q23 firma la ficha web con el dominio apagado y el copy `Sin plan vigente` (A25/A26, R1) y Q24 la hidratación de `/coach/dashboard` en Safari iOS (gotcha `EVA-NEXTJS-18`, riesgo declarado del carril C). Sin Q23 y Q24 el SDD no pasa a `done` aunque el device esté verde.
-- [ ] E9 **Owner**: aviso a Movens con el texto de [TESTING-QA](TESTING-QA.md) § Aviso a coaches (texto final listo el 10-09). Lo manda el owner, nunca la sesión.
+- [x] E9 **Owner**: aviso a Movens con el texto de [TESTING-QA](TESTING-QA.md) § Aviso a coaches (texto final listo el 10-09). Lo manda el owner, nunca la sesión. **Enviado 10-09 por el owner.**
 
 ## Backlog
 
@@ -126,7 +126,7 @@ Deuda declarada, fuera de alcance de este tren (se anota también en `docs/statu
 
 ## Cierre
 
-**QA del owner 2026-09-10 (tarde): Q1–Q24 VERDES ⇒ SDD `done` (los cuatro docs). Queda E9.**
+**QA del owner 2026-09-10 (tarde): Q1–Q24 VERDES ⇒ SDD `done` (los cuatro docs). E9 enviado el mismo día por el owner: tren cerrado sin pendientes; lo que sigue vive en § Backlog.**
 
 **Ejecución 2026-09-10 (sesión «Asistente Principal», jefe Fable + workers Opus/Sonnet vía Workflow).** W1 (4 workers Opus/Sonnet por lote de archivos), W2 (2 líneas, jefe), W3 (package → web ∥ RN, Opus), W4 (Sonnet), W5 (docs Sonnet). Base `f93378c3`; commit del tren en `rnmobiledenuevo`, **sin push** (E6/E7 a pedido del owner).
 
