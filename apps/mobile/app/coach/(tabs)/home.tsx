@@ -24,6 +24,7 @@ import { InviteCodePill } from '../../../components/coach/InviteStudent'
 import { VerifyEmailBanner } from '../../../components/coach/VerifyEmailBanner'
 import { useTheme } from '../../../context/ThemeContext'
 import { useMarkDashboardReady } from '../../../context/DashboardReadyContext'
+import { useDomainGuard } from '../../../lib/domain-guard'
 import {
   getCoachDashboardDataMobile,
   publishCoachOnboarding,
@@ -39,6 +40,12 @@ export default function CoachHomeScreen() {
   const [error, setError] = useState<string | null>(null)
   const [statsOpen, setStatsOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  // Master switch por DOMINIO del workspace activo (D3): con nutricion apagada el panel no muestra
+  // ni el tab de Nutricion del sheet ni la senal «Nutricion en riesgo» en la prioridad de hoy.
+  // Va ACA arriba, con el resto de los hooks: el guard llega asincrono (`ready:false` y despues
+  // `ready:true`) y los early-returns de abajo no pueden dejarlo fuera del orden de hooks
+  // (contrato de consumo de `lib/domain-guard.ts`). Fail-OPEN: solo el `false` explicito apaga.
+  const { enabled: nutritionEnabled } = useDomainGuard('nutrition')
   // Espejo de `data` para decidir initial vs refresh en cada foco sin re-disparar en loop.
   const dataRef = useRef<MobileDashboardData | null>(null)
 
@@ -188,12 +195,14 @@ export default function CoachHomeScreen() {
           items={data.topRiskClients}
           kpi={data.kpi}
           agenda={data.agenda}
+          agendaTotal={data.agendaTotal}
           expiringPrograms={data.expiringPrograms}
           onAdherencePress={() => setStatsOpen(true)}
+          nutritionEnabled={nutritionEnabled}
         />
 
-        {/* Agenda de hoy */}
-        <MobileTodayAgenda items={data.agenda} />
+        {/* Pendientes de hoy — trabajo derivado (sin horario ni «hechas») */}
+        <MobileTodayAgenda items={data.agenda} total={data.agendaTotal} />
 
         {/* Novedades — programas por vencer + actividad reciente */}
         <MobileNovedades
@@ -212,6 +221,7 @@ export default function CoachHomeScreen() {
           open={statsOpen}
           onClose={() => setStatsOpen(false)}
           clientStats={data.clientStats}
+          nutritionEnabled={nutritionEnabled}
         />
         {/* El modal de bienvenida Free ya no existe: la guía v2 (`/coach/guia`) ES la bienvenida,
             para todos los planes (decisión del owner 22-08, «un solo onboarding por área»). */}

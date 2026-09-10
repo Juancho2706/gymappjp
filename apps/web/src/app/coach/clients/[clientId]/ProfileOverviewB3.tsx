@@ -84,6 +84,12 @@ type ProfileOverviewB3Props = {
     clientId: string
     /** Programa activo del alumno — alimenta la card "Programa". */
     activeProgram: any | null | undefined
+    /**
+     * Dominio de nutrición habilitado para el coach (workspace). Fail-OPEN: solo `false` explícito
+     * apaga. Con `false` el anillo "Nutrición" desaparece (distinto de "sin plan", que lo pinta
+     * gris con `Sin plan vigente`).
+     */
+    nutritionEnabled?: boolean
     /** Riesgo de nutrición V2; `null`/ausente = SIN DATO ⇒ la señal se omite (no alarma). */
     isNutritionAtRisk?: boolean | null
     /**
@@ -129,6 +135,7 @@ export function ProfileOverviewB3({
     compliance,
     clientId,
     activeProgram,
+    nutritionEnabled = true,
     isNutritionAtRisk = null,
     nutritionWeeklyPct = null,
     nutritionWeeklyDays = null,
@@ -296,27 +303,29 @@ export function ProfileOverviewB3({
             {/* ===== Cumplimiento semanal ===== */}
             <Card padding="md">
                 <SectionTitle>Cumplimiento semanal</SectionTitle>
-                <div className="grid grid-cols-3 gap-2">
+                <div className={nutritionEnabled === false ? 'grid grid-cols-2 gap-2' : 'grid grid-cols-3 gap-2'}>
                     <ComplianceRing
                         label="Entreno"
                         percentage={workoutPct}
                         delta={workoutDelta}
                         pathColor={primaryHex}
                     />
-                    <ComplianceRing
-                        label="Nutrición"
-                        percentage={nutAvg == null ? null : Math.min(100, nutAvg)}
-                        delta={nutDelta}
-                        pathColor={nutColor}
-                        onClick={onViewNutrition}
-                        hint={
-                            nutAvg == null
-                                ? 'sin plan vigente'
-                                : nutritionWeeklyDays != null
-                                  ? `${nutritionWeeklyDays.inRange} de ${nutritionWeeklyDays.tracked} días en rango`
-                                  : undefined
-                        }
-                    />
+                    {nutritionEnabled === false ? null : (
+                        <ComplianceRing
+                            label="Nutrición"
+                            percentage={nutAvg == null ? null : Math.min(100, nutAvg)}
+                            delta={nutDelta}
+                            pathColor={nutColor}
+                            onClick={onViewNutrition}
+                            hint={
+                                nutAvg == null
+                                    ? 'Sin plan vigente'
+                                    : nutritionWeeklyDays != null
+                                      ? `${nutritionWeeklyDays.inRange} de ${nutritionWeeklyDays.tracked} días en rango`
+                                      : undefined
+                            }
+                        />
+                    )}
                     <ComplianceRing
                         label="Check-in"
                         percentage={checkPct}

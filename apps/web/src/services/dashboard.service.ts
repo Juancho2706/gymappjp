@@ -70,6 +70,20 @@ export function applyNutritionAttentionScore(
     return nutritionAtRisk === true ? baseScore + NUTRITION_RISK_SCORE_POINTS : baseScore;
 }
 
+/**
+ * `null` cuando NINGÚN día del rango tuvo comidas aplicables (sin plan ⇒ sin dato honesto).
+ *
+ * Evita que `calculateAttentionScore` sume el término de nutrición (+20, flag `NUTRICION_RIESGO`)
+ * para un alumno sin plan V1 vigente: antes de este helper, `compliancePct` colapsaba a `0` en ese
+ * caso y disparaba un falso positivo (R15).
+ */
+export function nutritionComplianceFromAdherence(
+    perDay: Array<{ applicableMeals: number }>,
+    summary: { compliancePct: number }
+): number | null {
+    return perDay.some((d) => d.applicableMeals > 0) ? Math.round(summary.compliancePct) : null;
+}
+
 export function calculateAttentionScore(client: ClientDataForAttention): {
     score: number;
     flags: AttentionFlag[];
@@ -258,6 +272,11 @@ export interface DirectoryPulseRow {
     totalSets: number;
     consumed: { cal: number; prot: number; carb: number; fat: number };
     target: { cal: number; prot: number; carb: number; fat: number };
+    /**
+     * Campo de presentación: sigue `number` (no `number | null`) para no mover las 4 superficies
+     * web que lo consumen sin dato opcional. El `null` honesto (sin plan) entra ANTES del score,
+     * vía `nutritionComplianceFromAdherence`, y se rellena con `?? 0` recién acá.
+     */
     nutritionPercentage: number;
     lastWorkoutDate: string | null;
     lastCheckinDate: string | null;
@@ -729,7 +748,7 @@ export class DashboardService {
                 logsByDate.set(date, rows);
             });
 
-            const { summary: nutritionSummary } = computeNutritionAdherence({
+            const { summary: nutritionSummary, perDay: nutritionPerDay } = computeNutritionAdherence({
                 meals: [...mealsById.values()],
                 logsByDate,
                 targetByDate,
@@ -752,7 +771,11 @@ export class DashboardService {
                 carb: nutritionSummary.targetMacros.carbs,
                 fat: nutritionSummary.targetMacros.fats,
             };
-            const nutritionPercentage = Math.round(nutritionSummary.compliancePct);
+            // `null` cuando NINGÚN día del rango tuvo comidas aplicables (sin plan ⇒ sin dato).
+            const nutritionCompliance = nutritionComplianceFromAdherence(nutritionPerDay, nutritionSummary);
+            // Presentación: `DirectoryPulseRow.nutritionPercentage` sigue siendo `number` porque lo
+            // leen 4 superficies con `?? 0` propio; el `null` entra ANTES del score, no después.
+            const nutritionPercentage = nutritionCompliance ?? 0;
 
             const latestEnergyLevel = sortedChecks[0]?.energy_level ?? null;
 
@@ -760,7 +783,7 @@ export class DashboardService {
                 lastCheckinDate,
                 lastWorkoutDate,
                 hasActiveWorkoutProgram: activeProgram != null,
-                nutritionCompliance: nutritionPercentage,
+                nutritionCompliance, // antes: nutritionPercentage
                 planDaysRemaining,
                 oneRMDelta,
             });

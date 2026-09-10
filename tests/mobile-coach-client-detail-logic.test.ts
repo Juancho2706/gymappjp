@@ -8,6 +8,7 @@ import {
   filterTrainingStrengthSeries,
   filterTimelineForActivePlan,
   isValidIsoYmd,
+  resolveNutritionSignal,
   selectTrainingRadarRows,
   trainingProgressionLabel,
 } from '../apps/mobile/lib/coach-client-detail-logic'
@@ -95,6 +96,59 @@ describe('coach client detail pure parity', () => {
     }]
     const mixedMeals = [...meals, { id: 'monday-only', day_of_week: 1, food_items: [] }]
     expect(activePlanNutritionComplianceForDay('2026-07-12', rows, mixedMeals, 'active')).toBe(0)
+  })
+
+  it('compliance de hoy es null sin plan y null sin comidas aplicables, pero un 0 real sigue siendo 0', () => {
+    const rows = [{
+      log_date: '2026-07-12',
+      plan_id: 'active',
+      nutrition_meal_logs: [{ meal_id: 'meal-1', is_completed: false }],
+    }]
+    // Sin plan activo no hay dato: antes valia 0 y la ficha lo pintaba como "0 % de cumplimiento".
+    expect(activePlanNutritionComplianceForDay('2026-07-12', rows, meals, null)).toBeNull()
+    // Plan activo pero ninguna comida aplicable HOY (todas son de otro dia) ⇒ tampoco hay dato.
+    const mondayOnly = [{ id: 'monday-only', day_of_week: 1, food_items: [] }]
+    expect(activePlanNutritionComplianceForDay('2026-07-12', rows, mondayOnly, 'active')).toBeNull()
+    // 0 REAL: plan activo, 4 comidas aplicables, ninguna completada.
+    expect(activePlanNutritionComplianceForDay('2026-07-12', rows, meals, 'active')).toBe(0)
+  })
+
+  it('resolveNutritionSignal cubre los 4 cuadrantes (dominio on/off × con/sin plan)', () => {
+    // ON · con plan: anillo con valor real, sin hint, banner con el pct de hoy, pildora visible.
+    expect(resolveNutritionSignal({ nutritionEnabled: true, weeklyAvgPct: 72, prevWeeklyAvgPct: 60, todayPct: 80 })).toEqual({
+      showRing: true,
+      ringValue: 72,
+      ringHint: undefined,
+      alertInput: 80,
+      atRisk: false,
+    })
+    // La píldora se decide con el pct de HOY (misma ventana que antes), no con el semanal.
+    expect(resolveNutritionSignal({ nutritionEnabled: true, weeklyAvgPct: 90, prevWeeklyAvgPct: 90, todayPct: 40 }))
+      .toMatchObject({ ringValue: 90, alertInput: 40, atRisk: true })
+    expect(resolveNutritionSignal({ nutritionEnabled: true, weeklyAvgPct: 45, prevWeeklyAvgPct: 60, todayPct: 0 }))
+      .toMatchObject({ ringValue: 45, alertInput: 0, atRisk: true })
+
+    // ON · sin plan: anillo gris con hint, sin banner (undefined) y sin pildora (null).
+    expect(resolveNutritionSignal({ nutritionEnabled: true, weeklyAvgPct: null, prevWeeklyAvgPct: null, todayPct: null })).toEqual({
+      showRing: true,
+      ringValue: null,
+      ringHint: 'Sin plan vigente',
+      alertInput: undefined,
+      atRisk: null,
+    })
+
+    // OFF · con plan: el anillo desaparece; ni banner ni pildora, aunque haya numeros.
+    expect(resolveNutritionSignal({ nutritionEnabled: false, weeklyAvgPct: 72, prevWeeklyAvgPct: 60, todayPct: 40 }))
+      .toMatchObject({ showRing: false, ringHint: undefined, alertInput: undefined, atRisk: null })
+
+    // OFF · sin plan (caso Movens): cero rastro de nutricion.
+    expect(resolveNutritionSignal({ nutritionEnabled: false, weeklyAvgPct: null, prevWeeklyAvgPct: null, todayPct: null })).toEqual({
+      showRing: false,
+      ringValue: null,
+      ringHint: undefined,
+      alertInput: undefined,
+      atRisk: null,
+    })
   })
 
   it('target semanal usa variante A/B efectiva y solo planes con bloques', () => {

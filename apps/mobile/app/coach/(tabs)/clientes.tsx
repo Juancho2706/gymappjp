@@ -59,6 +59,7 @@ import {
   filterClients,
   getCoachDirectoryClients,
   getCoachDirectoryPulse,
+  nutritionLowCountFor,
   sortClients,
   type DirectoryClient,
   type DirectoryProgramFilter,
@@ -85,6 +86,7 @@ import { getCoachProfile } from '../../../lib/coach'
 import { canImportClients, type SubscriptionTier } from '../../../lib/coach-tiers'
 import { getCoachOrgContext, type CoachOrgContext } from '../../../lib/org'
 import { useWorkspace } from '../../../lib/workspace'
+import { useDomainGuard } from '../../../lib/domain-guard'
 import { getCachedCoachPersonaStatus } from '../../../lib/coach-persona'
 import { FONT } from '../../../lib/typography'
 import { GLOWS } from '../../../lib/shadows'
@@ -183,6 +185,7 @@ function DenseDirectoryTable({
   onOpen,
   onActions,
   theme,
+  nutritionEnabled,
 }: {
   clients: DirectoryClient[]
   pulseById: Map<string, PulseRow>
@@ -192,6 +195,8 @@ function DenseDirectoryTable({
   onOpen: (client: DirectoryClient) => void
   onActions: (client: DirectoryClient) => void
   theme: any
+  /** Master switch del dominio, cableado por el screen con `useDomainGuard('nutrition')` (R16). */
+  nutritionEnabled: boolean
 }) {
   return (
     <View style={[styles.denseShell, { borderColor: theme.border, borderRadius: theme.radius.card }]}>
@@ -237,7 +242,9 @@ function DenseDirectoryTable({
               const score = pulse?.attentionScore ?? client.attentionScore
               const adherence = pulse?.percentage ?? 0
               const nutritionPct = pulse?.nutritionPercentage ?? 0
-              const nutritionRisk = !!pulse && ((pulse.attentionFlags ?? []).includes('NUTRICION_RIESGO') || (nutritionPct > 0 && nutritionPct < 60))
+              // Sin dominio de nutrición no hay señal: `nutritionRisk` queda en false y con él
+              // desaparece el ícono `Apple` de la celda de adherencia, su único consumidor (R4.13).
+              const nutritionRisk = nutritionEnabled && !!pulse && ((pulse.attentionFlags ?? []).includes('NUTRICION_RIESGO') || (nutritionPct > 0 && nutritionPct < 60))
               const lastDays = daysSince(pulse?.lastWorkoutDate ?? client.lastWorkoutDate)
               const delta = pulse?.weightDelta7d
               const scoreTone = score >= 50
@@ -334,6 +341,13 @@ export default function ClientesScreen() {
   const { theme } = useTheme()
   const router = useRouter()
   const workspace = useWorkspace()
+  /**
+   * Master switch del dominio de nutrición del workspace ACTIVO (A19). Contrato de consumo de
+   * `useDomainGuard`: nada de early-return antes de los hooks — el flag solo apaga superficies
+   * (tile «Nutri.», pill de la fila, ícono de la tabla densa, fila del sheet). Fail-OPEN: mientras
+   * el guard no resuelve, `enabled` viene en `true` y el directorio se pinta como hoy (R4.3).
+   */
+  const { enabled: nutritionEnabled } = useDomainGuard('nutrition')
 
   const [clients, setClients] = useState<DirectoryClient[]>([])
   const [loading, setLoading] = useState(true)
@@ -622,11 +636,20 @@ export default function ClientesScreen() {
 
   // A-F10 + QA F2: los contadores del resumen salen del array pulse CRUDO, no del
   // roster con fallback 0 — espejo exacto de CoachWarRoom.tsx:220-229. Nutri. cuenta
-  // solo el flag NUTRICION_RIESGO (la web no suma el umbral pct<60 aquí).
+  // solo el flag NUTRICION_RIESGO (la web no suma el umbral pct<60 aquí) y da 0 con el
+  // dominio apagado: el criterio vive en `nutritionLowCountFor` (lib), testeable sin RN (A20).
   const nutritionLowCount = useMemo(
-    () => [...pulseById.values()].filter((p) => (p.attentionFlags ?? []).includes('NUTRICION_RIESGO')).length,
-    [pulseById]
+    () => nutritionLowCountFor(pulseById.values(), nutritionEnabled),
+    [pulseById, nutritionEnabled]
   )
+  /**
+   * El coach puede apagar el dominio con el filtro «Nutrición baja» puesto: sin este reset la
+   * lista quedaría filtrada por una señal invisible y sin fila en el sheet para soltarla (R4.14).
+   * `filterClients` NO se toca: el gate vive en presentación (R8).
+   */
+  useEffect(() => {
+    if (!nutritionEnabled && riskFilter === 'nutrition_low') setRiskFilter('all')
+  }, [nutritionEnabled, riskFilter])
   const pulseUrgentCount = useMemo(
     () => [...pulseById.values()].filter((p) => p.attentionScore >= 50).length,
     [pulseById]
@@ -867,6 +890,7 @@ export default function ClientesScreen() {
         onSetAllRisk={() => setRiskFilter('all')}
         avgAdherence={avgAdherence}
         nutritionLowCount={nutritionLowCount}
+        nutritionEnabled={nutritionEnabled}
       />
 
       {/* QA2-B1: los banners de triage (urgente/vencido/sync/nutrición) se retiraron —
@@ -1013,6 +1037,7 @@ export default function ClientesScreen() {
                 onArchive={handleArchive}
                 onDelete={handleDelete}
                 archiveDisabledReason={archiveDisabledReason}
+                nutritionEnabled={nutritionEnabled}
               />
             </View>
           )}
@@ -1050,6 +1075,7 @@ export default function ClientesScreen() {
                     onOpen={goProfile}
                     onActions={setActionsClient}
                     theme={theme}
+                    nutritionEnabled={nutritionEnabled}
                   />
                   {tableRemaining > 0 ? (
                     <View style={styles.loadMoreWrap}>
@@ -1073,7 +1099,9 @@ export default function ClientesScreen() {
       {clients.length > 0 ? (
         <TouchableOpacity
           testID="directory-fab-new-client"
-          style={[styles.fab, { backgroundColor: theme.primary }, GLOWS.sport]}
+          // D4: el FAB flota sobre la cápsula de navegación (patrón `MobileQuickActionsFab`),
+          // con el inset real del device en vez de un `bottom` fijo.
+          style={[styles.fab, { backgroundColor: theme.primary, bottom: insets.bottom + 92 }, GLOWS.sport]}
           onPress={() => { setGuidedCreate(false); setShowCreate(true) }}
           activeOpacity={0.9}
         >
@@ -1103,6 +1131,7 @@ export default function ClientesScreen() {
         programFilter={programFilter}
         onProgramChange={setProgramFilter}
         archivedCount={archivedCount}
+        nutritionEnabled={nutritionEnabled}
       />
       <CreateClientModal
         visible={showCreate}
@@ -1410,7 +1439,6 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: 16,
-    bottom: 84,
     height: 50,
     paddingHorizontal: 20,
     borderRadius: 999,

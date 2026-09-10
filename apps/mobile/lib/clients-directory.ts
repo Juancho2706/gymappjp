@@ -255,6 +255,39 @@ export function buildStats(clients: DirectoryClient[]): DirectoryStats {
   }
 }
 
+/**
+ * Conteo del tile «Nutri.» del resumen del directorio (A20). Vive ACÁ, junto a los otros
+ * contadores, y no dentro de la pantalla: así el gate del dominio se prueba sin montar RN (N7).
+ *
+ * Cuenta SOLO el flag `NUTRICION_RIESGO` — espejo de `filterClients` con `nutrition_low` y del
+ * conteo web (`CoachWarRoom`); el umbral extra pct<60 divergía del resumen (QA F2).
+ *
+ * Con el dominio de nutrición apagado devuelve `0`: sin dominio no hay señal de nutrición que
+ * contar (R4.13). `nutritionEnabled` es fail-OPEN en su fuente (`useDomainGuard`): solo el `false`
+ * explícito apaga.
+ */
+export function nutritionLowCountFor(pulseRows: Iterable<PulseRow>, nutritionEnabled: boolean): number {
+  if (!nutritionEnabled) return 0
+  let count = 0
+  for (const row of pulseRows) {
+    if ((row.attentionFlags ?? []).includes('NUTRICION_RIESGO')) count += 1
+  }
+  return count
+}
+
+export type DirectorySummaryMetricKey = 'total' | 'active' | 'adherence' | 'nutrition'
+
+/**
+ * Tiles del «Resumen · hoy» del directorio, EN ORDEN (A21). El tile `nutrition` («Nutri.») entra
+ * solo con el dominio encendido: apagado, la grilla queda de 3 y no hay rastro de nutrición
+ * (R4.13). Es la única fuente del orden de la grilla, y por eso se prueba sin montar RN (N7).
+ */
+export function summaryMetricKeys(nutritionEnabled: boolean): DirectorySummaryMetricKey[] {
+  const keys: DirectorySummaryMetricKey[] = ['total', 'active', 'adherence']
+  if (nutritionEnabled) keys.push('nutrition')
+  return keys
+}
+
 export function filterClients(
   clients: DirectoryClient[],
   search: string,

@@ -1,6 +1,9 @@
 import { createClient } from '@/lib/supabase/server'
 import { getCachedDirectoryPulse } from '@/lib/coach/directory-pulse-cache'
 import { measureServer } from '@/lib/perf/measure-server'
+// Fecha y día calendario de Santiago: el YMD que alimenta el texto es el MISMO que alimenta la
+// cuenta de días de la agenda (nada de medianoche del runtime, que en el servidor es UTC).
+import { getSantiagoIsoYmdForUtcInstant, getTodayInSantiago } from '@/lib/date-utils'
 import {
     countCoachClients,
     findCoachById,
@@ -24,6 +27,9 @@ import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { resolveCheckinPhotoUrl } from '@/lib/storage/checkin-photos'
 import type { DbClient } from '@/infrastructure/db/interfaces'
 import type { Persona } from '@eva/schemas'
+// Copys, severidad y fecha corta de «Pendientes de hoy»: fuente UNICA compartida con el fallback
+// local de RN. Sin `Intl` en ningún lado (el label viaja armado al cliente, EVA-NEXTJS-18).
+import { agendaSeverity, buildAgendaLabel, daysSince, programSeverity, shortDayMonthEs } from '@eva/profile-analytics'
 import type { OnboardingSignals } from '@eva/onboarding'
 import { getDemoClientId } from '@/services/onboarding/demo-student.service'
 import {
@@ -35,6 +41,8 @@ import {
 import { parseLoaderConfig, serializeLoaderConfig } from '@/lib/brand-composer'
 import { BRAND_PRIMARY_COLOR } from '@/lib/brand-assets'
 import { buildKpiDeltas } from '../_lib/kpi-deltas'
+// Solo tipo (se borra en compilación): `types.ts` importa tipos de este módulo, no hay ciclo real.
+import type { AgendaItem } from './types'
 import { averageAdherence, KPI_SNAPSHOT_LOOKBACK_DAYS, ymdMinusDays } from '../_lib/kpi-snapshot'
 
 const FLAG_LABELS: Record<AttentionFlag, string> = {
@@ -259,7 +267,8 @@ export async function getCoachDashboardDataV2(userId: string) {
                 ? 100
                 : 0
 
-        const agenda = buildAgendaFromPulse(pulse, base.expiringPrograms)
+        // `agendaTotal` = filas ANTES del tope de 8: el header y el NBA cuentan el total real.
+        const { items: agenda, total: agendaTotal } = buildAgendaFromPulse(pulse, base.expiringPrograms)
 
         // Las entradas de los deltas salen del snapshot que el inner YA cargó (cero round-trips
         // nuevos) y no viajan al cliente: se consumen acá y quedan fuera del payload.
@@ -289,7 +298,7 @@ export async function getCoachDashboardDataV2(userId: string) {
         const clientList = pulse.map((p) => ({ id: p.clientId, name: p.clientName }))
         const clientPaymentSummary = buildClientPaymentSummary(base._rawClientPayments ?? [], pulse)
 
-        return { ...rest, pulse, mrrDeltaPct, agenda, kpi, clientList, clientPaymentSummary }
+        return { ...rest, pulse, mrrDeltaPct, agenda, agendaTotal, kpi, clientList, clientPaymentSummary }
     })
 }
 
@@ -306,7 +315,8 @@ export async function getCoachDashboardDataV2WithClient(userId: string, supabase
                 ? 100
                 : 0
 
-        const agenda = buildAgendaFromPulse(pulse, base.expiringPrograms)
+        // `agendaTotal` = filas ANTES del tope de 8: el header y el NBA cuentan el total real.
+        const { items: agenda, total: agendaTotal } = buildAgendaFromPulse(pulse, base.expiringPrograms)
 
         // Mismo helper que el camino RSC: web y RN reciben el mismo delta y el mismo copy.
         const { _rawSignupDates, areaTodayKey, areaYesterdayKey, _snapshot7d, ...rest } = base
@@ -335,62 +345,91 @@ export async function getCoachDashboardDataV2WithClient(userId: string, supabase
         const clientList = pulse.map((p) => ({ id: p.clientId, name: p.clientName }))
         const clientPaymentSummary = buildClientPaymentSummary(base._rawClientPayments ?? [], pulse)
 
-        return { ...rest, pulse, mrrDeltaPct, agenda, kpi, clientList, clientPaymentSummary }
+        return { ...rest, pulse, mrrDeltaPct, agenda, agendaTotal, kpi, clientList, clientPaymentSummary }
     })
 }
 
-function buildAgendaFromPulse(
-    pulse: Awaited<ReturnType<typeof getCachedDirectoryPulse>>,
-    expiring: Array<{ id: string; clientId?: string; clientName?: string; daysLeft: number; name: string }>
-) {
-    const items: Array<{
-        id: string
-        clientId: string
-        clientName: string
-        kind: 'programa_vence' | 'checkin_pendiente' | 'sin_ejercicio'
-        label: string
-        href: string
-        dueAt: string | null
-    }> = []
+/**
+ * Dentro de un grupo de severidad: el más viejo arriba, y las filas sin antigüedad (`days === null`,
+ * los `programa_vence`) ANTES que las de pulse de la misma severidad — es el orden que fija el PLAN
+ * («quedan antes que las filas de pulse de la misma severidad») y el ejemplo obligatorio de N6
+ * (`daysLeft 1` → `daysLeft 3` → `sin_ejercicio 9 d`). Entre ellas devuelve 0, así que conservan por
+ * estabilidad de `Array#sort` (ES2019) el `daysLeft` ascendente con el que se empujaron.
+ */
+function compareAgendaStaleness(a: number | null, b: number | null): number {
+    if (a === b) return 0
+    if (a === null) return -1
+    if (b === null) return 1
+    return b - a
+}
 
-    for (const p of expiring) {
+/**
+ * «Pendientes de hoy» — una fila por pendiente (no por alumno): programas por vencer + alumnos sin
+ * check-in o sin entrenos. Devuelve `{ items, total }` porque el header cuenta el TOTAL real y la
+ * lista se topea en 8; el `total` se calcula ANTES del `slice`.
+ *
+ * `export` para que N6 (`dashboard.queries.test.ts`) la importe por nombre. El `label` se arma acá,
+ * una sola vez, con `buildAgendaLabel` de `@eva/profile-analytics`: el cliente solo imprime.
+ */
+export function buildAgendaFromPulse(
+    pulse: Awaited<ReturnType<typeof getCachedDirectoryPulse>>,
+    expiring: Array<{ id: string; clientId?: string; clientName?: string; daysLeft: number; name: string }>,
+    now: Date = new Date()
+): { items: AgendaItem[]; total: number } {
+    const items: AgendaItem[] = []
+    const todayYmd = getTodayInSantiago(now).iso
+
+    // R1.11 — los programas se ordenan por `daysLeft` ascendente ACÁ, al empujarlos: como su `days`
+    // es `null`, el comparador de abajo los deja empatados entre sí y `Array#sort` es estable
+    // (ES2019), así que este orden sobrevive dentro de cada grupo de severidad.
+    for (const p of [...expiring].sort((a, b) => a.daysLeft - b.daysLeft)) {
         if (!p.clientId || !p.clientName) continue
         items.push({
             id: `expire-${p.id}`,
             clientId: p.clientId,
             clientName: p.clientName,
             kind: 'programa_vence',
-            label: p.daysLeft <= 0 ? `${p.name} vencio` : `${p.name} vence en ${p.daysLeft}d`,
+            label: buildAgendaLabel({
+                kind: 'programa_vence',
+                days: null,
+                dateText: null,
+                programName: p.name,
+                daysLeft: p.daysLeft,
+            }),
             href: `/coach/clients/${p.clientId}`,
             dueAt: null,
+            days: null,
+            severity: programSeverity(p.daysLeft),
         })
     }
 
     for (const row of pulse) {
-        if (row.attentionFlags.includes('SIN_CHECKIN_1M')) {
-            items.push({
-                id: `checkin-${row.clientId}`,
-                clientId: row.clientId,
-                clientName: row.clientName,
-                kind: 'checkin_pendiente',
-                label: 'Check-in pendiente (>30d)',
-                href: `/coach/clients/${row.clientId}`,
-                dueAt: row.lastCheckinDate,
-            })
-        } else if (row.attentionFlags.includes('SIN_EJERCICIO_7D')) {
-            items.push({
-                id: `workout-${row.clientId}`,
-                clientId: row.clientId,
-                clientName: row.clientName,
-                kind: 'sin_ejercicio',
-                label: 'Sin ejercicio esta semana',
-                href: `/coach/clients/${row.clientId}`,
-                dueAt: row.lastWorkoutDate,
-            })
-        }
+        const checkin = row.attentionFlags.includes('SIN_CHECKIN_1M')
+        // `else if` conservado: un alumno con los dos flags genera UNA fila (check-in gana).
+        if (!checkin && !row.attentionFlags.includes('SIN_EJERCICIO_7D')) continue
+        const kind = checkin ? ('checkin_pendiente' as const) : ('sin_ejercicio' as const)
+        const dueAt = checkin ? row.lastCheckinDate : row.lastWorkoutDate
+        // Un solo YMD de Santiago alimenta el texto Y la cuenta de días: nada de medianoche del runtime.
+        const dueYmd = dueAt ? getSantiagoIsoYmdForUtcInstant(dueAt) : null
+        const days = daysSince(dueYmd, todayYmd)
+        const dateText = dueYmd ? shortDayMonthEs(dueYmd) : null
+        items.push({
+            id: `${checkin ? 'checkin' : 'workout'}-${row.clientId}`,
+            clientId: row.clientId,
+            clientName: row.clientName,
+            kind,
+            label: buildAgendaLabel({ kind, days, dateText }),
+            href: `/coach/clients/${row.clientId}`,
+            dueAt,
+            days,
+            severity: agendaSeverity(days),
+        })
     }
 
-    return items.slice(0, 8)
+    // R5 — urgencia primero; dentro del grupo, el más viejo arriba (ver `compareAgendaStaleness`).
+    const rank = { danger: 0, warning: 1, none: 2 }
+    items.sort((a, b) => rank[a.severity] - rank[b.severity] || compareAgendaStaleness(a.days, b.days))
+    return { items: items.slice(0, 8), total: items.length }
 }
 
 async function getCoachDashboardDataInner(

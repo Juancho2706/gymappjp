@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-09-06"
+last_verified: "2026-09-10"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -92,6 +92,28 @@ source_of_truth: apps/web responsive + apps/mobile
 > **QA en device pendiente (acumulado, 18 ítems):** [`docs/testing/QA_DEVICE_PENDIENTE.md`](../testing/QA_DEVICE_PENDIENTE.md).
 > Los 11 puntos nuevos del tren «cierre de backlog 02-09» quedaron **VERDES con el owner el 02-09**
 > (Android e iOS, claro y oscuro): sección «Verificado» del mismo archivo.
+
+> **2026-09-10 (tren «Señales honestas para el coach», 4 reportes de Movens — EN CÓDIGO en
+> `rnmobiledenuevo`, push/deploy/OTA a pedido del owner, QA del owner Q1–Q24 pendiente)**: paridad web ↔
+> RN en los cuatro carriles. **Agenda** «Pendientes de hoy» (web `AgendaCard`, RN `MobileTodayAgenda`): sin
+> horas de relleno ni «0 de N hechas», contador = filas reales (`agendaTotal`, antes del tope de 8), orden
+> por urgencia (danger → warning → none; programas por `daysLeft`), label armado UNA vez con
+> `buildAgendaLabel`/`shortDayMonthEs` de `@eva/profile-analytics` («Sin entrenos desde el 2 sept · 8 d»,
+> sin `Intl` en ninguna plataforma), fila «y N más en Alumnos», NBA «{N} pendientes hoy» / «Ver
+> pendientes» al alumno más urgente. **Chip** «Entró hace X d» solo 7 d y luego `active`/«Activo»
+> (`ENTERED_CHIP_WINDOW_DAYS`, espejo web/RN; la píldora desaparece sola en ambos `DirRowCard`).
+> **Nutrición honesta**: `null` en vez de 0 % (ficha RN `resolveNutritionSignal`, servidor
+> `nutritionComplianceFromAdherence`), anillo oculto con el dominio apagado y «Sin plan vigente» sin plan
+> (web y RN), sin banner/píldora/chip/tab/tile/pill/filtro con el dominio apagado en ficha, home y
+> directorio RN. **FAB** de Alumnos en `insets.bottom + 92`. Tests N1–N8 (chip web/RN, señal de
+> nutrición, agenda RN/package/web, gate del directorio, score sin nutrición). Checklist Q1–Q24 en
+> [TESTING-QA](../specs/senales-honestas-coach/TESTING-QA.md). **Deuda declarada**: (1) web: tile y filtro
+> «Nutri.» del directorio (`apps/web/src/app/coach/clients/CoachWarRoom.tsx`) y el hint «Nutricion: X%»
+> de `KpiStrip.tsx` no gatean por dominio; (2) fallback offline RN: la consulta de check-ins mira 30 d, así
+> que sus filas salen sin fecha («Todavía no registra check-ins») mientras el servidor imprime la fecha;
+> (3) «y N más en Alumnos» abre el directorio sin filtro; (4) el pulse de nutrición sigue leyendo solo V1
+> (R15); (5) en web el NBA con `agendaTopHref` solo se monta en el ancho móvil del dashboard (`DesktopBento`
+> no monta `PriorityCard`): Q6 web se firma ahí.
 
 > **2026-09-02 (tren «cierre de backlog» — EN PRODUCCIÓN, QA del owner pendiente en device)**: `master` = `rnmobiledenuevo` =
 > `794aee52`, deploy `dpl_E6Rt7ETYsZ5tpbW84DLLdCP4RMHk` READY, OTA 1.1.2 `production` android `01a063b0-6a6a-7d09-ad3c-bbdd04591b0d`

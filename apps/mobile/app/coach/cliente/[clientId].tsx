@@ -467,6 +467,11 @@ export default function ClientDetailScreen() {
     } finally { setDeleting(false) }
   }
 
+  // Nombre canónico único del gate de nutrición de esta ficha: dominio del workspace del
+  // RECURSO, fail-OPEN (solo el `false` explícito apaga). Lo consumen la razón de atención,
+  // el score, los chips del hero, el `OverviewTab` y el `ClientHero`.
+  const nutritionEnabled = resourceDomains.nutrition !== false
+
   // ── Derivados para hero (badge, meta, chips) ──────────────────────────────
   const derived = useMemo(() => {
     if (!data || !client) return null
@@ -495,7 +500,9 @@ export default function ClientDetailScreen() {
     // Alerta de atencion (motivo del badge).
     let attention: string | null = null
     if (data.compliance && data.compliance.checkInCompliancePercent < 40) attention = 'Check-ins irregulares — conviene contactar.'
-    else if (data.activeNutrition && (data.compliance?.nutritionWeeklyAvgPct ?? 0) < 60) attention = 'Adherencia nutricional baja esta semana.'
+    // Sin dominio encendido (o sin dato de la semana) la razón NO nace: `?? 100` deja pasar
+    // solo un promedio real bajo 60.
+    else if (nutritionEnabled && data.activeNutrition && (data.compliance?.nutritionWeeklyAvgPct ?? 100) < 60) attention = 'Adherencia nutricional baja esta semana.'
     else if (data.checkIns[0] && !data.checkIns[0].reviewed_at) attention = 'Hay un check-in sin revisar.'
 
     // Ultima actividad (workout o check-in mas reciente) + semana de programa.
@@ -509,7 +516,7 @@ export default function ClientDetailScreen() {
     }
 
     return { currentWeight, weightDelta, streak, trainingAge, today, weeklyPRs, attention, lastActivityIso, planCurrentWeek }
-  }, [data, client, rpcStreak])
+  }, [data, client, rpcStreak, nutritionEnabled])
 
   function onScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
     const y = e.nativeEvent.contentOffset.y
@@ -590,20 +597,26 @@ export default function ClientDetailScreen() {
     : null
   const daysSinceCheckin = lastCheckinForStatus ? daysBetweenCalendar(lastCheckinForStatus, todayForStatus) : null
   const daysSinceWorkout = lastWorkoutForStatus ? daysBetweenCalendar(lastWorkoutForStatus, todayForStatus) : null
-  const todayMealsDone = derived.today?.mealsDone ?? 0
-  const todayMealsTotal = Math.max(1, derived.today?.mealsTotal ?? 0)
-  const todayNutritionPct = Math.min(100, Math.round((todayMealsDone / todayMealsTotal) * 100))
+  const rawMealsTotal = derived.today?.mealsTotal ?? 0
+  // Hay señal honesta solo con dominio encendido, plan vigente y comidas aplicables HOY
+  // (espejo de `activePlanNutritionComplianceForDay`). Si no, `null`: nunca 0/1 ni 0 %.
+  const hasMealsToday = nutritionEnabled && data.activeNutrition != null && rawMealsTotal > 0
+  const todayMealsDone: number | null = hasMealsToday ? derived.today?.mealsDone ?? 0 : null
+  const todayMealsTotal: number | null = hasMealsToday ? rawMealsTotal : null
+  const todayNutritionPct: number | null = hasMealsToday
+    ? Math.min(100, Math.round(((derived.today?.mealsDone ?? 0) / rawMealsTotal) * 100))
+    : null
   const attentionScore =
     (daysSinceCheckin != null && daysSinceCheckin > 30 ? 25 : 0) +
     (data.activeProgram && (daysSinceWorkout == null || daysSinceWorkout >= 7) ? 25 : 0) +
-    (todayNutritionPct < 60 ? 20 : 0) +
+    (todayNutritionPct != null && todayNutritionPct < 60 ? 20 : 0) +
     (programDaysRemaining != null && programDaysRemaining <= 0 ? 15 : programDaysRemaining != null && programDaysRemaining <= 3 ? 8 : 0)
   const derivedStatus = deriveClientStatus({
     attentionScore,
     daysSinceCheckin,
     daysSinceWorkout,
     hasActiveWorkoutProgram: Boolean(data.activeProgram),
-    nutritionAdherencePct: data.activeNutrition ? todayNutritionPct : null,
+    nutritionAdherencePct: todayNutritionPct,
     planDaysRemaining: programDaysRemaining,
   })
   const statusLevel: HeroStatusLevel = derivedStatus.level
@@ -647,7 +660,7 @@ export default function ClientDetailScreen() {
     {
       value: 'nutricion',
       label: 'Nutrición',
-      badge: data.activeNutrition && heroChips.nutritionPct < 60 ? '!' : data.nutritionMeals.length || null,
+      badge: data.activeNutrition && heroChips.nutritionPct != null && heroChips.nutritionPct < 60 ? '!' : data.nutritionMeals.length || null,
     },
   ]
 
@@ -742,6 +755,7 @@ export default function ClientDetailScreen() {
           sinceLabel={sinceMonthLabel(client.subscription_start_date || client.created_at)}
           trainingAge={derived.trainingAge}
           chips={heroChips}
+          nutritionEnabled={nutritionEnabled}
           onMore={() => { if (!actionBusy) setMoreOpen(true) }}
           onExportPdf={handleExportPdf}
           exportingPdf={exportingPdf}
@@ -785,6 +799,7 @@ export default function ClientDetailScreen() {
               workspace={actionWorkspace}
               moduleFlags={resourceModuleFlags}
               modulesReady={resourceModulesReady}
+              nutritionEnabled={nutritionEnabled}
             />
           ) : shownTab === 'progreso' ? (
             <ProgresoTab

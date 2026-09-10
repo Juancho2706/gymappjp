@@ -254,7 +254,8 @@ export function DashboardShell({
                         <PriorityCard
                             items={data.topRiskClients}
                             showNextStep
-                            agendaPending={data.agenda.length}
+                            agendaPending={data.agendaTotal}
+                            agendaTopHref={data.agenda[0]?.href}
                             expiringOverdue={
                                 data.expiringPrograms.filter((p) => p.daysLeft <= 0).length
                             }
@@ -263,7 +264,7 @@ export function DashboardShell({
                     </div>
 
                     <div className="mb-6">
-                        <AgendaCard items={data.agenda} />
+                        <AgendaCard items={data.agenda} total={data.agendaTotal} />
                     </div>
 
                     <div className="mb-[18px]">

@@ -199,8 +199,10 @@ export interface ComplianceSummary {
   workoutsThisWeek: number
   workoutsPrevWeek: number
   workoutsTarget: number
-  nutritionWeeklyAvgPct: number
-  nutritionPrevWeeklyAvgPct: number
+  /** `null` = sin dato de nutrición esa semana (no es 0 % de cumplimiento). */
+  nutritionWeeklyAvgPct: number | null
+  /** `null` = sin dato de nutrición la semana anterior (sin dato ⇒ sin delta). */
+  nutritionPrevWeeklyAvgPct: number | null
   checkInCompliancePercent: number
   checkInCompliancePercentWeekAgo: number
 }
@@ -322,8 +324,9 @@ export interface ClientDayDetail {
   habits: HabitsDayEntry | null
 }
 
-function nutritionAveragePct(rows: { nutrition_meal_logs?: { is_completed?: boolean | null }[] | null }[]): number {
-  if (!rows.length) return 0
+/** `null` = la semana no tiene NINGÚN log de nutrición (no hay dato), distinto de un 0 % real. */
+function nutritionAveragePct(rows: { nutrition_meal_logs?: { is_completed?: boolean | null }[] | null }[]): number | null {
+  if (!rows.length) return null
   let sum = 0
   for (const row of rows) {
     const logs = row.nutrition_meal_logs ?? []
@@ -693,7 +696,8 @@ export async function getCoachClientDetail(clientId: string, workspace?: ClientA
   nutritionMeals: NutritionMealPlanEntry[]
   nutritionTimeline: NutritionTimelineEntry[]
   nutritionMonthlyAvgPct: number | null
-  nutritionTodayCompliancePct: number
+  /** `null` = sin plan vigente o sin comidas aplicables hoy (paridad con el mensual). */
+  nutritionTodayCompliancePct: number | null
   nutritionStreakDays: number
   favoriteFoods: FavoriteFoodEntry[]
   workoutLogs: WorkoutLogRow[]
@@ -735,7 +739,8 @@ export async function getCoachClientDetail(clientId: string, workspace?: ClientA
     activeProgram: null as ActiveProgramInfo | null,
     activeNutrition: null as ActiveNutritionInfo | null,
     sessions30d: 0,
-    compliance: { workoutsThisWeek: 0, workoutsPrevWeek: 0, workoutsTarget: 1, nutritionWeeklyAvgPct: 0, nutritionPrevWeeklyAvgPct: 0, checkInCompliancePercent: 0, checkInCompliancePercentWeekAgo: 0 },
+    // Los dos pct de nutrición nacen en `null`: el fallback no tiene dato, no un 0 % real.
+    compliance: { workoutsThisWeek: 0, workoutsPrevWeek: 0, workoutsTarget: 1, nutritionWeeklyAvgPct: null, nutritionPrevWeeklyAvgPct: null, checkInCompliancePercent: 0, checkInCompliancePercentWeekAgo: 0 } as ComplianceSummary,
     activity: [] as ActivityDay[],
     personalRecords: [] as PersonalRecordEntry[],
     muscleVolume: [] as MuscleVolumeEntry[],
@@ -747,7 +752,7 @@ export async function getCoachClientDetail(clientId: string, workspace?: ClientA
     nutritionMeals: [] as NutritionMealPlanEntry[],
     nutritionTimeline: [] as NutritionTimelineEntry[],
     nutritionMonthlyAvgPct: null,
-    nutritionTodayCompliancePct: 0,
+    nutritionTodayCompliancePct: null as number | null,
     nutritionStreakDays: 0,
     favoriteFoods: [] as FavoriteFoodEntry[],
     workoutLogs: [] as WorkoutLogRow[],

@@ -52,7 +52,8 @@ export interface HeroChips {
   workoutsTarget: number
   mealsDone: number | null
   mealsTotal: number | null
-  nutritionPct: number
+  /** `null` = sin plan vigente o sin comidas aplicables hoy ⇒ el chip va en «—» y sin sub. */
+  nutritionPct: number | null
 }
 
 export interface ClientHeroProps {
@@ -67,6 +68,8 @@ export interface ClientHeroProps {
   sinceLabel: string
   trainingAge: string
   chips: HeroChips
+  /** Dominio `nutrition` del workspace del RECURSO: con `false` el chip «Comidas hoy» no existe. */
+  nutritionEnabled: boolean
   onMore: () => void
   /** Genera y comparte el dossier PDF del alumno (E5-13). */
   onExportPdf?: () => void
@@ -112,6 +115,7 @@ export function ClientHero({
   sinceLabel,
   trainingAge,
   chips,
+  nutritionEnabled,
   onMore,
   onExportPdf,
   exportingPdf = false,
@@ -181,16 +185,21 @@ export function ClientHero({
             </View>
           </View>
 
-          {/* 4 chips 2×2 (el programa/semana vive en el eyebrow, no en un chip). */}
+          {/* Chips 2×2 (el programa/semana vive en el eyebrow, no en un chip). Con el dominio
+              de nutrición apagado quedan 3: el `flexWrap` + `width: 47%` deja el último a lo ancho. */}
           <View style={styles.chipGrid}>
             <HeroChip label="Peso" value={chips.weightValue != null && chips.weightValue > 0 ? `${chips.weightValue} kg` : '—'} sub={<WeightDeltaSub delta={chips.weightDelta} />} />
             <HeroChip label="Adherencia" value={`${chips.adherencePct}%`} sub={<ChipBar value={chips.adherencePct} />} />
             <HeroChip label="Workouts" value={`${chips.workoutsThisWeek}/${chips.workoutsTarget}`} sub={<Text style={[styles.chipSub, { color: ON_DARK_MUTED }]}>esta semana</Text>} />
-            <HeroChip
-              label="Comidas hoy"
-              value={chips.mealsDone != null && chips.mealsTotal != null ? `${chips.mealsDone}/${chips.mealsTotal}` : '—'}
-              sub={<Text style={[styles.chipSub, { color: chips.nutritionPct >= 80 ? theme.success : WARNING }]}>{chips.nutritionPct}% plan</Text>}
-            />
+            {nutritionEnabled ? (
+              <HeroChip
+                label="Comidas hoy"
+                value={chips.mealsDone != null && chips.mealsTotal != null ? `${chips.mealsDone}/${chips.mealsTotal}` : '—'}
+                sub={chips.nutritionPct != null
+                  ? <Text style={[styles.chipSub, { color: chips.nutritionPct >= 80 ? theme.success : WARNING }]}>{chips.nutritionPct}% plan</Text>
+                  : undefined}
+              />
+            ) : null}
           </View>
         </Card>
       </GlowBorderCard>
@@ -236,12 +245,12 @@ function ChipBar({ value }: { value: number }) {
   )
 }
 
-function HeroChip({ label, value, sub }: { label: string; value: string; sub: ReactNode }) {
+function HeroChip({ label, value, sub }: { label: string; value: string; sub?: ReactNode }) {
   return (
     <View style={styles.chip}>
       <Text numberOfLines={1} style={[styles.chipLabel, { color: ON_DARK_MUTED }]}>{label}</Text>
       <Text numberOfLines={1} style={[styles.chipVal, { color: ON_DARK }]}>{value}</Text>
-      <View style={{ marginTop: 2 }}>{sub}</View>
+      {sub != null ? <View style={{ marginTop: 2 }}>{sub}</View> : null}
     </View>
   )
 }

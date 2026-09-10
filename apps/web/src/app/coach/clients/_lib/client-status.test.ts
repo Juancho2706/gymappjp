@@ -88,13 +88,37 @@ describe('getClientStatusMeta · con first_login_at (el chip que dice «entró»
         )
     })
 
-    it('varios días: «Entró hace N d»', () => {
+    it('varios días dentro de la ventana: «Entró hace N d»', () => {
         expect(getClientStatusMeta({ ...base, firstLoginAt: '2026-08-24T10:00:00' }, NOW).label).toBe(
             'Entró hace 2 d'
         )
-        expect(getClientStatusMeta({ ...base, firstLoginAt: '2026-07-27T10:00:00' }, NOW).label).toBe(
-            'Entró hace 30 d'
+    })
+
+    it('7 d exactos: borde inclusivo de la ventana, todavía «entered»', () => {
+        const meta = getClientStatusMeta({ ...base, firstLoginAt: '2026-08-19T10:00:00' }, NOW)
+        expect(meta.key).toBe('entered')
+        expect(meta.label).toBe('Entró hace 7 d')
+    })
+
+    it('8 d: la ventana de 7 d venció, el chip pasa a «Activo»', () => {
+        const meta = getClientStatusMeta({ ...base, firstLoginAt: '2026-08-18T10:00:00' }, NOW)
+        expect(meta.key).toBe('active')
+        expect(meta.label).toBe('Activo')
+    })
+
+    it('8 d + forcePasswordChange: true sigue en «Activo» (firstLoginAt gana antes que el cutover)', () => {
+        const meta = getClientStatusMeta(
+            { ...base, firstLoginAt: '2026-08-18T10:00:00', forcePasswordChange: true },
+            NOW
         )
+        expect(meta.key).toBe('active')
+        expect(meta.label).toBe('Activo')
+    })
+
+    it('30 d: mucho después de la ventana, sigue siendo «Activo»', () => {
+        const meta = getClientStatusMeta({ ...base, firstLoginAt: '2026-07-27T10:00:00' }, NOW)
+        expect(meta.key).toBe('active')
+        expect(meta.label).toBe('Activo')
     })
 
     it('el chip «entró» usa el tono de éxito y se muestra en el roster (key propia, no «active»)', () => {

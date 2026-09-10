@@ -86,6 +86,9 @@ import { ApiError, apiFetch, getApiBaseUrl } from '../../lib/api'
 import { shouldOpenAtCapWall } from '../../lib/client-cap'
 import { captureAppEvent } from '../../lib/analytics'
 import { CreateClientModal } from './directory/CreateClientModal'
+// Punto de severidad de «Pendientes de hoy»: los mismos dos hex fijos del directorio (danger-500 /
+// warning-500), para que ámbar y rojo signifiquen lo mismo en las dos pantallas del coach.
+import { DANGER, WARNING } from './directory/directory-shared'
 import { channelCarriesCredential, guidedInvitePayload } from './directory/guided-invite'
 import { getCoachNews, markCoachNewsRead, type CoachNewsItem } from '../../lib/coach-news'
 import { FONT } from '../../lib/typography'
@@ -1993,14 +1996,27 @@ export function MobileFocusList({
   items,
   kpi,
   agenda,
+  agendaTotal,
   expiringPrograms,
   onAdherencePress,
+  nutritionEnabled = true,
 }: {
   items: MobileRiskAlertItem[]
   kpi: MobileKpiSummary
   agenda: MobileAgendaItem[]
+  /**
+   * Total REAL de pendientes (`data.agendaTotal`), no `agenda.length`: la lista viene topada en 8 y
+   * sin este dato el NBA mentiría en cuanto el coach pasa de ese tope (R26).
+   */
+  agendaTotal: number
   expiringPrograms: MobileExpiringProgramItem[]
   onAdherencePress: () => void
+  /**
+   * Master switch por DOMINIO del workspace activo (`useDomainGuard('nutrition')`, cableado en
+   * `app/coach/(tabs)/home.tsx`). Fail-OPEN: el default `true` y el `=== false` de abajo hacen que
+   * solo el `false` explicito apague la senal de nutricion (D3 / R4.12).
+   */
+  nutritionEnabled?: boolean
 }) {
   const router = useRouter()
   const { theme, resolvedScheme } = useTheme()
@@ -2008,7 +2024,7 @@ export function MobileFocusList({
   const sport400 = sport.ramp['400']
   const hasRisk = items.length > 0
   const riesgoCount = items.length
-  const nba = resolveMobileNextBestAction({ kpi, topRiskClients: items, agenda, expiringPrograms })
+  const nba = resolveMobileNextBestAction({ kpi, topRiskClients: items, agenda, agendaTotal, expiringPrograms })
 
   function handleNba() {
     if (nba.id === 'programas-vencidos') {
@@ -2077,7 +2093,19 @@ export function MobileFocusList({
           <View>
             {items.map((item, index) => {
               const band = focusRiskBand(item.attentionScore)
-              const flagLabel = FOCUS_FLAG_LABEL[item.flags?.[0] ?? ''] ?? item.label
+              // D3 / R4.12: con el dominio apagado, `NUTRICION_RIESGO` se cae de los flags antes de
+              // resolver la etiqueta, asi el coach no lee «Nutricion en riesgo».
+              const itemFlags = item.flags ?? []
+              const nutritionFlagDropped = nutritionEnabled === false && itemFlags.includes('NUTRICION_RIESGO')
+              const visibleFlags = nutritionFlagDropped
+                ? itemFlags.filter((flag) => flag !== 'NUTRICION_RIESGO')
+                : itemFlags
+              // `item.label` viene armado por el servidor con el PRIMER flag
+              // (`dashboard.queries.ts:237`), asi que al filtrar la nutricion el fallback volveria a
+              // imprimirla: en ese caso se usa el mismo copy que el servidor da a las filas sin flags.
+              const flagLabel =
+                FOCUS_FLAG_LABEL[visibleFlags[0] ?? ''] ??
+                (nutritionFlagDropped ? 'Seguimiento recomendado' : item.label)
               return (
                 <TouchableOpacity
                   key={item.clientId}
@@ -2182,11 +2210,14 @@ function resolveMobileNextBestAction({
   kpi,
   topRiskClients,
   agenda,
+  agendaTotal,
   expiringPrograms,
 }: {
   kpi: MobileKpiSummary
   topRiskClients: MobileRiskAlertItem[]
   agenda: MobileAgendaItem[]
+  /** Total antes del tope de 8: el título del NBA cuenta pendientes reales, no filas visibles. */
+  agendaTotal: number
   expiringPrograms: MobileExpiringProgramItem[]
 }): MobileNextAction {
   const overdueExpiring = expiringPrograms.filter((program) => program.daysLeft <= 0)
@@ -2232,12 +2263,14 @@ function resolveMobileNextBestAction({
     }
   }
 
+  // El gate sigue siendo `agenda.length` (hace falta una fila para navegar a `agenda[0]`), pero el
+  // conteo que se muestra es el total real.
   if (agenda.length > 0) {
     return {
       id: 'agenda-hoy',
-      title: `${agenda.length} pendientes hoy`,
-      description: 'Cierra los check-ins y recordatorios pendientes.',
-      ctaLabel: 'Ver agenda',
+      title: agendaTotal === 1 ? '1 pendiente hoy' : `${agendaTotal} pendientes hoy`,
+      description: 'Alumnos sin entrenos, sin check-in o con programa por vencer.',
+      ctaLabel: 'Ver pendientes',
       tone: 'info',
     }
   }
@@ -2268,7 +2301,9 @@ export function MobileNextBestAction({
 }) {
   const router = useRouter()
   const { theme } = useTheme()
-  const action = resolveMobileNextBestAction({ kpi, topRiskClients, agenda, expiringPrograms })
+  // Componente suelto (hoy sin pantalla que lo monte): sin prop propia, el total honesto que tiene
+  // a mano es la cantidad de filas recibidas.
+  const action = resolveMobileNextBestAction({ kpi, topRiskClients, agenda, agendaTotal: agenda.length, expiringPrograms })
   const toneColor = action.tone === 'warn' ? '#F59E0B' : action.tone === 'positive' ? '#10B981' : theme.primary
 
   function handlePress() {
@@ -2326,28 +2361,39 @@ export function MobileNextBestAction({
   )
 }
 
-export function MobileTodayAgenda({ items }: { items: MobileAgendaItem[] }) {
+/**
+ * «Pendientes de hoy» (carril C · D1): trabajo derivado, NO una agenda con horario. No existe tabla
+ * de agendamiento ni estado «hecho», así que se fueron la hora de relleno (`startMinutes`/`slot`) y
+ * el «0 de N hechas»; el contador dice el total real de pendientes y cada fila trae el motivo con
+ * su fecha, ya armado por `buildAgendaLabel` en el servidor o en el fallback local.
+ *
+ * `total` puede ser mayor que `items.length`: la lista viene topada en 8 y el resto se ofrece en la
+ * fila «y N más en Alumnos».
+ */
+export function MobileTodayAgenda({ items, total }: { items: MobileAgendaItem[]; total: number }) {
   const router = useRouter()
   const { theme } = useTheme()
+  const hiddenCount = total - items.length
 
   return (
     <View style={{ gap: 10 }}>
       <View className="flex-row items-center justify-between">
         <View className="flex-row items-center gap-2">
           <CalendarClock size={16} color={theme.primary} />
-          <Text className="font-display-black text-[18px] text-strong">Agenda de hoy</Text>
+          <Text className="font-display-black text-[18px] text-strong">Pendientes de hoy</Text>
         </View>
-        <Text className="font-sans text-[12px] text-muted">0 de {items.length} hechas</Text>
+        <Text className="font-sans text-[12px] text-muted">
+          {total === 1 ? '1 pendiente' : `${total} pendientes`}
+        </Text>
       </View>
       {items.length === 0 ? (
         <Card padding="md" radius="card">
-          <EmptyPanel icon={<CheckCircle2 size={25} color={theme.success} />} title="Todo cerrado" subtitle="Sin pendientes en el día." />
+          <EmptyPanel icon={<CheckCircle2 size={25} color={theme.success} />} title="Todo al día" subtitle="Sin pendientes hoy." />
         </Card>
       ) : (
         <Card padding="none" radius="card" style={{ overflow: 'hidden' }}>
           {items.map((item, index) => {
-            const startMinutes = 9 * 60 + index * 90
-            const slot = `${String(Math.floor(startMinutes / 60) % 24).padStart(2, '0')}:${String(startMinutes % 60).padStart(2, '0')}`
+            const dotColor = item.severity === 'danger' ? DANGER : item.severity === 'warning' ? WARNING : theme.mutedForeground
             const AgendaIcon = item.kind === 'programa_vence'
               ? CalendarClock
               : item.kind === 'checkin_pendiente'
@@ -2362,8 +2408,8 @@ export function MobileTodayAgenda({ items }: { items: MobileAgendaItem[] }) {
               ) : null}
               <ListRow
                 leading={
-                  <View style={{ width: 86, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                    <Text style={{ width: 42, color: theme.mutedForeground, fontFamily: FONT.monoBold, fontSize: 12, fontVariant: ['tabular-nums'] }}>{slot}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: dotColor }} />
                     <View className="h-8 w-8 items-center justify-center rounded-pill" style={{ backgroundColor: theme.muted }}>
                       <AgendaIcon size={15} color={theme.foreground} />
                     </View>
@@ -2377,6 +2423,21 @@ export function MobileTodayAgenda({ items }: { items: MobileAgendaItem[] }) {
             </View>
             )
           })}
+          {hiddenCount > 0 ? (
+            <>
+              <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.border, marginHorizontal: 14 }} />
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => router.push('/coach/(tabs)/clientes')}
+                className="h-11 flex-row items-center justify-center gap-1"
+              >
+                <Text className="font-sans-extra text-[13px]" style={{ color: theme.primary }}>
+                  y {hiddenCount} más en Alumnos
+                </Text>
+                <ArrowRight size={14} color={theme.primary} />
+              </TouchableOpacity>
+            </>
+          ) : null}
         </Card>
       )}
     </View>
@@ -2929,14 +2990,30 @@ export function MobileClientStatsSheet({
   open,
   onClose,
   clientStats,
+  nutritionEnabled,
 }: {
   open: boolean
   onClose: () => void
   clientStats: MobileClientStats[]
+  /**
+   * Master switch por DOMINIO del workspace activo (`useDomainGuard('nutrition')`, cableado en
+   * `app/coach/(tabs)/home.tsx`). Fail-OPEN: solo el `false` explicito apaga la nutricion (D3).
+   * Con `false` no hay tab de Nutricion ni switcher, y la vista se fuerza a Adherencia.
+   */
+  nutritionEnabled: boolean
 }) {
   const router = useRouter()
   const { theme } = useTheme()
-  const [tab, setTab] = useState<'adherence' | 'nutrition'>('adherence')
+  const [selectedTab, setSelectedTab] = useState<'adherence' | 'nutrition'>('adherence')
+  // Con el dominio apagado la vista se fuerza a Adherencia aunque el estado local quedara en
+  // 'nutrition' de una apertura anterior del sheet (el sheet no se desmonta al cerrarse).
+  const tab = nutritionEnabled ? selectedTab : 'adherence'
+  // Con el dominio apagado el array queda con un solo elemento y el switcher no se pinta: no hay
+  // nada que elegir (D3 — cero rastro de nutricion en el home).
+  const tabs = ([
+    ['adherence', 'Adherencia'],
+    ['nutrition', 'Nutrición'],
+  ] as const).filter(([key]) => nutritionEnabled || key !== 'nutrition')
   const rows = clientStats.filter((client) =>
     tab === 'adherence' ? client.hasAdherenceData : client.hasNutritionData,
   )
@@ -2976,29 +3053,28 @@ export function MobileClientStatsSheet({
           </Text>
         </View>
 
-        <View className="mb-3.5 flex-row gap-[2px] rounded-control bg-surface-sunken p-[3px]">
-          {([
-            ['adherence', 'Adherencia'],
-            ['nutrition', 'Nutrición'],
-          ] as const).map(([key, label]) => {
-            const active = tab === key
-            return (
-              <TouchableOpacity
-                key={key}
-                activeOpacity={0.82}
-                accessibilityRole="tab"
-                accessibilityState={{ selected: active }}
-                onPress={() => setTab(key)}
-                className={`h-9 flex-1 items-center justify-center rounded-control ${active ? 'bg-surface-card' : 'bg-transparent'}`}
-                style={active ? shadow('xs', theme.scheme) : undefined}
-              >
-                <Text className={`font-sans-bold text-[13.5px] ${active ? 'text-strong' : 'text-subtle'}`}>
-                  {label}
-                </Text>
-              </TouchableOpacity>
-            )
-          })}
-        </View>
+        {tabs.length > 1 ? (
+          <View className="mb-3.5 flex-row gap-[2px] rounded-control bg-surface-sunken p-[3px]">
+            {tabs.map(([key, label]) => {
+              const active = tab === key
+              return (
+                <TouchableOpacity
+                  key={key}
+                  activeOpacity={0.82}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: active }}
+                  onPress={() => setSelectedTab(key)}
+                  className={`h-9 flex-1 items-center justify-center rounded-control ${active ? 'bg-surface-card' : 'bg-transparent'}`}
+                  style={active ? shadow('xs', theme.scheme) : undefined}
+                >
+                  <Text className={`font-sans-bold text-[13.5px] ${active ? 'text-strong' : 'text-subtle'}`}>
+                    {label}
+                  </Text>
+                </TouchableOpacity>
+              )
+            })}
+          </View>
+        ) : null}
 
         <Text className="mb-2.5 font-sans text-[11.5px] text-subtle">
           Ordenado por menor cumplimiento — los que necesitan ayuda primero.

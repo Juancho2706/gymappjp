@@ -58,11 +58,17 @@ export const DirRowCard = memo(function DirRowCard({
   onArchive,
   onDelete,
   archiveDisabledReason,
+  nutritionEnabled = true,
 }: {
   item: DirectoryClient
   index: number
   theme: any
   pulse?: PulseRow
+  /**
+   * Master switch del dominio (`useDomainGuard('nutrition')` en el screen del directorio).
+   * Fail-OPEN: default `true` y solo el `false` explícito apaga el pill de nutrición (R4.3/R4.13).
+   */
+  nutritionEnabled?: boolean
   onOpen: (c: DirectoryClient) => void
   onActions?: (c: DirectoryClient) => void
   onWhatsApp?: (c: DirectoryClient) => void
@@ -90,7 +96,8 @@ export const DirRowCard = memo(function DirRowCard({
   const li = lastWorkout ? lastInfo(lastWorkout) : { label: '—', dot: DANGER }
   const nutritionPct = pulse?.nutritionPercentage ?? 0
   const nutriRisk = (pulse?.attentionFlags ?? []).includes('NUTRICION_RIESGO') || nutritionPct < 60
-  const hasNutritionData = nutritionPct > 0
+  // Sin dominio de nutrición no hay pill: el gate vive acá, en presentación (R4.13 / R8).
+  const hasNutritionData = nutritionEnabled !== false && nutritionPct > 0
   const st = statusMeta(item)
 
   return (

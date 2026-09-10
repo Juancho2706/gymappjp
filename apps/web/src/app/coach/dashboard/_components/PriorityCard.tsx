@@ -20,6 +20,12 @@ interface Props {
     /** Mobile only: render the embedded "Tu próximo paso" inset (NextBestAction). */
     showNextStep?: boolean
     agendaPending?: number
+    /**
+     * `href` del pendiente que encabeza «Pendientes de hoy» (`data.agenda[0]?.href`, el más urgente
+     * tras el orden por severidad). El NBA tiene que mandar al MISMO alumno que abre la lista; sin
+     * esto apuntaba al directorio pelado.
+     */
+    agendaTopHref?: string
     expiringOverdue?: number
     avgAdherence?: number
 }
@@ -37,7 +43,8 @@ function resolveNextStep(
     riesgo: number,
     expiredCount: number,
     adherence: number,
-    agendaPending: number
+    agendaPending: number,
+    agendaTopHref?: string
 ): NextStep {
     if (expiredCount > 0)
         return {
@@ -67,8 +74,9 @@ function resolveNextStep(
         return {
             Icon: CalendarClock,
             title: `${agendaPending} ${agendaPending === 1 ? 'pendiente' : 'pendientes'} hoy`,
-            cta: 'Ver agenda',
-            href: '/coach/clients',
+            cta: 'Ver pendientes',
+            // Mismo alumno que encabeza «Pendientes de hoy»; el directorio queda como fallback.
+            href: agendaTopHref ?? '/coach/clients',
             tone: 'info',
         }
     return {
@@ -134,6 +142,7 @@ export function PriorityCard({
     items,
     showNextStep = false,
     agendaPending = 0,
+    agendaTopHref,
     expiringOverdue = 0,
     avgAdherence = 100,
 }: Props) {
@@ -142,7 +151,8 @@ export function PriorityCard({
         riesgoCount,
         expiringOverdue,
         avgAdherence,
-        agendaPending
+        agendaPending,
+        agendaTopHref
     )
 
     return (

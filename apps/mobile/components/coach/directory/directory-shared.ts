@@ -49,6 +49,14 @@ export const FIRST_LOGIN_SIGNAL_CUTOVER = '2026-08-26T06:00:00Z'
 const HOUR_MS = 60 * 60 * 1000
 const DAY_MS = 24 * HOUR_MS
 
+/**
+ * Ventana del chip «Entró hace X d»: 7 exactos siguen en `entered`, 8+ pasan a `active`.
+ * DUPLICADA a propósito con la web (`apps/web/src/app/coach/clients/_lib/client-status.ts`,
+ * mismo valor `ENTERED_CHIP_WINDOW_DAYS`) — mismo motivo que `FIRST_LOGIN_SIGNAL_CUTOVER` arriba:
+ * un módulo compartido en `packages/*` viajaría en el bundle RN y crearía split por runtime.
+ */
+export const ENTERED_CHIP_WINDOW_DAYS = 7
+
 function parseIso(value: string | null): number | null {
   if (!value) return null
   const ms = new Date(value).getTime()
@@ -108,7 +116,13 @@ export function statusMeta(
   if (!input.isActive) return { key: 'paused', label: 'Pausado', tone: 'neutral' }
 
   const firstLoginMs = parseIso(input.firstLoginAt)
-  if (firstLoginMs !== null) return { key: 'entered', label: enteredLabel(firstLoginMs, now), tone: 'success' }
+  if (firstLoginMs !== null) {
+    // A los 8 d el chip «Entró hace X d» deja paso a «Activo»; 7 exactos siguen en `entered`.
+    const days = Math.round((startOfLocalDay(now.getTime()) - startOfLocalDay(firstLoginMs)) / DAY_MS)
+    return days > ENTERED_CHIP_WINDOW_DAYS
+      ? { key: 'active', label: 'Activo', tone: 'success' }
+      : { key: 'entered', label: enteredLabel(firstLoginMs, now), tone: 'success' }
+  }
 
   if (input.forcePasswordChange) {
     const createdMs = parseIso(input.createdAt)

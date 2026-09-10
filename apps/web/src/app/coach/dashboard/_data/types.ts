@@ -1,4 +1,5 @@
 import type { AttentionFlag, DirectoryPulseRow } from '@/services/dashboard.service'
+import type { AgendaSeverity } from '@eva/profile-analytics'
 import type { RiskAlertItem, ActivityItemClient } from './dashboard.queries'
 
 export type { AttentionFlag, RiskAlertItem, ActivityItemClient }
@@ -61,6 +62,12 @@ export interface ChartPoint {
     alumnos?: number
 }
 
+/**
+ * Fila de «Pendientes de hoy». Una fila por pendiente, no por alumno: un alumno con programa por
+ * vencer Y sin entrenos aporta dos. El `label` viaja YA armado desde el servidor
+ * (`buildAgendaFromPulse` + `buildAgendaLabel`): ningún cliente lo recompone ni formatea fechas
+ * (`AgendaCard` es client component y no puede usar `Intl`, EVA-NEXTJS-18).
+ */
 export interface AgendaItem {
     id: string
     clientId: string
@@ -69,6 +76,13 @@ export interface AgendaItem {
     label: string
     href: string
     dueAt: string | null
+    /**
+     * Días calendario de Santiago desde `dueAt`. `null` = el alumno nunca registró (fila sin fecha)
+     * o la fila es un `programa_vence`, cuya urgencia sale de `daysLeft`, no de la antigüedad.
+     */
+    days: number | null
+    /** Punto de color de la fila: `agendaSeverity(days)` en pulse, `programSeverity(daysLeft)` en programas. */
+    severity: AgendaSeverity
 }
 
 export interface AdherenceStat {
@@ -151,6 +165,8 @@ export interface DashboardV2Data {
     areaData: ChartPoint[]
     barData: ChartPoint[]
     agenda: AgendaItem[]
+    /** Pendientes REALES (filas) antes del tope de 8 de `agenda`: lo que cuentan el header y el NBA. */
+    agendaTotal: number
     pulse: DirectoryPulseRow[]
     subscriptionStatus: string | null
     currentPeriodEnd: string | null

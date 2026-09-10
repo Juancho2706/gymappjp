@@ -268,6 +268,7 @@ export function ClientProfileDashboard({
                             compliance={compliance}
                             clientId={client.id}
                             activeProgram={data.activeProgram}
+                            nutritionEnabled={domainsEnabled.nutrition !== false}
                             isNutritionAtRisk={isNutritionAtRisk}
                             nutritionWeeklyPct={nutritionView?.weeklyInRangePct ?? null}
                             nutritionWeeklyDays={

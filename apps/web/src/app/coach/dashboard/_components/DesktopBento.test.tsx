@@ -60,6 +60,7 @@ function makeData(deltas: KpiDeltas): DashboardV2Data {
         areaData: [],
         barData: [],
         agenda: [],
+        agendaTotal: 0,
         pulse: [],
         subscriptionStatus: null,
         currentPeriodEnd: null,

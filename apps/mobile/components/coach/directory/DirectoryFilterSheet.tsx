@@ -78,6 +78,7 @@ export function DirectoryFilterSheet({
   programFilter,
   onProgramChange,
   archivedCount = 0,
+  nutritionEnabled = true,
 }: {
   visible: boolean
   onClose: () => void
@@ -89,9 +90,17 @@ export function DirectoryFilterSheet({
   programFilter: DirectoryProgramFilter
   onProgramChange: (v: DirectoryProgramFilter) => void
   archivedCount?: number
+  /**
+   * Master switch del dominio (`useDomainGuard('nutrition')` en el screen). Fail-OPEN: default
+   * `true`, solo el `false` explícito esconde la fila «Nutrición baja (<60%)» (R4.13).
+   */
+  nutritionEnabled?: boolean
 }) {
   const { height } = useWindowDimensions()
   const insets = useSafeAreaInsets()
+  // El gate del filtro vive en PRESENTACIÓN: `filterClients` no se toca (R8). Si el filtro estaba
+  // puesto cuando el coach apagó el dominio, el screen lo resetea a `all` por efecto (R4.14).
+  const riskRows = nutritionEnabled ? RISK_ROWS : RISK_ROWS.filter((it) => it.v !== 'nutrition_low')
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <Pressable style={styles.overlay} onPress={onClose} />
@@ -118,7 +127,7 @@ export function DirectoryFilterSheet({
 
           <View style={[styles.divider, { backgroundColor: theme.border }]} />
           <Text className="text-subtle" style={styles.groupLabel}>Riesgo</Text>
-          {RISK_ROWS.map((it) => (
+          {riskRows.map((it) => (
             <CheckRow
               key={it.v}
               testID={`directory-filter-riesgo-${it.v}`}

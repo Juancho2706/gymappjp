@@ -58,6 +58,7 @@ import {
   type DailyHabitRow,
   type DailyHabitsSummary,
 } from '../../../lib/coach-client-detail'
+import { resolveNutritionSignal } from '../../../lib/coach-client-detail-logic'
 import type { ClientActionWorkspace } from '../../../lib/client-actions'
 import { filterPlansForStructureView, resolveActiveWeekVariantForDisplay } from '../../../lib/program-week-variant'
 import { FONT } from '../../../lib/typography'
@@ -130,6 +131,7 @@ export function OverviewTab({
   workspace,
   moduleFlags,
   modulesReady,
+  nutritionEnabled,
 }: {
   data: CoachClientDetailData
   reload: () => void
@@ -141,6 +143,8 @@ export function OverviewTab({
   workspace: ClientActionWorkspace
   moduleFlags: { cardio: boolean; movement: boolean; bodycomp: boolean }
   modulesReady: boolean
+  /** Dominio `nutrition` del workspace del RECURSO (fail-OPEN): con `false` no queda rastro. */
+  nutritionEnabled: boolean
 }) {
   const { theme } = useTheme()
   const {
@@ -207,8 +211,18 @@ export function OverviewTab({
   const workoutPct = Math.min(100, Math.round((compliance.workoutsThisWeek / target) * 100))
   const previousWorkoutPct = Math.min(100, Math.round((compliance.workoutsPrevWeek / target) * 100))
   const workoutDelta = workoutPct - previousWorkoutPct
-  const nutritionPct = Math.min(100, compliance.nutritionWeeklyAvgPct)
-  const nutritionDelta = compliance.nutritionWeeklyAvgPct - compliance.nutritionPrevWeeklyAvgPct
+  // Toda la decisión de nutrición (anillo, banner, píldora) vive en la función pura; acá solo se pinta.
+  const nutritionSignal = resolveNutritionSignal({
+    nutritionEnabled,
+    weeklyAvgPct: compliance.nutritionWeeklyAvgPct,
+    prevWeeklyAvgPct: compliance.nutritionPrevWeeklyAvgPct,
+    todayPct: nutritionTodayCompliancePct,
+  })
+  const nutritionPct = nutritionSignal.ringValue
+  // El delta NO se fabrica: hacen falta las dos semanas con dato (espejo de la ficha web).
+  const nutritionDelta = compliance.nutritionWeeklyAvgPct != null && compliance.nutritionPrevWeeklyAvgPct != null
+    ? compliance.nutritionWeeklyAvgPct - compliance.nutritionPrevWeeklyAvgPct
+    : null
   const checkInPct = Math.min(100, compliance.checkInCompliancePercent)
   const checkInDelta = compliance.checkInCompliancePercent - compliance.checkInCompliancePercentWeekAgo
   const currentWeek = activeProgram ? resolveProgramWeek(activeProgram, todayIso) : null
@@ -220,7 +234,7 @@ export function OverviewTab({
   const topAlert = getProfileTopAlert({
     checkIns: sortedCheckIns,
     compliance: {
-      nutritionCompliancePercent: nutritionTodayCompliancePct,
+      nutritionCompliancePercent: nutritionSignal.alertInput,
       planDaysRemaining,
       currentStreak: currentActivityStreak,
     },
@@ -248,7 +262,16 @@ export function OverviewTab({
         <SectionTitle>Cumplimiento semanal</SectionTitle>
         <View style={styles.ringRow}>
           <Ring label="Entreno" value={workoutPct} color={theme.primary} delta={workoutDelta} />
-          <Ring label="Nutrición" value={nutritionPct} color={nutritionPct >= 70 ? theme.success : nutritionPct >= 50 ? theme.warning : theme.destructive} delta={nutritionDelta} onPress={onViewNutrition} />
+          {nutritionSignal.showRing ? (
+            <Ring
+              label="Nutrición"
+              value={nutritionPct}
+              color={nutritionPct == null ? theme.mutedForeground : nutritionPct >= 70 ? theme.success : nutritionPct >= 50 ? theme.warning : theme.destructive}
+              delta={nutritionDelta}
+              hint={nutritionSignal.ringHint}
+              onPress={onViewNutrition}
+            />
+          ) : null}
           <Ring label="Check-in" value={checkInPct} color={checkInPct >= 70 ? theme.success : checkInPct >= 40 ? theme.warning : theme.destructive} delta={checkInDelta} />
         </View>
       </StatCard>
@@ -265,7 +288,7 @@ export function OverviewTab({
           currentWeek={currentWeek}
           totalWeeks={totalWeeks}
           daysRemaining={planDaysRemaining}
-          nutritionAtRisk={nutritionTodayCompliancePct < 60}
+          nutritionAtRisk={nutritionSignal.atRisk}
           onAssign={onEditProgram}
           onOpen={onOpenProgram ?? onEditProgram}
           onViewNutrition={onViewNutrition}
@@ -351,15 +374,19 @@ function KpiCard({ item, index }: { item: ClientKpiCard; index: number }) {
   )
 }
 
-function Ring({ label, value, color, delta, onPress }: { label: string; value: number; color: string; delta: number | null; onPress?: () => void }) {
+// `value == null` = sin dato (sin plan vigente): el anillo va gris con «—» (nunca 0 %) y el
+// `hint` lo explica entre el label y el delta.
+function Ring({ label, value, color, delta, hint, onPress }: { label: string; value: number | null; color: string; delta: number | null; hint?: string; onPress?: () => void }) {
   const { theme } = useTheme()
+  const empty = value == null
   const deltaCopy = delta == null || delta === 0 ? 'sin cambio versus semana anterior' : `${delta > 0 ? 'sube' : 'baja'} ${Math.abs(delta)} puntos`
   const body = (
     <View style={styles.ringItem}>
       <View style={styles.ringGraphic}>
-        <ComplianceRing value={value / 100} label="" color={color} size={84} strokeWidth={8} />
+        <ComplianceRing value={empty ? 0 : value / 100} label="" color={color} size={84} strokeWidth={8} empty={empty} />
       </View>
       <Text className="text-strong" style={styles.ringLabel}>{label}</Text>
+      {hint ? <Text style={[styles.ringHint, { color: theme.mutedForeground }]} numberOfLines={1}>{hint}</Text> : null}
       <Text style={[styles.ringDelta, { color: delta == null || delta === 0 ? theme.ink300 : delta > 0 ? theme.success : theme.destructive }]}>
         {delta == null || delta === 0 ? '— vs sem. ant.' : `${delta > 0 ? '↑' : '↓'} ${Math.abs(delta)} pts`}
       </Text>
@@ -370,7 +397,9 @@ function Ring({ label, value, color, delta, onPress }: { label: string; value: n
       activeOpacity={0.78}
       onPress={onPress}
       accessibilityRole="button"
-      accessibilityLabel={`Ver ${label.toLocaleLowerCase('es-CL')}. ${Math.round(value)}%. ${deltaCopy}.`}
+      accessibilityLabel={empty
+        ? `Ver ${label.toLocaleLowerCase('es-CL')}. ${hint ?? 'Sin plan vigente'}.`
+        : `Ver ${label.toLocaleLowerCase('es-CL')}. ${Math.round(value)}%. ${deltaCopy}.`}
       style={styles.ringTouch}
     >
       {body}
@@ -394,7 +423,8 @@ function ProgramSummary({
   currentWeek: number | null
   totalWeeks: number
   daysRemaining?: number
-  nutritionAtRisk: boolean
+  /** `null` = sin señal honesta (dominio apagado o sin plan vigente) ⇒ la píldora no se pinta. */
+  nutritionAtRisk: boolean | null
   onAssign: () => void
   onOpen: () => void
   onViewNutrition?: () => void
@@ -458,26 +488,28 @@ function ProgramSummary({
           <Text className="text-muted" style={styles.programMetaText}>{left} d restantes</Text>
         </View>
         <ProgressBar value={week / totalWeeks} color={theme.primary} height={7} />
-        <TouchableOpacity
-          activeOpacity={onViewNutrition ? 0.78 : 1}
-          disabled={!onViewNutrition}
-          onPress={(event) => { event.stopPropagation(); onViewNutrition?.() }}
-          accessibilityRole={onViewNutrition ? 'button' : undefined}
-          accessibilityLabel={nutritionAtRisk ? 'Ver nutrición en riesgo' : 'Ver nutrición en track'}
-          accessibilityState={{ disabled: !onViewNutrition }}
-          className={nutritionAtRisk ? 'bg-danger-100 dark:bg-danger-100/[0.18]' : 'bg-success-100 dark:bg-success-100/[0.18]'}
-          style={styles.nutritionSignal}
-        >
-          <MotiView
-            from={{ opacity: 1 }}
-            animate={nutritionAtRisk && !reduceMotion ? { opacity: 0.42 } : { opacity: 1 }}
-            transition={{ type: 'timing', duration: 1000, loop: nutritionAtRisk && !reduceMotion, repeatReverse: true }}
-            style={[styles.signalDot, { backgroundColor: nutritionAtRisk ? theme.destructive : theme.success }]}
-          />
-          <Text className={nutritionAtRisk ? 'text-danger-600' : 'text-success-600'} style={styles.signalLabel}>
-            {nutritionAtRisk ? 'Nutrición en riesgo' : 'Nutrición en track'}
-          </Text>
-        </TouchableOpacity>
+        {nutritionAtRisk != null ? (
+          <TouchableOpacity
+            activeOpacity={onViewNutrition ? 0.78 : 1}
+            disabled={!onViewNutrition}
+            onPress={(event) => { event.stopPropagation(); onViewNutrition?.() }}
+            accessibilityRole={onViewNutrition ? 'button' : undefined}
+            accessibilityLabel={nutritionAtRisk ? 'Ver nutrición en riesgo' : 'Ver nutrición en track'}
+            accessibilityState={{ disabled: !onViewNutrition }}
+            className={nutritionAtRisk ? 'bg-danger-100 dark:bg-danger-100/[0.18]' : 'bg-success-100 dark:bg-success-100/[0.18]'}
+            style={styles.nutritionSignal}
+          >
+            <MotiView
+              from={{ opacity: 1 }}
+              animate={nutritionAtRisk && !reduceMotion ? { opacity: 0.42 } : { opacity: 1 }}
+              transition={{ type: 'timing', duration: 1000, loop: nutritionAtRisk && !reduceMotion, repeatReverse: true }}
+              style={[styles.signalDot, { backgroundColor: nutritionAtRisk ? theme.destructive : theme.success }]}
+            />
+            <Text className={nutritionAtRisk ? 'text-danger-600' : 'text-success-600'} style={styles.signalLabel}>
+              {nutritionAtRisk ? 'Nutrición en riesgo' : 'Nutrición en track'}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
         {next ? (
           <View className="bg-sport-100 dark:bg-sport-100/20" style={styles.nextWorkout}>
             <CalendarCheck size={18} className="text-sport-600" />
@@ -922,6 +954,7 @@ const styles = StyleSheet.create({
   ringItem: { alignItems: 'center', gap: 5 },
   ringGraphic: { width: 84, height: 84, overflow: 'hidden' },
   ringLabel: { fontSize: 12.5, fontFamily: FONT.uiBold, textAlign: 'center' },
+  ringHint: { fontSize: 10, fontFamily: FONT.uiSemibold, textAlign: 'center' },
   ringDelta: { minHeight: 15, fontSize: 10.5, fontFamily: FONT.uiSemibold, textAlign: 'center' },
   kpiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
   kpiHalf: { width: '48%' },

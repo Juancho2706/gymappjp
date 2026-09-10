@@ -50,6 +50,9 @@ export interface ClientStatusMeta {
 const HOUR_MS = 60 * 60 * 1000
 const DAY_MS = 24 * HOUR_MS
 
+/** Ventana del chip «Entró hace X d»: 7 exactos siguen en `entered`, 8+ pasan a `active` (R2 · D2). */
+export const ENTERED_CHIP_WINDOW_DAYS = 7
+
 function parseIso(value: string | null): number | null {
     if (!value) return null
     const ms = new Date(value).getTime()
@@ -74,6 +77,11 @@ function enteredLabel(firstLoginMs: number, now: Date): string {
     const days = Math.round((startOfLocalDay(now.getTime()) - startOfLocalDay(firstLoginMs)) / DAY_MS)
     if (days <= 0) return 'Entró hoy'
     return `Entró hace ${days} d`
+}
+
+/** Días calendario desde el primer login; misma fórmula que `enteredLabel` (arriba). */
+function daysSinceFirstLogin(firstLoginMs: number, now: Date): number {
+    return Math.round((startOfLocalDay(now.getTime()) - startOfLocalDay(firstLoginMs)) / DAY_MS)
 }
 
 /**
@@ -108,6 +116,14 @@ export function getClientStatusMeta(
 
     const firstLoginMs = parseIso(firstLoginAt)
     if (firstLoginMs !== null) {
+        // A los 8 d el chip «Entró hace X d» deja paso a «Activo»; 7 exactos siguen en `entered`.
+        if (daysSinceFirstLogin(firstLoginMs, now) > ENTERED_CHIP_WINDOW_DAYS) {
+            return {
+                key: 'active',
+                label: 'Activo',
+                cls: 'bg-[var(--success-100)] text-[var(--success-700)]',
+            }
+        }
         return {
             key: 'entered',
             label: enteredLabel(firstLoginMs, now),

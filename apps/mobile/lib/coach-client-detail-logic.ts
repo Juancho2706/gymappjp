@@ -76,20 +76,26 @@ export function checkInRegularityPercentAsOfSantiago(
   return Math.max(0, Math.round(100 - Math.min(100, (daysSince / 7) * 100)))
 }
 
-/** Compliance de HOY del plan activo: denominador = comidas vivas aplicables a ese dia. */
+/**
+ * Compliance de HOY del plan activo: denominador = comidas vivas aplicables a ese dia.
+ * Devuelve `null` cuando NO hay dato honesto (sin plan activo, o plan sin comidas aplicables
+ * hoy): antes esos dos casos valian `0` y la ficha los pintaba como "0 % de cumplimiento".
+ * Un 0 REAL (plan activo, comidas aplicables y ninguna completada) sigue devolviendo `0`.
+ */
 export function activePlanNutritionComplianceForDay(
   date: string,
   rows: NutritionLog[],
   macroMeals: MacroMeal[],
   activePlanId: string | null,
-): number {
-  if (!activePlanId) return 0
+): number | null {
+  if (!activePlanId) return null
   const row = rows.find((candidate) =>
     String(candidate.log_date ?? '').slice(0, 10) === date && candidate.plan_id === activePlanId,
   )
   const applicableMeals = macroMeals.filter((meal) =>
     meal.day_of_week == null || meal.day_of_week === getNutritionDayOfWeekFromIsoYmd(date),
   )
+  if (applicableMeals.length === 0) return null
   const applicableIds = new Set(applicableMeals.map((meal) => meal.id))
   const completedIds = new Set(
     (row?.nutrition_meal_logs ?? [])
@@ -230,4 +236,46 @@ export function effectiveWorkoutTarget(program: TargetProgram | null, now: Date 
     (plan) => plan.blocks.length > 0 && workoutPlanMatchesVariant(plan, activeVariant, abMode),
   ).length
   return Math.max(1, count)
+}
+
+/** Copy único del anillo sin dato (web y RN comparten la forma capitalizada). */
+export const NUTRITION_NO_PLAN_HINT = 'Sin plan vigente'
+
+export interface NutritionSignal {
+  /** Dominio encendido: con `false` el anillo (y todo rastro de nutrición) desaparece. */
+  showRing: boolean
+  /** `null` ⇒ `ComplianceRing` en `empty` (gris + «—»), nunca 0 %. */
+  ringValue: number | null
+  /** `Sin plan vigente` solo si el anillo se ve y no hay dato. */
+  ringHint: string | undefined
+  /** Lo que se pasa a `getProfileTopAlert`: `undefined` ⇒ la regla del banner se omite. */
+  alertInput: number | undefined
+  /** `null` ⇒ la píldora «Nutrición en riesgo / en track» no se pinta. Se decide con `todayPct` (< 60). */
+  atRisk: boolean | null
+}
+
+/**
+ * Única decisión de «qué se ve» de nutrición en la ficha RN: los `.tsx` solo pintan.
+ * Pura y testeable sin montar React Native.
+ *
+ * `prevWeeklyAvgPct` viaja en el input por contrato: el delta del anillo solo existe con los
+ * DOS promedios en `number` y esa comparación se hace en el llamador (`OverviewTab`), espejo
+ * de la ficha web.
+ */
+export function resolveNutritionSignal(input: {
+  nutritionEnabled: boolean
+  weeklyAvgPct: number | null
+  prevWeeklyAvgPct: number | null
+  todayPct: number | null
+}): NutritionSignal {
+  const showRing = input.nutritionEnabled
+  const ringValue = input.weeklyAvgPct == null ? null : Math.min(100, input.weeklyAvgPct)
+  return {
+    showRing,
+    ringValue,
+    ringHint: showRing && ringValue == null ? NUTRITION_NO_PLAN_HINT : undefined,
+    alertInput: input.nutritionEnabled ? input.todayPct ?? undefined : undefined,
+    // Misma ventana que tenía la píldora (HOY): sin dato de hoy no hay veredicto.
+    atRisk: input.nutritionEnabled && input.todayPct != null ? input.todayPct < 60 : null,
+  }
 }

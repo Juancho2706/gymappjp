@@ -6,12 +6,14 @@ import { AlertOctagon, AlertTriangle, ArrowRight, ChevronDown } from 'lucide-rea
 import { useTheme } from '../../../context/ThemeContext'
 import { deriveSportTokens } from '@eva/brand-kit'
 import { FONT } from '../../../lib/typography'
-import type { DirectoryRiskFilter, DirectoryStats } from '../../../lib/clients-directory'
+import { summaryMetricKeys } from '../../../lib/clients-directory'
+import type { DirectoryRiskFilter, DirectorySummaryMetricKey, DirectoryStats } from '../../../lib/clients-directory'
 
 /**
  * DirectorySummary — "Resumen · hoy" (triage). Realización móvil del web `CoachWarRoom`:
  * 2 PulseCard jerárquicas (Riesgo / Atención, botón-filtro) + grilla de 4 MetricChip
- * (Total / Activos / Adher. / Nutri.). Cada tile filtra el directorio.
+ * (Total / Activos / Adher. / Nutri.) — 3 con el dominio de nutrición apagado, sin «Nutri.»
+ * (`nutritionEnabled`, R4.13). Cada tile filtra el directorio.
  */
 
 /**
@@ -154,6 +156,7 @@ export function DirectorySummary({
   onSetAllRisk,
   avgAdherence,
   nutritionLowCount,
+  nutritionEnabled,
 }: {
   stats: DirectoryStats
   /** Contadores del pulso CRUDO (espejo CoachWarRoom.tsx:220-221), no del roster con fallback. */
@@ -164,6 +167,11 @@ export function DirectorySummary({
   onSetAllRisk: () => void
   avgAdherence: number
   nutritionLowCount: number
+  /**
+   * Master switch del dominio, cableado por el screen con `useDomainGuard('nutrition')`. Fail-OPEN
+   * en la fuente: el guard entrega `true` mientras no resuelve, solo el `false` explícito apaga.
+   */
+  nutritionEnabled: boolean
 }) {
   const { theme, resolvedScheme } = useTheme()
   const dark = resolvedScheme === 'dark'
@@ -189,13 +197,16 @@ export function DirectorySummary({
     { key: 'urgent', label: 'Riesgo', value: urgentCount, filter: 'urgent' as DirectoryRiskFilter, tone: 'danger' as const, icon: AlertOctagon, hint: urgentCount ? (urgentCount === 1 ? 'Necesita atención hoy' : 'Necesitan atención hoy') : 'Todo en orden' },
     { key: 'review', label: 'Atención', value: reviewCount, filter: 'review' as DirectoryRiskFilter, tone: 'warning' as const, icon: AlertTriangle, hint: reviewCount ? 'Para revisar pronto' : 'Sin pendientes' },
   ]
-  // Métricas secundarias — grilla de 4 (1:1 web: Total · Activos · Adher.% · Nutri.).
-  const metricTiles: { key: string; label: string; value: number; suffix?: string; color: string; selected: boolean; onPress?: () => void }[] = [
-    { key: 'total', label: 'Total', value: stats.total, color: theme.foreground, selected: riskFilter === 'all', onPress: onSetAllRisk },
-    { key: 'active', label: 'Activos', value: stats.active, color: sport600, selected: false },
-    { key: 'adherence', label: 'Adher.', value: avgAdherence, suffix: '%', color: theme.foreground, selected: false },
-    { key: 'nutrition', label: 'Nutri.', value: nutritionLowCount, color: ember700, selected: riskFilter === 'nutrition_low', onPress: () => onToggleRisk('nutrition_low') },
-  ]
+  // Métricas secundarias — grilla de 4 (1:1 web: Total · Activos · Adher.% · Nutri.), que pasa a 3
+  // con el dominio de nutrición apagado: `summaryMetricKeys` es la única fuente del orden y del
+  // gate (A21 / R4.13), para poder probarlo sin montar RN (N7).
+  const metricTileByKey: Record<DirectorySummaryMetricKey, { key: string; label: string; value: number; suffix?: string; color: string; selected: boolean; onPress?: () => void }> = {
+    total: { key: 'total', label: 'Total', value: stats.total, color: theme.foreground, selected: riskFilter === 'all', onPress: onSetAllRisk },
+    active: { key: 'active', label: 'Activos', value: stats.active, color: sport600, selected: false },
+    adherence: { key: 'adherence', label: 'Adher.', value: avgAdherence, suffix: '%', color: theme.foreground, selected: false },
+    nutrition: { key: 'nutrition', label: 'Nutri.', value: nutritionLowCount, color: ember700, selected: riskFilter === 'nutrition_low', onPress: () => onToggleRisk('nutrition_low') },
+  }
+  const metricTiles = summaryMetricKeys(nutritionEnabled).map((key) => metricTileByKey[key])
 
   return (
     <View style={styles.summary}>

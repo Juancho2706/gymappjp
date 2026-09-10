@@ -6,7 +6,20 @@ import {
   type OnboardingStepKey,
 } from '@eva/onboarding'
 import { PERSONAS, type Persona } from '@eva/schemas'
+// Agenda «Pendientes de hoy» (carril C): los copys, la severidad y la fecha corta salen del MISMO
+// módulo puro que usa el servidor web, así el fallback local no inventa una tercera variante de
+// texto. `shortDayMonthEs` reemplaza cualquier `toLocaleDateString` (gotcha EVA-NEXTJS-18).
+import {
+  agendaSeverity,
+  buildAgendaLabel,
+  daysSince,
+  programSeverity,
+  shortDayMonthEs,
+  type AgendaKind,
+  type AgendaSeverity,
+} from '@eva/profile-analytics'
 import { getCoachProfile, type CoachProfile } from './coach'
+import { getSantiagoIsoYmdForUtcInstant, getTodayInSantiago } from './date-utils'
 import { loadStoredBranding } from './branding'
 import { supabase } from './supabase'
 import { apiFetch } from './api'
@@ -129,8 +142,20 @@ export type MobileAgendaItem = {
   id: string
   clientId: string
   clientName: string
-  kind: 'programa_vence' | 'checkin_pendiente' | 'sin_ejercicio'
+  /** Misma unión que el servidor web: sale del package para que no puedan divergir. */
+  kind: AgendaKind
+  /** Texto YA armado con `buildAgendaLabel` (servidor o fallback). RN lo imprime tal cual. */
   label: string
+  /**
+   * Instante ISO del último registro que motiva la fila (`logged_at` / `created_at`), `null` para
+   * `programa_vence` y para el alumno que nunca registró. Ya viajaba en el JSON del endpoint: lo
+   * descartaba el tipo.
+   */
+  dueAt: string | null
+  /** Días calendario de Santiago desde `dueAt`. `null` = sin fecha honesta (no se fabrica «0 d»). */
+  days: number | null
+  /** Punto de color de la fila. `programa_vence` la calcula con `daysLeft`, no con `days`. */
+  severity: AgendaSeverity
 }
 
 export type MobileExpiringProgramItem = {
@@ -234,6 +259,12 @@ export type MobileDashboardData = {
   capClients: number
   topRiskClients: MobileRiskAlertItem[]
   agenda: MobileAgendaItem[]
+  /**
+   * Total REAL de pendientes, contado antes del tope de 8 filas. Es lo que pinta el contador
+   * («{N} pendientes»), el título del NBA y la fila «y N más en Alumnos»: `agenda.length` mentiría
+   * en cuanto el coach pasa de 8.
+   */
+  agendaTotal: number
   expiringPrograms: MobileExpiringProgramItem[]
   recentActivities: MobileActivityItem[]
   /** Check-ins recientes (ventana del feed) sin revisar por el coach. Alimenta el badge "por revisar" (1:1 con DashboardV2Data). */
@@ -741,6 +772,12 @@ type MobileDashboardApiResponse = {
     nutritionStats: RichNutritionStat[]
     topRiskClients: MobileRiskAlertItem[]
     agenda: MobileAgendaItem[]
+    /**
+     * Opcional a propósito (mismo criterio que `pendingCheckinsCount`): la app viaja por binario y
+     * por OTA, así que un teléfono nuevo puede pegarle a un deploy VIEJO que todavía no serializa
+     * el total. `mapApiDashboard` degrada a la cantidad de filas recibidas.
+     */
+    agendaTotal?: number
     expiringPrograms: MobileExpiringProgramItem[]
     pendingCheckinsCount?: number
     recentActivities: Array<{
@@ -774,7 +811,11 @@ function dropRowsWithInvalidClientId<T extends { clientId: string }>(
   return { rows: kept, dropped: list.length - kept.length }
 }
 
-function mapApiDashboard(
+/**
+ * Exportada SOLO para poder testear el mapeo del payload sin red (N4), igual que `mapKpiDeltas`:
+ * es una función pura sobre el JSON del endpoint. Nadie fuera de este módulo debe llamarla en runtime.
+ */
+export function mapApiDashboard(
   payload: MobileDashboardApiResponse,
   brandFallback?: { logoUrl?: string | null; logoUrlDark?: string | null } | null,
 ): MobileDashboardData {
@@ -858,6 +899,8 @@ function mapApiDashboard(
     capClients: payload.dashboard.kpi.totalClients,
     topRiskClients: topRisk.rows,
     agenda: agenda.rows,
+    // Default defensivo para el deploy viejo que no sirve el total (ver el tipo del payload).
+    agendaTotal: payload.dashboard.agendaTotal ?? agenda.rows.length,
     expiringPrograms: payload.dashboard.expiringPrograms,
     recentActivities,
     pendingCheckinsCount: payload.dashboard.pendingCheckinsCount ?? 0,
@@ -937,6 +980,99 @@ async function countCapClients(
   } catch {
     return null
   }
+}
+
+/** Orden de urgencia de las filas de la agenda: espejo exacto del comparador del servidor. */
+const AGENDA_SEVERITY_RANK: Record<AgendaSeverity, number> = { danger: 0, warning: 1, none: 2 }
+
+/**
+ * Dentro de un grupo de severidad: el más viejo arriba, y las filas sin antigüedad (`days === null`,
+ * los `programa_vence`) ANTES que las de pulse de la misma severidad — espejo exacto de
+ * `compareAgendaStaleness` de `dashboard.queries.ts` (web). Entre programas devuelve 0, así que
+ * conservan por estabilidad de `Array#sort` el `daysLeft` ascendente con el que se empujaron.
+ */
+function compareAgendaStaleness(a: number | null, b: number | null): number {
+  if (a === b) return 0
+  if (a === null) return -1
+  if (b === null) return 1
+  return b - a
+}
+
+/**
+ * Agenda «Pendientes de hoy» del camino DEGRADADO (endpoint caído / sin señal), con los MISMOS
+ * strings, la misma severidad y el mismo orden que `buildAgendaFromPulse` del servidor web: el
+ * label sale de `buildAgendaLabel` y la fecha corta de `shortDayMonthEs`, nunca de
+ * `toLocaleDateString` (si RN formateara con `Intl` volvería la divergencia `sept` / `sept.`).
+ *
+ * Es pura y exportada porque el fallback vive dentro de una función gigante que necesita Supabase:
+ * así N4 puede comparar sus strings contra `buildAgendaLabel` sin montar red ni React Native.
+ *
+ * `total` (R17) se cuenta sobre TODOS los riesgos y TODOS los programas por vencer que recibe —
+ * antes del tope de 8 filas y nunca sobre `topRiskClients`, que ya viene recortado a 5.
+ *
+ * `todayYmd` entra como parámetro (día de Santiago, `getTodayInSantiago().iso`): la cuenta de días
+ * no puede depender de la medianoche del runtime del teléfono.
+ */
+export function buildLocalAgenda(input: {
+  riskItems: MobileRiskAlertItem[]
+  expiringPrograms: MobileExpiringProgramItem[]
+  lastWorkoutByClient: Map<string, { logged_at: string }>
+  lastCheckInByClient: Map<string, { created_at: string }>
+  todayYmd: string
+}): { items: MobileAgendaItem[]; total: number } {
+  const items: MobileAgendaItem[] = []
+
+  // Los programas se empujan por `daysLeft` ascendente: su `days` es `null`, el comparador de abajo
+  // los deja empatados y `Array#sort` es estable (ES2019), así que ese orden sobrevive.
+  for (const program of [...input.expiringPrograms].sort((a, b) => a.daysLeft - b.daysLeft)) {
+    items.push({
+      id: `expire-${program.id}`,
+      clientId: program.clientId,
+      clientName: program.clientName,
+      kind: 'programa_vence',
+      label: buildAgendaLabel({
+        kind: 'programa_vence',
+        days: null,
+        dateText: null,
+        programName: program.name,
+        daysLeft: program.daysLeft,
+      }),
+      dueAt: null,
+      days: null,
+      severity: programSeverity(program.daysLeft),
+    })
+  }
+
+  for (const risk of input.riskItems) {
+    // Misma regla que el servidor: con los dos flags gana el check-in y el alumno aporta UNA fila
+    // de pulse. El motivo se lee de `flags`, no del `label` del riesgo (otro copy, ya no se reusa).
+    const checkin = (risk.flags ?? []).includes('SIN_CHECKIN_1M')
+    const kind: AgendaKind = checkin ? 'checkin_pendiente' : 'sin_ejercicio'
+    const dueAt = checkin
+      ? input.lastCheckInByClient.get(risk.clientId)?.created_at ?? null
+      : input.lastWorkoutByClient.get(risk.clientId)?.logged_at ?? null
+    // Un solo YMD de Santiago alimenta el texto Y la cuenta de días.
+    const dueYmd = dueAt ? getSantiagoIsoYmdForUtcInstant(dueAt) : null
+    const days = daysSince(dueYmd, input.todayYmd)
+    // `dateText` se gatea por `days`: un instante corrupto deja el YMD en `NaN-NaN-NaN` y preferimos
+    // degradar a «Todavía no registra …» antes que imprimir basura con fecha.
+    const dateText = days !== null && dueYmd ? shortDayMonthEs(dueYmd) : null
+    items.push({
+      id: `risk-${risk.clientId}`,
+      clientId: risk.clientId,
+      clientName: risk.clientName,
+      kind,
+      label: buildAgendaLabel({ kind, days, dateText }),
+      dueAt,
+      days,
+      severity: agendaSeverity(days),
+    })
+  }
+
+  items.sort(
+    (a, b) => AGENDA_SEVERITY_RANK[a.severity] - AGENDA_SEVERITY_RANK[b.severity] || compareAgendaStaleness(a.days, b.days),
+  )
+  return { items: items.slice(0, 8), total: items.length }
 }
 
 async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData | null> {
@@ -1123,7 +1259,7 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
 
   const topRiskClients = riskItems.sort((a, b) => b.attentionScore - a.attentionScore).slice(0, 5)
 
-  const expiringPrograms = ((expiringProgramsResult.data ?? []) as Array<{
+  const expiringProgramsAll = ((expiringProgramsResult.data ?? []) as Array<{
     id: string
     name: string
     end_date: string
@@ -1147,24 +1283,18 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
       }
     })
     .filter((program) => program.clientId && program.daysLeft <= 3)
-    .slice(0, 8)
 
-  const agenda: MobileAgendaItem[] = [
-    ...expiringPrograms.map((program) => ({
-      id: `expire-${program.id}`,
-      clientId: program.clientId,
-      clientName: program.clientName,
-      kind: 'programa_vence' as const,
-      label: program.daysLeft <= 0 ? `${program.name} vencio` : `${program.name} vence en ${program.daysLeft}d`,
-    })),
-    ...topRiskClients.map((client) => ({
-      id: `risk-${client.clientId}`,
-      clientId: client.clientId,
-      clientName: client.clientName,
-      kind: client.label.includes('check-in') ? 'checkin_pendiente' as const : 'sin_ejercicio' as const,
-      label: client.label,
-    })),
-  ].slice(0, 8)
+  // La lista que se muestra en «Programas por vencer» sigue topada en 8; la agenda cuenta sobre la
+  // lista COMPLETA (R17), así que el `slice` ya no se aplica antes de armarla.
+  const expiringPrograms = expiringProgramsAll.slice(0, 8)
+
+  const localAgenda = buildLocalAgenda({
+    riskItems,
+    expiringPrograms: expiringProgramsAll,
+    lastWorkoutByClient: latestWorkout,
+    lastCheckInByClient: latestCheckIn,
+    todayYmd: getTodayInSantiago().iso,
+  })
 
   const revenueByMonth: Record<string, number> = {}
   for (const payment of payments) {
@@ -1312,7 +1442,8 @@ async function getCoachDashboardDataMobileLocal(): Promise<MobileDashboardData |
     },
     capClients: capClients ?? clients.length,
     topRiskClients,
-    agenda,
+    agenda: localAgenda.items,
+    agendaTotal: localAgenda.total,
     expiringPrograms,
     recentActivities: activities.slice(0, 8),
     // "Por revisar": check-ins recientes (coach-scoped) sin reviewed_at — misma semantica que el endpoint V2.
