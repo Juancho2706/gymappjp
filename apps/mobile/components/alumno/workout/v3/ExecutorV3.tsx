@@ -1540,6 +1540,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         return (
           <ExerciseScreenV3
             key={block.id}
+            autoRestEnabled={isRestAutoTimerEnabled()}
             block={block}
             exercise={exercise}
             eff={effByBlock.get(block.id) ?? null}
@@ -1578,6 +1579,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         return (
           <MobilityScreenV3
             key={block.id}
+            autoRestEnabled={isRestAutoTimerEnabled()}
             block={block}
             exercise={exercise}
             blockLogs={blockLogs}

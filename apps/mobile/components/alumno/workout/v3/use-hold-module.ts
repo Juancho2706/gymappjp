@@ -124,6 +124,11 @@ export interface UseHoldModuleApi {
   resume(): void
   doneEarly(): void
   remeasure(): void
+  /**
+   * CA-90: «Listo» desde `idle` — siembra el OBJETIVO en la caja del lado en curso y NO envía (el
+   * alumno confirma con su botón, como hoy en movilidad). En `per_side` deja armado el derecho.
+   */
+  seedObjective(): void
 }
 
 export function useHoldModule(args: UseHoldModuleArgs): UseHoldModuleApi {
@@ -345,6 +350,30 @@ export function useHoldModule(args: UseHoldModuleArgs): UseHoldModuleApi {
     finish('restart')
   }, [finish, killNotif])
 
+  const seedObjective = useCallback(() => {
+    if (countdownRef.current.running) return
+    const a = argsRef.current
+    const now = Date.now()
+    const currentSide: HoldSide = sidesRef.current[sideIdxRef.current] ?? 'single'
+    const values = mergeHoldCaptureValues({
+      restored: seededRef.current,
+      typed: a.getCaptureValues(),
+      holdSec: a.prescribedSec,
+      side: currentSide,
+    })
+    seededRef.current = values
+    a.onSeed(values, now)
+    if (currentSide === 'left') {
+      const nextIdx = sideIdxRef.current + 1
+      const nextSide: HoldSide = sidesRef.current[nextIdx] ?? currentSide
+      sideIdxRef.current = nextIdx
+      setSideIdx(nextIdx)
+      elapsedRef.current = createHoldElapsed()
+      countdownRef.current.prime(a.prescribedSec)
+      a.onSideChange?.(nextSide, false)
+    }
+  }, [])
+
   const status: HoldModuleStatus = finished
     ? 'done'
     : suspended
@@ -370,5 +399,6 @@ export function useHoldModule(args: UseHoldModuleArgs): UseHoldModuleApi {
     resume: start,
     doneEarly,
     remeasure,
+    seedObjective,
   }
 }

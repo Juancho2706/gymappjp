@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, Text, useWindowDimensions, View } from 'react-native'
 import { MotiView } from 'moti'
 import Animated, {
@@ -14,6 +14,8 @@ import Animated, {
 import { Image } from 'expo-image'
 import { ArrowRightLeft, Check, Clock, Dumbbell, Pencil, Undo2 } from 'lucide-react-native'
 import {
+  isStrengthTimeBlock,
+  type HoldSource,
   effectiveExerciseType,
   firstIncompleteInRounds,
   formatTypedObjective,
@@ -42,6 +44,9 @@ import { bestPrevOf } from '../workout-ui'
 import { DualWheelPicker } from './DualWheelPicker'
 import { dismissWheelHint } from './wheel-hint'
 import { ExecMediaV3, execMediaKind } from './ExecMediaV3'
+import { HoldModuleV3 } from './HoldModuleV3'
+import { RestOfferV3 } from './RestOfferV3'
+import type { HoldModuleStatus } from './use-hold-module'
 import type { ExecTheme } from './exec-theme'
 import { activeRound, memberLetter, nextMemberIdInRound, roundDotStates, totalRounds } from './superset-screen-model'
 import type { PendingRoundRest } from './RestInterstitialV3'
@@ -165,7 +170,12 @@ export function SupersetScreenV3({
 
   // Aviso "¡Sigue sin detenerte!" (overlay efímero) + prefill "= última vez" del miembro activo. Ambos
   // son estado LOCAL de UI: no rozan el motor de guardado/cola.
-  const [cue, setCue] = useState<{ name: string; nonce: number } | null>(null)
+  const [cue, setCue] = useState<{ name: string; nonce: number; long?: boolean } | null>(null)
+  // Puente módulo de hold ↔ fila del miembro activo (W3.10/W3.13): siembra por nonce, estado del
+  // reloj (R26: corriendo ⇒ la fila se OCULTA con display none, nunca se desmonta) y lo tipeado hoy.
+  const [seedPatch, setSeedPatch] = useState<{ values: Record<string, string>; nonce: number } | null>(null)
+  const [holdStatus, setHoldStatus] = useState<HoldModuleStatus>('idle')
+  const captureRef = useRef<Record<string, string>>({})
   const [autofill, setAutofill] = useState<{ weight: number | null; reps: number | null; nonce: number } | null>(null)
   // Miembro YA HECHO cuya edición está abierta (QA2 #3): tap en su tarjeta colapsada abre el sheet oscuro
   // "Editar {nombre}" con las filas clásicas del motor (SetRow). Estado LOCAL de UI: no roza guardado/cola.
@@ -177,8 +187,9 @@ export function SupersetScreenV3({
 
   useEffect(() => {
     if (!cue) return
-    // 1650ms > timeline de la barra (~1,6s): ya salió de pantalla cuando se desmonta.
-    const t = setTimeout(() => setCue(null), 1650)
+    // 1650ms > timeline de la barra (~1,6s): ya salió de pantalla cuando se desmonta. R23: cuando el
+    // origen es el RELOJ el aviso sale sin gesto del alumno ⇒ se sostiene más (2400 ms).
+    const t = setTimeout(() => setCue(null), cue.long ? 2400 : 1650)
     return () => clearTimeout(t)
   }, [cue?.nonce])
 
@@ -251,7 +262,11 @@ export function SupersetScreenV3({
     setAutofill(null)
     // La rueda es del miembro activo: si cambia el miembro (o cierra la ronda), se cierra.
     setWheelOpen(false)
-  }, [activeBlockId])
+    // El puente del módulo de hold es por miembro activo Y por ronda (la ronda 2 arranca en 0).
+    setSeedPatch(null)
+    setHoldStatus('idle')
+    captureRef.current = {}
+  }, [activeBlockId, round])
 
   // Precarga de la media del SIGUIENTE miembro de la ronda: al pasar a él, el gif/imagen ya está en el
   // caché de disco y su card no aparece vacía. Sólo URLs de imagen (gif/imagen/miniatura de YouTube):
@@ -333,14 +348,15 @@ export function SupersetScreenV3({
   // LA serie de la ronda actual del miembro activo (QA3: editar una serie pasada — tarjeta hecha / keypad —
   // reusa el mismo motor y NO debe avisar). Si queda otro miembro en la MISMA ronda, muestra su nombre.
   // Payload intacto → motor sin tocar.
-  const handleCommit = (payload: OptimisticLogPayload) => {
+  const handleCommit = (payload: OptimisticLogPayload, source?: HoldSource) => {
     const esSerieActiva = payload.blockId === activeBlockId && payload.setNumber === round
     if (esSerieActiva && nextMemberId != null) {
       const nextVM = memberVMs.find((m) => m.block.id === nextMemberId)
-      if (nextVM) setCue({ name: nextVM.exercise.name, nonce: Date.now() })
+      if (nextVM) setCue({ name: nextVM.exercise.name, nonce: Date.now(), long: source === 'timer' })
     }
     onCommitSet(payload)
   }
+  const nextMemberName = nextMemberId ? memberVMs.find((m) => m.block.id === nextMemberId)?.exercise.name ?? null : null
 
   return (
     <MotiView layout={reducedMotion ? undefined : CARD_LAYOUT} style={{ gap: 12 }}>
@@ -460,7 +476,7 @@ export function SupersetScreenV3({
                   </View>
                 </View>
 
-                {/* Media grande + chips glass (compartida con el ejercicio solo). */}
+                {/* Media grande + chips glass (compartida con el ejercicio solo). El video NUNCA se colapsa (V1). */}
                 <ExecMediaV3
                   exercise={m.exercise}
                   coachNote={m.block.notes?.trim() ? m.block.notes.trim() : null}
@@ -468,6 +484,45 @@ export function SupersetScreenV3({
                   reducedMotion={reducedMotion}
                   onOpenTechnique={() => onOpenTechnique(m.exercise)}
                 />
+
+                {/* Módulo de hold compacto (80 px) DEBAJO del video (W3.10). Predicado único R29: movilidad
+                    con `duration_sec > 0` o fuerza por tiempo (`isStrengthTimeBlock`); sin reloj que
+                    montar, la fila manual de siempre queda tal cual. A 0 guarda solo (V2) y avanza al
+                    siguiente miembro de la ronda (V4); el último de la ronda espera el toque (D2). */}
+                {(() => {
+                  const holdKind =
+                    m.typedMode === 'mobility' && (m.block.duration_sec ?? 0) > 0
+                      ? ('mobility' as const)
+                      : m.typedMode == null && isStrengthTimeBlock(m.block, m.exercise)
+                        ? ('strength_time' as const)
+                        : null
+                  if (!holdKind) return null
+                  const calm = holdKind === 'mobility'
+                  return (
+                    <HoldModuleV3
+                      kind={holdKind}
+                      size="ss"
+                      blockId={m.block.id}
+                      setNumber={round}
+                      prescribedSec={m.block.duration_sec ?? 0}
+                      sideMode={m.block.side_mode ?? null}
+                      context="superset"
+                      closesRound={nextMemberId == null}
+                      resetKey={`${m.block.id}:${round}`}
+                      suspended={restingNow}
+                      exec={exec}
+                      accent={calm ? exec.recovery : exec.accent}
+                      accentText={calm ? '#08222b' : exec.accentText}
+                      reducedMotion={reducedMotion}
+                      nextLabel={nextMemberName}
+                      getCaptureValues={() => captureRef.current}
+                      onSeed={(values, nonce) => setSeedPatch({ values, nonce })}
+                      onCommit={(payload, source) => handleCommit(payload, source)}
+                      onStatusChange={setHoldStatus}
+                      testIDPrefix={`hold-ss-${m.block.id}`}
+                    />
+                  )
+                })()}
 
                 {/* Prescripción compacta. */}
                 <Text style={{ fontFamily: FONT.monoSemibold, fontSize: 13, letterSpacing: 0.1, color: hexToRgba(s.text, 0.82), textAlign: 'center', fontVariant: ['tabular-nums'] }}>
@@ -510,12 +565,17 @@ export function SupersetScreenV3({
                   </Pressable>
                 )}
 
-                {/* Captura HERO REUSADA del miembro activo (ActiveSetRow heroMode) — motor intocable. */}
+                {/* Captura HERO REUSADA del miembro activo (ActiveSetRow heroMode) — motor intocable.
+                    R8/R26: con el reloj CORRIENDO la fila se oculta (display: none), nunca se desmonta:
+                    en `paused` vuelve a verse editable y el estado de captura del alumno sobrevive. */}
+                <View style={{ display: holdStatus === 'running' ? 'none' : 'flex' }}>
                 <ActiveSetRow
                   key={`hero-${m.block.id}-${round}`}
                   blockId={m.block.id}
                   setNumber={round}
                   typedMode={m.typedMode}
+                  strengthTimeMode={m.typedMode == null && isStrengthTimeBlock(m.block, m.exercise)}
+                  typedSeedPatch={seedPatch}
                   // Ejes de cardio del miembro (Fase A `distanceUnit` + Fase C `cardioModality`): un
                   // bloque de cardio DENTRO de una superserie captura con las mismas cajas y las mismas
                   // conversiones que en su pantalla propia (km ×1000, saltos/pisos/reps en `reps_done`).
@@ -524,7 +584,7 @@ export function SupersetScreenV3({
                   isActive
                   heroMode
                   exec={exec}
-                  repsHint={repsHint}
+                  repsHint={m.typedMode == null && isStrengthTimeBlock(m.block, m.exercise) ? String(m.block.duration_sec ?? '') : repsHint}
                   suggestedWeight={m.suggested ?? null}
                   seedValues={seed}
                   autofill={autofill}
@@ -541,12 +601,16 @@ export function SupersetScreenV3({
                         ? { weightKg: m.bestPrev.weight_kg ?? null, reps: m.bestPrev.reps_done ?? null }
                         : null,
                   }}
-                  onDraftChange={(values, fieldIndex) => onDraftChange(m.block.id, round, values, fieldIndex)}
-                  onCommit={handleCommit}
+                  onDraftChange={(values, fieldIndex) => {
+                    captureRef.current = values
+                    onDraftChange(m.block.id, round, values, fieldIndex)
+                  }}
+                  onCommit={(payload) => handleCommit(payload)}
                   // Long-press en los tiles kg/reps ⇒ rueda (paridad ejercicio solo). Sin handler en los
-                  // miembros tipados: ahí el gesto queda inerte y el lector de pantalla no lo anuncia.
-                  onLongPressValue={wheelVM?.block.id === m.block.id ? openWheel : undefined}
+                  // miembros tipados ni en fuerza por tiempo: ahí el gesto queda inerte.
+                  onLongPressValue={wheelVM?.block.id === m.block.id && !isStrengthTimeBlock(m.block, m.exercise) ? openWheel : undefined}
                 />
+                </View>
 
                 {/* Banda marquee inferior: abraza el card por abajo con el mismo recorrido. */}
                 {!restingNow && <MarqueeBand accent={exec.accent} reducedMotion={reducedMotion} edge="bottom" />}
@@ -648,8 +712,22 @@ export function SupersetScreenV3({
         })}
       </View>
 
+      {/* D2 / R24: la ronda cerró (por reloj o a mano) con la preferencia «Pasar solo al descanso»
+          apagada ⇒ el descanso de grupo quedó ARMADO en el orquestador y el alumno lo arranca acá, con
+          el contexto completo de la ronda (banner + dots del interstitial, R28). */}
+      {pendingRoundRest && pendingRoundRest.groupId === members[0]?.id && onStartPendingRoundRest ? (
+        <RestOfferV3
+          kind="ronda"
+          seconds={pendingRoundRest.seconds}
+          exec={exec}
+          reducedMotion={reducedMotion}
+          onRest={onStartPendingRoundRest}
+          testIDPrefix="rest-offer-round"
+        />
+      ) : null}
+
       {/* Nota de descanso de grupo (sólo al cerrar la ronda). */}
-      {groupRestSec > 0 && active != null && (
+      {!pendingRoundRest && groupRestSec > 0 && active != null && (
         <View
           style={{
             flexDirection: 'row',

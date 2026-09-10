@@ -10,6 +10,7 @@ import {
   type TypedKeypadMode,
   // Mapeo PURO valores->payload (subido al engine en E0.3): compartido con el `KeypadHost`.
   buildStrengthPayload,
+  buildStrengthTimePayload,
   buildTypedPayload,
   int,
   // Copia compartida del rechazo permanente del editor de día pasado: si la serie no existe en esa
@@ -65,6 +66,9 @@ const BADGE_ACTIVE_STYLE: TextStyle = { ...textStyle('xs', FONT.displayBlack), f
 //     La cara JetBrainsMono_600SemiBold SÍ está cargada (`app/_layout.tsx:33,212`) y ya la usa `OBJECTIVE_STYLE`
 //     (`TypedKeypad.tsx:102`); el peso 500 previo caía uno por debajo del `font-semibold` del web.
 //   • Línea tipada (cardio/movilidad/roller) — chip propio de RN; conserva la familia mono previa a 13px.
+/** Serie vacía en fuerza POR TIEMPO: pide segundos, no reps (specs/cuenta-atras-en-pantalla, W3.15). */
+const STRENGTH_TIME_EMPTY_HINT = 'Inicia la serie para que el reloj anote los segundos, o escríbelos tú.'
+
 const CHIP_MARK_STYLE: TextStyle = { ...textStyle('xs', FONT.monoBold), fontVariant: ['tabular-nums'] }
 const CHIP_EFFORT_STYLE: TextStyle = textStyle('3xs', FONT.monoSemibold)
 const CHIP_TYPED_STYLE: TextStyle = { ...textStyle('xs', FONT.mono), fontVariant: ['tabular-nums'] }
@@ -684,6 +688,7 @@ export function ActiveSetRow({
   setNumber,
   typedMode,
   sideMode = null,
+  strengthTimeMode = false,
   distanceUnit = null,
   cardioModality = null,
   suggestedWeight,
@@ -717,6 +722,15 @@ export function ActiveSetRow({
    * previo (un solo campo). El engine ya soporta ambos ejes; acá solo se CONSUME.
    */
   sideMode?: string | null
+  /**
+   * Fuerza POR TIEMPO (specs/cuenta-atras-en-pantalla, D3/R2): la fila captura un peso y los SEGUNDOS
+   * sostenidos (`actual_hold_sec`; en `per_side` `hold_left_sec`/`hold_right_sec`, mismas keys que
+   * movilidad) y arma el payload con `buildStrengthTimePayload` (`reps_done` null, marca `'manual'`).
+   * `typedMode` sigue null: la fuerza nunca cruza al carril tipado (borraría el disco y el RIR). El
+   * reloj (`HoldModuleV3`) entra por `typedSeedPatch` con nonce, igual que cardio. ADITIVO: sin la prop
+   * la fila es byte-idéntica.
+   */
+  strengthTimeMode?: boolean
   /**
    * Unidad de distancia PRESCRITA del bloque (`workout_blocks.distance_unit`, 'm' | 'km'). Con 'km' la
    * caja de cardio se rotula "Km" y `buildTypedPayload` guarda ×1000 en `actual_distance_m` (G3: el
@@ -835,6 +849,22 @@ export function ActiveSetRow({
         mode: f.allowDecimal ? ('decimal' as const) : ('integer' as const),
       }))
     }
+    // Fuerza POR TIEMPO (D3/R2, R34): un peso y los segundos sostenidos, con las MISMAS keys que
+    // movilidad (`STRENGTH_TIME_KEYPAD_STEPS` del motor) para que el motor las lea con una sola rama;
+    // `per_side` ⇒ Izq/Der en segundos; `alternating` y bilateral ⇒ una caja (`holdSidesFor`).
+    if (strengthTimeMode) {
+      if (sideMode === 'per_side') {
+        return [
+          { key: 'weight', label: 'Kg', unit: 'kg', mode: 'weight' },
+          { key: 'hold_left_sec', label: 'Izq', unit: 'seg', mode: 'integer' },
+          { key: 'hold_right_sec', label: 'Der', unit: 'seg', mode: 'integer' },
+        ]
+      }
+      return [
+        { key: 'weight', label: 'Kg', unit: 'kg', mode: 'weight' },
+        { key: 'actual_hold_sec', label: 'Seg', unit: 'seg', mode: 'integer' },
+      ]
+    }
     // Fuerza POR LADO (R3/R4, W0.5): `per_side` y `alternating` capturan igual — un peso y DOS reps
     // (Izq → Der), mismas keys que lee `buildStrengthPayload` con `sideMode`. La fuerza nunca entra al
     // carril tipado (R18): los pasos salen de esta rama, no de `typedKeypadFields`.
@@ -849,8 +879,8 @@ export function ActiveSetRow({
       { key: 'weight', label: 'Kg', unit: 'kg', mode: 'weight' },
       { key: 'reps', label: 'Reps', unit: 'reps', mode: 'reps' },
     ]
-  }, [typedMode, sideMode, distanceUnit, cardioModality])
-  const perSideReps = !typedMode && (sideMode === 'per_side' || sideMode === 'alternating')
+  }, [typedMode, sideMode, distanceUnit, cardioModality, strengthTimeMode])
+  const perSideReps = !typedMode && !strengthTimeMode && (sideMode === 'per_side' || sideMode === 'alternating')
 
   const motion = useEvaMotion()
 
@@ -910,10 +940,15 @@ export function ActiveSetRow({
   // una fila con todos los ejes en NULL se cuenta hoy como serie hecha, así que el confirm se deshabilita
   // en vez de escribirla. La validación es de UI; el payload conserva su forma.
   const isEmptyCapture = useMemo(
-    () => fields.every((f) => (values[f.key] ?? '').trim() === ''),
-    [fields, values],
+    () =>
+      strengthTimeMode
+        // Fuerza POR TIEMPO: el peso sugerido ya viene puesto, así que lo que cuenta son los SEGUNDOS —
+        // «Aplastar serie» queda inerte hasta que el reloj los anote o el alumno los escriba (R8).
+        ? fields.filter((f) => f.key !== 'weight').every((f) => (values[f.key] ?? '').trim() === '')
+        : fields.every((f) => (values[f.key] ?? '').trim() === ''),
+    [fields, values, strengthTimeMode],
   )
-  const emptyHint = EMPTY_CAPTURE_HINT[typedMode ?? 'strength']
+  const emptyHint = strengthTimeMode ? STRENGTH_TIME_EMPTY_HINT : EMPTY_CAPTURE_HINT[typedMode ?? 'strength']
 
   const idxOf = (key: string) => Math.max(0, fields.findIndex((f) => f.key === key))
   const openField = (key: string) => {
@@ -937,9 +972,14 @@ export function ActiveSetRow({
           cardioModality,
           ...(hrMetadata ? { hrMetadata } : {}),
         })
-      // `sideMode` (R3): con `per_side`/`alternating` el motor escribe `reps_done = min(izq, der)` y el
-      // desglose en `metadata`; sin lado el payload es byte-idéntico al de siempre.
-      : buildStrengthPayload(valuesRef.current, blockId, setNumber, sideMode ?? null)
+      // Fuerza POR TIEMPO (D3/R2): `reps_done` null, `actual_hold_sec` (suma L+R en per_side) y la
+      // marca `'manual'` — lo tipeado en la fila lo escribió el alumno; el reloj entra por
+      // `typedSeedPatch` y el módulo de hold manda su propio commit con `'timer'`.
+      : strengthTimeMode
+        ? buildStrengthTimePayload(valuesRef.current, blockId, setNumber, { sideMode: sideMode ?? null, holdSource: 'manual' })
+        // `sideMode` (R3): con `per_side`/`alternating` el motor escribe `reps_done = min(izq, der)` y el
+        // desglose en `metadata`; sin lado el payload es byte-idéntico al de siempre.
+        : buildStrengthPayload(valuesRef.current, blockId, setNumber, sideMode ?? null)
     onCommit(payload)
   }
 
@@ -1057,6 +1097,44 @@ export function ActiveSetRow({
             onLongPress={onLongPressValue ? () => onLongPressValue('weight') : undefined}
             testID={`set-tile-${setNumber}-weight`}
           />
+          {strengthTimeMode ? (
+            // Fuerza POR TIEMPO: el tile REPS conmuta a SEG (W3.15); `repsHint` trae los segundos prescritos.
+            sideMode === 'per_side' ? (
+              <>
+                <ValueTile
+                  label="Izq"
+                  unit="SEG"
+                  value={values.hold_left_sec ?? ''}
+                  hint={values.hold_left_sec ? undefined : repsHint ?? undefined}
+                  editing={openKey === 'hold_left_sec'}
+                  exec={exec}
+                  onPress={() => openField('hold_left_sec')}
+                  testID={`set-tile-${setNumber}-hold_left_sec`}
+                />
+                <ValueTile
+                  label="Der"
+                  unit="SEG"
+                  value={values.hold_right_sec ?? ''}
+                  hint={values.hold_right_sec ? undefined : repsHint ?? undefined}
+                  editing={openKey === 'hold_right_sec'}
+                  exec={exec}
+                  onPress={() => openField('hold_right_sec')}
+                  testID={`set-tile-${setNumber}-hold_right_sec`}
+                />
+              </>
+            ) : (
+              <ValueTile
+                label="Seg"
+                unit="SEG"
+                value={values.actual_hold_sec ?? ''}
+                hint={values.actual_hold_sec ? undefined : repsHint ?? undefined}
+                editing={openKey === 'actual_hold_sec'}
+                exec={exec}
+                onPress={() => openField('actual_hold_sec')}
+                testID={`set-tile-${setNumber}-actual_hold_sec`}
+              />
+            )
+          ) : (
           <ValueTile
             label="Reps"
             unit="REPS"
@@ -1068,6 +1146,7 @@ export function ActiveSetRow({
             onLongPress={onLongPressValue ? () => onLongPressValue('reps') : undefined}
             testID={`set-tile-${setNumber}-reps`}
           />
+          )}
         </View>
 
         {/* Esfuerzo compacto (pills RPE/RIR + escala de ticks) — OPCIONAL, gateado por la tuerca */}
@@ -1186,7 +1265,7 @@ export function ActiveSetRow({
             </Text>
           </View>
         </View>
-        {typedMode ? (
+        {typedMode || strengthTimeMode ? (
           fields.map((f) => (
             <FieldBox
               key={f.key}

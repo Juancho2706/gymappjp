@@ -1,9 +1,11 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { MotiView } from 'moti'
 import { LinearTransition } from 'react-native-reanimated'
 import { ArrowUp, Hand, Keyboard, Pencil, TrendingUp, X } from 'lucide-react-native'
 import {
+  compactDuration,
+  isStrengthTimeBlock,
   formatWeightEsCl,
   sessionLogKey,
   type OptimisticLogPayload,
@@ -23,6 +25,9 @@ import { bestPrevOf, overloadChipLabel } from '../workout-ui'
 import { DualWheelPicker } from './DualWheelPicker'
 import { dismissWheelHint, useWheelHintDismissed } from './wheel-hint'
 import { ExecMediaV3 } from './ExecMediaV3'
+import { HoldModuleV3 } from './HoldModuleV3'
+import { RestOfferV3 } from './RestOfferV3'
+import { parseRestTime, useWorkoutTimers } from '../timers'
 import { EXEC_SKIP_AMBER, ExerciseActionChips } from './exercise-actions'
 import type { ExecTheme } from './exec-theme'
 
@@ -77,6 +82,7 @@ export function ExerciseScreenV3({
   reducedMotion = false,
   exec,
   showEffort = true,
+  autoRestEnabled = true,
   substitution,
   canSubstitute,
   skipped = false,
@@ -112,6 +118,11 @@ export function ExerciseScreenV3({
   exec: ExecTheme
   /** Mostrar las pills/escala de esfuerzo RPE/RIR (E3.7 — la tuerca). Default true. */
   showEffort?: boolean
+  /**
+   * Preferencia «Pasar solo al descanso» (D5). ON ⇒ el orquestador arranca el descanso al guardar;
+   * OFF ⇒ tras guardar se ofrece «Descansar N s» / «Siguiente serie» (R24).
+   */
+  autoRestEnabled?: boolean
   substitution: { name: string; prescribedName: string } | null
   canSubstitute: boolean
   /** El alumno declaró OMITIDO este bloque (mockup 3): la captura se retira y queda el badge. */
@@ -192,11 +203,47 @@ export function ExerciseScreenV3({
 
   const coachNote = block.notes?.trim() ? block.notes.trim() : null
 
+  // ── Fuerza POR TIEMPO (specs/cuenta-atras-en-pantalla, D3 / W3.15) ────────────────────────────
+  // Predicado único del motor (R29): `reps_unit === 'sec'` Y `duration_sec > 0`. Con él el hero
+  // conmuta el tile REPS a SEG, el anillo (130 px) se monta bajo el video y a 0 la serie se guarda
+  // sola con el KG del tile (V2). Descansar o seguir lo toca el alumno (V3 / R24) salvo que la
+  // preferencia «Pasar solo al descanso» esté encendida.
+  const strengthTime = isStrengthTimeBlock(block, exercise)
+  const holdSec = strengthTime ? (block.duration_sec ?? 0) : 0
+  const restSec = parseRestTime(block.rest_time)
+  const timers = useWorkoutTimers()
+  const [seedPatch, setSeedPatch] = useState<{ values: Record<string, string>; nonce: number } | null>(null)
+  const [restOffer, setRestOffer] = useState<{ setNumber: number; seconds: number } | null>(null)
+  // Lo tipeado AHORA en el hero (base de la mezcla del auto-envío): arranca con el peso sugerido, que
+  // es lo que la fila muestra antes de que el alumno toque nada.
+  const captureRef = useRef<Record<string, string>>({})
+  useEffect(() => {
+    captureRef.current = suggestedWeightKg != null ? { weight: formatWeightEsCl(suggestedWeightKg) } : {}
+    setSeedPatch(null)
+  }, [activeSet, suggestedWeightKg])
+  const commitSet = (payload: OptimisticLogPayload) => {
+    onCommitSet(payload)
+    if (!autoRestEnabled) setRestOffer({ setNumber: payload.setNumber, seconds: restSec })
+  }
+  const startOfferedRest = () => {
+    if (!restOffer) return
+    timers.startRest(restOffer.seconds, {
+      autoStart: true,
+      label: exercise.name,
+      setIndex: restOffer.setNumber,
+      setTotal: block.sets,
+      countKind: 'serie',
+    })
+    setRestOffer(null)
+  }
+
   // Reps objetivo (prescripción) → placeholder tenue del tile REPS del hero cuando aún no se capturó.
+  // En modo tiempo el tile es SEG y el placeholder son los segundos prescritos.
   const repsHint = useMemo(() => {
+    if (strengthTime) return holdSec > 0 ? String(holdSec) : null
     const n = parseInt(String(block.reps), 10)
     return Number.isFinite(n) ? String(n) : null
-  }, [block.reps])
+  }, [block.reps, strengthTime, holdSec])
 
   // Pie del hero (mockup `.a3a-foot`): botón teclado (nonce → abre el teclado en el tile activo) y botón
   // lápiz (abre el sheet oscuro con las filas clásicas del motor para corregir series ya guardadas).
@@ -226,6 +273,7 @@ export function ExerciseScreenV3({
         typedMode={null}
         // Fuerza POR LADO (W3.9): `per_side`/`alternating` ⇒ cajas «Izq»/«Der» + un peso.
         sideMode={block.side_mode}
+        strengthTimeMode={strengthTime}
         isActive
         heroMode
         exec={exec}
@@ -233,15 +281,20 @@ export function ExerciseScreenV3({
         openKeypadNonce={kbNonce}
         suggestedWeight={suggestedWeightKg ?? null}
         seedValues={seed}
+        typedSeedPatch={seedPatch}
         autofill={autofill}
         header={{
           exerciseName: exercise.name,
-          objectiveLine: `${block.sets}×${block.reps}${suggestedWeightKg != null ? ` · ${formatWeightEsCl(suggestedWeightKg)} kg` : ''}`,
+          objectiveLine: `${block.sets}×${strengthTime ? compactDuration(holdSec) : block.reps}${suggestedWeightKg != null ? ` · ${formatWeightEsCl(suggestedWeightKg)} kg` : ''}`,
           last: bestPrev ? { weightKg: bestPrev.weight_kg ?? null, reps: bestPrev.reps_done ?? null } : null,
         }}
-        onDraftChange={(values, fieldIndex) => onDraftChange(block.id, setNumber, values, fieldIndex)}
-        onCommit={onCommitSet}
-        onLongPressValue={openWheel}
+        onDraftChange={(values, fieldIndex) => {
+          captureRef.current = values
+          onDraftChange(block.id, setNumber, values, fieldIndex)
+        }}
+        onCommit={commitSet}
+        // La rueda kg | reps no aplica al eje tiempo (los segundos los pone el reloj o el keypad).
+        onLongPressValue={strengthTime ? undefined : openWheel}
         allowZeroRir
         showEffort={showEffort}
         effortExpanded={effortExpanded}
@@ -334,10 +387,34 @@ export function ExerciseScreenV3({
         onOpenTechnique={onOpenTechnique}
       />
 
+      {/* Fuerza POR TIEMPO: anillo 130 px DEBAJO del video (V1), en color de marca. A 0 guarda con el
+          KG del tile (V2). El predicado R29 lo da `isStrengthTimeBlock`; sin él no se monta nada. */}
+      {strengthTime && activeSet != null && holdSec > 0 && (
+        <HoldModuleV3
+          kind="strength_time"
+          size="solo130"
+          blockId={block.id}
+          setNumber={activeSet}
+          prescribedSec={holdSec}
+          sideMode={block.side_mode ?? null}
+          context="solo"
+          closesRound={false}
+          resetKey={`${block.id}:${activeSet}:1`}
+          exec={exec}
+          accent={exec.accent}
+          accentText={exec.accentText}
+          reducedMotion={reducedMotion}
+          getCaptureValues={() => captureRef.current}
+          onSeed={(values, nonce) => setSeedPatch({ values, nonce })}
+          onCommit={(payload) => commitSet(payload)}
+          testIDPrefix="hold-strength"
+        />
+      )}
+
       {/* Prescripción compacta + chip de sobrecarga */}
       <View style={{ gap: 8 }}>
         <Text style={{ fontFamily: FONT.monoSemibold, fontSize: 13, letterSpacing: 0.1, color: hexToRgba(s.text, 0.82), textAlign: 'center', fontVariant: ['tabular-nums'] }}>
-          {block.sets} × {block.reps}
+          {block.sets} × {strengthTime ? compactDuration(holdSec) : block.reps}
           {rxWeight != null && (
             <>
               {' · '}
@@ -442,6 +519,20 @@ export function ExerciseScreenV3({
 
       {/* HERO de la serie activa (tiles + esfuerzo + CTA "Aplastar serie"). Una serie a la vez (mockup). */}
       {activeHero}
+
+      {/* R24: con la preferencia «Pasar solo al descanso» APAGADA, tras cerrar cualquier serie (tocada o
+          por reloj) el alumno elige «Descansar N s» o «Siguiente serie». Con la preferencia ON el
+          orquestador ya arrancó el descanso y este par no se pinta. */}
+      {restOffer && !autoRestEnabled ? (
+        <RestOfferV3
+          seconds={restOffer.seconds}
+          exec={exec}
+          reducedMotion={reducedMotion}
+          onRest={startOfferedRest}
+          onNext={() => setRestOffer(null)}
+          testIDPrefix="rest-offer-strength"
+        />
+      ) : null}
 
       {/* Pie (mockup `.a3a-foot`): cuadraditos de progreso + "N de M series" · herramientas teclado/lápiz. */}
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>

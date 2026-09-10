@@ -584,3 +584,35 @@ describe('useHoldModule · aviso del SO (W3.6)', () => {
     expect(notif.cancel).toHaveBeenCalled()
   })
 })
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+// CA-90 · «Listo» desde idle siembra el OBJETIVO y no envía (la fila lo confirma, como hoy)
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+
+describe('useHoldModule · CA-90 — seedObjective desde idle', () => {
+  it('bilateral: siembra los segundos del objetivo, NO envía y sigue idle', () => {
+    const { result, h } = mountHold({ prescribedSec: 30 })
+    act(() => result.current.seedObjective())
+    expect(h.onCommit).not.toHaveBeenCalled()
+    expect(h.onSeed.mock.calls.at(-1)?.[0]).toEqual({ actual_hold_sec: '30' })
+    expect(result.current.status).toBe('idle')
+  })
+
+  it('per_side: el izquierdo siembra y deja el derecho ARMADO sin arrancar', () => {
+    const { result, h } = mountHold({ prescribedSec: 30, sideMode: 'per_side' })
+    act(() => result.current.seedObjective())
+    expect(h.onSeed.mock.calls.at(-1)?.[0]).toEqual({ hold_left_sec: '30' })
+    expect(result.current.side).toBe('right')
+    expect(result.current.running).toBe(false)
+    expect(h.onSideChange).toHaveBeenCalledWith('right', false)
+    expect(h.onCommit).not.toHaveBeenCalled()
+  })
+
+  it('corriendo es un no-op (la caja la rellena el reloj, no el objetivo)', () => {
+    const { result, h } = mountHold({ prescribedSec: 30 })
+    act(() => result.current.start())
+    h.onSeed.mockClear()
+    act(() => result.current.seedObjective())
+    expect(h.onSeed).not.toHaveBeenCalled()
+  })
+})
