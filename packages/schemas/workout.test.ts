@@ -273,6 +273,99 @@ describe('WorkoutBlockSchema — prescripción polimórfica', () => {
     })
 })
 
+// ─── Fuerza por tiempo (specs/cuenta-atras-en-pantalla, W0.3 + W0.5) ─────────
+// `reps_unit = 'sec'` es la marca del modo Segundos DENTRO de Fuerza (D3, sin quinto tipo). El enum
+// de Zod tiene que ser superset EXACTO del CHECK `workout_blocks_poly_check` ampliado por la
+// migración `workout_blocks_reps_unit_sec`: si Zod no lo acepta, el bloque nunca llega a la DB; si
+// lo acepta y la migración no está, el guardado rebota con 23514 y se pierde el PLAN entero.
+
+describe('WorkoutBlockSchema — reps_unit «sec» (fuerza por tiempo)', () => {
+    const strengthTime = { ...baseBlock, reps: '30s', reps_unit: 'sec' as const, duration_sec: 30 }
+
+    it('acepta reps_unit «sec» con duración válida y hace round-trip', () => {
+        const result = WorkoutBlockSchema.safeParse(strengthTime)
+        expect(result.success).toBe(true)
+        if (result.success) {
+            expect(result.data.reps_unit).toBe('sec')
+            expect(result.data.duration_sec).toBe(30)
+        }
+    })
+
+    it('sigue rechazando una unidad inventada («minutos»)', () => {
+        expect(WorkoutBlockSchema.safeParse({ ...baseBlock, reps_unit: 'minutos' }).success).toBe(false)
+    })
+
+    it('mantiene vivas las unidades previas (reps, passes, breaths, jumps, floors)', () => {
+        for (const unit of ['reps', 'passes', 'breaths', 'jumps', 'floors']) {
+            expect(WorkoutBlockSchema.safeParse({ ...baseBlock, reps_unit: unit, reps_value: 10 }).success).toBe(true)
+        }
+    })
+
+    // R11: piso 5 s (menos no es un hold), techo 600 s (más es cardio disfrazado).
+    it.each([3, 4, 601, 900])('rechaza %i segundos con path duration_sec', seconds => {
+        const result = WorkoutBlockSchema.safeParse({ ...strengthTime, duration_sec: seconds })
+        expect(result.success).toBe(false)
+        if (!result.success) {
+            expect(result.error.issues).toContainEqual(expect.objectContaining({
+                path: ['duration_sec'],
+                message: 'Los segundos por serie deben estar entre 5 y 600',
+            }))
+        }
+    })
+
+    it.each([5, 30, 600])('acepta %i segundos (bordes del rango incluidos)', seconds => {
+        expect(WorkoutBlockSchema.safeParse({ ...strengthTime, duration_sec: seconds }).success).toBe(true)
+    })
+
+    it('rechaza «sec» sin duración (ni null ni ausente): no hay cuenta atrás que mostrar', () => {
+        for (const duration of [null, undefined]) {
+            const result = WorkoutBlockSchema.safeParse({ ...strengthTime, duration_sec: duration })
+            expect(result.success).toBe(false)
+            if (!result.success) {
+                expect(result.error.issues).toContainEqual(expect.objectContaining({
+                    path: ['duration_sec'],
+                    message: 'Un bloque de fuerza por tiempo necesita segundos por serie',
+                }))
+            }
+        }
+    })
+
+    it('la rama nueva NO toca cardio ni fuerza clásica (validan byte-idéntico)', () => {
+        // Cardio: duración de 20 min, muy por encima del techo de 600 s del modo tiempo.
+        const cardio = {
+            ...baseBlock,
+            reps: '20min',
+            exercise_type_override: 'cardio' as const,
+            duration_sec: 1200,
+        }
+        const clasico = { ...baseBlock, target_weight_kg: 60, rir: '2', tempo: '3010' }
+
+        const cardioResult = WorkoutBlockSchema.safeParse(cardio)
+        const clasicoResult = WorkoutBlockSchema.safeParse(clasico)
+
+        expect(cardioResult.success).toBe(true)
+        expect(clasicoResult.success).toBe(true)
+        if (cardioResult.success) {
+            expect(cardioResult.data).toEqual(cardio)
+            expect(cardioResult.data.reps_unit).toBeUndefined()
+        }
+        if (clasicoResult.success) {
+            expect(clasicoResult.data).toEqual(clasico)
+            expect(clasicoResult.data.duration_sec).toBeUndefined()
+        }
+    })
+
+    it('un bloque en modo tiempo sobrevive dentro de un programa completo', () => {
+        const result = WorkoutProgramSchema.safeParse(programPayload({
+            days: [{ day_of_week: 1, week_variant: 'A' as const, blocks: [strengthTime] }],
+        }))
+        expect(result.success).toBe(true)
+        if (result.success) {
+            expect(result.data.days[0]?.blocks[0]?.reps_unit).toBe('sec')
+        }
+    })
+})
+
 describe('isCardioBlockComplete (fuente de verdad compartida)', () => {
     it('es true con duración, distancia o intervalos', () => {
         expect(isCardioBlockComplete({ duration_sec: 1200 })).toBe(true)
@@ -534,6 +627,71 @@ describe('WorkoutLogSetSchema — espejo polimórfico (AC4)', () => {
     it('rechaza skipped no booleano y skip_reason demasiado largo', () => {
         expect(WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { skipped: 'si' } }).success).toBe(false)
         expect(WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { skip_reason: 'x'.repeat(41) } }).success).toBe(false)
+    })
+
+    // ── FUENTE DEL HOLD (tren «cuenta atrás en pantalla», A3 · CA-28) — metadata {hold_source} ──
+    // MISMO pin de regresión que skipped/skip_reason: Zod v4 estripa lo no declarado, así que sin la
+    // clave en el schema el camino web guarda el jsonb SIN la marca y la métrica de adopción queda
+    // ciega (SPEC §8.2). Viaja en el MISMO objeto que los lados porque el UPDATE web reemplaza el
+    // jsonb entero (`workout-log.actions.ts`).
+    it('NO estripa hold_source: las TRES claves sobreviven junto a los lados', () => {
+        const result = WorkoutLogSetSchema.safeParse({
+            ...baseLog,
+            actual_hold_sec: '60',
+            metadata: { left_sec: 30, right_sec: 30, hold_source: 'timer' },
+        })
+        expect(result.success).toBe(true)
+        if (result.success) {
+            expect(result.data.metadata).toEqual({ left_sec: 30, right_sec: 30, hold_source: 'timer' })
+            expect(Object.keys(result.data.metadata ?? {})).toHaveLength(3)
+        }
+    })
+
+    it('acepta hold_source «manual» solo (hold bilateral de movilidad o roller)', () => {
+        const result = WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { hold_source: 'manual' } })
+        expect(result.success).toBe(true)
+        if (result.success) expect(result.data.metadata).toEqual({ hold_source: 'manual' })
+    })
+
+    it('rechaza un hold_source fuera del enum («otro»)', () => {
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { hold_source: 'otro' } }).success).toBe(false)
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { hold_source: 'auto' } }).success).toBe(false)
+    })
+
+    it('acepta hold_source null (vaciado) y ausente (log anterior al tren, NUNCA «manual»)', () => {
+        const vaciado = WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { left_sec: 30, hold_source: null } })
+        expect(vaciado.success).toBe(true)
+        if (vaciado.success) expect(vaciado.data.metadata).toEqual({ left_sec: 30, hold_source: null })
+
+        const anterior = WorkoutLogSetSchema.safeParse({ ...baseLog, metadata: { left_sec: 30, right_sec: 25 } })
+        expect(anterior.success).toBe(true)
+        if (anterior.success) expect(anterior.data.metadata?.hold_source).toBeUndefined()
+    })
+
+    it('sigue estripando una clave desconocida y conserva hold_source', () => {
+        const result = WorkoutLogSetSchema.safeParse({
+            ...baseLog,
+            metadata: { hold_source: 'timer', hold_engine: 'v9', foo: 'x' },
+        })
+        expect(result.success).toBe(true)
+        if (result.success) expect(result.data.metadata).toEqual({ hold_source: 'timer' })
+    })
+
+    it('convive con la omisión y con las reps por lado en el mismo jsonb', () => {
+        const result = WorkoutLogSetSchema.safeParse({
+            ...baseLog,
+            metadata: { left_sec: 30, right_sec: 30, hold_source: 'manual', skipped: false, left_reps: 10 },
+        })
+        expect(result.success).toBe(true)
+        if (result.success) {
+            expect(result.data.metadata).toEqual({
+                left_sec: 30,
+                right_sec: 30,
+                hold_source: 'manual',
+                skipped: false,
+                left_reps: 10,
+            })
+        }
     })
 })
 

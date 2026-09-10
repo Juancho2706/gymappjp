@@ -110,7 +110,7 @@ Orden duro: W0 → W1 → (W2 ‖ W3 ‖ W4) → M → W5 → W6. Un solo orden 
 
 ## W0 · DB y schemas — 1 día-agente · **Opus**
 
-- [ ] W0.1 **(Opus)** `supabase/migrations/<ts>_workout_blocks_reps_unit_sec.sql` (nuevo):
+- [x] W0.1 **(jefe, 10-09)** `supabase/migrations/20260910205046_workout_blocks_reps_unit_sec.sql` — dry-run con prueba positiva y negativa OK (DATA-TESTING §0.5). Original:
       `DROP CONSTRAINT IF EXISTS workout_blocks_poly_check` + `ADD CONSTRAINT` con la **definición
       vigente copiada literal desde LIVE** (`SELECT pg_get_constraintdef(oid) FROM pg_constraint WHERE
       conname = 'workout_blocks_poly_check'`), única diferencia
@@ -126,7 +126,7 @@ Orden duro: W0 → W1 → (W2 ‖ W3 ‖ W4) → M → W5 → W6. Un solo orden 
       jamás sobre datos de Movens ni de un alumno real), se prueba el `UPDATE … SET reps_unit='sec'`
       y se hace `ROLLBACK` ⇒ en LIVE persiste **solo** la migración, la prueba positiva **no deja
       filas**; el `ROLLBACK` queda registrado con su salida real en `DATA-TESTING.md`.
-- [ ] W0.2 **(Opus)** `supabase/migrations/<ts>_get_client_exercise_prs_reps_filter.sql` (nuevo):
+- [x] W0.2 **(jefe, 10-09)** `supabase/migrations/20260910205101_get_client_exercise_prs_reps_filter.sql` — ACL idéntica, `EXPLAIN` sin plan peor (DATA-TESTING §0.5). Original:
       `CREATE OR REPLACE FUNCTION public.get_client_exercise_prs(...)` sobre el linaje vigente, con
       `AND wl.reps_done IS NOT NULL AND wl.reps_done > 0` en el `WHERE`. Hoy filtra **solo** por
       `weight_kg > 0` ⇒ un hold con disco entraría como récord «20 kg × 0 reps»
@@ -134,26 +134,26 @@ Orden duro: W0 → W1 → (W2 ‖ W3 ‖ W4) → M → W5 → W6. Un solo orden 
       linaje reponidos). **Aceptación**: `has_function_privilege` confirma la ACL idéntica a la previa;
       un log con `weight_kg = 10, reps_done = NULL` deja de aparecer; `EXPLAIN` antes/después sin plan
       peor.
-- [ ] W0.3 **(Opus)** `packages/schemas/workout.ts:64`: `REPS_UNIT_VALUES` += `'sec'` y actualizar el
+- [x] W0.3 **(worker Opus, 10-09: `'sec'` + doc; test acepta `'sec'`/rechaza `'minutos'`)**  `packages/schemas/workout.ts:64`: `REPS_UNIT_VALUES` += `'sec'` y actualizar el
       doc `:58-63`, que declara ser «superset EXACTO del CHECK» y debe seguir siéndolo (nombrar la
       migración de W0.1). **Aceptación**: caso en `packages/schemas/workout.test.ts` que acepta
       `reps_unit: 'sec'` y sigue rechazando `'minutos'`.
-- [ ] W0.4 **(Opus)** `packages/schemas/workout.ts:301-320`: `WorkoutLogSetSchema.metadata` +=
+- [x] W0.4 **(worker Opus, 10-09: `hold_source` enum cerrado, 6 casos)**  `packages/schemas/workout.ts:301-320`: `WorkoutLogSetSchema.metadata` +=
       `hold_source: z.enum(['timer','manual']).nullable().optional()`. **Sin esto Zod v4 estripa la
       clave y `hold_source` nunca llega a la DB por el camino web** — el propio archivo lo documenta
       en `:293-297` (por eso hubo que declarar `skipped`/`skip_reason`). **Aceptación**: test que
       parsea `{left_sec:30, right_sec:30, hold_source:'timer'}` y verifica que **las tres** claves
       sobreviven; `hold_source:'otro'` se rechaza; un `metadata` con una clave desconocida se sigue
       estripando.
-- [ ] W0.5 **(Opus)** `packages/schemas/workout.ts:163-190`: `superRefine` nuevo — con
+- [x] W0.5 **(worker Opus, 10-09: rama independiente + `STRENGTH_TIME_MIN_SEC`/`MAX_SEC` exportadas)**  `packages/schemas/workout.ts:163-190`: `superRefine` nuevo — con
       `reps_unit === 'sec'`, `duration_sec` debe existir y estar entre **5 y 600** (R11). No toca la
       rama de cardio. **Aceptación**: `{reps_unit:'sec', duration_sec:3}` y `{…, duration_sec:900}`
       fallan con `path: ['duration_sec']`; `{…, duration_sec:30}` pasa; un bloque de cardio valida
       byte-idéntico.
-- [ ] W0.6 **(Opus)** `packages/plan-builder/types.ts:22` (`RepsUnit`) y su espejo
+- [x] W0.6 **(worker Opus, 10-09: los dos enums juntos; el espejo web además recupera `'jumps'`/`'floors'` que le faltaban)**  `packages/plan-builder/types.ts:22` (`RepsUnit`) y su espejo
       `apps/web/src/domain/workout/types.ts:34`: += `'sec'`. Los dos se mueven **juntos** o el builder
       web no compila. **Aceptación**: `pnpm typecheck` verde.
-- [ ] W0.7 **(Opus)** `packages/plan-builder/block-type-fields.ts` (tras `:114`): nuevo export
+- [x] W0.7 **(worker Opus, 10-09: `stripFieldsForStrengthMode` idempotente estricto, `progression_mode` `?? null`; 14 casos)**  `packages/plan-builder/block-type-fields.ts` (tras `:114`): nuevo export
       `stripFieldsForStrengthMode(block, mode: 'reps' | 'sec', durationSec?)`. `'sec'` ⇒
       `{duration_sec, reps_unit:'sec', progression_mode: block.progression_mode === 'double' ?
       'weekly_linear' : block.progression_mode}`; `'reps'` ⇒ `{duration_sec: null, reps_unit: null}`.
@@ -165,12 +165,12 @@ Orden duro: W0 → W1 → (W2 ‖ W3 ‖ W4) → M → W5 → W6. Un solo orden 
       `stripFieldsForType:112`). **Aceptación**: `packages/plan-builder/block-type-fields.test.ts` con
       round-trip reps→sec→reps que verifica `null` explícito (no `undefined`) y que
       `stripFieldsForType(strength→mobility)` sobre un bloque en modo tiempo **limpia `reps_unit`**.
-- [ ] W0.8 **(Opus)** Protocolo LIVE de las 2 migraciones (regla del owner: **tx-rollback primero**):
+- [x] W0.8 **(jefe, 10-09, salida real en DATA-TESTING §0.5)** Protocolo LIVE de las 2 migraciones (regla del owner: **tx-rollback primero**):
       transacción con el `DROP`+`ADD`, conteo de filas en violación, `INSERT` del bloque temporal del
       alumno E2E + `UPDATE … reps_unit='sec'` de prueba positiva, `EXPLAIN` de
       `get_client_exercise_prs`, `ROLLBACK`. **Aceptación**: la tabla del protocolo queda escrita en
       `DATA-TESTING.md` con la salida real y **sin filas nuevas** en LIVE.
-- [ ] W0.9 **(Opus)** **Aplicar M1 y M2 en LIVE, en W0** (**R35**), inmediatamente después del
+- [x] W0.9 **(jefe, 10-09: LIVE `20260910205046` + `20260910205101`, verificadas)** **Aplicar M1 y M2 en LIVE, en W0** (**R35**), inmediatamente después del
       tx-rollback de W0.8. **Decisión única**: si se aplicaran recién en W6, durante **W2/W3/W4**
       cualquier guardado real con
       `reps_unit = 'sec'` devolvería **23514** y —como el builder guarda **el programa completo**— se
@@ -184,7 +184,7 @@ Orden duro: W0 → W1 → (W2 ‖ W3 ‖ W4) → M → W5 → W6. Un solo orden 
       general a coaches** del cierre (W6.14), **sin mensajes individuales** (**R35**). El orden queda
       declarado igual en PLAN, TASKS y DATA-TESTING: **W0 migra → W6 deploya → W6 OTA**.
 
-**Gate de W0**: `pnpm exec vitest run packages/schemas packages/plan-builder` (⚠ **no existe**
+**Gate de W0** — corrido 10-09: `vitest` packages/schemas + packages/plan-builder **13 archivos / 298 tests verdes** (35 nuevos), `pnpm typecheck` 0, `tsc --noEmit` mobile 0, eslint 0 en los 4 archivos. Comando: `pnpm exec vitest run packages/schemas packages/plan-builder` (⚠ **no existe**
 `pnpm --filter @eva/schemas test`: esos paquetes no tienen script `test`; los tests de `packages/**`
 corren bajo el project `web-node`, `vitest.config.ts:55,86-90`).
 

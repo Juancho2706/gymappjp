@@ -105,6 +105,19 @@ sugerencia. Un `DROP CONSTRAINT` sin dry-run deja la tabla sin CHECK si el `ADD`
 bloques en modo tiempo en producción, revertir M1 **no** es la salida: la salida es revertir el código
 y dejar el CHECK ampliado (un `IN` más grande no molesta a nadie).
 
+### 0.5 Ejecución real de W0 en LIVE (2026-09-10, 20:47–20:51Z, sesión «Asistente Principal», por MCP)
+
+| Paso | Salida real |
+|---|---|
+| 0 · Snapshot previo | `reps_unit`: `NULL` 8 878 · `passes` 72 · `reps` 4 · `floors` 2 · `breaths` 2 · `jumps` 2 (0 `sec`). §2.1 (a): **617 filas, 25 alumnos**. §2.1 (b): **2 108 pares totales, 72 con PR falso, 17 alumnos** (el SDD decía 2 102 pares: 6 pares nuevos desde la lectura del plan). Constraint y función vigentes **byte-idénticos** a §1.1 y §2.2. |
+| 1 · Dry-run M1 (bloque `DO` que termina en `RAISE EXCEPTION` ⇒ rollback automático) | `W0 DRYRUN M1 OK \| tiene_sec=t \| filas_totales=8960 \| filas_en_violacion=0 \| plan_qa=dc7888a4-… (qa-cat-rojas@josefit-designqa.cl) \| bloque_temporal=7ab6a27f-… reps_unit=sec duration_sec=30 reps=30s \| negativa: OK 23514 en segundos \| ROLLBACK por excepcion`. ⚠ Desvío declarado: las personas `e2e-*@evatest.cl` **no existen en LIVE** (0 en `auth.users`; se siembran solo en CI y se limpian), así que la prueba positiva usó un plan del seed de QA de diseño de `josefit` (`@josefit-designqa.cl`, cuenta de prueba del owner) — dentro de la misma transacción revertida, cero filas persistidas. |
+| 2 · Dry-run M2 (mismo patrón, con `set_config('request.jwt.claims', …)` para que `auth.uid()` sea el alumno de QA) | `W0 DRYRUN M2 OK \| antes: filas=31 con_cero=0 \| despues: filas=31 con_cero=0 \| def_con_filtro=t \| acl_antes={postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres} acl_despues=(idéntica) \| ROLLBACK por excepcion`. `EXPLAIN (ANALYZE, BUFFERS)` de la consulta interna para ese alumno: mismo plan (Bitmap Index Scan `idx_wl_client_logged_notnull` + Nested Loop), **antes** 294 filas / 1 015 buffers / 1,76 ms, **después** 286 filas (`Rows Removed by Filter: 8`) / 991 buffers / 1,50 ms. Sin plan peor. |
+| 3 · Aplicar M1 | `apply_migration` ⇒ versión LIVE **`20260910205046`** `workout_blocks_reps_unit_sec`. Verificado: `pg_get_constraintdef` contiene `'sec'`, 0 filas con `sec`, 8 960 totales, comentario de columna presente. |
+| 4 · Aplicar M2 | `apply_migration` ⇒ versión LIVE **`20260910205101`** `get_client_exercise_prs_reps_filter`. Verificado: `pg_get_functiondef` contiene `AND wl.reps_done IS NOT NULL AND wl.reps_done > 0`; `has_function_privilege`: anon **false**, authenticated true, service_role true; `proacl` idéntica a la previa; comentario presente. |
+| 5 · Advisors | Security: solo hallazgos preexistentes (`_bak_*` sin policies, definers ya conocidos; `get_client_exercise_prs` ya figuraba como definer ejecutable por `authenticated`, igual que antes). Performance: 0 menciones a `get_client_exercise_prs`, `workout_blocks_poly_check` ni `reps_unit` (búsqueda por nombre sobre la salida completa). |
+
+Espejos en el repo con la **misma versión que LIVE**: `supabase/migrations/20260910205046_workout_blocks_reps_unit_sec.sql` y `20260910205101_get_client_exercise_prs_reps_filter.sql`.
+
 ---
 
 ## 1. Migración 1 · `<ts1>_workout_blocks_reps_unit_sec.sql`

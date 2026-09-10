@@ -8,7 +8,12 @@
  */
 import { describe, expect, it } from 'vitest'
 import { typedBlockSummary, type TypedBlockFields } from '@eva/workout-engine'
-import { POLYMORPHIC_BLOCK_FIELDS, defaultBlockForType, stripFieldsForType } from './block-type-fields'
+import {
+    POLYMORPHIC_BLOCK_FIELDS,
+    defaultBlockForType,
+    stripFieldsForStrengthMode,
+    stripFieldsForType,
+} from './block-type-fields'
 import type { BuilderBlock } from './types'
 
 /** Bloque con TODOS los ejes polimórficos poblados + los compartidos que deben sobrevivir. */
@@ -126,6 +131,159 @@ describe('stripFieldsForType: limpieza con null explícito', () => {
         stripFieldsForType(block, 'strength')
         expect(block.duration_sec).toBe(1800)
         expect(block.distance_value).toBe('5')
+    })
+})
+
+// ─── «Reps | Segundos» dentro de Fuerza (specs/cuenta-atras-en-pantalla, D3 + D4) ─────────────
+// Mismo `toBeNull()` que arriba y por el mismo motivo: un strip con `undefined` no viaja al UPDATE
+// del serializador RN y `_raw` repone el residuo — el alumno vería un reloj de 30 s en un press.
+
+/** Bloque de fuerza clásico con la prescripción completa que D3 obliga a conservar. */
+function strengthBlock(overrides: Partial<BuilderBlock> = {}): BuilderBlock {
+    return {
+        uid: 'blk-str',
+        exercise_id: 'ex-2',
+        exercise_name: 'Plancha frontal mantenida',
+        muscle_group: 'Core',
+        exercise_type: 'strength',
+        sets: 3,
+        reps: '8-12',
+        target_weight_kg: '10',
+        rir: '2',
+        tempo: '3010',
+        rest_time: '90s',
+        warmup_rest_time: '45s',
+        notes: 'nota del coach',
+        instructions: 'Mantené el torso firme',
+        superset_group: 'B',
+        side_mode: 'per_side',
+        progression_type: 'reps',
+        progression_value: 2,
+        progression_mode: 'weekly_linear',
+        ...overrides,
+    }
+}
+
+describe('stripFieldsForStrengthMode: conmutación Reps ↔ Segundos', () => {
+    it('reps → sec escribe duration_sec y reps_unit «sec»', () => {
+        const out = stripFieldsForStrengthMode(strengthBlock(), 'sec', 30)
+        expect(out.duration_sec).toBe(30)
+        expect(out.reps_unit).toBe('sec')
+    })
+
+    it('sec → reps deja AMBAS columnas en null EXPLÍCITO (no undefined)', () => {
+        const enTiempo = stripFieldsForStrengthMode(strengthBlock(), 'sec', 30)
+        const out = stripFieldsForStrengthMode(enTiempo, 'reps') as Record<string, unknown>
+        expect(Object.keys(out)).toContain('duration_sec')
+        expect(Object.keys(out)).toContain('reps_unit')
+        expect(out.duration_sec).toBeNull()
+        expect(out.reps_unit).toBeNull()
+        expect(out.duration_sec).not.toBeUndefined()
+        expect(out.reps_unit).not.toBeUndefined()
+    })
+
+    it('round-trip reps → sec → reps devuelve la prescripción de fuerza intacta (D3)', () => {
+        const original = strengthBlock()
+        const ida = stripFieldsForStrengthMode(original, 'sec', 45)
+        const vuelta = stripFieldsForStrengthMode(ida, 'reps')
+
+        expect(vuelta.duration_sec).toBeNull()
+        expect(vuelta.reps_unit).toBeNull()
+        // D3: nada de esto se toca en ninguna de las dos direcciones.
+        expect(vuelta.sets).toBe(3)
+        expect(vuelta.reps).toBe('8-12')
+        expect(vuelta.target_weight_kg).toBe('10')
+        expect(vuelta.rir).toBe('2')
+        expect(vuelta.tempo).toBe('3010')
+        expect(vuelta.rest_time).toBe('90s')
+        expect(vuelta.warmup_rest_time).toBe('45s')
+        expect(vuelta.side_mode).toBe('per_side')
+        expect(vuelta.superset_group).toBe('B')
+        expect(vuelta.notes).toBe('nota del coach')
+        expect(vuelta.instructions).toBe('Mantené el torso firme')
+        // identidad intacta
+        expect(vuelta.uid).toBe('blk-str')
+        expect(vuelta.exercise_id).toBe('ex-2')
+    })
+
+    // D4: `parseRepsTop('30s')` devuelve 30 (regex \d+) ⇒ sin el guard la doble progresión trataría
+    // 30 segundos como 30 reps y subiría el peso sola.
+    it('reps → sec baja la doble progresión a weekly_linear', () => {
+        const out = stripFieldsForStrengthMode(strengthBlock({ progression_mode: 'double' }), 'sec', 30)
+        expect(out.progression_mode).toBe('weekly_linear')
+    })
+
+    it('reps → sec respeta cualquier otro progression_mode y nunca escribe undefined', () => {
+        for (const mode of ['weekly_linear', 'session_linear', 'adaptive'] as const) {
+            const out = stripFieldsForStrengthMode(strengthBlock({ progression_mode: mode }), 'sec', 30)
+            expect(out.progression_mode).toBe(mode)
+        }
+        const sinModo = stripFieldsForStrengthMode(strengthBlock({ progression_mode: undefined }), 'sec', 30)
+        expect(sinModo.progression_mode).toBeNull()
+    })
+
+    it('la vuelta a Reps NO reabre la doble progresión (la decisión del coach ya se perdió en la ida)', () => {
+        const ida = stripFieldsForStrengthMode(strengthBlock({ progression_mode: 'double' }), 'sec', 30)
+        expect(stripFieldsForStrengthMode(ida, 'reps').progression_mode).toBe('weekly_linear')
+    })
+
+    it('mismo modo ⇒ devuelve el bloque sin mutar (mismo criterio que stripFieldsForType)', () => {
+        const enReps = strengthBlock()
+        expect(stripFieldsForStrengthMode(enReps, 'reps')).toBe(enReps)
+        // ni siquiera con una duración nueva: el segmented no puede pisar lo que el coach tipea
+        expect(stripFieldsForStrengthMode(enReps, 'reps', 30)).toBe(enReps)
+
+        const enTiempo = stripFieldsForStrengthMode(enReps, 'sec', 30)
+        expect(stripFieldsForStrengthMode(enTiempo, 'sec')).toBe(enTiempo)
+        expect(stripFieldsForStrengthMode(enTiempo, 'sec', 90)).toBe(enTiempo)
+    })
+
+    it('es idempotente en las dos direcciones', () => {
+        const sec = stripFieldsForStrengthMode(strengthBlock(), 'sec', 30)
+        expect(stripFieldsForStrengthMode(sec, 'sec', 30)).toEqual(sec)
+        const reps = stripFieldsForStrengthMode(sec, 'reps')
+        expect(stripFieldsForStrengthMode(reps, 'reps')).toEqual(reps)
+    })
+
+    it('sin durationSec conserva la duración que ya tenía el bloque, o null', () => {
+        const conDuracion = stripFieldsForStrengthMode(strengthBlock({ duration_sec: 60 }), 'sec')
+        expect(conDuracion.duration_sec).toBe(60)
+        const sinNada = stripFieldsForStrengthMode(strengthBlock(), 'sec') as Record<string, unknown>
+        expect(Object.keys(sinNada)).toContain('duration_sec')
+        expect(sinNada.duration_sec).toBeNull()
+    })
+
+    it('NO escribe reps_value (R3: sin consumidores verificados en el eje de fuerza)', () => {
+        const out = stripFieldsForStrengthMode(strengthBlock(), 'sec', 30)
+        expect(out.reps_value).toBeUndefined()
+    })
+
+    it('no muta el bloque de entrada', () => {
+        const block = strengthBlock()
+        stripFieldsForStrengthMode(block, 'sec', 30)
+        expect(block.duration_sec).toBeUndefined()
+        expect(block.reps_unit).toBeUndefined()
+    })
+})
+
+describe('stripFieldsForType con un bloque de fuerza en modo tiempo', () => {
+    it('Fuerza·Segundos → Movilidad limpia reps_unit y siembra el hold de movilidad', () => {
+        const enTiempo = stripFieldsForStrengthMode(strengthBlock(), 'sec', 30)
+        const out = stripFieldsForType(enTiempo, 'mobility') as Record<string, unknown>
+        expect(Object.keys(out)).toContain('reps_unit')
+        expect(out.reps_unit).toBeNull()
+        expect(out.duration_sec).toBe(30) // default del hold de movilidad, no residuo
+        // los compartidos siguen siendo los del coach (R32)
+        expect(out.sets).toBe(3)
+        expect(out.rest_time).toBe('90s')
+        expect(out.side_mode).toBe('per_side')
+    })
+
+    it('Fuerza·Segundos → Cardio también deja reps_unit en null explícito', () => {
+        const enTiempo = stripFieldsForStrengthMode(strengthBlock(), 'sec', 30)
+        const out = stripFieldsForType(enTiempo, 'cardio') as Record<string, unknown>
+        expect(out.reps_unit).toBeNull()
+        expect(out.duration_sec).toBe(600) // default de cardio
     })
 })
 

@@ -31,7 +31,12 @@ export type SideMode = 'bilateral' | 'per_side' | 'alternating'
 export type LoadType = 'weight' | 'time' | 'bodyweight' | 'none'
 export type LoadUnit = 'kg' | 'lb' | 'sec'
 export type DistanceUnit = 'm' | 'km'
-export type RepsUnit = 'reps' | 'passes' | 'breaths'
+/**
+ * 'sec': fuerza por tiempo (specs/cuenta-atras-en-pantalla, D3) — modo Segundos dentro de Fuerza,
+ * siempre con `duration_sec`. Espejo de `RepsUnit` de @eva/plan-builder y de `REPS_UNIT_VALUES` de
+ * @eva/schemas: si no se mueven juntos, el builder web no compila.
+ */
+export type RepsUnit = 'reps' | 'passes' | 'breaths' | 'jumps' | 'floors' | 'sec'
 
 /** Shape de workout_blocks.interval_config (jsonb) — espejo del IntervalConfigSchema de @eva/schemas. */
 export interface IntervalConfig {

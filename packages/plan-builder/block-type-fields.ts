@@ -112,3 +112,59 @@ export function stripFieldsForType(block: BuilderBlock, newType: ExerciseType): 
     if (currentType === newType) return block
     return { ...block, ...CLEARED_POLYMORPHIC_FIELDS, ...typedDefaultsForType(newType) }
 }
+
+// ─── Fuerza: «Reps | Segundos» (specs/cuenta-atras-en-pantalla, D3 + D4) ─────
+
+/**
+ * Los dos modos de prescripción DENTRO de Fuerza. NO son tipos de ejercicio (D3: sin quinto tipo):
+ * una plancha con disco sigue siendo `strength` y conserva carga, RIR, tempo, descanso y lado.
+ */
+export type StrengthPrescriptionMode = 'reps' | 'sec'
+
+/**
+ * Modo vigente de un bloque de fuerza. `reps_unit === 'sec'` es la ÚNICA marca del modo Segundos en
+ * el builder — el predicado del ejecutor (`isStrengthTimeBlock`, R3) además exige `duration_sec > 0`,
+ * pero acá el bloque puede estar a medio tipear y el selector no puede saltar solo a «Reps».
+ */
+function strengthPrescriptionMode(block: BuilderBlock): StrengthPrescriptionMode {
+    return block.reps_unit === 'sec' ? 'sec' : 'reps'
+}
+
+/**
+ * Conmuta un bloque de fuerza entre «Reps» y «Segundos» dejando el resto de la prescripción intacta.
+ *
+ *   - `'sec'` ⇒ escribe `duration_sec` + `reps_unit: 'sec'` y baja la **doble progresión** a
+ *     `weekly_linear` (D4): `parseRepsTop('30s')` devuelve **30** (regex `\d+`), así que sin este
+ *     guard la doble progresión trataría 30 segundos como 30 reps y subiría el peso sola.
+ *   - `'reps'` ⇒ `duration_sec` y `reps_unit` en `null` EXPLÍCITO.
+ *
+ * **`null`, jamás `undefined`** (misma regla R32 de la cabecera del archivo): el serializador RN
+ * sólo sobreescribe una columna tipada cuando el campo está DEFINIDO, así que un strip con
+ * `undefined` es un no-op y `_raw` repone el residuo — el alumno vería un reloj de 30 s en un press
+ * de banca. Por eso `progression_mode` también sale como `?? null` y nunca como `undefined`.
+ *
+ * **No toca** `sets`, `target_weight_kg`, `rir`, `tempo`, `rest_time`, `warmup_rest_time`,
+ * `side_mode`, `superset_group`, `notes` ni `instructions` (D3), ni `reps` (borrarlo dejaría al coach
+ * en «Datos incompletos» mientras tipea; el espejo legacy lo escribe el builder en W2), ni
+ * `reps_value` (R3: sin consumidores verificados en el eje de fuerza).
+ *
+ * Si el bloque YA está en ese modo devuelve el MISMO objeto sin tocar nada, igual que
+ * `stripFieldsForType`: un re-render o un click repetido en el segmented no puede pisar los segundos
+ * que el coach acaba de escribir.
+ */
+export function stripFieldsForStrengthMode(
+    block: BuilderBlock,
+    mode: StrengthPrescriptionMode,
+    durationSec?: number | null,
+): BuilderBlock {
+    if (strengthPrescriptionMode(block) === mode) return block
+    if (mode === 'reps') return { ...block, duration_sec: null, reps_unit: null }
+    return {
+        ...block,
+        duration_sec: durationSec ?? block.duration_sec ?? null,
+        reps_unit: 'sec',
+        progression_mode: block.progression_mode === 'double'
+            ? 'weekly_linear'
+            : block.progression_mode ?? null,
+    }
+}

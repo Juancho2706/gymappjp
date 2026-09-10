@@ -58,10 +58,25 @@ export const DISTANCE_UNIT_VALUES = ['m', 'km'] as const
 /**
  * Unidades del conteo prescrito (`workout_blocks.reps_unit`). 'jumps' (saltos) y 'floors' (pisos)
  * entran en la Fase C de cardio (specs/cardio-ejes-y-fixes, RF8): la cuerda y la escaladora se
- * prescriben por conteo propio. Superset EXACTO del CHECK `workout_blocks_poly_check` ampliado por
- * la migración 20260725221804 — sin esto Zod rechazaría un bloque que la DB sí acepta.
+ * prescriben por conteo propio. 'sec' es la FUERZA POR TIEMPO (specs/cuenta-atras-en-pantalla, D3):
+ * una plancha o un wall sit se prescriben dentro de Fuerza con `duration_sec` + `reps_unit = 'sec'`,
+ * sin quinto tipo de ejercicio.
+ *
+ * Superset EXACTO del CHECK `workout_blocks_poly_check`, ampliado por la migración 20260725221804
+ * ('jumps'/'floors') y por `workout_blocks_reps_unit_sec` ('sec') — sin esto Zod rechazaría un
+ * bloque que la DB sí acepta, y al revés: agregar un valor acá sin la migración hace que el guardado
+ * rebote con 23514 y —como el builder guarda el programa completo— se pierda el plan entero.
  */
-export const REPS_UNIT_VALUES = ['reps', 'passes', 'breaths', 'jumps', 'floors'] as const
+export const REPS_UNIT_VALUES = ['reps', 'passes', 'breaths', 'jumps', 'floors', 'sec'] as const
+
+/**
+ * Rango duro de los segundos por serie de la fuerza por tiempo (R11). Piso 5 s: por debajo no hay
+ * hold que sostener ni cuenta atrás que valga; techo 600 s: 10 minutos es un bloque de cardio,
+ * no una serie. Es la validez del builder para bloques NUEVOS, NO el predicado de montaje del reloj
+ * en el ejecutor (R29: un bloque legacy de 1-4 s igual monta el módulo).
+ */
+export const STRENGTH_TIME_MIN_SEC = 5
+export const STRENGTH_TIME_MAX_SEC = 600
 
 const IntervalTargetSchema = z.object({
     kind: z.enum(['hr_zone', 'pace', 'rpe', 'none']),
@@ -168,6 +183,25 @@ export const WorkoutBlockSchema = z.object({
             ctx.addIssue({
                 code: 'custom',
                 message: 'Un bloque cardio necesita duración, distancia o intervalos',
+                path: ['duration_sec'],
+            })
+        }
+    }
+    // Fuerza por tiempo (specs/cuenta-atras-en-pantalla, D3 + R11): `reps_unit = 'sec'` es la marca
+    // del modo Segundos, y sin `duration_sec` no hay cuenta atrás que mostrarle al alumno — el
+    // ejecutor pintaría un anillo en 0:00 con una CTA muerta. Rama INDEPENDIENTE de la de cardio:
+    // un bloque cardio no lleva 'sec' y su veredicto no cambia ni una coma.
+    if (block.reps_unit === 'sec') {
+        if (block.duration_sec == null) {
+            ctx.addIssue({
+                code: 'custom',
+                message: 'Un bloque de fuerza por tiempo necesita segundos por serie',
+                path: ['duration_sec'],
+            })
+        } else if (block.duration_sec < STRENGTH_TIME_MIN_SEC || block.duration_sec > STRENGTH_TIME_MAX_SEC) {
+            ctx.addIssue({
+                code: 'custom',
+                message: `Los segundos por serie deben estar entre ${STRENGTH_TIME_MIN_SEC} y ${STRENGTH_TIME_MAX_SEC}`,
                 path: ['duration_sec'],
             })
         }
@@ -314,6 +348,18 @@ export const WorkoutLogSetSchema = z.object({
             right_reps: z.coerce.number().int().min(0).max(9999).nullable().optional(),
             skipped: z.boolean().nullable().optional(),
             skip_reason: z.string().trim().max(40).nullable().optional(),
+            // ── Fuente del hold (tren «cuenta atrás en pantalla», A3 · CA-28) ──
+            // Quién midió los segundos: 'timer' = los puso la cuenta atrás al llegar a 0 (V2, el
+            // alumno no tocó nada); 'manual' = los escribió el alumno, o tocó «Listo» antes de 0
+            // (A2/R22), o editó la serie después (R7), o es un roller (sin reloj en este tren, R12).
+            // Se escribe en TODO hold guardado: movilidad, roller y fuerza por tiempo — así la
+            // métrica de adopción (SPEC §8.2) no gana un tercer estado «sin marca» que nadie definió.
+            // `undefined` = log ANTERIOR al tren (desconocido), NUNCA «manual».
+            // Va acá por lo mismo que `skipped`/`skip_reason`: Zod v4 estripa las claves no
+            // declaradas ⇒ sin esta línea el camino web persiste el jsonb sin `hold_source` y la
+            // marca no llega jamás a la DB. Enum cerrado (no string libre como `skip_reason`):
+            // son dos valores del motor, no un catálogo que pueda crecer.
+            hold_source: z.enum(['timer', 'manual']).nullable().optional(),
         })
         .nullable()
         .optional(),

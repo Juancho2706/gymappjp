@@ -18,8 +18,13 @@ export type SideMode = 'bilateral' | 'per_side' | 'alternating'
 export type LoadType = 'weight' | 'time' | 'bodyweight' | 'none'
 export type LoadUnit = 'kg' | 'lb' | 'sec'
 export type DistanceUnit = 'm' | 'km'
-/** 'jumps'/'floors': conteo propio de cardio rep-based (Fase C — cuerda y escaladora). */
-export type RepsUnit = 'reps' | 'passes' | 'breaths' | 'jumps' | 'floors'
+/**
+ * 'jumps'/'floors': conteo propio de cardio rep-based (Fase C — cuerda y escaladora).
+ * 'sec': fuerza por tiempo (specs/cuenta-atras-en-pantalla, D3) — la marca del modo Segundos dentro
+ * de Fuerza, siempre acompañada de `duration_sec`. Espejo de `REPS_UNIT_VALUES` (@eva/schemas) y del
+ * CHECK `workout_blocks_poly_check`: los tres se mueven juntos.
+ */
+export type RepsUnit = 'reps' | 'passes' | 'breaths' | 'jumps' | 'floors' | 'sec'
 
 export type BuilderSection = 'warmup' | 'main' | 'cooldown'
 
