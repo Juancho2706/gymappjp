@@ -435,6 +435,33 @@ jefe en el worktree tras el juicio de los workers (salida real):
   `34429709228`, job `e2e` `102723329034` ⇒ **9 passed (47,9 s)**, 1 worker, 02:35:09–02:37:41Z contra `www.eva-app.cl`; el
   resto del CI verde (`nutrition-smoke` skipped en dispatch). No corrido: E2E local (sin vars `E2E_*`).
 
+## Tren «Cuenta atrás en pantalla» (ejecutor, D5) — W0–W6.9, 10-09 (rama `rnmobiledenuevo`, commits locales `d2e2429c`…`0627f5b4`, sin push al cierre de esta sección)
+
+SDD en [`../specs/cuenta-atras-en-pantalla/`](../specs/cuenta-atras-en-pantalla/TASKS.md) (gates por wave en TASKS con salida real). Gate W6.9 sobre `0627f5b4`:
+
+| Gate | Resultado |
+|---|---|
+| `pnpm test` | 791 archivos / 10 827 tests verdes (2 archivos, 4 tests skipped) |
+| `vitest packages/workout-engine packages/schemas packages/plan-builder` | 51 / 1018 |
+| `vitest --project mobile-node --project mobile-dom tests/mobile` | 87 / 1177 |
+| `vitest --project web-dom --project web-node ".../workout/[planId]"` | 20 / 262 |
+| `pnpm typecheck` · `tsc --noEmit` mobile | 0 · 0 |
+| `pnpm lint` · `pnpm lint:mobile` | 0 errores / 572 warnings preexistentes · 0 |
+| `pnpm check:tokens` · `pnpm docs:check` | OK · OK |
+| `expo export --platform android` | Exported |
+| `pnpm test:e2e` (`tests/exec-hold-superset.spec.ts`) | **no corrido**: se omite sin `E2E_HOLD_PLAN_ID` (sale del seed `pnpm seed:e2e-personas`, que el owner corre contra LIVE con su doble gate) |
+
+**Gates nuevos que deja el tren:** `packages/workout-engine/auto-rest-pref.test.ts` y `rest-after-commit.test.ts` (motor puro de la preferencia D5 y de la matriz 2×4 del descanso), `tests/mobile/exec-autorest-*.test.ts` + `apps/web/.../v3/auto-rest-*.test.ts(x)` (paridad de claves y de veredicto por celda web ↔ RN), `tests/mobile/executor-v3-hold-module.test.ts` (+13 casos de analítica), `hold-autolog-report.test.ts` (RN y web), `HoldModuleV3.analytics.test.tsx`, y el spec Playwright del caso canónico `tests/exec-hold-superset.spec.ts` (project `chromium`, 1 navegador, reloj real de 5 s).
+
+**Baseline de CI rojo PREEXISTENTE (no se declara verde lo que ya estaba rojo, y ninguno lo toca este tren):**
+
+| Job / archivo | Por qué está rojo | Desde |
+|---|---|---|
+| `nutrition-smoke` (CI) | el job corre sin `NEXT_PUBLIC_SUPABASE_*` | tren de gates 05-09 |
+| `apps/web/src/lib/profile-analytics/overview.test.ts` | rojo según la hora del día (cálculo dependiente del reloj); el 10-09 a las 20:27 local salió verde | tren «plan vivo» 07-09 |
+
+**Hallazgo de esta corrida (corregido en `0627f5b4`):** `tests/mobile-branding-identity.test.ts` (project `web-node`) se puso rojo porque `lib/auth-actions.ts` importó `v3/auto-rest-pref.ts`, que importaba el barrel `../timers` y con él `react-native` (Vite no parsea `import typeof`). Regla que queda: **un módulo que importe `lib/auth-actions.ts` u otro archivo cargado por tests `web-node` no puede depender del barrel `components/alumno/workout/timers`**; importar el submódulo concreto.
+
 ## Pendientes actuales
 
 - [x] Artefactos del run `30185211552` retenidos (`D:\tmp\eva-artifacts-856829fa\`: build.aab + build.ipa) y procesamiento en TestFlight/Play internal verificado por el owner (2026-07-25).

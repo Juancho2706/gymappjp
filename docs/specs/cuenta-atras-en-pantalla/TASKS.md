@@ -1073,7 +1073,7 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
 
 ## W6 · Analytics, docs, gates y cierre — 1 día-agente · **Fable (jefe)** + owner
 
-- [ ] W6.1 **(Opus)** **4 eventos PostHog** (**R19**, snake_case, sin PII, verificando con grep contra
+- [x] W6.1 **(Opus)** (10-09, commit `623d689e` — los 3 del hold: RN en `use-hold-module.ts` vía `captureAppEvent`, web en `v3/HoldModuleV3.tsx` vía `usePostHog` con prop nueva `blockId` cableada en los 3 pasos; uno por serie, `via_app_state` = `expiredWhileAway`; `rest_autostart_pref_set` ya en `1b93d58e` desde los handlers del orquestador; tests +13 RN y `HoldModuleV3.analytics.test.tsx` web. **Aceptación final «aparecen en PostHog» queda para después del deploy**) **4 eventos PostHog** (**R19**, snake_case, sin PII, verificando con grep contra
       `apps/mobile/lib/analytics.ts` que no colisionen): `hold_timer_started {block_id, exercise_type,
       context, side_mode}` · `hold_timer_completed {block_id, exercise_type, context, hold_source,
       closes_round, via_app_state}` (la **propiedad** conserva su nombre canónico de R19; su **valor**
@@ -1082,7 +1082,7 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
       del brief original se elimina** (se fusiona con `hold_timer_completed`). RN por
       `captureAppEvent` (`apps/mobile/lib/analytics.ts:136-139`); web por `ph?.capture` (patrón
       `LogSetForm.tsx:895`). **Aceptación**: los 4 aparecen en PostHog tras el deploy.
-- [ ] W6.2 **(Opus)** Sentry en el camino de auto-envío de **las dos** plataformas:
+- [x] W6.2 **(Opus)** (10-09, commit `623d689e` — `reportHoldAutologError(err, ctx)` con el guard `source === 'timer'` ADENTRO, RN `@sentry/react-native` en la rama de error de `logSet` de `handleCommit`, web `@sentry/nextjs` en `result.error` de los dos `reconcile` de `LogSetForm`; el rechazo de red en web no se reporta porque la cola lo reintenta — asimetría chica de denominador declarada; tests `hold-autolog-report.test.ts` RN y web. **Aceptación final «error forzado con el tag» queda para después del deploy**) Sentry en el camino de auto-envío de **las dos** plataformas:
       `captureException(err, { tags: { area: 'hold-autolog' }, extra: { blockId, exerciseType } })`,
       patrón `apps/mobile/components/alumno/workout/v3/session-morph.tsx:311`. **Umbral de alarma**:
       > 2 % de auto-envíos con error en 72 h. **Aceptación**: un error forzado aparece con ese tag.
@@ -1114,7 +1114,7 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
       **Aceptación**: `docs:check` verde y el archivo sigue siendo canónico válido.
 - [ ] W6.8 `docs/operations/MOBILE_RELEASES_OTA.md`: registrar la publicación (tag, grupos
       android/ios y `run id`). **Aceptación**: las dos corridas citadas y verdes.
-- [ ] W6.9 **Gates completos, ejecución real** (tabla abajo). **Aceptación**: ninguna casilla verde sin
+- [x] W6.9 (10-09 ~20:35Z sobre `0627f5b4`, jefe; salida real en la tabla de abajo — incluye el fix `0627f5b4` que salió de la suite completa: `auto-rest-pref` importaba el barrel `../timers` y arrastraba `react-native` al project `web-node` vía `auth-actions.ts`) **Gates completos, ejecución real** (tabla abajo). **Aceptación**: ninguna casilla verde sin
       salida de consola.
 - [x] W6.10 (10-09, commit `47b640ad`, worker Opus juzgado por el jefe: seed `seedHoldCanonicalPlan` solo para el alumno standalone, idempotente por título, `duration_sec = 5` para reloj real sin reloj falso; spec propio `tests/exec-hold-superset.spec.ts` en el project `chromium`, `--list` ⇒ 2 tests, `tsc` del spec limpio, `docs:check` verde; assert de DB con anon key + login del alumno, gateado por `E2E_SUPABASE_URL/ANON_KEY`. **Pendiente del owner**: correr `pnpm seed:e2e-personas` contra LIVE con su doble gate → copiar `E2E_HOLD_PLAN_ID` → correr el spec; hasta ahí NO se declara verde. Hooks sin `data-testid` que el spec usa por clase: `.exec-v3-excard.is-active`, `.exec-v3-media`, `.exec-v3-slot.is-active` — deuda chica.) Playwright del caso canónico **solo al cierre**, 1 navegador: superserie «Dia B» ⇒ el
       reloj corre bajo el video (V1), llega a 0, la serie aparece guardada sin tocar nada (V2) y la
@@ -1194,19 +1194,19 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
 
 ### Gates (tabla a completar con la ejecución real)
 
-| Gate | Comando | Resultado |
+| Gate | Comando | Resultado (10-09 ~20:35Z, árbol `0627f5b4`, PC del jefe) |
 |---|---|---|
-| Tests | `pnpm test` | |
-| Motor y schemas | `pnpm exec vitest run packages/workout-engine packages/schemas packages/plan-builder` | |
-| Typecheck web | `pnpm typecheck` | |
-| Typecheck mobile | `pnpm --filter @eva/mobile exec tsc --noEmit` | |
-| Bundle mobile | `pnpm --filter @eva/mobile exec expo export --platform android` | |
-| Lint | `pnpm lint` | |
-| Tokens | `pnpm check:tokens` | |
-| Docs | `pnpm docs:check` | |
-| E2E ejecutor | `pnpm test:e2e` (1 navegador, solo al cierre) | |
-| Humo prod | `pnpm qa:prod:suave` (después del deploy) | |
-| SQL | tx-rollback ×2 + conteo de filas en violación (0) + **prueba positiva del CHECK sobre un bloque temporal del alumno E2E, con `ROLLBACK`** + `EXPLAIN` de `get_client_exercise_prs` | |
+| Tests | `pnpm test` | ✅ 791 archivos / 10 827 tests verdes, 2 archivos y 4 tests skipped (793 / 10 831). La primera corrida sobre `623d689e` dio 1 archivo rojo (`tests/mobile-branding-identity.test.ts`, 4 tests, `RollupError` por `react-native` en `web-node`) ⇒ fix `0627f5b4` y re-corrida verde |
+| Motor y schemas | `pnpm exec vitest run packages/workout-engine packages/schemas packages/plan-builder` | ✅ 51 / 1018 |
+| Typecheck web | `pnpm typecheck` | ✅ 0 |
+| Typecheck mobile | `pnpm --filter @eva/mobile exec tsc --noEmit` | ✅ 0 |
+| Bundle mobile | `pnpm --filter @eva/mobile exec expo export --platform android` | ✅ Exported (sobre `623d689e` y re-corrido sobre `0627f5b4`) |
+| Lint | `pnpm lint` + `pnpm lint:mobile` | ✅ 0 errores / 572 warnings preexistentes (`no-console` en scripts, disables sin uso) · mobile 0 |
+| Tokens | `pnpm check:tokens` | ✅ 86 + 5 tokens en paridad |
+| Docs | `pnpm docs:check` | ✅ 20 canónicos, CURRENT 14,9 KB |
+| E2E ejecutor | `pnpm test:e2e` (1 navegador, solo al cierre) | ⏸ NO corrido: `tests/exec-hold-superset.spec.ts` se omite sin `E2E_HOLD_PLAN_ID`, que nace del seed que el owner todavía no corrió contra LIVE (W6.10). Queda con causa anotada, no verde |
+| Humo prod | `pnpm qa:prod:suave` (después del deploy) | ⏳ después del deploy |
+| SQL | tx-rollback ×2 + conteo de filas en violación (0) + **prueba positiva del CHECK sobre un bloque temporal del alumno E2E, con `ROLLBACK`** + `EXPLAIN` de `get_client_exercise_prs` | ✅ en W0 (DATA-TESTING §0.5, 10-09 20:47–20:51Z; prueba positiva sobre `qa-cat-rojas@josefit-designqa.cl` porque las personas E2E no existen en LIVE) · W6.11 re-verificado 10-09 ~20:20Z |
 
 **Baseline de CI rojo preexistente (no se declara verde lo que ya estaba rojo):** `nutrition-smoke`
 (job sin `NEXT_PUBLIC_SUPABASE_*`) y `apps/web/.../profile-analytics/overview.test.ts` (rojo según la

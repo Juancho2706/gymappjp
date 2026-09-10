@@ -12,6 +12,22 @@ source_of_truth: apps/web responsive + apps/mobile
 
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
 
+> **2026-09-10 ~20:40Z (tren «Cuenta atrás en pantalla» + preferencia D5 «Pasar solo al descanso» — EN CÓDIGO LOCAL: `rnmobiledenuevo`
+> `0627f5b4`, SIN push; deploy y OTA 1.1.2 android/ios pendientes del OK del owner — los hashes se anotan acá al publicar; migraciones
+> M1 `20260910205046` + M2 `20260910205101` ya en LIVE desde W0; [SDD](../specs/cuenta-atras-en-pantalla/SPEC.md))**. Paridad por pieza:
+> **mismo motor** (`@eva/workout-engine`: `hold-autolog`, `auto-rest-pref`, `rest-after-commit`, `auto-rest-copy`) consumido por
+> `useCountdown` (RN `v3/timing.ts` + hook `use-hold-module.ts`) y `useExecCountdown` (web) con `prime`/`expiredWhileAway` — **paridad
+> nueva**; **superserie con reloj bajo el video** (RN `SupersetScreenV3.tsx` + `HoldModuleV3.tsx` / web `SupersetStepV3.tsx` +
+> `v3/HoldModuleV3.tsx`), guardado solo a 0 con `metadata.hold_source`, salto al miembro siguiente y «Ronda lista · Descansar N s» —
+> **paridad nueva**; **builder «Reps | Segundos»** (RN `BlockEditorSheet.tsx` / web `BlockEditSheet.tsx`, `reps_unit='sec'` + espejo
+> `reps='30s'`, progresión «+ Segundos») — **paridad nueva**; **preferencia D5** en el `ExecSettingsSheet` de ambas plataformas (fila
+> «Pasar solo al descanso», claves `eva:exec-autorest-v1:<clientId>` idénticas) + modal de primera vez `AutoRestModalV3` (RN Sheet
+> nativo tras el cierre real del Despegue / web `.exec-v3-settings*` tras `data-exec-ceremony`) — **paridad nueva**; **CTA «Descansar
+> N s / Siguiente serie»** (`RestOfferV3` en las dos) — **paridad nueva**; **aviso del SO «Terminó tu hold»** y **keep-awake** del
+> módulo — **solo RN**; **`countKind`/`setIndex`/`setTotal` del interstitial** («Ronda N de M») — **solo RN** (web lo lleva en `label`,
+> deuda B13); **PostHog** `hold_timer_started/completed`, `hold_early_finished`, `rest_autostart_pref_set` y **Sentry** `hold-autolog`
+> — **paridad nueva**. Roller sin cuenta atrás en las dos (fuera de alcance, B1).
+>
 > **2026-09-10 04:07Z (fix P1 «marca cruzada tras logout» + hero «Adherencia —» — EN PRODUCCIÓN: `master` = `rnmobiledenuevo` =
 > `d5d7d188`, deploy `dpl_D8pDehbVdMrdLvChsQSVWYPwxE3z` READY, OTA 1.1.2 `production` android `e1f8b60a-e148-418d-8f06-e8cd2a14bb1c`
 > (run 34435728469) / ios `66ffaf5d-c7be-4218-983f-b7e941ef2399` (run 34435730513); QA del owner PENDIENTE)**: cerrar sesión de un
