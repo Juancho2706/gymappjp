@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
 import { Check, Pause, Play, RotateCcw } from 'lucide-react'
+import { usePostHog } from 'posthog-js/react'
 import { cn } from '@/lib/utils'
 import { decideHoldAutolog, holdSidesFor, type HoldAdvance, type HoldContext, type HoldEndReason, type HoldSide, type HoldSource } from '@eva/workout-engine'
 import { useExecCountdown, formatCountdown } from './useExecCountdown'
@@ -51,6 +52,8 @@ export interface HoldMeasured {
 export interface HoldModuleV3Props {
     kind: HoldModuleKind
     size: HoldModuleSize
+    /** Bloque de esta serie. Sólo lo usa la analítica (`block_id` de los 3 eventos, W6.1). */
+    blockId: string
     /** `duration_sec` prescrito (> 0, garantizado por el predicado R29 del paso). */
     prescribedSec: number
     sideMode: string | null | undefined
@@ -71,11 +74,22 @@ export interface HoldModuleV3Props {
     testIdPrefix?: string
 }
 
+/**
+ * `exercise_type` de los eventos de PostHog (DATA-TESTING §8.1): el eje del tren tiene DOS `kind`
+ * pero la serie se lee en dos categorías — `mobility` y `strength`. Mismo mapeo que RN
+ * (`apps/mobile/components/alumno/workout/v3/use-hold-module.ts`): si cambia acá, cambia allá o el
+ * insight queda partido.
+ */
+function eventExerciseType(kind: HoldModuleKind): 'mobility' | 'strength' {
+    return kind === 'mobility' ? 'mobility' : 'strength'
+}
+
 const DASH = 2 * Math.PI * 92
 
 export function HoldModuleV3({
     kind,
     size,
+    blockId,
     prescribedSec,
     sideMode,
     context,
@@ -101,8 +115,15 @@ export function HoldModuleV3({
     // Refs de lectura imperativa (los callbacks del reloj se congelan en el primer render).
     const sideRef = useRef<HoldSide>(side)
     sideRef.current = side
-    const propsRef = useRef({ prescribedSec, context, closesRound, onMeasured })
-    propsRef.current = { prescribedSec, context, closesRound, onMeasured }
+    // Analítica de producto (W6.1, sin PII): los 3 eventos del hold salen de ACÁ, el único sitio que
+    // conoce el arranque, el vencimiento y el «Listo» antes de 0. `ph` puede ser `undefined` (sin
+    // provider) → siempre `ph?.capture`, igual que `LogSetForm`.
+    const ph = usePostHog()
+    const propsRef = useRef({ prescribedSec, context, closesRound, onMeasured, kind, blockId, sideMode, ph })
+    propsRef.current = { prescribedSec, context, closesRound, onMeasured, kind, blockId, sideMode, ph }
+    // `hold_timer_started` es UNO por serie: lo emite el arranque del PRIMER lado. Ni el lado 2 —que
+    // arranca solo o queda armado— ni un «Reanudar» tras la pausa vuelven a emitirlo.
+    const startedEventRef = useRef(false)
     // Segundos del lado izquierdo ya cerrado (viajan con el derecho en la MISMA fila, R34).
     const leftRef = useRef<number | null>(null)
     // Un envío por `resetKey:side` (calco del guard `sentSetsRef` de RN).
@@ -158,6 +179,28 @@ export function HoldModuleV3({
         if (submit) {
             setDone(true)
             setSavedSec(currentSide === 'right' ? (leftRef.current ?? 0) + (fill ?? 0) : fill)
+            // UNO por SERIE, no por lado: en `per_side` esta rama sólo corre al cerrar el derecho.
+            // `via_app_state` conserva el nombre canónico de R19 pero su valor es el
+            // `expiredWhileAway` de R27 (SPEC CA-08d). Sin PII: sólo ids y enums.
+            if (source === 'timer') {
+                p.ph?.capture('hold_timer_completed', {
+                    block_id: p.blockId,
+                    exercise_type: eventExerciseType(p.kind),
+                    context: p.context,
+                    hold_source: source,
+                    closes_round: p.closesRound,
+                    via_app_state: reason === 'expired' ? away : false,
+                })
+            } else {
+                p.ph?.capture('hold_early_finished', {
+                    block_id: p.blockId,
+                    exercise_type: eventExerciseType(p.kind),
+                    context: p.context,
+                    // Lo que efectivamente se guarda (`min(elapsed, prescribed)`), no el reloj crudo.
+                    elapsed_sec: fill ?? elapsedSec,
+                    prescribed_sec: p.prescribedSec,
+                })
+            }
         }
         if (decision.advanceSide) {
             autoStartNextRef.current = decision.autoStartNextSide
@@ -176,6 +219,7 @@ export function HoldModuleV3({
         setSavedSec(null)
         leftRef.current = null
         autoStartNextRef.current = false
+        startedEventRef.current = false
     }, [resetKey])
 
     // Cambio de lado: el reloj ya quedó re-armado en idle por `resetKey`; si el izquierdo cerró en
@@ -209,6 +253,16 @@ export function HoldModuleV3({
 
     const start = () => {
         if (countdown.isActive || done) return
+        if (!startedEventRef.current) {
+            startedEventRef.current = true
+            const p = propsRef.current
+            p.ph?.capture('hold_timer_started', {
+                block_id: p.blockId,
+                exercise_type: eventExerciseType(p.kind),
+                context: p.context,
+                side_mode: p.sideMode ?? null,
+            })
+        }
         countdown.toggle()
     }
     const pause = () => {

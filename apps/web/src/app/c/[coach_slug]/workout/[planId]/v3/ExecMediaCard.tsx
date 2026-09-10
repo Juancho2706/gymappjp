@@ -79,7 +79,8 @@ export function ExecMediaCard({ exercise, note, openTechnique }: ExecMediaCardPr
 
     return (
         <>
-            <div className="exec-v3-media">
+            {/* `data-testid` estable (W6.10): el spec de Playwright apuntaba por clase `.exec-v3-media`. */}
+            <div className="exec-v3-media" data-testid="exec-media">
                 <div className="exec-v3-mediachips">
                     {hasInstructions && (
                         <button

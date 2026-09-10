@@ -106,6 +106,7 @@ import {
   subscribeMorphOverlayOpen,
   subscribeMorphStartConfirmed,
 } from './session-morph'
+import { reportHoldAutologError } from './hold-autolog-report'
 import { AutoRestModalV3 } from './AutoRestModalV3'
 import { ExerciseScreenV3, strengthSeedValues } from './ExerciseScreenV3'
 import { SupersetScreenV3, type SupersetMemberSub } from './SupersetScreenV3'
@@ -1057,6 +1058,15 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         // sin botones; cualquier otro error sí conserva el payload para el Reintentar.
         if (error !== PAST_SET_NOT_FOUND_ERROR) failedPayloads.current[setKey] = payload
         setSyncErrors((m) => ({ ...m, [setKey]: error }))
+        // W6.2 · Sentry SOLO del auto-envío del reloj (`hold_source === 'timer'`): esa serie se
+        // cerró sola y el alumno puede no estar mirando la pantalla. El camino manual ya tiene el
+        // chip «Reintentar» de esta misma fila, así que no se instrumenta (DATA-TESTING §8.3).
+        reportHoldAutologError(new Error(error), {
+          source: holdSource,
+          blockId: payload.blockId,
+          exerciseType: block ? effectiveExerciseType(block, prescribedEx) : 'strength',
+          context: membersForTier && membersForTier.length >= 2 ? 'superset' : 'solo',
+        })
       } else {
         delete failedPayloads.current[setKey]
         setSyncErrors((m) => {

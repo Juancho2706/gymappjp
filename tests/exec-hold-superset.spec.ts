@@ -108,10 +108,13 @@ test.describe('W6.10 · caso canónico del hold (superserie + fuerza por tiempo)
         }
 
         // ── Paso 1 · el media se ve y el módulo de reloj está DEBAJO (V1) ─────────────────────
-        const activeCard = page.locator('.exec-v3-excard.is-active')
+        // Hook estable (W6.1/W6.10): `data-testid` en vez de la clase de presentación
+        // `.exec-v3-excard.is-active` — un re-skin del CSS del ejecutor no puede dejar ciego al spec.
+        const activeCard = page.getByTestId('ss-member-active')
         await expect(activeCard).toBeVisible({ timeout: 45_000 })
 
-        const media = activeCard.locator('.exec-v3-media')
+        // Ídem: `exec-media` reemplaza a la clase `.exec-v3-media` del contenedor de `ExecMediaCard`.
+        const media = activeCard.getByTestId('exec-media')
         await expect(media).toBeVisible()
         const holdModule = activeCard.locator('[data-testid^="hold-ss-"][data-testid$="-module"]')
         await expect(holdModule).toBeVisible()
@@ -158,7 +161,8 @@ test.describe('W6.10 · caso canónico del hold (superserie + fuerza por tiempo)
 
         // Tile KG con el peso prescrito por el seed (10 kg). Se acota a la serie ACTIVA: las otras
         // series del bloque siguen montadas (ocultas por CSS) con su propio input de peso.
-        const activeSlot = page.locator('.exec-v3-slot.is-active')
+        // Ídem: `set-slot-active` sólo lo lleva la serie activa (`.exec-v3-slot.is-active`).
+        const activeSlot = page.getByTestId('set-slot-active')
         await expect(activeSlot.getByLabel('Peso en kilos')).toHaveValue(/^10([.,]0+)?$/)
 
         const startSerie = page.getByTestId('hold-strength-start')

@@ -8,6 +8,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { toast } from 'sonner'
 import { logSetAction, type LogState } from './_actions/workout-log.actions'
+import { reportHoldAutologError } from './hold-autolog-report'
 import { useWorkoutTimer, parseRestTime } from './WorkoutTimerProvider'
 import {
     enqueueWorkoutLog,
@@ -735,6 +736,15 @@ function StrengthLogSetForm({
                 setSyncStatus('error')
                 setEditing(true)
             }
+            // W6.2 · Sentry SOLO del auto-envío del reloj (el guard vive en el helper): esa serie se
+            // cerró sola y el alumno puede estar mirando el techo. El camino manual ya tiene el chip
+            // «Reintentar» de esta misma fila (DATA-TESTING §8.3).
+            reportHoldAutologError(new Error(result.error), {
+                source: holdSourceRef.current,
+                blockId,
+                exerciseType: 'strength',
+                context: supersetRest ? 'superset' : 'solo',
+            })
             onResult?.(blockId, setNumber, 'error')
         } else if (result == null) {
             // Red caída: la serie sigue en la cola → se queda "sin sincronizar" y la reintenta el flush.
@@ -2357,6 +2367,14 @@ function TypedLogSetRow({
             onResult?.(blockId, setNumber, 'ok')
         } else if (result?.error) {
             if (mountedRef.current) setState(result)
+            // W6.2 · mismo reporte que la fila de fuerza, con el MISMO guard de fuente: en esta fila
+            // el hold es el de movilidad (DATA-TESTING §8.3).
+            reportHoldAutologError(new Error(result.error), {
+                source: holdSourceRef.current,
+                blockId,
+                exerciseType: mode,
+                context: supersetRest ? 'superset' : 'solo',
+            })
             onResult?.(blockId, setNumber, 'error')
         } else if (result == null) {
             // Red caída: el registro sigue en la cola y lo reintenta el flush.

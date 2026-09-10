@@ -135,6 +135,7 @@ export function MobilityStepV3({
                 <HoldModuleV3
                     kind="mobility"
                     size="solo214"
+                    blockId={block.id}
                     prescribedSec={holdSeconds}
                     sideMode={block.side_mode}
                     context="solo"

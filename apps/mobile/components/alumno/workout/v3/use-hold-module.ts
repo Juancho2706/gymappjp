@@ -54,6 +54,7 @@ import {
   type HoldSource,
   type OptimisticLogPayload,
 } from '@eva/workout-engine'
+import { captureAppEvent } from '../../../../lib/analytics'
 import { timerHaptics } from '../../../../lib/haptics'
 import {
   cancelHoldEndNotification,
@@ -65,6 +66,15 @@ import { useCountdown } from './timing'
 
 /** Los DOS ejes con reloj de este tren. El roller queda FUERA (R12). */
 export type HoldModuleKind = 'mobility' | 'strength_time'
+
+/**
+ * `exercise_type` de los eventos de PostHog (DATA-TESTING §8.1): el eje del tren tiene DOS `kind`
+ * pero la serie se lee en dos categorías — `mobility` y `strength`. Mismo mapeo que la web
+ * (`v3/HoldModuleV3.tsx`): si cambia acá, cambia allá o el insight queda partido.
+ */
+function eventExerciseType(kind: HoldModuleKind): 'mobility' | 'strength' {
+  return kind === 'mobility' ? 'mobility' : 'strength'
+}
 
 /**
  * Estado visible del módulo. `done` = la serie ya se envió — el anillo pasa a «¡Listo!». `paused`
@@ -159,6 +169,10 @@ export function useHoldModule(args: UseHoldModuleArgs): UseHoldModuleApi {
   const seededRef = useRef<Record<string, string>>({})
   // `finish` fresco para el `onDone` del reloj, que se congela en el primer render del hook.
   const finishRef = useRef<(reason: HoldEndReason, away?: boolean) => void>(() => {})
+  // `hold_timer_started` es UNO por serie (W6.1): lo emite el arranque del PRIMER lado. Ni el lado 2
+  // —que arranca solo o queda armado— ni un «Reanudar» tras la pausa vuelven a emitirlo. Se limpia
+  // con `resetKey`, que es exactamente «otra serie / otro miembro / otra ronda».
+  const startedEventRef = useRef(false)
 
   const countdown = useCountdown(
     prescribedSec,
@@ -231,6 +245,28 @@ export function useHoldModule(args: UseHoldModuleArgs): UseHoldModuleApi {
             ? buildStrengthTimePayload(values, a.blockId, a.setNumber, ctx)
             : buildTypedPayload('mobility', values, a.blockId, a.setNumber, ctx)
         setFinished(true)
+        // Analítica del cierre (W6.1 / DATA-TESTING §8.1) — UNO por SERIE, no por lado: en `per_side`
+        // este bloque sólo corre al cerrar el derecho. `via_app_state` conserva el nombre canónico de
+        // R19 pero su valor es el `expiredWhileAway` de R27 (SPEC CA-08d). Sin PII: sólo ids y enums.
+        if (source === 'timer') {
+          captureAppEvent('hold_timer_completed', {
+            block_id: a.blockId,
+            exercise_type: eventExerciseType(a.kind),
+            context: a.context,
+            hold_source: source,
+            closes_round: a.closesRound,
+            via_app_state: away,
+          })
+        } else {
+          captureAppEvent('hold_early_finished', {
+            block_id: a.blockId,
+            exercise_type: eventExerciseType(a.kind),
+            context: a.context,
+            // Lo que efectivamente se guarda (`min(elapsed, prescribed)`), no el reloj de pared crudo.
+            elapsed_sec: decision.fillSeconds ?? Math.round(elapsedSec),
+            prescribed_sec: a.prescribedSec,
+          })
+        }
         a.onCommit(payload, source, {
           side: currentSide,
           closesRound: a.closesRound,
@@ -270,6 +306,7 @@ export function useHoldModule(args: UseHoldModuleArgs): UseHoldModuleApi {
     setExpiredWhileAway(false)
     elapsedRef.current = createHoldElapsed()
     seededRef.current = {}
+    startedEventRef.current = false
     countdownRef.current.prime(argsRef.current.prescribedSec)
     killNotif()
   }, [resetKey, killNotif])
@@ -319,6 +356,16 @@ export function useHoldModule(args: UseHoldModuleArgs): UseHoldModuleApi {
   /** Arranca (o reanuda) el lado en curso. `resume` es el MISMO camino: no hay dos reglas. */
   const start = useCallback(() => {
     if (countdownRef.current.running) return
+    if (!startedEventRef.current) {
+      startedEventRef.current = true
+      const a = argsRef.current
+      captureAppEvent('hold_timer_started', {
+        block_id: a.blockId,
+        exercise_type: eventExerciseType(a.kind),
+        context: a.context,
+        side_mode: a.sideMode,
+      })
+    }
     elapsedRef.current = startHoldElapsed(elapsedRef.current, Date.now())
     countdownRef.current.toggle()
     void scheduleHoldEndNotification(countdownRef.current.remaining)

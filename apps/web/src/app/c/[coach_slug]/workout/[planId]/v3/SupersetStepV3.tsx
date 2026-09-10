@@ -290,10 +290,13 @@ export function SupersetStepV3({
                         // Mismo gate que la nota de descanso: las bandas mueren al cerrar la superserie.
                         const showMarquee = !groupComplete
                         return (
+                            // `data-testid` sólo en la tarjeta ACTIVA (W6.10): el spec de Playwright
+                            // apuntaba por clase (`.exec-v3-excard.is-active`) y un re-skin lo dejaba ciego.
                             <div
                                 key={m.block.id}
                                 ref={(el) => registerRowRef(m.block.id, currentRound, el)}
                                 className={cn('exec-v3-excard is-active', showMarquee && 'exec-v3-ss-hasmarquee')}
+                                data-testid="ss-member-active"
                             >
                                 {showMarquee &&
                                     (['is-top', 'is-bottom'] as const).map((pos) => (
@@ -346,6 +349,7 @@ export function SupersetStepV3({
                                                 <HoldModuleV3
                                                     kind={holdKind}
                                                     size="ss"
+                                                    blockId={m.block.id}
                                                     prescribedSec={m.block.duration_sec ?? 0}
                                                     sideMode={m.block.side_mode}
                                                     context="superset"

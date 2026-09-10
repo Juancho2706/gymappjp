@@ -51,6 +51,7 @@ function emitAppState(next: string) {
 }
 
 const holdDone = vi.fn()
+const captureAppEvent = vi.fn()
 const notif = {
   schedule: vi.fn(async () => {}),
   cancel: vi.fn(async () => {}),
@@ -66,6 +67,12 @@ vi.doMock(mobileDep('react-native'), () => ({
 vi.doMock(mobileFile('lib', 'haptics.ts'), () => ({
   haptics: {},
   timerHaptics: { holdDone },
+}))
+// Analítica de producto (W6.1): el hook emite los 3 eventos del hold por `captureAppEvent`. Se
+// mockea el módulo entero por path absoluto — importarlo de verdad arrastraría `posthog-react-native`,
+// `expo-constants` y `expo-updates` a un test de node.
+vi.doMock(mobileFile('lib', 'analytics.ts'), () => ({
+  captureAppEvent,
 }))
 vi.doMock(mobileFile('components', 'alumno', 'workout', 'timers', 'hold-notification.ts'), () => ({
   scheduleHoldEndNotification: notif.schedule,
@@ -85,6 +92,7 @@ beforeEach(() => {
   appState.currentState = 'active'
   appState.listeners.clear()
   holdDone.mockClear()
+  captureAppEvent.mockClear()
   notif.schedule.mockClear()
   notif.cancel.mockClear()
   notif.dismiss.mockClear()
@@ -614,5 +622,135 @@ describe('useHoldModule · CA-90 — seedObjective desde idle', () => {
     h.onSeed.mockClear()
     act(() => result.current.seedObjective())
     expect(h.onSeed).not.toHaveBeenCalled()
+  })
+})
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+// W6.1 · Los TRES eventos de PostHog (DATA-TESTING §8.1) — nombre y props EXACTAS
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+//
+// Lo que se protege no es la UI: es el contrato de la serie en PostHog. Si alguien renombra una prop
+// o emite `hold_timer_started` en el lado 2, el insight de adopción (§8.2) y el denominador del
+// umbral de alarma (§8.4) quedan mal y nadie se entera hasta abrir el dashboard.
+
+/** Eventos capturados con ese nombre, en orden, con sus props. */
+function eventsNamed(name: string) {
+  return captureAppEvent.mock.calls.filter((c) => c[0] === name).map((c) => c[1] as Record<string, unknown>)
+}
+
+describe('useHoldModule · hold_timer_started (W6.1)', () => {
+  it('se emite al arrancar el PRIMER lado, con las 4 props del contrato', () => {
+    const { result } = mountHold({ sideMode: 'per_side', context: 'superset', prescribedSec: 30 })
+    act(() => result.current.start())
+    expect(eventsNamed('hold_timer_started')).toEqual([
+      { block_id: 'blk-1', exercise_type: 'mobility', context: 'superset', side_mode: 'per_side' },
+    ])
+  })
+
+  it('fuerza por tiempo viaja como exercise_type strength y side_mode null', () => {
+    const { result } = mountHold({ kind: 'strength_time', prescribedSec: 30 })
+    act(() => result.current.start())
+    expect(eventsNamed('hold_timer_started')[0]).toMatchObject({ exercise_type: 'strength', side_mode: null })
+  })
+
+  it('«Reanudar» tras la pausa NO re-emite (uno por serie)', () => {
+    const { result } = mountHold({ prescribedSec: 30 })
+    act(() => result.current.start())
+    act(() => result.current.pause())
+    act(() => result.current.resume())
+    expect(eventsNamed('hold_timer_started')).toHaveLength(1)
+  })
+
+  it('per_side: el lado 2 arranca SOLO y tampoco re-emite', () => {
+    const { result } = mountHold({ sideMode: 'per_side', prescribedSec: 4 })
+    act(() => result.current.start())
+    advance(4_200)
+    expect(result.current.side).toBe('right')
+    expect(result.current.running).toBe(true)
+    expect(eventsNamed('hold_timer_started')).toHaveLength(1)
+  })
+
+  it('cambiar de serie re-arma el evento (es uno por SERIE, no por montaje)', () => {
+    const { result, rerender, args } = mountHold({ prescribedSec: 30 })
+    act(() => result.current.start())
+    act(() => {
+      rerender({ ...args, setNumber: 2, resetKey: 'blk-1:2:1' })
+    })
+    act(() => result.current.start())
+    expect(eventsNamed('hold_timer_started')).toHaveLength(2)
+  })
+})
+
+describe('useHoldModule · hold_timer_completed (W6.1)', () => {
+  it('a 0 se emite con las 6 props; via_app_state false en foreground', () => {
+    const { result } = mountHold({ prescribedSec: 5, context: 'superset', closesRound: true })
+    act(() => result.current.start())
+    advance(5_200)
+
+    expect(eventsNamed('hold_timer_completed')).toEqual([
+      {
+        block_id: 'blk-1',
+        exercise_type: 'mobility',
+        context: 'superset',
+        hold_source: 'timer',
+        closes_round: true,
+        via_app_state: false,
+      },
+    ])
+    expect(eventsNamed('hold_early_finished')).toHaveLength(0)
+  })
+
+  it('vencido con la app FUERA ⇒ via_app_state true (el nombre es de R19, el valor de R27)', () => {
+    const { result } = mountHold({ prescribedSec: 30 })
+    act(() => result.current.start())
+    act(() => {
+      appState.currentState = 'background'
+    })
+    vi.setSystemTime(Date.now() + 300_000)
+    advance(250)
+    act(() => emitAppState('active'))
+
+    expect(eventsNamed('hold_timer_completed')[0]).toMatchObject({ via_app_state: true })
+  })
+
+  it('per_side: UNO por serie (el izquierdo siembra, el derecho envía)', () => {
+    const { result } = mountHold({ sideMode: 'per_side', prescribedSec: 4 })
+    act(() => result.current.start())
+    advance(4_200)
+    expect(eventsNamed('hold_timer_completed')).toHaveLength(0)
+    advance(4_200)
+    expect(eventsNamed('hold_timer_completed')).toHaveLength(1)
+  })
+})
+
+describe('useHoldModule · hold_early_finished (W6.1)', () => {
+  it('«Listo» antes de 0 emite lo transcurrido y el objetivo', () => {
+    const { result } = mountHold({ prescribedSec: 30 })
+    act(() => result.current.start())
+    vi.setSystemTime(Date.now() + 12_000)
+    advance(250)
+    act(() => result.current.doneEarly())
+
+    expect(eventsNamed('hold_early_finished')).toEqual([
+      { block_id: 'blk-1', exercise_type: 'mobility', context: 'solo', elapsed_sec: 12, prescribed_sec: 30 },
+    ])
+    expect(eventsNamed('hold_timer_completed')).toHaveLength(0)
+  })
+
+  it('la PAUSA y «re-medir» no cierran la serie ⇒ ningún evento de cierre', () => {
+    const { result } = mountHold({ prescribedSec: 30 })
+    act(() => result.current.start())
+    vi.setSystemTime(Date.now() + 8_000)
+    advance(250)
+    act(() => result.current.pause())
+    act(() => result.current.remeasure())
+    expect(eventsNamed('hold_early_finished')).toHaveLength(0)
+    expect(eventsNamed('hold_timer_completed')).toHaveLength(0)
+  })
+
+  it('CA-90: «Listo» desde idle siembra el objetivo y NO emite nada', () => {
+    const { result } = mountHold({ prescribedSec: 30 })
+    act(() => result.current.seedObjective())
+    expect(captureAppEvent).not.toHaveBeenCalled()
   })
 })

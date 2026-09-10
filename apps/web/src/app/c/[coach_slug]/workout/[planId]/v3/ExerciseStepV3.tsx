@@ -204,6 +204,7 @@ export function ExerciseStepV3({
                 <HoldModuleV3
                     kind="strength_time"
                     size="solo130"
+                    blockId={block.id}
                     prescribedSec={holdSeconds}
                     sideMode={block.side_mode}
                     context="solo"
@@ -270,7 +271,13 @@ export function ExerciseStepV3({
                     const slot =
                         setNumber === firstUnlogged ? 'is-active' : log ? 'is-prev' : 'is-future'
                     return (
-                        <div key={`${block.id}-${setNumber}`} className={cn('exec-v3-slot', slot)}>
+                        // `data-testid` sólo en la ACTIVA (W6.10): el spec de Playwright apuntaba por
+                        // clase (`.exec-v3-slot.is-active`) y un re-skin del CSS lo dejaba ciego.
+                        <div
+                            key={`${block.id}-${setNumber}`}
+                            className={cn('exec-v3-slot', slot)}
+                            data-testid={slot === 'is-active' ? 'set-slot-active' : undefined}
+                        >
                             <LogSetForm
                                 blockId={block.id}
                                 sideMode={block.side_mode}
