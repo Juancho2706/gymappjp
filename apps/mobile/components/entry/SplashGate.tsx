@@ -13,7 +13,7 @@ import Animated, {
 import { ENTRY_TOKENS, isCoachBrandingPresentationAllowed, resolveEffectiveCoachBrandTheme } from '../../lib/theme'
 import { useTheme } from '../../context/ThemeContext'
 import { EASE } from '../../lib/motion'
-import { loadStoredBranding, type CoachBranding } from '../../lib/branding'
+import { isStoredBrandingUsableFor, loadStoredBranding, type CoachBranding } from '../../lib/branding'
 import { supabase } from '../../lib/supabase'
 import { getCoachProfile } from '../../lib/coach'
 import {
@@ -236,14 +236,24 @@ export function SplashGate({ onAnonymous, forceSelector = false }: SplashGatePro
         // de abajo recibe el rechazo igual y cae en el catch del gate, como siempre.
         const coachPromise = getCoachProfile()
         coachPromise.catch(() => {})
-        const [sessionResult, storedBranding] = await Promise.all([
+        const [sessionResult, rawStoredBranding] = await Promise.all([
           sessionPromise,
           loadStoredBranding(),
         ])
         if (!active || routed.current) return
-        cachedBrand.current = Boolean(storedBranding)
 
         const session = sessionResult.data.session
+        // P1 (QA device 10-09) — la cache la pudo firmar OTRO usuario de este mismo telefono (el
+        // coach anterior). Con sesion viva de otro dueno no se usa ni para el splash: el registro
+        // de un coach nuevo arrancaba con logo, color y nombre del anterior. Sin sesion (login del
+        // alumno por codigo) la regla la deja pasar — es el flujo que ESCRIBE esa cache pre-login.
+        // Se filtra aca en vez de pasarle `opts` a `loadStoredBranding` para no romper el paralelo
+        // con `getSession()` (ver ORDEN DE CREACION arriba: el gate no puede esperar a la sesion).
+        const storedBranding = isStoredBrandingUsableFor(rawStoredBranding, session?.user?.id ?? null)
+          ? rawStoredBranding
+          : null
+        cachedBrand.current = Boolean(storedBranding)
+
         if (!session || forceSelector) {
           decided.current = true
           setEvaSignature(true)

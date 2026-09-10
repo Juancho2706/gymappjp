@@ -5,6 +5,7 @@ import { revokePushToken } from './push'
 import { sessionFlags } from './session-flags'
 import { clearNutritionV2CacheForUser } from './nutrition-v2-cache'
 import { clearNutritionV2QueueForUser } from './nutrition-v2-offline'
+import { clearBranding, loadStoredBranding } from './branding'
 
 /**
  * Cierre de sesión central (Ola 0): revoca el push token de ESTE dispositivo
@@ -73,6 +74,23 @@ export async function signOutAndCleanup(
   }
 
   sessionFlags.pwChanged = false
+  // P1 (QA device 10-09) — la marca del coach SALIENTE no puede sobrevivir al logout: sin esto,
+  // `eva_coach_branding` quedaba en AsyncStorage y el siguiente usuario del teléfono (un coach
+  // nuevo, sin marca propia todavía) veía logo, colores, loader y nombre del anterior.
+  //
+  // Pero SOLO si la cache es del que se va (`coachId === outgoingUserId`). La del ALUMNO es la de
+  // SU coach (`coachId` = el coach, nunca el alumno) y SOBREVIVE al logout A PROPÓSITO — decisión
+  // del owner del 12-08 documentada en `app/alumno/(tabs)/perfil.tsx`: es lo que deja al alumno
+  // volver a entrar de un tap en el login branded de su coach en vez de recorrer bienvenida →
+  // código → credenciales otra vez. Borrar acá sin condición reintroducía justo eso.
+  //
+  // La comparación por `coachId` cubre también la cache LEGACY sin firma (`storedForUserId`
+  // ausente, escrita antes de esta OTA): la del coach A igual trae `coachId === A`.
+  // Corre en los dos scopes: el camino de error (`api.ts`, sesión irrecuperable) pasa por acá.
+  if (outgoingUserId) {
+    const storedBranding = await loadStoredBranding().catch(() => null)
+    if (storedBranding?.coachId === outgoingUserId) await clearBranding().catch(() => {})
+  }
   if (!options.preserveStudentAccountStatus) {
     await AsyncStorage.removeItem('eva:student-account-status:v1').catch(() => {})
   }

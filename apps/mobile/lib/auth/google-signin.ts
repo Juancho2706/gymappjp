@@ -222,5 +222,13 @@ export async function resolveGoogleCoachDestination(
  */
 export async function signOutGoogleAndSupabase(): Promise<void> {
   await GoogleSignin.signOut().catch(() => {})
+  // P1 (QA device 10-09): acá NO se limpia la marca, a propósito. Este helper tiene UN call site
+  // —`app/(auth)/login.tsx`, el botón Google, que es coach-only— y quien lo dispara es el ALUMNO
+  // que se equivocó de puerta: tiene cacheada la marca de SU coach (la escribió `CoachIdentifierForm`
+  // antes de loguearse) y borrarla lo devolvía a la pantalla de código sin que ningún usuario ajeno
+  // hubiera entrado. Además el usuario Google recién autenticado no llegó a escribir cache propia
+  // (sin fila `coaches` no corre `bootstrapOwnCoachBranding`), así que no hay nada suyo que limpiar.
+  // Si en el futuro apareciera marca ajena por este camino, la tapa el guard de DUEÑO
+  // (`storedForUserId`) de `loadStoredBranding`/`bootstrapOwnCoachBranding`, no un borrado ciego.
   await supabase.auth.signOut({ scope: 'local' }).catch(() => {})
 }

@@ -282,6 +282,13 @@ function RootLayout() {
   // nativo sigue visible durante esta lectura (preventAutoHideAsync arriba). El mapeo queda
   // fijo por cold start — mismo contrato que web, donde un cambio de fuente del coach
   // requiere full reload de la PWA.
+  //
+  // A PROPÓSITO sin el guard de dueño (`{ sessionUserId }`): pedirlo obliga a un `getSession()`
+  // que puede irse a la RED (refresh del token vencido) con el splash nativo congelado, y este
+  // arranque tiene que resolver YA. El costo asumido: con cache LEGACY sin firma —o antes de que
+  // corra `bootstrapOwnCoachBranding`— el cold start puede registrar la tipografía del coach
+  // anterior para toda la sesión. Es solo la FUENTE (colores, logo y loader sí van guardados, vía
+  // ThemeContext) y se corrige al siguiente arranque, cuando el guard ya limpió la cache.
   const [storedBranding, setStoredBranding] = useState<CoachBranding | null | undefined>(undefined)
   useEffect(() => {
     loadStoredBranding()

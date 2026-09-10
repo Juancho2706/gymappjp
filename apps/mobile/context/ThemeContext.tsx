@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useColorScheme, View } from 'react-native'
 import { StatusBar } from 'expo-status-bar'
 import { colorScheme as nwColorScheme, vars } from 'nativewind'
@@ -17,6 +17,7 @@ import {
   type Theme,
 } from '../lib/theme'
 import { type CoachBranding, loadStoredBranding } from '../lib/branding'
+import { supabase } from '../lib/supabase'
 import { isOwnBrandColor } from '../lib/loader-identity'
 
 type ThemeMode = 'light' | 'dark' | 'system'
@@ -94,12 +95,71 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [mode, setMode] = useState<ThemeMode>('system')
 
   useEffect(() => {
-    loadStoredBranding().then(setBranding)
+    // P1 (QA device 10-09) — la cache de marca se lee CONTRA la sesión: si la firmó otro usuario
+    // del mismo teléfono (el coach anterior), se descarta y se borra en vez de pintar marca ajena.
+    //
+    // DOS lecturas a propósito, no una encadenada: `getSession()` NO siempre es local — si el
+    // access token está vencido, supabase-js dispara el refresh POR RED antes de resolver, y
+    // encadenar el `loadStoredBranding` detrás mandaba el primer paint a EVA neutro con un salto
+    // visible a la marca después (flash de white-label). Así, la cache pinta YA y el guard de dueño
+    // se aplica en cuanto llega el id de sesión. `guardApplied` evita que la lectura sin guard,
+    // si llegara tarde, reviva una entrada que el guard acaba de descartar.
+    let alive = true
+    let guardApplied = false
+    void loadStoredBranding()
+      .then((stored) => {
+        if (alive && !guardApplied && stored) setBranding(stored)
+      })
+      .catch(() => {})
+    void supabase.auth
+      .getSession()
+      .then(({ data }) => loadStoredBranding({ sessionUserId: data.session?.user?.id ?? null }))
+      .then((usable) => {
+        guardApplied = true
+        if (alive) setBranding(usable)
+      })
+      .catch(() => {
+        guardApplied = true
+      })
     AsyncStorage.getItem(THEME_MODE_KEY).then((stored) => {
       if (stored === 'light' || stored === 'dark' || stored === 'system') {
         setMode(stored)
       }
     })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  // P1 (QA device 10-09) — al cerrar sesión el COACH, el provider vuelve a EVA neutro EN EL ACTO.
+  // Va acá y no en los 8 call sites de logout a propósito: un solo lugar, y cubre también el cierre
+  // INVOLUNTARIO (token muerto ⇒ `api.ts`) que ninguna pantalla ve pasar. `clearBranding()` borra
+  // el storage; esto borra lo que ya está en memoria pintando la app.
+  //
+  // Condicionado al DUEÑO, espejo de `signOutAndCleanup`: solo se apaga si la marca pintada es la
+  // del que se va (`coachId === saliente`). La del ALUMNO es la de SU coach y sobrevive al logout
+  // a propósito (owner 12-08, ver `app/alumno/(tabs)/perfil.tsx`) — apagarla acá lo mandaba de
+  // vuelta a bienvenida → código aunque el storage hubiera quedado intacto.
+  const brandingRef = useRef<CoachBranding | null>(null)
+  useEffect(() => {
+    brandingRef.current = branding
+  }, [branding])
+  useEffect(() => {
+    // `SIGNED_OUT` llega con `session` en null, así que el id del saliente hay que recordarlo del
+    // último evento con sesión (mismo patrón que el janitor de `lib/auth-actions.ts`).
+    const lastSessionUserId = { current: null as string | null }
+    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+      const sessionUserId = session?.user?.id ?? null
+      if (sessionUserId) {
+        lastSessionUserId.current = sessionUserId
+        return
+      }
+      if (event !== 'SIGNED_OUT') return
+      const outgoing = lastSessionUserId.current
+      lastSessionUserId.current = null
+      if (outgoing && brandingRef.current?.coachId === outgoing) setBranding(null)
+    })
+    return () => data.subscription.unsubscribe()
   }, [])
 
   // `useColorScheme()` is reactive, so 'system' tracks OS changes live.

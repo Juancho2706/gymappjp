@@ -782,10 +782,14 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
       no con el 9 de STATS), mensaje a `nutricionista-pame-cid`, a `dudu` y a
       `josefit` (textos en [PLAN](PLAN.md) §Docs y cierre). **Criterio**: enviado y anotado acá con fecha; nada de push
       masivo.
-      **Estado 10-09 (owner «Q3 a»)**: textos listos por el jefe en `D:\tmp\plan-porciones-chilenas\AVISOS-W6.11.md` (banner
-      para `/admin/novedades` con título y cuerpo, mensaje a Pame —versión larga en `RESPUESTA-PAME.md`— y mensaje a `dudu` /
-      `josefit`), todos tomados del PLAN. Los manda el owner después del encendido (ya hecho, W6.8); al mandarlos se anota acá
-      la fecha.
+      **Hecho 10-09 ~04:05Z (owner: «mandá con contacto@eva-app.cl, reply a contacto@eva-app.cl»)**: el banner in-app no se
+      manda (ya corre solo en el editor para quien abre un plan SMAE). **Correos por Resend, uno por coach**, desde
+      `EVA <contacto@eva-app.cl>`, asunto «Llegó el sistema chileno de porciones a EVA (tus planes no cambian)», tag
+      `campaign=porciones-cl-w611`, a los 6 coaches con porciones SMAE y alumnos activos: `jotap-coach` (`6ac163ff`), `movens`
+      (`bd32556f`), `dudu` (`f4173be9`, con el párrafo de sus grupos propios), `burgos-fit-club` (`87f05424`), `erikglift`
+      (`65795bee`), `jpl` (`f3127a44`). Fuera: `josefit` (cuenta del owner) y los dos coaches sin alumnos activos. **Pame**: el
+      owner le pasa el mensaje a JP para IG (texto en el artifact de avisos 6be4db5d). Draft y destinatarios en
+      `D:\tmp\plan-porciones-chilenas\CORREO-COACHES-SMAE-draft.md`.
 
 ## Decisiones del owner 10-09 (tras el reporte de W0–W4 + W3)
 

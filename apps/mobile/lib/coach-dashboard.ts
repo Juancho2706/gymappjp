@@ -80,6 +80,43 @@ export function mapKpiDeltas(raw: unknown): MobileKpiDeltas {
   }
 }
 
+/**
+ * Wiggle de la sparkline de adherencia: serie suave que TERMINA en el valor real. La pipeline no
+ * expone histórico agregado, así que es un placeholder de forma — el mismo array que usa el hero
+ * web (`PulseHero.tsx` → `sparkSeries`), para que las dos superficies dibujen la misma curva.
+ */
+const ADHERENCE_SPARK_WIGGLE = [-9, -5, -7, -2, -4, 1, 0]
+
+/**
+ * Stat «Adherencia» del hero, resuelto en UN solo lugar (reporte del owner 10-09).
+ *
+ * Un coach recién registrado, sin alumnos reales, veía «Adherencia 78 % · +2 pts» porque el KPI
+ * contaba al alumno de ejemplo; el server ya lo excluye de los KPIs agregados (`is_demo`; las
+ * listas del día 1 lo conservan a propósito, etiquetado), así que ahora ve «0 %»:
+ * honesto pero feo — un cero se lee como «tus alumnos no entrenan», y no hay alumnos. Sin
+ * denominador no hay porcentaje: se muestra «—», sin sparkline y sin delta (una tendencia sobre
+ * cero alumnos sería inventada).
+ *
+ * `totalClients` es la señal correcta y no `avgAdherence > 0`: un coach CON alumnos que ninguno
+ * entrenó tiene un 0 % verdadero y ese sí debe pintarse.
+ *
+ * Puro y exportado a propósito: lo consume el hero RN (`MobilePulseHero`) y es lo que testea
+ * `tests/mobile-coach-dashboard-hero.test.ts`.
+ */
+export function adherenceHeroStat(kpi: { avgAdherence: number; totalClients: number }): {
+  value: string
+  spark: number[] | null
+  showDelta: boolean
+} {
+  if (kpi.totalClients <= 0) return { value: '—', spark: null, showDelta: false }
+  const base = Math.max(0, Math.min(100, kpi.avgAdherence))
+  return {
+    value: `${kpi.avgAdherence}%`,
+    spark: ADHERENCE_SPARK_WIGGLE.map((w) => Math.max(0, Math.min(100, base + w))),
+    showDelta: true,
+  }
+}
+
 export type MobileRiskAlertItem = {
   clientId: string
   clientName: string

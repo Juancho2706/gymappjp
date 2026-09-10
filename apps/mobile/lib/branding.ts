@@ -74,6 +74,18 @@ export interface CoachBranding {
    * select rich fallaria y se apagaria TODO el white-label del login.
    */
   useBrandColorsCoach?: boolean | null
+  /**
+   * P1 (QA device 10-09) — DUEÑO de la entrada cacheada en AsyncStorage. NO viene de DB: lo
+   * completa `saveStoredBranding` con el `session.user.id` que escribió la cache.
+   *
+   * Existe porque la cache era anónima: al cerrar sesión el coach A y registrarse el coach B en
+   * el MISMO teléfono, B heredaba logo, colores, loader y nombre de A. Con el dueño marcado,
+   * `loadStoredBranding` descarta (y borra) la entrada cuando la sesión actual es de otro usuario.
+   *
+   * `null` = la escribió el flujo PRE-LOGIN del alumno (`CoachIdentifierForm`, sin sesión): esa
+   * entrada sigue siendo válida para cualquiera, que es justo lo que necesita el login por código.
+   */
+  storedForUserId?: string | null
 }
 
 const BRANDING_KEY = 'eva_coach_branding'
@@ -193,8 +205,56 @@ export async function fetchBrandingByInviteCode(inviteCode: string): Promise<Coa
   return fetchBrandingByCoachIdentifier(inviteCode)
 }
 
+/**
+ * ¿La marca cacheada le sirve a ESTA sesión? Función PURA (sin AsyncStorage ni red) para que la
+ * regla del P1 sea testeable y única.
+ *
+ * Reglas (en orden):
+ *  - Sin nada guardado ⇒ true (no hay nada que descartar; el caller ya devuelve null).
+ *  - Sin sesión (`null`/`undefined`) ⇒ true: es el login del alumno por código, que resuelve la
+ *    marca del coach ANTES de tener usuario. Romper esto apagaría el white-label del login.
+ *  - Cache sin dueño (`storedForUserId` ausente o `null`) ⇒ true: la escribió ese mismo flujo
+ *    pre-login (o una versión vieja de la app) y no hay evidencia de que sea ajena.
+ *  - Con sesión y con dueño ⇒ solo si coinciden.
+ *
+ * BORDE CONOCIDO (cache LEGACY, pre-OTA): toda entrada escrita por una versión anterior de la app
+ * viene SIN `storedForUserId` y esta regla la deja pasar para cualquier sesión — es el precio de no
+ * apagarle el white-label del login a los alumnos que ya tienen la marca de su coach cacheada. Se
+ * cierra por los dos lados que importan y sin tocar al alumno:
+ *  - COACH: `bootstrapOwnCoachBranding` exige además `stored.coachId === userId`, así que una marca
+ *    ajena legacy se borra en el primer arranque de su panel.
+ *  - LOGOUT: `signOutAndCleanup` borra la cache cuando `coachId` es el del usuario que se va, que
+ *    en la entrada legacy del coach A también es A.
+ * Queda vivo solo el hueco cosmético de SplashGate/ThemeContext: un primer paint con marca legacy
+ * ajena hasta que corre alguno de esos dos guards. No versionamos la clave a propósito — migrarla
+ * significaría descartar la cache de TODOS los alumnos y devolverlos a bienvenida → código.
+ */
+export function isStoredBrandingUsableFor(
+  stored: { storedForUserId?: string | null } | null,
+  sessionUserId: string | null | undefined,
+): boolean {
+  if (!stored) return true
+  if (!sessionUserId) return true
+  const owner = stored.storedForUserId
+  if (owner === undefined || owner === null) return true
+  return owner === sessionUserId
+}
+
+/** Id del usuario de la sesión LOCAL (sin round-trip). Best-effort: `null` si no hay o falla. */
+async function currentSessionUserId(): Promise<string | null> {
+  try {
+    const { data } = await supabase.auth.getSession()
+    return data.session?.user?.id ?? null
+  } catch {
+    return null
+  }
+}
+
 export async function saveStoredBranding(branding: CoachBranding): Promise<void> {
-  await AsyncStorage.setItem(BRANDING_KEY, JSON.stringify(branding))
+  // La entrada queda FIRMADA por quien la escribe (ver `storedForUserId`): sin firma, el próximo
+  // usuario del device hereda la marca del anterior.
+  const storedForUserId = await currentSessionUserId()
+  await AsyncStorage.setItem(BRANDING_KEY, JSON.stringify({ ...branding, storedForUserId }))
 }
 
 /**
@@ -256,8 +316,23 @@ export async function bootstrapOwnCoachBranding(): Promise<OwnBrandingBootstrapR
     if (!userId) return BOOTSTRAP_SKIPPED
     if (ownBrandingBootstrappedFor === userId) return BOOTSTRAP_SKIPPED
 
+    // P1 (QA device 10-09) — ANTES de la red: si la cache es de OTRO (firmada por otro usuario, o
+    // de otro coach: la marca propia siempre trae `coachId === userId`), se borra ya. Sin esto, un
+    // coach nuevo en el device del anterior veia logo/colores/loader/nombre ajenos mientras dura la
+    // consulta, y para siempre si la consulta no devolvia marca. `clearBranding()` resetea el memo,
+    // asi que va antes de marcarlo.
+    const stored = await loadStoredBranding()
+    const foreignCache =
+      !!stored && (!isStoredBrandingUsableFor(stored, userId) || stored.coachId !== userId)
+    if (foreignCache) await clearBranding()
+
     const own = await fetchOwnCoachBranding(userId)
-    if (!own) return BOOTSTRAP_SKIPPED // no es coach, o fallo la lectura ⇒ no memoizar
+    if (!own) {
+      // `null` no distingue «no es coach» de «coach sin fila legible» (`maybeSingle` devuelve
+      // data null en ambos) ⇒ nunca se memoiza. Pero si acabamos de tirar una marca ajena, el
+      // panel tiene que pintarse EVA neutro YA en vez de quedarse con lo que el provider tenga.
+      return foreignCache ? { handled: true, branding: null } : BOOTSTRAP_SKIPPED
+    }
 
     // OJO con el orden: `clearBranding()` resetea el memo, asi que se marca DESPUES de limpiar.
     if (own.useBrandColorsCoach === false) {
@@ -321,12 +396,28 @@ export async function refreshClientCoachBranding(): Promise<CoachBranding | null
   }
 }
 
-export async function loadStoredBranding(): Promise<CoachBranding | null> {
+/**
+ * Lee la marca cacheada.
+ *
+ * `opts.sessionUserId` (P1 QA 10-09) activa el guard de DUEÑO: si la entrada la firmó OTRO
+ * usuario, no se devuelve y ADEMÁS se borra (el device no puede quedar con marca ajena latente).
+ * Los callers que no tienen la sesión a mano llaman sin `opts` y conservan el comportamiento
+ * previo — para el coach el guard redundante vive en `bootstrapOwnCoachBranding`.
+ */
+export async function loadStoredBranding(
+  opts?: { sessionUserId?: string | null },
+): Promise<CoachBranding | null> {
   const raw = await AsyncStorage.getItem(BRANDING_KEY)
   if (!raw) return null
   try {
     const parsed = JSON.parse(raw) as unknown
-    if (isStoredCoachBranding(parsed)) return parsed
+    if (isStoredCoachBranding(parsed)) {
+      if (opts && !isStoredBrandingUsableFor(parsed, opts.sessionUserId)) {
+        await clearBranding()
+        return null
+      }
+      return parsed
+    }
     await AsyncStorage.removeItem(BRANDING_KEY)
     return null
   } catch {

@@ -61,6 +61,10 @@ function sparkSeries(end: number): number[] {
 export function PulseHero({ kpi, onAdherence }: Props) {
     const router = useRouter()
 
+    /* `totalClients` ya excluye al alumno de ejemplo (`is_demo`) en la capa de datos, así que 0
+       significa «todavía no tiene alumnos reales» y no «tiene alumnos inactivos». */
+    const sinAlumnos = kpi.totalClients === 0
+
     const stats = [
         {
             key: 'activos',
@@ -90,12 +94,17 @@ export function PulseHero({ kpi, onAdherence }: Props) {
         {
             key: 'adherencia',
             label: 'Adherencia',
-            num: kpi.avgAdherence,
-            suffix: '%',
+            // Sin alumnos reales no hay denominador: el porcentaje sería un 0 % que se lee como
+            // «tus alumnos no entrenan» cuando en realidad no hay alumnos (reporte del owner
+            // 10-09; hasta hoy el KPI contaba al alumno de ejemplo y mostraba un 78 % ajeno).
+            // Se muestra «—», sin sparkline y sin delta: una tendencia sobre cero alumnos sería
+            // inventada. Espejo exacto de `adherenceHeroStat` en RN.
+            num: sinAlumnos ? '—' : kpi.avgAdherence,
+            suffix: sinAlumnos ? '' : '%',
             danger: false,
-            sub: deltaView(kpi.deltas.adherence),
-            caption: undefined as string | undefined,
-            spark: sparkSeries(kpi.avgAdherence),
+            sub: sinAlumnos ? null : deltaView(kpi.deltas.adherence),
+            caption: (sinAlumnos ? 'sin alumnos todavía' : undefined) as string | undefined,
+            spark: sinAlumnos ? null : sparkSeries(kpi.avgAdherence),
             onClick: onAdherence,
         },
     ]
@@ -140,7 +149,13 @@ export function PulseHero({ kpi, onAdherence }: Props) {
                                     : 'var(--text-strong)',
                             }}
                         >
-                            <EvaCountUp value={c.num} suffix={c.suffix} />
+                            {/* `num` puede no ser un número («—» sin alumnos): el count-up anima
+                                enteros, así que ese caso se pinta tal cual. */}
+                            {typeof c.num === 'number' ? (
+                                <EvaCountUp value={c.num} suffix={c.suffix} />
+                            ) : (
+                                c.num
+                            )}
                         </span>
                         {c.spark ? (
                             /* `flex-wrap`: con la frase completa del delta ya no caben lado a lado

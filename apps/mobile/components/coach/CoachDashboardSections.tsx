@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react'
+import type { TextStyle } from 'react-native'
 import { Linking, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
 import { useFocusEffect, useRouter } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
@@ -61,7 +62,7 @@ import type {
   MobileKpiSummary,
   MobileRiskAlertItem,
 } from '../../lib/coach-dashboard'
-import { useCoachOnboarding } from '../../lib/coach-dashboard'
+import { adherenceHeroStat, useCoachOnboarding } from '../../lib/coach-dashboard'
 import { getCachedCoachPersonaStatus } from '../../lib/coach-persona'
 import type { CoachProfile } from '../../lib/coach'
 import { isUuid } from '../../lib/safe-uuid'
@@ -1730,10 +1731,9 @@ export function MobilePulseHero({
 }) {
   const { theme } = useTheme()
 
-  // Serie suave terminando en el valor real (1:1 con sparkSeries de PulseHero.tsx web:
-  // mismo wiggle → misma curva). La pipeline no expone histórico agregado (placeholder).
-  const base = Math.max(0, Math.min(100, kpi.avgAdherence))
-  const adherenceSpark = [-9, -5, -7, -2, -4, 1, 0].map((w) => Math.max(0, Math.min(100, base + w)))
+  // Valor + sparkline + «¿pinto delta?» del stat de adherencia, resueltos por el helper puro de
+  // lib/coach-dashboard: sin alumnos reales muestra «—» pelado (ver el comentario del helper).
+  const adherence = adherenceHeroStat(kpi)
 
   const stats: Array<{
     key: string
@@ -1768,11 +1768,14 @@ export function MobilePulseHero({
     {
       key: 'adherencia',
       label: 'Adherencia',
-      value: `${kpi.avgAdherence}%`,
+      value: adherence.value,
       danger: false,
       onPress: onAdherencePress,
-      sub: pulseDeltaView(kpi.deltas.adherence, theme),
-      spark: adherenceSpark,
+      // Sin alumnos reales no hay tendencia que contar: el delta del server no se pinta y la
+      // caption explica el «—» (misma frase que la web, PulseHero.tsx).
+      sub: adherence.showDelta ? pulseDeltaView(kpi.deltas.adherence, theme) : null,
+      caption: adherence.showDelta ? undefined : 'sin alumnos todavía',
+      spark: adherence.spark ?? undefined,
     },
   ]
 
@@ -1780,6 +1783,15 @@ export function MobilePulseHero({
     <Card padding="none" radius="card" style={{ flexDirection: 'row', overflow: 'hidden' }}>
       {stats.map((s, i) => {
         const SubIcon = s.sub?.icon
+        const numericValue = Number(s.value.replace('%', ''))
+        const metricStyle: TextStyle = {
+          fontFamily: FONT.displayBold,
+          fontSize: 27,
+          lineHeight: 27,
+          letterSpacing: -0.27,
+          color: s.danger ? theme.destructive600 : theme.foreground,
+          fontVariant: ['tabular-nums'],
+        }
         /* Delta real → caption fija → nada (mismo orden que el hero web). El copy del server es
            una FRASE («−2 pts vs. semana previa»), no un número suelto: en un stat de ~95 px un
            `numberOfLines={1}` lo cortaba con «…», así que la línea envuelve hasta 2 líneas y el
@@ -1824,16 +1836,22 @@ export function MobilePulseHero({
             <Text className="font-sans-extra uppercase text-[10.5px] tracking-[0.6px] text-muted" numberOfLines={1}>
               {s.label}
             </Text>
-            <AnimatedNumber
-              value={Number(s.value.replace('%', ''))}
-              duration={820}
-              format={(value) => `${Math.round(value)}${s.key === 'adherencia' ? '%' : ''}`}
-              // Número "En riesgo" = danger-600 scheme-aware (web PulseHero.tsx:106-108
-              // usa var(--danger-600): light #BE183C / dark #FF7C97), NO danger-500. El flip
-              // light/dark ya lo resuelve `theme.destructive600` (lib/theme.ts), así que acá no
-              // queda ningún hex suelto que se pueda desincronizar del DS.
-              style={{ fontFamily: FONT.displayBold, fontSize: 27, lineHeight: 27, letterSpacing: -0.27, color: s.danger ? theme.destructive600 : theme.foreground, fontVariant: ['tabular-nums'] }}
-            />
+            {/* Número "En riesgo" = danger-600 scheme-aware (web PulseHero.tsx:106-108
+                usa var(--danger-600): light #BE183C / dark #FF7C97), NO danger-500. El flip
+                light/dark ya lo resuelve `theme.destructive600` (lib/theme.ts), así que acá no
+                queda ningún hex suelto que se pueda desincronizar del DS.
+                El valor puede NO ser numérico («—» cuando el coach no tiene alumnos reales):
+                `AnimatedNumber` recibiría NaN, así que ese caso se pinta como texto pelado. */}
+            {Number.isFinite(numericValue) ? (
+              <AnimatedNumber
+                value={numericValue}
+                duration={820}
+                format={(value) => `${Math.round(value)}${s.key === 'adherencia' ? '%' : ''}`}
+                style={metricStyle}
+              />
+            ) : (
+              <Text style={metricStyle}>{s.value}</Text>
+            )}
             {s.spark ? (
               /* `flexWrap`: con la frase completa del delta ya no entran lado a lado en un stat
                  angosto, así que la sparkline baja sola a la línea de abajo (y sigue pegada a la
@@ -2192,7 +2210,9 @@ function resolveMobileNextBestAction({
     }
   }
 
-  if (kpi.avgAdherence < 60) {
+  // Sin alumnos reales no hay adherencia baja que revisar: el hero ya muestra «—» y esta tarjeta
+  // repetiría la misma mentira (coach nuevo con «Adherencia promedio < 60%», owner 10-09).
+  if (kpi.totalClients > 0 && kpi.avgAdherence < 60) {
     return {
       id: 'adherencia-baja',
       title: 'Adherencia promedio < 60%',

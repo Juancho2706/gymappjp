@@ -118,7 +118,8 @@ export function DesktopBento({ data, coachName, coachInviteCode, onAdherence }: 
     const kpis: {
         key: string
         label: string
-        value: number
+        /** Número animado, o un texto fijo («—») cuando no hay denominador (coach sin alumnos). */
+        value: number | string
         suffix?: string
         icon: LucideIcon
         tone: KpiTone
@@ -156,11 +157,14 @@ export function DesktopBento({ data, coachName, coachInviteCode, onAdherence }: 
         {
             key: 'adherencia',
             label: 'Adherencia',
-            value: data.kpi.avgAdherence,
-            suffix: '%',
+            // Sin alumnos reales no hay porcentaje que contar: «—» sin delta, como el hero móvil y
+            // PulseHero (un coach recién registrado veía «0 %», owner 10-09).
+            value: data.kpi.totalClients === 0 ? '—' : data.kpi.avgAdherence,
+            suffix: data.kpi.totalClients === 0 ? undefined : '%',
             icon: Activity,
             tone: 'success',
-            delta: data.kpi.deltas.adherence,
+            delta: data.kpi.totalClients === 0 ? null : data.kpi.deltas.adherence,
+            caption: data.kpi.totalClients === 0 ? 'sin alumnos todavía' : undefined,
             onClick: onAdherence,
         },
         {
@@ -235,7 +239,7 @@ export function DesktopBento({ data, coachName, coachInviteCode, onAdherence }: 
                                 </span>
                             </div>
                             <div className="font-display text-[34px] font-extrabold leading-none tabular-nums tracking-[-0.01em] text-[var(--text-strong)]">
-                                <EvaCountUp value={k.value} suffix={k.suffix} />
+                                {typeof k.value === 'number' ? <EvaCountUp value={k.value} suffix={k.suffix} /> : k.value}
                             </div>
                             {/* Delta real → caption fija → nada. El alto del tile no depende de
                                 esta línea: los 4 son celdas de un grid con `align-items: stretch`,
