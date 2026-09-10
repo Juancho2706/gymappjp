@@ -32,8 +32,8 @@ prevalecen sobre este resumen. La prosa retirada el 2026-09-02 está en
 1. **Tren «Porciones a la chilena» (Nutrición V2, caso Pame Cid) — EN PRODUCCIÓN 10-09 02:29Z** ([SDD](../specs/nutrition-porciones-chilenas/SPEC.md)):
    `master` = `rnmobiledenuevo` = `95a1d39a`, deploy `dpl_xuHL7Mrs…` READY, RPC `20260910015432` en LIVE, OTA 1.1.2 android
    `9e844b15` / ios `8de637b3`, **set chileno INTA/UDD ENCENDIDO (22 grupos del sistema vivos)**: picker con secciones y bump ½,
-   conversión SMAE → chileno, metas «Solo el {día}», sheet del alumno con foto y genéricos primero. Queda: QA del owner en
-   device (10 puntos en TASKS), banner in-app + avisos a coaches y respuesta a Pame (W6.11, textos listos).
+   conversión SMAE → chileno, metas «Solo el {día}», sheet del alumno con foto y genéricos primero. **QA del owner en device
+   VERDE 10-09 ⇒ SDD `done`** (fixes post-cierre `653bd760`). Queda W6.11: avisos a coaches y respuesta a Pame (textos listos).
 2. **Cerrados con QA del owner VERDE (02/04/05-09); prosa completa en el [historial](../archive/current-historial-2026-09.md):**
    «Ciclo real y por lado» ([tareas](../specs/ciclo-real-y-por-lado/TASKS.md), `a567f6e2`, SDD `done`, aviso a coaches y E2E 9/9
    el 05-09) · «QA del owner 02-09» ([spec](../specs/qa-ejecutor-share-0209/SPEC.md), `0f545926`; quedan F7 y P3) · «billing +

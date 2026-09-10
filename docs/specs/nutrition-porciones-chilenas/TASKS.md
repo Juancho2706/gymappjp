@@ -1,5 +1,5 @@
 ---
-status: active
+status: done
 owner: product-engineering
 last_verified: "2026-09-10"
 canonical: false
@@ -465,7 +465,7 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
       props)`). **Corrección de texto (decisión (q))**: el shape es el de DATA §11 —fuente única, fix S-07—
       `{ surface, group_code, portion_system, from, undone }`, no `{ surface }`. **Cerrado 09-09**: cero kcal, gramos,
       nombres de alimentos o ids (test exhaustivo en `editor-state.portions-bump.test.ts`).
-- [ ] W2.11 [owner] QA en device de los puntos 1–4 y 10 del checklist final.
+- [x] W2.11 [owner] QA en device de los puntos 1–4 y 10 del checklist final. **PASÓ 10-09** (veredicto en el checklist).
 - [x] W2.12 Gates W2 (09-09, sobre `564a2d2c` + remate): `pnpm exec vitest run packages/nutrition-v2 packages/nutrition-engine
       "apps/web/src/app/coach/nutrition-v2/[clientId]/_quick-edit" "apps/web/src/app/c/[coach_slug]/nutrition-v2"
       tests/mobile-nutrition-v2-portions.test.ts tests/nutrition-portions apps/web/src/app/coach/nutrition-v2/_actions` ⇒
@@ -530,7 +530,7 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
       DATA §11 (eventos 2 y 3, con `surface`) construido SOLO por `portions-analytics.ts` (decisión (ag)); `previewed`
       cuenta previews (se emite una vez por apertura y solo con `diff` no vacío), no aperturas. **Cerrado 09-09**: sin
       kcal ni nombres; `portions-analytics.test.ts` afirma las llaves de los cuatro constructores.
-- [ ] W3.8 [owner] QA en device del punto 5 del checklist final (incluye: el banner no aparece con solo grupos propios;
+- [x] W3.8 [owner] (**PASÓ 10-09**) QA en device del punto 5 del checklist final (incluye: el banner no aparece con solo grupos propios;
       hasta W6.8 tampoco aparece porque no hay destinos vivos; `ensureLoaded` al montar suma un request por apertura
       del editor clásico).
 - [x] W3.9 Gates W3 (09-09, sobre `6e2b37cb` (checkpoint) + remate y docs (este commit)): `pnpm exec vitest run packages/nutrition-v2 packages/nutrition-engine "apps/web/src/app/coach/nutrition-v2/[clientId]/_quick-edit" "apps/web/src/app/c/[coach_slug]/nutrition-v2" apps/web/src/infrastructure/db apps/web/src/app/api/mobile/nutrition-v2/exchange-groups apps/web/src/app/coach/nutrition-v2/_actions tests/mobile-nutrition-v2-portions.test.ts tests/mobile-nutrition-v2-targets-switch.test.ts tests/mobile-nutrition-v2-conversion-banner.test.ts tests/mobile-nutrition-exchange-groups-api.test.ts tests/nutrition-portions` ⇒ **109 archivos / 1.843 tests verdes** (tras corregir el fixture del RTL del diálogo: el catálogo del test no traía `isSystem` y `draftUsesLegacySmae` falla cerrado) · `pnpm typecheck` ⇒ exit 0 · `pnpm --filter @eva/mobile exec tsc --noEmit` ⇒ exit 0 · `pnpm check:tokens` ⇒ OK (86 + 5) · `pnpm check:nutrition-v2-boundaries` ⇒ 471 archivos OK · eslint por archivo sin hallazgos (workers). Tests nuevos: `exchange-conversion.test.ts` (tabla 1–29 + extras, S5 por id, `draftUsesLegacySmae` 31–37), `editor-state.replace-portion-groups.test.ts`, `portions-analytics.test.ts` (12), RTL `PortionConversionDialog.test.tsx` (22), `tests/mobile-nutrition-v2-conversion-banner.test.ts` (21), repo `exchanges.repository.portion-systems.test.ts` (+4). Smoke SQL `exchange_groups_portion_system_rollback.sql` alineado (`d_sets_en_uso` solo grupos del sistema).
@@ -581,7 +581,7 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
       writer»); el criterio «deja de decir Metas del día cuando escribe en todos» queda superado — la verdad del
       alcance la dice la ayuda del switch. OK del owner por delegación 10-09 («el que tú recomiendes» ⇒ se mantienen) sobre esa decisión y sobre los copys nuevos
       (`backToBase`, `appliedToAll`; filas en SPEC §16.1).
-- [ ] W4.7 [owner] QA en device de los puntos 6 y 7 del checklist final (incluido: en RN el aviso con «Deshacer» es
+- [x] W4.7 [owner] (**PASÓ 10-09**) QA en device de los puntos 6 y 7 del checklist final (incluido: en RN el aviso con «Deshacer» es
       INLINE dentro del sheet porque el `Toaster` raíz queda detrás del `nativeModal`; en iOS confirmar que el
       `KeyboardDoneBar` del Modal gana); además, arreglar el plan real de `nutricionista-pame-cid` con «Ir a Base» (es
       el único plan afectado en LIVE; los días con kcal propias no se tocan).
@@ -679,7 +679,7 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
       `exchangeFoods` (80.957 B), 7 llaves por fila; **después (10-09, RPC `20260910015432`) 132.878 B** — 360 filas
       (119.928 B), 11 llaves, 283 genéricos, 313 con foto, 91 con licencia `cc_by*`, 6 grupos ese día. **+41 %**, 5,6× por
       debajo del tope de 750 kB (el SPEC §9.1 estimaba +29 % sobre 532 filas; el path pesa más que la estimación).
-- [ ] W5.11 [owner] QA en device de los puntos 8 y 9 del checklist final.
+- [x] W5.11 [owner] QA en device de los puntos 8 y 9 del checklist final. **PASÓ 10-09** (veredicto en el checklist).
 - [x] W5.12 Gates W5 (2026-09-10): `pnpm exec vitest run packages/nutrition-v2 packages/nutrition-engine
       "apps/web/src/app/coach/nutrition-v2/[clientId]/_quick-edit" "apps/web/src/app/c/[coach_slug]/nutrition-v2"
       apps/web/src/lib/food-image.test.ts apps/web/src/infrastructure/db apps/web/src/app/api/mobile/nutrition-v2/exchange-groups
@@ -773,9 +773,10 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
       **Hecho 10-09**: por `workflow_dispatch` de `ci.yml` desde `master` (el job `e2e` solo corre así; local sin vars `E2E_*`):
       run **`34429709228`**, job `e2e` `102723329034` ⇒ **9 passed (47,9 s)**, 1 worker, 02:35:09–02:37:41Z, contra
       `www.eva-app.cl` con el set chileno ya encendido; el resto del CI (`quality`, `hygiene`, `unit` ×3) también verde.
-- [ ] W6.10 [Fable] Completar «Registro de cierres» y el checklist de QA en device con el veredicto del owner.
-      **Parcial 10-09**: registro completado con deploy, OTAs, encendido y E2E; el checklist de QA en device (10 puntos) espera
-      el veredicto del owner y con él el SDD pasa a `done`.
+- [x] W6.10 [Fable] Completar «Registro de cierres» y el checklist de QA en device con el veredicto del owner.
+      **Hecho 10-09 ~03:40Z**: veredicto del owner «el qa ya paso» sobre los 10 puntos, en Android y web PWA, después de los
+      dos fixes post-cierre (`653bd760`, deploy `dpl_HRR31wrwhpyXQJ6UCsUfugTNyqK6`). El SDD pasa a `status: done` en los
+      cuatro archivos.
 - [ ] W6.11 [owner] Avisos: banner in-app a **los coaches con porciones SMAE vivas** (9 por V2 al 08-09; **sumar los de
       V1** con la query de W0.6, que recorre las dos generaciones — la lista de destinatarios se cierra con ese número,
       no con el 9 de STATS), mensaje a `nutricionista-pame-cid`, a `dudu` y a
@@ -792,6 +793,12 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
 - **2 = «el que tú recomiendes»** ⇒ el jefe mantiene los copys provisionales: `builder.groupAtMax` («Ya está en {franja} con 99 · es el máximo»), título fijo «Metas del día» (decisión (z)), `targets.backToBase(día)` («{Día} vuelve a la meta de todos los días») y `targets.appliedToAll` («Ahora vale para toda la semana»). Quedan como aprobados por delegación en SPEC §16.1.
 
 ## Checklist de QA en device (se completa al cierre)
+
+> **Veredicto del owner, 2026-09-10 ~03:40Z: «el qa ya paso»** — los 10 puntos en Android (1.1.2 + OTA `9e844b15`) y web
+> PWA, con la cuenta `josefit` (Legado, conversión, metas), un coach nuevo (`pruebajhon`) y un alumno QA. Los dos hallazgos
+> del QA (picker sin secciones por `PGRST201`; «Adherencia 78 %» en coach nuevo) se corrigieron en `653bd760` antes del
+> veredicto (ver «Fixes post-cierre»). El hallazgo de marca cruzada tras logout es de otro frente (backlog, memoria
+> `project_bug_marca_cruzada_logout_rn_20260910`).
 
 1. Coach nuevo (sin porciones SMAE): el sheet «Agregar grupo» muestra los 13 chilenos con «Sistema chileno · INTA 1999 ·
    UDD 2019», sin chip «Valores referenciales», y **no** aparece la sección Legado.
@@ -856,7 +863,7 @@ Hoy un coach sin alumnos reales ve «0 %» sin tendencia; el «—» en el hero 
 | 2026-09-09 | W3 · conversión SMAE → chileno | worktree `porciones-chilenas`, sin push (`6e2b37cb` (checkpoint) + remate y docs (este commit)) | vitest paquete + engine + `_quick-edit` + repo + tests RN · typecheck · tsc mobile · tokens · boundaries · eslint por archivo | 18 + remate; decisiones (ad)–(ag) en W3.10; QA device W3.8 pendiente; corrige el `legacySystems` de W1.3 (solo grupos del sistema) |
 | 2026-09-09 | W4 · metas por día | worktree `porciones-chilenas`, sin push (`383e4a74` (checkpoint) + `20769987` (remate 1) + remate 2 y docs (este commit)) | vitest paquete + `_quick-edit` + tests RN · typecheck · tsc mobile · tokens · boundaries · eslint por archivo | 10 + 12 + remate 2 agentes; decisiones (y)–(ac) en W4.9; QA device W4.7 pendiente (aviso inline RN, KeyboardDoneBar iOS, plan de Pame con «Ir a Base») |
 | 2026-09-10 | W5 · equivalencias del alumno | worktree `porciones-chilenas`, sin push (`a4fe68b4` (checkpoint) + remate y docs (este commit)) | vitest 112/1.897 · typecheck (fixture W3 corregido) · tsc mobile · tokens · boundaries 473 · eslint por archivo · SQL W5.2 + W5.3 tx-rollback en LIVE | **RPC `get_nutrition_today_v2` parcheado en LIVE: versión `20260910015432`** (21.119 → 22.470 chars); Today 93.907 → 132.878 B (W5.10); 10 + 6 agentes; decisiones (ah)–(an) en W5.13; QA device W5.11 pendiente |
-| 2026-09-10 | W6 · cierre (W6.1–W6.9) — **EN PRODUCCIÓN 02:29Z** | `64c5cc0b` (docs W6.1–W6.5) + `95a1d39a` (OK del owner W6.6) + docs de cierre (este commit); `master` = `rnmobiledenuevo` = `95a1d39a` + docs | suite completa (vitest 760/10.275 · lint 0 errores · typecheck · tsc mobile · tokens · boundaries 473 · docs:check) · CI master `34429043071` · E2E `prod-suave` 9/9 (run `34429709228`) | OK del owner 02:18Z («Q1 a, Q2 a, Q3 a, Q4 a»); deploy `dpl_xuHL7Mrs7Rxqf9WEky7sRSELVX98` READY 02:22Z; OTA 1.1.2 android `9e844b15` (run 34429335195) / ios `8de637b3` (run 34429337419); **set chileno encendido 02:29:01Z ⇒ 22 vivos**; `classify-foods` dry-run exit 0; quedan W6.10 (QA en device del owner ⇒ SDD `done`) y W6.11 (avisos: textos listos, los manda el owner) |
+| 2026-09-10 | W6 · cierre (W6.1–W6.9) — **EN PRODUCCIÓN 02:29Z** | `64c5cc0b` (docs W6.1–W6.5) + `95a1d39a` (OK del owner W6.6) + docs de cierre (este commit); `master` = `rnmobiledenuevo` = `95a1d39a` + docs | suite completa (vitest 760/10.275 · lint 0 errores · typecheck · tsc mobile · tokens · boundaries 473 · docs:check) · CI master `34429043071` · E2E `prod-suave` 9/9 (run `34429709228`) | OK del owner 02:18Z («Q1 a, Q2 a, Q3 a, Q4 a»); deploy `dpl_xuHL7Mrs7Rxqf9WEky7sRSELVX98` READY 02:22Z; OTA 1.1.2 android `9e844b15` (run 34429335195) / ios `8de637b3` (run 34429337419); **set chileno encendido 02:29:01Z ⇒ 22 vivos**; `classify-foods` dry-run exit 0; **QA del owner en device VERDE 10-09 ~03:40Z ⇒ SDD `done`** (tras los fixes post-cierre `653bd760`, deploy `dpl_HRR31wrwhpyXQJ6UCsUfugTNyqK6`); queda W6.11 (avisos: textos listos en el artifact 6be4db5d, los manda el owner) |
 
 ## Backlog heredado
 

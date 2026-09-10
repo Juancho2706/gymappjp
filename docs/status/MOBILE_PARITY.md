@@ -15,7 +15,8 @@ source_of_truth: apps/web responsive + apps/mobile
 > **2026-09-10 (tren «Porciones a la chilena», Nutrición V2 — W0–W6 EN PRODUCCIÓN 02:29Z: `master` = `rnmobiledenuevo` =
 > `95a1d39a`, deploy `dpl_xuHL7Mrs7Rxqf9WEky7sRSELVX98` READY, RPC `get_nutrition_today_v2` `20260910015432` (aditivo), OTA 1.1.2
 > `production` android `9e844b15-bf9a-4e05-b192-2c565e64e593` (run 34429335195) / ios `8de637b3-1d45-42f7-b7af-9267de3301da`
-> (run 34429337419), set chileno ENCENDIDO 02:29Z ⇒ 22 grupos del sistema vivos; QA del owner en device PENDIENTE)**
+> (run 34429337419), set chileno ENCENDIDO 02:29Z ⇒ 22 grupos del sistema vivos; QA del owner en device VERDE 10-09 tras los fixes post-cierre
+> `653bd760` ⇒ SDD `done`)**
 > ([SDD](../specs/nutrition-porciones-chilenas/SPEC.md), mockups
 > aprobados por el owner el 09-09). Paridad web + RN: **sheet «1 porción equivale a» del alumno** con secciones «Genéricos · INTA ·
 > UDD» / «Marcas y productos», miniatura 36 px (`FoodThumbnail size="sm"` RN / `next/image unoptimized` web) con fallback del
