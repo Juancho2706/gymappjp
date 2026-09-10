@@ -1,7 +1,7 @@
 ---
-status: draft
+status: active
 owner: product-engineering
-last_verified: "2026-09-08"
+last_verified: "2026-09-10"
 canonical: false
 ---
 
@@ -708,18 +708,32 @@ particiona) y (c) el sheet RN sobre la lista ya mergeada (R17).
 
 ## W6 · Cierre (0,5 d)
 
-- [ ] W6.1 [Fable] SDD final en `docs/specs/nutrition-porciones-chilenas/{SPEC,PLAN,TASKS,DATA}.md` con `status` y
+- [x] W6.1 [Fable] SDD final en `docs/specs/nutrition-porciones-chilenas/{SPEC,PLAN,TASKS,DATA}.md` con `status` y
       `last_verified` al día. **Criterio**: `pnpm docs:check` OK (sin enlaces relativos rotos entre los cuatro archivos).
-- [ ] W6.2 [Fable] `docs/status/CURRENT.md`: mudar prosa vieja a `docs/archive/current-historial-2026-09.md` **y luego**
+      **Hecho 10-09**: los cuatro en `status: active` (pasan a `done` con el QA del owner en device y el encendido W6.8) y
+      `last_verified: "2026-09-10"`; SPEC §9.1 con el payload medido, §9.3/§16.1/glosario con las claves `student.sheet*`;
+      DATA §8.2 byte-idéntico a la migración, §10.3 con el nombre real y el umbral 20, §11 con el evento 5 de cuatro llaves.
+      `pnpm docs:check` ⇒ OK — 20 canónicos, 257 Markdown activos.
+- [x] W6.2 [Fable] `docs/status/CURRENT.md`: mudar prosa vieja a `docs/archive/current-historial-2026-09.md` **y luego**
       agregar la entrada del tren + editar la fila «Nutrition V2». **Criterio**: el archivo queda bajo 16.384 bytes
       (hoy 16.106) y `docs:check` lo confirma en su línea de salida.
-- [ ] W6.3 [Fable] `docs/status/MOBILE_PARITY.md`: blockquote nuevo arriba de todo (primera entrada sobre el sheet de
+      **Hecho 10-09**: las prioridades 1–4 (cuatro trenes ya cerrados con QA del owner verde) se mudaron tal cual al historial
+      bajo «Corte del 2026-09-10» y quedaron como una sola línea con punteros; el tren entra como prioridad 1 (4 líneas) y la
+      fila «Nutrition V2» apunta al SDD. `docs:check` ⇒ **CURRENT.md 14,5 KB** (tope 16 KB).
+- [x] W6.3 [Fable] `docs/status/MOBILE_PARITY.md`: blockquote nuevo arriba de todo (primera entrada sobre el sheet de
       equivalencias del alumno). **Criterio**: cada línea empieza con `>` y el tren anterior queda inmediatamente debajo.
-- [ ] W6.4 [Fable] `docs/testing/TEST_STATUS.md`: sección del tren con la salida real consolidada. **Criterio**: sin
-      logs largos; fecha, comando, resultado y bloqueador pendiente.
-- [ ] W6.5 [Fable] Suite completa **una vez** (`pnpm test`) con la CPU libre + `pnpm lint` + `pnpm typecheck` + tsc
+      **Hecho 10-09**: blockquote «2026-09-10 (tren «Porciones a la chilena» … EN CÓDIGO, sin push)» sobre el de «Cantidades
+      honestas» del 06-09; se actualiza con deploy/OTA cuando el owner dé el OK.
+- [x] W6.4 [Fable] `docs/testing/TEST_STATUS.md`: sección del tren con la salida real consolidada. **Criterio**: sin
+      logs largos; fecha, comando, resultado y bloqueador pendiente. **Hecho 10-09**: cabecera «W0–W6» con el consolidado
+      (gates por wave, tres migraciones en LIVE, bloqueador = OK del owner) + bullets W5 y W6.5.
+- [x] W6.5 [Fable] Suite completa **una vez** (`pnpm test`) con la CPU libre + `pnpm lint` + `pnpm typecheck` + tsc
       mobile + `pnpm check:tokens` + `pnpm check:nutrition-v2-boundaries` + `pnpm docs:check`. **Criterio**: salida real
       pegada; ningún test nuevo en rojo.
+      **Hecho 10-09 (sobre `eccabe68` + docs de W6)**: `pnpm test` ⇒ **760 archivos | 2 skipped · 10.275 tests | 4 skipped,
+      0 fallos** (116,6 s) · `pnpm lint` ⇒ exit 0 (0 errores, 565 warnings preexistentes) · `pnpm typecheck` ⇒ exit 0 · tsc
+      mobile ⇒ exit 0 · `check:tokens` ⇒ OK (86 + 5) · `check:nutrition-v2-boundaries` ⇒ 473 OK · `docs:check` ⇒ OK (CURRENT
+      14,5 KB). Salida completa en [TEST_STATUS](../../testing/TEST_STATUS.md) § «Porciones a la chilena».
 - [ ] W6.6 [owner] OK explícito para push a `rnmobiledenuevo` = `master`, deploy, aplicación de migraciones, OTA y
       **encendido del set chileno** (W6.8).
       **Criterio**: la frase del owner citada con fecha y hora.
@@ -789,7 +803,7 @@ _(vacía: se llena si aparece un reporte después del cierre, con `### <fecha> �
 | 2026-09-09 | W3 · conversión SMAE → chileno | worktree `porciones-chilenas`, sin push (`6e2b37cb` (checkpoint) + remate y docs (este commit)) | vitest paquete + engine + `_quick-edit` + repo + tests RN · typecheck · tsc mobile · tokens · boundaries · eslint por archivo | 18 + remate; decisiones (ad)–(ag) en W3.10; QA device W3.8 pendiente; corrige el `legacySystems` de W1.3 (solo grupos del sistema) |
 | 2026-09-09 | W4 · metas por día | worktree `porciones-chilenas`, sin push (`383e4a74` (checkpoint) + `20769987` (remate 1) + remate 2 y docs (este commit)) | vitest paquete + `_quick-edit` + tests RN · typecheck · tsc mobile · tokens · boundaries · eslint por archivo | 10 + 12 + remate 2 agentes; decisiones (y)–(ac) en W4.9; QA device W4.7 pendiente (aviso inline RN, KeyboardDoneBar iOS, plan de Pame con «Ir a Base») |
 | 2026-09-10 | W5 · equivalencias del alumno | worktree `porciones-chilenas`, sin push (`a4fe68b4` (checkpoint) + remate y docs (este commit)) | vitest 112/1.897 · typecheck (fixture W3 corregido) · tsc mobile · tokens · boundaries 473 · eslint por archivo · SQL W5.2 + W5.3 tx-rollback en LIVE | **RPC `get_nutrition_today_v2` parcheado en LIVE: versión `20260910015432`** (21.119 → 22.470 chars); Today 93.907 → 132.878 B (W5.10); 10 + 6 agentes; decisiones (ah)–(an) en W5.13; QA device W5.11 pendiente |
-| | W6 · cierre | | | |
+| 2026-09-10 | W6 · cierre documental (W6.1–W6.5) | worktree `porciones-chilenas`, sin push (docs de W6 = este commit) | suite completa: vitest 760/10.275 · lint 0 errores · typecheck · tsc mobile · tokens · boundaries 473 · docs:check | **Esperando el OK explícito del owner (W6.6)** para push a `rnmobiledenuevo` = `master`, deploy, OTA 1.1.2 android/ios, encendido del set (W6.8 ⇒ 22 vivos), `qa:prod:suave` (W6.9), avisos (W6.11) y respuesta a Pame; W6.7–W6.11 abiertas |
 
 ## Backlog heredado
 

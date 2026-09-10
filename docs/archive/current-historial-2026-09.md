@@ -72,3 +72,45 @@ Hydration del dashboard del ALUMNO (EVA-NEXTJS-18): **CAUSA RAÍZ CAZADA Y FIX E
 ### TTFB del área alumno — la causa medida era la región
 
 **TTFB del área alumno: la causa MEDIDA era la REGIÓN, no el fan-out SQL** (esta prioridad culpaba al fan-out hasta el saneo documental del 19-08). Medición base (2026-08-15, 7 d de pageloads, p75): `/c/:slug/dashboard` **5.204 ms** (n=160) 🔴, `/c/:slug/login` 3.063 ms 🔴, `/login` 2.652 ms, `/c/:slug/exercises` 1.900, `/c/:slug/workout/:planId` 1.828, `/c/:slug/nutrition` 1.766, `/` 1.696, `/c/:slug/nutrition-v2` 1.566 (borde), `/not-found` 198 ✓ — la plataforma estaba sana. La auditoría del 18-08 cazó la causa con `curl -D -`: el compute corría en **iad1** (Virginia), sin `regions` declarado en ningún lado, mientras Supabase vive en **us-west-2** (Oregón) — ~14 queries bloqueantes en ~8 saltos seriales × ~65 ms de cruce ≈ 0,9 s de pura red, con **ninguna query individual sobre 160 ms** y la base entera (70 MB) en `shared_buffers`. `deb8aee3` (2026-08-18) declaró `regions: ["pdx1"]` en `vercel.json`; baseline registrado el día del cambio: p50 **2.871** / p75 **4.748** ms. 🔴 **Falta re-medir el delta** (p50/p75 de `/c/:coach_slug/dashboard` en Sentry, 24 h antes vs después) — y es solo la MITAD del arreglo: el middleware corre en el POP del visitante, así que cada lectura del proxy de un alumno chileno sigue cruzando Sudamérica→Oregón (~180 ms). Quick wins restantes: **QW1/QW2** (gates del layout + dedupe de `clients`, en curso hoy) y **QW3** (doble render móvil+desktop, **pendiente de decisión del dueño**). Descartada con medición: las 543 políticas RLS permisivas duplicadas valen 30-60 ms por render, no segundos — y consolidarlas toca autorización, así que va al final y nunca con campaña viva. (La corrida de `eas update:insights` que vivía en esta línea se mudó a la fila de Nutrition V2, que es de donde salía el requisito.)
+
+## Corte del 2026-09-10 (tren «Porciones a la chilena»)
+
+El 2026-09-10 `CURRENT.md` volvió a rozar el tope (16.106 de 16.384 bytes) y se mudaron acá, tal cual estaban, las cuatro
+prioridades ya cerradas con QA del owner verde. En `CURRENT.md` quedó una sola línea por tren con sus punteros.
+
+### Tren «Ciclo real y por lado» (feedback Movens) — en producción 2026-09-04, QA verde, SDD `done` (texto de CURRENT al 10-09)
+
+**Tren «Ciclo real y por lado» (feedback Movens) — EN PRODUCCIÓN 04-09 02:25Z, QA del owner VERDE 04-09, SDD `done`** ([tareas](../specs/ciclo-real-y-por-lado/TASKS.md);
+`master` = `rnmobiledenuevo` = `a567f6e2`, deploy `dpl_DZ76aJq5…` READY, 4 migraciones en LIVE `20260904022120`…`022257`,
+OTA 1.1.2 android `fd2e1212` / ios `248580e4`; detalle en [MOBILE_PARITY](../status/MOBILE_PARITY.md)):
+ciclo N-días real (cursor por completitud, «Día N de M», «Empezar hoy»), fuerza por lado (reps izq/der + un peso),
+ficha del coach con tipo y lado, builder «Ninguno | Por lado | Alternado», PWA día 1, SW v5 + purga de caches.
+Las 4 migraciones (`20260903212038`…`212800`, validadas en LIVE con ROLLBACK) se aplican DESPUÉS del deploy y ANTES
+de la OTA (R35). QA del owner verde el 04-09 (ciclo y fuerza por lado, reporte global). Queda: el aviso a coaches (W6.5b,
+texto en TESTING-QA §11; **enviado el 05-09**) y el E2E W6.8: **VERDE 05-09** (run `33997451520`, job `e2e` `prod-suave` 9/9 en 38,9 s; los secrets
+`E2E_*` viven en GitHub).
+
+### Tanda «QA del owner 02-09» (ejecutor, Share Entreno, accesos A–J) — en producción, SDD `done` (texto de CURRENT al 10-09)
+
+**Tanda «QA del owner 02-09» (ejecutor, Share Entreno, accesos A–J) — EN PRODUCCIÓN, SDD `done`**
+([spec](../specs/qa-ejecutor-share-0209/SPEC.md)): `master` `0f545926`, deploy `dpl_35ZT6w7o…` READY,
+OTA android `bd2bc6e8` / ios `025d158f`; ronda 2 android `fc78e1c8` / ios `c46d4eed`.
+P5 (color efectivo, `8c7161f3`) y B2–B9 salieron en los trenes del 02-09 tarde. **QA del owner en device VERDE 05-09**
+(artifact `6bd32370`): B6, E10, F6, G6, G7, H8 y J4 cerradas; quedan F7 (reportar 3 decisiones) y P3.
+
+### Tren «billing + seguridad» — en producción 2026-09-02 (texto de CURRENT al 10-09)
+
+**Tren «billing + seguridad» — EN PRODUCCIÓN 02-09** (`master` `16c06fba`, deploy `dpl_8AJgWw36…`
+READY, OTA android `42f021f4` / ios `4052b874`): **QA del owner en device VERDE 05-09** (código → marca →
+login; artifact `6bd32370`). **SEC-01 fase 3 APLICADA en LIVE el 05-09** (`20260905190100_sec01_phase3_revoke_invite_code_anon`,
+adelantada desde el 09-09): `invite_code` revocado a `anon` y verificado con la anon key — `42501` en
+`select=invite_code`, login por código sigue en 200. **Frente cerrado.** [MANUAL_TASKS § SEC-01](../operations/MANUAL_TASKS.md)
+
+### Tren «cierre de backlog 02-09» — en producción 2026-09-02 (texto de CURRENT al 10-09)
+
+**Tren «cierre de backlog 02-09» — EN PRODUCCIÓN 02-09 19:55Z** (`master` `794aee52`, deploy
+`dpl_E6Rt7ETY…` READY, OTA 1.1.2 android grupo `ec7da7fb` / ios grupo `6db6747f`): **QA del owner en
+device VERDE 02-09** (11 puntos). **Ola 2 chica + higiene EN CÓDIGO 02-09 noche** (`5f3c48f2`…`31c1f7a8`,
+8 commits, RPC `substitutions` ya aplicado en LIVE): salió con el push del tren «Ciclo real y por lado» (03-09).
+**QA en device de lo nuevo y del acumulado de 18: VERDE 05-09** (artifact `6bd32370`) ⇒
+`docs/testing/QA_DEVICE_PENDIENTE.md` queda **sin pendientes**. [MOBILE_PARITY](../status/MOBILE_PARITY.md)

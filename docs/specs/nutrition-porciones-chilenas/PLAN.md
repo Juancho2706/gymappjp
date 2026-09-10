@@ -1,7 +1,7 @@
 ---
-status: draft
+status: active
 owner: product-engineering
-last_verified: "2026-09-08"
+last_verified: "2026-09-10"
 canonical: false
 ---
 

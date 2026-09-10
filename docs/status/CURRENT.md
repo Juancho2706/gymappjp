@@ -22,38 +22,23 @@ prevalecen sobre este resumen. La prosa retirada el 2026-09-02 está en
 | App nativa (RN) | 1.1.2 es el piso OTA; canal `production` recibe android e ios por separado sobre el mismo commit. **Hotfix 04-09** íconos de alimentos al reabrir una plantilla (endpoint móvil `plan-templates` no enviaba `category` + RN no derivaba del nombre como web): OTA 1.1.2 publicada el 04-09 desde `rnmobiledenuevo` @`7395b4fb` (android `e09935cb`, ios `22c32aed`) y deploy web `dpl_Gjh6Wbrhhkk8FDKZE2qvqspTRhwS` READY (`master` = `rnmobiledenuevo` = `e9c48127`). **OTA 05-09 23:02Z** desde `master` @`9c24815d` (retiro de Starter S1/S2 + tanda 05-09): android `ea487622` / ios `59f92afe`, runtime 1.1.2. **QA del owner en device VERDE 05-09** (sesión única, artifact `6bd32370`, Android 1.1.2+86 / iOS 1.1.2+59 con OTA 04-09, web `f9ba8a3f`). | [Mobile parity](MOBILE_PARITY.md) · [OTA](../operations/MOBILE_RELEASES_OTA.md) |
 | Auth: Google en el login de coach | **Fix 04-09 EN PRODUCCIÓN** (`master` = `rnmobiledenuevo` = `22644899`, deploy `dpl_CZKUwNthWaeQL2cvS6nG55k4eMGx` READY, OTA 1.1.2 android `d8220490` / ios `54487ddd`; **QA del owner VERDE 05-09** — artifact `6bd32370`: el alumno que toca Google en `/login` ve el copy nuevo y su correo queda libre; el coach nuevo va a `/register`): «Continuar con Google» sin cuenta de coach dejaba un `auth.users` huérfano que «ocupaba» el correo del alumno (caso Leonardo/Movens; huérfano borrado a mano en LIVE el 04-09). Ahora un LOGIN con Google sin fila `coaches` ya no cae en `/coach/onboarding/complete` (alta de coach): `resolvePostGoogleAuthUrl` (web) y `login.tsx` (RN) avisan a `POST /api/auth/google-orphan-cleanup` / `/api/mobile/auth/google-orphan-cleanup`, que borra solo al usuario demostrablemente vacío (`lib/auth/google-orphan-cleanup.ts`), cierran la sesión y rebotan a `/login` con copy que manda al alumno a su código y al coach nuevo a `/register` (el alta por Google sigue ahí). F2b (alta de alumno con cuenta existente) sigue en backlog. | [Login y auth](../architecture/FLOWS_AND_COMPONENTS.md) |
 | Archivado de alumnos | P0 de alta en producción (2026-08-03); **QA físico VERDE 05-09** (artifact `6bd32370`); queda la matriz Team. | [Spec de corte](../../specs/archive-nutrition-v2-cutover/SPEC.md) |
-| Nutrition V2 | Canónica para Standalone/Team; el programa de rediseño cerró el 2026-08-17. | [Programa](../specs/nutrition-flows-redesign/TASKS.md) · [Runbook de corte](../operations/NUTRITION_V2_CUTOVER_RUNBOOK.md) |
+| Nutrition V2 | Canónica para Standalone/Team; el programa de rediseño cerró el 2026-08-17. **«Porciones a la chilena» W0–W5 EN CÓDIGO 10-09** (worktree, sin push; RPC `get_nutrition_today_v2` `20260910015432` ya en LIVE, aditivo; set chileno sembrado APAGADO hasta el OK del owner). «Cantidades honestas» en producción 06-09. | [Porciones CL](../specs/nutrition-porciones-chilenas/SPEC.md) · [Programa](../specs/nutrition-flows-redesign/TASKS.md) · [Runbook de corte](../operations/NUTRITION_V2_CUTOVER_RUNBOOK.md) |
 | V1 nutrición | Congelada, **no se borra** (decisión owner 2026-08-03): solo migrar usuarios a V2. | [Delta del mapa](../audits/v1-deprecation-map-delta-2026-08-03.md) |
 | Teams | Pool, membresías y workspaces implementados. | [Flows](../architecture/FLOWS_AND_COMPONENTS.md#team) |
 | Enterprise | **ELIMINADO de EVA (decisión del owner 2026-09-01)**: E0+E1 EN PRODUCCIÓN 05-09 22:56Z (app Expo, specs y scripts borrados; `/enterprise` ⇒ 308 a `/pricing`); E2/E3 planificadas en el SDD. | [SDD retiro](../specs/retiro-starter-y-enterprise/SPEC.md) · [Ola de orden](../specs/ola-de-orden/TASKS.md) · [Flows](../architecture/FLOWS_AND_COMPONENTS.md#enterprise) |
 
 ## Prioridades vigentes
 
-1. **Tren «Ciclo real y por lado» (feedback Movens) — EN PRODUCCIÓN 04-09 02:25Z, QA del owner VERDE 04-09, SDD `done`** ([tareas](../specs/ciclo-real-y-por-lado/TASKS.md);
-   `master` = `rnmobiledenuevo` = `a567f6e2`, deploy `dpl_DZ76aJq5…` READY, 4 migraciones en LIVE `20260904022120`…`022257`,
-   OTA 1.1.2 android `fd2e1212` / ios `248580e4`; detalle en [MOBILE_PARITY](MOBILE_PARITY.md)):
-   ciclo N-días real (cursor por completitud, «Día N de M», «Empezar hoy»), fuerza por lado (reps izq/der + un peso),
-   ficha del coach con tipo y lado, builder «Ninguno | Por lado | Alternado», PWA día 1, SW v5 + purga de caches.
-   Las 4 migraciones (`20260903212038`…`212800`, validadas en LIVE con ROLLBACK) se aplican DESPUÉS del deploy y ANTES
-   de la OTA (R35). QA del owner verde el 04-09 (ciclo y fuerza por lado, reporte global). Queda: el aviso a coaches (W6.5b,
-   texto en TESTING-QA §11; **enviado el 05-09**) y el E2E W6.8: **VERDE 05-09** (run `33997451520`, job `e2e` `prod-suave` 9/9 en 38,9 s; los secrets
-   `E2E_*` viven en GitHub).
-2. **Tanda «QA del owner 02-09» (ejecutor, Share Entreno, accesos A–J) — EN PRODUCCIÓN, SDD `done`**
-   ([spec](../specs/qa-ejecutor-share-0209/SPEC.md)): `master` `0f545926`, deploy `dpl_35ZT6w7o…` READY,
-   OTA android `bd2bc6e8` / ios `025d158f`; ronda 2 android `fc78e1c8` / ios `c46d4eed`.
-   P5 (color efectivo, `8c7161f3`) y B2–B9 salieron en los trenes del 02-09 tarde. **QA del owner en device VERDE 05-09**
-   (artifact `6bd32370`): B6, E10, F6, G6, G7, H8 y J4 cerradas; quedan F7 (reportar 3 decisiones) y P3.
-3. **Tren «billing + seguridad» — EN PRODUCCIÓN 02-09** (`master` `16c06fba`, deploy `dpl_8AJgWw36…`
-   READY, OTA android `42f021f4` / ios `4052b874`): **QA del owner en device VERDE 05-09** (código → marca →
-   login; artifact `6bd32370`). **SEC-01 fase 3 APLICADA en LIVE el 05-09** (`20260905190100_sec01_phase3_revoke_invite_code_anon`,
-   adelantada desde el 09-09): `invite_code` revocado a `anon` y verificado con la anon key — `42501` en
-   `select=invite_code`, login por código sigue en 200. **Frente cerrado.** [MANUAL_TASKS § SEC-01](../operations/MANUAL_TASKS.md)
-4. **Tren «cierre de backlog 02-09» — EN PRODUCCIÓN 02-09 19:55Z** (`master` `794aee52`, deploy
-   `dpl_E6Rt7ETY…` READY, OTA 1.1.2 android grupo `ec7da7fb` / ios grupo `6db6747f`): **QA del owner en
-   device VERDE 02-09** (11 puntos). **Ola 2 chica + higiene EN CÓDIGO 02-09 noche** (`5f3c48f2`…`31c1f7a8`,
-   8 commits, RPC `substitutions` ya aplicado en LIVE): salió con el push del tren «Ciclo real y por lado» (03-09).
-   **QA en device de lo nuevo y del acumulado de 18: VERDE 05-09** (artifact `6bd32370`) ⇒
-   `docs/testing/QA_DEVICE_PENDIENTE.md` queda **sin pendientes**. [MOBILE_PARITY](MOBILE_PARITY.md)
+1. **Tren «Porciones a la chilena» (Nutrición V2, caso Pame Cid) — W0–W5 EN CÓDIGO 10-09, sin push, esperando el OK del
+   owner** ([SDD](../specs/nutrition-porciones-chilenas/SPEC.md); worktree `porciones-chilenas`): set chileno INTA/UDD (13 grupos
+   sembrados APAGADOS + 2.499 equivalencias en LIVE), picker con secciones y bump ½, conversión SMAE → chileno, metas «Solo el
+   {día}», sheet del alumno con foto y genéricos primero (RPC `20260910015432` YA en LIVE, aditivo). Queda W6.6: OK para
+   push/deploy/OTA 1.1.2 y encendido (W6.8 ⇒ 22 vivos), QA en device (10 puntos), avisos a coaches y respuesta a Pame.
+2. **Cerrados con QA del owner VERDE (02/04/05-09); prosa completa en el [historial](../archive/current-historial-2026-09.md):**
+   «Ciclo real y por lado» ([tareas](../specs/ciclo-real-y-por-lado/TASKS.md), `a567f6e2`, SDD `done`, aviso a coaches y E2E 9/9
+   el 05-09) · «QA del owner 02-09» ([spec](../specs/qa-ejecutor-share-0209/SPEC.md), `0f545926`; quedan F7 y P3) · «billing +
+   seguridad» (`16c06fba`; SEC-01 fase 3 en LIVE 05-09, frente cerrado) · «cierre de backlog 02-09» + ola 2 chica (`794aee52`;
+   `QA_DEVICE_PENDIENTE.md` sin pendientes). Detalle de paridad en [MOBILE_PARITY](MOBILE_PARITY.md).
 5. **(a) `EVA-NEXTJS-18` (hidratación en `/c/[coach_slug]/dashboard?recuperar=…`) — causa confirmada
    y FIX EN PRODUCCIÓN 05-09 22:56Z (O7.7, deploy `dpl_yJUsqXJ8…`)**: el barrido O7.1 se salteó
    `WorkoutPlanCard.fmtShortDate` (client component del dashboard del ALUMNO); ahora usa

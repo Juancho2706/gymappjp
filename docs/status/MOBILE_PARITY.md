@@ -12,6 +12,20 @@ source_of_truth: apps/web responsive + apps/mobile
 
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
 
+> **2026-09-10 (tren «Porciones a la chilena», Nutrición V2 — W0–W5 EN CÓDIGO en el worktree `porciones-chilenas`, sin push;
+> RPC `get_nutrition_today_v2` parcheado en LIVE `20260910015432` (aditivo), set chileno sembrado APAGADO hasta W6.8; esperando
+> el OK del owner para push/deploy/OTA 1.1.2 y encendido)** ([SDD](../specs/nutrition-porciones-chilenas/SPEC.md), mockups
+> aprobados por el owner el 09-09). Paridad web + RN: **sheet «1 porción equivale a» del alumno** con secciones «Genéricos · INTA ·
+> UDD» / «Marcas y productos», miniatura 36 px (`FoodThumbnail size="sm"` RN / `next/image unoptimized` web) con fallback del
+> marcador del grupo, medida casera en negrita y gramos debajo, pie «Fotos: Open Food Facts (CC BY-SA)» condicional por
+> `imageLicense`, evento `nutrition_equivalences_opened` una vez por franja; **picker «Agregar grupo»** con secciones Sistema
+> chileno / Legado (SMAE) / Propios, tocar un grupo usado suma ½ con toast + Deshacer, stepper con tap-to-edit (RN) y Legumbres
+> expandido (125 kcal, no 0); **conversión SMAE → chileno** (banner uno por plan, sheet RN / diálogo web con preview por franja y
+> selector de lácteo, solo sobre el borrador); **metas por día** con switch «Solo el {día}», aviso ámbar en `PublishBar` que deja
+> publicar. Read model con cuatro llaves opcionales (`isGeneric`, `imagePath`, `imageVersion`, `imageLicense`): un 1.1.2 sin la
+> OTA sigue parseando el RPC nuevo y muestra la lista sin foto. Gates reales en [TEST_STATUS](../testing/TEST_STATUS.md); QA en
+> device pendiente (10 puntos en el TASKS del SDD).
+>
 > **2026-09-06 (tren «Cantidades honestas», Nutrición V2 — W1–W4 EN PRODUCCIÓN ~23:07Z: `master` = `rnmobiledenuevo` =
 > `2fe28d61`, deploy `dpl_C95u9ArNCBx8VwvaZfnRLpdRijkm` READY, 3 migraciones en LIVE `20260906230222`/`230357`/`230411`, OTA 1.1.2
 > `production` android `27028d0f-2025-48d5-b6fa-30e5dfeaf7e5` (run 34065842472) / ios `ddf839b8-42b6-4a01-98e0-2117add5da92`
