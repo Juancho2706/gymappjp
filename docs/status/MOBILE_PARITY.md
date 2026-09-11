@@ -12,6 +12,19 @@ source_of_truth: apps/web responsive + apps/mobile
 
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
 
+> **2026-09-11 (tren «Arreglos chicos pre-OTA» + F1 «tile REPS en fuerza por tiempo» — EN CÓDIGO LOCAL: `rnmobiledenuevo` = `09e5d9fa`
+> (F1 `fe6e9b39` → docs `9f1284b9`/`3f3f2f6f` → W1-A `ed9c9085` · W1-C `7d2eb3f1` · W1-B `09e5d9fa`), SIN push; deploy y OTA 1.1.2 android/ios
+> pendientes del OK del owner; [SDD](../specs/arreglos-chicos-pre-ota/SPEC.md))**. Paridad por pieza: **miles es-CL** (`formatThousandsEsCl`
+> en `@eva/workout-engine`, consumido por el share «Bloque» RN y por `SessionCompleteV3` web) — **paridad nueva**; **agenda del coach sin
+> fecha**: el fallback offline de RN dice «Sin check-in / entreno reciente» (`limitedWindow`) y el pulse web sigue con «Todavía no registra…»
+> — **divergencia deliberada** (la web no mira una ventana de 30 d); **adherencia «—»** en `NutricionTab` RN (web ya lo hacía) — **paridad
+> nueva**; **hold persistido en `SessionSnapshot`** (sobrevive a que el SO mate la app; al rehidratar se ARMA, nunca arranca) — **solo RN**;
+> **tiles 2×2** en fuerza por tiempo «por lado» — **solo RN** (web usa inputs); **marca en el home**: RN pinta el logo del coach en el eyebrow del
+> alumno (22 px, siempre) y a la izquierda del header del coach (40 px); el header web del alumno NO pinta logo — **divergencia aceptada**
+> (la web lleva marca en manifest, favicon, apple-touch-icon y `CoachTopBar`); **Porciones con módulo apagado** (panel de permiso en vez de
+> «No pudimos cargar») — **solo RN** (la pestaña es nativa); **logout sin red** (`getSession`) — **solo RN**; `TopBar.showBrand` (código muerto)
+> borrado. Ítems del inventario ya cerrados antes (1, 2, 3, 4, 9, 10, 13) y 8 obsoleto (la banda `AuraHero` reemplazó al anillo): SPEC §Veredicto.
+>
 > **2026-09-11 00:13Z (tren «Cuenta atrás en pantalla» + preferencia D5 «Pasar solo al descanso» — EN PRODUCCIÓN: `master` = `rnmobiledenuevo` =
 > `6321a732`, deploy `dpl_BeykJxqvU9w1LUJsfAsBiTPnDgeZ` READY 00:10Z, OTA 1.1.2 `production` android `5f4dfb0f-a0d5-44b1-86a3-369a0672ecad` (run 34545510873) / ios
 > `0c5e8cb6-f742-44c1-9995-bdc8eeb5e2cf` (run 34545517678); migraciones M1 `20260910205046` + M2 `20260910205101` en LIVE desde W0; E2E `prod-suave` 9/9 (run 34545462628, 42,2 s);
