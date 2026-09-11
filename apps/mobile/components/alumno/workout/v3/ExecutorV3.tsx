@@ -379,6 +379,9 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
     loading, loadError, planTitle, programName, phaseName, activeWeekVariant, currentWeek, weeksToRepeat, programStructure,
     dayOfWeek, clientId, isDemo, blocks, sections, supersetMembersByBlock, sessionLogs, previousHistory, lastSessionByBlock,
     exerciseMaxes, repeatSeed, elapsedSec, isOnline, restoredDraft, saveDraft, logSet, finishSession, retry,
+    // Ítem 12 (R6): el reloj de hold armado viaja al snapshot y vuelve de él. Se bajan tal cual a las
+    // tres pantallas que montan `HoldModuleV3`; el orquestador no los toca.
+    restoredHold, saveHold,
   } = session
 
   // ── Preferencia D5 «Pasar solo al descanso» (W5 · R1/R25/R32/R36 + F5) ────────────────────────────
@@ -1637,6 +1640,8 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
             effByBlock={effByBlock}
             previousHistory={previousHistory}
             restoredDraft={restoredDraft}
+            restoredHold={restoredHold}
+            saveHold={saveHold}
             reducedMotion={motion.reduced}
             exec={exec}
             showEffort={execSettings.showRpeRir}
@@ -1707,6 +1712,8 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
             blockLogs={blockLogs}
             prevList={prevList}
             restoredDraft={restoredDraft}
+            restoredHold={restoredHold}
+            saveHold={saveHold}
             repeatSeed={repeatSeed}
             reducedMotion={motion.reduced}
             exec={exec}
@@ -1743,6 +1750,8 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
             exercise={exercise}
             blockLogs={blockLogs}
             restoredDraft={restoredDraft}
+            restoredHold={restoredHold}
+            saveHold={saveHold}
             reducedMotion={motion.reduced}
             exec={exec}
             substitution={sub ? { name: sub.name, prescribedName: sub.prescribedName } : null}
@@ -1853,7 +1862,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         />
       )
     },
-    [supersetMembersByBlock, sessionLogs, skippedBlockIds, skipReasonByBlock, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, getSubstitution, openSet, hrZones, hrProfile, restoredDraft, repeatSeed, motion.reduced, exec, execSettings.showRpeRir, handleCommit, handleRpeUpdate, saveActiveDraft, recentSet, syncErrors, retryCommit, pendingRoundRest, startPendingRoundRest, autoRestEnabled],
+    [supersetMembersByBlock, sessionLogs, skippedBlockIds, skipReasonByBlock, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, getSubstitution, openSet, hrZones, hrProfile, restoredDraft, restoredHold, saveHold, repeatSeed, motion.reduced, exec, execSettings.showRpeRir, handleCommit, handleRpeUpdate, saveActiveDraft, recentSet, syncErrors, retryCommit, pendingRoundRest, startPendingRoundRest, autoRestEnabled],
   )
 
   // ── Modelo de pasos (engine) + vistas del rail + auto-avance ──

@@ -36,6 +36,7 @@ import {
   type SessionBlock,
   type SessionDraft,
   type SessionExercise,
+  type SessionHold,
 } from '../../../../lib/workout-session'
 import type { EffectiveTarget } from '../../../../lib/workout/progression'
 import { Sheet } from '../../../Sheet'
@@ -110,6 +111,8 @@ export function SupersetScreenV3({
   effByBlock,
   previousHistory,
   restoredDraft,
+  restoredHold = null,
+  saveHold,
   reducedMotion = false,
   exec,
   showEffort = true,
@@ -134,6 +137,10 @@ export function SupersetScreenV3({
   effByBlock: Map<string, EffectiveTarget | null>
   previousHistory: Record<string, PrevSet[]>
   restoredDraft: SessionDraft | null
+  /** Reloj de hold rescatado del snapshot (ítem 12 · R6) — lo consume el módulo al montar. */
+  restoredHold?: SessionHold | null
+  /** Persiste el reloj de hold ARMADO en el snapshot de la sesión (ítem 12 · R6). */
+  saveHold?: (hold: SessionHold | null) => void
   reducedMotion?: boolean
   exec: ExecTheme
   /** Mostrar las pills/escala de esfuerzo RPE/RIR (E3.7 — la tuerca). */
@@ -519,6 +526,8 @@ export function SupersetScreenV3({
                       onSeed={(values, nonce) => setSeedPatch({ values, nonce })}
                       onCommit={(payload, source) => handleCommit(payload, source)}
                       onStatusChange={setHoldStatus}
+                      saveHold={saveHold}
+                      restoredHold={restoredHold}
                       testIDPrefix={`hold-ss-${m.block.id}`}
                     />
                   )

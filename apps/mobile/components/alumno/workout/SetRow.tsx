@@ -29,6 +29,8 @@ import { JuicyButton } from './v3/JuicyButton'
 import { EffortTicksV3 } from './v3/EffortTicksV3'
 import { resolveExecTheme, type ExecTheme } from './v3/exec-theme'
 import { WHEEL_LONG_PRESS_MS } from './v3/wheel-hint'
+// La decisión de fila vs grilla de los tiles vive en el modelo PURO de las pantallas V3 (ítem 19).
+import { strengthTimeTileLayout } from './v3/typed-screen-model'
 // RPE_HELP/RIR_HELP se importan (fuente única mobile) en vez de re-declararlos: evita el drift que la
 // Ola 0 flagueó (#1). Son mirror literal —con tildes— de la web (`EffortScale.tsx:17-20`).
 import {
@@ -1093,10 +1095,14 @@ export function ActiveSetRow({
   if (heroMode && !typedMode && exec) {
     const s = exec.surface
     const repsShown = values.reps ?? ''
+    // Ítem 19 (R12): sólo los CUATRO tiles de fuerza por tiempo «por lado» pasan a 2×2 (tiles algo más
+    // chicos, `compact`); con dos o tres tiles la fila queda exactamente como estaba.
+    const tileLayout = strengthTimeTileLayout({ strengthTimeMode, sideMode })
+    const gridTiles = tileLayout === 'grid'
     return (
       <View testID={`active-set-row-${setNumber}`} style={{ gap: 10 }}>
         {/* Tiles de valor (peso / reps) — 30/900, tap=teclado, mantener=rueda */}
-        <View style={{ flexDirection: 'row', gap: 10 }}>
+        <View style={{ flexDirection: 'row', flexWrap: gridTiles ? 'wrap' : 'nowrap', gap: 10 }}>
           <ValueTile
             label="Kg"
             unit="KG"
@@ -1105,6 +1111,7 @@ export function ActiveSetRow({
             exec={exec}
             onPress={() => openField('weight')}
             onLongPress={onLongPressValue ? () => onLongPressValue('weight') : undefined}
+            compact={gridTiles}
             testID={`set-tile-${setNumber}-weight`}
           />
           {/* REPS: SIEMPRE en fuerza, también por tiempo (F1). En modo tiempo va entre KG y SEG, sin
@@ -1119,6 +1126,7 @@ export function ActiveSetRow({
             exec={exec}
             onPress={() => openField('reps')}
             onLongPress={onLongPressValue ? () => onLongPressValue('reps') : undefined}
+            compact={gridTiles}
             testID={`set-tile-${setNumber}-reps`}
           />
           {strengthTimeMode ? (
@@ -1134,6 +1142,7 @@ export function ActiveSetRow({
                   editing={openKey === 'hold_left_sec'}
                   exec={exec}
                   onPress={() => openField('hold_left_sec')}
+                  compact={gridTiles}
                   testID={`set-tile-${setNumber}-hold_left_sec`}
                 />
                 <ValueTile
@@ -1144,6 +1153,7 @@ export function ActiveSetRow({
                   editing={openKey === 'hold_right_sec'}
                   exec={exec}
                   onPress={() => openField('hold_right_sec')}
+                  compact={gridTiles}
                   testID={`set-tile-${setNumber}-hold_right_sec`}
                 />
               </>
@@ -1572,6 +1582,7 @@ function ValueTile({
   exec,
   onPress,
   onLongPress,
+  compact = false,
   testID,
 }: {
   label: string
@@ -1582,6 +1593,12 @@ function ValueTile({
   exec: ExecTheme
   onPress: () => void
   onLongPress?: () => void
+  /**
+   * Grilla 2×2 de los cuatro tiles «por lado» por tiempo (ítem 19): base del 45 % para que entren dos
+   * por fila y valor algo más chico (26 en vez de 30) con menos aire vertical. En la fila de 2-3 tiles
+   * queda en `false` y NADA cambia.
+   */
+  compact?: boolean
   testID: string
 }) {
   const s = exec.surface
@@ -1598,10 +1615,12 @@ function ValueTile({
       accessibilityHint={onLongPress ? 'Mantén presionado para abrir la rueda de valores' : undefined}
       style={{
         flex: 1,
+        // 45 % es lo que obliga a DOS por fila (tres no entran) dejando que `flex: 1` reparta el resto.
+        flexBasis: compact ? '45%' : undefined,
         alignItems: 'center',
-        paddingTop: 10,
+        paddingTop: compact ? 8 : 10,
         paddingHorizontal: 8,
-        paddingBottom: 9,
+        paddingBottom: compact ? 7 : 9,
         borderRadius: 16,
         borderWidth: 2,
         backgroundColor: s.surfaceRaised,
@@ -1609,7 +1628,7 @@ function ValueTile({
       }}
     >
       <Text
-        style={{ fontFamily: FONT.displayBlack, fontSize: 30, letterSpacing: -0.9, lineHeight: 30, color: dim ? hexToRgba(s.text, 0.35) : s.text, fontVariant: ['tabular-nums'] }}
+        style={{ fontFamily: FONT.displayBlack, fontSize: compact ? 26 : 30, letterSpacing: compact ? -0.8 : -0.9, lineHeight: compact ? 26 : 30, color: dim ? hexToRgba(s.text, 0.35) : s.text, fontVariant: ['tabular-nums'] }}
         numberOfLines={1}
       >
         {shown}

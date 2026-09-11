@@ -22,6 +22,7 @@ import {
   rollerGoalLabel,
   rollerPassesTarget,
   sideLabel,
+  strengthTimeTileLayout,
   zoneBpmRange,
   zoneRingColor,
 } from '../../apps/mobile/components/alumno/workout/v3/typed-screen-model'
@@ -214,6 +215,27 @@ describe('holdEditValues (W3.4 / R7)', () => {
     const payload = buildTypedPayload('mobility', values, 'blk-1', 1, { sideMode: null, holdSource: 'manual' })
     expect(payload).toMatchObject({ actualHoldSec: 30, metadata: { hold_source: 'manual' } })
     expect(payload.metadata).not.toHaveProperty('left_sec')
+  })
+})
+
+describe('strengthTimeTileLayout (ítem 19 · R12)', () => {
+  it('grilla 2×2 SÓLO con los cuatro tiles: fuerza por tiempo y por lado', () => {
+    expect(strengthTimeTileLayout({ strengthTimeMode: true, sideMode: 'per_side' })).toBe('grid')
+  })
+  it('fila de siempre cuando no hay cuatro tiles', () => {
+    // Fuerza por tiempo sin lados ⇒ KG · REPS · SEG (tres tiles).
+    expect(strengthTimeTileLayout({ strengthTimeMode: true, sideMode: null })).toBe('row')
+    expect(strengthTimeTileLayout({ strengthTimeMode: true, sideMode: 'bilateral' })).toBe('row')
+    // `alternating` NO es por lado en el eje TIEMPO (R34/H7): una sola caja de segundos.
+    expect(strengthTimeTileLayout({ strengthTimeMode: true, sideMode: 'alternating' })).toBe('row')
+    // Fuerza por REPS por lado: los lados van en el keypad, no en tiles ⇒ KG · REPS.
+    expect(strengthTimeTileLayout({ strengthTimeMode: false, sideMode: 'per_side' })).toBe('row')
+  })
+  it('usa la MISMA regla de lados del motor que el resto del eje tiempo (R34)', () => {
+    for (const sideMode of ['per_side', 'alternating', 'bilateral', null]) {
+      const esperado = holdSidesFor(sideMode).length > 1 ? 'grid' : 'row'
+      expect(strengthTimeTileLayout({ strengthTimeMode: true, sideMode })).toBe(esperado)
+    }
   })
 })
 

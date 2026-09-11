@@ -155,6 +155,21 @@ export function mobilitySides(sideMode: string | null | undefined): MobilitySide
   return holdSidesFor(sideMode)
 }
 
+/**
+ * Layout de la fila de tiles del hero de FUERZA (ítem 19, R12 · decisión del owner 11-09: 2×2).
+ *
+ * Con cuatro tiles —KG · REPS · IZQ · DER, o sea fuerza por tiempo con lados— la fila apretaba los
+ * valores de tres cifras en un teléfono de 360 dp, así que pasa a grilla de 2×2. Con dos o tres tiles
+ * la fila de siempre no cambia una coma. La regla de lados es la ÚNICA del eje tiempo (`holdSidesFor`,
+ * R34): nadie compara `sideMode` a mano.
+ */
+export function strengthTimeTileLayout(input: {
+  strengthTimeMode: boolean
+  sideMode: string | null | undefined
+}): 'row' | 'grid' {
+  return input.strengthTimeMode && holdSidesFor(input.sideMode).length > 1 ? 'grid' : 'row'
+}
+
 /** Etiqueta es-neutro del lado grande de movilidad. */
 export function sideLabel(side: MobilitySide): string {
   if (side === 'left') return 'Lado izquierdo'

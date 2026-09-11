@@ -23,6 +23,9 @@
  *  · R6/R27: el lado 2 se ARMA con `prime(seconds)` y arranca solo **solo si `!expiredWhileAway`**.
  *    Con el hold vencido en background queda en «Iniciar lado derecho», no corriendo con datos
  *    falsos.
+ *  · Ítem 12: el reloj ARMADO (quién y su fin absoluto) viaja al snapshot de la sesión por `saveHold`
+ *    y vuelve por `restoredHold`, para que matar la app desde el multitarea no borre la evidencia.
+ *    Al rehidratar se ARMA (`prime`), nunca se arranca — el vencimiento lo decide `expiredWhileAwayFrom`.
  *  · Un envío por serie: `sentSetsRef` por `block:set:side`, calco de `CardioScreenV3.tsx:364`.
  *  · La siembra de la fila va por `onSeed(values, nonce)` → `typedSeedPatch` (`SetRow.tsx:894-901`),
  *    **nunca** por `seedValues`: eso remonta la fila y cierra el keypad abierto a mitad de escritura
@@ -41,6 +44,7 @@ import {
   buildTypedPayload,
   createHoldElapsed,
   decideHoldAutolog,
+  expiredWhileAwayFrom,
   holdSidesFor,
   mergeHoldCaptureValues,
   pauseHoldElapsed,
@@ -56,6 +60,9 @@ import {
 } from '@eva/workout-engine'
 import { captureAppEvent } from '../../../../lib/analytics'
 import { timerHaptics } from '../../../../lib/haptics'
+// Sólo el TIPO del reloj persistido (import type ⇒ se borra en compilación): este hook no puede
+// arrastrar `workout-session` —AsyncStorage, supabase— y aun así la forma del snapshot es una sola.
+import type { SessionHold } from '../../../../lib/workout-session'
 import {
   cancelHoldEndNotification,
   dismissHoldEndNotification,
@@ -116,6 +123,17 @@ export interface UseHoldModuleArgs {
   onCommit: (payload: OptimisticLogPayload, source: HoldSource, info: HoldCommitInfo) => void
   /** Cambio de lado: `autoStarted` = el lado 2 arrancó solo (foreground) o quedó armado (R6). */
   onSideChange?: (side: HoldSide, autoStarted: boolean) => void
+  /**
+   * Persiste el reloj ARMADO en el snapshot de la sesión (ítem 12 · R6), o lo borra con `null`. Se
+   * llama al armar la cuenta y al commitear/cancelar/reiniciar — **nunca** por tick.
+   */
+  saveHold?: (hold: SessionHold | null) => void
+  /**
+   * Reloj que quedó armado antes de que el SO matara la app, ya filtrado por día en
+   * `pickRestorableHold`. Se lee UNA vez, al montar: si es de esta serie y de este lado y su fin
+   * absoluto ya pasó, el módulo abre con `expiredWhileAway` — pero **jamás** arranca solo (R6/R27).
+   */
+  restoredHold?: SessionHold | null
 }
 
 export interface UseHoldModuleApi {
@@ -173,6 +191,9 @@ export function useHoldModule(args: UseHoldModuleArgs): UseHoldModuleApi {
   // —que arranca solo o queda armado— ni un «Reanudar» tras la pausa vuelven a emitirlo. Se limpia
   // con `resetKey`, que es exactamente «otra serie / otro miembro / otra ronda».
   const startedEventRef = useRef(false)
+  // Espejo de lo ÚLTIMO que se mandó al snapshot (ítem 12). Sin él, el reset de CADA montaje pediría
+  // un borrado que ya está hecho y escribiría AsyncStorage por gusto.
+  const persistedHoldRef = useRef<SessionHold | null>(null)
 
   const countdown = useCountdown(
     prescribedSec,
@@ -188,6 +209,17 @@ export function useHoldModule(args: UseHoldModuleArgs): UseHoldModuleApi {
   const killNotif = useCallback(() => {
     void cancelHoldEndNotification()
     void dismissHoldEndNotification()
+  }, [])
+
+  /**
+   * Escribe el reloj armado en el snapshot de la sesión (ítem 12 · R6) — MISMOS momentos que el aviso
+   * del SO: se arma junto con `scheduleHoldEndNotification` y se borra junto con `killNotif`. Un
+   * borrado sobre un snapshot que ya está limpio es un no-op (cero I/O).
+   */
+  const writeHold = useCallback((next: SessionHold | null) => {
+    if (next == null && persistedHoldRef.current == null) return
+    persistedHoldRef.current = next
+    argsRef.current.saveHold?.(next)
   }, [])
 
   // ── Fin del hold (cualquier razón) — el motor decide, el hook aplica ────────────────────────────
@@ -216,6 +248,9 @@ export function useHoldModule(args: UseHoldModuleArgs): UseHoldModuleApi {
       })
       setExpiredWhileAway(away)
       killNotif()
+      // La cuenta dejó de correr por la razón que sea (venció, pausa, «Listo», re-medir): el reloj
+      // persistido ya no aplica. Si toca lado siguiente ARMADO y corriendo, más abajo se reescribe.
+      writeHold(null)
 
       // Háptica de 0 en FOREGROUND (W3.8/R31): «vibra y avisa», nunca «suena». Con la app fuera el
       // canal es la notificación local, no la vibración (el JS puede estar congelado).
@@ -286,13 +321,14 @@ export function useHoldModule(args: UseHoldModuleArgs): UseHoldModuleApi {
           elapsedRef.current = startHoldElapsed(elapsedRef.current, Date.now())
           countdownRef.current.restart(a.prescribedSec)
           void scheduleHoldEndNotification(a.prescribedSec)
+          writeHold({ blockId: a.blockId, setNumber: a.setNumber, side: nextSide, endAtMs: Date.now() + a.prescribedSec * 1000 })
         } else {
           countdownRef.current.prime(a.prescribedSec)
         }
         a.onSideChange?.(nextSide, decision.autoStartNextSide)
       }
     },
-    [killNotif],
+    [killNotif, writeHold],
   )
   useEffect(() => {
     finishRef.current = finish
@@ -309,7 +345,36 @@ export function useHoldModule(args: UseHoldModuleArgs): UseHoldModuleApi {
     startedEventRef.current = false
     countdownRef.current.prime(argsRef.current.prescribedSec)
     killNotif()
-  }, [resetKey, killNotif])
+    writeHold(null)
+  }, [resetKey, killNotif, writeHold])
+
+  /**
+   * Rehidratación del reloj tras un cierre DURO de la app (ítem 12 · R6). Corre UNA vez, al montar y
+   * DESPUÉS del reset de arriba (que deja el módulo en `idle` y el flag en `false`).
+   *
+   * El hold restaurado tiene que ser de ESTA serie y del lado con el que el módulo abre: un hold del
+   * lado DERECHO no se rehidrata a propósito —la caja del izquierdo se perdió con la app, así que el
+   * alumno rehace la serie entera en vez de enviar una fila a medias—.
+   */
+  useEffect(() => {
+    const a = argsRef.current
+    const restored = a.restoredHold
+    const openingSide: HoldSide = sidesRef.current[0] ?? 'single'
+    if (!restored) return
+    if (restored.blockId !== a.blockId || restored.setNumber !== a.setNumber || restored.side !== openingSide) return
+    // Es lo que hay en disco: registrarlo para que el próximo borrado NO sea un no-op.
+    persistedHoldRef.current = restored
+    // `visible: true` a propósito: que el alumno estuvo FUERA ya es un hecho (el SO mató la app), así
+    // que lo único que falta decidir es si el fin ABSOLUTO ya pasó. Con `visible: false` el helper
+    // responde `true` sin mirar el reloj y un hold interrumpido a los 3 s se leería como vencido —y
+    // en cold start de Android `AppState.currentState` puede llegar como 'unknown'.
+    const expired = expiredWhileAwayFrom({ nowMs: Date.now(), endAtMs: restored.endAtMs, visible: true })
+    // SIEMPRE `prime`, jamás `restart`: el reloj queda armado esperando el toque (R6/R21/R27).
+    countdownRef.current.prime(a.prescribedSec)
+    // Vencido ⇒ «venció mientras no estabas»; interrumpido ⇒ idle limpio y el alumno lo repite.
+    if (expired) setExpiredWhileAway(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Barrido de programadas huérfanas al montar + limpieza al desmontar (reglas (d) y de desmontaje).
   useEffect(() => {
@@ -356,9 +421,9 @@ export function useHoldModule(args: UseHoldModuleArgs): UseHoldModuleApi {
   /** Arranca (o reanuda) el lado en curso. `resume` es el MISMO camino: no hay dos reglas. */
   const start = useCallback(() => {
     if (countdownRef.current.running) return
+    const a = argsRef.current
     if (!startedEventRef.current) {
       startedEventRef.current = true
-      const a = argsRef.current
       captureAppEvent('hold_timer_started', {
         block_id: a.blockId,
         exercise_type: eventExerciseType(a.kind),
@@ -368,8 +433,17 @@ export function useHoldModule(args: UseHoldModuleArgs): UseHoldModuleApi {
     }
     elapsedRef.current = startHoldElapsed(elapsedRef.current, Date.now())
     countdownRef.current.toggle()
-    void scheduleHoldEndNotification(countdownRef.current.remaining)
-  }, [])
+    const remaining = countdownRef.current.remaining
+    void scheduleHoldEndNotification(remaining)
+    // Fin ABSOLUTO al snapshot (ítem 12): el MISMO que va a anclar el reloj, con el mismo restante
+    // que ya usa el aviso del SO. Si el SO mata la app acá, al reabrir se sabe si venció o no.
+    writeHold({
+      blockId: a.blockId,
+      setNumber: a.setNumber,
+      side: sidesRef.current[sideIdxRef.current] ?? 'single',
+      endAtMs: Date.now() + remaining * 1000,
+    })
+  }, [writeHold])
 
   const pause = useCallback(() => {
     if (!countdownRef.current.running) return

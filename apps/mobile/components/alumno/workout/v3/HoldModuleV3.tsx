@@ -3,6 +3,7 @@ import { Pressable, Text, View } from 'react-native'
 import { Check, Pause, Play, RotateCcw } from 'lucide-react-native'
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake'
 import type { HoldContext, HoldSide, HoldSource, OptimisticLogPayload } from '@eva/workout-engine'
+import type { SessionHold } from '../../../../lib/workout-session'
 import { FONT } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
 import { JuicyButton } from './JuicyButton'
@@ -74,6 +75,10 @@ export interface HoldModuleV3Props {
   /** Auto-envío (V2): el payload ya viene armado por el motor. */
   onCommit: (payload: OptimisticLogPayload, source: HoldSource, info: HoldCommitInfo) => void
   onSideChange?: (side: HoldSide, autoStarted: boolean) => void
+  /** Persiste el reloj ARMADO en el snapshot de la sesión (ítem 12 · R6), o lo borra con `null`. */
+  saveHold?: (hold: SessionHold | null) => void
+  /** Reloj rescatado del snapshot tras un cierre duro de la app (ya filtrado por día). */
+  restoredHold?: SessionHold | null
   /** La pantalla lo usa para ocultar (display: 'none', R26) la fila de captura mientras corre. */
   onStatusChange?: (status: HoldModuleStatus) => void
   testIDPrefix?: string
@@ -99,6 +104,8 @@ export function HoldModuleV3({
   onSeed,
   onCommit,
   onSideChange,
+  saveHold,
+  restoredHold = null,
   onStatusChange,
   testIDPrefix = 'hold',
 }: HoldModuleV3Props) {
@@ -127,6 +134,8 @@ export function HoldModuleV3({
     onSeed,
     onCommit: handleCommit,
     onSideChange,
+    saveHold,
+    restoredHold,
   })
   useEffect(() => {
     setSavedSec(null)

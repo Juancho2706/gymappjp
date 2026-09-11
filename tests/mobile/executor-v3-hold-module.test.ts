@@ -82,6 +82,35 @@ vi.doMock(mobileFile('components', 'alumno', 'workout', 'timers', 'hold-notifica
   HOLD_NOTIF_MIN_SEC: 10,
 }))
 
+// `pickRestorableHold` es PURO pero vive en `workout-session.ts` (la casa del snapshot), que arrastra
+// supabase/expo/AsyncStorage: se mockea lo que el módulo importa en runtime y se deja real lo que se
+// prueba. Los helpers puros del propio módulo (`date-utils`, `program-week-variant`,
+// `workout-load-state`) NO se mockean: no tienen imports.
+vi.doMock(mobileDep('expo-router'), () => ({ useFocusEffect: () => {} }))
+vi.doMock(mobileDep('@react-native-community/netinfo'), () => ({
+  default: { addEventListener: () => () => {} },
+}))
+vi.doMock(mobileDep('@react-native-async-storage/async-storage'), () => ({
+  default: { getItem: async () => null, setItem: async () => {}, removeItem: async () => {} },
+}))
+vi.doMock(mobileFile('lib', 'supabase.ts'), () => ({ supabase: {} }))
+vi.doMock(mobileFile('lib', 'client.ts'), () => ({ getClientProfile: vi.fn() }))
+vi.doMock(mobileFile('lib', 'entitlements.ts'), () => ({
+  useEntitlements: () => ({ studentAccess: { state: 'ok' } }),
+}))
+vi.doMock(mobileFile('lib', 'offline-cache.ts'), () => ({
+  cachePlan: vi.fn(),
+  enqueueLog: vi.fn(),
+  getCachedPlan: vi.fn(async () => null),
+  getPendingLogCount: vi.fn(async () => 0),
+}))
+vi.doMock(mobileFile('lib', 'start-program.ts'), () => ({
+  shouldAutoStartProgram: vi.fn(() => false),
+  startWorkoutProgram: vi.fn(),
+}))
+vi.doMock(mobileFile('lib', 'use-online.ts'), () => ({ checkOnline: vi.fn(async () => true) }))
+
+const { pickRestorableHold } = await import('../../apps/mobile/lib/workout-session')
 const { useCountdown } = await import('../../apps/mobile/components/alumno/workout/v3/timing')
 const { useHoldModule } = await import('../../apps/mobile/components/alumno/workout/v3/use-hold-module')
 type UseHoldModuleArgs = Parameters<typeof useHoldModule>[0]
@@ -466,6 +495,129 @@ describe('useHoldModule · per_side (R34/R6)', () => {
     advance(4_200)
     const { payload } = commitAt(h)
     expect(payload).toMatchObject({ actualHoldSec: 10, metadata: { left_sec: 6, right_sec: 4 } })
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+// Ítem 12 · el reloj sobrevive a que el SO mate la app (R6)
+// ══════════════════════════════════════════════════════════════════════════════════════════════
+
+describe('pickRestorableHold · un reloj de AYER no vuelve a la pantalla (ítem 12)', () => {
+  const hold = { blockId: 'blk-1', setNumber: 2, side: 'single' as const, endAtMs: 1_757_600_000_000 }
+
+  it('mismo día ⇒ devuelve el hold tal cual', () => {
+    expect(pickRestorableHold(hold, '2026-09-11', '2026-09-11')).toBe(hold)
+  })
+
+  it('otro día ⇒ null (snapshot de ayer o de una edición de día pasado)', () => {
+    expect(pickRestorableHold(hold, '2026-09-10', '2026-09-11')).toBeNull()
+    expect(pickRestorableHold(hold, undefined, '2026-09-11')).toBeNull()
+  })
+
+  it('snapshot viejo SIN hold, o con datos basura ⇒ null (rehidrata igual que siempre)', () => {
+    expect(pickRestorableHold(undefined, '2026-09-11', '2026-09-11')).toBeNull()
+    expect(pickRestorableHold(null, '2026-09-11', '2026-09-11')).toBeNull()
+    expect(pickRestorableHold({ ...hold, endAtMs: Number.NaN }, '2026-09-11', '2026-09-11')).toBeNull()
+    expect(pickRestorableHold({ ...hold, blockId: '' }, '2026-09-11', '2026-09-11')).toBeNull()
+  })
+})
+
+describe('useHoldModule · el reloj armado viaja al snapshot (ítem 12 / R6)', () => {
+  it('persiste el fin ABSOLUTO al armar y lo borra al commitear', () => {
+    const saveHold = vi.fn()
+    const { result } = mountHold({ prescribedSec: 30, saveHold })
+    // Montar no escribe nada: el snapshot sólo cambia cuando hay reloj que guardar o que limpiar.
+    expect(saveHold).not.toHaveBeenCalled()
+
+    act(() => result.current.start())
+    expect(saveHold).toHaveBeenCalledTimes(1)
+    expect(saveHold.mock.calls[0][0]).toEqual({
+      blockId: 'blk-1',
+      setNumber: 1,
+      side: 'single',
+      endAtMs: Date.now() + 30_000,
+    })
+
+    saveHold.mockClear()
+    advance(30_200)
+    expect(saveHold).toHaveBeenLastCalledWith(null)
+  })
+
+  it('la pausa lo borra y un segundo cierre ya no reescribe el snapshot', () => {
+    const saveHold = vi.fn()
+    const { result } = mountHold({ prescribedSec: 30, saveHold })
+    act(() => result.current.start())
+    saveHold.mockClear()
+    act(() => result.current.pause())
+    expect(saveHold).toHaveBeenLastCalledWith(null)
+
+    saveHold.mockClear()
+    act(() => result.current.doneEarly())
+    // Ya estaba limpio ⇒ no se vuelve a escribir el snapshot por gusto.
+    expect(saveHold).not.toHaveBeenCalled()
+  })
+
+  it('per_side: el lado 2 que arranca solo persiste SU propio fin', () => {
+    const saveHold = vi.fn()
+    const { result } = mountHold({ sideMode: 'per_side', prescribedSec: 4, saveHold })
+    act(() => result.current.start())
+    saveHold.mockClear()
+    advance(4_200)
+    expect(result.current.side).toBe('right')
+    const saved = saveHold.mock.calls.at(-1)?.[0] as { blockId: string; setNumber: number; side: string; endAtMs: number }
+    expect(saved).toMatchObject({ blockId: 'blk-1', setNumber: 1, side: 'right' })
+    // El fin del lado 2 se ancla CUANDO cierra el lado 1 (el tick de los 4 s), no al leer el assert.
+    expect(saved.endAtMs).toBeGreaterThan(Date.now() + 3_000)
+    expect(saved.endAtMs).toBeLessThanOrEqual(Date.now() + 4_000)
+  })
+
+  it('restoredHold VENCIDO ⇒ «venció mientras no estabas» y el reloj NO corre', () => {
+    const saveHold = vi.fn()
+    const { result } = mountHold({
+      prescribedSec: 30,
+      saveHold,
+      restoredHold: { blockId: 'blk-1', setNumber: 1, side: 'single', endAtMs: Date.now() - 120_000 },
+    })
+    expect(result.current.expiredWhileAway).toBe(true)
+    expect(result.current.status).toBe('idle')
+    expect(result.current.running).toBe(false)
+    expect(result.current.started).toBe(false)
+    expect(result.current.remaining).toBe(30)
+    // R6/R21: rehidratar NO es arrancar. Cinco segundos después sigue esperando el toque.
+    advance(5_000)
+    expect(result.current.remaining).toBe(30)
+    expect(result.current.running).toBe(false)
+    // Rehidratar tampoco reescribe el snapshot.
+    expect(saveHold).not.toHaveBeenCalled()
+  })
+
+  it('restoredHold NO vencido ⇒ idle limpio, sin flag (hold interrumpido: el alumno lo repite)', () => {
+    const { result } = mountHold({
+      prescribedSec: 30,
+      restoredHold: { blockId: 'blk-1', setNumber: 1, side: 'single', endAtMs: Date.now() + 20_000 },
+    })
+    expect(result.current.expiredWhileAway).toBe(false)
+    expect(result.current.status).toBe('idle')
+    expect(result.current.remaining).toBe(30)
+  })
+
+  it('un hold de OTRO bloque, de otra serie o de otro lado se ignora', () => {
+    const base = { setNumber: 1, side: 'single' as const, endAtMs: Date.now() - 120_000 }
+    const otroBloque = mountHold({ prescribedSec: 30, restoredHold: { ...base, blockId: 'blk-9' } })
+    expect(otroBloque.result.current.expiredWhileAway).toBe(false)
+
+    const otraSerie = mountHold({ prescribedSec: 30, restoredHold: { ...base, blockId: 'blk-1', setNumber: 7 } })
+    expect(otraSerie.result.current.expiredWhileAway).toBe(false)
+
+    // El módulo abre por el IZQUIERDO: un hold del derecho no se rehidrata (la caja del izquierdo se
+    // perdió con la app, así que el alumno rehace la serie entera).
+    const otroLado = mountHold({
+      sideMode: 'per_side',
+      prescribedSec: 30,
+      restoredHold: { ...base, blockId: 'blk-1', side: 'right' },
+    })
+    expect(otroLado.result.current.expiredWhileAway).toBe(false)
+    expect(otroLado.result.current.side).toBe('left')
   })
 })
 

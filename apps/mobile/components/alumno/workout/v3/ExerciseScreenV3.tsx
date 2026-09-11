@@ -18,7 +18,7 @@ import { hexToRgba } from '../../../../lib/theme'
 import { haptics } from '../../../../lib/haptics'
 import { EXERCISE_TYPE_META, exerciseTypeColor } from '../../../../lib/exercise-type-meta'
 import type { EffectiveTarget } from '../../../../lib/workout/progression'
-import type { PrevSet, SessionBlock, SessionDraft, SessionExercise } from '../../../../lib/workout-session'
+import type { PrevSet, SessionBlock, SessionDraft, SessionExercise, SessionHold } from '../../../../lib/workout-session'
 import { Sheet } from '../../../Sheet'
 import { SetRow, ActiveSetRow } from '../SetRow'
 import { bestPrevOf, overloadChipLabel } from '../workout-ui'
@@ -78,6 +78,8 @@ export function ExerciseScreenV3({
   blockLogs,
   prevList,
   restoredDraft,
+  restoredHold = null,
+  saveHold,
   repeatSeed = null,
   reducedMotion = false,
   exec,
@@ -107,6 +109,10 @@ export function ExerciseScreenV3({
   blockLogs: ReconciledSessionLog[]
   prevList: PrevSet[]
   restoredDraft: SessionDraft | null
+  /** Reloj de hold rescatado del snapshot (ítem 12 · R6) — lo consume el módulo al montar. */
+  restoredHold?: SessionHold | null
+  /** Persiste el reloj de hold ARMADO en el snapshot de la sesión (ítem 12 · R6). */
+  saveHold?: (hold: SessionHold | null) => void
   /**
    * Semilla de "repetir un día" indexada por `sessionLogKey(block_id, set_number)`: precarga la serie
    * activa con lo que el alumno registró ese día, EDITABLE. Entra por la misma cadena de valores
@@ -407,6 +413,8 @@ export function ExerciseScreenV3({
           getCaptureValues={() => captureRef.current}
           onSeed={(values, nonce) => setSeedPatch({ values, nonce })}
           onCommit={(payload) => commitSet(payload)}
+          saveHold={saveHold}
+          restoredHold={restoredHold}
           testIDPrefix="hold-strength"
         />
       )}

@@ -7,8 +7,8 @@
  * headless — la presentación vive en `components/alumno/workout/ExecutorV2.tsx`.
  *
  * Resiliencia (E2-03, espejo de web PR #113 session-drafts): snapshot por plan en AsyncStorage con el
- * arreglo de logs + `startedAt` + un draft del set en curso. Al reabrir hoy, `reconcileSessionLogs`
- * une el server (gana) con el snapshot local (lo aún-no-confirmado sobrevive, marcado `_pending`) y el
+ * arreglo de logs + `startedAt` + un draft del set en curso + el reloj de hold armado (ítem 12). Al
+ * reabrir hoy, `reconcileSessionLogs` une el server (gana) con el snapshot local (lo aún-no-confirmado sobrevive, marcado `_pending`) y el
  * cronómetro continúa desde `startedAt` (cap 4h). Cerrar la app a mitad de set ya no pierde nada.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -25,6 +25,7 @@ import {
   PAST_SET_NOT_FOUND_ERROR,
   type ReconciledSessionLog,
   type OptimisticLogPayload,
+  type HoldSide,
   type RepeatSeedEntry,
   type WorkoutOfflineLog,
   type WorkoutArea,
@@ -138,6 +139,12 @@ interface SessionSnapshot {
   logs: ReconciledSessionLog[]
   /** Draft del set en curso (valores tipeados sin confirmar) — restaura el keypad al reabrir. */
   draft?: SessionDraft | null
+  /**
+   * Reloj de HOLD ARMADO al momento de persistir (ítem 12 · R6). OPCIONAL a propósito: los snapshots
+   * escritos antes de este campo rehidratan exactamente igual (`undefined` ⇒ no hay reloj que
+   * restaurar).
+   */
+  hold?: SessionHold | null
   updatedAt: number
 }
 
@@ -149,7 +156,40 @@ export interface SessionDraft {
   fieldIndex: number
 }
 
+/**
+ * Reloj de hold corriendo, tal como se persiste en el snapshot (ítem 12 · R6): QUIÉN lo corre
+ * (`blockId` + `setNumber` + `side`) y su fin ABSOLUTO (`endAtMs`, ms epoch). Sin él, matar la app
+ * desde el multitarea borraba el fin —que sólo vivía en memoria (`v3/timing.ts`, `endRef`)— y al
+ * reabrir el módulo no tenía con qué decidir si el hold venció mientras el alumno no estaba.
+ */
+export interface SessionHold {
+  blockId: string
+  setNumber: number
+  side: HoldSide
+  endAtMs: number
+}
+
 const SNAPSHOT_PREFIX = 'eva_workout_session_'
+
+/**
+ * ¿El hold del snapshot se puede rehidratar? Guard PURO y gemelo del `parsed.day === windowDay` de la
+ * carga: un reloj que quedó armado AYER —o en una edición de un día pasado, donde el snapshot vive en
+ * otra clave— no vuelve a la pantalla; su fin absoluto no dice nada del entreno de hoy. Devuelve el
+ * mismo objeto (no una copia) cuando es restaurable, o `null`.
+ *
+ * @param hold `SessionSnapshot.hold` crudo (puede faltar en snapshots viejos).
+ * @param snapshotDay `SessionSnapshot.day` — el día al que ESCRIBE ese snapshot.
+ * @param todayYmd ymd Santiago de HOY.
+ */
+export function pickRestorableHold(
+  hold: SessionHold | null | undefined,
+  snapshotDay: string | null | undefined,
+  todayYmd: string,
+): SessionHold | null {
+  if (!hold || !snapshotDay || snapshotDay !== todayYmd) return null
+  if (!hold.blockId || !Number.isFinite(hold.setNumber) || !Number.isFinite(hold.endAtMs)) return null
+  return hold
+}
 
 /**
  * Nombre de la fase activa del programa (semanas de `program_phases` acumuladas vs semana actual).
@@ -277,11 +317,23 @@ export interface WorkoutSessionState {
   isOnline: boolean
   /** Draft restaurado del set en curso (para rehidratar el keypad al reabrir). */
   restoredDraft: SessionDraft | null
+  /**
+   * Reloj de hold que quedó armado antes de que el SO matara la app (ítem 12 · R6), ya filtrado por
+   * día con `pickRestorableHold`. Lo consume el módulo de hold al montar: NUNCA para arrancar solo,
+   * sólo para decidir si el hold venció mientras el alumno no estaba.
+   */
+  restoredHold: SessionHold | null
   refresh: () => Promise<void>
   /** Reintento explícito tras `loadError`: limpia el error y vuelve a cargar mostrando el loader. */
   retry: () => Promise<void>
   /** Persiste el draft del set en curso (llamado por el keypad host en cada cambio). */
   saveDraft: (draft: SessionDraft | null) => void
+  /**
+   * Persiste (o borra con `null`) el reloj de hold ARMADO — gemelo de `saveDraft`. Lo llama el módulo
+   * de hold al armar la cuenta y al commitear/cancelar/terminar, NUNCA en cada tick: escribe una vez
+   * por arranque y una vez por cierre.
+   */
+  saveHold: (hold: SessionHold | null) => void
   /**
    * Registra una serie: optimista + snapshot + server (enqueue si falla). Devuelve isPR y, cuando el
    * guardado falla CON conexión (error real de server, no offline), `error` con el mensaje a mostrar
@@ -353,6 +405,8 @@ export function useWorkoutSession(
   const [isOnline, setIsOnline] = useState(true)
   const [elapsedSec, setElapsedSec] = useState(0)
   const [restoredDraft, setRestoredDraft] = useState<SessionDraft | null>(null)
+  // Reloj de hold rescatado del snapshot (ítem 12). Se resuelve UNA vez, en la rehidratación.
+  const [restoredHold, setRestoredHold] = useState<SessionHold | null>(null)
 
   // Estado de acceso del alumno por suscripcion del coach (politica CEO 2026-07-18), ya resuelto
   // por /api/mobile/config via useEntitlements. Se espeja en un ref para leerlo dentro de logSet
@@ -365,6 +419,8 @@ export function useWorkoutSession(
   const startedAtRef = useRef<number>(Date.now())
   const logsRef = useRef<ReconciledSessionLog[]>([])
   const draftRef = useRef<SessionDraft | null>(null)
+  // Reloj de hold armado (ítem 12): lo escribe `saveHold` y lo lee `persistSnapshot`, igual que el draft.
+  const holdRef = useRef<SessionHold | null>(null)
   const clientIdRef = useRef<string | null>(null)
   // Espejo del estado online para leerlo sin stale-closure dentro de listeners (NetInfo/AppState/focus).
   const isOnlineRef = useRef(true)
@@ -404,6 +460,7 @@ export function useWorkoutSession(
       startedAt: startedAtRef.current,
       logs: logsRef.current,
       draft: draftRef.current,
+      hold: holdRef.current,
       updatedAt: Date.now(),
     }
     void AsyncStorage.setItem(snapshotKey, JSON.stringify(snap)).catch(() => {})
@@ -687,6 +744,14 @@ export function useWorkoutSession(
           draftRef.current = snapshot.draft
           setRestoredDraft(snapshot.draft)
         }
+        // Reloj de hold (ítem 12 · R6): el guard de arriba ya exige `parsed.day === windowDay`, y
+        // `pickRestorableHold` agrega el que falta — que ese día sea HOY. En el editor de día pasado
+        // (`windowDay` = la fecha editada) no hay reloj que restaurar: ahí no se cronometra nada.
+        const hold = pickRestorableHold(snapshot.hold, snapshot.day, getTodayInSantiago().iso)
+        if (hold) {
+          holdRef.current = hold
+          setRestoredHold(hold)
+        }
       }
 
       // Cache offline del plan (render inmediato) → server (fuente de verdad).
@@ -886,6 +951,19 @@ export function useWorkoutSession(
     [persistSnapshot],
   )
 
+  /**
+   * Gemelo de `saveDraft` para el reloj de hold (ítem 12 · R6). Persiste EN EL ACTO —el SO puede matar
+   * la app en cualquier momento y el fin absoluto tiene que estar ya en disco— pero se llama sólo dos
+   * veces por hold (al armar y al cerrar), nunca por tick.
+   */
+  const saveHold = useCallback(
+    (hold: SessionHold | null) => {
+      holdRef.current = hold
+      persistSnapshot()
+    },
+    [persistSnapshot],
+  )
+
   const refresh = useCallback(async () => {
     await load()
   }, [load])
@@ -905,6 +983,9 @@ export function useWorkoutSession(
     // WEC:1546-1548/1567-1569). `sessionLogs` en memoria se conservan para el resumen.
     draftRef.current = null
     setRestoredDraft(null)
+    // El reloj armado muere con la sesión (ítem 12): si no, un snapshot posterior lo reescribiría.
+    holdRef.current = null
+    setRestoredHold(null)
     try {
       await AsyncStorage.removeItem(snapshotKey)
     } catch {
@@ -1219,9 +1300,11 @@ export function useWorkoutSession(
     capped: elapsedSec >= MAX_SESSION_SEC,
     isOnline,
     restoredDraft,
+    restoredHold,
     refresh,
     retry,
     saveDraft,
+    saveHold,
     logSet,
     finishSession,
   }

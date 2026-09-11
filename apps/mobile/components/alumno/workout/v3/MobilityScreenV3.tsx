@@ -8,7 +8,7 @@ import {
 } from '@eva/workout-engine'
 import { FONT, textStyle } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
-import type { SessionBlock, SessionDraft, SessionExercise } from '../../../../lib/workout-session'
+import type { SessionBlock, SessionDraft, SessionExercise, SessionHold } from '../../../../lib/workout-session'
 import { parseRestTime, useWorkoutTimers } from '../timers'
 import { Sheet } from '../../../Sheet'
 import { ActiveSetRow, SetRow } from '../SetRow'
@@ -39,6 +39,8 @@ export function MobilityScreenV3({
   exercise,
   blockLogs,
   restoredDraft,
+  restoredHold = null,
+  saveHold,
   reducedMotion = false,
   exec,
   autoRestEnabled = true,
@@ -62,6 +64,10 @@ export function MobilityScreenV3({
   exercise: SessionExercise
   blockLogs: ReconciledSessionLog[]
   restoredDraft: SessionDraft | null
+  /** Reloj de hold rescatado del snapshot (ítem 12 · R6) — lo consume el módulo al montar. */
+  restoredHold?: SessionHold | null
+  /** Persiste el reloj de hold ARMADO en el snapshot de la sesión (ítem 12 · R6). */
+  saveHold?: (hold: SessionHold | null) => void
   reducedMotion?: boolean
   exec: ExecTheme
   /**
@@ -239,6 +245,8 @@ export function MobilityScreenV3({
           onSeed={(values, nonce) => setSeedPatch({ values, nonce })}
           onCommit={(payload) => commitSet(payload)}
           onStatusChange={setHoldStatus}
+          saveHold={saveHold}
+          restoredHold={restoredHold}
           testIDPrefix="hold-mobility"
         />
       )}
