@@ -4,11 +4,9 @@ import { useRouter } from 'expo-router'
 import { useTheme } from '../context/ThemeContext'
 
 interface TopBarProps {
-  /** Show "EVA" brand mark on the left. */
-  showBrand?: boolean
-  /** Custom title rendered centered. Use either this OR `showBrand`, not both. */
+  /** Custom title rendered centered. */
   title?: string
-  /** When true, show back chevron + "Volver" label instead of brand. */
+  /** When true, show back chevron + "Volver" label on the left. */
   back?: boolean
   /** Override default back-handler (router.back). */
   onBack?: () => void
@@ -17,7 +15,15 @@ interface TopBarProps {
   backColor?: string
 }
 
-export function TopBar({ showBrand, title, back, onBack, backLabel = 'Volver', backColor }: TopBarProps) {
+/**
+ * Barra superior chica de las pantallas sueltas (auth, legales).
+ *
+ * Item 7 del tren «Arreglos chicos pre-OTA»: se borro la rama `showBrand`, que pintaba un «EVA»
+ * suelto a la izquierda. Era codigo MUERTO —los dos unicos call sites pasaban `showBrand back` y en
+ * el ternario `back` siempre ganaba— y ademas contradecia el white-label: en la app de un coach con
+ * marca propia el unico wordmark EVA vive en el pie de Opciones.
+ */
+export function TopBar({ title, back, onBack, backLabel = 'Volver', backColor }: TopBarProps) {
   const { theme } = useTheme()
   const router = useRouter()
 
@@ -44,11 +50,6 @@ export function TopBar({ showBrand, title, back, onBack, backLabel = 'Volver', b
               {backLabel}
             </Text>
           </TouchableOpacity>
-        ) : showBrand ? (
-          // DS: Archivo display black (marca EVA), NO Montserrat.
-          <Text className="font-display-black" style={[styles.brand, { color: theme.foreground }]}>
-            EVA
-          </Text>
         ) : null}
       </View>
       {title ? (
@@ -76,6 +77,5 @@ const styles = StyleSheet.create({
   side: { width: 80 },
   backBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   backLabel: { fontSize: 13, letterSpacing: 0.3 },
-  brand: { fontSize: 24, letterSpacing: -0.8 },
   title: { flex: 1, textAlign: 'center', fontSize: 15, letterSpacing: -0.2 },
 })

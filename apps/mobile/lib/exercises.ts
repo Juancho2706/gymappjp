@@ -356,7 +356,11 @@ export async function createExercise(input: ExerciseInput): Promise<{ ok: boolea
     .single()
 
   if (error) return { ok: false, error: error.message }
-  return { ok: true, id: (data as { id: string }).id }
+  const createdId = (data as { id: string }).id
+  // El catálogo cambió: el memo de uso no puede guardar nada de este id (defensivo — un id nuevo
+  // no debería estar cacheado, pero acá es donde nace el ejercicio).
+  forgetExerciseUsage(createdId)
+  return { ok: true, id: createdId }
 }
 
 export async function updateExercise(
@@ -403,6 +407,7 @@ export async function updateExercise(
     .eq('coach_id', coachId)
 
   if (error) return { ok: false, error: error.message }
+  forgetExerciseUsage(id)
   return { ok: true }
 }
 
@@ -469,6 +474,7 @@ export async function cloneExercise(row: ExerciseRow): Promise<{ ok: boolean; id
     video_start_time: row.video_start_time ?? null,
     video_end_time: row.video_end_time ?? null,
   })
+  if (created.ok) forgetExerciseUsage(created.id)
   return created.ok ? { ...created, name } : created
 }
 
@@ -495,6 +501,7 @@ export async function deleteExercise(id: string): Promise<{ ok: boolean; error?:
   if (!data || data.length === 0) {
     return { ok: false, error: 'No se pudo eliminar: el ejercicio no es tuyo o ya no existe.' }
   }
+  forgetExerciseUsage(id)
   return { ok: true }
 }
 
@@ -522,6 +529,24 @@ export async function restoreExercise(id: string): Promise<{ ok: boolean; error?
 }
 
 /**
+ * Memo de módulo del conteo de uso (ítem 18 del tren «Arreglos chicos pre-OTA»).
+ *
+ * El flujo real es preview → «Editar»: dos hojas distintas preguntando por el MISMO ejercicio,
+ * una query cada una. Guarda SOLO el camino feliz: `countExerciseUsage` devuelve 0 ante cualquier
+ * error, y cachear ese 0 dejaría pegado un «no lo usa nadie» falso hasta cerrar la app.
+ *
+ * Se invalida en las cuatro mutaciones del catálogo (crear, editar, clonar, borrar) para que la
+ * confirmación de borrado nunca muestre un número viejo.
+ */
+const exerciseUsageMemo = new Map<string, number>()
+
+/** Olvida el conteo de un ejercicio (o de todos, sin `id`). */
+function forgetExerciseUsage(id?: string): void {
+  if (id) exerciseUsageMemo.delete(id)
+  else exerciseUsageMemo.clear()
+}
+
+/**
  * ¿En cuántos bloques de programa está usado el ejercicio?
  *
  * RLS de `workout_blocks` acota la cuenta a los programas VISIBLES para el coach, así que el
@@ -530,13 +555,17 @@ export async function restoreExercise(id: string): Promise<{ ok: boolean; error?
  * romper la hoja por un dato accesorio.
  */
 export async function countExerciseUsage(id: string): Promise<number> {
+  const memoized = exerciseUsageMemo.get(id)
+  if (memoized !== undefined) return memoized
   try {
     const { count, error } = await supabase
       .from('workout_blocks')
       .select('exercise_id', { count: 'exact', head: true })
       .eq('exercise_id', id)
     if (error) return 0
-    return count ?? 0
+    const usage = count ?? 0
+    exerciseUsageMemo.set(id, usage)
+    return usage
   } catch {
     return 0
   }

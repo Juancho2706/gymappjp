@@ -10,6 +10,12 @@ import path from 'node:path'
 import { createRequire } from 'node:module'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { buildNutritionPortionIntakeKey } from '@eva/nutrition-v2'
+// Copy + clasificador de la pantalla «Porciones» del coach: módulo PURO (no toca RN), así que va
+// con import estático normal.
+import {
+  classifyExchangeListError,
+  PORTIONS_COPY,
+} from '../apps/mobile/lib/nutrition-portions-copy'
 // Import SOLO de tipos (se borra en compilación: no ejecuta el módulo antes de los mocks).
 import type { PendingPortionMark } from '../apps/mobile/lib/nutrition-v2-portions'
 
@@ -685,5 +691,46 @@ describe('portionChipIsCompact / portionBarFractions (H4)', () => {
     // El exceso NO entra a la barra (va al badge "+n").
     expect(portionBarFractions(10, 12, 3)).toEqual({ marked: 1, derived: 0 })
     expect(portionBarFractions(0, 2, 1)).toEqual({ marked: 0, derived: 0 })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// «Porciones» del coach con el modulo apagado (item 6 del tren «Arreglos chicos pre-OTA», R3)
+// ---------------------------------------------------------------------------
+
+describe('classifyExchangeListError (pantalla Porciones del coach)', () => {
+  /** Clon del `ApiError` de `apps/mobile/lib/api.ts:26-41` (mismo `name` y mismo `code`). */
+  class ApiErrorLike extends Error {
+    status: number
+    code?: string
+    constructor(message: string, status: number, code?: string) {
+      super(message)
+      this.name = 'ApiError'
+      this.status = status
+      this.code = code
+    }
+  }
+
+  it('el 403 MODULE_OFF del server es «modulo apagado», no «no pudimos cargar»', () => {
+    const error = new ApiErrorLike('Modulo no habilitado: nutrition_exchanges', 403, 'MODULE_OFF')
+    expect(classifyExchangeListError(error)).toBe('module-off')
+  })
+
+  it('cualquier otro error de la API sigue cayendo en load-failed', () => {
+    expect(classifyExchangeListError(new ApiErrorLike('Boom', 500))).toBe('load-failed')
+    expect(classifyExchangeListError(new ApiErrorLike('Nope', 403, 'FORBIDDEN'))).toBe('load-failed')
+    expect(classifyExchangeListError(new Error('Network request failed'))).toBe('load-failed')
+    expect(classifyExchangeListError(null)).toBe('load-failed')
+    expect(classifyExchangeListError(undefined)).toBe('load-failed')
+    // Un objeto suelto con el code NO alcanza: tiene que venir del ApiError.
+    expect(classifyExchangeListError({ code: 'MODULE_OFF' })).toBe('load-failed')
+  })
+
+  it('el copy del modulo apagado esta declarado y no repite el de carga fallida', () => {
+    expect(PORTIONS_COPY.exchangeList.moduleOffTitle).toBe('Módulo de porciones no habilitado')
+    expect(PORTIONS_COPY.exchangeList.moduleOffHint).toBe(
+      'Activá el módulo desde Herramientas para administrar las listas.',
+    )
+    expect(PORTIONS_COPY.exchangeList.loadFailed).toBe('No pudimos cargar la lista.')
   })
 })

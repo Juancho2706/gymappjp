@@ -40,7 +40,7 @@ export default function ForgotPasswordScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.kav}
       >
-        <TopBar showBrand back />
+        <TopBar back />
 
         {sent ? (
           <MotiView

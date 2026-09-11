@@ -23,10 +23,11 @@ const EYEBROW = { fontSize: 10, textTransform: 'uppercase', letterSpacing: 1 } a
  * header se funde con el scroll en vez de cortarse con una línea.
  *
  * Composición:
- *   1. Fila eyebrow: `brandName` (izq) ↔ `dateLabel` (der), mismo estilo 10px uppercase.
+ *   1. Fila eyebrow: LOGO del coach en un círculo de 22px + `brandName` (izq) ↔ `dateLabel`
+ *      (der), mismo estilo 10px uppercase. El logo va acá —y no colgando del mensaje de
+ *      bienvenida, donde vivía— para que la marca esté SIEMPRE, escriba o no el coach.
  *   2. Saludo `{timeGreeting}, {firstName}` (display) con stagger palabra-por-palabra.
- *   3. `welcomeMessage` con el LOGO del coach en un círculo de 22px y el mensaje entre
- *      comillas tipográficas.
+ *   3. `welcomeMessage` entre comillas tipográficas.
  *
  * Se monta como PRIMER hijo del ScrollView (full-bleed) para que SCROLLEE con el
  * contenido — paridad con el header web md (el CEO marcó el header fijo como
@@ -55,34 +56,41 @@ export function DashboardHeader({
   const washTop = hexToRgba(theme.card, 0.9)
   const washBottom = hexToRgba(theme.card, 0)
 
+  // Ítem 7 del tren «Arreglos chicos pre-OTA»: el logo del coach vive acá, en el eyebrow, y SIEMPRE
+  // se ve. Antes colgaba de la fila de bienvenida, así que el alumno de un coach que no escribió
+  // mensaje no veía marca ninguna en su home — justo la pantalla donde el white-label importa. Sin
+  // `brandName` el círculo igual se pinta: `BrandLogoCircle` cae solo a la figura EVA neutra.
   const eyebrowRow = (
     <View
       style={{
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: brandName ? 'space-between' : 'flex-end',
+        justifyContent: 'space-between',
         gap: 8,
       }}
     >
-      {brandName ? (
-        <Text
-          className="text-subtle"
-          numberOfLines={1}
-          style={{ ...EYEBROW, fontFamily: FONT.uiBold, flexShrink: 1 }}
-        >
-          {brandName}
-        </Text>
-      ) : null}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, minWidth: 0 }}>
+        <BrandLogoCircle size={22} brandName={brandName} />
+        {brandName ? (
+          <Text
+            className="text-subtle"
+            numberOfLines={1}
+            style={{ ...EYEBROW, fontFamily: FONT.uiBold, flexShrink: 1 }}
+          >
+            {brandName}
+          </Text>
+        ) : null}
+      </View>
       <Text className="text-muted" numberOfLines={1} style={{ ...EYEBROW, fontFamily: FONT.uiSemibold }}>
         {dateLabel}
       </Text>
     </View>
   )
 
+  // La bienvenida queda SOLO con la cita (el logo se mudó al eyebrow).
   const welcomeRow = welcomeMessage ? (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
-      <BrandLogoCircle size={22} brandName={brandName} />
-      <Text className="text-muted" numberOfLines={1} style={{ flex: 1, fontSize: 12, fontFamily: FONT.ui }}>
+    <View style={{ marginTop: 6 }}>
+      <Text className="text-muted" numberOfLines={1} style={{ fontSize: 12, fontFamily: FONT.ui }}>
         {`“${welcomeMessage}”`}
       </Text>
     </View>
@@ -176,15 +184,16 @@ export function DashboardHeaderSkeleton() {
         pointerEvents="none"
       />
       <View style={{ minHeight: 56, justifyContent: 'center', paddingTop: 8, paddingBottom: 12, gap: 6 }}>
+        {/* Eyebrow con el círculo de marca a la izquierda (misma estructura que el header real). */}
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Skeleton width={92} height={10} radius={4} />
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Skeleton width={22} height={22} radius={11} />
+            <Skeleton width={92} height={10} radius={4} />
+          </View>
           <Skeleton width={110} height={10} radius={4} />
         </View>
         <Skeleton width={200} height={24} radius={6} />
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Skeleton width={22} height={22} radius={11} />
-          <Skeleton width={150} height={10} radius={4} />
-        </View>
+        <Skeleton width={150} height={10} radius={4} />
       </View>
     </View>
   )

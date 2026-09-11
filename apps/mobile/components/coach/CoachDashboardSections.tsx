@@ -50,6 +50,7 @@ import { deriveSportTokens } from '@eva/brand-kit'
 import type { MobileCreateClientResponse, Persona } from '@eva/schemas'
 import { EvaBlur } from '../EvaBlur'
 import { EvaFigure } from '../entry/EvaFigure'
+import { BrandLogoCircle } from '../BrandLogoCircle'
 import { useTheme } from '../../context/ThemeContext'
 import type {
   MobileActivityItem,
@@ -1331,17 +1332,27 @@ export function MobileGreetingHeader({
 
   return (
     <View style={styles.greeting}>
-      <View style={{ flex: 1, minWidth: 0 }}>
-        <Text className="font-sans-semibold text-[13px] text-muted" numberOfLines={1}>
-          {dateStr}
-        </Text>
-        <Text
-          className="font-display-black text-[28px] text-strong"
-          style={{ lineHeight: 29.4, letterSpacing: -0.84 }}
-          numberOfLines={1}
-        >
-          Hola, {firstName}
-        </Text>
+      {/* Ítem 7 del tren «Arreglos chicos pre-OTA» (opción A del owner): el logo del coach abre su
+          propio home, a la izquierda de fecha + saludo y con el mismo 40 de los `iconBtn` de la
+          derecha. El bloque de texto ya mide ~50, así que el header NO crece. `BrandLogoCircle`
+          resuelve el logo desde `useTheme().branding` (la MISMA caché que alimenta `brandLogoUrl`
+          de acá abajo, con la misma precedencia dark → light) y cae solo a la figura EVA neutra
+          cuando el coach es Free o todavía no subió marca: cero ramas nuevas por tier. Único punto
+          que no cubre: el respaldo `logoUrl` del dashboard degradado, que sigue siendo del avatar. */}
+      <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+        <BrandLogoCircle size={40} />
+        <View style={{ flex: 1, minWidth: 0 }}>
+          <Text className="font-sans-semibold text-[13px] text-muted" numberOfLines={1}>
+            {dateStr}
+          </Text>
+          <Text
+            className="font-display-black text-[28px] text-strong"
+            style={{ lineHeight: 29.4, letterSpacing: -0.84 }}
+            numberOfLines={1}
+          >
+            Hola, {firstName}
+          </Text>
+        </View>
       </View>
 
       <View className="flex-row items-center" style={{ gap: 6 }}>

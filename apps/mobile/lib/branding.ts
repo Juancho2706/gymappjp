@@ -310,7 +310,9 @@ const BOOTSTRAP_SKIPPED: OwnBrandingBootstrapResult = { handled: false, branding
  */
 export async function bootstrapOwnCoachBranding(): Promise<OwnBrandingBootstrapResult> {
   try {
-    // getSession() lee la sesion LOCAL (sin round-trip): esto corre en el arranque del panel.
+    // getSession() lee la sesion GUARDADA y solo va a la red si el access token esta vencido (puede
+    // refrescarlo): manda la version conservadora del docblock de `app/_layout.tsx:278-291`. Igual es
+    // estrictamente mejor que getUser(), que SIEMPRE hace round-trip. Esto corre al abrir el panel.
     const { data } = await supabase.auth.getSession()
     const userId = data.session?.user?.id
     if (!userId) return BOOTSTRAP_SKIPPED

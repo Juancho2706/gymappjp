@@ -21,7 +21,7 @@ import {
   type ExchangeListCandidate,
   type ExchangeListRow,
 } from '../../../lib/nutrition-v2-exchange-lists.api'
-import { PORTIONS_COPY } from '../../../lib/nutrition-portions-copy'
+import { classifyExchangeListError, PORTIONS_COPY } from '../../../lib/nutrition-portions-copy'
 
 const COPY = PORTIONS_COPY.exchangeList
 const GROUP_COPY = PORTIONS_COPY.groupEditor
@@ -70,6 +70,11 @@ export default function CoachPortionsScreen() {
   const [loadingGroups, setLoadingGroups] = useState(true)
   const [loadingRows, setLoadingRows] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  /**
+   * El coach no tiene `nutrition_exchanges` (403 MODULE_OFF). Es un estado propio y no un error de
+   * carga: reintentar no lo va a arreglar, así que la pantalla lo dice con todas sus letras.
+   */
+  const [moduleOff, setModuleOff] = useState(false)
   const [adding, setAdding] = useState(false)
   const [duplicating, setDuplicating] = useState(false)
   /** Fuerza el refetch del catálogo tras duplicar (el grupo nuevo y su conteo tienen que aparecer). */
@@ -105,9 +110,14 @@ export default function CoachPortionsScreen() {
       try {
         setRows(await fetchExchangeList({ groupId: id, search: term || null }))
         setError(null)
-      } catch {
+        setModuleOff(false)
+      } catch (e) {
         setRows([])
-        setError(COPY.loadFailed)
+        // El `catch {}` sin binding colapsaba TODO a «No pudimos cargar la lista», incluido el
+        // módulo apagado (ítem 6). `classifyExchangeListError` separa los dos casos.
+        const state = classifyExchangeListError(e)
+        setModuleOff(state === 'module-off')
+        setError(state === 'module-off' ? null : COPY.loadFailed)
       } finally {
         setLoadingRows(false)
       }
@@ -177,6 +187,26 @@ export default function CoachPortionsScreen() {
             description="Cambia a tu espacio de coach para administrar las porciones."
             icon="permission"
           />
+        </View>
+      </SafeAreaView>
+    )
+  }
+
+  // Módulo `nutrition_exchanges` apagado (403 MODULE_OFF del server): mismo panel de permiso que el
+  // caso de arriba. Sin el módulo no hay lista que administrar, así que se toma la pantalla entera
+  // en vez de dejar la tira de grupos invitando a tocar algo que va a volver a fallar.
+  if (moduleOff) {
+    return (
+      <SafeAreaView className="flex-1 bg-surface-app" edges={['top', 'bottom']}>
+        <View className="px-4 pt-1">
+          <NutritionHeader
+            title={COPY.manageEntry}
+            description={COPY.manageEntryHint}
+            onBack={() => router.back()}
+          />
+        </View>
+        <View className="px-4 pt-4">
+          <NutritionStatePanel title={COPY.moduleOffTitle} description={COPY.moduleOffHint} icon="permission" />
         </View>
       </SafeAreaView>
     )

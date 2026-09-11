@@ -62,10 +62,16 @@ export async function signOutAndCleanup(
   // Resolvemos el id del usuario SALIENTE ANTES de cerrar la sesión: después se pierde y ya no
   // podríamos revocar el push ni borrar su cache por-usuario. Aislado para que un fallo aquí no
   // impida la limpieza posterior.
+  //
+  // `getSession()` y NO `getUser()` (ítem 17 del tren «Arreglos chicos pre-OTA»): `getUser()` SIEMPRE
+  // va a la red, así que en modo avión —o con el backend caído— devolvía null y el logout se saltaba
+  // las tres limpiezas que dependen del id (push, nutrición V2 y el guard de marca de abajo), que es
+  // justo el escenario del bug de marca cruzada. `getSession()` lee la sesión guardada y solo toca la
+  // red si el access token está vencido (y ahí un fallo cae en el mismo `catch`).
   let outgoingUserId: string | null = null
   try {
-    const { data: { user } } = await supabase.auth.getUser()
-    outgoingUserId = user?.id ?? null
+    const { data } = await supabase.auth.getSession()
+    outgoingUserId = data.session?.user?.id ?? null
   } catch {
     // no-op: sin id no hay limpieza por-usuario; el signOut de abajo igual corre.
   }

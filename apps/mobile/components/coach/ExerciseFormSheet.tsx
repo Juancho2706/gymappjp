@@ -184,8 +184,12 @@ export const ExerciseFormSheet = forwardRef<BottomSheetModal, Props>(function Ex
   // Conteo de uso: `count exact + head` (no trae filas), y la lib devuelve 0 ante cualquier error,
   // así que la confirmación cae sola a la frase genérica. Guard de desmontaje para no setear estado
   // sobre un sheet ya cerrado.
+  //
+  // Solo para ejercicios PROPIOS (ítem 18, paridad con `ExercisePreviewSheet.tsx:52-58`): el del
+  // sistema no se edita ni se borra desde acá, así que su conteo era una query de puro ruido. La
+  // lib memoiza el camino feliz, así que el salto preview → «Editar» de un propio no repregunta.
   useEffect(() => {
-    if (!exercise) { setUsageCount(null); return }
+    if (!exercise || !exercise.isOwn) { setUsageCount(null); return }
     let alive = true
     setUsageCount(null)
     countExerciseUsage(exercise.id).then((n) => { if (alive) setUsageCount(n) })

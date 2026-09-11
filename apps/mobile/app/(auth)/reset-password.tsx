@@ -190,7 +190,7 @@ export default function ResetPasswordScreen() {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.kav}
       >
-        <TopBar showBrand back />
+        <TopBar back />
 
         {phase === 'checking' ? (
           <View style={styles.inner} testID="reset-password-checking">
