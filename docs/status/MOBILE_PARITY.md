@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-09-10"
+last_verified: "2026-09-11"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -12,14 +12,14 @@ source_of_truth: apps/web responsive + apps/mobile
 
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
 
-> **2026-09-11 (F2 «Descanso siempre», reporte de un alumno de jotap — EN CÓDIGO LOCAL en `rnmobiledenuevo`, sin push; [SPEC §20](../specs/cuenta-atras-en-pantalla/SPEC.md))**: motor
+> **2026-09-11 22:57Z (F2 «Descanso siempre», reporte de un alumno de jotap — EN PRODUCCIÓN: `master` = `rnmobiledenuevo` = `e15a031c`, deploy `dpl_5UDcjDBrfEKKB7TPTwpUeFsgVrbf` READY 22:54Z, OTA 1.1.2 `production` android `f0c0d18b-35db-45ee-8019-2bdc194d90ba` (update `01a092b2…`, run 34656126731) / ios `76bf4d26-ce2d-4ed6-a815-7d4ddc1e4441` (update `01a092b3…`, run 34656131797); sin migraciones; E2E `prod-suave` 9/9 (run 34656145899); [SPEC §20](../specs/cuenta-atras-en-pantalla/SPEC.md); **QA del owner PENDIENTE** (TASKS F2.4, artifact `53f6ec40`))**: motor
 > `rest-fallback.ts` (`resolveEffectiveRest`, fallback 60 s, warmup 0 cae al `rest_time`) consumido por RN (`ExecutorV3`, `ExerciseScreenV3`,
 > `MobilityScreenV3`, `RollerScreenV3`, `CardioScreenV3`) y web (`LogSetForm.buildRest`/`buildTypedRest`, `supersetInfo.groupRestSeconds`,
 > `ExerciseStepV3`, `MobilityStepV3`) — **paridad nueva**; auto-avance de paso espera al CTA de descanso con la pref OFF (`restOfferOpen` +
 > `pendingRoundRest`; web además difiere `scrollToNextIncomplete`) — **paridad nueva**; CTA de ronda con salida «Siguiente ronda/ejercicio» en
 > las dos — **paridad nueva**; **solo RN**: Roller y Cardio con `RestOfferV3` (web `RollerStepV3`/`CardioStepV3` siguen sin CTA con la pref OFF —
 > deuda declarada), `skip` huérfano de la notificación descartado; **solo web**: guard offline arranca el descanso (offline la web sigue sin
-> `onLogged` ⇒ sin CTA ni avance, deuda declarada). Hashes de deploy/OTA al publicar.
+> `onLogged` ⇒ sin CTA ni avance, deuda declarada).
 
 > **2026-09-11 02:58Z (tren «Arreglos chicos pre-OTA» + F1 «tile REPS en fuerza por tiempo» — EN PRODUCCIÓN: `master` = `rnmobiledenuevo` =
 > `091a19b0` (F1 `fe6e9b39` → W1-A `ed9c9085` · W1-C `7d2eb3f1` · W1-B `09e5d9fa` → docs `091a19b0`), deploy `dpl_6FXkTMyJ6DuHhcakAcPtgF7zZkMJ` READY 02:52Z,
