@@ -8,7 +8,7 @@
  * el runtime nativo para leer un string.
  */
 
-import { formatSessionDuration } from '@eva/workout-engine'
+import { formatSessionDuration, formatThousandsEsCl } from '@eva/workout-engine'
 import type { WorkoutShareData } from './share-types'
 // `capitalize` es EL tratamiento de nombres de grupo del card: es el que usaba `MuscleFigureSticker`
 // en modo chips, y los `muscle_group` del catálogo llegan en formatos mixtos ('pecho', 'Piernas').
@@ -64,7 +64,9 @@ export function blockLines(data: WorkoutShareData): ShareBlockLines {
             : data.completedSets === 1
               ? 'SERIE COMPLETADA'
               : 'SERIES COMPLETADAS',
-        value: hasVolume ? String(Math.round(data.totalVolumeKg)) : String(data.completedSets),
+        // La cifra héroe lleva separador de miles es-CL («12.450»), igual que el ticker de la Final
+        // V3. Los `tiles` NO se formatean: duración es mm:ss y series/reps nunca llegan a 4 cifras.
+        value: hasVolume ? formatThousandsEsCl(data.totalVolumeKg) : String(data.completedSets),
         unit: hasVolume ? 'kg' : null,
         tiles: [
             { value: formatSessionDuration(data.durationSec), label: 'Duración' },

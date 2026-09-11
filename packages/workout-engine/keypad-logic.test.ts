@@ -3,6 +3,7 @@ import {
   incrementChipsForStep,
   parseWeightEsCl,
   formatWeightEsCl,
+  formatThousandsEsCl,
   applyKeypadIncrement,
   appendKeypadDigit,
   appendKeypadDecimal,
@@ -168,3 +169,26 @@ describe('keypadBackspace', () => {
 
 // Persistencia (readKeypadStep/writeKeypadStep): tests en
 // apps/web/src/lib/client/keypad-step.test.ts (localStorage es capa web).
+
+// Miles es-CL (ítem 5 del tren «Arreglos chicos pre-OTA»): el helper se mudó desde
+// `NumberTicker.tsx` para que el share «Bloque» de RN y la Final del ejecutor web lean el mismo
+// separador que el ticker V3. Sin `Intl` (Hermes) y sin decimales.
+describe('formatThousandsEsCl', () => {
+  it('no agrega separador bajo mil', () => {
+    expect(formatThousandsEsCl(950)).toBe('950')
+    expect(formatThousandsEsCl(0)).toBe('0')
+  })
+
+  it('separa los miles con punto', () => {
+    expect(formatThousandsEsCl(4860)).toBe('4.860')
+    expect(formatThousandsEsCl(12450)).toBe('12.450')
+  })
+
+  it('conserva el signo negativo', () => {
+    expect(formatThousandsEsCl(-1200)).toBe('-1.200')
+  })
+
+  it('redondea a entero (la cifra héroe no muestra decimales)', () => {
+    expect(formatThousandsEsCl(12340.6)).toBe('12.341')
+  })
+})

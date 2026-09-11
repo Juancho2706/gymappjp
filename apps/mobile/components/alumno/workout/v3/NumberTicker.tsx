@@ -85,14 +85,11 @@ export function NumberTicker({
   )
 }
 
-/** Miles con punto es-CL, Hermes-safe (sin Intl): 4860 → "4.860", 950 → "950". */
-export function formatThousandsEsCl(n: number): string {
-  const neg = n < 0
-  const s = String(Math.round(Math.abs(n)))
-  let out = ''
-  for (let i = 0; i < s.length; i++) {
-    if (i > 0 && (s.length - i) % 3 === 0) out += '.'
-    out += s[i]
-  }
-  return neg ? `-${out}` : out
-}
+/**
+ * Miles con punto es-CL, Hermes-safe (sin Intl): 4860 → "4.860", 950 → "950".
+ *
+ * La implementación vive en `@eva/workout-engine` (`packages/workout-engine/keypad-logic.ts`) desde
+ * el tren «Arreglos chicos pre-OTA»: el share «Bloque» y el ejecutor web usan el MISMO separador.
+ * Acá queda solo el re-export para no tocar los call sites de la Final V3.
+ */
+export { formatThousandsEsCl } from '@eva/workout-engine'

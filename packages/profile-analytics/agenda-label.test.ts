@@ -167,3 +167,47 @@ describe('buildAgendaLabel', () => {
     )
   })
 })
+
+// Ítem 15 del tren «Arreglos chicos pre-OTA»: el fallback local de RN solo mira 30 d, así que sin
+// fecha no puede afirmar «Todavía no registra …». Con `limitedWindow: true` el copy dice solo lo
+// que la ventana midió; el camino online (sin el flag) queda idéntico.
+describe('buildAgendaLabel — limitedWindow (fallback con ventana)', () => {
+  it('sin fecha y con ventana ⇒ «Sin entreno reciente»', () => {
+    expect(
+      buildAgendaLabel({ kind: 'sin_ejercicio', days: null, dateText: null, limitedWindow: true })
+    ).toBe('Sin entreno reciente')
+  })
+  it('sin fecha y con ventana ⇒ «Sin check-in reciente»', () => {
+    expect(
+      buildAgendaLabel({ kind: 'checkin_pendiente', days: null, dateText: null, limitedWindow: true })
+    ).toBe('Sin check-in reciente')
+  })
+  it('CON fecha el flag no cambia nada: manda la fecha real', () => {
+    expect(
+      buildAgendaLabel({ kind: 'checkin_pendiente', days: 34, dateText: '7 ago', limitedWindow: true })
+    ).toBe('Sin check-in desde el 7 ago · 34 d')
+    expect(
+      buildAgendaLabel({ kind: 'sin_ejercicio', days: 8, dateText: '2 sept', limitedWindow: true })
+    ).toBe('Sin entrenos desde el 2 sept · 8 d')
+  })
+  it('sin el flag (o en false) conserva «Todavía no registra …» del camino online', () => {
+    expect(buildAgendaLabel({ kind: 'sin_ejercicio', days: null, dateText: null })).toBe(
+      'Todavía no registra entrenos'
+    )
+    expect(
+      buildAgendaLabel({ kind: 'checkin_pendiente', days: null, dateText: null, limitedWindow: false })
+    ).toBe('Todavía no registra check-ins')
+  })
+  it('programa_vence ignora el flag (su copy no depende de la ventana)', () => {
+    expect(
+      buildAgendaLabel({
+        kind: 'programa_vence',
+        days: null,
+        dateText: null,
+        programName: 'Fuerza 4 días',
+        daysLeft: 2,
+        limitedWindow: true,
+      })
+    ).toBe('«Fuerza 4 días» vence en 2 d')
+  })
+})

@@ -6,7 +6,7 @@ import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { Share2, Check, ArrowRight, HeartPulse, Move, GitCommit, CloudOff, Loader2, AlertTriangle } from 'lucide-react'
 import { getSantiagoIsoYmdForUtcInstant } from '@/lib/date-utils'
 import { compactDistance } from '@/lib/workout-exercise-type'
-import { formatCardioReps } from '@eva/workout-engine'
+import { formatCardioReps, formatThousandsEsCl } from '@eva/workout-engine'
 import { MuscleMapSvg } from '../MuscleMapSvg'
 import {
     formatSessionDuration,
@@ -407,7 +407,7 @@ export function SessionCompleteV3({
                                     value={Math.round(totalVolume)}
                                     active={statsVisible}
                                     reducedMotion={reducedMotion}
-                                    format={(n) => `${Math.round(n)} kg`}
+                                    format={(n) => `${formatThousandsEsCl(n)} kg`}
                                 />
                             </StatTile>
                         )}

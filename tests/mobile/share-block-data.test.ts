@@ -53,8 +53,21 @@ describe('blockLines — entreno de fuerza normal', () => {
         ])
     })
 
-    it('redondea el volumen: la cifra héroe no muestra decimales', () => {
-        expect(blockLines(data({ totalVolumeKg: 12340.6 })).value).toBe('12341')
+    it('redondea el volumen y separa los miles es-CL: la cifra héroe no muestra decimales', () => {
+        expect(blockLines(data({ totalVolumeKg: 12340.6 })).value).toBe('12.341')
+    })
+
+    // Ítem 5 del tren «Arreglos chicos pre-OTA»: el volumen de 5 cifras se leía «12450» y el card
+    // mentía de tamaño. Los `tiles` (duración, series, reps) NO se formatean: nunca llegan a mil.
+    it('un volumen de 5 cifras lleva punto de miles, los tiles no', () => {
+        const l = blockLines(data({ totalVolumeKg: 12450 }))
+        expect(l.value).toBe('12.450')
+        expect(l.unit).toBe('kg')
+        expect(l.tiles).toEqual([
+            { value: '42 min', label: 'Duración' },
+            { value: '12', label: 'Series' },
+            { value: '96', label: 'Reps' },
+        ])
     })
 })
 

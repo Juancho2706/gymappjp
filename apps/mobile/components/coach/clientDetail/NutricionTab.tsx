@@ -11,6 +11,7 @@ import { BarComposed, type BarComposedPoint } from '../charts/BarComposed'
 import { StatCard, CardHeader, MetricBox, cd, formatDate, adherenceColor } from './shared'
 import { deriveNutritionV2Alerts, priorVersionEntries } from '@eva/nutrition-v2'
 import { deriveNutritionCoachAlerts, type NutritionCoachAlert } from '../../../lib/nutrition-coach-alerts'
+import { deriveNutritionWeekDelta } from '../../../lib/coach-nutrition-detail-logic'
 import { getTodayInSantiago, isoDateAddDays } from '../../../lib/date-utils'
 import {
   addCoachMealComment,
@@ -171,9 +172,21 @@ function NutricionTabV1({
     return { date, entry: timelineByDate.get(date) }
   })
 
-  const weekAvg = compliance?.nutritionWeeklyAvgPct ?? 0
-  const previousWeekAvg = compliance?.nutritionPrevWeeklyAvgPct ?? 0
-  const weekDelta = weekAvg - previousWeekAvg
+  // Adherencia honesta (ítem 14): sin datos NO se pinta un «0 %» que parece medido. El contrato
+  // `number` de `deriveNutritionCoachAlerts` (arriba) queda intacto — acá cambia solo lo que se
+  // IMPRIME. El delta sale del helper compartido, que ya resuelve el caso sin medición.
+  const weekAvg = compliance?.nutritionWeeklyAvgPct ?? null
+  const weekDelta = deriveNutritionWeekDelta(
+    compliance?.nutritionWeeklyAvgPct ?? null,
+    compliance?.nutritionPrevWeeklyAvgPct ?? null,
+  )
+  const weekDeltaColor =
+    weekDelta.tone === 'muted' ? theme.mutedForeground : weekDelta.tone === 'success' ? theme.success : theme.destructive
+  // «pp» (puntos porcentuales) es el copy vivo de esta caja: es una RESTA de dos porcentajes.
+  const weekDeltaValue =
+    weekDelta.tone === 'muted'
+      ? weekDelta.valueLabel
+      : `${weekDelta.roundedDelta >= 0 ? '+' : ''}${weekDelta.roundedDelta} pp`
 
   const recentWeights = checkIns.slice(0, 3)
 
@@ -202,7 +215,9 @@ function NutricionTabV1({
         <CardHeader icon={Flame} title="Hoy" />
         <View style={styles.ringRow}>
           <ComplianceRing value={kcalPct} label="kcal" color={theme.primary} size={64} />
-          <ComplianceRing value={todayCompliance} label="Comidas" color={adherenceColor(today?.compliancePct ?? 0, theme)} size={64} />
+          {/* Sin registro de hoy el anillo queda gris: el rojo de «0 % de adherencia» sería una
+              medición inventada (ítem 14). */}
+          <ComplianceRing value={todayCompliance} label="Comidas" color={today ? adherenceColor(today.compliancePct, theme) : theme.mutedForeground} size={64} />
         </View>
         {today ? (
           <View style={{ gap: 10 }}>
@@ -220,9 +235,9 @@ function NutricionTabV1({
 
       {/* Métricas de adherencia */}
       <View style={cd.grid2}>
-        <MetricBox value={`${weekAvg}%`} label="Adherencia 7d" />
+        <MetricBox value={weekAvg == null ? '—' : `${weekAvg}%`} label="Adherencia 7d" />
         <MetricBox value={nutritionMonthlyAvgPct == null ? '—' : `${nutritionMonthlyAvgPct}%`} label="Adherencia 30d" />
-        <MetricBox value={`${weekDelta >= 0 ? '+' : ''}${weekDelta} pp`} label="Sem. vs ant." color={weekDelta >= 0 ? theme.success : theme.destructive} />
+        <MetricBox value={weekDeltaValue} label="Sem. vs ant." color={weekDeltaColor} />
         <MetricBox value={`${nutritionStreakDays}d`} label="Racha ≥80%" color={theme.warning} />
       </View>
 
@@ -273,7 +288,7 @@ function NutricionTabV1({
               <Text style={[cd.rowMetric, { color: theme.primary, fontFamily: FONT.display }]}>{c.weight != null ? `${c.weight} kg` : '—'}</Text>
             </View>
           ))}
-          <Text style={[cd.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Cruza el peso declarado en check-in con la adherencia a comidas de esta semana (~{Math.round(weekAvg)}%). Los datos son autodeclarados por el alumno.</Text>
+          <Text style={[cd.sub, { color: theme.mutedForeground, fontFamily: theme.fontSans }]}>Cruza el peso declarado en check-in con la adherencia a comidas de esta semana ({weekAvg == null ? 'sin medición' : `~${Math.round(weekAvg)}%`}). Los datos son autodeclarados por el alumno.</Text>
         </StatCard>
       ) : null}
 

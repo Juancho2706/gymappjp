@@ -1062,7 +1062,10 @@ export function buildLocalAgenda(input: {
       clientId: risk.clientId,
       clientName: risk.clientName,
       kind,
-      label: buildAgendaLabel({ kind, days, dateText }),
+      // `limitedWindow`: acá solo se miraron los últimos 30 d de check-ins y logs, así que sin
+      // fecha el copy dice «Sin check-in / entreno reciente» en vez de afirmar «Todavía no
+      // registra …», que sería mentira para un alumno con actividad hace 45 d.
+      label: buildAgendaLabel({ kind, days, dateText, limitedWindow: true }),
       dueAt,
       days,
       severity: agendaSeverity(days),

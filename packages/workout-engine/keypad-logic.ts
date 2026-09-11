@@ -69,6 +69,28 @@ export function formatWeightEsCl(n: number): string {
 }
 
 /**
+ * Miles con punto es-CL, Hermes-safe (sin `Intl`): 4860 → «4.860», 950 → «950», -1200 → «-1.200».
+ *
+ * Vivía en `apps/mobile/components/alumno/workout/v3/NumberTicker.tsx`; se mudó acá (tren «Arreglos
+ * chicos pre-OTA», ítem 5) para que el share «Bloque» de RN y la pantalla final del ejecutor web
+ * lean el mismo separador que el ticker V3. **Nada de `Intl`**: Hermes no trae el ICU completo y el
+ * texto de la web viaja del servidor al cliente (mismatch de hidratación, familia EVA-NEXTJS-18).
+ *
+ * Redondea a entero: es un formateador de cifras grandes (volumen en kg), no de pesos con decimal
+ * — para eso está `formatWeightEsCl`.
+ */
+export function formatThousandsEsCl(n: number): string {
+  const neg = n < 0
+  const s = String(Math.round(Math.abs(n)))
+  let out = ''
+  for (let i = 0; i < s.length; i++) {
+    if (i > 0 && (s.length - i) % 3 === 0) out += '.'
+    out += s[i]
+  }
+  return neg ? `-${out}` : out
+}
+
+/**
  * Aplica un incremento (kg) al valor actual. Clampa a 0 (nunca peso negativo) y limpia el
  * ruido de punto flotante. Base 0 si el valor actual está vacío.
  */

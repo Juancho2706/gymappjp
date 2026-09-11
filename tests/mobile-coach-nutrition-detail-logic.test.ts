@@ -86,7 +86,7 @@ describe('coach nutrition detail · Zona A', () => {
       .toBe(false)
   })
 
-  it('deriva delta semanal con umbral visual ±1 y null como cero', () => {
+  it('deriva delta semanal con umbral visual ±1 (con las dos semanas medidas)', () => {
     expect(deriveNutritionWeekDelta(81, 80)).toMatchObject({
       delta: 1,
       roundedDelta: 1,
@@ -102,7 +102,30 @@ describe('coach nutrition detail · Zona A', () => {
       tone: 'danger',
       valueLabel: '-1%',
     })
-    expect(deriveNutritionWeekDelta(null, undefined).valueLabel).toBe('+0%')
+    // Dos ceros MEDIDOS siguen siendo un delta real: el caso honesto es la ausencia, no el 0.
+    expect(deriveNutritionWeekDelta(0, 0)).toMatchObject({ tone: 'success', valueLabel: '+0%' })
+  })
+
+  // Ítem 14 del tren «Arreglos chicos pre-OTA»: sin alguna de las dos semanas no hay delta que
+  // medir ⇒ «—» en gris, nunca «+0%» en verde (que se leía como «mantuvo su adherencia»).
+  it('sin datos en alguna de las dos semanas devuelve «—» / flat / muted', () => {
+    for (const [current, previous] of [
+      [null, null],
+      [null, undefined],
+      [80, null],
+      [null, 80],
+      [undefined, 80],
+      [Number.NaN, 80],
+      [80, Number.NaN],
+    ] as Array<[number | null | undefined, number | null | undefined]>) {
+      expect(deriveNutritionWeekDelta(current, previous)).toMatchObject({
+        delta: 0,
+        roundedDelta: 0,
+        trend: 'flat',
+        tone: 'muted',
+        valueLabel: '—',
+      })
+    }
   })
 
   it('arma chart de siete días calendario con letras D-L-M-X-J-V-S y ceros sin log', () => {

@@ -92,6 +92,14 @@ export function shortDayMonthEs(ymd: string): string {
  *
  * Sin fecha (`dateText`/`days` en `null`) las filas de pulse dicen «Todavía no registra …»: es el
  * alumno que nunca registró, y por eso no se fabrica un «· 0 d».
+ *
+ * `limitedWindow` (ítem 15 del tren «Arreglos chicos pre-OTA»): el llamador solo miró una VENTANA
+ * (el fallback local de RN consulta 30 d de check-ins y logs). Ahí la ausencia de fecha no prueba
+ * que el alumno nunca registró —puede haberlo hecho hace 45 d—, así que el copy baja a «Sin
+ * check-in reciente» / «Sin entreno reciente»: dice lo que la app midió y nada más. Tampoco se
+ * imprime un «más de 30 d», porque la ventana es un detalle de implementación del fallback y el
+ * texto no puede afirmar un número que no contó. El camino online (`buildAgendaFromPulse`, sin
+ * ventana) NO pasa el flag y conserva «Todavía no registra …».
  */
 export function buildAgendaLabel(input: {
   kind: AgendaKind
@@ -99,16 +107,21 @@ export function buildAgendaLabel(input: {
   dateText: string | null
   programName?: string
   daysLeft?: number
+  limitedWindow?: boolean
 }): string {
   switch (input.kind) {
     case 'sin_ejercicio':
       return input.dateText !== null && input.days !== null
         ? `Sin entrenos desde el ${input.dateText} · ${input.days} d`
-        : 'Todavía no registra entrenos'
+        : input.limitedWindow === true
+          ? 'Sin entreno reciente'
+          : 'Todavía no registra entrenos'
     case 'checkin_pendiente':
       return input.dateText !== null && input.days !== null
         ? `Sin check-in desde el ${input.dateText} · ${input.days} d`
-        : 'Todavía no registra check-ins'
+        : input.limitedWindow === true
+          ? 'Sin check-in reciente'
+          : 'Todavía no registra check-ins'
     case 'programa_vence': {
       const name = input.programName ?? ''
       const daysLeft = input.daysLeft ?? 0

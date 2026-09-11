@@ -188,6 +188,18 @@ export function nutritionStreakValue(days: number | null | undefined): string {
   return `${rounded(days)} d`
 }
 
+/**
+ * Delta de adherencia semanal (esta semana vs la anterior).
+ *
+ * **Caso honesto** (ítem 14 del tren «Arreglos chicos pre-OTA»): si falta CUALQUIERA de las dos
+ * semanas —`null`, `undefined` o no finito— no hay delta que medir y devuelve `valueLabel: '—'`,
+ * `trend: 'flat'`, `tone: 'muted'`. Antes caía a `finiteOrZero` en las dos y pintaba «+0%» en
+ * verde: un alumno sin un solo registro se leía como si hubiera mantenido su adherencia exacta.
+ * Mismo criterio que el hero «Adherencia = —» del panel del coach.
+ *
+ * `delta`/`roundedDelta` quedan en 0 en ese caso: quien los use tiene que mirar el `tone` (o el
+ * `valueLabel`) para saber si hay medición, nunca el número.
+ */
 export function deriveNutritionWeekDelta(
   currentWeeklyAverage: number | null | undefined,
   previousWeeklyAverage: number | null | undefined,
@@ -195,9 +207,15 @@ export function deriveNutritionWeekDelta(
   delta: number
   roundedDelta: number
   trend: NutritionWeekTrend
-  tone: 'success' | 'danger'
+  tone: 'success' | 'danger' | 'muted'
   valueLabel: string
 } {
+  const hasCurrent = currentWeeklyAverage != null && Number.isFinite(currentWeeklyAverage)
+  const hasPrevious = previousWeeklyAverage != null && Number.isFinite(previousWeeklyAverage)
+  if (!hasCurrent || !hasPrevious) {
+    return { delta: 0, roundedDelta: 0, trend: 'flat', tone: 'muted', valueLabel: '—' }
+  }
+
   const delta = finiteOrZero(currentWeeklyAverage) - finiteOrZero(previousWeeklyAverage)
   const roundedDelta = Math.round(delta)
   return {

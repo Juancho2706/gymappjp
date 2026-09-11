@@ -233,7 +233,11 @@ describe('buildLocalAgenda · fallback offline', () => {
     expect(items[0]).toMatchObject({ kind: 'checkin_pendiente', days: 34, severity: 'danger' })
   })
 
-  it('alumno sin ninguna fecha: «Todavía no registra …», sin «· 0 d» y severidad none', () => {
+  // Ítem 15 del tren «Arreglos chicos pre-OTA»: el fallback solo mira 30 d de check-ins y logs, así
+  // que sin fecha NO puede decir «Todavía no registra …» (un alumno con check-in hace 45 d cae acá
+  // y el copy mentía). Pasa `limitedWindow: true` y el copy baja a «Sin … reciente», sin inventar
+  // un «más de 30 d» que la app no midió. El camino online (`buildAgendaFromPulse`) no cambia.
+  it('alumno sin fecha en la ventana de 30 d: «Sin … reciente», sin «· 0 d» y severidad none', () => {
     const { items } = buildLocalAgenda({
       riskItems: [
         { clientId: CLIENT_A, clientName: 'Ana', attentionScore: 75, label: 'x', flags: ['SIN_EJERCICIO_7D'] },
@@ -245,9 +249,14 @@ describe('buildLocalAgenda · fallback offline', () => {
     })
 
     const byClient = new Map(items.map((item) => [item.clientId, item]))
-    expect(byClient.get(CLIENT_A)?.label).toBe(buildAgendaLabel({ kind: 'sin_ejercicio', days: null, dateText: null }))
-    expect(byClient.get(CLIENT_A)?.label).toBe('Todavía no registra entrenos')
-    expect(byClient.get(CLIENT_B)?.label).toBe('Todavía no registra check-ins')
+    expect(byClient.get(CLIENT_A)?.label).toBe(
+      buildAgendaLabel({ kind: 'sin_ejercicio', days: null, dateText: null, limitedWindow: true }),
+    )
+    expect(byClient.get(CLIENT_A)?.label).toBe('Sin entreno reciente')
+    expect(byClient.get(CLIENT_B)?.label).toBe(
+      buildAgendaLabel({ kind: 'checkin_pendiente', days: null, dateText: null, limitedWindow: true }),
+    )
+    expect(byClient.get(CLIENT_B)?.label).toBe('Sin check-in reciente')
     expect(byClient.get(CLIENT_A)).toMatchObject({ dueAt: null, days: null, severity: 'none' })
   })
 
