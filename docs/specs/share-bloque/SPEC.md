@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 owner: product-engineering
 last_verified: "2026-09-06"
 canonical: false

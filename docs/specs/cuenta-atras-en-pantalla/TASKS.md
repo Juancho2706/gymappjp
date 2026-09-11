@@ -1,5 +1,5 @@
 ---
-status: active
+status: done
 owner: product-engineering
 last_verified: "2026-09-10"
 canonical: false
@@ -1091,7 +1091,7 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
       <fecha del deploy> AND actual_hold_sec IS NOT NULL GROUP BY 1`. Declarar también que **no hay
       índice sobre `metadata`** ⇒ la consulta va **acotada por fecha** y no es un dashboard (backlog
       B10).
-- [ ] W6.4 SDD versionada en `docs/specs/cuenta-atras-en-pantalla/` (SPEC.md, PLAN.md, TASKS.md,
+- [x] W6.4 (11-09: QA del owner VERDE en el artifact `53f6ec40` ⇒ los 4 docs a `done`) SDD versionada en `docs/specs/cuenta-atras-en-pantalla/` (SPEC.md, PLAN.md, TASKS.md,
       DATA-TESTING.md) con frontmatter `status: draft` → `active` al empezar la ejecución → `done` con
       el QA verde; `canonical: false` (la lista de canónicos está hardcodeada en
       `scripts/check-docs.mjs:11-31` y **no** incluye specs de feature). **Aceptación**:
@@ -1265,7 +1265,7 @@ Contrato en SPEC §20. Regla: terminar una serie lleva SIEMPRE al descanso; salt
 - [x] F2.1 **(Fable)** Motor: `rest-fallback.ts` (`resolveEffectiveRest`, `DEFAULT_REST_FALLBACK_SEC = 60`, warmup 0 cae al `rest_time`) + test; builder `defaultBlockForType`/`createDefaultBlock` escriben `'60s'` en movilidad/cardio/roller; `resolveAutoRestDefault` deja de leer `omni_autotimer` (tests actualizados). Motor+builder 5 archivos / 101 tests verdes.
 - [x] F2.2 **(Opus RN, juzgado por el jefe 11-09; el jefe agregó la salida «Siguiente ejercicio» del CTA de ronda — paridad web)** `ExecutorV3.maybeStartRest` (solo y ronda) + CTA de `ExerciseScreenV3`/`MobilityScreenV3` con `resolveEffectiveRest`; auto-avance de paso espera `restOfferOpen || pendingRoundRest`; `retryCommit` no borra el CTA de ronda; `RollerScreenV3`/`CardioScreenV3` con `autoRestEnabled` + `RestOfferV3`; `rest-remote-commands.handleSkip` solo encola con descanso vivo + `useRestTimerEngine` descarta comandos previos al arranque.
 - [x] F2.3 **(Opus web, juzgado por el jefe 11-09; extra: `SupersetStepV3` gana «Siguiente ejercicio» con el grupo completo; `buildTypedRest()` extraído)** `LogSetForm.buildRest` (solo y ronda) + `restOffer` de `ExerciseStepV3`/`MobilityStepV3` + `pendingRoundRest` con `resolveEffectiveRest`; guard offline llama `buildRest()`; avance diferido hasta resolver el CTA con la pref OFF.
-- [ ] F2.4 **(Fable)** Gates 11-09 sobre el árbol final: `pnpm test` **794 archivos / 10 907 tests** verdes (2 skip), mobile-node 86/1190, tsc mobile 0, typecheck 0, lint 0 err/572 warn preexistentes, lint:mobile 0, tokens OK, docs:check OK, `expo export --platform android` Exported. Commit local `F2` hecho. Queda: docs (CURRENT/MOBILE_PARITY), OK del owner para push → deploy → OTA 1.1.2 android+ios, QA del owner: (a) movilidad/cardio sin descanso configurado ⇒ descansa 60 s con pref ON; (b) pref OFF, última serie ⇒ el par «Descansar N s / Siguiente serie» se queda hasta que se toca; (c) superserie fin de ronda con pref OFF ⇒ «Ronda lista» se queda; (d) PWA sin conexión ⇒ el descanso arranca igual.
+- [x] F2.4 **(Fable)** Gates 11-09 sobre el árbol final: `pnpm test` **794 archivos / 10 907 tests** verdes (2 skip), mobile-node 86/1190, tsc mobile 0, typecheck 0, lint 0 err/572 warn preexistentes, lint:mobile 0, tokens OK, docs:check OK, `expo export --platform android` Exported. Commit local `F2` hecho. Queda: docs (CURRENT/MOBILE_PARITY), OK del owner para push → deploy → OTA 1.1.2 android+ios, QA del owner: (a) movilidad/cardio sin descanso configurado ⇒ descansa 60 s con pref ON; (b) pref OFF, última serie ⇒ el par «Descansar N s / Siguiente serie» se queda hasta que se toca; (c) superserie fin de ronda con pref OFF ⇒ «Ronda lista» se queda; (d) PWA sin conexión ⇒ el descanso arranca igual.
 
 ## Backlog heredado (para próximas sesiones; ninguno bloquea)
 

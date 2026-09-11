@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 owner: product-engineering
 last_verified: "2026-09-07"
 canonical: false
@@ -73,7 +73,7 @@ Push, deploy y OTA solo a pedido del owner.
 - [x] D4 Commit `95817804` en `rnmobiledenuevo`.
 - [x] D5 Push a `rnmobiledenuevo` y `master` (08-09), deploy web `dpl_HNXWcBmC…` READY (humo `www.eva-app.cl` y `/login` 200) y OTA 1.1.2 canal `production`: android `fa85b4c7-996d-46f7-857f-9bf420c68d4f` (run 34182217975) / ios `34245c78-ab31-4939-b505-bf3a6f58d150` (run 34182225023).
 - [ ] D6 **Owner**: responder a Angela (borrador listo).
-- [ ] D7 **Owner**: QA en device.
+- [x] D7 **Owner**: QA en device — VERDE 11-09 (artifact `53f6ec40`) ⇒ SDD `done`. Queda D6 (responder a Angela).
 
 ## Hallazgos al margen (NO se tocaron hoy)
 

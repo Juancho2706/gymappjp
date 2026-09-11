@@ -1,5 +1,5 @@
 ---
-status: in-progress
+status: done
 owner: product-engineering
 last_verified: "2026-09-06"
 canonical: false
@@ -85,24 +85,24 @@ Ver [SPEC](SPEC.md) · [PLAN](PLAN.md). Estado: **en código en el worktree
 
 ## QA en device (owner, tras la OTA)
 
-- [ ] Q1 Bloque legible sobre foto CLARA y sobre foto OSCURA (contorno hace el trabajo, sin velo
+- [x] Q1 Bloque legible sobre foto CLARA y sobre foto OSCURA (contorno hace el trabajo, sin velo
       adicional).
-- [ ] Q2 Drag del bloque sin parpadeo; clamp correcto contra los cuatro bordes del canvas.
-- [ ] Q3 Pellizco hasta el tope (`maxScaleFor`) sin que el bloque desaparezca ni se corte — repetir
+- [x] Q2 Drag del bloque sin parpadeo; clamp correcto contra los cuatro bordes del canvas.
+- [x] Q3 Pellizco hasta el tope (`maxScaleFor`) sin que el bloque desaparezca ni se corte — repetir
       la regresión del 02-09 (`qa-ejecutor-share-0209/TASKS.md` Q5).
-- [ ] Q4 Stories en Instagram y en Facebook, con foto y con «Sin foto» (fondo de marca).
-- [ ] Q5 WhatsApp (hoja nativa / share directo según disponibilidad).
-- [ ] Q6 «Guardar» a la galería.
-- [ ] Q7 PNG capturado sin marco punteado ni recorte del bloque en los cuatro cuadrantes del canvas.
-- [ ] Q8 Coach SIN logo propio muestra la inicial en el círculo, sin branding «EVA» visible más
+- [x] Q4 Stories en Instagram y en Facebook, con foto y con «Sin foto» (fondo de marca).
+- [x] Q5 WhatsApp (hoja nativa / share directo según disponibilidad).
+- [x] Q6 «Guardar» a la galería.
+- [x] Q7 PNG capturado sin marco punteado ni recorte del bloque en los cuatro cuadrantes del canvas.
+- [x] Q8 Coach SIN logo propio muestra la inicial en el círculo, sin branding «EVA» visible más
       allá de «vía EVA» en el footer.
-- [ ] Q9 Reduced motion: sin animaciones de entrada del bloque cuando el sistema lo pide.
-- [ ] Q10 TalkBack/VoiceOver: el bloque se anuncia como una unidad legible; el hint de arrastrar/
+- [x] Q9 Reduced motion: sin animaciones de entrada del bloque cuando el sistema lo pide.
+- [x] Q10 TalkBack/VoiceOver: el bloque se anuncia como una unidad legible; el hint de arrastrar/
       pellizcar es descubrible sin gesto.
 
 ## Pendientes declarados
 
 - [ ] P1 Commit local, push y OTA — **solo a pedido del owner**.
-- [ ] P2 QA en device (checklist arriba) — depende de la OTA.
+- [x] P2 QA en device — VERDE 11-09 (artifact `53f6ec40`) ⇒ SDD `done`. (En producción desde el 06-09 21:03Z: `f5d50cdc`, OTA 1.1.2 android `45819218` / ios `eac94332`.)
 - [ ] P3 Actualizar `docs/testing/QA_DEVICE_PENDIENTE.md` y `docs/status/MOBILE_PARITY.md` cuando
       el QA del owner dé veredicto (ver entradas ya agregadas el 06-09, pendientes de tildar).

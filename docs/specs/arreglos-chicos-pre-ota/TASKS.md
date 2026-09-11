@@ -1,5 +1,5 @@
 ---
-status: active
+status: done
 owner: product-engineering
 last_verified: "2026-09-11"
 canonical: false
@@ -124,11 +124,11 @@ Archivos del worker C: `apps/mobile/lib/auth-actions.ts`, `apps/mobile/lib/brand
 - [x] W3.6 Memoria del proyecto actualizada (estado del tren, OTA y pendientes).
 - [x] W3.7 (OK del owner 11-09 ~02:45Z: «Dale: push + deploy + OTA android e iOS») **Pedir OK al owner** con la tabla de gates llena y el resumen de diffs. Sin ese OK no se pushea nada.
 - [x] W3.8 (11-09: push `rnmobiledenuevo` = `master` = `091a19b0` → deploy `dpl_6FXkTMyJ6DuHhcakAcPtgF7zZkMJ` READY 02:52Z, humo 200 ×3 → piso ASC releído run 34556195403 → OTA android `d4701f84-78f8-4ec9-81d5-50576c030de7` (run 34556445933) / ios `369ec7af-851b-41f5-bba4-1246584293f4` (run 34556447853) → E2E `prod-suave` 9/9 (run 34556450253, 42,7 s)) Push de `rnmobiledenuevo` + `master` → deploy web → verificar READY → **UNA sola OTA 1.1.2 android + ios** con F1 (`fe6e9b39`) + este tren; anotar los dos ids de update.
-- [ ] W3.9 QA del owner en device — F1 (los 3 puntos con reps):
+- [x] W3.9 (VERDE 11-09, artifact `53f6ec40`) QA del owner en device — F1 (los 3 puntos con reps):
   - [ ] Fuerza por tiempo, un solo lado: el tile REPS aparece entre KG y SEG y el keypad va KG → REPS → SEG.
   - [ ] Reps vacías en fuerza por tiempo: la serie se guarda igual (reps opcionales, no bloquea).
   - [ ] La serie guardada se relee con el mismo valor de reps en el historial y en la pantalla final.
-- [ ] W3.10 QA del owner en device — este tren (uno por ítem vigente):
+- [x] W3.10 (VERDE 11-09, artifact `53f6ec40` ⇒ SDD `done`) QA del owner en device — este tren (uno por ítem vigente):
   - [ ] **5** — Sesión con más de 10 000 kg de volumen: el share «Bloque» muestra «12.450» (con punto) y la pantalla final del ejecutor **web** también.
   - [ ] **6** — Coach sin el módulo de porciones abre «Porciones»: ve «módulo no habilitado», no «No pudimos cargar la lista»; con el módulo encendido la lista carga igual que antes.
   - [ ] **7a** — «Olvidé mi contraseña» y «Restablecer contraseña»: la barra superior muestra solo «Volver», sin el «EVA» suelto.
