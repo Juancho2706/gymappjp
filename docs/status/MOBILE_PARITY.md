@@ -12,9 +12,11 @@ source_of_truth: apps/web responsive + apps/mobile
 
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
 
-> **2026-09-11 (tren «Arreglos chicos pre-OTA» + F1 «tile REPS en fuerza por tiempo» — EN CÓDIGO LOCAL: `rnmobiledenuevo` = `09e5d9fa`
-> (F1 `fe6e9b39` → docs `9f1284b9`/`3f3f2f6f` → W1-A `ed9c9085` · W1-C `7d2eb3f1` · W1-B `09e5d9fa`), SIN push; deploy y OTA 1.1.2 android/ios
-> pendientes del OK del owner; [SDD](../specs/arreglos-chicos-pre-ota/SPEC.md))**. Paridad por pieza: **miles es-CL** (`formatThousandsEsCl`
+> **2026-09-11 02:58Z (tren «Arreglos chicos pre-OTA» + F1 «tile REPS en fuerza por tiempo» — EN PRODUCCIÓN: `master` = `rnmobiledenuevo` =
+> `091a19b0` (F1 `fe6e9b39` → W1-A `ed9c9085` · W1-C `7d2eb3f1` · W1-B `09e5d9fa` → docs `091a19b0`), deploy `dpl_6FXkTMyJ6DuHhcakAcPtgF7zZkMJ` READY 02:52Z,
+> OTA 1.1.2 `production` android `d4701f84-78f8-4ec9-81d5-50576c030de7` (update `01a08e66-4c2d-78bd-b641-49aa3d4f28dd`, run 34556445933) / ios `369ec7af-851b-41f5-bba4-1246584293f4` (update
+> `01a08e66-9691-7c7b-b324-9ba4201772ea`, run 34556447853); sin migraciones; E2E `prod-suave` 9/9 (run 34556450253, 42,7 s); [SDD](../specs/arreglos-chicos-pre-ota/SPEC.md);
+> **QA del owner PENDIENTE** (TASKS W3.10, 11 puntos + los 3 con reps de F1))**. Paridad por pieza: **miles es-CL** (`formatThousandsEsCl`
 > en `@eva/workout-engine`, consumido por el share «Bloque» RN y por `SessionCompleteV3` web) — **paridad nueva**; **agenda del coach sin
 > fecha**: el fallback offline de RN dice «Sin check-in / entreno reciente» (`limitedWindow`) y el pulse web sigue con «Todavía no registra…»
 > — **divergencia deliberada** (la web no mira una ventana de 30 d); **adherencia «—»** en `NutricionTab` RN (web ya lo hacía) — **paridad

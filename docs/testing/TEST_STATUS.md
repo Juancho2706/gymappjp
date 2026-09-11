@@ -462,7 +462,7 @@ SDD en [`../specs/cuenta-atras-en-pantalla/`](../specs/cuenta-atras-en-pantalla/
 
 **Hallazgo de esta corrida (corregido en `0627f5b4`):** `tests/mobile-branding-identity.test.ts` (project `web-node`) se puso rojo porque `lib/auth-actions.ts` importó `v3/auto-rest-pref.ts`, que importaba el barrel `../timers` y con él `react-native` (Vite no parsea `import typeof`). Regla que queda: **un módulo que importe `lib/auth-actions.ts` u otro archivo cargado por tests `web-node` no puede depender del barrel `components/alumno/workout/timers`**; importar el submódulo concreto.
 
-## Tren «Arreglos chicos pre-OTA» (+ F1 «tile REPS en fuerza por tiempo») — W1–W3, 11-09 (rama `rnmobiledenuevo`, commits locales `9f1284b9`…`09e5d9fa` sobre F1 `fe6e9b39`, sin push al cierre de esta sección)
+## Tren «Arreglos chicos pre-OTA» (+ F1 «tile REPS en fuerza por tiempo») — W1–W3, 11-09 (rama `rnmobiledenuevo` = `master` = `091a19b0`, EN PRODUCCIÓN 02:58Z: deploy `dpl_6FXkTMyJ6DuHhcakAcPtgF7zZkMJ`, OTA android `d4701f84…` / ios `369ec7af…`)
 
 SDD en [`../specs/arreglos-chicos-pre-ota/`](../specs/arreglos-chicos-pre-ota/TASKS.md). Gates W3.1 sobre `09e5d9fa` (cadena secuencial, 11-09 23:35–23:43 local, log en el scratchpad del job):
 
@@ -474,7 +474,7 @@ SDD en [`../specs/arreglos-chicos-pre-ota/`](../specs/arreglos-chicos-pre-ota/TA
 | `pnpm check:tokens` · `pnpm docs:check` | OK · OK (CURRENT 15,8 KB, tope 16) |
 | `expo export --platform android` | Exported |
 | `pnpm check:nutrition-v2-boundaries` | 473 archivos / 8 raíces OK. El «✗ Nutrition V2 boundary check failed — raíces declaradas inexistentes» que aparece DENTRO de `pnpm test` lo imprime `scripts/check-nutrition-v2-boundaries.test.ts` al ejercitar el camino de error del script: no es un fallo |
-| `pnpm test:e2e` | no corrido (sin cambios de auth/RLS/pagos/nutrición V2 de escritura; `prod-suave` se corre tras el deploy como en los trenes anteriores) |
+| `pnpm test:e2e` | no corrido en local (sin cambios de auth/RLS/pagos/nutrición V2 de escritura). E2E `prod-suave` contra producción tras el deploy: 9/9 (run 34556450253, 42,7 s) |
 
 **Gates nuevos que deja el tren:** `tests/mobile/logout-cleanup.test.ts` (`getSession()` en el logout, guard de marca por `coachId`), `tests/mobile/exercise-usage-memo.test.ts` (memo solo camino feliz + invalidación en crear/editar/clonar/borrar), casos nuevos en `packages/workout-engine/keypad-logic.test.ts` (`formatThousandsEsCl`), `packages/profile-analytics/agenda-label.test.ts` (`limitedWindow`), `tests/mobile/share-block-data.test.ts` (12340,6 ⇒ «12.341»; 12450 ⇒ «12.450»), `tests/mobile/coach-dashboard-agenda.test.ts` (caso reescrito: «Sin check-in reciente»), `tests/mobile-coach-nutrition-detail-logic.test.ts` (`deriveNutritionWeekDelta` con semana nula ⇒ «—»), `tests/mobile/executor-v3-hold-module.test.ts` (+12: `restoredHold`, `saveHold`, `pickRestorableHold`), `tests/mobile/executor-v3-typed-screens.test.ts` (`strengthTimeTileLayout`), `tests/mobile-nutrition-v2-portions.test.ts` (+3: `classifyExchangeListError`). Sin test unitario para los headers brandeados (JSX; el repo no renderiza componentes RN en vitest): la cobertura es el QA de device (TASKS W3.10, 7a/7b/7c).
 

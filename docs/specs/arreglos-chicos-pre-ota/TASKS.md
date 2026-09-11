@@ -122,8 +122,8 @@ Archivos del worker C: `apps/mobile/lib/auth-actions.ts`, `apps/mobile/lib/brand
 - [x] W3.4 `docs/testing/TEST_STATUS.md` con los tests nuevos y el resultado real de la suite.
 - [ ] W3.5 (`active` ✔ en `3f3f2f6f`; `done` pendiente del QA) SPEC y TASKS a `status: active` durante la ejecución y a `done` recién con el QA verde del owner; commit `docs(specs):`.
 - [x] W3.6 Memoria del proyecto actualizada (estado del tren, OTA y pendientes).
-- [ ] W3.7 **Pedir OK al owner** con la tabla de gates llena y el resumen de diffs. Sin ese OK no se pushea nada.
-- [ ] W3.8 Push de `rnmobiledenuevo` + `master` → deploy web → verificar READY → **UNA sola OTA 1.1.2 android + ios** con F1 (`fe6e9b39`) + este tren; anotar los dos ids de update.
+- [x] W3.7 (OK del owner 11-09 ~02:45Z: «Dale: push + deploy + OTA android e iOS») **Pedir OK al owner** con la tabla de gates llena y el resumen de diffs. Sin ese OK no se pushea nada.
+- [x] W3.8 (11-09: push `rnmobiledenuevo` = `master` = `091a19b0` → deploy `dpl_6FXkTMyJ6DuHhcakAcPtgF7zZkMJ` READY 02:52Z, humo 200 ×3 → piso ASC releído run 34556195403 → OTA android `d4701f84-78f8-4ec9-81d5-50576c030de7` (run 34556445933) / ios `369ec7af-851b-41f5-bba4-1246584293f4` (run 34556447853) → E2E `prod-suave` 9/9 (run 34556450253, 42,7 s)) Push de `rnmobiledenuevo` + `master` → deploy web → verificar READY → **UNA sola OTA 1.1.2 android + ios** con F1 (`fe6e9b39`) + este tren; anotar los dos ids de update.
 - [ ] W3.9 QA del owner en device — F1 (los 3 puntos con reps):
   - [ ] Fuerza por tiempo, un solo lado: el tile REPS aparece entre KG y SEG y el keypad va KG → REPS → SEG.
   - [ ] Reps vacías en fuerza por tiempo: la serie se guarda igual (reps opcionales, no bloquea).
