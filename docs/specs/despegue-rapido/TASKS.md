@@ -17,7 +17,7 @@ canonical: false
 - [x] T2 **(Opus web, juzgado 11-09; `launch-ceremony.test.ts` nuevo con 6 casos; sin cobertura automatizada de `WorkoutLaunchMorph`: QA 3 y 4 del SPEC)** B3 señal con `isCeremonyActive()` aunque no haya marca · B4 TTL 20 s en
       `launch-ceremony.ts` · T1 `routeReady` solo con el destino · T2 sin aviso con la pestaña oculta ·
       T3 `navigationType`/`ceremonyAttr`/`storageOk`/`visibility` · tests.
-- [ ] T3 **(Fable)** Juicio de los diffs, gates completos (`pnpm test`, tsc mobile, typecheck, lint,
+- [x] T3 **(Fable, salida hecha; queda el QA del owner)** Juicio de los diffs, gates completos (`pnpm test`, tsc mobile, typecheck, lint,
       lint:mobile, tokens, docs, expo export), commit, docs (CURRENT/MOBILE_PARITY/runbook), OK del
       owner ⇒ push → deploy → OTA 1.1.2 android+ios → E2E prod-suave → QA del owner (SPEC) ⇒ `done`.
 - [ ] T4 **(Fable, ~14-09)** Sentry a 72 h: releer `EVA-MOBILE-F` y `EVA-NEXTJS-1P/1Q` por release;

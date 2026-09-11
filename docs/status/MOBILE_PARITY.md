@@ -12,11 +12,11 @@ source_of_truth: apps/web responsive + apps/mobile
 
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
 
-> **2026-09-11 (tren chico «Despegue rápido» — EN CÓDIGO LOCAL en `rnmobiledenuevo`, sin push; [SDD](../specs/despegue-rapido/SPEC.md))**: **solo RN**
+> **2026-09-11 23:48Z (tren chico «Despegue rápido» — EN PRODUCCIÓN: `master` = `rnmobiledenuevo` = `f77d8400`, deploy `dpl_H2B91dcRpiz9EmbfBRqEVGBbZNtw` READY 23:47Z, OTA 1.1.2 `production` android `a349abee-d7c0-450d-87e8-b4fd87dd1e99` (run 34659420827) / ios `d7b9a9d5-ddb1-4a53-99c2-8c3e3c6308c1` (run 34659425829); sin migraciones; E2E `prod-suave` 9/9 (run 34659439531); [SDD](../specs/despegue-rapido/SPEC.md); **QA del owner PENDIENTE** (5 puntos del SPEC))**: **solo RN**
 > `useWorkoutSession` pinta el plan desde la caché y baja `loading` ANTES de esperar auth/perfil (`ExecutorV3` avisa «escena lista» sin esperar la
 > red), `plan-cache-hint.ts` + `appState` en el aviso de Sentry; **solo web** la señal `eva:exec-v3-ready` sale también sin marca de morph con la
 > ceremonia viva, `routeReady` solo con el pathname del destino, `navigationType`/`storageOk`/`visibility` en el aviso; **paridad nueva** TTL del
-> Despegue 20 s en las dos (`despegue-ready.ts` / `launch-ceremony.ts`) y sin aviso a Sentry con la app en background. Hashes al publicar.
+> Despegue 20 s en las dos (`despegue-ready.ts` / `launch-ceremony.ts`) y sin aviso a Sentry con la app en background.
 
 > **2026-09-11 22:57Z (F2 «Descanso siempre», reporte de un alumno de jotap — EN PRODUCCIÓN: `master` = `rnmobiledenuevo` = `e15a031c`, deploy `dpl_5UDcjDBrfEKKB7TPTwpUeFsgVrbf` READY 22:54Z, OTA 1.1.2 `production` android `f0c0d18b-35db-45ee-8019-2bdc194d90ba` (update `01a092b2…`, run 34656126731) / ios `76bf4d26-ce2d-4ed6-a815-7d4ddc1e4441` (update `01a092b3…`, run 34656131797); sin migraciones; E2E `prod-suave` 9/9 (run 34656145899); [SPEC §20](../specs/cuenta-atras-en-pantalla/SPEC.md); **QA del owner VERDE 11-09** (artifact `53f6ec40`) ⇒ SDD `done`; con el mismo verde cierran «Arreglos chicos pre-OTA» + F1, «Share Bloque», «Plan vivo» y el fix de marca cruzada)**: motor
 > `rest-fallback.ts` (`resolveEffectiveRest`, fallback 60 s, warmup 0 cae al `rest_time`) consumido por RN (`ExecutorV3`, `ExerciseScreenV3`,
