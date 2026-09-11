@@ -48,6 +48,8 @@ export * from './hold-autolog'
 export * from './auto-rest-pref'
 // Matriz 2×4 «quién arranca el descanso al cerrar la serie» (W5.T5): una regla para web y RN.
 export * from './rest-after-commit'
+// Segundos efectivos del descanso (fallback 60 s sin `rest_time`; warmup 0 cae al normal) — web y RN.
+export * from './rest-fallback'
 // Copys literales del modal D5 y de la fila de la tuerca (R11b / W5.6–W5.8), compartidos web ↔ RN.
 export * from './auto-rest-copy'
 export * from './pr-detect'

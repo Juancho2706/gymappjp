@@ -84,6 +84,13 @@ interface SupersetStepV3Props {
      * porque en web no existe `countKind` (R28)— y limpia el estado pendiente.
      */
     onStartPendingRoundRest?: () => void
+    /**
+     * «Siguiente ronda» del mismo par (reporte del alumno 2026-09-11): descarta el descanso de grupo
+     * sin arrancarlo. Existe porque saltarse el descanso lo decide el ALUMNO y porque el avance al
+     * siguiente paso queda DIFERIDO hasta que este CTA se resuelve: sin salida, un grupo ya completo
+     * se quedaba esperando un toque que no tenía botón.
+     */
+    onDismissPendingRoundRest?: () => void
 }
 
 const SUBSTITUTION_REASON = 'Máquina ocupada'
@@ -132,6 +139,7 @@ export function SupersetStepV3({
     getExercise,
     pendingRoundRest = null,
     onStartPendingRoundRest,
+    onDismissPendingRoundRest,
 }: SupersetStepV3Props) {
     const { members, letterByBlock, groupLetter, groupRestSeconds, maxSets } = info
 
@@ -529,7 +537,15 @@ export function SupersetStepV3({
             {/* D2 / R24: la ronda cerró con la preferencia «Pasar solo al descanso» apagada ⇒ el descanso de
                 grupo quedó ARMADO en el orquestador y el alumno lo arranca acá («Ronda N de M» viaja en `label`). */}
             {pendingRoundRest && onStartPendingRoundRest ? (
-                <RestOfferV3 kind="ronda" seconds={pendingRoundRest.seconds} onRest={onStartPendingRoundRest} testIdPrefix="rest-offer-round" />
+                <RestOfferV3
+                    kind="ronda"
+                    seconds={pendingRoundRest.seconds}
+                    onRest={onStartPendingRoundRest}
+                    onNext={onDismissPendingRoundRest}
+                    // Con el grupo ya cerrado «Siguiente ronda» mentiría: lo que sigue es otro ejercicio.
+                    nextLabel={groupComplete ? 'Siguiente ejercicio' : undefined}
+                    testIdPrefix="rest-offer-round"
+                />
             ) : null}
 
             {/* Nota: el descanso completo llega al cerrar la ronda (no entre miembros). */}

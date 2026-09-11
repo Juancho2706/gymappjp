@@ -57,6 +57,7 @@ vi.mock('./v3/use-celebrations', () => ({
     useCelebrations: () => ({ celebrate: vi.fn(), plan: () => ({ tier: null, visual: 'none', reducedMotion: true }) }),
 }))
 
+import { DEFAULT_REST_FALLBACK_SEC } from '@eva/workout-engine'
 import { LogSetForm, type HoldPrefill } from './LogSetForm'
 
 const BLOCK_ID = '11111111-1111-4111-8111-111111111111'
@@ -402,7 +403,8 @@ describe('W4.6 / CA-80 — canal de supresión del descanso', () => {
         await act(async () => {})
 
         expect(harness.startRest).toHaveBeenCalledTimes(1)
-        expect(harness.startRest).toHaveBeenCalledWith('90', expect.objectContaining({ warmup: false }))
+        // Desde el 11-09 los segundos ya vienen RESUELTOS por el motor y viajan como `"90s"`.
+        expect(harness.startRest).toHaveBeenCalledWith('90s', expect.objectContaining({ warmup: false }))
     })
 
     it('superserie: un miembro que NO cierra la ronda sigue cortando el descanso en curso (pref ON)', async () => {
@@ -417,5 +419,128 @@ describe('W4.6 / CA-80 — canal de supresión del descanso', () => {
 
         expect(harness.startRest).not.toHaveBeenCalled()
         expect(harness.cancelRest).toHaveBeenCalledTimes(1)
+    })
+})
+
+/**
+ * Reporte de un alumno (2026-09-11): con «Pasar solo al descanso» encendida, «a veces al terminar una
+ * serie salta el descanso y va al próximo ejercicio». Regla de producto del owner: terminar una serie
+ * SIEMPRE lleva al descanso; **saltarlo lo decide el alumno**. El motor (`resolveEffectiveRest`) elige
+ * aproximación → `rest_time` → fallback de 60 s y nunca devuelve 0, así que las ramas «sin descanso»
+ * (`cancelRest()` por `rest_time` vacío) que vivían acá dejaron de existir.
+ */
+describe('Reporte 2026-09-11 — terminar una serie SIEMPRE lleva al descanso', () => {
+    it('fuerza sin `rest_time` ⇒ fallback de 60 s, no «ningún descanso»', async () => {
+        const { bump } = mountRow({ strengthTimeMode: true, restTimeStr: '' })
+
+        bump({ holdSec: 30, submit: true, source: 'timer', nonce: 1 })
+        await act(async () => {})
+
+        expect(harness.startRest).toHaveBeenCalledWith(
+            `${DEFAULT_REST_FALLBACK_SEC}s`,
+            expect.objectContaining({ warmup: false }),
+        )
+        expect(harness.cancelRest).not.toHaveBeenCalled()
+    })
+
+    it('fila TIPADA sin `rest_time` (movilidad, como la crea el builder) ⇒ el mismo fallback', async () => {
+        const { bump } = mountRow({ mode: 'mobility', restTimeStr: '' })
+
+        bump({ holdSec: 45, submit: true, source: 'timer', nonce: 1 })
+        await act(async () => {})
+
+        expect(harness.startRest).toHaveBeenCalledWith(
+            `${DEFAULT_REST_FALLBACK_SEC}s`,
+            expect.objectContaining({ label: undefined }),
+        )
+        expect(harness.cancelRest).not.toHaveBeenCalled()
+    })
+
+    it('warmup VACÍO en la serie 1 de un bloque de ≥3 series cae al `rest_time`, no al vacío', async () => {
+        const { bump } = mountRow({ strengthTimeMode: true, restTimeStr: '90', warmupRestTimeStr: '', totalSets: 4 })
+
+        bump({ holdSec: 30, submit: true, source: 'timer', nonce: 1 })
+        await act(async () => {})
+
+        expect(harness.startRest).toHaveBeenCalledWith('90s', expect.objectContaining({ warmup: false }))
+    })
+
+    it('warmup VÁLIDO en la serie 1 de un bloque de ≥3 series sigue mandando (M2 · 6)', async () => {
+        const { bump } = mountRow({ strengthTimeMode: true, restTimeStr: '90', warmupRestTimeStr: '30', totalSets: 4 })
+
+        bump({ holdSec: 30, submit: true, source: 'timer', nonce: 1 })
+        await act(async () => {})
+
+        expect(harness.startRest).toHaveBeenCalledWith('30s', expect.objectContaining({ warmup: true }))
+    })
+
+    it('superserie con el grupo en 0: la ronda que CIERRA descansa igual', async () => {
+        const { bump } = mountRow({
+            strengthTimeMode: true,
+            supersetRest: { groupRestSeconds: 0, closesRound: () => true },
+        })
+
+        bump({ holdSec: 30, submit: true, source: 'timer', nonce: 1 })
+        await act(async () => {})
+
+        expect(harness.startRest).toHaveBeenCalledWith(`${DEFAULT_REST_FALLBACK_SEC}s`, expect.anything())
+    })
+
+    it('V4 intacto: el miembro que NO cierra la ronda sigue sin descanso aunque el grupo esté en 0', async () => {
+        const { bump } = mountRow({
+            strengthTimeMode: true,
+            supersetRest: { groupRestSeconds: 0, closesRound: () => false },
+        })
+
+        bump({ holdSec: 30, submit: true, source: 'timer', nonce: 1 })
+        await act(async () => {})
+
+        expect(harness.startRest).not.toHaveBeenCalled()
+        expect(harness.cancelRest).toHaveBeenCalledTimes(1)
+    })
+})
+
+/**
+ * Reporte 2026-09-11 (segunda causa): el guard `!navigator.onLine` retornaba ANTES de armar el
+ * descanso ⇒ sin conexión la serie entraba a la cola local pero el cronómetro no arrancaba nunca. El
+ * descanso es LOCAL (cero red), así que se arma igual.
+ */
+describe('Reporte 2026-09-11 — sin conexión el descanso arranca igual', () => {
+    const setOnline = (value: boolean) => {
+        Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => value })
+    }
+    afterEach(() => setOnline(true))
+
+    it('fuerza: la serie se encola (0 envíos al server) y el descanso arranca', async () => {
+        setOnline(false)
+        const { bump } = mountRow({ strengthTimeMode: true, restTimeStr: '90' })
+
+        bump({ holdSec: 30, submit: true, source: 'timer', nonce: 1 })
+        await act(async () => {})
+
+        expect(harness.logSetAction).not.toHaveBeenCalled()
+        expect(harness.startRest).toHaveBeenCalledWith('90s', expect.objectContaining({ warmup: false }))
+    })
+
+    it('fila TIPADA: mismo contrato', async () => {
+        setOnline(false)
+        const { bump } = mountRow({ mode: 'mobility', restTimeStr: '90' })
+
+        bump({ holdSec: 45, submit: true, source: 'timer', nonce: 1 })
+        await act(async () => {})
+
+        expect(harness.logSetAction).not.toHaveBeenCalled()
+        expect(harness.startRest).toHaveBeenCalledWith('90s', expect.anything())
+    })
+
+    it('con la preferencia OFF, offline tampoco arranca nada (CA-80 intacto)', async () => {
+        setOnline(false)
+        const { bump } = mountRow({ strengthTimeMode: true, restTimeStr: '90', autoTimerEnabled: false })
+
+        bump({ holdSec: 30, submit: true, source: 'timer', nonce: 1 })
+        await act(async () => {})
+
+        expect(harness.startRest).not.toHaveBeenCalled()
+        expect(harness.cancelRest).not.toHaveBeenCalled()
     })
 })

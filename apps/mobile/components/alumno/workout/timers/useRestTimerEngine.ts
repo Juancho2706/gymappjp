@@ -131,6 +131,22 @@ export function useRestTimerEngine({
   // que la callback) lo invoque PRIMERO al volver a foreground: asi el estado que dejo un boton de la
   // notificacion se adopta antes de que el recomputo desde `endTimeRef` lea un reloj viejo.
   const consumeRemoteRef = useRef<(() => void) | null>(null)
+  /**
+   * Instante en que ARRANCO este descanso. El provider monta el host con `key={nonce}` -> hay un
+   * motor nuevo por cada `startRest`, asi que el momento del montaje ES el arranque del descanso
+   * actual. Reporte 11-09: un comando que quedo en la cola ANTES de este arranque pertenece a un
+   * descanso que ya no existe (p. ej. un «Saltar» de una notificacion huerfana) y no puede aplicarse
+   * al actual -- `subscribeRestRemoteCommands` dispara al montar justamente para no perder presses,
+   * y sin este corte ese press viejo cerraba de golpe el descanso recien iniciado.
+   */
+  const startedAtMsRef = useRef<number | null>(null)
+  // Se fija en el PRIMER efecto del motor: corre antes que el efecto que se suscribe a los comandos
+  // remotos (React ejecuta los efectos en orden de declaracion), asi que el corte ya esta puesto
+  // cuando `subscribeRestRemoteCommands` dispara su drenaje inicial. `Date.now()` no puede ir en el
+  // render (regla `react-hooks/purity`).
+  useEffect(() => {
+    startedAtMsRef.current = Date.now()
+  }, [])
 
   useEffect(() => {
     isActiveRef.current = isActive
@@ -394,6 +410,11 @@ export function useRestTimerEngine({
     const commands = drainRestRemoteCommands()
     if (commands.length === 0) return
     for (const command of commands) {
+      // Comando HUERFANO (reporte 11-09): se presiono ANTES de que arrancara ESTE descanso, o sea que
+      // era para uno que ya no existe. Se descarta sin aplicarlo — un «Saltar» viejo cerraba solo el
+      // descanso recien iniciado y el alumno lo leia como «se salto el descanso».
+      const startedAt = startedAtMsRef.current
+      if (startedAt != null && command.atMs < startedAt) continue
       if (command.type === 'skip') {
         close()
         continue

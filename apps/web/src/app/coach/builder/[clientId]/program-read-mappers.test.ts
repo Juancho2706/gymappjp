@@ -140,9 +140,9 @@ describe('createDefaultBlock', () => {
         expect(b.uid).toMatch(/^new-/)
     })
     it('cardio / mobility / roller: defaults por tipo', () => {
-        expect(createDefaultBlock(ex({ id: 'c', name: 'Bici', muscle_group: '-', exercise_type: 'cardio' }))).toMatchObject({ sets: 1, reps: '10min', duration_sec: 600, rest_time: '' })
-        expect(createDefaultBlock(ex({ id: 'm', name: 'Estiramiento', muscle_group: '-', exercise_type: 'mobility' }))).toMatchObject({ sets: 3, reps: '30s', duration_sec: 30, rest_time: '' })
-        expect(createDefaultBlock(ex({ id: 'r', name: 'Foam', muscle_group: '-', exercise_type: 'roller' }))).toMatchObject({ sets: 1, reps: '10 pasadas', reps_value: 10, reps_unit: 'passes', rest_time: '' })
+        expect(createDefaultBlock(ex({ id: 'c', name: 'Bici', muscle_group: '-', exercise_type: 'cardio' }))).toMatchObject({ sets: 1, reps: '10min', duration_sec: 600, rest_time: '60s' })
+        expect(createDefaultBlock(ex({ id: 'm', name: 'Estiramiento', muscle_group: '-', exercise_type: 'mobility' }))).toMatchObject({ sets: 3, reps: '30s', duration_sec: 30, rest_time: '60s' })
+        expect(createDefaultBlock(ex({ id: 'r', name: 'Foam', muscle_group: '-', exercise_type: 'roller' }))).toMatchObject({ sets: 1, reps: '10 pasadas', reps_value: 10, reps_unit: 'passes', rest_time: '60s' })
     })
 })
 

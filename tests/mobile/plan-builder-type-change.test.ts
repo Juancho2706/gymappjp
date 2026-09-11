@@ -284,7 +284,9 @@ describe('ExerciseSearchSheet · buildCatalogBlock (W4.4)', () => {
     expect(block.sets).toBe(1)
     expect(block.reps).toBe('10min')
     expect(block.duration_sec).toBe(600)
-    expect(block.rest_time).toBe('')
+    // Reporte 11-09: los tipados nacían con `rest_time: ''` y ese hueco era la causa del «a veces
+    // salta el descanso» (el ejecutor leía 0 s y no arrancaba nada). Ahora nacen con el fallback.
+    expect(block.rest_time).toBe('60s')
   })
 
   it('movilidad y roller nacen con sus defaults tipados', async () => {

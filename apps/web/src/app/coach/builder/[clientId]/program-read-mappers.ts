@@ -190,13 +190,13 @@ export function createDefaultBlock(exercise: Exercise): BuilderBlock {
     }
     // Defaults por tipo (ejercicios strength: EXACTAMENTE el default de siempre — AC3)
     if (exerciseType === 'cardio') {
-        return { ...base, sets: 1, reps: '10min', duration_sec: 600, rest_time: '' }
+        return { ...base, sets: 1, reps: '10min', duration_sec: 600, rest_time: '60s' }
     }
     if (exerciseType === 'mobility') {
-        return { ...base, sets: 3, reps: '30s', duration_sec: 30, rest_time: '' }
+        return { ...base, sets: 3, reps: '30s', duration_sec: 30, rest_time: '60s' }
     }
     if (exerciseType === 'roller') {
-        return { ...base, sets: 1, reps: '10 pasadas', reps_value: 10, reps_unit: 'passes', rest_time: '' }
+        return { ...base, sets: 1, reps: '10 pasadas', reps_value: 10, reps_unit: 'passes', rest_time: '60s' }
     }
     return base
 }

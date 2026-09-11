@@ -7,6 +7,7 @@ import {
   compactDuration,
   isStrengthTimeBlock,
   formatWeightEsCl,
+  resolveEffectiveRest,
   sessionLogKey,
   type OptimisticLogPayload,
   type ReconciledSessionLog,
@@ -85,6 +86,7 @@ export function ExerciseScreenV3({
   exec,
   showEffort = true,
   autoRestEnabled = true,
+  onRestOfferChange,
   substitution,
   canSubstitute,
   skipped = false,
@@ -129,6 +131,11 @@ export function ExerciseScreenV3({
    * OFF ⇒ tras guardar se ofrece «Descansar N s» / «Siguiente serie» (R24).
    */
   autoRestEnabled?: boolean
+  /**
+   * Avisa al orquestador que hay (o dejó de haber) un par «Descansar N s» / «Siguiente serie» vivo
+   * (reporte 11-09): mientras esté abierto el auto-avance de paso NO puede desmontarlo.
+   */
+  onRestOfferChange?: (open: boolean) => void
   substitution: { name: string; prescribedName: string } | null
   canSubstitute: boolean
   /** El alumno declaró OMITIDO este bloque (mockup 3): la captura se retira y queda el badge. */
@@ -216,10 +223,9 @@ export function ExerciseScreenV3({
   // preferencia «Pasar solo al descanso» esté encendida.
   const strengthTime = isStrengthTimeBlock(block, exercise)
   const holdSec = strengthTime ? (block.duration_sec ?? 0) : 0
-  const restSec = parseRestTime(block.rest_time)
   const timers = useWorkoutTimers()
   const [seedPatch, setSeedPatch] = useState<{ values: Record<string, string>; nonce: number } | null>(null)
-  const [restOffer, setRestOffer] = useState<{ setNumber: number; seconds: number } | null>(null)
+  const [restOffer, setRestOffer] = useState<{ setNumber: number; seconds: number; warmup: boolean } | null>(null)
   // Lo tipeado AHORA en el hero (base de la mezcla del auto-envío): arranca con el peso sugerido, que
   // es lo que la fila muestra antes de que el alumno toque nada.
   const captureRef = useRef<Record<string, string>>({})
@@ -229,19 +235,38 @@ export function ExerciseScreenV3({
   }, [activeSet, suggestedWeightKg])
   const commitSet = (payload: OptimisticLogPayload) => {
     onCommitSet(payload)
-    if (!autoRestEnabled) setRestOffer({ setNumber: payload.setNumber, seconds: restSec })
+    // Segundos EFECTIVOS por SERIE (reporte 11-09): MISMA regla que el orquestador — warmup válido en
+    // la serie 1 de un bloque de ≥3 → `rest_time` → fallback de 60 s. Antes era una constante por
+    // bloque (`parseRestTime(block.rest_time)`), así que un `rest_time` vacío dejaba el CTA en «0 s» y
+    // `RestOfferV3` ni pintaba el botón de descansar: el alumno sólo podía seguir de largo.
+    if (!autoRestEnabled) {
+      const eff = resolveEffectiveRest({
+        restSec: parseRestTime(block.rest_time),
+        warmupRestSec: parseRestTime(block.warmup_rest_time),
+        useWarmup: payload.setNumber === 1 && block.sets >= 3,
+      })
+      setRestOffer({ setNumber: payload.setNumber, seconds: eff.seconds, warmup: eff.warmup })
+    }
   }
   const startOfferedRest = () => {
     if (!restOffer) return
     timers.startRest(restOffer.seconds, {
       autoStart: true,
       label: exercise.name,
+      warmup: restOffer.warmup,
       setIndex: restOffer.setNumber,
       setTotal: block.sets,
       countKind: 'serie',
     })
     setRestOffer(null)
   }
+  // El orquestador congela el auto-avance de paso mientras el par siga vivo (reporte 11-09). Se
+  // publica también en el desmontaje: si el alumno se va por el rail, el paso no puede quedar trabado.
+  const restOfferOpen = restOffer != null && !autoRestEnabled
+  useEffect(() => {
+    onRestOfferChange?.(restOfferOpen)
+    return () => onRestOfferChange?.(false)
+  }, [restOfferOpen, onRestOfferChange])
 
   // Reps objetivo (prescripción) → placeholder tenue del tile REPS del hero cuando aún no se capturó.
   // En modo tiempo el tile es SEG y el placeholder son los segundos prescritos.

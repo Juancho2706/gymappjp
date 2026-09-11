@@ -61,10 +61,10 @@ export const SHARED_BLOCK_FIELDS = [
  * `strength` devuelve el default de siempre (sets 3 · "8-12" · 90s), byte a byte (AC3).
  */
 export function defaultBlockForType(type: ExerciseType): Partial<BuilderBlock> {
-    if (type === 'cardio') return { sets: 1, reps: '10min', duration_sec: 600, rest_time: '' }
-    if (type === 'mobility') return { sets: 3, reps: '30s', duration_sec: 30, rest_time: '' }
+    if (type === 'cardio') return { sets: 1, reps: '10min', duration_sec: 600, rest_time: '60s' }
+    if (type === 'mobility') return { sets: 3, reps: '30s', duration_sec: 30, rest_time: '60s' }
     if (type === 'roller') {
-        return { sets: 1, reps: '10 pasadas', reps_value: 10, reps_unit: 'passes', rest_time: '' }
+        return { sets: 1, reps: '10 pasadas', reps_value: 10, reps_unit: 'passes', rest_time: '60s' }
     }
     return { sets: 3, reps: '8-12', rest_time: '90s' }
 }

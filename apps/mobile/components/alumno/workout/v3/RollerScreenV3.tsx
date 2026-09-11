@@ -5,6 +5,7 @@ import { GitCommit, Minus, Plus, Timer, X } from 'lucide-react-native'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import {
   buildTypedPayload,
+  resolveEffectiveRest,
   type OptimisticLogPayload,
   type ReconciledSessionLog,
 } from '@eva/workout-engine'
@@ -15,8 +16,10 @@ import type { SessionBlock, SessionExercise } from '../../../../lib/workout-sess
 import { Sheet } from '../../../Sheet'
 import { SetRow } from '../SetRow'
 import { EMPTY_CAPTURE_HINT, TypedKeypad } from '../TypedKeypad'
+import { parseRestTime, useWorkoutTimers } from '../timers'
 import { ExerciseActionChips } from './exercise-actions'
 import { JuicyButton } from './JuicyButton'
+import { RestOfferV3 } from './RestOfferV3'
 import { SingleWheelPicker } from './DualWheelPicker'
 import { TypedMediaV3, TypedInstructionsChip, hasExecMedia } from './TypedMediaV3'
 import { useStopwatch } from './timing'
@@ -41,6 +44,8 @@ export function RollerScreenV3({
   blockLogs,
   reducedMotion = false,
   exec,
+  autoRestEnabled = true,
+  onRestOfferChange,
   substitution = null,
   canSubstitute = false,
   onOpenSubstitute,
@@ -61,6 +66,15 @@ export function RollerScreenV3({
   blockLogs: ReconciledSessionLog[]
   reducedMotion?: boolean
   exec: ExecTheme
+  /**
+   * Preferencia «Pasar solo al descanso» (D5). ON ⇒ el orquestador arranca el descanso al guardar;
+   * OFF ⇒ tras guardar se ofrece «Descansar N s» / «Siguiente serie» (R24). Reporte 11-09: hasta acá
+   * el roller NO recibía la preferencia ni montaba el par, así que con la pref APAGADA cerrar una
+   * pasada no tenía NINGÚN camino al descanso y se caía al ejercicio siguiente.
+   */
+  autoRestEnabled?: boolean
+  /** Avisa al orquestador que hay (o dejó de haber) un par vivo: congela el auto-avance de paso. */
+  onRestOfferChange?: (open: boolean) => void
   /** Sustitución de HOY (mockup 3: ya no es exclusiva de fuerza). */
   substitution?: { name: string; prescribedName: string } | null
   canSubstitute?: boolean
@@ -97,6 +111,28 @@ export function RollerScreenV3({
   // Bloque OMITIDO ⇒ no hay serie activa: se retiran contador, botones y cronómetro; queda el
   // historial de lo YA registrado antes de omitir.
   const activeSet = skipped ? null : firstUnlogged
+
+  const timers = useWorkoutTimers()
+  // Par «Descansar N s» / «Siguiente serie» con la preferencia APAGADA (R24), con los segundos
+  // EFECTIVOS del motor: el builder crea el roller con `rest_time` vacío ⇒ sin el fallback de 60 s el
+  // botón de descansar no existiría.
+  const [restOffer, setRestOffer] = useState<{ setNumber: number; seconds: number } | null>(null)
+  const restOfferOpen = restOffer != null && !autoRestEnabled
+  useEffect(() => {
+    onRestOfferChange?.(restOfferOpen)
+    return () => onRestOfferChange?.(false)
+  }, [restOfferOpen, onRestOfferChange])
+  const startOfferedRest = () => {
+    if (!restOffer) return
+    timers.startRest(restOffer.seconds, {
+      autoStart: true,
+      label: exercise.name,
+      setIndex: restOffer.setNumber,
+      setTotal: block.sets,
+      countKind: 'serie',
+    })
+    setRestOffer(null)
+  }
 
   const [count, setCount] = useState(0)
   const [bump, setBump] = useState(0) // nonce del micro-spring del contador
@@ -160,6 +196,14 @@ export function RollerScreenV3({
         holdSource: 'manual',
       }),
     )
+    if (!autoRestEnabled) {
+      const eff = resolveEffectiveRest({
+        restSec: parseRestTime(block.rest_time),
+        warmupRestSec: parseRestTime(block.warmup_rest_time),
+        useWarmup: activeSet === 1 && block.sets >= 3,
+      })
+      setRestOffer({ setNumber: activeSet, seconds: eff.seconds })
+    }
   }
 
   const loggedRows = Array.from({ length: block.sets }).map((_, i) => {
@@ -351,6 +395,18 @@ export function RollerScreenV3({
               <Text style={{ fontFamily: FONT.uiExtra, fontSize: 16, letterSpacing: 0.3, color: '#e8e8ee' }}>Completar</Text>
             </Pressable>
           </View>
+
+          {/* R24: con la preferencia APAGADA, tras completar la pasada el alumno elige descansar o seguir. */}
+          {restOffer && !autoRestEnabled ? (
+            <RestOfferV3
+              seconds={restOffer.seconds}
+              exec={{ ...exec, accent, accentText: '#08222b' }}
+              reducedMotion={reducedMotion}
+              onRest={startOfferedRest}
+              onNext={() => setRestOffer(null)}
+              testIDPrefix="rest-offer-roller"
+            />
+          ) : null}
 
           {loggedRows.some(Boolean) && <View style={{ width: '100%', gap: 6 }}>{loggedRows}</View>}
 

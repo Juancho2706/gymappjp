@@ -98,11 +98,17 @@ describe('W5.T3 · lectura, escritura y migración', () => {
         expect(prefs.readAutoRestPref({ clientId: CLIENT_A, hasHistory: true })).toBe(false)
     })
 
-    it('sin clave nueva, `omni_autotimer` migra por LECTURA y NO se copia a disco', async () => {
+    it('sin clave nueva, `omni_autotimer` YA NO manda: gana la cohorte (retiro 11-09)', async () => {
+        // Reporte 11-09: `omni_autotimer` es por DISPOSITIVO, no por alumno. Un teléfono donde alguna
+        // vez se apagó el «Cronómetro automático» dejaba al alumno en OFF sin haberlo decidido — y en
+        // OFF caía en el bug «terminás la serie y salta al ejercicio siguiente». La migración de
+        // lectura se retiró del motor (`resolveAutoRestDefault`); la clave se sigue leyendo del disco
+        // por compatibilidad de firma y se ignora.
         store.set('omni_autotimer', 'false')
         await prefs.hydrateAutoRestPref({ clientId: CLIENT_A })
-        expect(prefs.readAutoRestPref({ clientId: CLIENT_A, hasHistory: true })).toBe(false)
-        // La migración es de lectura: nada se escribió (la clave nueva nace recién cuando el alumno elige).
+        expect(prefs.readAutoRestPref({ clientId: CLIENT_A, hasHistory: true })).toBe(true)
+        expect(prefs.readAutoRestPref({ clientId: CLIENT_A, hasHistory: false })).toBe(false)
+        // Sigue sin escribirse nada: la clave nueva nace recién cuando el alumno elige.
         expect(writes).toHaveLength(0)
         expect(store.has(prefs.autoRestPrefKey(CLIENT_A))).toBe(false)
     })

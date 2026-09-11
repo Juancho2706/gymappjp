@@ -39,6 +39,7 @@ import {
     type SkipReason,
     type WorkoutLogMetadata,
     SIDE_LABEL,
+    resolveEffectiveRest,
     resolveRestAfterCommit,
     resolveShowAutoRestModal,
     type AutoRestModalMode,
@@ -1306,6 +1307,20 @@ export function WorkoutExecutionClient({
      * desmonta al avanzar de miembro y se llevaría el estado. `null` = no hay ronda esperando.
      */
     const [pendingRoundRest, setPendingRoundRest] = useState<PendingRoundRest | null>(null)
+    /**
+     * ¿El PASO tiene abierto su par «Descansar N s» / «Siguiente serie»? (reporte del alumno
+     * 2026-09-11). Los `restOffer` de `ExerciseStepV3`/`MobilityStepV3` son estado LOCAL del paso y se
+     * desmontan con él: si el auto-avance mueve el pager a los 350 ms, el alumno ve el botón un
+     * instante y aparece en el próximo ejercicio sin haber podido descansar. Los pasos avisan acá
+     * (`onRestOfferChange`) y el orquestador DIFIERE el avance hasta que el CTA se resuelve.
+     */
+    const [restOfferOpen, setRestOfferOpen] = useState(false)
+    /**
+     * Avance pendiente (`scrollToNextIncomplete` ya cerrado sobre sus logs). Se ejecuta cuando NO queda
+     * ningún CTA de descanso abierto — ni el del paso (`restOfferOpen`) ni el de ronda
+     * (`pendingRoundRest`). `null` = no hay nada que avanzar.
+     */
+    const deferredAdvanceRef = useRef<(() => void) | null>(null)
     /** API del provider de timers, publicada por `WorkoutTimerBridge` (montado dentro del provider). */
     const timerApiRef = useRef<ReturnType<typeof useWorkoutTimer> | null>(null)
     /**
@@ -1315,10 +1330,18 @@ export function WorkoutExecutionClient({
      */
     const startPendingRoundRest = useCallback(() => {
         setPendingRoundRest((pending) => {
-            if (pending) timerApiRef.current?.startRest(String(pending.seconds), { label: pending.label })
+            if (pending) timerApiRef.current?.startRest(`${pending.seconds}s`, { label: pending.label })
             return null
         })
     }, [])
+    /**
+     * «Siguiente ronda» del CTA de grupo (reporte 2026-09-11): saltarse el descanso lo decide el
+     * ALUMNO, así que el par de la ronda también necesita su salida. Sin ella, con el avance diferido
+     * el paso de la superserie completa se quedaba esperando un toque que no tenía botón.
+     */
+    const dismissPendingRoundRest = useCallback(() => setPendingRoundRest(null), [])
+    /** Los pasos avisan si su par «Descansar N s» / «Siguiente serie» está en pantalla. */
+    const handleRestOfferChange = useCallback((open: boolean) => setRestOfferOpen(open), [])
     const blocks = useMemo(() => [...plan.workout_blocks].sort((a, b) => a.order_index - b.order_index), [plan.workout_blocks])
     const [showTechnique, setShowTechnique] = useState(false)
     /**
@@ -1395,7 +1418,24 @@ export function WorkoutExecutionClient({
     // finalizar el entreno (`handleFinish`).
     useEffect(() => {
         setPendingRoundRest(null)
+        // Un avance diferido que sobrevivió a un cambio de paso MANUAL (swipe/rail) ya no corresponde:
+        // el alumno se movió solo. Se descarta para que no salte un paso de más más tarde.
+        deferredAdvanceRef.current = null
     }, [currentStepIndex])
+    /**
+     * Avance diferido (reporte del alumno 2026-09-11 · pref «Pasar solo al descanso» OFF): con la pref
+     * apagada el avance NO se dispara a los 350 ms; queda guardado y corre recién cuando se resuelve el
+     * último CTA de descanso —«Descansar N s» (que arranca el cronómetro y DESPUÉS avanza) o «Siguiente
+     * serie» (que avanza sin descanso)—. Con la pref ON no se guarda nada acá y el camino es el de
+     * siempre.
+     */
+    useEffect(() => {
+        if (restOfferOpen || pendingRoundRest) return
+        const run = deferredAdvanceRef.current
+        if (!run) return
+        deferredAdvanceRef.current = null
+        run()
+    }, [restOfferOpen, pendingRoundRest])
     const [showTimerSettings, setShowTimerSettings] = useState(false)
     // Ejecutor V3 (E2.1): arranca con la prop `executorV3` (hoy siempre `true` — el flag `executor_v3`
     // se eliminó). QA3: arrancar con este valor mantiene SSR=cliente determinístico. Antes arrancaba
@@ -1715,7 +1755,14 @@ export function WorkoutExecutionClient({
                 const members = [...group.blocks].sort((a, b) => a.order_index - b.order_index)
                 const letterByBlock = new Map<string, string>()
                 members.forEach((m, i) => letterByBlock.set(m.id, SUPERSET_MEMBER_LETTERS[i] ?? '?'))
-                const groupRestSeconds = members.reduce((mx, m) => Math.max(mx, parseRestTime(m.rest_time)), 0)
+                // Reporte del alumno 2026-09-11: si NINGÚN miembro trae `rest_time` el máximo daba 0 y
+                // la ronda cerraba sin descanso (y sin CTA con la pref OFF). El fallback del motor se
+                // aplica ACÁ, en el ORIGEN: todos los consumidores (`SupersetStepV3`, el prop
+                // `supersetRest` de `LogSetForm`, `resolveRestAfterCommit` y `pendingRoundRest`) leen
+                // este mismo número, así que no hay dos verdades sobre cuánto dura el descanso del grupo.
+                const groupRestSeconds = resolveEffectiveRest({
+                    restSec: members.reduce((mx, m) => Math.max(mx, parseRestTime(m.rest_time)), 0),
+                }).seconds
                 const maxSets = members.reduce((mx, m) => Math.max(mx, m.sets), 0)
                 const groupLetter = SUPERSET_MEMBER_LETTERS[groupIdx] ?? '?'
                 groupIdx += 1
@@ -2081,6 +2128,29 @@ export function WorkoutExecutionClient({
         smoothScrollIntoViewIfNeeded(blockRefs.current.get(nextIncomplete.id), 'start')
     }
 
+    /**
+     * Avance tras completar un paso — con la pref «Pasar solo al descanso» OFF **no** corre a los
+     * 350 ms (reporte del alumno 2026-09-11).
+     *
+     * En modo STEPPER, `scrollToNextIncomplete` llama `setCurrentStepIndex`: eso desmonta el paso (y
+     * con él su `restOffer`) y además dispara el efecto que limpia `pendingRoundRest` ⇒ el CTA
+     * «Descansar N s» que el alumno acababa de ver desaparecía solo. Con la pref apagada el avance
+     * queda guardado en `deferredAdvanceRef` y lo destraba el efecto de arriba cuando el alumno
+     * resuelve el CTA.
+     *
+     * Excepciones declaradas (comportamiento idéntico al de hoy):
+     *  · pref ON  ⇒ el descanso arranca solo, no hay CTA que proteger.
+     *  · modo LISTA (`!stepperEnabled`) ⇒ `scrollToNextIncomplete` sólo hace scroll: no desmonta nada,
+     *    así que diferirlo no aportaría y sí rompería el scroll suave de siempre.
+     */
+    const scheduleAdvance = (fromLogs: Props['logs']) => {
+        if (autoTimerEnabled || !stepperEnabled) {
+            setTimeout(() => scrollToNextIncomplete(fromLogs), 350)
+            return
+        }
+        deferredAdvanceRef.current = () => scrollToNextIncomplete(fromLogs)
+    }
+
     const handleLogged = (payload: OptimisticLogPayload) => {
         // Marca de actividad (Fix A): al primer log, futuras REENTRADAS por atrás refrescan aunque el
         // snapshot del client Router Cache vuelva vacío.
@@ -2137,6 +2207,9 @@ export function WorkoutExecutionClient({
             const roundRestDecision = resolveRestAfterCommit({
                 autoRestEnabled: autoTimerEnabled,
                 context: roundClosed ? 'superset-last' : 'superset-mid',
+                // Reporte 2026-09-11: `groupRestSeconds` ya viene por `resolveEffectiveRest` desde
+                // `supersetInfo` (nunca 0), así que la rama A7 «sin rest_time ⇒ none» no puede volver a
+                // dejar una ronda cerrada sin descanso ni sin CTA. Un solo lugar, el ORIGEN.
                 restSec: info.groupRestSeconds,
                 holdSource: (payload.metadata as { hold_source?: string } | null | undefined)?.hold_source ?? null,
             })
@@ -2165,7 +2238,7 @@ export function WorkoutExecutionClient({
             } else {
                 // Grupo completo → floreo del recap + saltar al siguiente bloque/serie incompleto.
                 setJustCompleted({ id: payload.blockId, nonce: Date.now() })
-                setTimeout(() => scrollToNextIncomplete(nextLogs), 350)
+                scheduleAdvance(nextLogs)
             }
             return
         }
@@ -2194,7 +2267,7 @@ export function WorkoutExecutionClient({
         if (!wasComplete && nowComplete) {
             // Floreo al cerrar el ejercicio: la card colapsa a recap y el recap celebra una vez.
             setJustCompleted({ id: payload.blockId, nonce: Date.now() })
-            setTimeout(() => scrollToNextIncomplete(nextLogs), 350)
+            scheduleAdvance(nextLogs)
         }
     }
 
@@ -2282,8 +2355,10 @@ export function WorkoutExecutionClient({
     const handleFinish = async () => {
         if (finishingRef.current) return
         finishingRef.current = true
-        // Limpieza (4/4): la sesión terminó — ninguna ronda queda esperando su descanso.
+        // Limpieza (4/4): la sesión terminó — ninguna ronda queda esperando su descanso, y un avance
+        // diferido (reporte 2026-09-11) tampoco tiene a dónde ir.
         setPendingRoundRest(null)
+        deferredAdvanceRef.current = null
         const pending = readWorkoutOfflineQueueForPlan(plan.id)
 
         // ── 1) Cierre local inmediato (todo síncrono y barato) ──
@@ -2418,6 +2493,7 @@ export function WorkoutExecutionClient({
                         // D2/R28: la ronda que cerró con la pref OFF espera acá su CTA (W4.11).
                         pendingRoundRest={pendingRoundRest?.groupId === info.members[0]?.id ? pendingRoundRest : null}
                         onStartPendingRoundRest={startPendingRoundRest}
+                        onDismissPendingRoundRest={dismissPendingRoundRest}
                     />
                 )
             }
@@ -2578,6 +2654,9 @@ export function WorkoutExecutionClient({
                                 onSkip={onSkipBlock}
                                 handleLogged={handleLogged}
                                 handleResult={handleResult}
+                                // R24 + reporte 2026-09-11: mientras el par «Descansar N s» / «Siguiente
+                                // serie» esté en pantalla, el auto-avance espera (ver `scheduleAdvance`).
+                                onRestOfferChange={handleRestOfferChange}
                             />
                         )
                     }
@@ -2605,7 +2684,7 @@ export function WorkoutExecutionClient({
                         handleResult,
                     }
                     if (execV3Active && !allowCollapse && effType === 'mobility') {
-                        return <MobilityStepV3 key={block.id} {...typedCommon} />
+                        return <MobilityStepV3 key={block.id} {...typedCommon} onRestOfferChange={handleRestOfferChange} />
                     }
                     if (execV3Active && !allowCollapse && effType === 'roller') {
                         return <RollerStepV3 key={block.id} {...typedCommon} />

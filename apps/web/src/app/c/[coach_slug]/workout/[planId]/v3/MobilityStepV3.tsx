@@ -4,7 +4,13 @@ import { useEffect, useState } from 'react'
 import { Move } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { LogSetForm, type HoldPrefill, type SetSyncResult } from '../LogSetForm'
-import { formatTypedObjective, sessionLogKey, type OptimisticLogPayload, type RepeatSeedEntry } from '@eva/workout-engine'
+import {
+    formatTypedObjective,
+    resolveEffectiveRest,
+    sessionLogKey,
+    type OptimisticLogPayload,
+    type RepeatSeedEntry,
+} from '@eva/workout-engine'
 import type { BlockType, ExerciseType, WorkoutSessionLog } from '../WorkoutExecutionClient'
 import { parseRestTime, useWorkoutTimer } from '../WorkoutTimerProvider'
 import { BlockActionsV3 } from './SkipBlockV3'
@@ -35,6 +41,11 @@ interface MobilityStepV3Props {
     onSkip?: () => void
     handleLogged: (payload: OptimisticLogPayload) => void
     handleResult: (blockId: string, setNumber: number, result: SetSyncResult) => void
+    /**
+     * Avisa al orquestador si el par «Descansar N s» / «Siguiente serie» está en pantalla (reporte del
+     * alumno 2026-09-11). Sin esto el auto-avance desmonta el CTA antes de que el alumno lo toque.
+     */
+    onRestOfferChange?: (open: boolean) => void
 }
 
 /**
@@ -70,12 +81,12 @@ export function MobilityStepV3({
     onSkip,
     handleLogged,
     handleResult,
+    onRestOfferChange,
 }: MobilityStepV3Props) {
     const coachNote = block.notes?.trim() || null
     const perSide = block.side_mode === 'per_side'
     const holdSeconds = block.duration_sec ?? 0
     const activeSet = firstUnlogged ?? block.sets
-    const restSeconds = parseRestTime(block.rest_time)
     const { startRest } = useWorkoutTimer()
 
     // Lo que midió el módulo para la serie activa → `holdPrefill` de su fila (uncontrolled, por nonce).
@@ -87,14 +98,31 @@ export function MobilityStepV3({
         setHoldPrefill(null)
     }, [activeSet])
 
+    /**
+     * El paso se desmonta al avanzar (o al volver atrás) con su `restOffer` adentro: el orquestador
+     * tiene que enterarse o su avance diferido se quedaría esperando un CTA que ya no existe.
+     */
+    useEffect(() => () => onRestOfferChange?.(false), [onRestOfferChange])
     const onLogged = (payload: OptimisticLogPayload) => {
         handleLogged(payload)
-        if (!autoTimerEnabled) setRestOffer({ setNumber: payload.setNumber, seconds: restSeconds })
+        if (!autoTimerEnabled) {
+            // Reporte del alumno 2026-09-11: movilidad es JUSTO el tipo que el builder crea con
+            // `rest_time = ''` ⇒ `parseRestTime` daba 0 y el par se pintaba sin «Descansar N s». El
+            // motor resuelve la misma regla que el camino automático y nunca devuelve 0.
+            const { seconds } = resolveEffectiveRest({ restSec: parseRestTime(block.rest_time) })
+            setRestOffer({ setNumber: payload.setNumber, seconds })
+            onRestOfferChange?.(true)
+        }
+    }
+    /** «Siguiente serie»: se salta el descanso y destraba el avance diferido del orquestador. */
+    const closeRestOffer = () => {
+        setRestOffer(null)
+        onRestOfferChange?.(false)
     }
     const startOfferedRest = () => {
         if (!restOffer) return
-        startRest(String(restOffer.seconds), { label: exercise.name })
-        setRestOffer(null)
+        startRest(`${restOffer.seconds}s`, { label: exercise.name })
+        closeRestOffer()
     }
 
     const running = holdStatus === 'running'
@@ -153,7 +181,7 @@ export function MobilityStepV3({
                 <RestOfferV3
                     seconds={restOffer.seconds}
                     onRest={startOfferedRest}
-                    onNext={() => setRestOffer(null)}
+                    onNext={closeRestOffer}
                     testIdPrefix="rest-offer-mobility"
                 />
             )}

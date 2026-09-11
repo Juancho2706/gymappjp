@@ -11,29 +11,36 @@ import { cn } from '@/lib/utils'
  * legacy, que en V3 no se pinta ⇒ con la preferencia «Pasar solo al descanso» APAGADA (default del
  * alumno nuevo, R1) el alumno cerraba una serie y no tenía cómo descansar. Este panel es el único
  * camino: «Descansar N s» llama el MISMO `startRest` del provider (lo pasa el paso por `onRest`) y
- * «Siguiente serie» sólo cierra el panel. Sin `rest_time` no hay nada que arrancar ⇒ sólo «Siguiente
- * serie». Al cerrar la ronda de una superserie el par se colapsa en «Ronda lista · Descansar N s»
- * (`kind: 'ronda'`, D2). Con la preferencia ON el descanso arranca solo y este panel NO se pinta.
+ * «Siguiente serie» sólo cierra el panel. Al cerrar la ronda de una superserie el par se presenta
+ * como «Ronda lista · Descansar N s» / «Siguiente ronda» (`kind: 'ronda'`, D2). Con la preferencia ON
+ * el descanso arranca solo y este panel NO se pinta.
+ *
+ * Reporte del alumno 2026-09-11: `seconds` YA llega resuelto por el motor (`resolveEffectiveRest`) y
+ * nunca es 0 —sin `rest_time` configurado el bloque cae al fallback de 60 s—, así que el botón
+ * «Descansar N s» siempre está. El guard `seconds > 0` se conserva como cinturón, no como regla.
  */
 export function RestOfferV3({
     seconds,
     kind = 'serie',
     onRest,
     onNext,
+    nextLabel: nextLabelOverride,
     className,
     testIdPrefix = 'rest-offer',
 }: {
-    /** Segundos reales del bloque (`parseRestTime(rest_time)`); ≤ 0 ⇒ sólo «Siguiente serie». */
+    /** Segundos EFECTIVOS del descanso (`resolveEffectiveRest(...).seconds`, siempre > 0). */
     seconds: number
     kind?: 'serie' | 'ronda'
     onRest: () => void
-    /** Ausente en `ronda`: la siguiente ronda ya está activa, no hay «siguiente» que cerrar. */
+    /** Ausente ⇒ sólo se pinta «Descansar N s». */
     onNext?: () => void
+    /** Rótulo del botón de salida cuando el de `kind` no aplica (p. ej. la superserie ya cerró). */
+    nextLabel?: string
     className?: string
     testIdPrefix?: string
 }) {
     const restLabel = kind === 'ronda' ? `Ronda lista · Descansar ${seconds} s` : `Descansar ${seconds} s`
-    const nextLabel = kind === 'ronda' ? 'Siguiente ronda' : 'Siguiente serie'
+    const nextLabel = nextLabelOverride ?? (kind === 'ronda' ? 'Siguiente ronda' : 'Siguiente serie')
     return (
         <div className={cn('exec-v3-restoffer', className)} data-testid={`${testIdPrefix}-panel`}>
             {seconds > 0 && (

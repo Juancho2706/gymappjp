@@ -65,20 +65,27 @@ describe('W5.T2 · claves y codificación', () => {
     })
 })
 
-describe('W5.T2 · migración de lectura desde `omni_autotimer`', () => {
-    it('sin clave nueva, el `false` histórico del dispositivo se respeta', () => {
+/**
+ * Reporte del alumno 2026-09-11 («a veces salta el descanso y va al próximo ejercicio»): la migración
+ * de LECTURA desde `omni_autotimer` se RETIRÓ del motor. Ese carril es por DISPOSITIVO, así que un
+ * teléfono donde alguna vez se apagó el «Cronómetro automático» dejaba al alumno en OFF sin haberlo
+ * decidido — y OFF es justo la preferencia donde el bug se ve. Ahora, sin clave nueva, manda la
+ * cohorte; `omni_autotimer` sólo sigue vivo como carril de escritura/lectura para `clientId` nulo (R32).
+ */
+describe('W5.T2 · `omni_autotimer` ya NO migra por lectura (reporte 2026-09-11)', () => {
+    it('sin clave nueva, el `false` histórico del dispositivo se IGNORA: manda la cohorte', () => {
         localStorage.setItem(OMNI_AUTOTIMER_KEY, 'false')
-        expect(readAutoRestPref({ clientId: CLIENT_A, hasHistory: true })).toBe(false)
-        // Migración de LECTURA: la clave nueva no nace sola.
+        expect(readAutoRestPref({ clientId: CLIENT_A, hasHistory: true })).toBe(true)
+        // Sigue sin nacer sola: no se escribe nada al leer.
         expect(localStorage.getItem(autoRestPrefKey(CLIENT_A))).toBeNull()
     })
 
-    it('`true` histórico ⇒ ON aunque la cohorte diría OFF', () => {
+    it('`true` histórico tampoco manda: sin historial la cohorte deja OFF', () => {
         localStorage.setItem(OMNI_AUTOTIMER_KEY, 'true')
-        expect(readAutoRestPref({ clientId: CLIENT_A, hasHistory: false })).toBe(true)
+        expect(readAutoRestPref({ clientId: CLIENT_A, hasHistory: false })).toBe(false)
     })
 
-    it('la clave nueva manda sobre la legacy', () => {
+    it('la clave nueva manda sobre la legacy (lo que el alumno eligió se respeta)', () => {
         localStorage.setItem(OMNI_AUTOTIMER_KEY, 'false')
         writeAutoRestPref({ clientId: CLIENT_A, enabled: true })
         expect(readAutoRestPref({ clientId: CLIENT_A, hasHistory: true })).toBe(true)
@@ -113,9 +120,11 @@ describe('W5.T2 · marca «visto»', () => {
 })
 
 describe('W5.T2 · `clientId` nulo ⇒ carril legacy `omni_autotimer` (R32)', () => {
-    it('lee Y escribe `omni_autotimer` con `String(boolean)`, sin crear ninguna clave nueva', () => {
+    it('escribe `omni_autotimer` con `String(boolean)`, sin crear ninguna clave nueva', () => {
+        // 2026-09-11: sin id con qué namespacear, un `omni_autotimer` que el alumno NO escribió por esta
+        // vía tampoco apaga la preferencia — el resolver del motor dejó de leerlo para el default.
         localStorage.setItem(OMNI_AUTOTIMER_KEY, 'false')
-        expect(readAutoRestPref({ clientId: null, hasHistory: true })).toBe(false)
+        expect(readAutoRestPref({ clientId: null, hasHistory: true })).toBe(true)
 
         writeAutoRestPref({ clientId: null, enabled: true })
         expect(localStorage.getItem(OMNI_AUTOTIMER_KEY)).toBe('true')

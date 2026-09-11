@@ -18,6 +18,7 @@ import {
   pauseCardioElapsed,
   readCardioElapsed,
   resetCardioElapsed,
+  resolveEffectiveRest,
   startCardioElapsed,
   type CardioSegmentReason,
   type IntervalConfig,
@@ -44,9 +45,11 @@ import { Sheet } from '../../../Sheet'
 import { ConnectSensorSheet } from './ConnectSensorSheet'
 import type { SessionBlock, SessionDraft, SessionExercise } from '../../../../lib/workout-session'
 import { ActiveSetRow, SetRow } from '../SetRow'
+import { parseRestTime, useWorkoutTimers } from '../timers'
 import { ExerciseActionChips } from './exercise-actions'
 import { JuicyButton } from './JuicyButton'
 import { ProgressRing } from './ProgressRing'
+import { RestOfferV3 } from './RestOfferV3'
 import { TypedMediaV3, TypedInstructionsChip, hasExecMedia } from './TypedMediaV3'
 import { useCountdown, useIntervalRunner, useStopwatch } from './timing'
 import { useCardioLiveTimer, type CardioLiveControls, type CardioLiveSpec } from './use-cardio-live-timer'
@@ -121,6 +124,8 @@ export function CardioScreenV3({
   restoredDraft,
   reducedMotion = false,
   exec,
+  autoRestEnabled = true,
+  onRestOfferChange,
   hrZones,
   hrProfile,
   substitution = null,
@@ -145,6 +150,15 @@ export function CardioScreenV3({
   restoredDraft: SessionDraft | null
   reducedMotion?: boolean
   exec: ExecTheme
+  /**
+   * Preferencia «Pasar solo al descanso» (D5). ON ⇒ el orquestador arranca el descanso al guardar;
+   * OFF ⇒ tras guardar se ofrece «Descansar N s» / «Siguiente serie» (R24). Reporte 11-09: hasta acá
+   * el cardio NO recibía la preferencia ni montaba el par ⇒ con la pref APAGADA cerrar el bloque no
+   * tenía NINGÚN camino al descanso.
+   */
+  autoRestEnabled?: boolean
+  /** Avisa al orquestador que hay (o dejó de haber) un par vivo: congela el auto-avance de paso. */
+  onRestOfferChange?: (open: boolean) => void
   hrZones?: import('@eva/cardio').HrZoneRange[] | null
   /** Perfil FC del alumno (FCmax + FC reposo) para clasificar el BPM en vivo del sensor BLE (E6.1). */
   hrProfile?: HrToZoneProfile | null
@@ -181,6 +195,8 @@ export function CardioScreenV3({
   // un naranja hardcodeado fuera de contrato (D4).
   const chipColor = isInterval ? PHASE_COLORS.work : exec.accent
   const zoneColor = zoneRingColor(block.hr_zone, exec.accent)
+  // Mismo provider de temporizadores que usan fuerza/movilidad para el CTA de descanso (R24).
+  const timers = useWorkoutTimers()
   const bpmRange = zoneBpmRange(block.hr_zone, hrZones)
   const objectiveLine = formatTypedObjective(block, 'cardio')
   const distanceObjective = cardioDistanceObjective(block)
@@ -260,6 +276,16 @@ export function CardioScreenV3({
     return st.count > 0 ? zoneSessionSummary(st) : null
   }, [])
 
+  // Par «Descansar N s» / «Siguiente serie» con la preferencia APAGADA (R24). Los segundos salen del
+  // motor (`resolveEffectiveRest`): el builder crea cardio con `rest_time` vacío, así que sin el
+  // fallback de 60 s el botón de descansar no existiría (reporte 11-09).
+  const [restOffer, setRestOffer] = useState<{ setNumber: number; seconds: number } | null>(null)
+  const restOfferOpen = restOffer != null && !autoRestEnabled
+  useEffect(() => {
+    onRestOfferChange?.(restOfferOpen)
+    return () => onRestOfferChange?.(false)
+  }, [restOfferOpen, onRestOfferChange])
+
   const handleCommitSet = useCallback(
     (payload: OptimisticLogPayload) => {
       // Serie cerrada ⇒ el acumulador arranca limpio: cada serie del bloque persiste SU propia curva.
@@ -268,9 +294,29 @@ export function CardioScreenV3({
       lastSampleRef.current = null
       setZoneSession(fresh)
       onCommitSet(payload)
+      if (!autoRestEnabled) {
+        const eff = resolveEffectiveRest({
+          restSec: parseRestTime(block.rest_time),
+          warmupRestSec: parseRestTime(block.warmup_rest_time),
+          useWarmup: payload.setNumber === 1 && block.sets >= 3,
+        })
+        setRestOffer({ setNumber: payload.setNumber, seconds: eff.seconds })
+      }
     },
-    [onCommitSet, targetZone],
+    [onCommitSet, targetZone, autoRestEnabled, block.rest_time, block.warmup_rest_time, block.sets],
   )
+
+  const startOfferedRest = () => {
+    if (!restOffer) return
+    timers.startRest(restOffer.seconds, {
+      autoStart: true,
+      label: exercise.name,
+      setIndex: restOffer.setNumber,
+      setTotal: block.sets,
+      countKind: 'serie',
+    })
+    setRestOffer(null)
+  }
 
   // Congela el promedio de la sesión de stream para auto-rellenar `actual_avg_hr` una vez, al cerrar
   // el bloque (transición streaming → detenido). El athlete captura el esfuerzo DESPUÉS de detener,
@@ -637,6 +683,18 @@ export function CardioScreenV3({
           />
         </View>
       )}
+
+      {/* R24: con la preferencia APAGADA, tras guardar el alumno elige descansar o seguir. */}
+      {restOffer && !autoRestEnabled ? (
+        <RestOfferV3
+          seconds={restOffer.seconds}
+          exec={exec}
+          reducedMotion={reducedMotion}
+          onRest={startOfferedRest}
+          onNext={() => setRestOffer(null)}
+          testIDPrefix="rest-offer-cardio"
+        />
+      ) : null}
 
       {loggedRows.some(Boolean) && <View style={{ gap: 6 }}>{loggedRows}</View>}
 

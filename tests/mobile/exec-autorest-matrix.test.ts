@@ -17,7 +17,12 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { resolveRestAfterCommit, type RestAfterCommitContext } from '@eva/workout-engine'
+import {
+    DEFAULT_REST_FALLBACK_SEC,
+    resolveEffectiveRest,
+    resolveRestAfterCommit,
+    type RestAfterCommitContext,
+} from '@eva/workout-engine'
 
 const requireFromTest = createRequire(import.meta.url)
 const mobileDir = path.resolve(__dirname, '..', '..', 'apps', 'mobile')
@@ -26,6 +31,12 @@ const v3Dir = path.join(mobileDir, 'components', 'alumno', 'workout', 'v3')
 const timersDir = path.join(mobileDir, 'components', 'alumno', 'workout', 'timers')
 
 const EXECUTOR_SRC = fs.readFileSync(path.join(v3Dir, 'ExecutorV3.tsx'), 'utf8')
+const SCREEN_SRC = {
+    fuerza: fs.readFileSync(path.join(v3Dir, 'ExerciseScreenV3.tsx'), 'utf8'),
+    movilidad: fs.readFileSync(path.join(v3Dir, 'MobilityScreenV3.tsx'), 'utf8'),
+    roller: fs.readFileSync(path.join(v3Dir, 'RollerScreenV3.tsx'), 'utf8'),
+    cardio: fs.readFileSync(path.join(v3Dir, 'CardioScreenV3.tsx'), 'utf8'),
+} as const
 
 const store = new Map<string, string>()
 const asyncStorageMock = {
@@ -52,6 +63,9 @@ const MATRIX: Array<{ label: string; context: RestAfterCommitContext; restSec: n
     { label: 'pantalla sola', context: 'solo', restSec: 90, off: 'offer-cta', on: 'auto-start' },
     { label: 'superserie · NO último', context: 'superset-mid', restSec: 90, off: 'none', on: 'none' },
     { label: 'superserie · ÚLTIMO', context: 'superset-last', restSec: 120, off: 'offer-cta', on: 'auto-start' },
+    // El modelo PURO sigue devolviendo `none` con 0 s; lo que cambió (reporte 11-09) es que RN ya
+    // nunca le pasa un 0: el `restSec` sale de `resolveEffectiveRest`, que cae al fallback de 60 s.
+    // Lo verifica el bloque «el descanso EFECTIVO nunca es 0» de más abajo.
     { label: 'sin rest_time', context: 'solo', restSec: 0, off: 'none', on: 'none' },
 ]
 
@@ -142,5 +156,101 @@ describe('W5.T5(c) · CA-80 — con la pref OFF, cerrar una serie NO cancela el 
         expect(
             resolveRestAfterCommit({ autoRestEnabled: false, context: 'superset-last', restSec: 90, holdSource: 'timer' }),
         ).toBe('offer-cta')
+    })
+})
+
+
+/**
+ * Reporte de un alumno (11-09, pref «Pasar solo al descanso» ON, iPhone): «a veces al terminar una
+ * serie salta el descanso y va al próximo ejercicio». Regla de producto del owner: terminar una serie
+ * SIEMPRE lleva al descanso; saltarlo lo decide el alumno. Acá se fija esa regla en RN.
+ */
+describe('11-09 · el descanso EFECTIVO nunca es 0', () => {
+    it('sin `rest_time` cae al fallback de 60 s en vez de «ningún descanso»', () => {
+        expect(resolveEffectiveRest({ restSec: 0 })).toEqual({
+            seconds: DEFAULT_REST_FALLBACK_SEC,
+            source: 'fallback',
+            warmup: false,
+        })
+        // Con el fallback, la matriz del motor ya no puede devolver `none` en un bloque suelto: con la
+        // pref ON arranca el descanso y con la pref OFF se ofrece el CTA.
+        const secs = resolveEffectiveRest({ restSec: 0 }).seconds
+        expect(resolveRestAfterCommit({ autoRestEnabled: true, context: 'solo', restSec: secs })).toBe('auto-start')
+        expect(resolveRestAfterCommit({ autoRestEnabled: false, context: 'solo', restSec: secs })).toBe('offer-cta')
+    })
+
+    it('un `warmup_rest_time` VACÍO no deja la serie 1 sin descanso: cae al `rest_time` del bloque', () => {
+        expect(resolveEffectiveRest({ restSec: 90, warmupRestSec: 0, useWarmup: true })).toEqual({
+            seconds: 90,
+            source: 'block',
+            warmup: false,
+        })
+        expect(resolveEffectiveRest({ restSec: 90, warmupRestSec: 150, useWarmup: true }).seconds).toBe(150)
+    })
+
+    it('`ExecutorV3` resuelve los segundos con el motor en el bloque suelto y en el plan de ronda', () => {
+        // Bloque suelto: el cálculo `useWarmup/restStr/secs` a mano quedó retirado.
+        expect(EXECUTOR_SRC).toContain('const effRest = resolveEffectiveRest({')
+        expect(EXECUTOR_SRC).toContain('useWarmup: payload.setNumber === 1 && (block?.sets ?? 0) >= 3,')
+        expect(EXECUTOR_SRC).not.toMatch(/const restStr = useWarmup \?/)
+        // Superserie: el plan de ronda ya no devuelve `null` por falta de `rest_time`.
+        expect(EXECUTOR_SRC).toContain('rawGroupRest > 0 ? rawGroupRest : resolveEffectiveRest({ restSec: rawGroupRest }).seconds')
+        expect(EXECUTOR_SRC).not.toMatch(/const groupRest = members\.reduce/)
+    })
+
+    it('las CUATRO pantallas calculan los segundos del CTA por SERIE con el motor (no una constante por bloque)', () => {
+        for (const [name, src] of Object.entries(SCREEN_SRC)) {
+            expect(src, name).toContain('resolveEffectiveRest')
+            // La constante por bloque (`const restSec = parseRestTime(block.rest_time)`) desapareció:
+            // con ella la serie 1 perdía el warmup y un `rest_time` vacío dejaba el CTA en «0 s».
+            expect(src, name).not.toMatch(/const restSec = parseRestTime\(block\.rest_time\)/)
+        }
+        // Fuerza y movilidad aplican la MISMA regla de warmup que el orquestador.
+        for (const name of ['fuerza', 'movilidad'] as const) {
+            expect(SCREEN_SRC[name], name).toContain('useWarmup: payload.setNumber === 1 && block.sets >= 3,')
+        }
+    })
+
+    it('roller y cardio ya tienen camino al descanso con la pref APAGADA (antes no montaban el par)', () => {
+        for (const name of ['roller', 'cardio'] as const) {
+            expect(SCREEN_SRC[name], name).toContain('autoRestEnabled')
+            expect(SCREEN_SRC[name], name).toContain('RestOfferV3')
+            expect(SCREEN_SRC[name], name).toContain('timers.startRest(restOffer.seconds')
+        }
+        // Y el orquestador se las cablea.
+        expect(EXECUTOR_SRC).toMatch(/<RollerScreenV3[\s\S]{0,120}autoRestEnabled=\{autoRestEnabled\}/)
+        expect(EXECUTOR_SRC).toMatch(/<CardioScreenV3[\s\S]{0,120}autoRestEnabled=\{autoRestEnabled\}/)
+    })
+})
+
+describe('11-09 · el auto-avance de paso no puede desmontar el CTA de descanso', () => {
+    it('el efecto de auto-avance se congela mientras haya una oferta viva', () => {
+        expect(EXECUTOR_SRC).toContain('if (restOfferOpen || pendingRoundRest != null) return')
+        // Ambos entran en las deps: al resolver la oferta el efecto se re-evalúa y el paso avanza.
+        expect(EXECUTOR_SRC).toContain('[completionLogs, stepIndex, steps, restOfferOpen, pendingRoundRest]')
+        // El guard por paso sigue vivo (no se avanza dos veces por el mismo paso).
+        expect(EXECUTOR_SRC).toContain('autoAdvancedRef.current.add(active.key)')
+    })
+
+    it('las cuatro pantallas publican el estado del par (y lo apagan al desmontarse)', () => {
+        for (const [name, src] of Object.entries(SCREEN_SRC)) {
+            expect(src, name).toContain('onRestOfferChange?.(restOfferOpen)')
+            expect(src, name).toContain('return () => onRestOfferChange?.(false)')
+        }
+    })
+
+    it('un reintento de una serie YA logueada no borra el CTA «Ronda lista» (retryCommit)', () => {
+        // `wasLogged` se calcula ANTES de la limpieza y la gatea: `maybeStartRest` se saltea con
+        // `wasLogged === true`, así que si la limpieza corría nadie volvía a armar el CTA.
+        const src = EXECUTOR_SRC
+        const wasLoggedAt = src.indexOf('const wasLogged = sessionLogs.some(')
+        const clearAt = src.indexOf('if (!wasLogged) setPendingRoundRest(null)')
+        expect(wasLoggedAt).toBeGreaterThan(-1)
+        expect(clearAt).toBeGreaterThan(wasLoggedAt)
+        // La limpieza incondicional de antes (la línea suelta justo antes de `const projected`) ya no existe.
+        const unguarded = src.match(/^[ \t]*setPendingRoundRest\(null\)$/gm) ?? []
+        // Quedan las limpiezas 2/3/4 (cambio de paso, omitir bloque, finalizar) + `startPendingRoundRest`:
+        // ninguna es el cierre de una serie. La 1 de 4 (la del commit) es la única que pasó a gatearse.
+        expect(unguarded).toHaveLength(4)
     })
 })

@@ -296,11 +296,11 @@ describe('defaultBlockForType: espejo de createDefaultBlock (program-read-mapper
     })
 
     it('cardio', () => {
-        expect(defaultBlockForType('cardio')).toEqual({ sets: 1, reps: '10min', duration_sec: 600, rest_time: '' })
+        expect(defaultBlockForType('cardio')).toEqual({ sets: 1, reps: '10min', duration_sec: 600, rest_time: '60s' })
     })
 
     it('mobility', () => {
-        expect(defaultBlockForType('mobility')).toEqual({ sets: 3, reps: '30s', duration_sec: 30, rest_time: '' })
+        expect(defaultBlockForType('mobility')).toEqual({ sets: 3, reps: '30s', duration_sec: 30, rest_time: '60s' })
     })
 
     it('roller', () => {
@@ -309,7 +309,7 @@ describe('defaultBlockForType: espejo de createDefaultBlock (program-read-mapper
             reps: '10 pasadas',
             reps_value: 10,
             reps_unit: 'passes',
-            rest_time: '',
+            rest_time: '60s',
         })
     })
 })

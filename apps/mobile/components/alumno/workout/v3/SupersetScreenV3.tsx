@@ -129,6 +129,7 @@ export function SupersetScreenV3({
   onRetrySet,
   pendingRoundRest = null,
   onStartPendingRoundRest,
+  onDismissPendingRoundRest,
 }: {
   /** Letra del grupo superserie (A, B…) para el título del paso. */
   groupLetter: string
@@ -167,6 +168,12 @@ export function SupersetScreenV3({
   pendingRoundRest?: PendingRoundRest | null
   /** Dispara el descanso armado: repone el `RestRoundContext` y llama al MISMO `startRest` de hoy. */
   onStartPendingRoundRest?: () => void
+  /**
+   * Salida del CTA de ronda SIN descansar (reporte 11-09). El orquestador congela el auto-avance de
+   * paso mientras `pendingRoundRest` viva; sin esta salida, la última ronda de la superserie con la
+   * preferencia OFF quedaba esperando un toque que no tenía botón (paridad web `SupersetStepV3`).
+   */
+  onDismissPendingRoundRest?: () => void
 }) {
   const s = exec.surface
   // Descanso de grupo en curso: mientras el interstitial de descanso está arriba, las bandas marquee
@@ -731,6 +738,8 @@ export function SupersetScreenV3({
           exec={exec}
           reducedMotion={reducedMotion}
           onRest={onStartPendingRoundRest}
+          onNext={onDismissPendingRoundRest}
+          nextLabel={active == null ? 'Siguiente ejercicio' : undefined}
           testIDPrefix="rest-offer-round"
         />
       ) : null}

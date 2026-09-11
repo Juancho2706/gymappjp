@@ -31,6 +31,7 @@ import {
   metersToDistanceCapture,
   PAST_SET_NOT_FOUND_ERROR,
   repsUnitForModality,
+  resolveEffectiveRest,
   resolveRestAfterCommit,
   resolveShowAutoRestModal,
   sessionLogKey,
@@ -323,6 +324,16 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
   const [pendingRoundRest, setPendingRoundRest] = useState<PendingRoundRest | null>(null)
   const pendingRoundRestRef = useRef<PendingRoundRest | null>(null)
   pendingRoundRestRef.current = pendingRoundRest
+  /**
+   * Hay un par «Descansar N s» / «Siguiente serie» VIVO en la pantalla del paso activo (reporte
+   * 11-09). Lo publican las pantallas por `onRestOfferChange` al armarlo y al resolverlo (los DOS
+   * botones lo resuelven) y también al desmontarse. Existe por una sola razón: el auto-avance de
+   * paso corre 350 ms después de completar el bloque y desmontaba el CTA antes de que el alumno
+   * pudiera tocarlo — con la pref «Pasar solo al descanso» APAGADA ése es el ÚNICO camino al
+   * descanso, así que saltaba al ejercicio siguiente sin descansar.
+   */
+  const [restOfferOpen, setRestOfferOpen] = useState(false)
+  const handleRestOfferChange = useCallback((open: boolean) => setRestOfferOpen(open), [])
   // PR en vivo (E4.2): true cuando la serie recién cerrada fue récord → el interstitial muestra "+1 serie · ¡PR!".
   const restPrRef = useRef(false)
   // Fase de presentacion V3: arranca en el splash (una vez por apertura) → Inicio → sesion. EXCEPCION
@@ -848,15 +859,19 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
       restCelebrateRef.current = true
       // Por defecto NO es un cierre de ronda; el branch de superserie lo setea si corresponde (E3.5).
       restRoundContextRef.current = null
-      // Limpieza (1 de 4) del descanso de ronda armado: CUALQUIER commit nuevo lo invalida — el de
-      // otro miembro, el de otra ronda o la corrección de una serie ya guardada. `maybeStartRest` lo
-      // vuelve a armar en la misma pasada si corresponde.
-      setPendingRoundRest(null)
+      // `wasLogged` se calcula ANTES de la limpieza del CTA de ronda (reporte 11-09): `retryCommit`
+      // reentra acá con una serie que YA está en `sessionLogs`, y como `maybeStartRest` se saltea con
+      // `wasLogged === true` nadie volvía a armar el `pendingRoundRest` que esta línea borraba ⇒ un
+      // reintento dejaba al alumno sin «Ronda lista · Descansar N s».
+      const wasLogged = sessionLogs.some((l) => l.block_id === payload.blockId && l.set_number === payload.setNumber)
+      // Limpieza (1 de 4) del descanso de ronda armado: un commit NUEVO lo invalida — el de otro
+      // miembro o el de otra ronda. `maybeStartRest` lo vuelve a armar en la misma pasada si
+      // corresponde. Un reintento/corrección de una serie ya logueada NO lo toca (ver arriba).
+      if (!wasLogged) setPendingRoundRest(null)
       const projected = [
         ...sessionLogs.filter((l) => !(l.block_id === payload.blockId && l.set_number === payload.setNumber)),
         { block_id: payload.blockId, set_number: payload.setNumber },
       ]
-      const wasLogged = sessionLogs.some((l) => l.block_id === payload.blockId && l.set_number === payload.setNumber)
 
       // ── Celebración (E4.1/E4.2) — decidida ANTES de persistir (todo es puro; no depende del server). El
       // motor de guardado sigue intacto: solo se DECIDE tier + PR con los datos que ya fluyen. ──
@@ -929,8 +944,12 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
            */
           const buildRoundRestPlan = (): PendingRoundRest | null => {
             if (!roundClosed) return null
-            const groupRest = members.reduce((mx, m) => Math.max(mx, parseRestTime(m.rest_time)), 0)
-            if (groupRest <= 0) return null
+            const rawGroupRest = members.reduce((mx, m) => Math.max(mx, parseRestTime(m.rest_time)), 0)
+            // Reporte 11-09: una superserie cuyos miembros vienen con `rest_time` vacío (lo normal en
+            // movilidad/cardio/roller del builder) devolvía `null` acá ⇒ cerrar la ronda pasaba directo
+            // al ejercicio siguiente, sin descanso ni CTA. Regla de producto: cerrar SIEMPRE lleva al
+            // descanso ⇒ el plan de ronda nunca queda en 0 (fallback del motor).
+            const groupRest = rawGroupRest > 0 ? rawGroupRest : resolveEffectiveRest({ restSec: rawGroupRest }).seconds
             // Contexto de "ronda cerrada" (E3.5): el interstitial muestra banner + dots + siguiente
             // ronda. Se deriva del engine (round = la ronda recién cerrada; total = maxSets del grupo).
             const totalRounds = members.reduce((mx, m) => Math.max(mx, m.sets), 0)
@@ -1015,9 +1034,15 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         // desde la tarjeta ya hecha, "Deshacer" de cada card). V2 la conserva (ExecutorV2.tsx). El resto del
         // flujo (descanso/scroll) NO cambia.
         if (!wasLogged) {
-          const useWarmup = !!block?.warmup_rest_time && payload.setNumber === 1 && (block?.sets ?? 0) >= 3
-          const restStr = useWarmup ? block!.warmup_rest_time! : block?.rest_time
-          const secs = parseRestTime(restStr)
+          // Segundos EFECTIVOS del motor (reporte 11-09, `rest-fallback.ts`): warmup válido en la serie
+          // 1 de un bloque de ≥3 → `rest_time` válido → fallback de 60 s. NUNCA 0, así que terminar una
+          // serie SIEMPRE lleva al descanso (o al CTA con la pref OFF); saltarlo lo decide el alumno.
+          const effRest = resolveEffectiveRest({
+            restSec: parseRestTime(block?.rest_time),
+            warmupRestSec: parseRestTime(block?.warmup_rest_time),
+            useWarmup: payload.setNumber === 1 && (block?.sets ?? 0) >= 3,
+          })
+          const secs = effRest.seconds
           // Lectura SÍNCRONA y previa al `await` de red (R36) + matriz 2×4 del motor (W5.T5 a).
           const autoRest = readAutoRest()
           const decision = resolveRestAfterCommit({
@@ -1035,15 +1060,14 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
             timers.startRest(secs, {
               autoStart: true,
               label: ex?.name,
-              warmup: useWarmup,
+              warmup: effRest.warmup,
               setIndex: payload.setNumber,
               setTotal: block?.sets,
               countKind: 'serie',
             })
           } else if (decision === 'none' && autoRest) {
-            // Sin `rest_time` (A7) y con la preferencia ENCENDIDA se corta el descanso en curso, como
-            // siempre. CA-80: con la preferencia APAGADA ya NO se cancela nada — el descanso que
-            // corre lo pidió el alumno con el CTA «Descansar N s» (R24).
+            // DEFENSIVA (11-09): con `resolveEffectiveRest` los segundos ya nunca son 0, así que en
+            // `solo` la matriz no puede devolver `none`; la rama queda por si el motor cambia.
             timers.cancelRest()
           }
         }
@@ -1107,6 +1131,12 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
     setPendingRoundRest(null)
     timers.startRest(pending.seconds, roundRestStartArgs(pending))
   }, [timers])
+
+  /**
+   * «Siguiente ronda / Siguiente ejercicio» del CTA de grupo (reporte 11-09): saltarse el descanso lo
+   * decide el ALUMNO. Deja `pendingRoundRest` en `null` para que el auto-avance congelado se destrabe.
+   */
+  const dismissPendingRoundRest = useCallback(() => setPendingRoundRest(null), [])
 
   /**
    * OMITIR un ejercicio (mockup 3). Escribe UNA fila por el MISMO pipeline que una serie (`logSet`:
@@ -1663,6 +1693,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
             // Se pasa CRUDO (con su `groupId`): la pantalla decide si apunta a ESTE grupo.
             pendingRoundRest={pendingRoundRest}
             onStartPendingRoundRest={startPendingRoundRest}
+            onDismissPendingRoundRest={dismissPendingRoundRest}
           />
         )
       }
@@ -1705,6 +1736,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
           <ExerciseScreenV3
             key={block.id}
             autoRestEnabled={autoRestEnabled}
+            onRestOfferChange={handleRestOfferChange}
             block={block}
             exercise={exercise}
             eff={effByBlock.get(block.id) ?? null}
@@ -1746,6 +1778,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
           <MobilityScreenV3
             key={block.id}
             autoRestEnabled={autoRestEnabled}
+            onRestOfferChange={handleRestOfferChange}
             block={block}
             exercise={exercise}
             blockLogs={blockLogs}
@@ -1776,6 +1809,8 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         return (
           <RollerScreenV3
             key={block.id}
+            autoRestEnabled={autoRestEnabled}
+            onRestOfferChange={handleRestOfferChange}
             block={block}
             exercise={exercise}
             blockLogs={blockLogs}
@@ -1802,6 +1837,8 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         return (
           <CardioScreenV3
             key={block.id}
+            autoRestEnabled={autoRestEnabled}
+            onRestOfferChange={handleRestOfferChange}
             block={block}
             exercise={exercise}
             blockLogs={blockLogs}
@@ -1862,7 +1899,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         />
       )
     },
-    [supersetMembersByBlock, sessionLogs, skippedBlockIds, skipReasonByBlock, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, getSubstitution, openSet, hrZones, hrProfile, restoredDraft, restoredHold, saveHold, repeatSeed, motion.reduced, exec, execSettings.showRpeRir, handleCommit, handleRpeUpdate, saveActiveDraft, recentSet, syncErrors, retryCommit, pendingRoundRest, startPendingRoundRest, autoRestEnabled],
+    [supersetMembersByBlock, sessionLogs, skippedBlockIds, skipReasonByBlock, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, getSubstitution, openSet, hrZones, hrProfile, restoredDraft, restoredHold, saveHold, repeatSeed, motion.reduced, exec, execSettings.showRpeRir, handleCommit, handleRpeUpdate, saveActiveDraft, recentSet, syncErrors, retryCommit, pendingRoundRest, startPendingRoundRest, dismissPendingRoundRest, autoRestEnabled, handleRestOfferChange],
   )
 
   // ── Modelo de pasos (engine) + vistas del rail + auto-avance ──
@@ -2050,8 +2087,15 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
 
   // Auto-avance de paso (paridad ExecutorV2): al RESOLVER el paso activo —todas sus series hechas U
   // omitido— reposiciona al primer paso sin resolver; una sola vez por paso (guard).
+  //
+  // Reporte 11-09: el avance a los 350 ms DESMONTABA el par «Descansar N s / Siguiente serie» (y el
+  // «Ronda lista · Descansar N s») de la última serie del bloque antes de que el alumno lo tocara ⇒
+  // con la pref APAGADA se pasaba al ejercicio siguiente sin descanso. Mientras haya una oferta viva
+  // el efecto NO dispara; cuando el alumno la resuelve (descansar o seguir) el efecto se re-evalúa
+  // por deps y avanza igual. El guard `autoAdvancedRef` por paso se mantiene intacto.
   useEffect(() => {
     if (steps.length === 0) return
+    if (restOfferOpen || pendingRoundRest != null) return
     const active = steps[Math.min(stepIndex, steps.length - 1)]
     if (!active || autoAdvancedRef.current.has(active.key)) return
     if (!isStepComplete(active, completionLogs)) return
@@ -2062,7 +2106,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
       setStepIndex((i) => (i === stepIndex ? target : i))
     }, 350)
     return () => clearTimeout(t)
-  }, [completionLogs, stepIndex, steps])
+  }, [completionLogs, stepIndex, steps, restOfferOpen, pendingRoundRest])
 
   // Error de CARGA (Sentry EVA-MOBILE-9) — tercer estado, ANTES del vacío y con la misma anatomía.
   // El `finally` del hook a secas no alcanzaba: apagaba el spinner eterno pero dejaba al alumno sin señal

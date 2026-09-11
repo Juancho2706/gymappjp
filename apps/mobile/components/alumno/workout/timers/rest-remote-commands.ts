@@ -206,11 +206,17 @@ async function handleResume(snap: RestLiveSnapshot): Promise<void> {
 }
 
 async function handleSkip(): Promise<void> {
+  // El «Saltar» se atiende ANTES del guard `if (!snap) return` de abajo (una notificación huérfana
+  // igual debe limpiarse), así que el guard vive acá. Reporte 11-09: sin descanso vivo esto encolaba
+  // igual un `skip` que nadie consumía; `useRestTimerEngine` drena la cola AL MONTAR, así que el
+  // descanso SIGUIENTE se cerraba solo apenas arrancaba (el alumno veía «saltó el descanso»).
+  const hadLiveRest = snapshot != null
   clearRestLiveSnapshot()
   await stopRestLiveCountdown()
   await cancelRestEndNotification()
   await dismissRestEndNotification()
-  enqueueCommand('skip')
+  // La limpieza va SIEMPRE (notificación huérfana incluida); el comando SÓLO si había algo que saltar.
+  if (hadLiveRest) enqueueCommand('skip')
 }
 
 /**

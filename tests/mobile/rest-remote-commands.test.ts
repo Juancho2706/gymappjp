@@ -310,9 +310,25 @@ describe('saltar desde la notificación', () => {
     expect(drainRestRemoteCommands().map((c) => c.type)).toEqual(['skip'])
   })
 
-  it('funciona incluso sin snapshot (notificación huérfana de un build previo)', async () => {
+  it('sin snapshot limpia las notificaciones pero NO encola comando (huérfana de un build previo)', async () => {
+    // Reporte 11-09 (alumno con «Pasar solo al descanso» ON, iPhone): «a veces al terminar una serie
+    // salta el descanso». Un «Saltar» sobre una notificación huérfana encolaba igual el comando, y
+    // `useRestTimerEngine` drena la cola AL MONTAR ⇒ el descanso SIGUIENTE se cerraba solo. La
+    // limpieza de la notificación sigue corriendo siempre; lo que se descarta es el comando.
     await handleRestNotificationEvent(pressEvent(REST_ACTION_SKIP))
-    expect(drainRestRemoteCommands().map((c) => c.type)).toEqual(['skip'])
+    expect(stopLiveTimer).toHaveBeenCalledWith(REST_LIVE_NOTIF_ID)
+    expect(cancelRestEndNotification).toHaveBeenCalled()
+    expect(dismissRestEndNotification).toHaveBeenCalled()
+    expect(drainRestRemoteCommands()).toEqual([])
+  })
+
+  it('un «Saltar» huérfano no puede cerrar el descanso que arranque después', async () => {
+    // Secuencia real del bug: press sobre la notificación vieja (sin snapshot) → arranca un descanso
+    // nuevo → el motor se suscribe y drena. Sin comando encolado no hay nada que cierre el nuevo.
+    await handleRestNotificationEvent(pressEvent(REST_ACTION_SKIP))
+    setRestLiveSnapshot(snapshotEndingAt(NOW + 90_000))
+    expect(drainRestRemoteCommands()).toEqual([])
+    expect(getRestLiveSnapshot()?.endEpochMs).toBe(NOW + 90_000)
   })
 })
 

@@ -727,4 +727,35 @@ Queda **una sola pregunta abierta, que no bloquea el SDD ni la ejecución**:
 
 ---
 
+## 20. Enmienda 2026-09-11 · «Descanso siempre» (reporte de un alumno de jotap, iPhone, pref ON)
+
+Reporte: «con *Pasar solo al descanso* a veces se salta el descanso y va al próximo ejercicio». Regla de
+producto del owner, que **manda sobre A7, CA-75 y CA-78**: terminar una serie lleva **siempre** al
+descanso; saltarlo lo decide **solo el alumno**. Investigación completa (9 hipótesis, RN + web + motor) en
+la memoria de la sesión; lo que cambia de contrato:
+
+- **A7 / CA-75 se retiran.** Sin `rest_time` (o con uno que parsea a 0) ya no hay celda «none»: el motor
+  resuelve **segundos efectivos** con `resolveEffectiveRest` (`packages/workout-engine/rest-fallback.ts`):
+  warmup válido en la serie 1 → `rest_time` válido → **fallback 60 s** (`DEFAULT_REST_FALLBACK_SEC`).
+  Causa raíz: el builder creaba movilidad, cardio y roller con `rest_time: ''` (solo fuerza nacía con
+  90 s) y el ejecutor hacía `cancelRest()` y avanzaba de paso. El builder (`defaultBlockForType`,
+  `createDefaultBlock`) pasa a escribir `'60s'` para esos tipos; los planes ya guardados con `''` caen en
+  el fallback en runtime. Un warmup vacío ya **no** deja la serie 1 sin descanso: cae al `rest_time`.
+- **CA-78 se acota.** El avance de paso a los 350 ms **espera** mientras haya un CTA de descanso vivo con
+  la pref OFF (`restOffer` de pantalla sola o `pendingRoundRest` de fin de ronda): antes desmontaba el par
+  «Descansar N s / Siguiente serie» antes de que el alumno lo tocara. Con la pref ON no cambia nada
+  (el overlay del descanso cubre la pantalla). **B7 (Q2) queda resuelto así.**
+- **CA-95 se completa de verdad:** Roller y Cardio en RN reciben `autoRestEnabled` y montan
+  `RestOfferV3` (con la pref OFF no tenían ningún camino al descanso).
+- **Web offline:** el guard `!navigator.onLine` de `LogSetForm` ya no se salta `buildRest()`.
+- **Notificación Android «Saltar» huérfana:** `handleSkip` solo encola `skip` con un descanso vivo y el
+  motor descarta comandos anteriores al arranque del descanso actual (antes un `skip` viejo cerraba el
+  siguiente descanso al montarse).
+- **`omni_autotimer` deja de decidir el default** (`resolveAutoRestDefault` paso 2 retirado): era
+  device-scoped y apagaba la preferencia a alumnos que nunca la eligieron.
+- **Sin cambio (decisión de producto, V4 / CA-77):** entre miembros de una ronda de superserie **no** hay
+  descanso; el descanso llega al cerrar la ronda. Si un alumno lo reporta como «se saltó», es esto.
+
+---
+
 *Fin del SPEC. El contrato ejecutable (migraciones, payloads byte a byte, tests y checklist de QA) vive en `DATA-TESTING.md`; el orden de ejecución y el presupuesto en `PLAN.md`.*

@@ -48,6 +48,7 @@ import {
     formatStrengthSetLine,
     formatStrengthTimeSetLine,
     holdSidesFor,
+    resolveEffectiveRest,
     sideRepsFromMetadata,
     type HoldSource,
     type OptimisticLogPayload,
@@ -782,14 +783,27 @@ function StrengthLogSetForm({
         if (supersetRest) {
             // Superserie: descanso completo del grupo SOLO al cerrar la ronda (semántica intacta);
             // si no la cierra, sigues con el otro ejercicio → corta el descanso en curso (auto-skip).
-            if (supersetRest.closesRound()) startRest(String(supersetRest.groupRestSeconds), { label: nextUpLabel })
-            else cancelRest()
+            // El intra-ronda NO cambia (V4 · decisión de producto): entre miembros no hay descanso.
+            if (supersetRest.closesRound()) {
+                // Reporte del alumno 2026-09-11: el grupo puede venir con `rest_time` vacío en todos
+                // sus miembros ⇒ `groupRestSeconds === 0` y la ronda cerraba SIN descanso. El motor
+                // resuelve el fallback (nunca 0); el origen ya viene corregido en `supersetInfo`, esto
+                // es el cinturón por si algún otro call site arma el prop a mano.
+                const { seconds } = resolveEffectiveRest({ restSec: supersetRest.groupRestSeconds })
+                startRest(`${seconds}s`, { label: nextUpLabel })
+            } else cancelRest()
         } else {
             // Descanso de aproximación (M2 · 6): la 1ª serie de un bloque de ≥3 series usa el warmup.
-            const useWarmup = !!warmupRestTimeStr && setNumber === 1 && (totalSets ?? 0) >= 3
-            const restStr = useWarmup ? (warmupRestTimeStr as string) : restTimeStr
-            if (parseRestTime(restStr) > 0) startRest(restStr, { label: nextUpLabel, warmup: useWarmup })
-            else cancelRest()
+            // Reporte del alumno 2026-09-11 («a veces salta el descanso y va al próximo ejercicio»):
+            // terminar una serie SIEMPRE lleva al descanso — saltarlo lo decide el alumno. El motor
+            // (`resolveEffectiveRest`) elige warmup → rest_time → fallback 60 s y NUNCA devuelve 0, así
+            // que acá ya no existe la rama «sin descanso» que llamaba `cancelRest()`.
+            const { seconds, warmup } = resolveEffectiveRest({
+                restSec: parseRestTime(restTimeStr),
+                warmupRestSec: parseRestTime(warmupRestTimeStr ?? null),
+                useWarmup: setNumber === 1 && (totalSets ?? 0) >= 3,
+            })
+            startRest(`${seconds}s`, { label: nextUpLabel, warmup })
         }
     }
 
@@ -1121,6 +1135,11 @@ function StrengthLogSetForm({
             setEditing(false)
             onResult?.(blockId, setNumber, 'pending')
             toast.info('Sin conexión — el log se guardará al reconectar')
+            // Reporte del alumno 2026-09-11: este `return` vivía ANTES del `buildRest()` de abajo ⇒ sin
+            // conexión la serie se registraba (cola offline) pero el descanso NUNCA arrancaba. El
+            // descanso es LOCAL (un cronómetro, cero red): se arma igual. Va sólo en la rama `backedUp`
+            // —acá la serie SÍ quedó registrada—; la rama de error de arriba no lo hace a propósito.
+            buildRest()
             return
         }
 
@@ -2391,6 +2410,42 @@ function TypedLogSetRow({
         metadata: collectMetadata(formData),
     })
 
+    /**
+     * Descanso de la fila TIPADA (movilidad/roller/cardio) — espejo exacto del `buildRest()` de la
+     * fila de fuerza. Antes vivía inline en el camino online del submit, así que el `return` del guard
+     * offline se lo comía (reporte del alumno 2026-09-11): sin conexión la serie entraba a la cola y
+     * el descanso no arrancaba nunca. Extraído a una función para llamarlo desde los DOS caminos.
+     *
+     * Diferencia declarada con fuerza: acá NO hay descanso de aproximación — `warmup_rest_time` es una
+     * prescripción de series de fuerza y esta fila nunca lo recibió; el motor igual garantiza ≥ 1 s.
+     */
+    const buildTypedRest = () => {
+        // Editar una serie ya cerrada no toca el descanso en curso (M2 · 4).
+        if (isLogged) return
+        if (!autoTimerEnabled) {
+            // Canal de supresión (W4.6 · CA-80), espejo exacto del `buildRest` de la fila de
+            // fuerza: con la pref OFF no se arranca ningún descanso — y **tampoco se corta el que
+            // ya corre**. Un submit por reloj (`hold_source === 'timer'`) con la pref apagada hace
+            // CERO llamadas a `startRest`; el `cancelRest()` que vivía acá mataba el descanso que
+            // el alumno acababa de pedir a mano con «Descansar N s».
+        } else if (supersetRest) {
+            // Superserie: descanso completo del grupo SOLO al cerrar la ronda (semántica intacta).
+            // El intra-ronda sigue cortando el descanso (V4: entre miembros no se descansa).
+            triggerHaptic(50)
+            if (supersetRest.closesRound()) {
+                const { seconds } = resolveEffectiveRest({ restSec: supersetRest.groupRestSeconds })
+                startRest(`${seconds}s`, { label: nextUpLabel })
+            } else cancelRest()
+        } else {
+            // Reporte del alumno 2026-09-11: movilidad, cardio y roller son justo los bloques que el
+            // builder crea con `rest_time = ''` ⇒ la rama `else cancelRest()` que vivía acá dejaba la
+            // serie SIN descanso. El motor cae al fallback de 60 s y nunca devuelve 0.
+            triggerHaptic(50)
+            const { seconds } = resolveEffectiveRest({ restSec: parseRestTime(restTimeStr) })
+            startRest(`${seconds}s`, { label: nextUpLabel })
+        }
+    }
+
     // Reconciliación del guardado (contrato a + e): éxito → sale de la cola; error → respaldo en cola
     // + el padre revierte su optimismo (onResult). Corre desde el `.then` del envío, montada o no la
     // fila (fix de la cola huérfana); sólo el estado de UI queda tras el ref de montaje.
@@ -2467,6 +2522,10 @@ function TypedLogSetRow({
             addOptimisticLogged(true)
             onResult?.(blockId, setNumber, 'pending')
             toast.info('Sin conexión — el registro se guardará al reconectar')
+            // Reporte del alumno 2026-09-11: el descanso es un cronómetro LOCAL (cero red) y este
+            // `return` lo saltaba. Sólo en la rama `backedUp` (la serie quedó registrada en la cola);
+            // la rama de error de arriba no arranca nada porque la serie no se registró.
+            buildTypedRest()
             return
         }
 
@@ -2474,26 +2533,9 @@ function TypedLogSetRow({
         // La petición sale ANTES del optimismo del padre (mismo motivo que en fuerza: su `flushSync`
         // puede desmontar esta fila antes de que el server responda).
         const sending = sendLogSet(formData, reconcile)
-        // Descanso + auto-skip (M2 · 4): editar una serie ya cerrada no toca el descanso en curso.
-        if (!isLogged) {
-            if (!autoTimerEnabled) {
-                // Canal de supresión (W4.6 · CA-80), espejo exacto del `buildRest` de la fila de
-                // fuerza: con la pref OFF no se arranca ningún descanso — y **tampoco se corta el que
-                // ya corre**. Un submit por reloj (`hold_source === 'timer'`) con la pref apagada hace
-                // CERO llamadas a `startRest`; el `cancelRest()` que vivía acá mataba el descanso que
-                // el alumno acababa de pedir a mano con «Descansar N s».
-            } else if (supersetRest) {
-                // Superserie: descanso completo del grupo SOLO al cerrar la ronda (semántica intacta).
-                triggerHaptic(50)
-                if (supersetRest.closesRound()) startRest(String(supersetRest.groupRestSeconds), { label: nextUpLabel })
-                else cancelRest()
-            } else if (restTimeStr) {
-                triggerHaptic(50)
-                startRest(restTimeStr, { label: nextUpLabel })
-            } else {
-                cancelRest()
-            }
-        }
+        // Descanso + auto-skip (M2 · 4): la regla completa vive en `buildTypedRest()` (un solo lugar
+        // para el camino online y el offline).
+        buildTypedRest()
         onLogged?.({
             blockId,
             setNumber,

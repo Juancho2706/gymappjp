@@ -37,7 +37,7 @@ export const AUTOREST_DEFAULT_STRATEGY: 'cohort' | 'off' = 'cohort'
 export type AutoRestDefaultSource =
     /** La clave nueva por alumno ya existía: manda su valor. */
     | 'stored'
-    /** Migración de lectura: no hay clave nueva pero sí `omni_autotimer` del dispositivo. */
+    /** @deprecated (11-09) ya no se produce: la migración de lectura de `omni_autotimer` se retiró. */
     | 'legacy'
     /** Sin clave y con historial ⇒ ON (cero regresión para la base viva). */
     | 'cohort-history'
@@ -49,7 +49,7 @@ export type AutoRestDefaultSource =
 export interface AutoRestDefaultInput {
     /** Valor crudo de `eva:exec-autorest-v1:<clientId>` (`'1'`/`'0'`), o `null` si no existe. */
     storedNew: string | null
-    /** Valor crudo de `omni_autotimer` (`String(boolean)` histórico), o `null` si no existe. */
+    /** Valor crudo de `omni_autotimer`. Se acepta por compatibilidad y **se ignora** desde el 11-09. */
     storedLegacy: string | null
     /** **F5**: SIEMPRE `!showModal`. Ninguna superficie lo calcula por su cuenta (§3.6.a). */
     hasHistory: boolean
@@ -64,7 +64,8 @@ export interface AutoRestDefaultInput {
  *
  * Prioridad:
  *  1. clave nueva presente      ⇒ su valor (`'1'` = ON, cualquier otra cosa = OFF)
- *  2. `omni_autotimer` presente ⇒ migración de LECTURA (`raw !== 'false'`, el default histórico es ON)
+ *  2. (retirado 11-09) `omni_autotimer` ya NO se lee para el default: es device-scoped y apagaba la
+ *     preferencia a alumnos que nunca la eligieron
  *  3. sin clave y CON historial ⇒ `true`
  *  4. sin clave y SIN historial ⇒ `false` (primer entreno)
  *
@@ -81,8 +82,10 @@ export function resolveAutoRestDefault(input: AutoRestDefaultInput): {
 } {
     // 1. La clave nueva por alumno manda siempre, incluso con `strategy: 'off'`.
     if (input.storedNew != null) return { enabled: input.storedNew === '1', source: 'stored' }
-    // 2. Migración de lectura desde el carril device-scoped. `String(boolean)` ⇒ sólo 'false' apaga.
-    if (input.storedLegacy != null) return { enabled: input.storedLegacy !== 'false', source: 'legacy' }
+    // 2. (RETIRADO 2026-09-11) La migración de lectura desde `omni_autotimer` se apagó: ese carril es
+    //    por DISPOSITIVO (no por alumno) y un teléfono donde alguna vez se apagó el «Cronómetro
+    //    automático» dejaba al alumno en OFF sin haberlo decidido — y con OFF caía en el bug «se
+    //    salta el descanso». `storedLegacy` sigue llegando por compatibilidad de firma y se ignora.
     // 3/4. Cohorte — o el colapso de R25.
     if (input.strategy === 'off') return { enabled: false, source: 'strategy-off' }
     return input.hasHistory

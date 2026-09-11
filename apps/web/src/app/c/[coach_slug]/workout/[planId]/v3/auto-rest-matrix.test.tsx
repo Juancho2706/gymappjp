@@ -11,7 +11,12 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { beforeEach, describe, expect, it } from 'vitest'
-import { resolveRestAfterCommit, type RestAfterCommitContext } from '@eva/workout-engine'
+import {
+    DEFAULT_REST_FALLBACK_SEC,
+    resolveEffectiveRest,
+    resolveRestAfterCommit,
+    type RestAfterCommitContext,
+} from '@eva/workout-engine'
 import { autoRestPrefKey, readAutoRestPref, writeAutoRestPref } from './auto-rest-pref'
 
 // v3 → [planId] → workout → [coach_slug] → c → app → src → web → apps → raíz del repo.
@@ -27,12 +32,26 @@ const LOG_SET_FORM_SRC = fs.readFileSync(
 
 const CLIENT = 'eeeeeeee-5555-4555-8555-eeeeeeeeeeee'
 
-/** La tabla literal de §6.3 W5.T5(a) — la MISMA que usa `tests/mobile/exec-autorest-matrix.test.ts`. */
+/**
+ * La tabla literal de §6.3 W5.T5(a) — la MISMA que usa `tests/mobile/exec-autorest-matrix.test.ts`.
+ *
+ * **Cambio del 11-09** (reporte de un alumno: «a veces salta el descanso y va al próximo ejercicio»):
+ * la última fila ya NO es «sin rest_time ⇒ none». El ejecutor resuelve los segundos EFECTIVOS con
+ * `resolveEffectiveRest` ANTES de consultar esta matriz, así que un bloque sin descanso configurado
+ * llega como el fallback de 60 s y se comporta como cualquier otro. La rama A7 del motor sigue viva
+ * (ver el test de abajo), pero ninguna superficie del ejecutor la alcanza.
+ */
 const MATRIX: Array<{ label: string; context: RestAfterCommitContext; restSec: number; off: string; on: string }> = [
     { label: 'pantalla sola', context: 'solo', restSec: 90, off: 'offer-cta', on: 'auto-start' },
     { label: 'superserie · NO último', context: 'superset-mid', restSec: 90, off: 'none', on: 'none' },
     { label: 'superserie · ÚLTIMO', context: 'superset-last', restSec: 120, off: 'offer-cta', on: 'auto-start' },
-    { label: 'sin rest_time', context: 'solo', restSec: 0, off: 'none', on: 'none' },
+    {
+        label: 'sin rest_time ⇒ fallback de 60 s',
+        context: 'solo',
+        restSec: resolveEffectiveRest({ restSec: 0 }).seconds,
+        off: 'offer-cta',
+        on: 'auto-start',
+    },
 ]
 
 beforeEach(() => {
@@ -48,6 +67,22 @@ describe('W5.T5(a) · matriz 2×4 en web, con paridad por celda', () => {
             expect(on).toBe(row.on)
         })
     }
+
+    it('sin `rest_time` el ejecutor descansa 60 s en vez de nada (reporte 2026-09-11)', () => {
+        const efectivo = resolveEffectiveRest({ restSec: 0 })
+        expect(efectivo.seconds).toBe(DEFAULT_REST_FALLBACK_SEC)
+        expect(efectivo.source).toBe('fallback')
+        // La rama A7 del motor sigue existiendo: es la matriz la que ya nunca recibe un 0.
+        expect(resolveRestAfterCommit({ autoRestEnabled: true, context: 'solo', restSec: 0 })).toBe('none')
+    })
+
+    it('las DOS superficies web resuelven el descanso efectivo antes de arrancarlo (11-09)', () => {
+        // Origen único del descanso de grupo: `supersetInfo` en el orquestador.
+        expect(ORCHESTRATOR_SRC).toContain('const groupRestSeconds = resolveEffectiveRest({')
+        // Fila de fuerza y fila tipada: ninguna vuelve a decidir «sin descanso» por su cuenta.
+        expect(LOG_SET_FORM_SRC).toContain('resolveEffectiveRest({')
+        expect(LOG_SET_FORM_SRC).not.toContain('if (parseRestTime(restStr) > 0) startRest(')
+    })
 
     it('el ORQUESTADOR web usa el modelo para armar el descanso de ronda (R28/D2)', () => {
         expect(ORCHESTRATOR_SRC).toContain('resolveRestAfterCommit({')
@@ -124,5 +159,32 @@ describe('W5.T5(c) · CA-80 — con la pref OFF, cerrar una serie NO llama `canc
         expect(
             resolveRestAfterCommit({ autoRestEnabled: false, context: 'solo', restSec: 90, holdSource: 'timer' }),
         ).toBe('offer-cta')
+    })
+})
+
+/**
+ * Reporte 2026-09-11 (tercera causa, pref OFF): el auto-avance del stepper corría a los 350 ms y
+ * desmontaba el paso — con él, el `restOffer` local y el `pendingRoundRest` del orquestador (su efecto
+ * de `currentStepIndex` los limpia). El alumno veía «Descansar N s» un instante y aparecía en el
+ * próximo ejercicio. Ahora el avance queda DIFERIDO hasta que el CTA se resuelve.
+ */
+describe('Reporte 2026-09-11 (c) · el auto-avance no se come el CTA de descanso', () => {
+    it('el avance pasa por `scheduleAdvance`, nunca por el `setTimeout` suelto', () => {
+        expect(ORCHESTRATOR_SRC).toContain('const scheduleAdvance = (fromLogs:')
+        // Los dos call sites de `handleLogged` (grupo completo y bloque completo) ya no avanzan solos.
+        expect(ORCHESTRATOR_SRC).not.toContain('setTimeout(() => scrollToNextIncomplete(nextLogs), 350)')
+        expect(ORCHESTRATOR_SRC.match(/scheduleAdvance\(nextLogs\)/g) ?? []).toHaveLength(2)
+        // Pref ON o modo LISTA ⇒ comportamiento histórico (350 ms); el resto se difiere.
+        expect(ORCHESTRATOR_SRC).toContain('if (autoTimerEnabled || !stepperEnabled) {')
+        expect(ORCHESTRATOR_SRC).toContain('deferredAdvanceRef.current = () => scrollToNextIncomplete(fromLogs)')
+    })
+
+    it('el avance diferido espera a los DOS carriles de CTA (paso y ronda)', () => {
+        expect(ORCHESTRATOR_SRC).toContain('if (restOfferOpen || pendingRoundRest) return')
+        expect(ORCHESTRATOR_SRC).toContain('}, [restOfferOpen, pendingRoundRest])')
+        // Los pasos con `restOffer` propio avisan al orquestador.
+        expect(ORCHESTRATOR_SRC).toContain('onRestOfferChange={handleRestOfferChange}')
+        // Y el CTA de ronda tiene su salida («Siguiente ronda»), que también destraba el avance.
+        expect(ORCHESTRATOR_SRC).toContain('onDismissPendingRoundRest={dismissPendingRoundRest}')
     })
 })

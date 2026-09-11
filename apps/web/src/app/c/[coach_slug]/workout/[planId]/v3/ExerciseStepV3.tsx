@@ -5,7 +5,15 @@ import type { Dispatch, SetStateAction } from 'react'
 import { Keyboard, Pencil } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { LogSetForm, type HoldPrefill, type SetSyncResult } from '../LogSetForm'
-import { SIDE_LABEL, compactDuration, isStrengthTimeBlock, sessionLogKey, type OptimisticLogPayload, type RepeatSeedEntry } from '@eva/workout-engine'
+import {
+    SIDE_LABEL,
+    compactDuration,
+    isStrengthTimeBlock,
+    resolveEffectiveRest,
+    sessionLogKey,
+    type OptimisticLogPayload,
+    type RepeatSeedEntry,
+} from '@eva/workout-engine'
 import type { ExerciseType as WorkoutKind } from '@/domain/workout/types'
 import {
     type BlockType,
@@ -78,6 +86,11 @@ interface ExerciseStepV3Props {
     handleLogged: (payload: OptimisticLogPayload) => void
     /** Reconciliación del optimismo (resultado REAL del server). */
     handleResult: (blockId: string, setNumber: number, result: SetSyncResult) => void
+    /**
+     * Avisa al orquestador si el par «Descansar N s» / «Siguiente serie» está en pantalla (reporte del
+     * alumno 2026-09-11). Sin esto el auto-avance desmonta el CTA antes de que el alumno lo toque.
+     */
+    onRestOfferChange?: (open: boolean) => void
 }
 
 /**
@@ -115,6 +128,7 @@ export function ExerciseStepV3({
     onSkip,
     handleLogged,
     handleResult,
+    onRestOfferChange,
 }: ExerciseStepV3Props) {
     // Pie: el lápiz revela las series anteriores (chips) para corregirlas; el teclado enfoca el valor activo.
     const [showPrev, setShowPrev] = useState(false)
@@ -131,21 +145,42 @@ export function ExerciseStepV3({
     // por `holdPrefill.submit`. Descansar o seguir lo toca el alumno (R24) salvo preferencia encendida.
     const strengthTime = isStrengthTimeBlock(block, exercise)
     const holdSeconds = strengthTime ? (block.duration_sec ?? 0) : 0
-    const restSeconds = parseRestTime(block.rest_time)
     const { startRest } = useWorkoutTimer()
     const [holdPrefill, setHoldPrefill] = useState<HoldPrefill | null>(null)
-    const [restOffer, setRestOffer] = useState<{ setNumber: number; seconds: number } | null>(null)
+    const [restOffer, setRestOffer] = useState<{ setNumber: number; seconds: number; warmup: boolean } | null>(null)
     useEffect(() => {
         setHoldPrefill(null)
     }, [firstUnlogged])
+    /**
+     * El paso se desmonta al avanzar (o al volver atrás) con su `restOffer` adentro: el orquestador
+     * tiene que enterarse o su avance diferido se quedaría esperando un CTA que ya no existe.
+     */
+    useEffect(() => () => onRestOfferChange?.(false), [onRestOfferChange])
     const onLogged = (payload: OptimisticLogPayload) => {
         handleLogged(payload)
-        if (!autoTimerEnabled) setRestOffer({ setNumber: payload.setNumber, seconds: restSeconds })
+        if (!autoTimerEnabled) {
+            // Reporte del alumno 2026-09-11: los segundos del CTA salían de `parseRestTime(rest_time)`
+            // crudo ⇒ un bloque sin descanso configurado pintaba «Descansar 0 s» (o directamente sólo
+            // «Siguiente serie») y la serie quedaba sin descanso. Se resuelven POR SERIE con la misma
+            // regla que el camino automático de `LogSetForm`: aproximación → bloque → fallback 60 s.
+            const { seconds, warmup } = resolveEffectiveRest({
+                restSec: parseRestTime(block.rest_time),
+                warmupRestSec: parseRestTime(block.warmup_rest_time),
+                useWarmup: payload.setNumber === 1 && block.sets >= 3,
+            })
+            setRestOffer({ setNumber: payload.setNumber, seconds, warmup })
+            onRestOfferChange?.(true)
+        }
+    }
+    /** «Siguiente serie»: se salta el descanso y destraba el avance diferido del orquestador. */
+    const closeRestOffer = () => {
+        setRestOffer(null)
+        onRestOfferChange?.(false)
     }
     const startOfferedRest = () => {
         if (!restOffer) return
-        startRest(String(restOffer.seconds), { label: exercise.name })
-        setRestOffer(null)
+        startRest(`${restOffer.seconds}s`, { label: exercise.name, warmup: restOffer.warmup })
+        closeRestOffer()
     }
 
     // Deshacer (reopenSignal): la serie a corregir vive tras el lápiz — al reabrirla, mostramos el panel.
@@ -321,7 +356,7 @@ export function ExerciseStepV3({
                 o por reloj) el alumno elige «Descansar N s» o «Siguiente serie». Con la preferencia ON el
                 `LogSetForm` ya arrancó el descanso y este par no se pinta. */}
             {restOffer && !autoTimerEnabled && (
-                <RestOfferV3 seconds={restOffer.seconds} onRest={startOfferedRest} onNext={() => setRestOffer(null)} testIdPrefix="rest-offer-strength" />
+                <RestOfferV3 seconds={restOffer.seconds} onRest={startOfferedRest} onNext={closeRestOffer} testIdPrefix="rest-offer-strength" />
             )}
 
             {/* Pie: cuadraditos de serie (izq) + herramientas teclado/lápiz (der) — mockup a3a-foot */}

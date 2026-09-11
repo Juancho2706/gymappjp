@@ -1258,6 +1258,15 @@ cualquier diferencia visible frena el cierre.
 
 ---
 
+## F2 · Post-QA 11-09 (reporte de un alumno de jotap): «descanso siempre» — 1 día-agente · Fable (motor) + 2 Opus (RN, web)
+
+Contrato en SPEC §20. Regla: terminar una serie lleva SIEMPRE al descanso; saltarlo lo decide el alumno.
+
+- [x] F2.1 **(Fable)** Motor: `rest-fallback.ts` (`resolveEffectiveRest`, `DEFAULT_REST_FALLBACK_SEC = 60`, warmup 0 cae al `rest_time`) + test; builder `defaultBlockForType`/`createDefaultBlock` escriben `'60s'` en movilidad/cardio/roller; `resolveAutoRestDefault` deja de leer `omni_autotimer` (tests actualizados). Motor+builder 5 archivos / 101 tests verdes.
+- [x] F2.2 **(Opus RN, juzgado por el jefe 11-09; el jefe agregó la salida «Siguiente ejercicio» del CTA de ronda — paridad web)** `ExecutorV3.maybeStartRest` (solo y ronda) + CTA de `ExerciseScreenV3`/`MobilityScreenV3` con `resolveEffectiveRest`; auto-avance de paso espera `restOfferOpen || pendingRoundRest`; `retryCommit` no borra el CTA de ronda; `RollerScreenV3`/`CardioScreenV3` con `autoRestEnabled` + `RestOfferV3`; `rest-remote-commands.handleSkip` solo encola con descanso vivo + `useRestTimerEngine` descarta comandos previos al arranque.
+- [x] F2.3 **(Opus web, juzgado por el jefe 11-09; extra: `SupersetStepV3` gana «Siguiente ejercicio» con el grupo completo; `buildTypedRest()` extraído)** `LogSetForm.buildRest` (solo y ronda) + `restOffer` de `ExerciseStepV3`/`MobilityStepV3` + `pendingRoundRest` con `resolveEffectiveRest`; guard offline llama `buildRest()`; avance diferido hasta resolver el CTA con la pref OFF.
+- [ ] F2.4 **(Fable)** Gates 11-09 sobre el árbol final: `pnpm test` **794 archivos / 10 907 tests** verdes (2 skip), mobile-node 86/1190, tsc mobile 0, typecheck 0, lint 0 err/572 warn preexistentes, lint:mobile 0, tokens OK, docs:check OK, `expo export --platform android` Exported. Commit local `F2` hecho. Queda: docs (CURRENT/MOBILE_PARITY), OK del owner para push → deploy → OTA 1.1.2 android+ios, QA del owner: (a) movilidad/cardio sin descanso configurado ⇒ descansa 60 s con pref ON; (b) pref OFF, última serie ⇒ el par «Descansar N s / Siguiente serie» se queda hasta que se toca; (c) superserie fin de ronda con pref OFF ⇒ «Ronda lista» se queda; (d) PWA sin conexión ⇒ el descanso arranca igual.
+
 ## Backlog heredado (para próximas sesiones; ninguno bloquea)
 
 | # | Deuda | Dónde | Costo estimado |
@@ -1268,7 +1277,7 @@ cualquier diferencia visible frena el cierre.
 | B4 | **Live Activity / lockscreen del hold**: `LiveActivityKind` es `'rest' \| 'cardio'` y el archivo declara que exige **build EAS nuevo** (`timers/live-activity.ts:31,34`) ⇒ imposible por OTA | `timers/live-activity*` | build nativa |
 | B5 | **Sincronización servidor de la preferencia D5**: hoy es storage local ⇒ no viaja web ↔ RN y el modal sale una vez por superficie. Requiere 1 política RLS aditiva (`client_feature_prefs` **no** admite escritura del alumno, `20260618200000_feature_prefs.sql:102-115`) | `supabase/migrations` + `auto-rest-pref.ts` ×2 | 0,5 día |
 | B6 | **PR / e1RM en modo tiempo** (A4): hoy `detectPR` descarta por `reps_done > 0` ⇒ nunca celebra. «Récord de tiempo bajo carga» es feature nueva | `pr-detect.ts` | 1 día |
-| B7 | **Frenar el salto de paso** tras un guardado por reloj (R5, pregunta Q2 al owner) | `ExecutorV3.tsx:1798-1811`, `WorkoutExecutionClient.tsx:1967-1973` | 0,25 día |
+| ~~B7~~ | **CERRADO 11-09 (F2.2):** el avance de paso espera al CTA de descanso vivo con la pref OFF (SPEC §20) | `ExecutorV3.tsx:1798-1811`, `WorkoutExecutionClient.tsx:1967-1973` | 0,25 día |
 | B8 | `TemplatePickerDialog.tsx:102-148` **no copia `warmup_rest_time`** (deuda preexistente; se agrava si el modo tiempo se usa en calentamientos) | builder web | 15 min |
 | B9 | `mergeBlocksForSync` empareja por `order_index`: convertir un bloque a segundos en el plan del alumno sin `is_override` puede **revertirse** al sincronizar la plantilla (deuda preexistente) | `workout.service.ts:1359-1371` | 0,5 día |
 | B10 | Índice sobre `metadata` para consultar `hold_source` a escala (hoy la consulta de adopción va acotada por fecha) | `supabase/migrations` | 30 min |

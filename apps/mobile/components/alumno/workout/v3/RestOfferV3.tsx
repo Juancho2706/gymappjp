@@ -24,6 +24,7 @@ export function RestOfferV3({
   reducedMotion = false,
   onRest,
   onNext,
+  nextLabel: nextLabelOverride,
   testIDPrefix = 'rest-offer',
 }: {
   /** Segundos reales del bloque (`parseRestTime(rest_time)`); ≤ 0 ⇒ sólo «Siguiente serie». */
@@ -32,13 +33,19 @@ export function RestOfferV3({
   exec: ExecTheme
   reducedMotion?: boolean
   onRest: () => void
-  /** Ausente en `ronda`: el CTA de la ronda no tiene «siguiente» (la siguiente ronda ya está activa). */
+  /**
+   * Salida sin descansar. Desde el 11-09 también en `ronda` (reporte de un alumno): el auto-avance de
+   * paso espera a que este par se resuelva, así que la última ronda de una superserie necesita su
+   * «Siguiente ejercicio» — saltarse el descanso lo decide el alumno, nunca la app.
+   */
   onNext?: () => void
+  /** Rótulo del secundario; por defecto «Siguiente ronda» / «Siguiente serie» según `kind`. */
+  nextLabel?: string
   testIDPrefix?: string
 }) {
   const s = exec.surface
   const restLabel = kind === 'ronda' ? `Ronda lista · Descansar ${seconds} s` : `Descansar ${seconds} s`
-  const nextLabel = kind === 'ronda' ? 'Siguiente ronda' : 'Siguiente serie'
+  const nextLabel = nextLabelOverride ?? (kind === 'ronda' ? 'Siguiente ronda' : 'Siguiente serie')
   return (
     <View testID={`${testIDPrefix}-panel`} style={{ width: '100%', gap: 8 }}>
       {seconds > 0 ? (

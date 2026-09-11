@@ -66,49 +66,16 @@ describe('resolveAutoRestDefault — las 4 cohortes de R1 (§3.6)', () => {
         })
     })
 
-    it('(2) sin clave nueva pero con `omni_autotimer` ⇒ migración de LECTURA', () => {
+    it('(2, retirado 11-09) `omni_autotimer` ya NO decide: cae a la cohorte aunque exista', () => {
+        // Un OFF device-scoped viejo no apaga la preferencia de un alumno con historial…
         expect(resolveAutoRestDefault(defaultInput({ storedLegacy: 'false', hasHistory: true }))).toEqual({
-            enabled: false,
-            source: 'legacy',
-        })
-        // `String(boolean)` histórico: sólo 'false' explícito apaga (el default de ese carril era ON).
-        expect(resolveAutoRestDefault(defaultInput({ storedLegacy: 'true', hasHistory: false }))).toEqual({
-            enabled: true,
-            source: 'legacy',
-        })
-    })
-
-    it('(3) sin ninguna clave y CON historial ⇒ ON (cero regresión para la base viva)', () => {
-        expect(resolveAutoRestDefault(defaultInput({ hasHistory: true }))).toEqual({
             enabled: true,
             source: 'cohort-history',
         })
-    })
-
-    it('(4) sin ninguna clave y SIN historial ⇒ OFF (primer entreno, D5 literal)', () => {
-        expect(resolveAutoRestDefault(defaultInput({ hasHistory: false }))).toEqual({
+        // …ni un ON viejo enciende a uno sin historial (primer entreno sigue siendo OFF + modal).
+        expect(resolveAutoRestDefault(defaultInput({ storedLegacy: 'true', hasHistory: false }))).toEqual({
             enabled: false,
             source: 'cohort-first',
-        })
-    })
-
-    it('storage inaccesible ⇒ fail-safe: manda la cohorte y no hay valores guardados que leer (T8)', () => {
-        expect(resolveAutoRestDefault(defaultInput({ storageAvailable: false, hasHistory: true }))).toEqual({
-            enabled: true,
-            source: 'cohort-history',
-        })
-    })
-})
-
-describe('resolveAutoRestDefault — variante `strategy: "off"` (R25, FILA del test, no rama muerta)', () => {
-    it('colapsa las cohortes 3 y 4 en OFF con `source: "strategy-off"`', () => {
-        expect(resolveAutoRestDefault(defaultInput({ strategy: 'off', hasHistory: true }))).toEqual({
-            enabled: false,
-            source: 'strategy-off',
-        })
-        expect(resolveAutoRestDefault(defaultInput({ strategy: 'off', hasHistory: false }))).toEqual({
-            enabled: false,
-            source: 'strategy-off',
         })
     })
 
@@ -117,9 +84,10 @@ describe('resolveAutoRestDefault — variante `strategy: "off"` (R25, FILA del t
             enabled: true,
             source: 'stored',
         })
+        // El carril legacy ya no cuenta como «elección del alumno»: con `strategy: 'off'` colapsa a OFF.
         expect(resolveAutoRestDefault(defaultInput({ strategy: 'off', storedLegacy: 'true' }))).toEqual({
-            enabled: true,
-            source: 'legacy',
+            enabled: false,
+            source: 'strategy-off',
         })
     })
 })

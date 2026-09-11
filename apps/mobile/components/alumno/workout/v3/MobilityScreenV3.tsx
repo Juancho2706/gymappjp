@@ -3,6 +3,7 @@ import { Text, View } from 'react-native'
 import { Move } from 'lucide-react-native'
 import {
   formatTypedObjective,
+  resolveEffectiveRest,
   type OptimisticLogPayload,
   type ReconciledSessionLog,
 } from '@eva/workout-engine'
@@ -44,6 +45,7 @@ export function MobilityScreenV3({
   reducedMotion = false,
   exec,
   autoRestEnabled = true,
+  onRestOfferChange,
   substitution = null,
   canSubstitute = false,
   onOpenSubstitute,
@@ -75,6 +77,11 @@ export function MobilityScreenV3({
    * esta pantalla no pinta nada; OFF ⇒ tras guardar se ofrece «Descansar N s» / «Siguiente serie».
    */
   autoRestEnabled?: boolean
+  /**
+   * Avisa al orquestador que hay (o dejó de haber) un par «Descansar N s» / «Siguiente serie» vivo
+   * (reporte 11-09): mientras esté abierto el auto-avance de paso NO puede desmontarlo.
+   */
+  onRestOfferChange?: (open: boolean) => void
   /** Sustitución de HOY (mockup 3: ya no es exclusiva de fuerza). */
   substitution?: { name: string; prescribedName: string } | null
   canSubstitute?: boolean
@@ -98,7 +105,6 @@ export function MobilityScreenV3({
   const sideMode = block.side_mode ?? null
   const perSide = sideMode === 'per_side'
   const holdSec = block.duration_sec ?? 0
-  const restSec = parseRestTime(block.rest_time)
   const timers = useWorkoutTimers()
   const [noteOpen, setNoteOpen] = useState(false)
   const coachNote = block.notes?.trim() ? block.notes.trim() : null
@@ -121,7 +127,7 @@ export function MobilityScreenV3({
   // `restOffer`: tras guardar con la preferencia OFF, el par «Descansar N s» / «Siguiente serie».
   const [seedPatch, setSeedPatch] = useState<{ values: Record<string, string>; nonce: number } | null>(null)
   const [holdStatus, setHoldStatus] = useState<HoldModuleStatus>('idle')
-  const [restOffer, setRestOffer] = useState<{ setNumber: number; seconds: number } | null>(null)
+  const [restOffer, setRestOffer] = useState<{ setNumber: number; seconds: number; warmup: boolean } | null>(null)
   const captureRef = useRef<Record<string, string>>({})
   useEffect(() => {
     captureRef.current = {}
@@ -132,7 +138,17 @@ export function MobilityScreenV3({
   // preferencia ON arranca el descanso); con la preferencia OFF esta pantalla ofrece el par R24.
   const commitSet = (payload: OptimisticLogPayload) => {
     onCommitSet(payload)
-    if (!autoRestEnabled) setRestOffer({ setNumber: payload.setNumber, seconds: restSec })
+    // Segundos EFECTIVOS por SERIE (reporte 11-09), MISMA regla que el orquestador: warmup válido en
+    // la serie 1 de un bloque de ≥3 → `rest_time` → fallback de 60 s. El builder crea movilidad con
+    // `rest_time` vacío, así que la constante por bloque anterior dejaba el CTA sin botón de descansar.
+    if (!autoRestEnabled) {
+      const eff = resolveEffectiveRest({
+        restSec: parseRestTime(block.rest_time),
+        warmupRestSec: parseRestTime(block.warmup_rest_time),
+        useWarmup: payload.setNumber === 1 && block.sets >= 3,
+      })
+      setRestOffer({ setNumber: payload.setNumber, seconds: eff.seconds, warmup: eff.warmup })
+    }
   }
   const startOfferedRest = () => {
     if (!restOffer) return
@@ -140,12 +156,20 @@ export function MobilityScreenV3({
     timers.startRest(restOffer.seconds, {
       autoStart: true,
       label: exercise.name,
+      warmup: restOffer.warmup,
       setIndex: restOffer.setNumber,
       setTotal: block.sets,
       countKind: 'serie',
     })
     setRestOffer(null)
   }
+  // El orquestador congela el auto-avance de paso mientras el par siga vivo (reporte 11-09); en el
+  // desmontaje se publica `false` para no dejar el paso trabado si el alumno se va por el rail.
+  const restOfferOpen = restOffer != null && !autoRestEnabled
+  useEffect(() => {
+    onRestOfferChange?.(restOfferOpen)
+    return () => onRestOfferChange?.(false)
+  }, [restOfferOpen, onRestOfferChange])
 
   const objectiveLine = formatTypedObjective(block, 'mobility')
 

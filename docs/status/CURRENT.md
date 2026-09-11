@@ -29,6 +29,7 @@ prevalecen sobre este resumen. La prosa retirada el 2026-09-02 está en
 
 ## Prioridades vigentes
 
+0. **F2 «Descanso siempre» (reporte de un alumno, 11-09) — EN CÓDIGO LOCAL, sin push** ([SPEC §20](../specs/cuenta-atras-en-pantalla/SPEC.md) · [TASKS F2](../specs/cuenta-atras-en-pantalla/TASKS.md)): sin `rest_time` ya no se salta el descanso (fallback 60 s, builder escribe `'60s'`), el auto-avance espera al CTA con la pref OFF, roller/cardio RN con CTA, web offline descansa, `skip` huérfano Android descartado. Sin migraciones. **Queda: OK del owner ⇒ push → deploy → OTA → QA (F2.4).**
 1. **Tren «Arreglos chicos pre-OTA» + F1 (tile REPS en fuerza por tiempo) — EN PRODUCCIÓN 11-09 02:58Z (deploy `dpl_6FXkTMyJ…` READY 02:52Z, OTA 1.1.2 android `d4701f84` / ios `369ec7af`), QA del owner pendiente** ([SDD](../specs/arreglos-chicos-pre-ota/SPEC.md) · [tareas](../specs/arreglos-chicos-pre-ota/TASKS.md)): `master` = `rnmobiledenuevo` = `091a19b0` (F1 `fe6e9b39` → docs → W1-A `ed9c9085` · W1-C `7d2eb3f1` · W1-B `09e5d9fa` → docs `091a19b0`); E2E `prod-suave` 9/9 (run 34556450253, 42,7 s). De 19 ítems del inventario, 7 ya estaban cerrados en código y el 8 era obsoleto (la banda `AuraHero` reemplazó al anillo); entran 9: miles es-CL en el share RN y el ejecutor web, agenda offline honesta, adherencia «—» en la ficha del coach, hold que sobrevive a que el SO mate la app, 4 tiles «por lado» en 2×2, logout sin red, una sola query de uso por ejercicio, Porciones honesto con módulo apagado y marca en los dos homes (logo al eyebrow del alumno, 40 px en el header del coach). Gates completos en [TEST_STATUS](../testing/TEST_STATUS.md). **Queda: QA del owner en device (3 puntos con reps de F1 + 11 del tren, TASKS W3.10) ⇒ SDD `done` (este tren y W6.4 de cuenta atrás).** «Cuenta atrás en pantalla» ([SDD](../specs/cuenta-atras-en-pantalla/SPEC.md) · [datos y QA](../specs/cuenta-atras-en-pantalla/DATA-TESTING.md)): en producción desde 11-09 00:13Z (`6321a732`, OTA android `5f4dfb0f` / ios `0c5e8cb6`), QA del owner VERDE 11-09 salvo los 3 puntos con reps, que se re-verifican con esta OTA ⇒ luego `done`; siguen aviso a Gerardo (owner), seed E2E contra LIVE para W6.10 y Sentry `hold-autolog` + adopción ~14-09.
 2. **Cerrados 10-09 con QA del owner VERDE ⇒ SDD `done`** (prosa en el [historial](../archive/current-historial-2026-09.md)): «Señales honestas para el coach» ([tareas](../specs/senales-honestas-coach/TASKS.md); `27132cb9`, `dpl_EjxDinR2…`, OTA android `a95c9e11` / ios `bd329833`; aviso a Movens enviado) · «Porciones a la chilena» ([SDD](../specs/nutrition-porciones-chilenas/SPEC.md); `95a1d39a`, RPC `20260910015432`, OTA android `9e844b15` / ios `8de637b3`, set chileno encendido; queda W6.11: avisos a coaches y respuesta a Pame, textos listos).
 3. **Cerrados con QA del owner VERDE (02/04/05-09); prosa completa en el [historial](../archive/current-historial-2026-09.md):**
@@ -44,13 +45,8 @@ prevalecen sobre este resumen. La prosa retirada el 2026-09-02 está en
    18:42Z con tráfico alto (12.230 spans en la ruta) ⇒ O6.8 cumplida**, **resuelto en Sentry con nota
    el 05-09** (C3 cerrada con la misma evidencia); O7.4 desestimado salvo regresión (decisión del jefe
    05-09). [tareas § O7](../specs/cierre-sentry-vivos/TASKS.md)
-7. **Errores al día (ola O6) — EN PRODUCCIÓN 01-09** (`master` `231d2937`, OTA 1.1.2 android
-   `d2f948a0` / ios `d40564a9`; QA device del owner verde): O6.8 cumplida el 05-09 (ver 5b);
-   `EVA-MOBILE-9` **resuelto con nota el 05-09** (O6.9), pero el mismo síntoma vive en `EVA-MOBILE-F`
-   (iOS 02-09, Android 04-09, viaMorph fresh 4,7 s), que sigue **abierto**; Skia exige build nativo y P5
-   `noUncheckedIndexedAccess` (431 errores) como tanda propia. **O7.6 cerrado 05-09**: (a) y (b) ya
-   estaban en código desde `136e0411` (02-09) y el residuo `ProfileOverviewB3.fmtHabitDate` salió
-   EN PRODUCCIÓN 05-09 22:56Z. [tareas § O6/O7](../specs/cierre-sentry-vivos/TASKS.md)
+7. **Errores al día (ola O6) — EN PRODUCCIÓN 01-09**, O6.8/O6.9/O7.6 cerrados 05-09; `EVA-MOBILE-F` (despegue sin escena) sigue abierto;
+   Skia exige build nativo y P5 `noUncheckedIndexedAccess` (431 errores) como tanda propia. [tareas § O6/O7](../specs/cierre-sentry-vivos/TASKS.md)
 8. **PLAN «Cobros coach → alumno» — BLOQUEADO, nada implementado** ([spec](../specs/cobros-coach-alumno/SPEC.md)
    `draft`, versionada en `edf6a07c`; artifact `046f3bb1`): esperan 8 decisiones del owner (§18.1) y
    3 verificaciones externas (§18.2: contador SII, abogado retracto, smoke MP con plata real).
