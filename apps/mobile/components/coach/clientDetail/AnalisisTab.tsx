@@ -625,7 +625,14 @@ function ExerciseSession({ name, muscle, kind, sets, last }: { name: string; mus
           // Fuerza POR TIEMPO (D3, W2.11): «10 kg × 30 s» lo arma el motor dentro de la rama de fuerza;
           // sin hold cae a la línea peso × reps de siempre (paridad web TrainingTabB4Panels).
           const holdLine = set.actualHoldSec != null
-            ? formatStrengthTimeSetLine({ weight_kg: set.weightKg, actual_hold_sec: set.actualHoldSec, metadata: set.metadata })
+            ? formatStrengthTimeSetLine({
+                weight_kg: set.weightKg,
+                // F1: la serie por tiempo puede traer reps ⇒ «45 kg × 5 · 30 s» (el motor las omite
+                // cuando son null o 0: la ficha NUNCA muestra «× 0»).
+                reps_done: set.repsDone,
+                actual_hold_sec: set.actualHoldSec,
+                metadata: set.metadata,
+              })
             : null
           if (holdLine != null) {
             return (

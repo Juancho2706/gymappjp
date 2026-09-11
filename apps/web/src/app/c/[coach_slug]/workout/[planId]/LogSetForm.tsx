@@ -283,9 +283,11 @@ interface Props {
      * el predicado ÚNICO del motor `isStrengthTimeBlock(block, exercise)` — nadie compara `reps_unit`
      * a mano (R3). Sin la prop (o en `false`) la fila de fuerza es **byte-idéntica** a la de siempre.
      *
-     * Con `true` la fila captura SEGUNDOS en vez de reps: el tile REPS pasa a `actual_hold_sec`
-     * (`hold_left_sec`/`hold_right_sec` en `per_side`), `reps_done` **nunca** viaja (R2: `NULL`,
-     * jamás `0`) y la serie no entra al camino de PR (A4).
+     * Con `true` la fila SUMA un tile de SEGUNDOS (`actual_hold_sec`; `hold_left_sec`/`hold_right_sec`
+     * en `per_side`) al lado del de reps: KG · REPS · SEG. Las REPS siguen ahí y son OPCIONALES (F1,
+     * pedido del owner 11-09: «nunca deberíamos quitar reps de los ejercicios de fuerza») — vacías
+     * ⇒ `reps_done` viaja `NULL`, jamás `0` (R2); con un entero > 0 se guardan y la serie vuelve a
+     * contar para récords/tonelaje, igual que cualquier serie de fuerza.
      */
     strengthTimeMode?: boolean
 }
@@ -805,20 +807,24 @@ function StrengthLogSetForm({
         // inputs de segundos quedan `readOnly` sin teclado que los llene: el camino MANUAL de R8
         // (tipear los segundos sin usar el reloj) sería imposible en móvil.
         if (strengthTimeMode) {
+            // F1: el paso REPS vuelve al medio (KG → REPS → SEG, o KG → REPS → IZQ → DER). Es
+            // salteable: el alumno pasa de largo y la serie se guarda igual con solo el hold.
             keypad.openKeypad({
                 fields: perSideHold
                     ? [
                           { key: 'weight', label: 'Kg', unit: 'kg', allowDecimal: true, weightChips: true, maxIntDigits: 3 },
+                          { key: 'reps', label: 'Reps', unit: 'reps', allowDecimal: false, maxIntDigits: 3 },
                           { key: 'hold_left_sec', label: 'Izq', unit: 'seg', allowDecimal: false, maxIntDigits: 3 },
                           { key: 'hold_right_sec', label: 'Der', unit: 'seg', allowDecimal: false, maxIntDigits: 3 },
                       ]
                     : [
                           { key: 'weight', label: 'Kg', unit: 'kg', allowDecimal: true, weightChips: true, maxIntDigits: 3 },
+                          { key: 'reps', label: 'Reps', unit: 'reps', allowDecimal: false, maxIntDigits: 3 },
                           { key: 'actual_hold_sec', label: 'Seg', unit: 'seg', allowDecimal: false, maxIntDigits: 3 },
                       ],
                 fieldRefs: perSideHold
-                    ? { weight: weightRef, hold_left_sec: holdLeftRef, hold_right_sec: holdRightRef }
-                    : { weight: weightRef, actual_hold_sec: holdRef },
+                    ? { weight: weightRef, reps: repsRef, hold_left_sec: holdLeftRef, hold_right_sec: holdRightRef }
+                    : { weight: weightRef, reps: repsRef, actual_hold_sec: holdRef },
                 initialFieldKey: initialField,
                 target: {
                     sets: totalSets ?? null,
@@ -977,6 +983,10 @@ function StrengthLogSetForm({
             const timePayload = buildStrengthTimePayload(
                 {
                     weight: weightRaw == null ? '' : String(weightRaw),
+                    // F1: las reps del tile (opcionales) las normaliza el MISMO builder que RN —
+                    // entero > 0 ⇒ viajan; vacío o `0` ⇒ `null`. El input se llama `reps_done`
+                    // (columna), el builder lee la key `reps` (tile), igual que en fuerza clásica.
+                    reps: repsRaw == null ? '' : String(repsRaw),
                     actual_hold_sec: String(formData.get('actual_hold_sec') ?? ''),
                     hold_left_sec: String(formData.get('hold_left_sec') ?? ''),
                     hold_right_sec: String(formData.get('hold_right_sec') ?? ''),
@@ -988,11 +998,13 @@ function StrengthLogSetForm({
             // Los inputs por lado no son columnas: viajan resumidos en `actual_hold_sec` + `metadata`.
             formData.delete('hold_left_sec')
             formData.delete('hold_right_sec')
-            // R2: una serie por tiempo lleva `reps_done = NULL`, JAMÁS `0` — un 0 la metería como
-            // «serie de cero reps» en las RPC de récords y tonelaje.
-            formData.delete('reps_done')
             formData.delete('reps_right')
-            r = null
+            // R2 (revisado en F1): `reps_done` sale del FormData sólo cuando está VACÍO — la columna
+            // queda NULL, jamás `0`, que la metería como «serie de cero reps» en las RPC de récords y
+            // tonelaje. Con reps reales viaja como en cualquier serie de fuerza.
+            r = timePayload.repsDone ?? null
+            if (r == null) formData.delete('reps_done')
+            else formData.set('reps_done', String(r))
             holdSec = timePayload.actualHoldSec ?? null
             if (holdSec != null) formData.set('actual_hold_sec', String(holdSec))
             else formData.delete('actual_hold_sec')
@@ -1071,12 +1083,14 @@ function StrengthLogSetForm({
         // series sin semilla (ese día no se hicieron) y con el criterio por-fila igualar el máximo ahí
         // seguía celebrando. Fuera del modo repetir, el umbral queda exactamente como siempre.
         const strictPr = isRepeatSession ?? seed != null
-        // Fuerza por TIEMPO fuera del camino de PR (A4): `reps_done` es NULL, así que
-        // `classifyThresholdPr` recibiría `r = null` y el e1RM no significa nada sobre una plancha.
-        // Es la misma decisión que ya toma el motor (`pr-detect.ts` filtra `reps_done > 0`) y la
-        // migración M2 en la RPC de récords: acá se cierra el tercer camino, el de la celebración.
+        // Fuerza por TIEMPO y PR (A4, revisado en F1): SIN reps la serie queda fuera del camino de
+        // PR —`reps_done` es NULL y el e1RM no significa nada sobre una plancha—, exactamente como
+        // hasta hoy. CON reps > 0 vuelve a ser una serie de fuerza normal: el motor (`pr-detect.ts`)
+        // y la RPC de récords (M2) ya la cuentan porque filtran `reps_done > 0`, así que bloquear
+        // sólo la celebración dejaría la UI mintiendo sobre lo que la ficha ya muestra.
+        const timeSetCountsForPr = !strengthTimeMode || (r != null && r > 0)
         const hitPr =
-            !strengthTimeMode && prThresholdKg != null && w != null && w > 0 && (strictPr ? w > prThresholdKg : w >= prThresholdKg)
+            timeSetCountsForPr && prThresholdKg != null && w != null && w > 0 && (strictPr ? w > prThresholdKg : w >= prThresholdKg)
         prRef.current = hitPr
         // PR en vivo V3 (E4.2): el disparo es el umbral de arriba; el EJE (weight/e1rm) lo clasifica el
         // engine (`detectPR` vía adaptador de borde). Presentación dorada + háptico (pref) por el
@@ -1159,7 +1173,13 @@ function StrengthLogSetForm({
         // hold cae a la línea peso × reps de siempre (over/under, «PC» y RPE/RIR intactos).
         const holdLine =
             strengthTimeMode || existingLog?.actual_hold_sec != null
-                ? formatStrengthTimeSetLine({ weight_kg: dispW, actual_hold_sec: existingLog?.actual_hold_sec ?? null, metadata: existingLog?.metadata })
+                ? formatStrengthTimeSetLine({
+                      weight_kg: dispW,
+                      // F1: con reps tipeadas el chip dice «45 kg x 5 . 30 s»; sin ellas, «10 kg x 30 s».
+                      reps_done: dispR,
+                      actual_hold_sec: existingLog?.actual_hold_sec ?? null,
+                      metadata: existingLog?.metadata,
+                  })
                 : null
         const sideLine =
             holdLine ??
@@ -1360,11 +1380,50 @@ function StrengthLogSetForm({
                             />
                             <span className="exec-v3-valu">KG</span>
                         </label>
+                        {/* REPS: SIEMPRE presente en fuerza, también por tiempo (F1, owner 11-09).
+                            En modo tiempo es el tile del medio y es OPCIONAL — vacío se pinta con el
+                            mismo guion que los demás y la serie se guarda igual con solo el hold. */}
+                        <label className="exec-v3-val">
+                            <input
+                                ref={repsRef}
+                                name="reps_done"
+                                type={useKeypad ? 'text' : 'number'}
+                                {...(useKeypad ? { readOnly: true } : { min: '0' })}
+                                inputMode={useKeypad ? 'none' : 'numeric'}
+                                defaultValue={perSideReps ? repsLeftDefault : repsDefaultValue}
+                                placeholder="-"
+                                aria-label={
+                                    perSideReps
+                                        ? 'Repeticiones lado izquierdo'
+                                        : strengthTimeMode
+                                          ? 'Repeticiones (opcional)'
+                                          : 'Repeticiones'
+                                }
+                                onFocus={useKeypad ? () => openKeypadFor('reps') : undefined}
+                                onPointerDown={useWheel ? onFieldPointerDown : undefined}
+                                onPointerMove={useWheel ? onFieldPointerMove : undefined}
+                                onPointerUp={useWheel ? onFieldPointerUp : undefined}
+                                onPointerCancel={useWheel ? onFieldPointerCancel : undefined}
+                                onPointerLeave={useWheel ? onFieldPointerCancel : undefined}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault()
+                                        // Por lado: Enter pasa al lado derecho; por tiempo, al hold;
+                                        // si no, cierra el teclado.
+                                        if (perSideReps) repsRightRef.current?.focus()
+                                        else if (strengthTimeMode) (perSideHold ? holdLeftRef : holdRef).current?.focus()
+                                        else e.currentTarget.blur()
+                                    }
+                                }}
+                                className={cn('exec-v3-valinput', useWheel && 'exec-v3-touchnone')}
+                            />
+                            <span className="exec-v3-valu">{perSideReps ? 'IZQ' : 'REPS'}</span>
+                        </label>
                         {strengthTimeMode ? (
-                            // Fuerza por TIEMPO (W4.14): el tile REPS conmuta a SEG conservando
-                            // `.exec-v3-val` / `.exec-v3-valinput` / `.exec-v3-valu` ⇒ cero drift
-                            // visual. Los lados salen de `holdSidesFor` (R34): `alternating` es UNA
-                            // sola caja para el eje tiempo, aunque sea por lado para el eje reps.
+                            // Fuerza por TIEMPO (W4.14 · F1): el tile SEG se SUMA después del de reps,
+                            // conservando `.exec-v3-val` / `.exec-v3-valinput` / `.exec-v3-valu` ⇒ cero
+                            // drift visual. Los lados salen de `holdSidesFor` (R34): `alternating` es
+                            // UNA sola caja para el eje tiempo, aunque sea por lado para el eje reps.
                             perSideHold ? (
                                 <>
                                     <label className="exec-v3-val">
@@ -1433,37 +1492,7 @@ function StrengthLogSetForm({
                                     <span className="exec-v3-valu">SEG</span>
                                 </label>
                             )
-                        ) : (
-                        <>
-                        <label className="exec-v3-val">
-                            <input
-                                ref={repsRef}
-                                name="reps_done"
-                                type={useKeypad ? 'text' : 'number'}
-                                {...(useKeypad ? { readOnly: true } : { min: '0' })}
-                                inputMode={useKeypad ? 'none' : 'numeric'}
-                                defaultValue={perSideReps ? repsLeftDefault : repsDefaultValue}
-                                placeholder="-"
-                                aria-label={perSideReps ? 'Repeticiones lado izquierdo' : 'Repeticiones'}
-                                onFocus={useKeypad ? () => openKeypadFor('reps') : undefined}
-                                onPointerDown={useWheel ? onFieldPointerDown : undefined}
-                                onPointerMove={useWheel ? onFieldPointerMove : undefined}
-                                onPointerUp={useWheel ? onFieldPointerUp : undefined}
-                                onPointerCancel={useWheel ? onFieldPointerCancel : undefined}
-                                onPointerLeave={useWheel ? onFieldPointerCancel : undefined}
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        e.preventDefault()
-                                        // Por lado: Enter pasa al lado derecho; si no, cierra el teclado.
-                                        if (perSideReps) repsRightRef.current?.focus()
-                                        else e.currentTarget.blur()
-                                    }
-                                }}
-                                className={cn('exec-v3-valinput', useWheel && 'exec-v3-touchnone')}
-                            />
-                            <span className="exec-v3-valu">{perSideReps ? 'IZQ' : 'REPS'}</span>
-                        </label>
-                        {perSideReps ? (
+                        ) : perSideReps ? (
                             // Fuerza POR LADO (mockup B): tercer tile «Der», mismo tamaño y mismo teclado.
                             <label className="exec-v3-val">
                                 <input
@@ -1487,8 +1516,6 @@ function StrengthLogSetForm({
                                 <span className="exec-v3-valu">DER</span>
                             </label>
                         ) : null}
-                        </>
-                        )}
                     </div>
 
                     {/* Panel de esfuerzo compacto y OPCIONAL — COLAPSADO por default (QA2 hallazgo 3): fila
@@ -1777,9 +1804,50 @@ function StrengthLogSetForm({
                             />
                         </label>
                         <span className={cn('shrink-0 text-on-dark-muted', isActive ? 'pb-3 text-xl' : 'pb-2 text-base')}>×</span>
+                        <label className="flex-1">
+                            <span className="mb-1 block text-[9.5px] font-bold uppercase tracking-[0.08em] text-on-dark-muted">
+                                {perSideReps ? 'Izq' : 'Reps'}
+                            </span>
+                            <input
+                                ref={repsRef}
+                                name="reps_done"
+                                type={useKeypad ? 'text' : 'number'}
+                                {...(useKeypad ? { readOnly: true } : { min: '0' })}
+                                inputMode={useKeypad ? 'none' : 'numeric'}
+                                defaultValue={perSideReps ? repsLeftDefault : repsDefaultValue}
+                                placeholder="-"
+                                aria-label={
+                                    perSideReps
+                                        ? 'Repeticiones lado izquierdo'
+                                        : strengthTimeMode
+                                          ? 'Repeticiones (opcional)'
+                                          : undefined
+                                }
+                                onFocus={useKeypad ? () => openKeypadFor('reps') : undefined}
+                                onPointerDown={useWheel ? onFieldPointerDown : undefined}
+                                onPointerMove={useWheel ? onFieldPointerMove : undefined}
+                                onPointerUp={useWheel ? onFieldPointerUp : undefined}
+                                onPointerCancel={useWheel ? onFieldPointerCancel : undefined}
+                                onPointerLeave={useWheel ? onFieldPointerCancel : undefined}
+                                // Enter cierra el teclado (blur) sin submitear — deja meter RPE/RIR antes de "Listo".
+                                // Por lado: pasa el foco al lado derecho; por tiempo, a la caja de segundos.
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                        e.preventDefault()
+                                        if (perSideReps) repsRightRef.current?.focus()
+                                        else if (strengthTimeMode) (perSideHold ? holdLeftRef : holdRef).current?.focus()
+                                        else e.currentTarget.blur()
+                                    }
+                                }}
+                                className={inputClass}
+                            />
+                        </label>
                         {strengthTimeMode ? (
-                            // Fuerza por TIEMPO en la fila compacta (V2/lista): mismas cajas, otro eje.
-                            perSideHold ? (
+                            // Fuerza por TIEMPO en la fila compacta (V2/lista): las cajas de segundos se
+                            // SUMAN detrás de las reps (F1), separadas con «·» como los ejes tipados.
+                            <>
+                            <span className={cn('shrink-0 text-on-dark-muted', isActive ? 'pb-3 text-xl' : 'pb-2 text-base')}>·</span>
+                            {perSideHold ? (
                                 <>
                                     <label className="flex-1">
                                         <span className="mb-1 block text-[9.5px] font-bold uppercase tracking-[0.08em] text-on-dark-muted">Izq</span>
@@ -1847,41 +1915,9 @@ function StrengthLogSetForm({
                                         className={inputClass}
                                     />
                                 </label>
-                            )
-                        ) : (
-                        <>
-                        <label className="flex-1">
-                            <span className="mb-1 block text-[9.5px] font-bold uppercase tracking-[0.08em] text-on-dark-muted">
-                                {perSideReps ? 'Izq' : 'Reps'}
-                            </span>
-                            <input
-                                ref={repsRef}
-                                name="reps_done"
-                                type={useKeypad ? 'text' : 'number'}
-                                {...(useKeypad ? { readOnly: true } : { min: '0' })}
-                                inputMode={useKeypad ? 'none' : 'numeric'}
-                                defaultValue={perSideReps ? repsLeftDefault : repsDefaultValue}
-                                placeholder="-"
-                                aria-label={perSideReps ? 'Repeticiones lado izquierdo' : undefined}
-                                onFocus={useKeypad ? () => openKeypadFor('reps') : undefined}
-                                onPointerDown={useWheel ? onFieldPointerDown : undefined}
-                                onPointerMove={useWheel ? onFieldPointerMove : undefined}
-                                onPointerUp={useWheel ? onFieldPointerUp : undefined}
-                                onPointerCancel={useWheel ? onFieldPointerCancel : undefined}
-                                onPointerLeave={useWheel ? onFieldPointerCancel : undefined}
-                                // Enter cierra el teclado (blur) sin submitear — deja meter RPE/RIR antes de "Listo".
-                                // Por lado: pasa el foco al lado derecho.
-                                onKeyDown={(e) => {
-                                    if (e.key === 'Enter') {
-                                        e.preventDefault()
-                                        if (perSideReps) repsRightRef.current?.focus()
-                                        else e.currentTarget.blur()
-                                    }
-                                }}
-                                className={inputClass}
-                            />
-                        </label>
-                        {perSideReps ? (
+                            )}
+                            </>
+                        ) : perSideReps ? (
                             <>
                                 <span className={cn('shrink-0 text-on-dark-muted', isActive ? 'pb-3 text-xl' : 'pb-2 text-base')}>/</span>
                                 <label className="flex-1">
@@ -1907,8 +1943,6 @@ function StrengthLogSetForm({
                                 </label>
                             </>
                         ) : null}
-                        </>
-                        )}
                     </div>
                 </div>
 

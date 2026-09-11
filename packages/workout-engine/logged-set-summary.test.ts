@@ -259,6 +259,36 @@ describe('formatStrengthTimeSetLine — las 5 formas', () => {
     it('el peso conserva 1 decimal en es-neutro', () => {
         expect(formatStrengthTimeSetLine({ weight_kg: 12.5, actual_hold_sec: 45 })).toBe('12,5 kg × 45 s')
     })
+
+    // ── F1: las reps vuelven a la serie por tiempo y el coach tiene que verlas ─────────────────
+    it('con reps registradas: «45 kg × 5 · 30 s» (kg × reps · hold)', () => {
+        expect(formatStrengthTimeSetLine({ weight_kg: 45, reps_done: 5, actual_hold_sec: 30 })).toBe(
+            '45 kg × 5 · 30 s',
+        )
+    })
+
+    it('con reps y lados: el desglose del hold no cambia', () => {
+        expect(
+            formatStrengthTimeSetLine({
+                weight_kg: 10,
+                reps_done: 8,
+                actual_hold_sec: 55,
+                metadata: { left_sec: 30, right_sec: 25 },
+            }),
+        ).toBe('10 kg × 8 · Izq. 30 s · Der. 25 s')
+    })
+
+    it('con reps y SIN peso (peso corporal): las reps se rotulan, no quedan sueltas', () => {
+        expect(formatStrengthTimeSetLine({ weight_kg: null, reps_done: 12, actual_hold_sec: 30 })).toBe(
+            '12 reps · 30 s',
+        )
+    })
+
+    it('NUNCA «× 0»: un `reps_done` en 0 o negativo se ignora como si no estuviera', () => {
+        expect(formatStrengthTimeSetLine({ weight_kg: 10, reps_done: 0, actual_hold_sec: 30 })).toBe('10 kg × 30 s')
+        expect(formatStrengthTimeSetLine({ weight_kg: 10, reps_done: -2, actual_hold_sec: 30 })).toBe('10 kg × 30 s')
+        expect(formatStrengthTimeSetLine({ weight_kg: null, reps_done: 0, actual_hold_sec: 30 })).toBe('30 s')
+    })
 })
 
 // ANTI-REGRESIÓN del interruptor `if (kind === 'strength') return null` de `formatLoggedSetLine`:

@@ -325,6 +325,17 @@ export function buildStrengthPayload(
  * `metadata: undefined` ⇒ el payload no gana la key (paridad byte-idéntica); `null` ⇒ `per_side` sin
  * ningún lado tipeado, exactamente como hoy en movilidad.
  */
+/**
+ * Reps OPCIONALES de una serie de fuerza POR TIEMPO (F1). Entero > 0 ⇒ viaja tal cual; vacío, no
+ * numérico, `0` o negativo ⇒ `null`. El `0` se descarta a propósito (no se "conserva" como dato):
+ * `get_client_exercise_prs` (M2) y el tonelaje filtran `reps_done > 0`, así que un 0 solo serviría
+ * para ensuciar la columna con series de cero reps.
+ */
+function optionalReps(v: string | undefined): number | null {
+  const n = int(v)
+  return n != null && n > 0 ? n : null
+}
+
 function strengthHoldValues(
   values: Record<string, string>,
   sideMode?: string | null,
@@ -350,10 +361,15 @@ function strengthHoldValues(
  * Por qué no `buildTypedPayload`: fuerza `weightKg: null` y `rir: null` ⇒ borraría el disco de la
  * plancha y el esfuerzo. Es la misma razón por la que la fuerza nunca cruza al carril tipado (R18).
  *
- * Contrato de columnas (R2):
+ * Contrato de columnas (R2 · revisado en F1 por pedido del owner 11-09):
  *   `weight_kg`           = KG del tile (`null` = peso corporal), con coma es-CL.
- *   `reps_done`           = **`null` SIEMPRE**, nunca `0`: un `0` contaría como serie de 0 reps en
- *                           las RPC de récords/tonelaje (por eso M2 filtra `reps_done > 0`).
+ *   `reps_done`           = las REPS que el alumno haya tipeado, **opcionales**: un entero > 0 viaja;
+ *                           vacío, no numérico, `0` o negativo ⇒ `null`. NUNCA `0`: un `0` contaría
+ *                           como serie de 0 reps en las RPC de récords/tonelaje (por eso M2 filtra
+ *                           `reps_done > 0`). Antes de F1 era `null` SIEMPRE y el tile REPS ni se
+ *                           pintaba; el owner lo devolvió porque «reps es esencial en fuerza aunque
+ *                           le pongamos tiempo» — el alumno puede dejarlo vacío y la serie se guarda
+ *                           igual (el eje obligatorio sigue siendo el hold).
  *   `actual_hold_sec`     = segundos sostenidos; en `per_side` la **suma** L+R.
  *   `actual_duration_sec` = **ausente** (es el eje de cardio/roller: escribirlo metería el hold en
  *                           `totalCardioDurationSec`, `session-summary.ts:251`).
@@ -378,7 +394,9 @@ export function buildStrengthTimePayload(
     blockId,
     setNumber,
     weightKg: num(values.weight),
-    repsDone: null,
+    // F1: el tile REPS volvió a la fila de fuerza por tiempo y lo que el alumno escriba viaja acá.
+    // Vacío ⇒ `null` (la serie se guarda igual, con el hold como único eje).
+    repsDone: optionalReps(values.reps),
     rpe: int(values.rpe),
     rir: int(values.rir),
     note: note ? note : null,

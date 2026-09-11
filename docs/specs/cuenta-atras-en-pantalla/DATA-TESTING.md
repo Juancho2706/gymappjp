@@ -1982,7 +1982,7 @@ ve **idéntico** a antes del deploy; y comparar la movilidad sola contra una cap
   `formData.delete('metadata')`, un solo `set('metadata')` con las tres claves, `reps_done` fuera del
   FormData) y el **invariante de montaje del form** (R26). (Opus)
 - [ ] D13 (W6) Playwright del caso canónico verde con el seed extendido (§6.5). (Opus)
-- [ ] D14 (W6) QA del owner completo en las 3 plataformas (§7), con el punto de control «solo reps» verde. (owner)
+- [x] D14 (W6) (11-09: **QA del owner VERDE** en device, PWA y web — «el QA salió verde, la verdad es que me gustó» — con UN pedido: en fuerza por tiempo el tile REPS tiene que volver al lado de SEG, reps opcionales ⇒ F1 en TASKS; SDD a `done` cuando F1 esté en producción) QA del owner completo en las 3 plataformas (§7), con el punto de control «solo reps» verde. (owner)
 - [ ] D15 (W6) Consulta de adopción de §8.2 corrida a las 72 h y anotada; umbral de §8.4 no superado. (Opus)
 - [ ] D16 (W6) `docs/status/CURRENT.md` y `docs/status/MOBILE_PARITY.md` actualizados; `pnpm docs:check` verde. (Opus)
 - [ ] D17 (W6) **Aviso GENERAL a coaches** (`news_items`) con **dos líneas obligatorias, sin mensajes

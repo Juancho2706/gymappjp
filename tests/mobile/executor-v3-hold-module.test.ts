@@ -502,6 +502,31 @@ describe('useHoldModule · fuerza por tiempo', () => {
     // `actual_duration_sec` es el eje de cardio: un hold NUNCA lo escribe (§ W1.3).
     expect(payload.actualDurationSec).toBeUndefined()
   })
+
+  // F1 (owner 11-09): el tile REPS volvió a la fila de fuerza por tiempo. Lo que el alumno tipeó
+  // ANTES de que el reloj llegue a 0 tiene que viajar en el auto-envío — la mezcla es la misma
+  // (`mergeHoldCaptureValues` spreadea lo tipeado y sólo agrega la caja del hold).
+  it('F1: las reps tipeadas en la fila viajan en el auto-envío del reloj', () => {
+    const { result, h } = mountHold({ kind: 'strength_time', prescribedSec: 3 })
+    h.typed = { weight: '45', reps: '5', rir: '2' }
+    act(() => result.current.start())
+    advance(3_200)
+    expect(commitAt(h).payload).toMatchObject({
+      weightKg: 45,
+      repsDone: 5,
+      rir: 2,
+      actualHoldSec: 3,
+      metadata: { hold_source: 'timer' },
+    })
+  })
+
+  it('F1: sin reps tipeadas el auto-envío sigue guardando `reps_done` en null (nunca 0)', () => {
+    const { result, h } = mountHold({ kind: 'strength_time', prescribedSec: 3 })
+    h.typed = { weight: '45', reps: '' }
+    act(() => result.current.start())
+    advance(3_200)
+    expect(commitAt(h).payload.repsDone).toBeNull()
+  })
 })
 
 describe('useHoldModule · resetKey y suspensión', () => {

@@ -723,9 +723,10 @@ export function ActiveSetRow({
    */
   sideMode?: string | null
   /**
-   * Fuerza POR TIEMPO (specs/cuenta-atras-en-pantalla, D3/R2): la fila captura un peso y los SEGUNDOS
-   * sostenidos (`actual_hold_sec`; en `per_side` `hold_left_sec`/`hold_right_sec`, mismas keys que
-   * movilidad) y arma el payload con `buildStrengthTimePayload` (`reps_done` null, marca `'manual'`).
+   * Fuerza POR TIEMPO (specs/cuenta-atras-en-pantalla, D3/R2 · reps de vuelta en F1): la fila captura
+   * un peso, las REPS (opcionales) y los SEGUNDOS sostenidos (`actual_hold_sec`; en `per_side`
+   * `hold_left_sec`/`hold_right_sec`, mismas keys que movilidad) y arma el payload con
+   * `buildStrengthTimePayload` (`reps_done` solo si el alumno tipeó un entero > 0; marca `'manual'`).
    * `typedMode` sigue null: la fuerza nunca cruza al carril tipado (borraría el disco y el RIR). El
    * reloj (`HoldModuleV3`) entra por `typedSeedPatch` con nonce, igual que cardio. ADITIVO: sin la prop
    * la fila es byte-idéntica.
@@ -849,19 +850,26 @@ export function ActiveSetRow({
         mode: f.allowDecimal ? ('decimal' as const) : ('integer' as const),
       }))
     }
-    // Fuerza POR TIEMPO (D3/R2, R34): un peso y los segundos sostenidos, con las MISMAS keys que
-    // movilidad (`STRENGTH_TIME_KEYPAD_STEPS` del motor) para que el motor las lea con una sola rama;
-    // `per_side` ⇒ Izq/Der en segundos; `alternating` y bilateral ⇒ una caja (`holdSidesFor`).
+    // Fuerza POR TIEMPO (D3/R2, R34 + F1): un peso, las REPS (opcionales) y los segundos sostenidos,
+    // con las MISMAS keys que movilidad para el hold (`STRENGTH_TIME_KEYPAD_STEPS` del motor) para que
+    // el motor las lea con una sola rama; `per_side` ⇒ Izq/Der en segundos; `alternating` y bilateral
+    // ⇒ una caja (`holdSidesFor`). Las reps son SIEMPRE una sola caja: el eje por lado de esta
+    // prescripción es el tiempo, no las reps.
+    //
+    // F1 (owner 11-09): «reps es algo esencial para los ejercicios de fuerza aunque le pongamos
+    // tiempo». Vacías ⇒ `buildStrengthTimePayload` guarda `reps_done` en null (nunca 0).
     if (strengthTimeMode) {
       if (sideMode === 'per_side') {
         return [
           { key: 'weight', label: 'Kg', unit: 'kg', mode: 'weight' },
+          { key: 'reps', label: 'Reps', unit: 'reps', mode: 'reps' },
           { key: 'hold_left_sec', label: 'Izq', unit: 'seg', mode: 'integer' },
           { key: 'hold_right_sec', label: 'Der', unit: 'seg', mode: 'integer' },
         ]
       }
       return [
         { key: 'weight', label: 'Kg', unit: 'kg', mode: 'weight' },
+        { key: 'reps', label: 'Reps', unit: 'reps', mode: 'reps' },
         { key: 'actual_hold_sec', label: 'Seg', unit: 'seg', mode: 'integer' },
       ]
     }
@@ -942,8 +950,10 @@ export function ActiveSetRow({
   const isEmptyCapture = useMemo(
     () =>
       strengthTimeMode
-        // Fuerza POR TIEMPO: el peso sugerido ya viene puesto, así que lo que cuenta son los SEGUNDOS —
-        // «Aplastar serie» queda inerte hasta que el reloj los anote o el alumno los escriba (R8).
+        // Fuerza POR TIEMPO: el peso sugerido ya viene puesto, así que NO cuenta como captura —
+        // «Aplastar serie» queda inerte hasta que el reloj anote los segundos, el alumno los escriba
+        // (R8) o tipee las reps (F1: son un eje real, igual que en la web, cuyo guard de fila vacía
+        // es `w == null && r == null && hold == null`).
         ? fields.filter((f) => f.key !== 'weight').every((f) => (values[f.key] ?? '').trim() === '')
         : fields.every((f) => (values[f.key] ?? '').trim() === ''),
     [fields, values, strengthTimeMode],
@@ -1097,8 +1107,23 @@ export function ActiveSetRow({
             onLongPress={onLongPressValue ? () => onLongPressValue('weight') : undefined}
             testID={`set-tile-${setNumber}-weight`}
           />
+          {/* REPS: SIEMPRE en fuerza, también por tiempo (F1). En modo tiempo va entre KG y SEG, sin
+              `hint` (el `repsHint` de este modo trae los SEGUNDOS prescritos, no reps) y sin rueda:
+              es opcional y se deja vacío sin que pase nada. */}
+          <ValueTile
+            label="Reps"
+            unit="REPS"
+            value={repsShown}
+            hint={strengthTimeMode ? undefined : repsShown ? undefined : repsHint ?? undefined}
+            editing={openKey === 'reps'}
+            exec={exec}
+            onPress={() => openField('reps')}
+            onLongPress={onLongPressValue ? () => onLongPressValue('reps') : undefined}
+            testID={`set-tile-${setNumber}-reps`}
+          />
           {strengthTimeMode ? (
-            // Fuerza POR TIEMPO: el tile REPS conmuta a SEG (W3.15); `repsHint` trae los segundos prescritos.
+            // Fuerza POR TIEMPO: el tile SEG se SUMA detrás del de reps (W3.15 · F1); `repsHint` trae
+            // los segundos prescritos.
             sideMode === 'per_side' ? (
               <>
                 <ValueTile
@@ -1134,19 +1159,7 @@ export function ActiveSetRow({
                 testID={`set-tile-${setNumber}-actual_hold_sec`}
               />
             )
-          ) : (
-          <ValueTile
-            label="Reps"
-            unit="REPS"
-            value={repsShown}
-            hint={repsShown ? undefined : repsHint ?? undefined}
-            editing={openKey === 'reps'}
-            exec={exec}
-            onPress={() => openField('reps')}
-            onLongPress={onLongPressValue ? () => onLongPressValue('reps') : undefined}
-            testID={`set-tile-${setNumber}-reps`}
-          />
-          )}
+          ) : null}
         </View>
 
         {/* Esfuerzo compacto (pills RPE/RIR + escala de ticks) — OPCIONAL, gateado por la tuerca */}

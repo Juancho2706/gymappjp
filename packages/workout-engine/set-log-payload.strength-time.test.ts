@@ -2,8 +2,9 @@
  * Contrato del payload de FUERZA POR TIEMPO (specs/cuenta-atras-en-pantalla, W1.3/W1.3b/W1.4).
  *
  * Tres cosas que este archivo tiene que dejar clavadas:
- *  1. `buildStrengthTimePayload` guarda `reps_done: null` (nunca 0), el hold en `actual_hold_sec`
- *     (suma L+R en `per_side`) y **jamás** `actual_duration_sec` —que es el eje de cardio/roller y
+ *  1. `buildStrengthTimePayload` guarda las REPS OPCIONALES del alumno (F1: entero > 0 ⇒ viajan;
+ *     vacías o `0` ⇒ `reps_done: null`, NUNCA 0), el hold en `actual_hold_sec` (suma L+R en
+ *     `per_side`) y **jamás** `actual_duration_sec` —que es el eje de cardio/roller y
  *     metería la plancha en `totalCardioDurationSec`.
  *  2. `hold_source` también se escribe por el carril TIPADO (movilidad y roller): sin eso los 32
  *     holds de movilidad del caso canónico saldrían sin marca y la consulta de adopción quedaría ciega.
@@ -53,6 +54,62 @@ describe('buildStrengthTimePayload — bilateral', () => {
   it('`reps_done` es null, nunca 0 (un 0 contaría como serie de 0 reps en las RPC de récords)', () => {
     const p = buildStrengthTimePayload({ weight: '10', actual_hold_sec: '30', reps: '0' }, BLOCK, SET)
     expect(p.repsDone).toBeNull()
+  })
+
+  // ── F1 (owner 11-09): «nunca deberíamos quitar reps de los ejercicios de fuerza» ───────────────
+  it('las reps tipeadas VIAJAN junto al hold (el eje de tiempo no las reemplaza)', () => {
+    expect(
+      buildStrengthTimePayload({ weight: '45', reps: '5', actual_hold_sec: '30' }, BLOCK, SET, {
+        holdSource: 'timer',
+      }),
+    ).toEqual({
+      blockId: BLOCK,
+      setNumber: SET,
+      weightKg: 45,
+      repsDone: 5,
+      rpe: null,
+      rir: null,
+      note: null,
+      actualHoldSec: 30,
+      metadata: { hold_source: 'timer' },
+    })
+  })
+
+  it('las reps son OPCIONALES: vacías o ausentes ⇒ `reps_done: null` y la serie se guarda igual', () => {
+    expect(buildStrengthTimePayload({ weight: '10', reps: '', actual_hold_sec: '30' }, BLOCK, SET).repsDone).toBeNull()
+    expect(buildStrengthTimePayload({ weight: '10', actual_hold_sec: '30' }, BLOCK, SET).repsDone).toBeNull()
+    expect(buildStrengthTimePayload({ weight: '10', reps: '   ', actual_hold_sec: '30' }, BLOCK, SET).repsDone).toBeNull()
+  })
+
+  it('basura o negativos en la caja de reps ⇒ null (nunca un entero inventado)', () => {
+    expect(buildStrengthTimePayload({ reps: 'abc', actual_hold_sec: '30' }, BLOCK, SET).repsDone).toBeNull()
+    expect(buildStrengthTimePayload({ reps: '-3', actual_hold_sec: '30' }, BLOCK, SET).repsDone).toBeNull()
+  })
+
+  it('reps con coma/decimal se redondean a entero (misma regla que la fuerza clásica)', () => {
+    expect(buildStrengthTimePayload({ reps: '5,4', actual_hold_sec: '30' }, BLOCK, SET).repsDone).toBe(5)
+    expect(buildStrengthTimePayload({ reps: '5,6', actual_hold_sec: '30' }, BLOCK, SET).repsDone).toBe(6)
+  })
+
+  it('reps SIN hold: la serie sale con reps y sin `actual_hold_sec` (el guard de fila vacía la deja pasar)', () => {
+    const p = buildStrengthTimePayload({ weight: '45', reps: '5' }, BLOCK, SET)
+    expect(p.repsDone).toBe(5)
+    expect(p.actualHoldSec).toBeNull()
+  })
+
+  it('`per_side` con reps: UNA sola caja de reps + los dos holds en `metadata`', () => {
+    expect(
+      buildStrengthTimePayload(
+        { weight: '10', reps: '8', hold_left_sec: '30', hold_right_sec: '28' },
+        BLOCK,
+        SET,
+        { sideMode: 'per_side', holdSource: 'timer' },
+      ),
+    ).toMatchObject({
+      repsDone: 8,
+      actualHoldSec: 58,
+      metadata: { left_sec: 30, right_sec: 28, hold_source: 'timer' },
+    })
   })
 
   it('peso con coma es-CL y nota en blanco ⇒ null', () => {

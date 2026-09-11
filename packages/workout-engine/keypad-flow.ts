@@ -72,7 +72,8 @@ export interface KeypadTarget {
   /**
    * FUERZA POR TIEMPO (specs/cuenta-atras-en-pantalla, D3): el bloque sigue siendo strength pero se
    * prescribe con `reps_unit = 'sec'` + `duration_sec` ⇒ el flujo pasa de peso → reps a
-   * peso → segundos. Hermano de `sideMode`, y por el MISMO motivo vive acá y no en `typed` (R18):
+   * peso → reps (opcionales, F1) → segundos. Hermano de `sideMode`, y por el MISMO motivo vive acá
+   * y no en `typed` (R18):
    * la fuerza nunca cruza al carril tipado, que escribiría `weightKg: null` y `rir: null`.
    * El commit es `buildStrengthTimePayload(values, blockId, setNumber, { sideMode, holdSource })`.
    *
@@ -120,29 +121,40 @@ export const STRENGTH_PER_SIDE_KEYPAD_STEPS: KeypadStep[] = [
 ]
 
 /**
- * Flujo de FUERZA POR TIEMPO (D3): UN peso y los SEGUNDOS sostenidos — peso → segundos. El primer
- * paso es el mismo de `STRENGTH_KEYPAD_STEPS` (modo `weight` ⇒ decimal + chips de peso) y el hold va
- * en modo entero, así que el teclado no cambia de comportamiento, solo de secuencia.
+ * Flujo de FUERZA POR TIEMPO (D3, con el paso REPS de vuelta en F1): peso → reps → segundos. Los dos
+ * primeros pasos son los MISMOS de `STRENGTH_KEYPAD_STEPS` (modo `weight` ⇒ decimal + chips de peso;
+ * modo `reps` ⇒ entero) y el hold va en modo entero, así que el teclado no cambia de comportamiento,
+ * solo de secuencia.
  *
- * La key es la MISMA de movilidad (`typed-keypad.ts:102`) para que el motor lea el hold con una sola
- * rama (`strengthHoldValues` / `typedLogValues`); el rótulo es «Segundos» porque acá el hold no es un
- * eje más de un bloque tipado, es la prescripción entera de la serie.
+ * Por qué vuelve REPS (owner 11-09): «reps es algo esencial para los ejercicios de fuerza aunque le
+ * pongamos tiempo». Es OPCIONAL — el alumno puede saltar el paso y guardar solo el hold
+ * (`buildStrengthTimePayload` deja `reps_done` en `null` cuando viene vacío).
+ *
+ * La key del hold es la MISMA de movilidad (`typed-keypad.ts:102`) para que el motor lo lea con una
+ * sola rama (`strengthHoldValues` / `typedLogValues`); el rótulo es «Segundos» porque acá el hold no
+ * es un eje más de un bloque tipado, es la prescripción entera de la serie.
  */
 export const STRENGTH_TIME_KEYPAD_STEPS: KeypadStep[] = [
   { kind: 'keypad', key: 'weight', mode: 'weight', unit: 'kg', label: 'Peso (kg)' },
+  { kind: 'keypad', key: 'reps', mode: 'reps', unit: 'reps', label: 'Repeticiones' },
   { kind: 'keypad', key: 'actual_hold_sec', mode: 'integer', unit: 'seg', label: 'Segundos' },
 ]
 
 /**
- * Flujo de FUERZA POR TIEMPO unilateral (`side_mode === 'per_side'`, R34): UN peso y DOS holds —
- * peso → hold izq → hold der, una sola fila por serie con `actual_hold_sec = L + R`.
+ * Flujo de FUERZA POR TIEMPO unilateral (`side_mode === 'per_side'`, R34): UN peso, las reps
+ * OPCIONALES (F1) y DOS holds — peso → reps → hold izq → hold der, una sola fila por serie con
+ * `actual_hold_sec = L + R`.
  *
- * Keys y rótulos idénticos a los de movilidad `per_side` (`typed-keypad.ts:102-103`): la captura del
- * eje TIEMPO es la misma en los dos tipos, y así `strengthHoldValues` no necesita una rama propia.
- * `alternating` NO usa estos pasos (H7): captura un solo lado, como movilidad hoy.
+ * Las reps son UNA sola caja también acá: el eje por lado de esta prescripción es el TIEMPO, no las
+ * reps (por eso nunca aparecen `reps_left`/`reps_right` en modo tiempo).
+ *
+ * Keys y rótulos del hold idénticos a los de movilidad `per_side` (`typed-keypad.ts:102-103`): la
+ * captura del eje TIEMPO es la misma en los dos tipos, y así `strengthHoldValues` no necesita una
+ * rama propia. `alternating` NO usa estos pasos (H7): captura un solo lado, como movilidad hoy.
  */
 export const STRENGTH_TIME_PER_SIDE_KEYPAD_STEPS: KeypadStep[] = [
   { kind: 'keypad', key: 'weight', mode: 'weight', unit: 'kg', label: 'Peso (kg)' },
+  { kind: 'keypad', key: 'reps', mode: 'reps', unit: 'reps', label: 'Repeticiones' },
   { kind: 'keypad', key: 'hold_left_sec', mode: 'integer', unit: 'seg', label: 'Hold izq.' },
   { kind: 'keypad', key: 'hold_right_sec', mode: 'integer', unit: 'seg', label: 'Hold der.' },
 ]
@@ -201,7 +213,8 @@ export function keypadStepsForTarget(target: KeypadTarget | null): KeypadStep[] 
       label: f.label,
     }))
   }
-  // Fuerza POR TIEMPO (D3): peso → segundos, con los dos lados solo si `holdSidesFor` los pide (R34;
+  // Fuerza POR TIEMPO (D3 + F1): peso → reps → segundos, con los dos lados del HOLD solo si
+  // `holdSidesFor` los pide (R34;
   // `alternating` captura una sola caja para el eje tiempo, H7). Va ANTES de la rama por lado del eje
   // reps, que sí trata `alternating` como bilateral y pediría «reps izq/der» sobre una plancha.
   if (target.strengthTimeMode) {

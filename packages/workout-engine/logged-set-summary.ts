@@ -182,15 +182,19 @@ export function formatStrengthSetLine(log: LoggedSetLike): string | null {
 }
 
 /**
- * Línea de una serie de FUERZA POR TIEMPO registrada (D3, specs/cuenta-atras-en-pantalla):
- *   `"10 kg × 30 s"` · `"10 kg × 30 s por lado"` · `"10 kg × Izq. 30 s · Der. 25 s"` · `"30 s"`.
+ * Línea de una serie de FUERZA POR TIEMPO registrada (D3, specs/cuenta-atras-en-pantalla; reps
+ * opcionales desde F1):
+ *   sin reps → `"10 kg × 30 s"` · `"10 kg × 30 s por lado"` · `"10 kg × Izq. 30 s · Der. 25 s"` · `"30 s"`
+ *   con reps → `"45 kg × 5 · 30 s"` · `"5 reps · 30 s"` (sin peso, el «kg ×» que las explicaba no está)
  * Sin ningún hold registrado ⇒ `null` (la superficie pinta su fila de fuerza de siempre).
+ *
+ * Las reps solo entran si son > 0 (`positive`): un `reps_done` en 0 —que el motor ya no escribe—
+ * jamás debe pintarse como «× 0» en la ficha del coach.
  *
  * Hermana de `formatStrengthSetLine`, y por el MISMO motivo export separado:
  * `formatLoggedSetLine('strength')` sigue devolviendo `null` (`:154`) — ese `null` es el interruptor
  * con que cada superficie elige su render de fuerza (objetivo↔hecho, «PC», RPE/RIR). Los call sites
- * la llaman DENTRO de su rama de fuerza y sólo reemplazan el «peso × reps», que en modo tiempo
- * quedaría como «10 kg × —» porque `reps_done` es NULL a propósito (R2).
+ * la llaman DENTRO de su rama de fuerza y sólo reemplazan el «peso × reps».
  *
  * Reusa `mobilityParts` —y con él `loggedSideSeconds`— para que el desglose por lado sea EXACTAMENTE
  * el mismo que ya ve el coach en movilidad: mismo redondeo, mismos rótulos «Izq./Der.», misma regla
@@ -202,5 +206,11 @@ export function formatStrengthTimeSetLine(log: LoggedSetLike): string | null {
     if (parts.length === 0) return null
     const hold = parts.join(' · ')
     const weight = positive(log.weight_kg)
-    return weight != null ? `${formatEsNumber(weight, 1)} kg × ${hold}` : hold
+    const reps = positive(log.reps_done)
+    if (weight != null) {
+        return reps != null
+            ? `${formatEsNumber(weight, 1)} kg × ${formatEsNumber(reps)} · ${hold}`
+            : `${formatEsNumber(weight, 1)} kg × ${hold}`
+    }
+    return reps != null ? `${formatEsNumber(reps)} reps · ${hold}` : hold
 }

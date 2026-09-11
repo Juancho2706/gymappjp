@@ -112,27 +112,36 @@ describe('typedTargetFor — guard R18: la fuerza nunca entra al carril tipado',
   })
 })
 
-// ── FUERZA POR TIEMPO (specs/cuenta-atras-en-pantalla, W1.7) ──────────────────────────────────────
-describe('STRENGTH_TIME_KEYPAD_STEPS — peso → segundos', () => {
-  it('dos pasos: peso (kg, decimal) → segundos (entero)', () => {
+// ── FUERZA POR TIEMPO (specs/cuenta-atras-en-pantalla, W1.7 · reps de vuelta en F1) ───────────────
+describe('STRENGTH_TIME_KEYPAD_STEPS — peso → reps → segundos', () => {
+  it('tres pasos: peso (kg, decimal) → reps (entero) → segundos (entero)', () => {
     expect(STRENGTH_TIME_KEYPAD_STEPS).toEqual([
       { kind: 'keypad', key: 'weight', mode: 'weight', unit: 'kg', label: 'Peso (kg)' },
+      { kind: 'keypad', key: 'reps', mode: 'reps', unit: 'reps', label: 'Repeticiones' },
       { kind: 'keypad', key: 'actual_hold_sec', mode: 'integer', unit: 'seg', label: 'Segundos' },
     ])
   })
 
-  it('per_side: un solo peso y DOS holds (una fila por serie, `actual_hold_sec` = L + R)', () => {
+  it('el paso REPS es el MISMO de la fuerza clásica (misma key, modo y rótulo)', () => {
+    expect(STRENGTH_TIME_KEYPAD_STEPS[1]).toEqual(STRENGTH_KEYPAD_STEPS[1])
+    expect(STRENGTH_TIME_PER_SIDE_KEYPAD_STEPS[1]).toEqual(STRENGTH_KEYPAD_STEPS[1])
+  })
+
+  it('per_side: un solo peso, UNAS solas reps y DOS holds (`actual_hold_sec` = L + R)', () => {
     expect(STRENGTH_TIME_PER_SIDE_KEYPAD_STEPS).toEqual([
       { kind: 'keypad', key: 'weight', mode: 'weight', unit: 'kg', label: 'Peso (kg)' },
+      { kind: 'keypad', key: 'reps', mode: 'reps', unit: 'reps', label: 'Repeticiones' },
       { kind: 'keypad', key: 'hold_left_sec', mode: 'integer', unit: 'seg', label: 'Hold izq.' },
       { kind: 'keypad', key: 'hold_right_sec', mode: 'integer', unit: 'seg', label: 'Hold der.' },
     ])
     expect(STRENGTH_TIME_PER_SIDE_KEYPAD_STEPS.filter((s) => s.key === 'weight')).toHaveLength(1)
+    // El eje por lado de esta prescripción es el TIEMPO: las reps nunca se parten en izq/der.
+    expect(STRENGTH_TIME_PER_SIDE_KEYPAD_STEPS.filter((s) => s.key === 'reps')).toHaveLength(1)
   })
 
   it('las keys del hold son las MISMAS que las de movilidad (el motor lee con una sola rama)', () => {
-    expect(STRENGTH_TIME_KEYPAD_STEPS[1].key).toBe(typedKeypadFields('mobility')[0].key)
-    expect(STRENGTH_TIME_PER_SIDE_KEYPAD_STEPS.slice(1).map((s) => s.key)).toEqual(
+    expect(STRENGTH_TIME_KEYPAD_STEPS[2].key).toBe(typedKeypadFields('mobility')[0].key)
+    expect(STRENGTH_TIME_PER_SIDE_KEYPAD_STEPS.slice(2).map((s) => s.key)).toEqual(
       typedKeypadFields('mobility', 'per_side').map((f) => f.key),
     )
   })
@@ -162,6 +171,18 @@ describe('keypadStepsForTarget — rama de fuerza por tiempo', () => {
   it('el modo tiempo manda sobre la rama por lado del eje REPS (nunca «reps izq/der» en una plancha)', () => {
     const steps = keypadStepsForTarget(strengthTarget({ strengthTimeMode: true, sideMode: 'per_side' }))
     expect(steps.some((s) => s.key === 'reps_left' || s.key === 'reps_right')).toBe(false)
+    // …pero la caja de reps ÚNICA sigue ahí (F1): la fuerza nunca se queda sin reps.
+    expect(steps.filter((s) => s.key === 'reps')).toHaveLength(1)
+  })
+
+  it('F1: el paso REPS existe en las dos variantes del modo tiempo y va ANTES del hold', () => {
+    for (const sideMode of [null, 'alternating', 'per_side'] as const) {
+      const steps = keypadStepsForTarget(strengthTarget({ strengthTimeMode: true, sideMode }))
+      const repsIdx = steps.findIndex((s) => s.key === 'reps')
+      const holdIdx = steps.findIndex((s) => s.key.includes('hold'))
+      expect(repsIdx).toBe(1)
+      expect(holdIdx).toBeGreaterThan(repsIdx)
+    }
   })
 
   it('devuelve una COPIA, no la constante', () => {

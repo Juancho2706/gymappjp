@@ -1238,6 +1238,26 @@ cualquier diferencia visible frena el cierre.
 
 ---
 
+## F1 · Post-QA 11-09 (owner): el tile REPS vuelve en fuerza por tiempo — 0,5 día-agente · Opus + Fable
+
+> **QA del owner 11-09 VERDE** (DATA-TESTING D14) con un solo pedido, con captura del ejecutor RN: «Le quitaste la parte de reps, y reps es algo esencial
+> para los ejercicios de fuerza aunque le pongamos tiempo. El cuadrito de reps nunca debería salir, debería estar al lado del de tiempo. Colócalo de
+> nuevo, porque no sabemos si el alumno quiere colocar sus reps también.» Enmienda a R2 en el SPEC.
+
+- [x] F1.1 **(Opus)** (11-09: `optionalReps` en `set-log-payload.ts`, paso `reps` en `STRENGTH_TIME_*_KEYPAD_STEPS`, `formatStrengthTimeSetLine` con reps; motor+schemas+plan-builder 51/1030 verdes) Motor: `buildStrengthTimePayload` ⇒ `repsDone = int(values.reps)` si entero > 0, si no `null` (nunca 0); keypad de tiempo
+      KG → REPS → SEG (y KG → REPS → IZQ → DER); `formatStrengthTimeSetLine` ⇒ «45 kg × 5 · 30 s» con reps. `buildStrengthPayload` intacto.
+- [x] F1.2 **(Opus)** (11-09: `SetRow.tsx` tile REPS hoisteado fuera del ternario, `fields` con `reps` en modo tiempo, ficha del coach `AnalisisTab` pasa `reps_done`; cola offline ya escribía `reps_done` incondicional; tests/mobile 87/1179) RN `SetRow.tsx` (`strengthTimeMode`): tiles **KG · REPS · SEG** en `ExerciseScreenV3` y `SupersetScreenV3`, keypad nativo con
+      el paso REPS (saltable), `captureRef` con `reps`, cola offline sin descartar reps con `actual_hold_sec`.
+- [x] F1.3 **(Opus)** (11-09: input `reps_done` entre KG y SEG en hero V3 y fila V2, keypad con `reps`, `FormData.reps_done` solo si hay valor, guard de PR `!strengthTimeMode || r > 0`; sin guard excluyente en el server action; ejecutor web 20/269) Web `LogSetForm.tsx` (`strengthTimeMode`): `<input name="reps">` entre KG y SEG, keypad con `reps`, `reps_done` en el FormData
+      solo si hay valor; server action acepta `reps_done` + `actual_hold_sec`.
+- [x] F1.4 **(Opus)** (11-09, gates sobre el árbol final: `pnpm test` 791 archivos / 10 848 tests, tsc mobile 0, typecheck 0, lint 0 err / 572 warn preexistentes, lint:mobile 0, tokens, docs, `expo export` OK) Tests actualizados + casos nuevos (reps 5 ⇒ 5; vacío ⇒ null; `'0'` ⇒ null; formato; keypad; FormData). Gates de W6.9.
+- [ ] F1.5 **(Fable)** Juicio del diff, commit, push, deploy, OTA 1.1.2 android+ios, docs (CURRENT/MOBILE_PARITY/runbook), y **QA del owner del punto**
+      (§7.1 p11 + §7.2 p6 + §7.3 p9 con reps) ⇒ SDD `done`.
+
+**Gate de F1**: los de W6.9 (suite completa, tsc/typecheck, lint, tokens, docs, expo export).
+
+---
+
 ## Backlog heredado (para próximas sesiones; ninguno bloquea)
 
 | # | Deuda | Dónde | Costo estimado |

@@ -208,6 +208,102 @@ describe('W4.3 — el guard de serie vacía deja pasar la serie por tiempo', () 
     })
 })
 
+// ── F1 (owner 11-09) — el tile REPS vuelve a la fila de fuerza por tiempo ────────────────────────
+// «Le quitaste la parte de reps, y reps es algo esencial para los ejercicios de fuerza aunque le
+// pongamos tiempo». Contrato: KG · REPS · SEG, reps OPCIONALES, `reps_done` fuera del FormData sólo
+// cuando está vacío (nunca un `0`, que contaría como serie de cero reps en récords/tonelaje).
+describe('F1 — reps opcionales en fuerza por tiempo', () => {
+    it('la fila por tiempo pinta la caja de REPS junto a la de segundos', () => {
+        mountRow({ strengthTimeMode: true })
+
+        expect(screen.getByLabelText('Repeticiones (opcional)')).toBeTruthy()
+        expect(screen.getByLabelText('Segundos sostenidos')).toBeTruthy()
+    })
+
+    it('reps tipeadas + segundos ⇒ las DOS columnas viajan', async () => {
+        const { container } = mountRow({ strengthTimeMode: true })
+        ;(container.querySelector('input[name="weight_kg"]') as HTMLInputElement).value = '45'
+        ;(screen.getByLabelText('Repeticiones (opcional)') as HTMLInputElement).value = '5'
+        ;(screen.getByLabelText('Segundos sostenidos') as HTMLInputElement).value = '30'
+
+        await act(async () => {
+            ;(container.querySelector('form') as HTMLFormElement).requestSubmit()
+        })
+
+        const fd = lastFormData()
+        expect(fd.get('weight_kg')).toBe('45')
+        expect(fd.get('reps_done')).toBe('5')
+        expect(fd.get('actual_hold_sec')).toBe('30')
+    })
+
+    it('reps VACÍAS ⇒ `reps_done` no viaja (la columna queda NULL, como hasta hoy)', async () => {
+        const { container } = mountRow({ strengthTimeMode: true })
+        ;(screen.getByLabelText('Segundos sostenidos') as HTMLInputElement).value = '30'
+
+        await act(async () => {
+            ;(container.querySelector('form') as HTMLFormElement).requestSubmit()
+        })
+
+        expect(lastFormData().has('reps_done')).toBe(false)
+    })
+
+    it('un `0` en la caja de reps NO viaja (R2: jamás una serie de cero reps)', async () => {
+        const { container } = mountRow({ strengthTimeMode: true })
+        ;(screen.getByLabelText('Repeticiones (opcional)') as HTMLInputElement).value = '0'
+        ;(screen.getByLabelText('Segundos sostenidos') as HTMLInputElement).value = '30'
+
+        await act(async () => {
+            ;(container.querySelector('form') as HTMLFormElement).requestSubmit()
+        })
+
+        expect(lastFormData().has('reps_done')).toBe(false)
+        expect(lastFormData().get('actual_hold_sec')).toBe('30')
+    })
+
+    it('el auto-envío del reloj se lleva las reps que el alumno ya había tipeado', async () => {
+        const { bump } = mountRow({ strengthTimeMode: true })
+        ;(screen.getByLabelText('Repeticiones (opcional)') as HTMLInputElement).value = '5'
+
+        bump({ holdSec: 30, submit: true, source: 'timer', nonce: 1 })
+        await act(async () => {})
+
+        const fd = lastFormData()
+        expect(fd.get('reps_done')).toBe('5')
+        expect(fd.get('actual_hold_sec')).toBe('30')
+        expect(JSON.parse(String(fd.get('metadata')))).toEqual({ hold_source: 'timer' })
+    })
+
+    it('SOLO reps (sin segundos) igual guarda: el guard de fila vacía mira los tres ejes', async () => {
+        const { container } = mountRow({ strengthTimeMode: true })
+        ;(screen.getByLabelText('Repeticiones (opcional)') as HTMLInputElement).value = '5'
+
+        await act(async () => {
+            ;(container.querySelector('form') as HTMLFormElement).requestSubmit()
+        })
+
+        expect(harness.logSetAction).toHaveBeenCalledTimes(1)
+        expect(lastFormData().get('reps_done')).toBe('5')
+        expect(lastFormData().has('actual_hold_sec')).toBe(false)
+    })
+
+    it('`per_side` por tiempo: UNA caja de reps y los DOS lados del hold', async () => {
+        const { container } = mountRow({ strengthTimeMode: true, sideMode: 'per_side' })
+        ;(screen.getByLabelText('Repeticiones (opcional)') as HTMLInputElement).value = '8'
+        ;(screen.getByLabelText('Segundos lado izquierdo') as HTMLInputElement).value = '30'
+        ;(screen.getByLabelText('Segundos lado derecho') as HTMLInputElement).value = '28'
+
+        await act(async () => {
+            ;(container.querySelector('form') as HTMLFormElement).requestSubmit()
+        })
+
+        const fd = lastFormData()
+        expect(fd.get('reps_done')).toBe('8')
+        expect(fd.get('actual_hold_sec')).toBe('58')
+        expect(JSON.parse(String(fd.get('metadata')))).toEqual({ left_sec: 30, right_sec: 28 })
+        expect(fd.has('reps_right')).toBe(false)
+    })
+})
+
 describe('W4.2a — auto-envío en la fila TIPADA (movilidad)', () => {
     it('un `holdPrefill` con `submit` dispara UN solo envío y marca la fuente', async () => {
         const { bump } = mountRow({ mode: 'mobility' })
