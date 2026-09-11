@@ -1112,7 +1112,7 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
       (`nutrition-smoke` sin `NEXT_PUBLIC_SUPABASE_*`; `profile-analytics/overview.test.ts` rojo según
       la hora) para no declarar verde lo que ya estaba rojo, y los gates nuevos del tren.
       **Aceptación**: `docs:check` verde y el archivo sigue siendo canónico válido.
-- [ ] W6.8 `docs/operations/MOBILE_RELEASES_OTA.md`: registrar la publicación (tag, grupos
+- [x] W6.8 (11-09: párrafo «Aplicación del 2026-09-11» + fila 1.1.2 con grupos android `5f4dfb0f` run 34545510873 / ios `0c5e8cb6` run 34545517678) `docs/operations/MOBILE_RELEASES_OTA.md`: registrar la publicación (tag, grupos
       android/ios y `run id`). **Aceptación**: las dos corridas citadas y verdes.
 - [x] W6.9 (10-09 ~20:35Z sobre `0627f5b4`, jefe; salida real en la tabla de abajo — incluye el fix `0627f5b4` que salió de la suite completa: `auto-rest-pref` importaba el barrel `../timers` y arrastraba `react-native` al project `web-node` vía `auth-actions.ts`) **Gates completos, ejecución real** (tabla abajo). **Aceptación**: ninguna casilla verde sin
       salida de consola.
@@ -1132,16 +1132,16 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
       esquema. **Aceptación**: `list_migrations` muestra las 2 con su timestamp y
       `has_function_privilege` confirma la ACL de `get_client_exercise_prs` idéntica a la previa; si
       **alguna faltara**, el deploy se detiene y se aplica antes de continuar.
-- [ ] W6.12 Deploy web a Vercel desde `rnmobiledenuevo` = `master`. **Aceptación**: `deployment id` en
+- [x] W6.12 (11-09: push `6321a732` a `rnmobiledenuevo` y `master` 00:05Z; deploy `dpl_BeykJxqvU9w1LUJsfAsBiTPnDgeZ` READY 00:10Z; humo 200 en `/`, `/login`, `/api/health`; E2E `prod-suave` 9/9 (run 34545462628, 42,2 s)) Deploy web a Vercel desde `rnmobiledenuevo` = `master`. **Aceptación**: `deployment id` en
       estado READY anotado en CURRENT y MOBILE_PARITY; `pnpm qa:prod:suave` verde después.
-- [ ] W6.13 **Aviso a Gerardo (Movens)**, redactado y enviado por el owner **después del deploy y
+- [ ] W6.13 (texto listo en DATA-TESTING §11.1; el owner dijo 11-09 «le voy a decir a Gerardo» — queda su envío) **Aviso a Gerardo (Movens)**, redactado y enviado por el owner **después del deploy y
       antes de la OTA**, con los tres efectos que el tren acepta: (a) sus **21 bloques de movilidad en
       superserie** ahora traen reloj y se guardan solos al llegar a 0; (b) «plancha frontal mantenida»
       (hoy Cardio 3 × 1 min) puede pasar a **Fuerza por tiempo** con carga y RIR — **el cambio lo hace
       él, el tren no migra datos**; (c) **flota mixta**: un alumno en 1.1.2 sin la OTA ve el bloque en
       modo tiempo como fuerza clásica con `reps = "30s"` de objetivo y registra a mano (degradación
       honesta, sin crash). **Aceptación**: el texto queda citado en `DATA-TESTING.md`.
-- [ ] W6.14 **Aviso general a coaches** (`news_items`), redactado y enviado por el owner **después del
+- [x] W6.14 (11-09 00:12:33Z, con el OK del owner «dale el tres»: publicada por SQL en LIVE, id `cbecf922-a7b0-4c8b-bdd0-2623cfdf8f84`, tipo `announcement`, sin fijar, `published_at` seteado; texto = DATA-TESTING §11.2; por SQL NO dispara la push `news_published`, la campanita la muestra igual) **Aviso general a coaches** (`news_items`), redactado y enviado por el owner **después del
       deploy y antes de la OTA**, con **dos líneas** que este tren debe a los coaches y que **no van
       como mensajes individuales** (**R35** + DECISIONS-2): (a) **M2 cambia récords ya listados** —
       617 filas, 25 alumnos, **72 pares alumno×ejercicio afectados**: un «récord» que en realidad era
@@ -1149,7 +1149,7 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
       «Pasar solo al descanso» **apagado** ya **no se corta** un descanso que el alumno arrancó a mano.
       **Aceptación**: el texto queda citado en `DATA-TESTING.md` y la novedad publicada antes de la
       OTA.
-- [ ] W6.15 OTA 1.1.2 android + ios por `.github/workflows/mobile-ota.yml` (**publicar a mano está
+- [x] W6.15 (11-09 ~00:13–00:16Z: dry-run ASC run 34545214811 ⇒ piso 1.1.2 READY_FOR_SALE sin cambios; sin cambio nativo en `27132cb9..6321a732`; android grupo `5f4dfb0f-a0d5-44b1-86a3-369a0672ecad` run 34545510873 verde · ios grupo `0c5e8cb6-f742-44c1-9995-bdc8eeb5e2cf` run 34545517678 verde, runtime 1.1.2, canal `production`) OTA 1.1.2 android + ios por `.github/workflows/mobile-ota.yml` (**publicar a mano está
       prohibido por runbook**), **última del orden**. Antes: releer el estado real en App Store Connect
       con `ios-submit-review.yml` en `dry_run=true` para confirmar el piso. **Aceptación**: los dos
       grupos EAS Update verdes, con hash y `run id` anotados.
@@ -1205,7 +1205,7 @@ tiene que caber en la OTA 1.1.2. **Corrido 10-09 (jefe):** `tsc --noEmit` mobile
 | Tokens | `pnpm check:tokens` | ✅ 86 + 5 tokens en paridad |
 | Docs | `pnpm docs:check` | ✅ 20 canónicos, CURRENT 14,9 KB |
 | E2E ejecutor | `pnpm test:e2e` (1 navegador, solo al cierre) | ⏸ NO corrido: `tests/exec-hold-superset.spec.ts` se omite sin `E2E_HOLD_PLAN_ID`, que nace del seed que el owner todavía no corrió contra LIVE (W6.10). Queda con causa anotada, no verde |
-| Humo prod | `pnpm qa:prod:suave` (después del deploy) | ⏳ después del deploy |
+| Humo prod | `pnpm qa:prod:suave` (después del deploy) | ✅ curl 200 en `/`, `/login`, `/api/health` tras `dpl_BeykJxqv…`; tanda `prod-suave` por CI: 9/9 (run 34545462628, 42,2 s) |
 | SQL | tx-rollback ×2 + conteo de filas en violación (0) + **prueba positiva del CHECK sobre un bloque temporal del alumno E2E, con `ROLLBACK`** + `EXPLAIN` de `get_client_exercise_prs` | ✅ en W0 (DATA-TESTING §0.5, 10-09 20:47–20:51Z; prueba positiva sobre `qa-cat-rojas@josefit-designqa.cl` porque las personas E2E no existen en LIVE) · W6.11 re-verificado 10-09 ~20:20Z |
 
 **Baseline de CI rojo preexistente (no se declara verde lo que ya estaba rojo):** `nutrition-smoke`

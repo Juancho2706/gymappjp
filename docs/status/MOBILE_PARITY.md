@@ -12,9 +12,10 @@ source_of_truth: apps/web responsive + apps/mobile
 
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
 
-> **2026-09-10 ~20:40Z (tren «Cuenta atrás en pantalla» + preferencia D5 «Pasar solo al descanso» — EN CÓDIGO LOCAL: `rnmobiledenuevo`
-> `0627f5b4`, SIN push; deploy y OTA 1.1.2 android/ios pendientes del OK del owner — los hashes se anotan acá al publicar; migraciones
-> M1 `20260910205046` + M2 `20260910205101` ya en LIVE desde W0; [SDD](../specs/cuenta-atras-en-pantalla/SPEC.md))**. Paridad por pieza:
+> **2026-09-11 00:13Z (tren «Cuenta atrás en pantalla» + preferencia D5 «Pasar solo al descanso» — EN PRODUCCIÓN: `master` = `rnmobiledenuevo` =
+> `6321a732`, deploy `dpl_BeykJxqvU9w1LUJsfAsBiTPnDgeZ` READY 00:10Z, OTA 1.1.2 `production` android `5f4dfb0f-a0d5-44b1-86a3-369a0672ecad` (run 34545510873) / ios
+> `0c5e8cb6-f742-44c1-9995-bdc8eeb5e2cf` (run 34545517678); migraciones M1 `20260910205046` + M2 `20260910205101` en LIVE desde W0; E2E `prod-suave` 9/9 (run 34545462628, 42,2 s);
+> [SDD](../specs/cuenta-atras-en-pantalla/SPEC.md); **QA del owner PENDIENTE**, 45 puntos en DATA-TESTING §7)**. Paridad por pieza:
 > **mismo motor** (`@eva/workout-engine`: `hold-autolog`, `auto-rest-pref`, `rest-after-commit`, `auto-rest-copy`) consumido por
 > `useCountdown` (RN `v3/timing.ts` + hook `use-hold-module.ts`) y `useExecCountdown` (web) con `prime`/`expiredWhileAway` — **paridad
 > nueva**; **superserie con reloj bajo el video** (RN `SupersetScreenV3.tsx` + `HoldModuleV3.tsx` / web `SupersetStepV3.tsx` +
