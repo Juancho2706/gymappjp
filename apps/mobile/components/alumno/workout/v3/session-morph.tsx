@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
-import { Dimensions, Modal, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
+import { AppState, Dimensions, Modal, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { usePathname, useRouter } from 'expo-router'
 import * as Sentry from '@sentry/react-native'
@@ -21,7 +21,8 @@ import Animated, {
 } from 'react-native-reanimated'
 import { useTheme } from '../../../../context/ThemeContext'
 import { resolveOrFallback } from '../../../../lib/measure-guard'
-import { resolveDespegueReady } from '../../../../lib/despegue-ready'
+import { isMorphLaunchFresh, resolveDespegueReady } from '../../../../lib/despegue-ready'
+import { peekPlanCacheHint } from '../../../../lib/plan-cache-hint'
 import { FONT } from '../../../../lib/typography'
 import { resolveExecTheme, type ExecTheme } from './exec-theme'
 import { CircularBrandLogo } from '../../../CircularBrandLogo'
@@ -129,9 +130,6 @@ const SessionMorphContext = createContext<SessionMorphContextValue | null>(null)
 // Puente módulo-nivel Despegue ↔ ExecutorV3 (equivalente RN del sessionStorage 'eva:exec-v3-morph' web).
 // ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
-/** Ventana de validez de la marca via-morph: si el ejecutor no la consume en este lapso, se considera
- *  rancia (un aborto dejó basura global) y NO salta el SessionIntro. Espejo del TTL del fix web. */
-const MORPH_LAUNCH_TTL_MS = 10000
 /** Marca "llegué por el morph" como TIMESTAMP (o null): el ExecutorV3 la consume al montar y —si es
  *  reciente— salta DIRECTO a la fase 'start'. `markMorphLaunch`/`consumeMorphLaunch` son funciones a
  *  nivel MÓDULO, así que el `Date.now()` de la marca no cae en el lint react-compiler de los handlers. */
@@ -154,7 +152,8 @@ export function markMorphLaunch(): void {
 export function consumeMorphLaunch(): boolean {
   const ts = pendingMorphLaunch
   pendingMorphLaunch = null
-  const fresh = ts != null && Date.now() - ts < MORPH_LAUNCH_TTL_MS
+  // El TTL (20 s) y su criterio viven en `lib/despegue-ready` — puros y con suite propia.
+  const fresh = isMorphLaunchFresh(ts, Date.now())
   morphConsumeState = fresh ? 'fresh' : 'stale'
   return fresh
 }
@@ -841,14 +840,32 @@ function DespegueOverlay({
   // montar el Modal, así que incluye lo que tardó el propio montaje y en Android suele pasarse de 4600.
   // `viaMorph` dice qué pasó con la marca vía-morph y es lo que separa "lento de verdad" ('none'/'fresh')
   // de "falso positivo del TTL" ('stale', donde el ejecutor NUNCA iba a avisar por contrato).
+  //
+  // NO se reporta con la app en BACKGROUND (specs/despegue-rapido · R4): iOS (y Android con ahorro de
+  // batería) throttlea los timers de una app que no está en pantalla, así que el fallback de 4,6 s
+  // vence tardísimo por RAZONES DEL SISTEMA — el alumno se fue a otra app a mitad de ceremonia y
+  // nadie estaba mirando. Eso no es lentitud del ejecutor y ensucia el issue. El `ready` se fuerza
+  // IGUAL (la válvula no se toca): lo único que se omite es el aviso.
+  //
+  // `hasPlanCache` separa las dos historias que hoy se ven idénticas en Sentry: 'yes' ⇒ la rutina
+  // estaba en disco y aun así no pintó a tiempo (mirar el waterfall del hook); 'no' ⇒ primera vez con
+  // este plan, no había nada que pintar sin red; 'unknown' ⇒ el ejecutor ni llegó a leer la caché.
   useEffect(() => {
     if (forceReady && !sceneReady) {
+      const appState = AppState.currentState
+      if (appState !== 'active') return
       try {
         Sentry.captureMessage('exec-v3-despegue-force-ready-sin-escena', {
           // fingerprint fijo: sin él Sentry agrupa por el nombre de la función del stack (EVA-MOBILE-9/C).
           fingerprint: ['exec-v3', 'despegue-force-ready-sin-escena'],
           level: 'warning',
-          extra: { planId, elapsedMs: Date.now() - startedAt, viaMorph: morphConsumeState },
+          extra: {
+            planId,
+            elapsedMs: Date.now() - startedAt,
+            viaMorph: morphConsumeState,
+            hasPlanCache: peekPlanCacheHint(planId),
+            appState,
+          },
         })
       } catch {
         // Sentry no inicializado → no-op silencioso.

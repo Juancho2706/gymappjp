@@ -10,7 +10,7 @@
  * escena que avisa TARDE devuelve el overlay al camino feliz.
  */
 import { describe, expect, it } from 'vitest'
-import { resolveDespegueReady } from '../../apps/mobile/lib/despegue-ready'
+import { isMorphLaunchFresh, MORPH_LAUNCH_TTL_MS, resolveDespegueReady } from '../../apps/mobile/lib/despegue-ready'
 
 describe('resolveDespegueReady · listo real vs. válvula del fallback', () => {
   it('nada listo (ceremonia en curso) → el tap NO se habilita', () => {
@@ -51,5 +51,36 @@ describe('resolveDespegueReady · listo real vs. válvula del fallback', () => {
       signalsReady: false,
       degraded: false,
     })
+  })
+})
+
+/**
+ * TTL de la marca vía-morph (specs/despegue-rapido · R3 · B4). Si el ExecutorV3 monta DESPUÉS de la
+ * ventana, la marca se descarta y el alumno ve el splash `SessionIntro` DESPUÉS del Despegue. Con la
+ * válvula del overlay a 4,6 s hay ejecutores que entran a los 6 s y terminan de montar a los 11: a
+ * 10 s cobraban el splash repetido, a 20 s no.
+ */
+describe('isMorphLaunchFresh · ventana de la marca vía-morph (20 s)', () => {
+  const T0 = 1_757_500_000_000
+
+  it('la ventana es de 20 s (10 s dejaba afuera a los ejecutores lentos de EVA-MOBILE-F)', () => {
+    expect(MORPH_LAUNCH_TTL_MS).toBe(20_000)
+  })
+
+  it('marca de 15 s → SIGUE fresca ⇒ arranca en «start», sin repetir el splash', () => {
+    expect(isMorphLaunchFresh(T0, T0 + 15_000)).toBe(true)
+  })
+
+  it('marca de 25 s → VENCIDA ⇒ se ignora (basura de un aborto), el ejecutor muestra el SessionIntro', () => {
+    expect(isMorphLaunchFresh(T0, T0 + 25_000)).toBe(false)
+  })
+
+  it('justo en el borde: 19,999 s fresca, 20 s clavados vencida', () => {
+    expect(isMorphLaunchFresh(T0, T0 + 19_999)).toBe(true)
+    expect(isMorphLaunchFresh(T0, T0 + 20_000)).toBe(false)
+  })
+
+  it('sin marca (nadie lanzó el Despegue) → nunca es fresca', () => {
+    expect(isMorphLaunchFresh(null, T0)).toBe(false)
   })
 })

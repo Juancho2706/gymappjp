@@ -12,15 +12,23 @@
  *    vivo y quita al terminar. Los sync consultan `waitForCeremonyEnd()` para DIFERIR sólo su refresh
  *    (nunca el flush de datos) hasta que la ceremonia termine.
  *  - La marca de handoff `eva:exec-v3-morph` con TTL: en vez de un `'1'` eterno de consumo único, se
- *    escribe un timestamp; el consumidor sólo la acepta si es fresca (< 10 s) para que una marca rancia
+ *    escribe un timestamp; el consumidor sólo la acepta si es fresca (< `MORPH_TTL_MS`) para que una rancia
  *    de una ceremonia muerta no salte fases en la próxima entrada. Se acepta el `'1'` legado para no
  *    romper una sesión abierta durante el deploy.
  */
 
 const CEREMONY_ATTR = 'data-exec-ceremony'
 const MORPH_KEY = 'eva:exec-v3-morph'
-/** Frescura de la marca de morph: más allá de esto la ceremonia se considera abandonada. */
-const MORPH_TTL_MS = 10_000
+/**
+ * Frescura de la marca de morph: más allá de esto la ceremonia se considera abandonada.
+ *
+ * 20 s, no 10 s (Sentry EVA-NEXTJS-1P, 09-2026): en 3G el ejecutor puede montar recién a los 11-15 s
+ * del tap y con el TTL viejo la marca ya estaba vencida → el alumno veía el `SessionIntro` OTRA VEZ
+ * después del Despegue (splash duplicado) y el overlay nunca recibía la señal de listo. El TTL sólo
+ * existe para que una marca de una ceremonia MUERTA no salte fases días después; 20 s sigue siendo
+ * muy por debajo de "otra sesión" y cubre la cola lenta real de la carga del ejecutor.
+ */
+const MORPH_TTL_MS = 20_000
 
 /** Reloj a nivel módulo (evita el lint de react-compiler que prohíbe `Date.now()` en handlers). */
 function nowMs(): number {

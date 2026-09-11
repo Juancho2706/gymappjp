@@ -46,3 +46,26 @@ export function resolveDespegueReady({ animDone, sceneReady, forceReady }: Despe
   const degraded = animDone && forceReady && !sceneReady
   return { ready: signalsReady || degraded, signalsReady, degraded }
 }
+
+/**
+ * Ventana de validez de la marca «vengo del Despegue» (`markMorphLaunch` → `consumeMorphLaunch` en
+ * `session-morph.tsx`). Si el ExecutorV3 monta DESPUÉS de este lapso, la marca se considera rancia
+ * (basura de un aborto) y el ejecutor NO salta el `SessionIntro`: el alumno ve el splash otra vez,
+ * DESPUÉS de la ceremonia.
+ *
+ * 10 s → **20 s** (specs/despegue-rapido · R3): con la válvula del overlay a 4,6 s
+ * (`READY_FALLBACK_MS`), un ejecutor lento —Galaxy S24 en celular, `EVA-MOBILE-F`— entra a los 6 s y
+ * puede tardar 11 s en montar del todo; a 10 s perdía la marca y cobraba el splash repetido. 20 s
+ * sigue siendo MUY corto para confundirse con una entrada nueva (nadie relanza el mismo plan en ese
+ * lapso sin pasar por `markMorphLaunch` de nuevo) y es el MISMO número que el web
+ * (`apps/web/src/lib/workout/launch-ceremony.ts`).
+ */
+export const MORPH_LAUNCH_TTL_MS = 20_000
+
+/**
+ * ¿La marca vía-morph sigue fresca? `markedAt` es el epoch de `markMorphLaunch()` (o `null` si no hay
+ * marca). Puro a propósito: el TTL es la regla que decide si el alumno ve o no un splash de más.
+ */
+export function isMorphLaunchFresh(markedAt: number | null, now: number): boolean {
+  return markedAt != null && now - markedAt < MORPH_LAUNCH_TTL_MS
+}

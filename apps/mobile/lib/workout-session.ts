@@ -38,6 +38,7 @@ import { useEntitlements } from './entitlements'
 import type { StudentAccessState } from './entitlements-core'
 import { isCoachAccountPausedError, STUDENT_ACCESS_COPY } from './student-access-copy'
 import { cachePlan, enqueueLog, getCachedPlan, getPendingLogCount } from './offline-cache'
+import { notePlanCacheHint } from './plan-cache-hint'
 import { shouldAutoStartProgram, startWorkoutProgram } from './start-program'
 import { checkOnline } from './use-online'
 import { classifyPlanLoad } from './workout-load-state'
@@ -691,12 +692,20 @@ export function useWorkoutSession(
       // (`client.ts:21`: `auth.getUser()` + un select a `clients`) y el select del plan de más abajo
       // solo necesita `planId`, que ya tenemos: no dependían entre sí y estaban en serie, pagando dos
       // viajes donde alcanza uno. Esta pantalla pelea contra el fallback de ~4,6 s del despegue
-      // (`session-morph.tsx:72`), así que un viaje entero es una tajada grande del presupuesto.
+      // (`session-morph.tsx:73`), así que un viaje entero es una tajada grande del presupuesto.
       //
-      // El `await` de cada una queda EXACTAMENTE donde estaba, así que el orden de los `setState`, del
-      // snapshot local y del render desde caché no cambia en nada: lo único que cambia es cuándo
-      // arrancan los requests.
+      // Y la RED no puede gatear el primer pintado (Sentry EVA-MOBILE-F, `viaMorph:'fresh'` con
+      // `elapsedMs` 4,7 s en celular): antes el `await clientPromise` estaba ARRIBA del snapshot y de
+      // la caché del plan, así que el camino «la rutina ya está en disco» esperaba igual a que
+      // `auth.getUser()` volviera de la red para recién pintar y soltar `loading`. Ahora lo LOCAL
+      // (snapshot del día + caché del plan) corre primero y `setLoading(false)` sale sin tocar la red;
+      // el perfil y el plan del server siguen exactamente donde estaban, sólo que se esperan después.
       const clientPromise = getClientProfile()
+      // Marca la promesa como manejada (mismo motivo que el `planPromise.catch` de abajo): entre su
+      // creación y su `await` ahora hay I/O local, así que un rechazo de auth/red quedaría unos ms sin
+      // handler y el runtime lo reporta como unhandled rejection. El `await` real lee el MISMO
+      // resultado y el `catch` del `try` lo sigue manejando igual.
+      clientPromise.catch(() => { /* lo maneja el await de abajo */ })
       // `Promise.resolve(...)` ENVUELVE el builder UNA sola vez, y esa llamada es la que dispara el
       // request. NO guardar el builder pelado para awaitearlo después: `PostgrestBuilder.then()` ejecuta
       // un fetch NUEVO en cada llamada (no memoiza), así que un `.catch()` acá más un `await` abajo
@@ -717,13 +726,6 @@ export function useWorkoutSession(
       // Marca la promesa como manejada: si `getClientProfile()` lanza, el `await` de abajo no llega a
       // correr y quedaría un unhandled rejection. El `await` real sigue leyendo el resultado igual.
       planPromise.catch(() => { /* lo maneja el await de abajo */ })
-
-      const client = await clientPromise
-      if (client) {
-        setClientId(client.id)
-        clientIdRef.current = client.id
-        setIsDemo(client.isDemo)
-      }
 
       // Día que esta sesión escribe: hoy, o la fecha objetivo en el editor de día pasado (`?fecha`).
       // Es la ventana ÚNICA de logs del día / historial / máximos / última sesión y del upsert de `logSet`.
@@ -754,8 +756,17 @@ export function useWorkoutSession(
         }
       }
 
-      // Cache offline del plan (render inmediato) → server (fuente de verdad).
+      // Cache offline del plan (render inmediato) → server (fuente de verdad). Va ANTES de esperar el
+      // perfil a propósito: es AsyncStorage puro (sin red) y es lo único que el primer frame necesita
+      // para dejar de decir «Cargando rutina…». `loadAreas` tampoco pide `clientId` (sólo mira
+      // `section_template_id` de los bloques) y ya iba sin await, así que nada de esto depende del
+      // perfil. Con esto, un alumno que ya abrió su rutina alguna vez ve los bloques aunque la red
+      // esté muerta, y el Despegue recibe su `signalMorphSceneReady()` (gateado por `loading`) sin
+      // esperar un round-trip de auth.
       const cached = await getCachedPlan<{ title: string; blocks: SessionBlock[]; activeWeekVariant?: string | null }>(planId)
+      // Pista para el aviso del Despegue (`EVA-MOBILE-F`): si vuelve a rendirse a los 4,6 s, el evento
+      // dice si había o no rutina en disco. Sólo telemetría en memoria, no toca la carga.
+      notePlanCacheHint(planId, cached != null)
       if (cached) {
         setPlanTitle(cached.title)
         setBlocks(cached.blocks)
@@ -763,6 +774,17 @@ export function useWorkoutSession(
         void loadAreas(cached.blocks)
         paintedFromCache = true
         setLoading(false)
+      }
+
+      // Perfil del alumno. Su request salió al principio del `load` (arriba), así que acá sólo se
+      // cobra lo que falte: lo que se movió es el punto de ESPERA, no el de arranque. Todo lo que
+      // sigue —logs del día, historial, máximos, última sesión y el auto-start— sí necesita
+      // `client.id`, por eso el `await` vive justo antes de ese bloque.
+      const client = await clientPromise
+      if (client) {
+        setClientId(client.id)
+        clientIdRef.current = client.id
+        setIsDemo(client.isDemo)
       }
 
       // Ya viajó en paralelo con el perfil (ver arriba): acá normalmente ya resolvió.

@@ -7,7 +7,7 @@ import { motion } from 'framer-motion'
 import { useReducedMotion } from '@/lib/use-reduced-motion'
 import * as Sentry from '@sentry/nextjs'
 import { LAUNCH_BRAND_FALLBACK_LOGO, resolveLaunchBrand } from '@/lib/workout/exec-launch-brand'
-import { clearCeremonyDom, clearMorphFlag, markCeremonyDom, markMorphFlag } from '@/lib/workout/launch-ceremony'
+import { clearCeremonyDom, clearMorphFlag, isCeremonyActive, markCeremonyDom, markMorphFlag } from '@/lib/workout/launch-ceremony'
 import { useCaptureStudentWorkoutLaunched } from '@/lib/posthog/events'
 
 /**
@@ -44,11 +44,34 @@ const EXIT_MS = 320
 /** Reloj monótono a nivel módulo (evita `Date.now()` en handlers del render — lint react-compiler). */
 const perfNow = (): number => (typeof performance !== 'undefined' ? performance.now() : Date.now())
 
+/**
+ * Pathname puro del destino (sin query ni hash, sin barra final) para comparar contra `usePathname()`.
+ * Sentry EVA-NEXTJS-1P: antes cualquier cambio de pathname contaba como "ruta commiteada", así que el
+ * botón "atrás" del teléfono o un link a otra sección marcaban `routeReady` sobre una ruta que NO es el
+ * ejecutor, inflando el aviso con casos que no son degradación. Ahora sólo cuenta el DESTINO real.
+ */
+function destPathOf(href: string): string {
+    let path = href
+    try {
+        path = new URL(href, typeof window !== 'undefined' ? window.location.origin : 'http://localhost').pathname
+    } catch {
+        path = href.split('#')[0].split('?')[0]
+    }
+    return path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path
+}
+
+/** Normaliza el pathname vivo con la misma regla que `destPathOf` (barra final). */
+function normalizePath(path: string): string {
+    return path.length > 1 && path.endsWith('/') ? path.slice(0, -1) : path
+}
+
 interface Rect { top: number; left: number; width: number; height: number; radius: number }
 interface MorphState {
     href: string
     startedAt: number
     startPath: string
+    /** Pathname del ejecutor al que apunta `href` — única ruta que cuenta como "commiteada". */
+    destPath: string
     rect: Rect
     label: string
     logoUrl: string | null
@@ -172,7 +195,7 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
             // Marca de ceremonia en el DOM → los sync de cola del layout difieren su refresh mientras dure.
             markCeremonyDom()
 
-            setState({ href, startedAt: launchedAtPerf, startPath: pathname, rect, label, logoUrl: brand.logoUrl, initial: brand.initial })
+            setState({ href, startedAt: launchedAtPerf, startPath: pathname, destPath: destPathOf(href), rect, label, logoUrl: brand.logoUrl, initial: brand.initial })
             setAnimDone(false)
             setRouteReady(false)
             setExecReady(false)
@@ -212,7 +235,12 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
             timersRef.current.push(window.setTimeout(() => {
                 // Si el fallback gana la carrera con la señal REAL aún sin llegar, es una degradación
                 // (red lenta / ruta que no commiteó): la reportamos con el tiempo transcurrido.
-                if (!execReadyRef.current || !routeReadyRef.current) {
+                // iOS (y Chrome Android) THROTTLEAN los timers con la pestaña en background: si el alumno
+                // se fue de la app, el fallback dispara tardísimo y el aviso no habla de ninguna
+                // degradación real, sólo de que la pestaña estaba escondida. Se habilita el tap igual
+                // (la válvula no cambia), pero NO se reporta: era ruido puro en EVA-NEXTJS-1P.
+                const hidden = typeof document !== 'undefined' && document.visibilityState === 'hidden'
+                if (!hidden && (!execReadyRef.current || !routeReadyRef.current)) {
                     // EVA-NEXTJS-Z: el mensaje anterior era uno solo para las DOS degradaciones, y
                     // sin saber cual señal falto no habia nada que arreglar (96 avisos anonimos).
                     // Ahora cada causa tiene su propio grupo en Sentry:
@@ -241,6 +269,33 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
                                     ? ((navigator as Navigator & { connection?: { effectiveType?: string } }).connection
                                           ?.effectiveType ?? null)
                                     : null,
+                            // 'navigate' | 'reload' | 'back_forward' | 'prerender': separa el tap normal
+                            // de un reload o de una vuelta por historial (donde el overlay arranca con la
+                            // ruta ya puesta y la carrera no significa lo mismo).
+                            navigationType: (() => {
+                                try {
+                                    const nav = performance.getEntriesByType('navigation')[0] as
+                                        | (PerformanceEntry & { type?: string })
+                                        | undefined
+                                    return nav?.type ?? null
+                                } catch {
+                                    return null
+                                }
+                            })(),
+                            // ¿Seguía viva la marca de ceremonia en <html>? Si es false, algo la barrió
+                            // (navegación dura / remonte del provider) y el aviso es de otra película.
+                            ceremonyAttr: isCeremonyActive(),
+                            // `sessionStorage` disponible: en falso, el handoff por marca es IMPOSIBLE
+                            // (modo privado / ITP) y la falta de `execReady` se explica sola.
+                            storageOk: (() => {
+                                try {
+                                    sessionStorage.getItem('eva:exec-v3-ready')
+                                    return true
+                                } catch {
+                                    return false
+                                }
+                            })(),
+                            visibility: typeof document !== 'undefined' ? document.visibilityState : null,
                         },
                     })
                 }
@@ -252,10 +307,14 @@ export function WorkoutLaunchProvider({ children }: { children: React.ReactNode 
 
     useEffect(() => {
         if (!state) return
-        if (pathname !== state.startPath) {
+        // `routeReady` = la ruta DEL EJECUTOR commiteó, no "cambió el pathname". Un "atrás" del teléfono
+        // hacia otra sección, o un link a otra parte de la app, ya no cuentan como ruta lista (antes sí,
+        // e inflaban EVA-NEXTJS-1P con casos que no eran degradación del ejecutor).
+        if (normalizePath(pathname) === state.destPath) {
             if (!routeReady) setRouteReady(true)
             return
         }
+        if (pathname !== state.startPath) return
         // Volvimos al path de lanzamiento estando ya fuera → el alumno tocó "atrás" del teléfono:
         // el overlay debe irse (no quedar pegado sobre el dashboard). ABORTO: una ceremonia muerta no
         // debe dejar la marca de morph rancia, o la próxima entrada saltaría fases indebidamente.

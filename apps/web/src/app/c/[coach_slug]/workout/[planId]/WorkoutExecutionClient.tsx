@@ -1849,8 +1849,20 @@ export function WorkoutExecutionClient({
     // stepper base (el motor va montado detras) o el cover de ruta → el FLASH "Ejercicio 1 de 5" + la
     // sensacion de "se recarga la pagina". Doble rAF = garantiza al menos un paint de SessionStart antes
     // de la senal. Flag en sessionStorage + evento (el provider persiste, escucha ambos).
+    //
+    // RED DE SEGURIDAD (Sentry EVA-NEXTJS-1P / 1Q, 09-2026): la señal salía SÓLO por el camino vía-morph,
+    // o sea sólo si `readAndConsumeMorphFlag()` había devuelto true. Si `sessionStorage` falla (modo
+    // privado de iOS, ITP, storage lleno) o la marca venció su TTL porque la ruta tardó, `execV3ViaMorph`
+    // queda en false y el overlay NO recibe nada NUNCA → siempre cae al fallback de 4,6 s y le miente al
+    // alumno («ESTO ESTÁ TARDANDO») aunque el ejecutor ya esté pintado debajo. Por eso, si la ceremonia
+    // sigue viva en el DOM (`data-exec-ceremony` en <html>, que sí sobrevive sin sessionStorage), también
+    // avisamos — en CUALQUIER fase, porque sin morph el ejecutor puede estar en 'intro' o en 'session' y
+    // eso igual significa «ya pinté, podés despedirte». El camino vía-morph queda idéntico.
     useEffect(() => {
-        if (!execV3Active || !execV3ViaMorph || execV3Phase !== 'start') return
+        if (!execV3Active) return
+        const viaMorphReady = execV3ViaMorph && execV3Phase === 'start'
+        const ceremonyHuerfana = !execV3ViaMorph && isCeremonyActive()
+        if (!viaMorphReady && !ceremonyHuerfana) return
         let raf1 = 0
         let raf2 = 0
         raf1 = requestAnimationFrame(() => {
