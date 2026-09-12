@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient'
 import type { SportTokens } from '@eva/brand-kit'
 import { STICKER_PAINT_ORDER } from './share-layout'
 import {
-    liveDeltaFor,
+    livePositionFor,
     SHARE_CANVAS_H,
     SHARE_CANVAS_W,
     type ShareBackground,
@@ -238,9 +238,13 @@ function StaticStickerSlot({ state, size, width, height, onLayout, children }: S
  * de render y obliga a desmontar/remontar el bloque en cada toque, que se siente como un tirón justo
  * al empezar a arrastrar.
  *
- * `left`/`top` siguen siendo layout normal (posición YA commiteada) y el delta viaja por transform:
- * al soltar, React re-renderiza con la posición nueva y `liveDeltaFor` devuelve 0 en ese MISMO
- * render, así que no hay ni un frame con las dos cosas aplicadas ni con ninguna.
+ * La posición ENTERA viaja por transform (`left`/`top` quedan en 0) y la calcula `livePositionFor`
+ * en el UI thread. NO volver a poner la base commiteada en `left`/`top` con un delta encima: React
+ * aplica el `left`/`top` nuevo en su commit y Reanimated recién cambia el worklet (con la base
+ * nueva) en un `useEffect`, así que durante un frame el worklet viejo sumaba su delta sobre la
+ * posición nueva y el bloque se «teletransportaba» al doble del arrastre (bug del 12-09-2026, medido
+ * frame a frame). Con el destino completo dentro del worklet no hay ninguna prop de React en la
+ * cadena y cualquier orden de commit pinta el mismo punto.
  *
  * El orden del transform (`translate → scale`) tiene que ser EL MISMO que el de la zona de gesto en
  * `StickerGestureLayer`: si se separan, el marco punteado deja de calzar con el bloque al pellizcar.
@@ -262,12 +266,12 @@ function LiveStickerSlot({
     const h = size ? size.h : 0
 
     const moved = useAnimatedStyle(() => {
-        const d = liveDeltaFor(live.value, id, baseX, baseY, baseScale)
+        const p = livePositionFor(live.value, id, baseX, baseY, baseScale)
         return {
             transform: [
-                { translateX: -w / 2 + d.dx },
-                { translateY: -h / 2 + d.dy },
-                { scale: d.k },
+                { translateX: p.cx - w / 2 },
+                { translateY: p.cy - h / 2 },
+                { scale: p.k },
             ],
         }
     })
@@ -275,7 +279,7 @@ function LiveStickerSlot({
     return (
         <Animated.View
             onLayout={onLayout}
-            style={[{ position: 'absolute', left: baseX, top: baseY, opacity: size ? 1 : 0 }, moved]}
+            style={[{ position: 'absolute', left: 0, top: 0, opacity: size ? 1 : 0 }, moved]}
         >
             {children}
         </Animated.View>

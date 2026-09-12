@@ -13,7 +13,7 @@
 // ── Contratos ────────────────────────────────────────────────────────────────────────────────────
 export {
     idleStickerTransform,
-    liveDeltaFor,
+    livePositionFor,
     SHARE_CANVAS_H,
     SHARE_CANVAS_W,
     type ShareBackground,

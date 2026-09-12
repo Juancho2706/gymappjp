@@ -274,8 +274,10 @@ export function WorkoutShareComposer({ visible, onClose, data, embedded = false 
      *
      * Se hace acá y no en el worklet a propósito: el UI thread resetea al instante y React tarda uno
      * o dos frames, así que el bloque volvía a su lugar viejo antes de saltar al nuevo. Cuando este
-     * efecto corre, el render con la posición nueva ya se aplicó y el desplazamiento vivo vale 0 por
-     * cálculo (`liveDeltaFor` compara contra el estado pintado), así que apagarlo no se ve.
+     * efecto corre, los `useAnimatedStyle` del canvas y de la capa de gestos (hijos ⇒ sus efectos
+     * corren ANTES que este) ya encolaron en el UI thread el worklet con la base nueva; este `.value =`
+     * entra en la MISMA cola `runOnUI`, así que al apagarse `live` el worklet nuevo pinta la base
+     * nueva, que es el mismo punto (`livePositionFor`). Apagarlo no se ve.
      */
     useEffect(() => {
         liveTransform.value = idleStickerTransform()

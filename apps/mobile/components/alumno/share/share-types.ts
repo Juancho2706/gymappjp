@@ -14,7 +14,7 @@
  * texto con volumen + fila de stats + grupo top + firma del coach.
  *
  * Sigue siendo una unión y no un literal suelto porque todo el motor (canvas, capa de gestos,
- * `liveDeltaFor`) está escrito contra un `Record<StickerId, …>` y las medidas se reportan por id:
+ * `livePositionFor`) está escrito contra un `Record<StickerId, …>` y las medidas se reportan por id:
  * degradarlo a `string` perdería el chequeo de exhaustividad y no ahorraría una línea.
  */
 export type StickerId = 'bloque'
@@ -110,12 +110,14 @@ export function maxScaleFor(
  * Estado VIVO de un arrastre/pellizco: el sticker que el dedo está moviendo AHORA.
  *
  * Vive en un `SharedValue` de Reanimated (UI thread) y describe destinos ABSOLUTOS, no deltas:
- * `cx`/`cy` = centro objetivo en px del canvas, `scale` = escala objetivo. Es a propósito y es lo
- * que evita el parpadeo del commit: el canvas calcula su desplazamiento como `cx − (state.x·ancho)`
- * contra el estado YA commiteado que está pintando, así que en el mismo render en que React aplica
- * la posición nueva el delta pasa a valer 0 solo. Con deltas relativos habría que resetearlos al
- * soltar, y ese reset (UI thread, inmediato) llega SIEMPRE antes que el re-render de React: el
- * sticker volvía un par de frames a su posición vieja antes de saltar a la nueva.
+ * `cx`/`cy` = centro objetivo en px del canvas, `scale` = escala objetivo. Mientras `id` apunta al
+ * sticker, el worklet que lo pinta usa ESTE centro y no mira la posición commiteada; cuando vuelve a
+ * `null`, pinta la commiteada. Por eso el commit no salta: las dos fuentes describen el mismo punto
+ * y el worklet pinta siempre un destino completo (ver `livePositionFor`).
+ *
+ * Con deltas relativos habría que resetearlos al soltar, y ese reset (UI thread, inmediato) llega
+ * SIEMPRE antes que el re-render de React: el sticker volvía un par de frames a su posición vieja
+ * antes de saltar a la nueva.
  */
 export interface StickerLiveTransform {
     id: StickerId | null
@@ -132,25 +134,35 @@ export function idleStickerTransform(): StickerLiveTransform {
 }
 
 /**
- * Desplazamiento vivo de UN sticker contra el estado que ese mismo render está pintando.
+ * Posición ABSOLUTA (centro en px del canvas) que un sticker pinta en este frame: el destino vivo si
+ * el dedo lo tiene agarrado, la posición commiteada si no. `k` es el multiplicador de escala sobre
+ * el contenido ya renderizado a `baseScale`.
  *
  * WORKLET: corre en el UI thread (lo consumen los `useAnimatedStyle` del canvas y de la capa de
- * gestos). Vive acá, en los contratos, porque las DOS capas tienen que calcular exactamente el
- * mismo desplazamiento — si se desincronizan, el marco punteado deja de coincidir con el bloque y
- * el alumno arrastra "al lado" de lo que ve.
+ * gestos). Vive acá, en los contratos, porque las DOS capas tienen que calcular exactamente la misma
+ * posición — si se desincronizan, el marco punteado deja de coincidir con el bloque y el alumno
+ * arrastra "al lado" de lo que ve.
+ *
+ * Devuelve un destino COMPLETO y no un delta a propósito (bug del 12-09-2026, «teletransporte» de un
+ * frame al soltar). Con `left`/`top` = base commiteada + transform = `cx − base`, React aplica el
+ * `left`/`top` nuevo en su commit pero Reanimated registra el worklet con la base nueva recién en un
+ * `useEffect` (`useAnimatedStyle.ts`): durante un frame corre el worklet viejo —delta contra la base
+ * vieja— sobre la posición nueva, y el bloque aparece desplazado el doble. Con la posición entera
+ * dentro del worklet no hay ninguna prop de React en la cadena: el worklet viejo y el nuevo pintan
+ * el mismo punto mientras `live` está activo, y la base commiteada toma el relevo cuando se apaga.
  */
-export function liveDeltaFor(
+export function livePositionFor(
     live: StickerLiveTransform,
     id: StickerId,
     baseX: number,
     baseY: number,
     baseScale: number,
-): { dx: number; dy: number; k: number } {
+): { cx: number; cy: number; k: number } {
     'worklet'
-    if (live.id !== id) return { dx: 0, dy: 0, k: 1 }
+    if (live.id !== id) return { cx: baseX, cy: baseY, k: 1 }
     return {
-        dx: live.cx - baseX,
-        dy: live.cy - baseY,
+        cx: live.cx,
+        cy: live.cy,
         k: baseScale > 0 ? live.scale / baseScale : 1,
     }
 }

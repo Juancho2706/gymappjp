@@ -11,7 +11,7 @@ import Animated, {
 import { haptics } from '../../../lib/haptics'
 import {
     idleStickerTransform,
-    liveDeltaFor,
+    livePositionFor,
     maxScaleFor,
     STICKER_SCALE_MAX,
     STICKER_SCALE_MIN,
@@ -57,8 +57,8 @@ import {
 export { STICKER_SCALE_MAX, STICKER_SCALE_MIN }
 
 /**
- * El id del único sticker. Constante y no un literal suelto: `liveDeltaFor` compara por id contra lo
- * que escribe esta misma capa, y las dos puntas tienen que decir exactamente lo mismo.
+ * El id del único sticker. Constante y no un literal suelto: `livePositionFor` compara por id contra
+ * lo que escribe esta misma capa, y las dos puntas tienen que decir exactamente lo mismo.
  */
 const BLOCK_ID = 'bloque' as const
 
@@ -271,15 +271,17 @@ export function StickerGestureLayer({
     const vStyle = useAnimatedStyle(() => ({ opacity: vGuide.value }))
     const hStyle = useAnimatedStyle(() => ({ opacity: hGuide.value }))
 
-    // El MISMO `liveDeltaFor` que usa el canvas, con el MISMO orden de transform: si se separan, el
-    // marco punteado deja de calzar con el bloque.
+    // El MISMO `livePositionFor` que usa el canvas, con el MISMO orden de transform: si se separan,
+    // el marco punteado deja de calzar con el bloque. La posición ENTERA va por transform y
+    // `left`/`top` quedan en 0, por la misma razón que en `LiveStickerSlot` (ShareCanvas): con la
+    // base en `left`/`top` el marco también se teletransportaba un frame al soltar.
     const moved = useAnimatedStyle(() => {
-        const d = liveDeltaFor(live.value, BLOCK_ID, baseX, baseY, baseScale)
+        const p = livePositionFor(live.value, BLOCK_ID, baseX, baseY, baseScale)
         return {
             transform: [
-                { translateX: -boxW / 2 + d.dx },
-                { translateY: -boxH / 2 + d.dy },
-                { scale: d.k },
+                { translateX: p.cx - boxW / 2 },
+                { translateY: p.cy - boxH / 2 },
+                { scale: p.k },
             ],
         }
     })
@@ -317,8 +319,8 @@ export function StickerGestureLayer({
                             style={[
                                 {
                                     position: 'absolute',
-                                    left: baseX,
-                                    top: baseY,
+                                    left: 0,
+                                    top: 0,
                                     width: boxW,
                                     height: boxH,
                                     borderRadius: 10,
