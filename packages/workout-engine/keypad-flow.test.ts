@@ -196,6 +196,12 @@ describe('keypadStepsForTarget — rama de fuerza por tiempo', () => {
     ])
   })
 
+  it('holdSource + prompt («Reps tras el reloj», R5/R6) no alteran los pasos: son metadata del target, no del routing', () => {
+    expect(
+      keypadStepsForTarget(strengthTarget({ strengthTimeMode: true, holdSource: 'timer', prompt: 'hold-gap' })),
+    ).toEqual(keypadStepsForTarget(strengthTarget({ strengthTimeMode: true })))
+  })
+
   it('un bloque TIPADO manda por su tipo aunque le llegue strengthTimeMode (la rama typed va primero)', () => {
     const typed = typedTargetFor({ exercise_type_override: 'mobility' }, null)
     expect(keypadStepsForTarget(strengthTarget({ typed: typed ?? undefined, strengthTimeMode: true }))).toEqual([

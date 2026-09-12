@@ -13,6 +13,7 @@ import { describe, it, expect, afterEach, vi } from 'vitest'
 
 import {
     HOLD_EXPIRED_AWAY_GRACE_MS,
+    captureGapsFor,
     createHoldElapsed,
     decideHoldAutolog,
     expiredWhileAwayFrom,
@@ -367,6 +368,60 @@ describe('mergeHoldCaptureValues', () => {
 
     it('los segundos se guardan enteros (el keypad de hold no admite decimales)', () => {
         expect(mergeHoldCaptureValues({ holdSec: 29.6 })).toEqual({ actual_hold_sec: '30' })
+    })
+})
+
+// ── Huecos de la captura al cerrar el hold (R2/R3, «Reps tras el reloj») ─────────────────────────
+
+describe('captureGapsFor', () => {
+    it('mobility ⇒ [] siempre, aunque falte todo', () => {
+        expect(captureGapsFor({}, 'mobility')).toEqual([])
+        expect(captureGapsFor({ reps: '', weight: '' }, 'mobility')).toEqual([])
+    })
+
+    it('reps vacío ⇒ [\'reps\']', () => {
+        expect(captureGapsFor({ reps: '', weight: '10' }, 'strength_time')).toEqual(['reps'])
+    })
+
+    it('reps \'0\' ⇒ [\'reps\'] (nunca cuenta como anotado, F1)', () => {
+        expect(captureGapsFor({ reps: '0', weight: '10' }, 'strength_time')).toEqual(['reps'])
+    })
+
+    it('reps \'8\' ⇒ [] (con peso presente, ningún hueco)', () => {
+        expect(captureGapsFor({ reps: '8', weight: '10' }, 'strength_time')).toEqual([])
+    })
+
+    it('peso presente no aparece en los huecos aunque sea 0 (peso corporal es un dato real)', () => {
+        expect(captureGapsFor({ reps: '8', weight: '0' }, 'strength_time')).toEqual([])
+    })
+
+    it('sin peso ni reps ⇒ [\'reps\',\'weight\'] con el orden estable (reps antes que peso)', () => {
+        expect(captureGapsFor({}, 'strength_time')).toEqual(['reps', 'weight'])
+        expect(captureGapsFor({ reps: '', weight: '' }, 'strength_time')).toEqual(['reps', 'weight'])
+    })
+
+    it('peso vacío con reps anotadas ⇒ solo [\'weight\']', () => {
+        expect(captureGapsFor({ reps: '8', weight: '' }, 'strength_time')).toEqual(['weight'])
+    })
+
+    // Tabla de parseo (congela las DOS formas: reps vía optionalReps —redondeo `int()` incluido—, peso
+    // vía num — set-log-payload.ts `:334-337` y `:29`) para que `captureGapsFor` nunca diverja de la
+    // regla que ya guarda la serie: `'0,5'` redondea a 1 (`optionalReps` GUARDA `reps_done = 1`) ⇒ NO
+    // es hueco; `'0,4'` redondea a 0 (`optionalReps` guarda `null`) ⇒ SÍ es hueco.
+    it.each([
+        ['', true, true],
+        ['0', true, false],
+        ['0,5', false, false],
+        ['0,4', true, false],
+        ['-3', true, false],
+        ['8', false, false],
+        [' 8 ', false, false],
+        ['60', false, false],
+        ['60,5', false, false],
+        ['abc', true, true],
+    ])('valor %j ⇒ reps-hueco=%s, peso-hueco=%s', (value, repsGap, weightGap) => {
+        expect(captureGapsFor({ reps: value, weight: '999' }, 'strength_time').includes('reps')).toBe(repsGap)
+        expect(captureGapsFor({ reps: '8', weight: value }, 'strength_time').includes('weight')).toBe(weightGap)
     })
 })
 

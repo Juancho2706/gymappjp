@@ -246,3 +246,65 @@ export function mergeHoldCaptureValues(input: {
     if (seconds != null) merged[holdValueKeyFor(input.side ?? 'single')] = String(seconds)
     return merged
 }
+
+// ── Huecos de la captura al cerrar el hold (R2/R3, «Reps tras el reloj») ─────────────────────────
+
+/**
+ * Qué le falta anotar a la fila cuando el hold se cierra solo: decide si se abre el prompt de huecos
+ * (R2/R3) y, con `'reps'` primero, en qué campo hace foco el teclado (REPS antes que PESO — el orden
+ * de este array define el foco, nunca se reordena).
+ */
+export type HoldCaptureGap = 'reps' | 'weight'
+
+/**
+ * Reps anotadas con la MISMA regla que `optionalReps` de `set-log-payload.ts` (`:334-337`), LITERAL:
+ * `int()` redondea (`Math.round`) y el hueco es `n == null || Math.round(n) <= 0`. Por eso un decimal
+ * no siempre es hueco: `'0,5'` redondea a `1` ⇒ eso es lo que `optionalReps` GUARDA en `reps_done`,
+ * así que acá tampoco puede ser hueco (abrir el teclado sobre una serie que ya tiene reps guardadas
+ * sería un bug). `'0,4'` sí es hueco: redondea a `0`, y `optionalReps` guarda `null`. `optionalReps`
+ * es privada de `set-log-payload.ts` (que no está en la lista de archivos de este worker), así que la
+ * regla se replica acá; el test de `captureGapsFor` congela la tabla de parseo para que las dos
+ * formas no diverjan.
+ */
+function repsIsGap(v: string | undefined): boolean {
+    const trimmed = (v ?? '').trim()
+    if (!trimmed) return true
+    const n = parseFloat(trimmed.replace(',', '.'))
+    return !(Number.isFinite(n) && Math.round(n) > 0)
+}
+
+/**
+ * Peso anotado con la MISMA regla que `num` de `set-log-payload.ts` (`:29`): acepta la coma decimal
+ * es-CL y CUALQUIER número finito cuenta como anotado — incluido `'0'` (peso corporal es un dato
+ * real, no un hueco). Solo `''`/`undefined` o algo no numérico son huecos.
+ */
+function weightIsGap(v: string | undefined): boolean {
+    if (!v) return true
+    const n = parseFloat(v.replace(',', '.'))
+    return !Number.isFinite(n)
+}
+
+/**
+ * Huecos de la fila de un HOLD que acaba de cerrarse solo (R2). `mobility` nunca pide nada más —el
+ * hold ES el dato— así que siempre devuelve `[]`. `strength_time` sí tiene dos ejes opcionales:
+ * reps y peso.
+ *
+ * El PESO SUGERIDO cuenta como «anotado» aunque el alumno no haya tocado la caja: es el valor que se
+ * va a guardar tal cual (`suggestedWeight` ya vive en `values.weight` cuando la fila se siembra) y
+ * queda a un toque en el teclado si el alumno quiere cambiarlo — no es un hueco real, es un dato ya
+ * puesto. Por eso este helper no distingue «tipeado» de «sugerido»: solo mira lo que hay en `values`.
+ *
+ * El ORDEN del array es estable y NO es cosmético: `'reps'` va primero porque el teclado hace foco
+ * ahí primero (F1: «reps es esencial en fuerza aunque le pongamos tiempo»), y el consumidor de este
+ * helper (`initialFieldIndex` de `KeypadTarget`) lee el primer elemento para decidir el foco.
+ */
+export function captureGapsFor(
+    values: Record<string, string>,
+    kind: 'mobility' | 'strength_time',
+): HoldCaptureGap[] {
+    if (kind === 'mobility') return []
+    const gaps: HoldCaptureGap[] = []
+    if (repsIsGap(values.reps)) gaps.push('reps')
+    if (weightIsGap(values.weight)) gaps.push('weight')
+    return gaps
+}

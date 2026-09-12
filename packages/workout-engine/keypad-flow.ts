@@ -16,6 +16,7 @@
  */
 import { effectiveExerciseType } from './workout-exercise-type'
 import { holdSidesFor } from './hold-autolog'
+import type { HoldSource } from './session-logs.reconcile'
 import {
   typedKeypadFields,
   formatTypedObjective,
@@ -81,6 +82,20 @@ export interface KeypadTarget {
    * `alternating` uno solo (H7, igual que movilidad).
    */
   strengthTimeMode?: boolean
+  /**
+   * FUERZA POR TIEMPO al EDITAR una serie ya cerrada por el reloj («Reps tras el reloj», R5/R6):
+   * de dónde salió el hold que se está reabriendo (`'timer'` = lo cerró la cuenta atrás sola,
+   * `'manual'` = «Listo» antes de 0). El host lo reenvía tal cual a `buildStrengthTimePayload` para
+   * que el re-commit NO degrade `metadata.hold_source` a `'manual'` solo por pasar por el teclado.
+   * `null`/ausente ⇒ sin marca que conservar (serie nueva o fuera de fuerza por tiempo).
+   */
+  holdSource?: HoldSource | null
+  /**
+   * El teclado se abrió porque el hold cerró con huecos (R2/R3: `captureGapsFor` del motor), no
+   * porque el alumno tocó «Editar». Único valor por ahora: `'hold-gap'`, que dispara el copy de
+   * SPEC §6 («Sin reps» como secundario). Ausente ⇒ apertura manual de siempre, copy de siempre.
+   */
+  prompt?: 'hold-gap'
 }
 
 /**
