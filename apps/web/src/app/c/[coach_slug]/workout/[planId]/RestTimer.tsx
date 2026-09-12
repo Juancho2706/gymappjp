@@ -17,6 +17,9 @@ import {
 } from "./rest-timer-preferences";
 import { readExecVibration, readExecKeepAwake } from "./v3/exec-settings";
 import { RestInterstitialV3 } from "./v3/RestInterstitialV3";
+// `import type`: se borra en compilación, así que el provider puede seguir importando este archivo
+// sin ciclo real en runtime.
+import type { RestClockSnapshot } from "./WorkoutTimerProvider";
 
 interface RestTimerProps {
   initialSeconds: number;
@@ -30,6 +33,27 @@ interface RestTimerProps {
    * `'compact'` (default) = barra inferior histórica (legacy intacto).
    */
   variant?: "compact" | "v3";
+  /**
+   * «Reps tras el reloj» · Enmienda E1: en `variant='v3'` arranca en la BARRA compacta en vez del
+   * interstitial. Lo pide `startRest(t, { minimized: true })` cuando el reloj de fuerza por tiempo
+   * cerró la serie con huecos: el descanso ya corre (contador mini) mientras el alumno anota sobre la
+   * pantalla del ejercicio. Default `false` ⇒ comportamiento histórico, byte-idéntico.
+   */
+  initialMinimized?: boolean;
+  /**
+   * Señal de EXPANDIR del provider (`expandRest`). Cada incremento sube la barra al interstitial sin
+   * remontar: mismo `timeLeft`, misma alarma, mismo WakeLock. El valor en sí no significa nada — sólo
+   * el CAMBIO —, y el de montaje nunca cuenta (si no, un descanso pedido `minimized` se expandiría
+   * solo en su primer render).
+   */
+  expandNonce?: number;
+  /**
+   * W5.2b — reporta la FORMA del reloj al mini-store del provider (`RestClockSnapshot`) para que el
+   * chip «Descanso 1:27» de la sheet de huecos pueda contar sin re-renderizar a nadie más. Sólo la
+   * forma: mientras corre viaja `endAtMs` (constante) y el consumidor hace su propio tick. El ciclo
+   * de vida (arranque y borrado) lo maneja el provider, no este componente.
+   */
+  onClockChange?: (clock: RestClockSnapshot) => void;
   onClose: () => void;
 }
 
@@ -42,6 +66,9 @@ export function RestTimer({
   nextLabel,
   warmup = false,
   variant = "compact",
+  initialMinimized = false,
+  expandNonce = 0,
+  onClockChange,
   onClose,
 }: RestTimerProps) {
   const [timeLeft, setTimeLeft] = useState(initialSeconds);
@@ -51,7 +78,8 @@ export function RestTimer({
   const [muted, setMuted] = useState(false);
   // Ejecutor V3 (E3.1): en `variant='v3'` el descanso arranca como interstitial; minimizar cambia sólo
   // la presentación (barra compacta) sin desmontar → el conteo/alarma/WakeLock siguen vivos.
-  const [minimized, setMinimized] = useState(false);
+  // E1: `initialMinimized` invierte el arranque (barra primero) sin tocar nada de ese motor.
+  const [minimized, setMinimized] = useState(initialMinimized);
   // Ejecutor V3 (QA4): la píldora del descanso existe SÓLO mientras el alumno descansa. Al llegar a 0
   // arrancamos la salida suave (`leaving`) y descartamos el descanso; nunca persiste al siguiente paso.
   const [leaving, setLeaving] = useState(false);
@@ -101,11 +129,24 @@ export function RestTimer({
     endTimeRef.current = null;
     lastBeepRef.current = null;
     setIsActive(true);
-    // V3: un descanso nuevo reabre el interstitial (por si el anterior quedó minimizado) y cancela
-    // cualquier salida en curso (por si el descanso previo estaba auto-descartándose).
-    setMinimized(false);
+    // V3: un descanso nuevo vuelve a su presentación de arranque (por si el anterior quedó
+    // minimizado) y cancela cualquier salida en curso (por si el previo estaba auto-descartándose).
+    // E1: «su presentación de arranque» es el interstitial salvo que el llamador haya pedido
+    // `minimized` — sin la opción esto es literalmente el `setMinimized(false)` de siempre.
+    setMinimized(initialMinimized);
     setLeaving(false);
-  }, [initialSeconds]);
+  }, [initialSeconds, initialMinimized]);
+
+  // E1 · señal de EXPANDIR (`expandRest` del provider). Sólo cambia la PRESENTACIÓN: nunca toca
+  // `timeLeft`, `endTimeRef` ni la alarma, así el descanso que arrancó minimizado sigue exactamente
+  // donde estaba al pasar a pantalla completa. El ref nace con el nonce de montaje ⇒ el primer render
+  // no cuenta como señal.
+  const expandNonceRef = useRef(expandNonce);
+  useEffect(() => {
+    if (expandNonce === expandNonceRef.current) return;
+    expandNonceRef.current = expandNonce;
+    setMinimized(false);
+  }, [expandNonce]);
 
   const stopAlarm = useCallback(() => {
     if (alarmIntervalRef.current) {
@@ -232,6 +273,20 @@ export function RestTimer({
     }
     return () => clearInterval(interval);
   }, [isActive, timeLeft, triggerAlarm]);
+
+  // W5.2b · publica la FORMA del reloj (no el tick). Va DESPUÉS del efecto de arriba a propósito:
+  // ahí es donde `endTimeRef` se siembra al arrancar/reanudar, y los efectos corren en orden de
+  // declaración. Corriendo ⇒ `endAtMs` (constante mientras dura, así que el provider deduplica y
+  // NADIE se re-renderiza por tick); pausado o a 0 ⇒ los segundos congelados. El borrado no se hace
+  // acá: lo maneja el provider en `close`/`cancelRest`/`replaceWith` (si no, el cleanup de desmontaje
+  // pisaría la semilla del descanso siguiente).
+  useEffect(() => {
+    onClockChange?.(
+      isActive && endTimeRef.current != null
+        ? { endAtMs: endTimeRef.current, pausedRemainingSec: null }
+        : { endAtMs: null, pausedRemainingSec: timeLeft }
+    );
+  }, [isActive, timeLeft, onClockChange]);
 
   // Beeps suaves 3-2-1 (M2 · 3): un beep por segundo en los últimos 3s; el 0 lo cubre la alarma.
   useEffect(() => {

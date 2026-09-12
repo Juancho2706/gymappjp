@@ -33,6 +33,9 @@ import { DualWheelPicker } from './v3/DualWheelPicker'
 import { PrCelebration } from './v3/PrCelebration'
 import { classifyThresholdPr } from './v3/pr-adapter'
 import { useCelebrations } from './v3/use-celebrations'
+// E1: la fila calcula los huecos con el MISMO adaptador que usan los pasos para decidir la sheet — si
+// se leyeran distinto, el descanso arrancaría minimizado sin que nadie lo expandiera (o al revés).
+import { holdCaptureValuesFromCommit } from './v3/hold-capture-prompt'
 import {
     typedKeypadFields,
     typedLogValues,
@@ -45,6 +48,7 @@ import {
 import {
     buildStrengthPayload,
     buildStrengthTimePayload,
+    captureGapsFor,
     formatStrengthSetLine,
     formatStrengthTimeSetLine,
     holdSidesFor,
@@ -326,6 +330,15 @@ export type HoldPrefill = {
      * todos—: sin él, el reloj de una serie repetida llegaría a 0 y no guardaría nada en silencio.
      */
     repeat?: boolean
+    /**
+     * Enmienda E1 (owner 12-09): esta medición puede terminar abriendo la sheet de huecos, así que si
+     * el descanso automático arranca en este commit tiene que hacerlo **minimizado** — el contador
+     * mini sobre la pantalla del ejercicio, no el interstitial tapando la fila. Lo pone el paso en
+     * `onMeasured` (`submit && !expiredWhileAway`, las dos condiciones que él conoce); la fila decide
+     * lo que le toca a ella: si los valores que REALMENTE se guardaron dejan huecos (R2/`captureGapsFor`).
+     * Sin huecos no hay sheet y el descanso arranca a pantalla completa, como siempre.
+     */
+    minimizeRestIfGaps?: boolean
 }
 
 /** Estado de sincronización de una serie de cara al usuario (contrato a). */
@@ -527,6 +540,13 @@ function StrengthLogSetForm({
      * submit: un save manual posterior nunca hereda el permiso.
      */
     const holdRepeatSubmitRef = useRef(false)
+    /**
+     * Enmienda E1: el próximo submit disparado por `holdPrefill` viene de un reloj que puede dejar
+     * huecos ⇒ si arranca descanso, arranca MINIMIZADO. Mismo patrón (y mismos motivos) que
+     * `holdRepeatSubmitRef`: ref porque se lee dentro del `requestSubmit()`, y se CONSUME en la
+     * primera línea del submit — un guardado manual posterior nunca hereda la marca.
+     */
+    const holdMinimizeRestRef = useRef(false)
     // Nota: sólo la fila de FUERZA usa este permiso — «Repetir» es de fuerza por tiempo (R8/R13), así
     // que la fila TIPADA (movilidad/roller/cardio) conserva su gate `isLogged` tal cual.
     const formRef = useRef<HTMLFormElement>(null)
@@ -671,8 +691,9 @@ function StrengthLogSetForm({
         syncEmptyCapture()
         if (holdPrefill?.submit) {
             // R8: el permiso de repetición viaja por REF porque `handleSubmit` corre dentro de este
-            // mismo `requestSubmit()` — un state llegaría un render tarde.
+            // mismo `requestSubmit()` — un state llegaría un render tarde. E1 viaja igual.
             holdRepeatSubmitRef.current = holdPrefill.repeat === true
+            holdMinimizeRestRef.current = holdPrefill.minimizeRestIfGaps === true
             formRef.current?.requestSubmit()
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -811,7 +832,16 @@ function StrengthLogSetForm({
 
     const collapsed = isLogged && !editing
 
-    const buildRest = (repeatSubmit = false) => {
+    /**
+     * `commit` (Enmienda E1) — lo que la serie ACABA de guardar, para decidir si el descanso arranca
+     * minimizado. Se pasa desde `handleSubmit` (no se lee de los inputs): entre el submit y esta
+     * llamada el `<form>` puede haberse remontado por `formIdentityKey`, y lo que importa es lo que
+     * viajó al server, ya normalizado por el motor (`repsDone` entero > 0 o `null`).
+     */
+    const buildRest = (
+        repeatSubmit = false,
+        commit?: { minimizeRest: boolean; weightKg: number | null; repsDone: number | null },
+    ) => {
         // Editar una serie ya cerrada no toca el descanso en curso… salvo que sea una REPETICIÓN
         // (R8): ahí la serie se volvió a hacer de verdad y merece su descanso como cualquier otra.
         if (isLogged && !repeatSubmit) return
@@ -824,6 +854,23 @@ function StrengthLogSetForm({
         // pref apagada hace CERO llamadas a `startRest` — el descanso lo decide el alumno.
         if (!autoTimerEnabled) return
         triggerHaptic(50)
+        /**
+         * Enmienda E1 (owner 12-09: «coloca el contador mini que tenemos al terminar, que el usuario
+         * coloque sus pesos y luego siga normal a la pantalla grande del descanso continuando con el
+         * timer que ya tenía el mini»). Las tres condiciones son las del prompt de R3 que le tocan a
+         * la fila: (1) la marca del paso —el reloj cerró la serie y no venció con la pestaña afuera—,
+         * (2) fuerza por TIEMPO, y (3) huecos REALES en lo que se guardó, con el mismo `captureGapsFor`
+         * del motor que usa el paso para abrir la sheet. Sin las tres, `minimized: false` y el descanso
+         * es el interstitial de siempre. La sheet lo expande al resolverse (`expandRest`).
+         */
+        const minimized =
+            strengthTimeMode &&
+            commit != null &&
+            commit.minimizeRest &&
+            captureGapsFor(
+                holdCaptureValuesFromCommit({ weightKg: commit.weightKg, repsDone: commit.repsDone }),
+                'strength_time',
+            ).length > 0
         if (supersetRest) {
             // Superserie: descanso completo del grupo SOLO al cerrar la ronda (semántica intacta);
             // si no la cierra, sigues con el otro ejercicio → corta el descanso en curso (auto-skip).
@@ -834,7 +881,7 @@ function StrengthLogSetForm({
                 // resuelve el fallback (nunca 0); el origen ya viene corregido en `supersetInfo`, esto
                 // es el cinturón por si algún otro call site arma el prop a mano.
                 const { seconds } = resolveEffectiveRest({ restSec: supersetRest.groupRestSeconds })
-                startRest(`${seconds}s`, { label: nextUpLabel })
+                startRest(`${seconds}s`, { label: nextUpLabel, minimized })
             } else cancelRest()
         } else {
             // Descanso de aproximación (M2 · 6): la 1ª serie de un bloque de ≥3 series usa el warmup.
@@ -847,7 +894,7 @@ function StrengthLogSetForm({
                 warmupRestSec: parseRestTime(warmupRestTimeStr ?? null),
                 useWarmup: setNumber === 1 && (totalSets ?? 0) >= 3,
             })
-            startRest(`${seconds}s`, { label: nextUpLabel, warmup })
+            startRest(`${seconds}s`, { label: nextUpLabel, warmup, minimized })
         }
     }
 
@@ -1015,6 +1062,9 @@ function StrengthLogSetForm({
         // idéntico a un submit normal; sólo el descanso lo trata como serie nueva pese a `isLogged`.
         const repeatSubmit = holdRepeatSubmitRef.current
         holdRepeatSubmitRef.current = false
+        // E1: se consume igual (una medición = un submit). Sólo cambia CÓMO se presenta el descanso.
+        const minimizeRest = holdMinimizeRestRef.current
+        holdMinimizeRestRef.current = false
         // RPE y RIR viajan por el submit igual que siempre; su origen son los controles segmentados.
         if (rpe != null) formData.set('rpe', String(rpe))
         else formData.delete('rpe')
@@ -1187,7 +1237,7 @@ function StrengthLogSetForm({
             // conexión la serie se registraba (cola offline) pero el descanso NUNCA arrancaba. El
             // descanso es LOCAL (un cronómetro, cero red): se arma igual. Va sólo en la rama `backedUp`
             // —acá la serie SÍ quedó registrada—; la rama de error de arriba no lo hace a propósito.
-            buildRest(repeatSubmit)
+            buildRest(repeatSubmit, { minimizeRest, weightKg: w, repsDone: r })
             return
         }
 
@@ -1197,7 +1247,7 @@ function StrengthLogSetForm({
         setSyncStatus('pending')
         setNoteOpen(false)
         setEditing(false)
-        buildRest(repeatSubmit)
+        buildRest(repeatSubmit, { minimizeRest, weightKg: w, repsDone: r })
 
         // La petición sale ANTES del optimismo del padre: `onLogged` dispara un `flushSync` que puede
         // DESMONTAR esta fila (superserie), y el envío no puede depender de que el fiber siga vivo.

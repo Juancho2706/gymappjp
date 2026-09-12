@@ -42,6 +42,7 @@ import {
     type PendingRoundRest,
     RUT_TYPE_META,
 } from '../WorkoutExecutionClient'
+import { useWorkoutTimer, RestClockChip } from '../WorkoutTimerProvider'
 import { resolveExecMedia } from './exec-media'
 import { ExecMediaCard } from './ExecMediaCard'
 import { HoldModuleV3, type HoldModuleStatus } from './HoldModuleV3'
@@ -202,8 +203,28 @@ export function SupersetStepV3({
      * es impuro y estas funciones se arman en el cuerpo del componente.
      */
     const promptNonceRef = useRef(0)
+    // Enmienda E1: sólo `expandRest` — el descanso de RONDA lo arranca (y lo minimiza) el mismo
+    // `LogSetForm` del miembro activo por su `supersetRest`, como siempre.
+    const { expandRest } = useWorkoutTimer()
     const ph = usePostHog()
     const reducedMotion = useReducedMotion()
+
+    /**
+     * Enmienda E1 · red de seguridad (misma que en `ExerciseStepV3`): cerrar la última ronda dispara
+     * el auto-avance y el paso se desmonta con la sheet del reloj abierta, sin pasar por
+     * `closeEditSheet` ⇒ el descanso de ronda se quedaría minimizado. Al irse, se expande igual.
+     */
+    const promptOpenRef = useRef(false)
+    const editPromptTrigger = editPrompt?.trigger
+    useEffect(() => {
+        promptOpenRef.current = editPromptTrigger === 'timer'
+    }, [editPromptTrigger])
+    useEffect(
+        () => () => {
+            if (promptOpenRef.current) expandRest()
+        },
+        [expandRest],
+    )
 
     useEffect(() => {
         if (!cue) return
@@ -382,6 +403,11 @@ export function SupersetStepV3({
      * fuerza por tiempo abre la sheet de edición de siempre y no entra a esta analítica.
      */
     const closeEditSheet = (outcome: 'saved' | 'dismissed', payload?: OptimisticLogPayload) => {
+        // Enmienda E1: la sheet abierta por el RELOJ dejó el descanso de ronda corriendo minimizado
+        // detrás; resolverla lo sube a pantalla completa con el mismo reloj. `'manual'` (tap en la
+        // tarjeta hecha) no toca nada, y sin descanso montado —pref OFF, o el miembro no cerró la
+        // ronda— es un no-op.
+        if (editPrompt?.trigger === 'timer') expandRest()
         if (editPrompt) {
             ph?.capture('hold_capture_resolved', {
                 block_id: editPrompt.blockId,
@@ -560,7 +586,22 @@ export function SupersetStepV3({
                                                                   expiredWhileAway: hm.expiredWhileAway,
                                                               }
                                                             : null
-                                                        setHoldPrefill({ holdSec: hm.holdSec, leftSec: hm.leftSec, rightSec: hm.rightSec, submit: hm.submit, source: hm.source, nonce: hm.nonce })
+                                                        setHoldPrefill({
+                                                            holdSec: hm.holdSec,
+                                                            leftSec: hm.leftSec,
+                                                            rightSec: hm.rightSec,
+                                                            submit: hm.submit,
+                                                            source: hm.source,
+                                                            nonce: hm.nonce,
+                                                            // E1: mismas condiciones que el armado de
+                                                            // R3. Sólo fuerza por tiempo: en movilidad
+                                                            // `captureGapsFor` devuelve `[]` y no hay
+                                                            // sheet que expandiera el descanso después.
+                                                            minimizeRestIfGaps:
+                                                                hm.submit &&
+                                                                !hm.expiredWhileAway &&
+                                                                holdKind === 'strength_time',
+                                                        })
                                                     }}
                                                     onStatusChange={setHoldStatus}
                                                     testIdPrefix={`hold-ss-${m.block.id}`}
@@ -823,9 +864,15 @@ export function SupersetStepV3({
                             <div className="exec-v3-settings-hd">
                                 <span>
                                     {promptCopy && (
-                                        <span className="exec-v3-holdsheet-k">
-                                            Serie {promptCopy.setNumber}
-                                            {promptHoldSec != null ? ` · guardada con ${promptHoldSec} s` : ''}
+                                        // W5.2b: eyebrow + chip vivo del descanso de RONDA, que corre
+                                        // minimizado detrás de esta sheet (E1). Igual que en la
+                                        // pantalla sola.
+                                        <span className="flex flex-wrap items-center gap-2">
+                                            <span className="exec-v3-holdsheet-k">
+                                                Serie {promptCopy.setNumber}
+                                                {promptHoldSec != null ? ` · guardada con ${promptHoldSec} s` : ''}
+                                            </span>
+                                            <RestClockChip />
                                         </span>
                                     )}
                                     {/* Copy de SPEC §6; desde el tap en la tarjeta hecha, la cabecera de siempre. */}

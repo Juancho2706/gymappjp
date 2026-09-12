@@ -36,7 +36,7 @@ import { BlockActionsV3 } from './SkipBlockV3'
 import { ExecMediaCard } from './ExecMediaCard'
 import { HoldModuleV3 } from './HoldModuleV3'
 import { RestOfferV3 } from './RestOfferV3'
-import { parseRestTime, useWorkoutTimer } from '../WorkoutTimerProvider'
+import { parseRestTime, useWorkoutTimer, RestClockChip } from '../WorkoutTimerProvider'
 import { WheelHint } from './WheelHint'
 
 /** Mejor sesión previa (para "Anterior" + autollenado). */
@@ -181,7 +181,7 @@ export function ExerciseStepV3({
     // por `holdPrefill.submit`. Descansar o seguir lo toca el alumno (R24) salvo preferencia encendida.
     const strengthTime = isStrengthTimeBlock(block, exercise)
     const holdSeconds = strengthTime ? (block.duration_sec ?? 0) : 0
-    const { startRest, cancelRest } = useWorkoutTimer()
+    const { startRest, cancelRest, expandRest } = useWorkoutTimer()
     const ph = usePostHog()
     const reducedMotion = useReducedMotion()
     const [holdPrefill, setHoldPrefill] = useState<HoldPrefill | null>(null)
@@ -228,6 +228,24 @@ export function ExerciseStepV3({
      * tiene que enterarse o su avance diferido se quedaría esperando un CTA que ya no existe.
      */
     useEffect(() => () => onRestOfferChange?.(false), [onRestOfferChange])
+    /**
+     * Enmienda E1 · red de seguridad. Cerrar la ÚLTIMA serie de un bloque con la pref ON dispara el
+     * auto-avance a los 350 ms: el paso se desmonta con la sheet del reloj todavía abierta y nadie
+     * llegaría a llamar a `closeCaptureSheet`, así que el descanso se quedaría en la barra compacta.
+     * Al irse, se expande igual. El ref se escribe en un efecto (nunca en render) y el cleanup del
+     * segundo efecto corre SÓLO al desmontar (`expandRest` es estable en el provider).
+     */
+    const promptOpenRef = useRef(false)
+    const sheetTrigger = sheet?.trigger
+    useEffect(() => {
+        promptOpenRef.current = sheetTrigger === 'timer'
+    }, [sheetTrigger])
+    useEffect(
+        () => () => {
+            if (promptOpenRef.current) expandRest()
+        },
+        [expandRest],
+    )
 
     /** Abre la sheet de huecos y emite `hold_capture_prompted` (R12) — un evento por apertura. */
     const openCaptureSheet = (
@@ -251,6 +269,12 @@ export function ExerciseStepV3({
     /** Cierra la sheet por cualquiera de las dos vías y emite `hold_capture_resolved` (R12). */
     const closeCaptureSheet = (outcome: 'saved' | 'dismissed', payload?: OptimisticLogPayload) => {
         if (!sheet) return
+        // Enmienda E1: la sheet que abrió el RELOJ dejó el descanso corriendo MINIMIZADO detrás (el
+        // «contador mini» que pidió el owner). Resolverla —Guardar, «Sin reps», scrim o X— es la señal
+        // de subirlo a pantalla completa con el mismo reloj. Con la pref «Pasar solo al descanso» OFF
+        // no hay descanso montado y esto es un no-op. La sheet abierta desde «Editar» (`'manual'`) NO
+        // expande nada: ahí el descanso ya venía como el alumno lo dejó.
+        if (sheet.trigger === 'timer') expandRest()
         ph?.capture('hold_capture_resolved', {
             block_id: block.id,
             context: 'solo',
@@ -484,6 +508,10 @@ export function ExerciseStepV3({
                             nonce: m.nonce,
                             // R8: permiso EXPLÍCITO para que el auto-envío atraviese el gate `isLogged`.
                             repeat: repeat != null,
+                            // E1: mismas dos condiciones que el armado de R3 de arriba (las únicas que
+                            // este componente conoce). Si además quedan huecos, la fila arranca el
+                            // descanso minimizado y `closeCaptureSheet` lo expande.
+                            minimizeRestIfGaps: m.submit && !m.expiredWhileAway,
                         })
                     }}
                     testIdPrefix="hold-strength"
@@ -704,9 +732,16 @@ export function ExerciseStepV3({
                             <div className="exec-v3-settings-hd">
                                 <span>
                                     {sheetPrompt && (
-                                        <span className="exec-v3-holdsheet-k">
-                                            Serie {sheet.setNumber}
-                                            {sheetLog.actual_hold_sec != null ? ` · guardada con ${sheetLog.actual_hold_sec} s` : ''}
+                                        // W5.2b: el eyebrow y el chip vivo del descanso comparten fila.
+                                        // El descanso corre MINIMIZADO detrás de esta sheet (E1) y la
+                                        // barra queda tapada por el z-62, así que el reloj se repite acá
+                                        // — es lo que el owner pidió ver mientras anota.
+                                        <span className="flex flex-wrap items-center gap-2">
+                                            <span className="exec-v3-holdsheet-k">
+                                                Serie {sheet.setNumber}
+                                                {sheetLog.actual_hold_sec != null ? ` · guardada con ${sheetLog.actual_hold_sec} s` : ''}
+                                            </span>
+                                            <RestClockChip />
                                         </span>
                                     )}
                                     <span className="exec-v3-settings-t">{sheetTitle}</span>

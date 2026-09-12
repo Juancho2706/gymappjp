@@ -17,9 +17,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const harness = vi.hoisted(() => ({
     measured: null as null | ((m: Record<string, unknown>) => void),
     logged: null as null | ((p: Record<string, unknown>) => void),
+    /** Último `holdPrefill` que recibió la fila ACTIVA (E1: por ahí viaja `minimizeRestIfGaps`). */
+    holdPrefill: null as null | Record<string, unknown>,
     capture: vi.fn(),
     startRest: vi.fn(),
     cancelRest: vi.fn(),
+    expandRest: vi.fn(),
 }))
 
 // framer-motion fuera (mismo stub que `CheckInForm.test.tsx`): `AnimatePresence` mantiene el nodo
@@ -58,7 +61,14 @@ vi.mock('framer-motion', async () => {
 vi.mock('posthog-js/react', () => ({ usePostHog: () => ({ capture: harness.capture }) }))
 vi.mock('../WorkoutTimerProvider', () => ({
     parseRestTime: (s: string | null) => (s ? Number(s) || 0 : 0),
-    useWorkoutTimer: () => ({ startRest: harness.startRest, cancelRest: harness.cancelRest }),
+    useWorkoutTimer: () => ({
+        startRest: harness.startRest,
+        cancelRest: harness.cancelRest,
+        expandRest: harness.expandRest,
+    }),
+    // W5.2b: el chip vivo se prueba de verdad en `WorkoutTimerProvider.test.tsx` (ahí está el reloj);
+    // acá sólo interesa DÓNDE lo monta el paso, así que va como marca.
+    RestClockChip: () => <span data-testid="rest-clock-chip">Descanso 1:27</span>,
 }))
 // El orquestador entero (3.6k líneas, server actions incluidas) no tiene por qué entrar al grafo del
 // test: del módulo sólo se usa `RUT_TYPE_META` como VALOR (los demás imports son tipos, que se borran).
@@ -75,8 +85,18 @@ vi.mock('./HoldModuleV3', () => ({
     },
 }))
 vi.mock('../LogSetForm', () => ({
-    LogSetForm: (props: { setNumber: number; isActive?: boolean; onLogged?: (p: Record<string, unknown>) => void }) => {
-        if (props.isActive) harness.logged = props.onLogged ?? null
+    LogSetForm: (props: {
+        setNumber: number
+        isActive?: boolean
+        holdPrefill?: Record<string, unknown>
+        onLogged?: (p: Record<string, unknown>) => void
+    }) => {
+        if (props.isActive) {
+            harness.logged = props.onLogged ?? null
+            // E1: la fila REAL decide con esto si el descanso arranca minimizado; acá sólo se congela
+            // que el paso lo emita (el `startRest({ minimized })` lo prueba `LogSetForm.test.tsx`).
+            if (props.holdPrefill) harness.holdPrefill = props.holdPrefill
+        }
         return <div data-testid={`row-${props.setNumber}`} />
     },
 }))
@@ -198,6 +218,7 @@ beforeEach(() => {
     vi.clearAllMocks()
     harness.measured = null
     harness.logged = null
+    harness.holdPrefill = null
 })
 
 describe('R3/R10 — cuándo aparece la sheet de huecos en pantalla sola', () => {
@@ -295,5 +316,79 @@ describe('R7/R8 — línea «Serie N» con la preferencia OFF', () => {
         expect(harness.capture).toHaveBeenCalledWith('hold_set_repeated', { block_id: BLOCK_ID, set_number: 1 })
         // El override local devuelve el foco a la serie 1 aunque `firstUnlogged` ya sea 2.
         expect(screen.getByTestId('set-slot-active').querySelector('[data-testid="row-1"]')).toBeTruthy()
+    })
+})
+
+/**
+ * specs/reps-tras-el-reloj · Enmienda E1 (owner 12-09) — el descanso automático arranca MINIMIZADO
+ * («el contador mini») mientras la sheet de huecos está abierta sobre la pantalla del ejercicio, y se
+ * EXPANDE al resolverla, con el mismo reloj. Acá se congela el cableado del paso: qué le pide a la
+ * fila (`minimizeRestIfGaps`) y cuándo llama a `expandRest` del provider.
+ */
+describe('E1 — contador mini mientras se anotan los huecos', () => {
+    it('la medición del reloj le pide a la fila que el descanso arranque minimizado', () => {
+        const step = mountStep()
+        closeSetByTimer(step, { repsDone: null, weightKg: 10 })
+
+        expect(harness.holdPrefill?.minimizeRestIfGaps).toBe(true)
+        // El otro permiso del prefill no se contamina: esta serie no es una repetición.
+        expect(harness.holdPrefill?.repeat).toBe(false)
+    })
+
+    it('si venció con la pestaña afuera (R6/R27) el descanso arranca a pantalla completa, como siempre', () => {
+        const step = mountStep()
+        closeSetByTimer(step, { repsDone: null, weightKg: 10, expiredWhileAway: true })
+
+        expect(harness.holdPrefill?.minimizeRestIfGaps).toBe(false)
+        expect(harness.expandRest).not.toHaveBeenCalled()
+    })
+
+    it('resolver la sheet con «Sin reps» expande el descanso (una sola vez)', () => {
+        const step = mountStep()
+        closeSetByTimer(step, { repsDone: null, weightKg: 10 })
+
+        expect(harness.expandRest).not.toHaveBeenCalled()
+        fireEvent.click(screen.getByLabelText('Dejar la serie sin reps'))
+
+        expect(harness.expandRest).toHaveBeenCalledTimes(1)
+    })
+
+    it('«Editar» (trigger manual) NO expande nada: ahí el descanso ya estaba como el alumno lo dejó', () => {
+        const step = mountStep({ autoTimerEnabled: false })
+        closeSetByTimer(step, { repsDone: 8, weightKg: 10 })
+
+        fireEvent.click(screen.getByLabelText('Editar la serie 1'))
+        // La sheet de «Editar» no tiene el secundario «Sin reps» (ese es copy del prompt del reloj,
+        // SPEC §6): se cierra con la X, que es la vía real del alumno.
+        fireEvent.click(screen.getByLabelText('Cerrar'))
+
+        expect(harness.expandRest).not.toHaveBeenCalled()
+    })
+})
+
+/**
+ * specs/reps-tras-el-reloj · W5.2b — el contador mini tiene que VERSE mientras el alumno anota: la
+ * sheet (z-62) tapa la barra del descanso, así que el reloj se repite en su cabecera. Sólo en la
+ * sheet que abrió el RELOJ; la de «Editar» no tiene descanso propio que mostrar.
+ */
+describe('W5.2b — chip vivo del descanso en la cabecera de la sheet', () => {
+    it('la sheet del reloj lo pinta y desaparece con ella', () => {
+        const step = mountStep()
+        closeSetByTimer(step, { repsDone: null, weightKg: 10 })
+
+        expect(screen.getByTestId('rest-clock-chip')).toBeTruthy()
+
+        fireEvent.click(screen.getByLabelText('Dejar la serie sin reps'))
+        expect(screen.queryByTestId('rest-clock-chip')).toBeNull()
+    })
+
+    it('la sheet de «Editar» (trigger manual) NO lo pinta', () => {
+        const step = mountStep({ autoTimerEnabled: false })
+        closeSetByTimer(step, { repsDone: 8, weightKg: 10 })
+
+        fireEvent.click(screen.getByLabelText('Editar la serie 1'))
+
+        expect(screen.getByRole('dialog', { name: 'Editar la serie 1' })).toBeTruthy()
+        expect(screen.queryByTestId('rest-clock-chip')).toBeNull()
     })
 })

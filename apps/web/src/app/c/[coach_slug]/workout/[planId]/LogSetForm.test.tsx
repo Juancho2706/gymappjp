@@ -657,3 +657,56 @@ describe('R8 — el permiso de repetición no relaja el gate para todos (fuerza 
         expect(harness.startRest).toHaveBeenCalledWith('90s', expect.objectContaining({ warmup: false }))
     })
 })
+
+/**
+ * specs/reps-tras-el-reloj · Enmienda E1 (owner 12-09): «coloca el contador mini que tenemos al
+ * terminar, que el usuario coloque sus pesos y luego siga normal a la pantalla grande del descanso».
+ * La fila es quien decide: la marca la pone el paso en el prefill, pero el descanso arranca
+ * minimizado SÓLO si lo que realmente se guardó dejó huecos (`captureGapsFor`) — si no, no habría
+ * sheet que lo expandiera después y el mini se quedaría abajo para siempre.
+ */
+describe('E1 — `minimized` en el `startRest` del auto-envío por reloj', () => {
+    it('marca + reps vacías ⇒ el descanso arranca MINIMIZADO', async () => {
+        const { bump } = mountRow({ strengthTimeMode: true })
+
+        bump({ holdSec: 30, submit: true, source: 'timer', nonce: 1, minimizeRestIfGaps: true })
+        await act(async () => {})
+
+        expect(harness.startRest).toHaveBeenCalledTimes(1)
+        expect(harness.startRest).toHaveBeenCalledWith('90s', expect.objectContaining({ minimized: true }))
+    })
+
+    it('marca pero SIN huecos (kg y reps tipeados antes) ⇒ descanso a pantalla completa, como siempre', async () => {
+        const { bump, container } = mountRow({ strengthTimeMode: true })
+        // Por `name` y no por etiqueta: la caja de KG sólo tiene `aria-label` en el hero V3, y esta
+        // suite monta la fila clásica.
+        ;(container.querySelector('input[name="weight_kg"]') as HTMLInputElement).value = '60'
+        ;(screen.getByLabelText('Repeticiones (opcional)') as HTMLInputElement).value = '8'
+
+        bump({ holdSec: 30, submit: true, source: 'timer', nonce: 1, minimizeRestIfGaps: true })
+        await act(async () => {})
+
+        expect(harness.startRest).toHaveBeenCalledWith('90s', expect.objectContaining({ minimized: false }))
+    })
+
+    it('huecos pero SIN la marca (guardado a mano, «Editar») ⇒ tampoco se minimiza', async () => {
+        const { bump } = mountRow({ strengthTimeMode: true })
+
+        bump({ holdSec: 30, submit: true, source: 'timer', nonce: 1 })
+        await act(async () => {})
+
+        expect(harness.startRest).toHaveBeenCalledWith('90s', expect.objectContaining({ minimized: false }))
+    })
+
+    it('superserie: la ronda que cierra con huecos también arranca su descanso minimizado', async () => {
+        const { bump } = mountRow({
+            strengthTimeMode: true,
+            supersetRest: { groupRestSeconds: 90, closesRound: () => true },
+        })
+
+        bump({ holdSec: 30, submit: true, source: 'timer', nonce: 1, minimizeRestIfGaps: true })
+        await act(async () => {})
+
+        expect(harness.startRest).toHaveBeenCalledWith('90s', expect.objectContaining({ minimized: true }))
+    })
+})
