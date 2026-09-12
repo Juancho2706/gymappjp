@@ -31,6 +31,35 @@ export interface OpenSetOpts {
   prompt?: 'hold-gap'
 }
 
+/**
+ * Segundo argumento OPCIONAL de `onCommitSet` (= `ExecutorV3.handleCommit`). Ausente ⇒ el commit de
+ * siempre; por eso `commitSetOptsFor` devuelve `undefined` cuando no hay nada que declarar y el
+ * camino del alumno que ya tenía sus reps tipeadas queda byte-idéntico.
+ */
+export interface CommitSetOpts {
+  /** R8 «Repetir»: la fila YA existe pero el alumno rehizo la serie ⇒ tratarla como serie nueva. */
+  repeat?: boolean
+  /**
+   * R3b (enmienda E1 del owner, 12-09): este commit va a abrir el prompt de huecos, así que el
+   * descanso automático arranca MINIMIZADO (la barra compacta) en vez del interstitial a pantalla
+   * completa — el alumno tiene que ver el ejercicio mientras anota kg y reps. `ExecutorV3` lo expande
+   * a la pantalla grande, con el MISMO reloj, cuando el prompt se resuelve.
+   */
+  minimizeRest?: boolean
+}
+
+/**
+ * Traduce las dos decisiones de la pantalla al `opts` del commit. Existe para que `ExerciseScreenV3`
+ * y `SupersetScreenV3` no puedan divergir justo en el detalle que más importa: cuando no hay nada que
+ * declarar el commit viaja con `undefined`, exactamente como antes de este tren.
+ */
+export function commitSetOptsFor(input: { repeat?: boolean; minimizeRest?: boolean }): CommitSetOpts | undefined {
+  const opts: CommitSetOpts = {}
+  if (input.repeat) opts.repeat = true
+  if (input.minimizeRest) opts.minimizeRest = true
+  return Object.keys(opts).length > 0 ? opts : undefined
+}
+
 export interface HoldCapturePromptInput {
   /** Eje del reloj que acaba de cerrar: solo `strength_time` pide algo más (R3 b). */
   kind: HoldModuleKind

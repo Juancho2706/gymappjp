@@ -30,7 +30,7 @@ import { DualWheelPicker } from './DualWheelPicker'
 import { dismissWheelHint, useWheelHintDismissed } from './wheel-hint'
 import { ExecMediaV3 } from './ExecMediaV3'
 import { HoldModuleV3 } from './HoldModuleV3'
-import { holdCapturePromptFor, type OpenSetOpts } from './hold-capture-prompt'
+import { commitSetOptsFor, holdCapturePromptFor, type CommitSetOpts, type OpenSetOpts } from './hold-capture-prompt'
 import type { HoldCommitInfo } from './use-hold-module'
 import { RestOfferV3 } from './RestOfferV3'
 import { parseRestTime, useWorkoutTimers } from '../timers'
@@ -160,8 +160,10 @@ export function ExerciseScreenV3({
   /**
    * `opts.repeat` (R8): este commit REEMPLAZA una serie ya guardada porque el alumno tocó «Repetir».
    * El orquestador tiene que tratarlo como serie NUEVA (descanso + celebración) pese a `wasLogged`.
+   * `opts.minimizeRest` (R3b): este commit abre el prompt de huecos ⇒ el descanso automático arranca
+   * MINIMIZADO para no tapar la pantalla del ejercicio mientras el alumno anota.
    */
-  onCommitSet: (payload: OptimisticLogPayload, opts?: { repeat?: boolean }) => void
+  onCommitSet: (payload: OptimisticLogPayload, opts?: CommitSetOpts) => void
   onRpeUpdate?: (payload: OptimisticLogPayload) => void
   onDraftChange: (blockId: string, setNumber: number, values: Record<string, string>, fieldIndex: number) => void
   onOpenSubstitute: () => void
@@ -308,10 +310,21 @@ export function ExerciseScreenV3({
   }, [repeatRequestNonce])
 
   const commitSet = (payload: OptimisticLogPayload, hold?: { source: HoldSource; info: HoldCommitInfo }) => {
+    // R3/R4/R3b: la DECISIÓN se calcula ANTES del commit aunque el teclado se abra después (riesgo 2
+    // del PLAN), porque el orquestador la necesita EN el commit: es lo que le dice si el descanso
+    // automático arranca minimizado (barra) para dejar visible la pantalla del ejercicio. La regla
+    // vive en el helper puro `holdCapturePromptFor`; acá no se reimplementa nada.
+    const gap = hold
+      ? holdCapturePromptFor({
+          kind: 'strength_time',
+          captureGaps: hold.info.captureGaps,
+          expiredWhileAway: hold.info.expiredWhileAway,
+        })
+      : null
     // R8: el re-commit de una serie repetida viaja MARCADO para que el orquestador lo trate como serie
     // nueva (descanso + celebración) aunque la fila ya exista en `sessionLogs`.
     const isRepeat = repeat != null && repeat.setNumber === payload.setNumber
-    onCommitSet(payload, isRepeat ? { repeat: true } : undefined)
+    onCommitSet(payload, commitSetOptsFor({ repeat: isRepeat, minimizeRest: gap != null }))
     if (isRepeat) setRepeat(null)
     // Segundos EFECTIVOS por SERIE (reporte 11-09): MISMA regla que el orquestador — warmup válido en
     // la serie 1 de un bloque de ≥3 → `rest_time` → fallback de 60 s. Antes era una constante por
@@ -335,29 +348,22 @@ export function ExerciseScreenV3({
         : null
       setRestOffer({ setNumber: payload.setNumber, seconds: eff.seconds, warmup: eff.warmup, line })
     }
-    // R3/R4: la pantalla DECIDE y abre, siempre DESPUÉS de `onCommitSet` — `handleCommit` limpia el
-    // teclado con un `setKeypadTarget(null)` síncrono en su primera línea (riesgo 2 del PLAN), así que
-    // abrir antes se borraría solo. La regla vive en el helper puro `holdCapturePromptFor`.
-    if (hold) {
-      const gap = holdCapturePromptFor({
-        kind: 'strength_time',
-        captureGaps: hold.info.captureGaps,
-        expiredWhileAway: hold.info.expiredWhileAway,
+    // R3/R4: la APERTURA va siempre DESPUÉS de `onCommitSet` — `handleCommit` limpia el teclado con un
+    // `setKeypadTarget(null)` síncrono en su primera línea (riesgo 2 del PLAN), así que abrir antes se
+    // borraría solo. Lo único que se adelantó es la decisión (`gap`, arriba).
+    if (hold && gap) {
+      captureAppEvent('hold_capture_prompted', {
+        block_id: block.id,
+        exercise_type: 'strength',
+        context: 'solo',
+        // SPEC §7 pide `missing: string[]`, pero `AppEventProps` de RN sólo admite escalares
+        // (`analytics.ts:87`, y ese archivo no es de este worker): viaja como lista separada por
+        // comas — «reps», «weight» o «reps,weight» —, que en PostHog se filtra igual de bien.
+        missing: hold.info.captureGaps.join(','),
+        trigger: hold.source === 'timer' ? 'timer' : 'manual',
+        platform: 'mobile',
       })
-      if (gap) {
-        captureAppEvent('hold_capture_prompted', {
-          block_id: block.id,
-          exercise_type: 'strength',
-          context: 'solo',
-          // SPEC §7 pide `missing: string[]`, pero `AppEventProps` de RN sólo admite escalares
-          // (`analytics.ts:87`, y ese archivo no es de este worker): viaja como lista separada por
-          // comas — «reps», «weight» o «reps,weight» —, que en PostHog se filtra igual de bien.
-          missing: hold.info.captureGaps.join(','),
-          trigger: hold.source === 'timer' ? 'timer' : 'manual',
-          platform: 'mobile',
-        })
-        onOpenSet(payload.setNumber, { seed: payload, focus: gap.focus, prompt: 'hold-gap' })
-      }
+      onOpenSet(payload.setNumber, { seed: payload, focus: gap.focus, prompt: 'hold-gap' })
     }
   }
   const startOfferedRest = () => {

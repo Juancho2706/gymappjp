@@ -47,7 +47,7 @@ import { DualWheelPicker } from './DualWheelPicker'
 import { dismissWheelHint } from './wheel-hint'
 import { ExecMediaV3, execMediaKind } from './ExecMediaV3'
 import { HoldModuleV3 } from './HoldModuleV3'
-import { holdCapturePromptFor, type OpenSetOpts } from './hold-capture-prompt'
+import { commitSetOptsFor, holdCapturePromptFor, type CommitSetOpts, type OpenSetOpts } from './hold-capture-prompt'
 import { RestOfferV3 } from './RestOfferV3'
 import type { HoldCommitInfo, HoldModuleKind, HoldModuleStatus } from './use-hold-module'
 import type { ExecTheme } from './exec-theme'
@@ -156,7 +156,11 @@ export function SupersetScreenV3({
    * usa el prompt de huecos cuando el reloj cierra un miembro de FUERZA POR TIEMPO sin reps.
    */
   onOpenSet: (blockId: string, setNumber: number, opts?: OpenSetOpts) => void
-  onCommitSet: (payload: OptimisticLogPayload) => void
+  /**
+   * `opts.minimizeRest` (R3b): este commit abre el prompt de huecos ⇒ el descanso de RONDA arranca
+   * MINIMIZADO (barra) en vez de taparle al alumno la tarjeta del ejercicio mientras anota kg/reps.
+   */
+  onCommitSet: (payload: OptimisticLogPayload, opts?: CommitSetOpts) => void
   onRpeUpdate?: (payload: OptimisticLogPayload) => void
   onDraftChange: (blockId: string, setNumber: number, values: Record<string, string>, fieldIndex: number) => void
   /** Abre el sheet "máquina ocupada" para un miembro strength. */
@@ -381,28 +385,31 @@ export function SupersetScreenV3({
       const nextVM = memberVMs.find((m) => m.block.id === nextMemberId)
       if (nextVM) setCue({ name: nextVM.exercise.name, nonce: Date.now(), long: source === 'timer' })
     }
-    onCommitSet(payload)
-    // R3/R4: la MISMA regla que la pantalla sola, con el mismo helper puro. Se abre DESPUÉS de
-    // `onCommitSet` (riesgo 2 del PLAN) y el avance de miembro (V4) sigue ocurriendo por detrás: el
-    // alumno cierra el teclado y la ronda continúa donde estaba. «Repetir» no existe acá (R8/R13).
-    if (info && source && holdKind) {
-      const gap = holdCapturePromptFor({
-        kind: holdKind,
-        captureGaps: info.captureGaps,
-        expiredWhileAway: info.expiredWhileAway,
+    // R3/R4/R3b: la MISMA regla que la pantalla sola, con el mismo helper puro, y calculada ANTES del
+    // commit porque el orquestador necesita saber en ESE momento si el descanso de ronda arranca
+    // minimizado. La apertura sigue DESPUÉS de `onCommitSet` (riesgo 2 del PLAN) y el avance de
+    // miembro (V4) ocurre por detrás: el alumno cierra el teclado y la ronda continúa donde estaba.
+    // «Repetir» no existe acá (R8/R13).
+    const gap =
+      info && source && holdKind
+        ? holdCapturePromptFor({
+            kind: holdKind,
+            captureGaps: info.captureGaps,
+            expiredWhileAway: info.expiredWhileAway,
+          })
+        : null
+    onCommitSet(payload, commitSetOptsFor({ minimizeRest: gap != null }))
+    if (info && source && gap) {
+      captureAppEvent('hold_capture_prompted', {
+        block_id: payload.blockId,
+        exercise_type: 'strength',
+        context: 'superset',
+        // Misma adaptación que la pantalla sola: `AppEventProps` sólo admite escalares.
+        missing: info.captureGaps.join(','),
+        trigger: source === 'timer' ? 'timer' : 'manual',
+        platform: 'mobile',
       })
-      if (gap) {
-        captureAppEvent('hold_capture_prompted', {
-          block_id: payload.blockId,
-          exercise_type: 'strength',
-          context: 'superset',
-          // Misma adaptación que la pantalla sola: `AppEventProps` sólo admite escalares.
-          missing: info.captureGaps.join(','),
-          trigger: source === 'timer' ? 'timer' : 'manual',
-          platform: 'mobile',
-        })
-        onOpenSet(payload.blockId, payload.setNumber, { seed: payload, focus: gap.focus, prompt: 'hold-gap' })
-      }
+      onOpenSet(payload.blockId, payload.setNumber, { seed: payload, focus: gap.focus, prompt: 'hold-gap' })
     }
   }
   const nextMemberName = nextMemberId ? memberVMs.find((m) => m.block.id === nextMemberId)?.exercise.name ?? null : null

@@ -23,6 +23,12 @@ import {
 } from '@eva/workout-engine'
 import { FONT, textStyle } from '../../../lib/typography'
 import { useEvaMotion } from '../../../lib/motion'
+// Chip vivo del descanso (W5.1b · R3b): el descanso corre MINIMIZADO detrás de esta hoja, así que el
+// tiempo que queda tiene que verse ACÁ. El hook late solo mientras el chip está montado.
+// Se importa el módulo HOJA (`timers/rest-clock`, sólo React) y no el barril `./timers`: el barril
+// arrastraría el provider, el motor del descanso y sus notificaciones nativas al grafo del teclado —y
+// a los tests que lo montan (`tests/mobile/executor-v3-keypad-strength-time.test.ts`).
+import { formatRestRemaining, restRemainingA11yLabel, useRestRemainingSec } from './timers/rest-clock'
 import { shadow } from '../../../lib/shadows'
 import { haptics } from '../../../lib/haptics'
 // Primitivas presentacionales compartidas con la `ActiveSetRow` (sin duplicar).
@@ -41,12 +47,69 @@ const ON_DARK_MUTED = '#939DAB'
 const WHITE = '#FFFFFF'
 const WARNING_500 = '#F5A524' // --color-warning-500 (ámbar de la nota, mirror amber-300/400 web)
 
+/**
+ * `#rrggbb` + alpha → `rgba(...)`, local a este archivo (W5.1b). NO se importa `hexToRgba` de
+ * `lib/theme`: ese módulo arrastra `@eva/brand-kit` y `lib/shadows` al grafo del teclado, y
+ * `tests/mobile/executor-v3-keypad-strength-time.test.ts` —que monta este host de verdad— tiene
+ * `lib/shadows` doblado sin `GLOWS`, así que el import lo rompería. Cuatro líneas puras a cambio de no
+ * atar el teclado al tema imperativo.
+ */
+function withAlpha(hex: string, alpha: number): string {
+  const h = hex.replace('#', '')
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h
+  const [r, g, b] = [0, 2, 4].map((i) => parseInt(full.slice(i, i + 2), 16) || 0)
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`
+}
+
 // El tipo `KeypadTarget` vive en `@eva/workout-engine` (keypad-flow, puro/testeable); se re-exporta
 // para los consumidores que ya lo importaban desde acá sin tocar sus imports.
 export type { KeypadTarget } from '@eva/workout-engine'
 
 /** Paso de campo (excluye el paso de esfuerzo) — cada uno es una pestaña del display. */
 type KeypadFieldStep = Extract<KeypadStep, { kind: 'keypad' }>
+
+/**
+ * Chip vivo «Descanso 1:27» del prompt de huecos (W5.1b · enmienda E1 del owner, 12-09).
+ *
+ * Con la preferencia «Pasar solo al descanso» encendida, cuando el reloj de fuerza por tiempo cierra
+ * la serie sin reps el descanso arranca MINIMIZADO (R3b) y esta hoja le tapa la `RestTimerBar` al
+ * alumno: el chip es la única forma de que VEA cuánto le queda mientras anota kg y reps.
+ *
+ * Es un componente APARTE a propósito: el valor cambia una vez por segundo y, si el hook viviera en
+ * `KeypadHost`, cada tick re-renderizaría el teclado entero (display, grid y chips) mientras el alumno
+ * tipea. Acá el latido sólo toca estas dos vistas.
+ *
+ * `null` cuando no hay descanso vivo (pref apagada, descanso saltado o ya cerrado) ⇒ no se pinta nada.
+ * En el 0 dice «¡A entrenar!» hasta que el host del descanso se cierra solo (~1,5 s después).
+ */
+function RestClockChip({ accent }: { accent?: string }) {
+  const remaining = useRestRemainingSec()
+  if (remaining == null) return null
+  const tint = accent ?? ON_DARK
+  const done = remaining <= 0
+  return (
+    <View
+      accessibilityRole="timer"
+      accessibilityLabel={restRemainingA11yLabel(remaining)}
+      style={{
+        flexDirection: 'row',
+        alignItems: 'center',
+        borderRadius: 999,
+        borderWidth: 1.5,
+        paddingHorizontal: 11,
+        paddingVertical: 5,
+        backgroundColor: withAlpha(tint, done ? 0.2 : 0.12),
+        borderColor: withAlpha(tint, done ? 0.45 : 0.3),
+      }}
+    >
+      <Text
+        style={{ fontFamily: FONT.uiBold, fontSize: 12, color: withAlpha(tint, 0.95), fontVariant: ['tabular-nums'] }}
+      >
+        {done ? formatRestRemaining(0) : `Descanso ${formatRestRemaining(remaining)}`}
+      </Text>
+    </View>
+  )
+}
 
 /**
  * Host del teclado numérico custom (mobile) — espejo del `NumericKeypadSheet` + `WorkoutKeypadProvider`
@@ -386,9 +449,15 @@ export function KeypadHost({
                 no lo reemplaza: el alumno tiene que poder ver contra qué objetivo está anotando. */}
             {gapPrompt ? (
               <View className="mt-2 px-1">
-                <Text style={KEYPAD_EYEBROW_STYLE} className="text-on-dark-muted" numberOfLines={1}>
-                  {`Serie ${target.setNumber}${gapHoldSec != null ? ` · guardada con ${gapHoldSec} s` : ''}`}
-                </Text>
+                {/* Eyebrow + chip vivo del descanso (W5.1b): el descanso corre minimizado DETRÁS de
+                    esta hoja, así que el tiempo que queda se muestra acá. Sin descanso vivo (pref
+                    apagada, o ya cerrado) el chip devuelve null y la fila queda como antes. */}
+                <View className="flex-row items-center justify-between gap-2">
+                  <Text style={KEYPAD_EYEBROW_STYLE} className="flex-1 text-on-dark-muted" numberOfLines={1}>
+                    {`Serie ${target.setNumber}${gapHoldSec != null ? ` · guardada con ${gapHoldSec} s` : ''}`}
+                  </Text>
+                  <RestClockChip accent={accent} />
+                </View>
                 <Text style={textStyle('lg', FONT.displayBold)} className="text-on-dark" numberOfLines={2}>
                   {gapAsksWeight ? '¿Con cuánto peso?' : '¿Cuántas reps hiciste?'}
                 </Text>

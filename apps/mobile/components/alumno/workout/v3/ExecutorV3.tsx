@@ -119,7 +119,7 @@ import { ExerciseScreenV3, strengthSeedValues } from './ExerciseScreenV3'
 import { SupersetScreenV3, type SupersetMemberSub } from './SupersetScreenV3'
 import { supersetGroupLetter, memberLetter, roundRestStartArgs, shouldDeferRoundRest } from './superset-screen-model'
 import { holdEditValues } from './typed-screen-model'
-import type { OpenSetOpts } from './hold-capture-prompt'
+import type { CommitSetOpts, OpenSetOpts } from './hold-capture-prompt'
 import { MobilityScreenV3 } from './MobilityScreenV3'
 import { RollerScreenV3 } from './RollerScreenV3'
 import { CardioScreenV3 } from './CardioScreenV3'
@@ -276,6 +276,10 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
   const { theme, branding } = useTheme()
   const motion = useEvaMotion()
   const timers = useWorkoutTimers()
+  // R3b: se DESESTRUCTURA porque `timers` (el objeto del contexto) cambia de identidad con cada
+  // arranque/cierre de timer, mientras que `expandRest` es un callback estable. Así `resolveHoldPrompt`
+  // —que es dependencia de `handleCommit`— no se recrea en cada tick de descanso.
+  const { expandRest } = timers
   const session = useWorkoutSession(planId, repeatDate, editDate)
   // Finalizar en curso: el REF es el guard de reentrada (bloquea el 2.º tap dentro del mismo render) y el
   // ESTADO es lo que ve el alumno (botones deshabilitados + spinner). Antes sólo existía el ref, así que
@@ -724,7 +728,14 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
       reps_filled: payload?.repsDone != null,
       weight_changed: payload != null && (payload.weightKg ?? null) !== open.weightKg,
     })
-  }, [])
+    // R3b (enmienda E1): el descanso arrancó MINIMIZADO para dejar a la vista la pantalla del
+    // ejercicio mientras el alumno anotaba; resuelto el prompt —«Guardar» o «Sin reps»/scrim/X— pasa a
+    // la pantalla grande CON EL MISMO reloj (el motor nunca se re-montó). `holdPromptRef` sólo se
+    // puebla desde `prompt: 'hold-gap'` (ver `openSet`), así que el teclado de «Editar» —abierto con
+    // el descanso YA expandido— nunca llega hasta acá. Si el descanso terminó mientras anotaba,
+    // `expandRest` es no-op.
+    expandRest()
+  }, [expandRest])
 
   // ── Abrir teclado para una serie (copia de ExecutorV2: sin cambios al motor). ──
   const openSet = useCallback(
@@ -1013,11 +1024,17 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
   // maneja el efecto de auto-avance). Motor INTOCABLE: solo se INVOCA logSet/timers. ──
   const handleCommit = useCallback(
     /**
-     * `opts.repeat` (R8): el alumno rehízo la serie N desde el reloj. Es el ÚNICO consumidor del
-     * segundo argumento; el resto de los llamadores (filas, teclado, `retryCommit`) siguen pasando
-     * sólo el payload y su comportamiento es byte-idéntico.
+     * `opts.repeat` (R8): el alumno rehízo la serie N desde el reloj.
+     *
+     * `opts.minimizeRest` (R3b · enmienda E1): este commit va a abrir el prompt de huecos, así que el
+     * descanso automático arranca MINIMIZADO (la barra) en vez del interstitial a pantalla completa —
+     * el alumno tiene que ver el ejercicio mientras anota kg/reps, y `resolveHoldPrompt` lo expande
+     * cuando termina. Lo deciden las pantallas ANTES de commitear (riesgo 2 del PLAN).
+     *
+     * El resto de los llamadores (filas, teclado, `retryCommit`) siguen pasando sólo el payload y su
+     * comportamiento es byte-idéntico.
      */
-    async (payload: OptimisticLogPayload, opts?: { repeat?: boolean }) => {
+    async (payload: OptimisticLogPayload, opts?: CommitSetOpts) => {
       const block = blocks.find((b) => b.id === payload.blockId)
       const sub = block ? getSubstitution(block) : null
       setKeypadTarget(null)
@@ -1214,7 +1231,10 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
               // `countKind: 'ronda'` para que la notificación imprima "Ronda 2 de 4" en vez de la
               // lectura falsa "Serie 2 de 4" (por eso antes esta rama no mandaba contexto alguno).
               // Es la ronda RECIÉN cerrada sobre el total del grupo — nunca la próxima.
-              timers.startRest(plan.seconds, roundRestStartArgs(plan))
+              // R3b: si este commit abre el prompt de huecos, el descanso de ronda arranca MINIMIZADO
+              // (la barra) para no taparle la tarjeta al alumno mientras anota; `resolveHoldPrompt` lo
+              // expande al cerrarse el prompt, con el MISMO reloj. Sin prompt, `false` = lo de siempre.
+              timers.startRest(plan.seconds, { ...roundRestStartArgs(plan), minimized: opts?.minimizeRest === true })
             } else if (decision === 'none' && autoRest) {
               // Intra-ronda (o grupo sin descanso) con la preferencia ENCENDIDA: se sigue sin
               // detenerse y el descanso en curso se corta, como siempre. Con la pref OFF no se toca.
@@ -1264,6 +1284,10 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
               setIndex: payload.setNumber,
               setTotal: block?.sets,
               countKind: 'serie',
+              // R3b: con el prompt de huecos por abrirse, el descanso arranca en la BARRA y no en el
+              // interstitial — el alumno anota sobre la pantalla del ejercicio y `resolveHoldPrompt`
+              // lo expande después, sin reiniciar el reloj. Sin prompt, `false` = lo de siempre.
+              minimized: opts?.minimizeRest === true,
             })
           } else if (decision === 'none' && autoRest) {
             // DEFENSIVA (11-09): con `resolveEffectiveRest` los segundos ya nunca son 0, así que en

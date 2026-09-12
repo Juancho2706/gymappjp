@@ -8,6 +8,7 @@ import type { RestCountKind } from './rest-live-notification'
 import { HoldTimer } from './HoldTimer'
 import { IntervalTimer } from './IntervalTimer'
 import { StopwatchTimer } from './StopwatchTimer'
+import { clearRestClock, publishRestClock } from './rest-clock'
 import { hydrateRestTimerPrefs } from './rest-timer-preferences'
 import { primeTimerAudio } from './sound'
 
@@ -37,6 +38,15 @@ type RestOpts = {
   setIndex?: number
   setTotal?: number
   countKind?: RestCountKind
+  /**
+   * R3b («Reps tras el reloj», enmienda E1 del owner 12-09): arrancar el descanso YA MINIMIZADO —la
+   * barra compacta de abajo— en vez del interstitial a pantalla completa. Lo pide `ExecutorV3` cuando
+   * el reloj de fuerza por tiempo cerró la serie con huecos y hay que pedirle kg/reps al alumno: tiene
+   * que seguir viendo la pantalla del EJERCICIO mientras anota, con el descanso ya corriendo detrás.
+   * Al resolverse el prompt, `expandRest()` lo lleva a la pantalla grande CON EL MISMO reloj.
+   * Default `false` ⇒ cualquier otro descanso arranca expandido, byte-idéntico a antes.
+   */
+  minimized?: boolean
 }
 
 type ActiveTimer =
@@ -68,6 +78,14 @@ export interface WorkoutTimersApi {
   startStopwatch: () => void
   /** Corta SOLO el descanso en curso (no pisa hold/interval/cronómetro). */
   cancelRest: () => void
+  /**
+   * Expande a pantalla completa el descanso que está corriendo MINIMIZADO (R3b). NO re-monta el host
+   * ni reinicia el motor: sólo cambia la presentación, así el reloj sigue exactamente donde iba —que
+   * es todo el punto de la enmienda E1 («que siga normal a la pantalla grande del descanso
+   * continuando con el timer que ya tenía el mini»). No-op si no hay descanso activo (p. ej. terminó
+   * mientras el alumno anotaba) o si ya está expandido.
+   */
+  expandRest: () => void
   /** Cierra cualquier timer activo. */
   close: () => void
   /** Timer activo (o null). Tipado laxo en el contrato (`unknown`). */
@@ -130,6 +148,20 @@ export function WorkoutTimerProvider({ children }: { children: React.ReactNode }
     setActive(next)
   }, [])
 
+  /**
+   * ¿El descanso vivo se muestra MINIMIZADO (barra compacta) en vez del interstitial? (R3b)
+   *
+   * El estado vive ACÁ y ya no dentro de `RestTimerHost` porque pasó a tener dos dueños: el toque del
+   * alumno (barra ⇄ interstitial, que sigue funcionando igual) y el orquestador, que necesita
+   * arrancar el descanso minimizado (`startRest(…, { minimized: true })`) y expandirlo después
+   * (`expandRest()`). Subirlo NO re-monta nada: el host se monta con `key={nonce}`, que no cambia al
+   * alternar la presentación, así que el motor —y con él la cuenta— sobrevive intacto.
+   *
+   * Deliberadamente FUERA del `api` del contexto: es puro detalle de presentación, y publicarlo ahí
+   * re-renderizaría a todos los consumidores (el ejecutor entero) en cada minimizar/expandir.
+   */
+  const [restMinimized, setRestMinimized] = useState(false)
+
   const startRest = useCallback(
     (input: number | string, opts?: RestOpts) => {
       // Paridad de contrato con la web (`WorkoutTimerProvider.tsx:96-99`): `startRest` acepta un
@@ -138,6 +170,19 @@ export function WorkoutTimerProvider({ children }: { children: React.ReactNode }
       // early-return por `!Number.isFinite` lo tragaba). Sólo dispara si segundos > 0 (igual que web).
       const seconds = typeof input === 'string' ? parseRestTime(input) : input
       if (!Number.isFinite(seconds) || seconds <= 0) return
+      // R3b: cada descanso declara su presentación inicial. Sin la opción arranca EXPANDIDO, como
+      // siempre — así el flag nunca queda pegado del descanso anterior.
+      setRestMinimized(opts?.minimized === true)
+      // W5.1b: primera publicación del reloj para el chip vivo del teclado (`useRestRemainingSec`).
+      // Va acá —y no sólo en el host— porque el chip puede montarse ANTES del primer tick del motor.
+      // `Date.now()` en un handler, nunca en render (regla `react-hooks/purity`). Después el
+      // `RestTimerHost` toma la posta con las pausas y los ±15 s.
+      const secs = Math.round(seconds)
+      publishRestClock(
+        (opts?.autoStart ?? true)
+          ? { endAtMs: Date.now() + secs * 1000, pausedRemainingSec: null }
+          : { endAtMs: null, pausedRemainingSec: secs },
+      )
       nonceRef.current += 1
       replaceWith({
         kind: 'rest',
@@ -182,10 +227,27 @@ export function WorkoutTimerProvider({ children }: { children: React.ReactNode }
     replaceWith({ kind: 'stopwatch', nonce: nonceRef.current })
   }, [replaceWith])
 
-  const close = useCallback(() => setActive(null), [])
+  const close = useCallback(() => {
+    // W5.1b: sin timer no hay reloj que mostrar. Es idempotente (`publishRestClock` ignora lo igual),
+    // así que cerrar un hold/interval —que nunca publicó nada— no dispara a ningún suscriptor.
+    clearRestClock()
+    setActive(null)
+  }, [])
 
   const cancelRest = useCallback(() => {
+    clearRestClock()
     setActive((cur) => (cur?.kind === 'rest' ? null : cur))
+  }, [])
+
+  /**
+   * R3b: el prompt de huecos se resolvió ⇒ el descanso que venía corriendo en la barra pasa a la
+   * pantalla grande, sin tocar el motor. La guarda lee `activeKindRef` (y no `active`) para que el
+   * callback quede ESTABLE: `ExecutorV3` lo mete en las deps de `resolveHoldPrompt`, que a su vez es
+   * dep de `handleCommit`. Si el descanso ya se cerró solo mientras el alumno anotaba, no hace nada.
+   */
+  const expandRest = useCallback(() => {
+    if (activeKindRef.current !== 'rest') return
+    setRestMinimized(false)
   }, [])
 
   // Renderer del interstitial V3 (E3.1). `ExecutorV3` lo registra; se guarda envuelto en un objeto para
@@ -216,8 +278,8 @@ export function WorkoutTimerProvider({ children }: { children: React.ReactNode }
   }, [])
 
   const api = useMemo<WorkoutTimersApi>(
-    () => ({ startRest, startHold, startInterval, startStopwatch, cancelRest, close, state: active, setRestInterstitial }),
-    [startRest, startHold, startInterval, startStopwatch, cancelRest, close, active, setRestInterstitial],
+    () => ({ startRest, startHold, startInterval, startStopwatch, cancelRest, expandRest, close, state: active, setRestInterstitial }),
+    [startRest, startHold, startInterval, startStopwatch, cancelRest, expandRest, close, active, setRestInterstitial],
   )
 
   return (
@@ -249,6 +311,8 @@ export function WorkoutTimerProvider({ children }: { children: React.ReactNode }
                 onClose={close}
                 registerAlarmSilencer={registerAlarmSilencer}
                 renderInterstitial={restInterstitial?.render ?? null}
+                minimized={restMinimized}
+                onMinimizedChange={setRestMinimized}
               />
             ) : null}
             {active.kind === 'hold' ? (

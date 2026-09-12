@@ -1,6 +1,7 @@
-import { type ReactNode, useEffect, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useMemo } from 'react'
 import { useTheme } from '../../../../context/ThemeContext'
 import { RestTimerBar } from './RestTimerBar'
+import { clearRestClock, publishRestClock } from './rest-clock'
 import { useRestTimerEngine, type RestTimerEngine } from './useRestTimerEngine'
 import type { RestCountKind, RestLiveContext } from './rest-live-notification'
 
@@ -26,6 +27,12 @@ export type RestInterstitialRenderer = (
  * Como el host NO se re-monta al alternar `minimized`, el motor sobrevive el minimizar/expandir: el
  * cronometro nunca se reinicia ni se duplica. El provider lo monta con `key={nonce}` → re-disparar un
  * descanso nuevo si re-monta (motor fresco), igual que antes con la barra.
+ *
+ * R3b («Reps tras el reloj», enmienda E1 del owner 12-09): `minimized` es CONTROLADO por el provider
+ * y ya no un `useState` de acá. Motivo: ahora tiene dos dueños — el toque del alumno (esta pantalla)
+ * y el orquestador, que arranca el descanso minimizado mientras el teclado pide kg/reps y lo expande
+ * al resolverse el prompt. Subirlo no cambia el comportamiento observable: el host sigue sin
+ * re-montarse al alternar, así que el motor y su cuenta siguen siendo los mismos.
  */
 export function RestTimerHost({
   initialSeconds,
@@ -38,6 +45,8 @@ export function RestTimerHost({
   onClose,
   registerAlarmSilencer,
   renderInterstitial,
+  minimized,
+  onMinimizedChange,
 }: {
   initialSeconds: number
   autoStart?: boolean
@@ -51,6 +60,10 @@ export function RestTimerHost({
   onClose: () => void
   registerAlarmSilencer?: (silence: (() => void) | null) => void
   renderInterstitial?: RestInterstitialRenderer | null
+  /** Presentacion actual: `true` = barra compacta, `false` = interstitial fullscreen (R3b). */
+  minimized: boolean
+  /** Cambia la presentacion. El dueño del estado es el provider (ver el docblock de arriba). */
+  onMinimizedChange: (next: boolean) => void
 }) {
   // Contexto VISUAL de la notificacion del descanso (QA-11 fase 2, mock aprobado por el CEO):
   // "Descanso · sigue {ejercicio}" + "Serie n de N" (o "Ronda n de N" en superserie, segun
@@ -68,7 +81,23 @@ export function RestTimerHost({
   )
 
   const engine = useRestTimerEngine({ initialSeconds, autoStart, onClose, registerAlarmSilencer, liveContext })
-  const [minimized, setMinimized] = useState(false)
+
+  // W5.1b · chip vivo del teclado: el host es el único que ve TODAS las transiciones del motor (tick,
+  // pausa, ±15 s, reset, el 0), así que es el que mantiene fiel el mini-store que lee
+  // `useRestRemainingSec`. Se publica el fin ABSOLUTO mientras corre y los segundos CONGELADOS cuando
+  // no (pausa, o `timeLeft === 0` ⇒ el chip dice «¡A entrenar!» hasta que el host se cierre solo a los
+  // ~1,5 s). Nada de esto re-renderiza al provider ni al ejecutor: es un ref + listeners.
+  const { timeLeft, isActive } = engine
+  useEffect(() => {
+    publishRestClock(
+      isActive && timeLeft > 0
+        ? { endAtMs: Date.now() + timeLeft * 1000, pausedRemainingSec: null }
+        : { endAtMs: null, pausedRemainingSec: timeLeft },
+    )
+  }, [isActive, timeLeft])
+  // Host desmontado = no hay descanso (se cerró, se saltó o lo reemplazó otro timer): el chip
+  // desaparece en vez de quedar contando un reloj fantasma.
+  useEffect(() => () => clearRestClock(), [])
 
   // QA4 (paridad web `RestTimer.tsx`): la píldora/interstitial del descanso existe SÓLO mientras el
   // alumno descansa. Al llegar a 0 mostramos "¡A entrenar!" ~1.5s y AUTO-DESCARTAMOS el descanso vía
@@ -83,7 +112,7 @@ export function RestTimerHost({
   }, [done, close])
 
   if (renderInterstitial && !minimized) {
-    return <>{renderInterstitial(engine, { minimize: () => setMinimized(true) })}</>
+    return <>{renderInterstitial(engine, { minimize: () => onMinimizedChange(true) })}</>
   }
 
   return (
@@ -91,7 +120,7 @@ export function RestTimerHost({
       engine={engine}
       nextLabel={nextLabel}
       warmup={warmup}
-      onExpand={renderInterstitial ? () => setMinimized(false) : undefined}
+      onExpand={renderInterstitial ? () => onMinimizedChange(false) : undefined}
     />
   )
 }
