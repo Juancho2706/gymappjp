@@ -222,10 +222,10 @@ Base: `apps/web/src/app/c/[coach_slug]/workout/[planId]/`.
       plataformas o la divergencia declarada si se recortó) y `docs/testing/TEST_STATUS.md` (tests
       nuevos + resultado real de la suite).
       **Done:** `pnpm docs:check` OK y CURRENT bajo el tope.
-- [ ] **W4.5 OK del owner.** Pedirlo con la tabla de gates llena y el resumen de los tres diffs.
+- [x] **W4.5 OK del owner (12-09 21:15Z: «si a todo»).** Pedirlo con la tabla de gates llena y el resumen de los tres diffs.
       **Sin ese OK no se pushea nada.**
       **Done:** respuesta del owner citada en esta tarea.
-- [ ] **W4.6 Salida.** Push de `rnmobiledenuevo` + `master` → deploy web → verificar READY → **una sola
+- [x] **W4.6 Salida (12-09 21:27Z):** push `rnmobiledenuevo` + `master` = `055269f2`; deploy `dpl_8jx73Xxz5L734uKTXHmgs2n6pQtB` READY 21:24Z, OTA 1.1.2 `production` android `01a09783-5424-7702-b3f6-b44d7cb774c1` (grupo `89e5fc36…`, run 34719802498) / ios `01a09783-2049-7be3-94cf-2c4838d42aac` (grupo `c6128d24…`, run 34719804242), E2E `prod-suave` 9/9 (run 34719982237, 41,0 s). Push de `rnmobiledenuevo` + `master` → deploy web → verificar READY → **una sola
       OTA 1.1.2 android + ios** que lleve el fix del share (W0.2) y este tren → anotar los dos ids de
       update → E2E `prod-suave`.
       **Done:** deploy READY, los dos ids de OTA anotados y el E2E con su resultado real.

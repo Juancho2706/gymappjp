@@ -12,8 +12,9 @@ source_of_truth: apps/web responsive + apps/mobile
 
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
 
-> **2026-09-12 (tren «Reps tras el reloj» — fuerza por tiempo; commits locales `da0525fe` motor · `170a6424` RN · `57fa541d` web sobre el SDD
-> `9917f444` y el fix del share `b49cc0da`, SIN PUSH ni OTA al cierre de esta entrada; [SDD](../specs/reps-tras-el-reloj/SPEC.md))**. Motor
+> **2026-09-12 21:27Z (tren «Reps tras el reloj» — fuerza por tiempo — EN PRODUCCIÓN: `master` = `rnmobiledenuevo` = `055269f2`
+> (`b49cc0da` fix del share → `9917f444` SDD → `da0525fe` motor · `170a6424` RN · `57fa541d` web → docs), deploy `dpl_8jx73Xxz5L734uKTXHmgs2n6pQtB` READY 21:24Z, OTA 1.1.2 `production` android `01a09783-5424-7702-b3f6-b44d7cb774c1` (grupo `89e5fc36…`, run 34719802498) / ios `01a09783-2049-7be3-94cf-2c4838d42aac` (grupo `c6128d24…`, run 34719804242), E2E `prod-suave` 9/9 (run 34719982237, 41,0 s);
+> [SDD](../specs/reps-tras-el-reloj/SPEC.md); QA del owner PENDIENTE (SPEC §10, 10 puntos))**. Motor
 > compartido `captureGapsFor` + `KeypadTarget.holdSource/prompt` (`@eva/workout-engine`) — **paridad nueva**; **timbre a 0** del hold en RN
 > (`playTimerCue('done')` con el silencio del alumno; la web ya sonaba por `useExecCountdown`) — **brecha cerrada**; **teclado/sheet que se
 > abre solo** si faltan reps (o kg) al cerrar el reloj, misma regla R3 en `v3/hold-capture-prompt.ts` de cada app (RN `KeypadHost` como
