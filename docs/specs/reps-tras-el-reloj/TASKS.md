@@ -238,7 +238,7 @@ Pedido del owner tras ver la salida en producción (12-09): el teclado sobre la 
 el descanso corriendo en la barra mini y la pantalla grande recién al confirmar, con el mismo reloj.
 Mismos workers que W2/W3. Sin gates hasta que el owner libere la CPU.
 
-- [ ] **W5.1 (RN, worker W2)** Contrato: `RestOpts.minimized?: boolean` en `timers/TimerProvider.tsx` y
+- [x] **W5.1 (RN, worker W2, `2ef37ff2`)** Contrato: `RestOpts.minimized?: boolean` en `timers/TimerProvider.tsx` y
       `timers.expandRest()`; el estado `minimized` de `RestTimerHost.tsx:71` sube al provider (o llega
       como prop + señal) para que arranque minimizado y se expanda por API sin remontar el host ni
       reiniciar el motor. `ExecutorV3.handleCommit`: los dos `startRest` automáticos (`:1217` ronda,
@@ -249,7 +249,7 @@ Mismos workers que W2/W3. Sin gates hasta que el owner libere la CPU.
       **Done:** con pref ON y reps vacías, a 0 se ve la pantalla del ejercicio + barra mini + teclado;
       Guardar/Sin reps ⇒ interstitial con el reloj ya avanzado; con reps tipeadas o pref OFF byte-idéntico;
       tests del provider (arranque minimizado + expandRest) y del executor/helper.
-- [ ] **W5.2 (web, worker W3)** Contrato: `RestOptions.minimized?: boolean` en `WorkoutTimerProvider.tsx`
+- [x] **W5.2 (web, worker W3, `31a9dfc1`)** Contrato: `RestOptions.minimized?: boolean` en `WorkoutTimerProvider.tsx`
       y `expandRest()` en el contexto; el `minimized` de `RestTimer.tsx:54` se inicializa desde la opción y
       responde a la señal de expandir sin remontar. Pantalla sola: `HoldPrefill.minimizeRestIfGaps`
       (lo pone `onMeasured` cuando `submit && !expiredWhileAway`); `StrengthLogSetForm.buildRest` pasa
@@ -259,18 +259,23 @@ Mismos workers que W2/W3. Sin gates hasta que el owner libere la CPU.
       (decidir ANTES de `onLogged`) y `closeEditSheet` llama `expandRest()`.
       **Done:** test en `ExerciseStepV3.test.tsx` (`startRest` recibe `minimized: true` y `expandRest`
       se llama al cerrar) y en `LogSetForm.test.tsx`; E2E W6.10 sin cambios (pref OFF).
-- [ ] **W5.1b (RN, worker W2)** Chip vivo «Descanso 1:27» en el header del `KeypadHost` con `prompt: 'hold-gap'`
+- [x] **W5.1b (RN, worker W2, `2ef37ff2`)** Chip vivo «Descanso 1:27» en el header del `KeypadHost` con `prompt: 'hold-gap'`
       (a la derecha del eyebrow), alimentado por `restClockRef` + `subscribeRestClock` + `useRestRemainingSec`
       en `timers/` (sin `setState` por tick en el provider). Test con fake timers en
       `tests/mobile/rest-minimized-hold-prompt.test.ts`.
       **Done:** el chip cuenta mientras el teclado está abierto y desaparece sin descanso activo.
-- [ ] **W5.2b (web, worker W3)** Mismo chip en el header de la sheet de huecos (pantalla sola y superserie)
+- [x] **W5.2b (web, worker W3, `31a9dfc1`)** Mismo chip en el header de la sheet de huecos (pantalla sola y superserie)
       con un `useRestRemainingSec` del `WorkoutTimerProvider` (mismo diseño: ref + suscripción, intervalo
       solo en el chip). Test en `ExerciseStepV3.test.tsx`.
       **Done:** ídem RN.
-- [ ] **W5.3 (Fable)** Juicio, gates completos cuando el owner libere la CPU, commit, push, deploy, OTA
-      1.1.2 android+ios, E2E `prod-suave`, docs; mockup v4.
-- [ ] **W5.4 (owner)** QA §10 con el punto 1 enmendado.
+- [x] **W5.3 (Fable, 12-09)** Juicio (una devolución a W3: el test «Editar no expande» cerraba con un botón que
+      solo existe en el prompt). Gates reales sobre `31a9dfc1`: typecheck 0, tsc mobile 0, `pnpm test` 801
+      archivos / 11 028 tests verdes (2 rojos en `_data/substitution.queries.test.ts`, ajeno al tren, que pasa
+      7/7 solo: flaky bajo carga, corría junto al `expo export`), lint 0/572 warn, lint:mobile 0, tokens OK,
+      docs OK, expo export OK. Salida: `master` = `rnmobiledenuevo` = `9e153f23`, deploy `dpl_5d2TczpX66aoGSsfAkkeqwW9BqVh` READY, OTA 1.1.2 `production` android `01a097d4-0a6e-7bd9-8323-e7efd6cadeb0` / ios `01a097d4-2ebd-7a75-83c2-874454fd36fd`, E2E `prod-suave` 9/9 (run 34723934934). Mockup v4.
+- [ ] **W5.4 (owner)** QA §10 con el punto 1 enmendado (teclado sobre el ejercicio + chip «Descanso 1:27» +
+      expansión al confirmar) y el punto extra: descanso corto que llega a 0 con el teclado abierto ⇒ chip
+      «¡A entrenar!» y sin pantalla grande al cerrar.
 
 ## Backlog (no bloquea el cierre)
 

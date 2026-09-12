@@ -12,6 +12,14 @@ source_of_truth: apps/web responsive + apps/mobile
 
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
 
+> **2026-09-12 (Enmienda E1 de «Reps tras el reloj» — EN PRODUCCIÓN: `master` = `rnmobiledenuevo` = `9e153f23` (`2ef37ff2` RN ·
+> `31a9dfc1` web), deploy `dpl_5d2TczpX66aoGSsfAkkeqwW9BqVh` READY, OTA 1.1.2 `production` android `01a097d4-0a6e-7bd9-8323-e7efd6cadeb0` / ios `01a097d4-2ebd-7a75-83c2-874454fd36fd`, E2E `prod-suave` 9/9 (run 34723934934))**. Con el prompt de huecos abierto el descanso arranca MINIMIZADO y se
+> expande al confirmar, con el mismo reloj: contrato `startRest(secs, { minimized })` + `expandRest()` en los dos providers (RN el
+> estado `minimized` sube al `TimerProvider`; web `expandNonce` sin remontar el `RestTimer`) — **paridad nueva**; chip vivo «Descanso
+> 1:27» en el header del teclado (RN `timers/rest-clock.ts` + `RestClockChip` en `KeypadHost`) y de la sheet (web `RestClockSnapshot` +
+> `useRestRemainingSec` + `RestClockChip` en `WorkoutTimerProvider.tsx`), ambos como hoja con su propio intervalo — **paridad nueva**;
+> **solo web** el paso expande el descanso si se desmonta con la sheet abierta (auto-avance al cerrar el bloque).
+
 > **2026-09-12 21:27Z (tren «Reps tras el reloj» — fuerza por tiempo — EN PRODUCCIÓN: `master` = `rnmobiledenuevo` = `055269f2`
 > (`b49cc0da` fix del share → `9917f444` SDD → `da0525fe` motor · `170a6424` RN · `57fa541d` web → docs), deploy `dpl_8jx73Xxz5L734uKTXHmgs2n6pQtB` READY 21:24Z, OTA 1.1.2 `production` android `01a09783-5424-7702-b3f6-b44d7cb774c1` (grupo `89e5fc36…`, run 34719802498) / ios `01a09783-2049-7be3-94cf-2c4838d42aac` (grupo `c6128d24…`, run 34719804242), E2E `prod-suave` 9/9 (run 34719982237, 41,0 s);
 > [SDD](../specs/reps-tras-el-reloj/SPEC.md); QA del owner PENDIENTE (SPEC §10, 10 puntos))**. Motor
