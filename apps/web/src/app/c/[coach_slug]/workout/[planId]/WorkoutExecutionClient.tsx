@@ -38,6 +38,8 @@ import {
     isSkippedSetRow,
     type SkipReason,
     type WorkoutLogMetadata,
+    formatStrengthTimeSetLine,
+    isStrengthTimeBlock,
     SIDE_LABEL,
     resolveEffectiveRest,
     resolveRestAfterCommit,
@@ -47,7 +49,7 @@ import {
 import { StepperExecution, type StepperStepView } from './StepperExecution'
 import { ExecHeaderV3, type ExecDotState } from './v3/ExecHeaderV3'
 import { applyExecThemeVars, readExecutorTheme } from './v3/exec-theme'
-import { ExerciseStepV3 } from './v3/ExerciseStepV3'
+import { ExerciseStepV3, type HoldSetActionSignal } from './v3/ExerciseStepV3'
 import { MobilityStepV3 } from './v3/MobilityStepV3'
 import { RollerStepV3 } from './v3/RollerStepV3'
 import { CardioStepV3 } from './v3/CardioStepV3'
@@ -60,7 +62,7 @@ import { TechniqueSheetV3 } from './v3/TechniqueSheetV3'
 import { computeWeeklyStreak, type WeekStatusDaySource } from './v3/weekly-streak'
 import { ExecSettingsSheet } from './v3/ExecSettingsSheet'
 import { AutoRestModalV3 } from './v3/AutoRestModalV3'
-import { RestInterstitialDataProvider, type InterstitialNext, type InterstitialRound } from './v3/RestInterstitialV3'
+import { RestInterstitialDataProvider, type InterstitialLastSet, type InterstitialNext, type InterstitialRound } from './v3/RestInterstitialV3'
 import { resolveExecMedia } from './v3/exec-media'
 import { useExecSettings } from './v3/exec-settings'
 // Preferencia «Pasar solo al descanso» por ALUMNO (D5/W5). La verdad vive ACÁ, en el orquestador:
@@ -1486,6 +1488,25 @@ export function WorkoutExecutionClient({
     const [fillByBlock, setFillByBlock] = useState<Record<string, { weight: number | null; reps: number | null; nonce: number; setNumber: number }>>({})
     // Deshacer (quick-win E2-4): reabre la última serie logueada para corregir (no existe DELETE del log).
     const [reopenSignal, setReopenSignal] = useState<{ blockId: string; setNumber: number; nonce: number } | null>(null)
+    /**
+     * Última serie de FUERZA POR TIEMPO cerrada en PANTALLA SOLA (specs/reps-tras-el-reloj, R7):
+     * alimenta la línea «Serie N · 60 kg × 8 · 30 s» del interstitial de descanso. Vive ACÁ porque el
+     * interstitial se pinta desde el contexto del orquestador, no desde el paso.
+     *
+     * La superserie queda FUERA a propósito: ahí la línea vive en la tarjeta del miembro hecho
+     * (R7) —el descanso de grupo llega al cerrar la RONDA, que puede ser otro miembro— y «Repetir»
+     * no existe (R8/R13: la unidad de repetición de una superserie es la ronda).
+     */
+    const [lastHoldSet, setLastHoldSet] = useState<
+        { blockId: string; setNumber: number; line: string } | null
+    >(null)
+    /** «Editar»/«Repetir» de esa línea, de vuelta al paso por nonce (mismo carril que `reopenSignal`). */
+    const [holdActionSignal, setHoldActionSignal] = useState<HoldSetActionSignal | null>(null)
+    /**
+     * Nonce monótono de esa señal (`Date.now()` es impuro y estas fábricas se arman en render). El
+     * paso reacciona al CAMBIO de nonce, así que sólo importa que no se repita.
+     */
+    const holdActionNonceRef = useRef(0)
     // QA4: los banners contextuales ("Editando registros del…" / "Recuperando…") se pueden descartar con
     // una X. Estado LOCAL por sesión (solo visual): descartar NO cambia la semántica de guardado — `targetDate`
     // sigue guardando en esa fecha (modo solo-UPDATE) y `recoverDate` sigue siendo el pendiente de la semana.
@@ -2163,7 +2184,13 @@ export function WorkoutExecutionClient({
         deferredAdvanceRef.current = () => scrollToNextIncomplete(fromLogs)
     }
 
-    const handleLogged = (payload: OptimisticLogPayload) => {
+    /**
+     * `opts.repeat` (specs/reps-tras-el-reloj, R8): el commit rehace una serie que YA estaba
+     * registrada. Sin la marca, `wasComplete` sería `true` y el bloque no volvería a celebrar ni a
+     * avanzar — el alumno quedaría mirando un bloque completo sin salida. Nada más cambia: el upsert
+     * por (bloque, serie, día) reemplaza la MISMA fila (`_actions/workout-log.actions.ts:180-191`).
+     */
+    const handleLogged = (payload: OptimisticLogPayload, opts?: { repeat?: boolean }) => {
         // Marca de actividad (Fix A): al primer log, futuras REENTRADAS por atrás refrescan aunque el
         // snapshot del client Router Cache vuelva vacío.
         markWorkoutTouched()
@@ -2196,6 +2223,24 @@ export function WorkoutExecutionClient({
         const prev = sessionLogs
         const nextLogs = applyOptimisticSessionLog(prev, payload)
         const info = supersetInfo.get(payload.blockId)
+
+        // R7 · línea «Serie N» del interstitial. Se recalcula en CADA commit (y se apaga cuando la
+        // serie no es de fuerza por tiempo) para que el descanso nunca muestre la línea de otra serie.
+        // El texto lo arma el motor tal cual, sin guion inventado (decisión W0.4 · 2).
+        const loggedBlock = blocks.find((b) => b.id === payload.blockId)
+        const loggedExercise = loggedBlock ? getExercise(loggedBlock) : null
+        const holdLine =
+            loggedBlock && loggedExercise && isStrengthTimeBlock(loggedBlock, loggedExercise)
+                ? formatStrengthTimeSetLine({
+                      weight_kg: payload.weightKg,
+                      reps_done: payload.repsDone,
+                      actual_hold_sec: payload.actualHoldSec ?? null,
+                      metadata: payload.metadata ?? null,
+                  })
+                : null
+        setLastHoldSet(
+            holdLine && !info ? { blockId: payload.blockId, setNumber: payload.setNumber, line: holdLine } : null,
+        )
         // Limpieza (1/4): un commit NUEVO de cualquier miembro invalida la ronda que estaba esperando;
         // si esta serie vuelve a cerrar ronda con la pref OFF, se re-arma unas líneas más abajo.
         setPendingRoundRest(null)
@@ -2276,7 +2321,9 @@ export function WorkoutExecutionClient({
         }
         const wasComplete = isBlockComplete(block, prev)
         const nowComplete = isBlockComplete(block, nextLogs)
-        if (!wasComplete && nowComplete) {
+        // R8: al REPETIR, la serie ya estaba registrada ⇒ `wasComplete` es true y el bloque completo
+        // no volvería a celebrar ni a destrabar el avance. El re-commit se trata como serie nueva.
+        if ((!wasComplete || opts?.repeat) && nowComplete) {
             // Floreo al cerrar el ejercicio: la card colapsa a recap y el recap celebra una vez.
             setJustCompleted({ id: payload.blockId, nonce: Date.now() })
             scheduleAdvance(nextLogs)
@@ -2658,6 +2705,9 @@ export function WorkoutExecutionClient({
                                 fillEntry={fillByBlock[block.id]}
                                 setFillByBlock={setFillByBlock}
                                 reopenSignal={reopenSignal}
+                                // R7/R8: «Editar»/«Repetir» tocados en la línea «Serie N» del
+                                // interstitial de descanso (el paso los resuelve, ver ExerciseStepV3).
+                                holdActionSignal={holdActionSignal}
                                 substitution={sub ? { exerciseId: sub.id, exerciseName: sub.name, reason: SUBSTITUTION_REASON } : null}
                                 autoTimerEnabled={autoTimerEnabled}
                                 openTechnique={openTechnique}
@@ -2841,6 +2891,33 @@ export function WorkoutExecutionClient({
         }
     })()
 
+    /**
+     * R7 · la línea «Serie N» que ve el alumno DENTRO del descanso, con sus dos acciones. Los
+     * callbacks sólo escriben una señal por nonce (nunca capturan `sessionLogs`, que cambia en cada
+     * commit): el paso es el que sabe abrir su sheet y rearmar el reloj. Las dos acciones existen
+     * siempre porque `lastHoldSet` sólo se puebla en PANTALLA SOLA (ver su declaración).
+     */
+    const execInterstitialLastSet: InterstitialLastSet | null = lastHoldSet
+        ? {
+              setNumber: lastHoldSet.setNumber,
+              line: lastHoldSet.line,
+              onEdit: () =>
+                  setHoldActionSignal({
+                      blockId: lastHoldSet.blockId,
+                      setNumber: lastHoldSet.setNumber,
+                      action: 'edit',
+                      nonce: ++holdActionNonceRef.current,
+                  }),
+              onRepeat: () =>
+                  setHoldActionSignal({
+                      blockId: lastHoldSet.blockId,
+                      setNumber: lastHoldSet.setNumber,
+                      action: 'repeat',
+                      nonce: ++holdActionNonceRef.current,
+                  }),
+          }
+        : null
+
     // Pinta el card del paso `index` reusando `renderGroup` (siempre completo — sin colapsar).
     const renderStepNode = (index: number) => {
         const step = steps[index]
@@ -2930,7 +3007,7 @@ export function WorkoutExecutionClient({
     return (
         <TargetDateProvider value={targetDate}>
         <RestInterstitialDataProvider
-            value={{ items: execListMapItems, next: execInterstitialNext, round: execInterstitialRound }}
+            value={{ items: execListMapItems, next: execInterstitialNext, round: execInterstitialRound, lastSet: execInterstitialLastSet }}
         >
         <WorkoutTimerProvider v3={execV3Active}>
           {/* Publica `startRest` para el orquestador (W4.7): el provider se monta ACÁ, así que el

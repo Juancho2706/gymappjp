@@ -48,6 +48,24 @@ export interface InterstitialRound {
   nextTag: string | null
 }
 
+/**
+ * Última serie de FUERZA POR TIEMPO recién cerrada (specs/reps-tras-el-reloj, R7). El descanso tapa
+ * la fila (`z-index: 60`), así que sin esta línea el alumno no ve qué guardó ni tiene forma de
+ * corregirlo hasta que el descanso termine.
+ *
+ * `line` es la línea del MOTOR (`formatStrengthTimeSetLine`) SIN el prefijo «Serie N ·»: acá el
+ * número va en el eyebrow y el texto en el valor mono. Componer `Serie ${setNumber} · ${line}`
+ * devuelve el copy literal de SPEC §6. Los callbacks tienen que leer refs/estado estables del
+ * orquestador — nunca capturar `sessionLogs`, que cambia con cada commit.
+ */
+export interface InterstitialLastSet {
+  setNumber: number
+  line: string
+  onEdit: () => void
+  /** «Repetir» sólo existe en pantalla sola (R8/R13): en superserie la unidad es la ronda. */
+  onRepeat?: () => void
+}
+
 export interface RestInterstitialData {
   /** Filas del plan para el peek "Plan completo" (reusa el mapa del ejecutor, SÓLO LECTURA). */
   items: ExecListMapItem[]
@@ -55,6 +73,8 @@ export interface RestInterstitialData {
   next: InterstitialNext | null
   /** Contexto de ronda cuando el descanso viene de cerrar una ronda de superserie (null ⇒ descanso normal). */
   round?: InterstitialRound | null
+  /** Línea «Serie N · …» de la fuerza por tiempo recién cerrada (null ⇒ no se pinta). */
+  lastSet?: InterstitialLastSet | null
 }
 
 const RestInterstitialDataContext = createContext<RestInterstitialData | null>(null)
@@ -162,6 +182,9 @@ export function RestInterstitialV3({
   const doneCount = items.filter((i) => i.complete).length
   // Cierre de ronda (E3.5): sólo cuando el descanso de grupo viene de cerrar una ronda de superserie.
   const round = data?.round ?? null
+  // R7: la serie de fuerza por tiempo que acaba de cerrarse, con «Editar» y (en pantalla sola)
+  // «Repetir». Llega por el MISMO contexto que `next`/`round`, sin deps nuevas en este componente.
+  const lastSet = data?.lastSet ?? null
 
   const transition = reducedMotion ? { duration: 0 } : { type: 'spring' as const, stiffness: 420, damping: 34 }
 
@@ -300,6 +323,36 @@ export function RestInterstitialV3({
               +15s
             </button>
           </div>
+
+          {/* R7 · «Serie N · 60 kg × 8 · 30 s» de la fuerza por tiempo recién cerrada, DEBAJO de los
+              controles del anillo y ANTES de «Siguiente»: el descanso tapa la fila, así que este es el
+              único lugar donde el alumno ve lo que guardó y puede corregirlo sin esperar. */}
+          {lastSet && (
+            <div className="exec-v3-lastset" data-testid="rest-lastset">
+              <span className="exec-v3-lastset-k">Serie {lastSet.setNumber}</span>
+              <span className="exec-v3-lastset-v tabular-nums">{lastSet.line}</span>
+              <span className="exec-v3-lastset-acts">
+                <button
+                  type="button"
+                  className="exec-v3-lastset-a"
+                  onClick={lastSet.onEdit}
+                  aria-label={`Editar la serie ${lastSet.setNumber}`}
+                >
+                  Editar
+                </button>
+                {lastSet.onRepeat && (
+                  <button
+                    type="button"
+                    className="exec-v3-lastset-a"
+                    onClick={lastSet.onRepeat}
+                    aria-label={`Repetir la serie ${lastSet.setNumber} desde el reloj`}
+                  >
+                    Repetir
+                  </button>
+                )}
+              </span>
+            </div>
+          )}
 
           {/* Tarjeta SIGUIENTE con mini-media estática + mensaje del coach del bloque siguiente. */}
           {next && (

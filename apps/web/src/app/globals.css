@@ -1143,6 +1143,19 @@ body[data-exec-keypad-open] .exec-finish-bar {
 body[data-exec-keypad-open] {
   padding-bottom: var(--keypad-h, 20rem);
 }
+/* El teclado nace con `z-40` (scrim) y `z-50` (panel), utilidades de Tailwind pensadas para un
+   layout SIN sheets encima. Las sheets del ejecutor V3 viven en 60-62 (`.exec-v3-rest`,
+   `.exec-v3-settings`, `.exec-v3-holdsheet`), así que un input enfocado DENTRO de una sheet abría
+   el teclado por detrás: invisible e intocable. Desde el tren «reps tras el reloj» ese foco es
+   automático (R10), así que el teclado pasa a ser siempre la capa de más arriba — que es lo que
+   corresponde: es la interacción activa. Se engancha por su nombre accesible (los dos nodos lo
+   tienen fijo desde la Fase L) porque el componente no expone clase propia. */
+body[data-exec-keypad-open] [aria-label='Cerrar teclado'] {
+  z-index: 70;
+}
+body[data-exec-keypad-open] [role='group'][aria-label='Teclado numérico'] {
+  z-index: 71;
+}
 
 /* Immersive Workout Mode */
 body.immersive-workout-mode nav.client-nav-mobile,
@@ -5170,6 +5183,76 @@ html[data-exec-v3-entered] [data-exec-v3] .exec-v3-splash {
     border: 2px solid #33333f;
   }
 }
+/* ── Reps tras el reloj (R7/R10) — línea «Serie N» + sheet de huecos ──────────────────────────
+   La sheet HEREDA `.exec-v3-settings` entera (posición, animación, padding, handle): lo único
+   propio es el LAYERING. Con la preferencia «Pasar solo al descanso» encendida el interstitial de
+   descanso (`.exec-v3-rest`, z 60) ya está en pantalla y se pinta DESPUÉS de los pasos en el DOM
+   (`WorkoutTimerProvider` monta `{children}` y recién ahí el `RestTimer`), así que un scrim en el
+   z 60 de siempre quedaría DEBAJO y tocar afuera no cerraría nada. Scrim 61, sheet 62. */
+[data-exec-v3] .exec-v3-holdsheet-scrim {
+  z-index: 61;
+}
+[data-exec-v3] .exec-v3-holdsheet {
+  z-index: 62;
+}
+[data-exec-v3] .exec-v3-holdsheet-k {
+  display: block;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #9a9aa6;
+}
+/* Línea «Serie N · 60 kg × 8 · 30 s» con «Editar» / «Repetir» (R7). Vive en el interstitial de
+   descanso (pref ON), sobre el par de CTAs del paso (pref OFF) y en la tarjeta hecha de la
+   superserie (solo «Editar»). Borde de acento a la izquierda + valor mono, como el resto del V3. */
+[data-exec-v3] .exec-v3-lastset {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  flex-wrap: wrap;
+  border: 1.5px solid #2e2e39;
+  border-left: 3px solid var(--exec-brand, #1462dc);
+  border-radius: 14px;
+  background: #17171e;
+  padding: 8px 12px;
+  text-align: left;
+}
+[data-exec-v3] .exec-v3-lastset-k {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #9a9aa6;
+}
+[data-exec-v3] .exec-v3-lastset-v {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 800;
+  color: #eaeaf0;
+}
+[data-exec-v3] .exec-v3-lastset-acts {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+[data-exec-v3] .exec-v3-lastset-a {
+  /* Target táctil ≥44px de alto efectivo con el padding vertical + la altura de línea. */
+  min-height: 34px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--exec-brand, #1462dc);
+  background: transparent;
+  border: 0;
+}
+[data-exec-v3] .exec-v3-lastset-a:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
 [data-exec-v3] .exec-v3-settings-hd {
   display: flex;
   align-items: center;

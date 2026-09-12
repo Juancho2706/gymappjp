@@ -544,3 +544,116 @@ describe('Reporte 2026-09-11 — sin conexión el descanso arranca igual', () =>
         expect(harness.cancelRest).not.toHaveBeenCalled()
     })
 })
+
+/**
+ * specs/reps-tras-el-reloj · W3.3 (R10 · riesgo 4) — la marca del reloj SOBREVIVE al re-submit.
+ *
+ * La sheet de huecos monta esta misma fila en EDICIÓN sobre una serie que ya cerró el reloj. Como
+ * `holdSourceRef` nacía en `null` y el efecto de prefill se saltea con `isLogged`, el re-guardado
+ * armaba la metadata sin `hold_source`… y el UPDATE reemplaza el jsonb ENTERO
+ * (`_actions/workout-log.actions.ts:177`), así que la marca `'timer'` se borraba en silencio y con
+ * ella la adopción del auto-registro (DATA-TESTING §8.2).
+ */
+describe('W3.3 — `hold_source` sobrevive al re-submit desde la sheet', () => {
+    it('anotar las reps de una serie cerrada por el reloj manda `reps_done` Y conserva la marca', async () => {
+        const { container } = mountRow({
+            strengthTimeMode: true,
+            // `reopenNonce` es el carril con el que la sheet abre la fila en edición.
+            reopenNonce: 1,
+            existingLog: {
+                weight_kg: 10,
+                reps_done: null,
+                rpe: null,
+                actual_hold_sec: 30,
+                metadata: { hold_source: 'timer' },
+            },
+        })
+        ;(screen.getByLabelText('Repeticiones (opcional)') as HTMLInputElement).value = '5'
+
+        await act(async () => {
+            ;(container.querySelector('form') as HTMLFormElement).requestSubmit()
+        })
+
+        expect(harness.logSetAction).toHaveBeenCalledTimes(1)
+        const fd = lastFormData()
+        expect(fd.get('reps_done')).toBe('5')
+        // Los segundos vuelven a viajar: el UPDATE escribe `actual_hold_sec` SIEMPRE, así que una
+        // fila de edición sin la caja de SEG dejaría el hold en NULL.
+        expect(fd.get('actual_hold_sec')).toBe('30')
+        expect(JSON.parse(String(fd.get('metadata')))).toEqual({ hold_source: 'timer' })
+    })
+
+    it('`per_side`: la marca viaja en el MISMO objeto que los dos lados', async () => {
+        const { container } = mountRow({
+            strengthTimeMode: true,
+            sideMode: 'per_side',
+            reopenNonce: 1,
+            existingLog: {
+                weight_kg: 10,
+                reps_done: null,
+                rpe: null,
+                actual_hold_sec: 58,
+                metadata: { left_sec: 30, right_sec: 28, hold_source: 'timer' },
+            },
+        })
+        ;(screen.getByLabelText('Repeticiones (opcional)') as HTMLInputElement).value = '5'
+
+        await act(async () => {
+            ;(container.querySelector('form') as HTMLFormElement).requestSubmit()
+        })
+
+        const fd = lastFormData()
+        expect(fd.get('reps_done')).toBe('5')
+        expect(fd.get('actual_hold_sec')).toBe('58')
+        expect(JSON.parse(String(fd.get('metadata')))).toEqual({ left_sec: 30, right_sec: 28, hold_source: 'timer' })
+    })
+
+    it('una serie SIN marca guardada no se inventa una (`undefined` ≠ «lo tipeó a mano»)', async () => {
+        const { container } = mountRow({
+            strengthTimeMode: true,
+            reopenNonce: 1,
+            existingLog: { weight_kg: 10, reps_done: null, rpe: null, actual_hold_sec: 30 },
+        })
+        ;(screen.getByLabelText('Repeticiones (opcional)') as HTMLInputElement).value = '5'
+
+        await act(async () => {
+            ;(container.querySelector('form') as HTMLFormElement).requestSubmit()
+        })
+
+        expect(lastFormData().has('metadata')).toBe(false)
+    })
+})
+
+/**
+ * specs/reps-tras-el-reloj · R8 — «Repetir»: el auto-envío del reloj atraviesa el gate `isLogged`
+ * SÓLO con el permiso explícito del paso, y ese re-commit vuelve a armar el descanso.
+ */
+describe('R8 — el permiso de repetición no relaja el gate para todos (fuerza por tiempo)', () => {
+    // `reopenNonce`: es lo que hace el paso al repetir — sin reabrir la fila no habría `<form>` que
+    // `requestSubmit()` pudiera disparar (la serie logueada se pinta como chip colapsado).
+    const loggedRow = {
+        strengthTimeMode: true,
+        reopenNonce: 1,
+        existingLog: { weight_kg: 10, reps_done: null, rpe: null, actual_hold_sec: 30 },
+    }
+
+    it('sin la marca `repeat`, una serie ya logueada sigue sin re-enviarse', async () => {
+        const { bump } = mountRow(loggedRow)
+
+        bump({ holdSec: 30, submit: true, source: 'timer', nonce: 1 })
+        await act(async () => {})
+
+        expect(harness.logSetAction).not.toHaveBeenCalled()
+    })
+
+    it('con `repeat` el re-commit sale y el descanso vuelve a arrancar (serie nueva pese a `isLogged`)', async () => {
+        const { bump } = mountRow(loggedRow)
+
+        bump({ holdSec: 30, submit: true, source: 'timer', nonce: 1, repeat: true })
+        await act(async () => {})
+
+        expect(harness.logSetAction).toHaveBeenCalledTimes(1)
+        expect(lastFormData().get('actual_hold_sec')).toBe('30')
+        expect(harness.startRest).toHaveBeenCalledWith('90s', expect.objectContaining({ warmup: false }))
+    })
+})

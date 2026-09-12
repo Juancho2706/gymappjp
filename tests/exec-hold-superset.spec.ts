@@ -12,6 +12,9 @@ import { expect, test } from '@playwright/test'
  *   D2  el último miembro de la ronda ofrece «Ronda lista · Descansar 90 s» y el descanso NO arranca solo.
  *   V3  en fuerza por tiempo (pantalla sola) a 0 queda «10 kg × 5 s» y el alumno elige
  *       «Descansar 90 s» o «Siguiente serie»: nunca se pasa solo.
+ *   R3/R10 (tren «reps tras el reloj»): esa misma serie cierra con las reps VACÍAS, así que a 0 se
+ *       abre sola la sheet «Anotar la serie 1». Se cierra con «Sin reps» — cerrar sin guardar no
+ *       borra nada, y por eso el assert de DB de abajo (`reps_done IS NULL`) sigue intacto.
  *
  * Archivo PROPIO (no una ampliación de `workout-flow.spec.ts`): el project `chromium` de
  * `playwright.config.ts:60-75` corre `tests/**\/*.spec.ts`, así que este spec entra al mismo gate sin
@@ -170,9 +173,23 @@ test.describe('W6.10 · caso canónico del hold (superserie + fuerza por tiempo)
         await startSerie.click()
         await expect(strengthTimeModule).toHaveAttribute('data-status', 'running', { timeout: 15_000 })
 
+        // A 0 la serie se guarda sola y, como las reps quedaron vacías, se abre la SHEET DE HUECOS
+        // (specs/reps-tras-el-reloj, R3/R10). Su nombre accesible es PROPIO — «Anotar la serie 1» —
+        // justamente para que el assert de `dialog 'Descanso'` de más abajo siga contando 0.
+        const gapSheet = page.getByRole('dialog', { name: 'Anotar la serie 1' })
+        await expect(gapSheet).toBeVisible({ timeout: HOLD_SETTLE_MS })
+        await expect(gapSheet).toContainText('¿Cuántas reps hiciste?')
+        // «Sin reps» cierra SIN guardar: la serie sigue con sus 5 s y `reps_done` NULL — que es
+        // exactamente lo que el segundo test asserta en DB, por eso ese test no se toca. De paso queda
+        // cubierta la regla más frágil del tren: cerrar el prompt no borra ni cambia nada.
+        await gapSheet.getByRole('button', { name: 'Dejar la serie sin reps' }).click()
+        await expect(gapSheet).toBeHidden()
+
         // A 0: la serie queda guardada con «10 kg × 5 s» (`formatStrengthTimeSetLine`) y aparecen los
-        // DOS caminos manuales — V3: en pantalla sola nunca se pasa solo.
-        await expect(page.getByText(/10 kg × 5 s/)).toBeVisible({ timeout: HOLD_SETTLE_MS })
+        // DOS caminos manuales — V3: en pantalla sola nunca se pasa solo. El texto se lee en la línea
+        // «Serie N» de R7 (la que el alumno realmente ve): el chip recap de la serie 1 sigue montado
+        // pero oculto tras el lápiz, así que apuntar al texto suelto matchearía dos nodos.
+        await expect(page.getByTestId('hold-lastset')).toContainText(/10 kg × 5 s/, { timeout: HOLD_SETTLE_MS })
         await expect(page.getByTestId('rest-offer-strength-rest')).toHaveText(/Descansar 90 s/)
         await expect(page.getByTestId('rest-offer-strength-next')).toHaveText(/Siguiente serie/)
         await expect(page.getByRole('dialog', { name: 'Descanso' })).toHaveCount(0)

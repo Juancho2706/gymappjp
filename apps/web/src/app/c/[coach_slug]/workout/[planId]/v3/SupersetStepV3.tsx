@@ -6,8 +6,12 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { Info, Dumbbell, Check, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { usePostHog } from 'posthog-js/react'
 import {
+    captureGapsFor,
+    formatStrengthTimeSetLine,
     isStrengthTimeBlock,
+    type HoldCaptureGap,
     type HoldSource,
     buildRoundOrder,
     firstIncompleteInRounds,
@@ -20,6 +24,11 @@ import {
     type RepeatSeedEntry,
     SIDE_LABEL,
 } from '@eva/workout-engine'
+import {
+    decideHoldCapturePrompt,
+    holdCaptureValuesFromCommit,
+    type HoldCaptureFocus,
+} from './hold-capture-prompt'
 import { computeEffectiveTarget } from '@/lib/workout/progression'
 import { effectiveExerciseType } from '@/lib/workout-exercise-type'
 import type { ExerciseType as WorkoutKind } from '@/domain/workout/types'
@@ -159,6 +168,41 @@ export function SupersetStepV3({
     // "Editar {nombre}" que monta las filas clásicas del motor (LogSetForm) para ese bloque — mismo patrón
     // que el lápiz del ejercicio solo. Estado LOCAL de UI: no roza el guardado/cola.
     const [editBlockId, setEditBlockId] = useState<string | null>(null)
+    /**
+     * Sheet de HUECOS dentro de la de edición (specs/reps-tras-el-reloj, R10/W3.2): el reloj de un
+     * miembro de fuerza por tiempo llegó a 0 y falta anotar reps (o el peso). Se REUSA `editBlockId`
+     * —la sheet ya existe— y esto sólo describe la serie que hay que abrir, en qué caja va el foco y
+     * qué copy mostrar. `null` con `editBlockId` puesto ⇒ edición de siempre (tap en la tarjeta hecha).
+     */
+    const [editPrompt, setEditPrompt] = useState<{
+        blockId: string
+        setNumber: number
+        focus: HoldCaptureFocus
+        missing: HoldCaptureGap[]
+        /** `'timer'` ⇒ copy de huecos (SPEC §6). `'manual'` ⇒ la cabecera de edición de siempre. */
+        trigger: 'timer' | 'manual'
+        nonce: number
+    } | null>(null)
+    /**
+     * R3 se ARMA en `onMeasured` (único punto con `submit`/`expiredWhileAway`) y se RESUELVE en
+     * `handleActiveLogged`, con los valores que de verdad se guardaron. Ref: entre las dos llamadas no
+     * hay render de por medio.
+     */
+    const promptArmRef = useRef<{
+        blockId: string
+        setNumber: number
+        kind: 'mobility' | 'strength_time'
+        expiredWhileAway: boolean
+    } | null>(null)
+    /** Peso al abrir la sheet — alimenta `weight_changed` de `hold_capture_resolved` (SPEC §7). */
+    const promptWeightRef = useRef<number | null>(null)
+    const sheetRef = useRef<HTMLDivElement>(null)
+    /**
+     * Nonce monótono de apertura de la sheet (mismo patrón que `cueNonceRef`). No es `Date.now()`:
+     * es impuro y estas funciones se arman en el cuerpo del componente.
+     */
+    const promptNonceRef = useRef(0)
+    const ph = usePostHog()
     const reducedMotion = useReducedMotion()
 
     useEffect(() => {
@@ -234,6 +278,29 @@ export function SupersetStepV3({
         lastHoldSourceRef.current = null
     }, [activeBlockId, currentRound])
 
+    /**
+     * Foco programático en la caja que falta (R10). Riesgo 6: `formIdentityKey` re-monta el `<form>`
+     * cuando la reconciliación del optimismo cambia la identidad de la serie ⇒ se reintenta una vez, y
+     * sólo si el foco no quedó ya dentro de la sheet (para no robárselo al alumno).
+     */
+    const promptNonce = editPrompt?.nonce
+    const promptFocus = editPrompt?.focus
+    useEffect(() => {
+        if (promptNonce == null) return
+        const selector = promptFocus === 'weight' ? 'input[name="weight_kg"]' : 'input[name="reps_done"]'
+        const apply = () => {
+            const root = sheetRef.current
+            if (!root || root.contains(document.activeElement)) return
+            root.querySelector<HTMLInputElement>(selector)?.focus()
+        }
+        const raf = requestAnimationFrame(apply)
+        const retry = setTimeout(apply, 180)
+        return () => {
+            cancelAnimationFrame(raf)
+            clearTimeout(retry)
+        }
+    }, [promptNonce, promptFocus])
+
     if (memberVMs.length < 2) return null
 
     // Estado de un miembro relativo a la ronda actual.
@@ -253,6 +320,19 @@ export function SupersetStepV3({
               .filter((l) => l.block_id === editVM.block.id && l.set_number >= 1 && l.set_number <= editVM.block.sets)
               .sort((a, b) => a.set_number - b.set_number)
         : []
+    // R10: la sheet abierta POR EL PROMPT de huecos (vs. el tap de siempre en la tarjeta hecha).
+    const activePrompt = editVM && editPrompt?.blockId === editVM.block.id ? editPrompt : null
+    // Sólo el prompt del RELOJ trae el copy de huecos; desde «Editar» la sheet conserva su cabecera
+    // de siempre y su primario «Guardar» (SPEC §6, último párrafo).
+    const promptCopy = activePrompt?.trigger === 'timer' ? activePrompt : null
+    const promptHoldSec = activePrompt
+        ? (sessionLogs.find(
+              (l) => l.block_id === activePrompt.blockId && l.set_number === activePrompt.setNumber,
+          )?.actual_hold_sec ?? null)
+        : null
+    // Predicado ÚNICO del motor, igual que en la captura: sin esto la fila de edición perdería la
+    // caja de segundos y el UPDATE dejaría `actual_hold_sec` en NULL.
+    const editIsStrengthTime = !!editVM && editVM.effType === 'strength' && isStrengthTimeBlock(editVM.block, editVM.exercise)
 
     // Envoltura de `onLogged`: dispara el aviso "¡Sigue sin detenerte!" SOLO cuando lo que se confirma
     // es LA serie de la ronda actual del miembro activo (QA3: editar una serie pasada — lápiz o tarjeta
@@ -264,6 +344,108 @@ export function SupersetStepV3({
             if (nextVM) setCue({ name: nextVM.exercise.name, nonce: ++cueNonceRef.current, long: lastHoldSourceRef.current === 'timer' })
         }
         lastHoldSourceRef.current = null
+        onLogged(payload)
+        // R3/R10: la sheet se abre DESPUÉS del optimismo del padre — así `editLogs` ya trae la serie
+        // recién cerrada. El avance de miembro (V4) ocurre por detrás; el alumno cierra y sigue.
+        const armed = promptArmRef.current
+        promptArmRef.current = null
+        if (!armed || armed.blockId !== payload.blockId || armed.setNumber !== payload.setNumber) return
+        const decision = decideHoldCapturePrompt({
+            submit: true,
+            kind: armed.kind,
+            expiredWhileAway: armed.expiredWhileAway,
+            values: holdCaptureValuesFromCommit(payload),
+        })
+        if (!decision.open) return
+        promptWeightRef.current = payload.weightKg ?? null
+        setEditBlockId(armed.blockId)
+        setEditPrompt({
+            blockId: armed.blockId,
+            setNumber: payload.setNumber,
+            focus: decision.focus,
+            missing: decision.missing,
+            trigger: 'timer',
+            nonce: ++promptNonceRef.current,
+        })
+        ph?.capture('hold_capture_prompted', {
+            block_id: armed.blockId,
+            exercise_type: 'strength',
+            context: 'superset',
+            missing: decision.missing,
+            trigger: 'timer',
+            platform: 'web',
+        })
+    }
+    /**
+     * Cierra la sheet por cualquiera de las dos vías. `hold_capture_resolved` sale UNA vez por
+     * apertura y sólo cuando hubo apertura contada (`editPrompt`): el tap en un miembro que no es de
+     * fuerza por tiempo abre la sheet de edición de siempre y no entra a esta analítica.
+     */
+    const closeEditSheet = (outcome: 'saved' | 'dismissed', payload?: OptimisticLogPayload) => {
+        if (editPrompt) {
+            ph?.capture('hold_capture_resolved', {
+                block_id: editPrompt.blockId,
+                context: 'superset',
+                outcome,
+                reps_filled: (payload?.repsDone ?? 0) > 0,
+                weight_changed: outcome === 'saved' && (payload?.weightKg ?? null) !== promptWeightRef.current,
+            })
+        }
+        setEditPrompt(null)
+        setEditBlockId(null)
+    }
+    /**
+     * «Editar» (R7) — tap en la tarjeta de un miembro HECHO. Cuando ese miembro es de fuerza por
+     * tiempo, la sheet abre DIRECTO sobre su última serie con foco en REPS (R7: «Editar» = foco reps,
+     * sin el copy de huecos) y la apertura se cuenta con `trigger: 'manual'` (riesgo 9: así no se
+     * confunde con la apertura automática del reloj). Para el resto de los miembros es la sheet de
+     * siempre, byte-idéntica.
+     */
+    const openEditSheet = (blockId: string) => {
+        setEditBlockId(blockId)
+        const vm = memberVMs.find((v) => v.block.id === blockId)
+        if (!vm || vm.effType !== 'strength' || !isStrengthTimeBlock(vm.block, vm.exercise)) {
+            setEditPrompt(null)
+            return
+        }
+        const log = sessionLogs
+            .filter((l) => l.block_id === blockId && l.set_number <= vm.block.sets)
+            .sort((a, b) => b.set_number - a.set_number)[0]
+        if (!log) {
+            setEditPrompt(null)
+            return
+        }
+        const missing = captureGapsFor(
+            holdCaptureValuesFromCommit({ weightKg: log.weight_kg, repsDone: log.reps_done }),
+            'strength_time',
+        )
+        promptWeightRef.current = log.weight_kg
+        setEditPrompt({
+            blockId,
+            setNumber: log.set_number,
+            focus: 'reps',
+            missing,
+            trigger: 'manual',
+            nonce: ++promptNonceRef.current,
+        })
+        ph?.capture('hold_capture_prompted', {
+            block_id: blockId,
+            exercise_type: 'strength',
+            context: 'superset',
+            missing,
+            trigger: 'manual',
+            platform: 'web',
+        })
+    }
+    /**
+     * Guardado desde la sheet: `onLogged` PLANO (no dispara el aviso «¡Sigue sin detenerte!»). La
+     * sheet se cierra SÓLO cuando lo guardado es la serie que el prompt vino a completar; corregir
+     * otras series del mismo miembro deja la sheet abierta, byte-idéntico al comportamiento previo.
+     */
+    const handleEditLogged = (payload: OptimisticLogPayload) => {
+        if (editPrompt && editPrompt.blockId === payload.blockId && editPrompt.setNumber === payload.setNumber) {
+            closeEditSheet('saved', payload)
+        }
         onLogged(payload)
     }
     const nextMemberName = nextInRound ? memberVMs.find((v) => v.block.id === nextInRound.blockId)?.exercise.name ?? null : null
@@ -368,6 +550,16 @@ export function SupersetStepV3({
                                                     nextLabel={nextMemberName}
                                                     onMeasured={(hm) => {
                                                         lastHoldSourceRef.current = hm.submit ? hm.source : null
+                                                        // R3 armado: sólo un envío real (lado `single`
+                                                        // o `right`) puede abrir la sheet de huecos.
+                                                        promptArmRef.current = hm.submit
+                                                            ? {
+                                                                  blockId: m.block.id,
+                                                                  setNumber: currentRound,
+                                                                  kind: holdKind,
+                                                                  expiredWhileAway: hm.expiredWhileAway,
+                                                              }
+                                                            : null
                                                         setHoldPrefill({ holdSec: hm.holdSec, leftSec: hm.leftSec, rightSec: hm.rightSec, submit: hm.submit, source: hm.source, nonce: hm.nonce })
                                                     }}
                                                     onStatusChange={setHoldStatus}
@@ -458,6 +650,24 @@ export function SupersetStepV3({
                     // el sheet de edición al tocarlos (QA2 #3); los pendientes no son interactivos.
                     const media = resolveExecMedia(m.exercise)
                     const editable = state === 'done'
+                    // R7 · línea «Serie N · 10 kg × 30 s» del miembro HECHO de fuerza por tiempo. En
+                    // superserie la única acción es «Editar», y ya existe: la tarjeta entera es el
+                    // botón que abre la sheet (`aria-label="Editar …"`). «Repetir» no aplica acá
+                    // (R8/R13: la unidad de repetición de una superserie es la RONDA).
+                    const doneHoldLog =
+                        editable && m.effType === 'strength' && isStrengthTimeBlock(m.block, m.exercise)
+                            ? sessionLogs
+                                  .filter((l) => l.block_id === m.block.id && l.set_number <= m.block.sets)
+                                  .sort((a, b) => b.set_number - a.set_number)[0]
+                            : undefined
+                    const doneHoldLine = doneHoldLog
+                        ? formatStrengthTimeSetLine({
+                              weight_kg: doneHoldLog.weight_kg,
+                              reps_done: doneHoldLog.reps_done,
+                              actual_hold_sec: doneHoldLog.actual_hold_sec ?? null,
+                              metadata: doneHoldLog.metadata,
+                          })
+                        : null
                     return (
                         <div
                             key={m.block.id}
@@ -470,13 +680,13 @@ export function SupersetStepV3({
                             )}
                             role={editable ? 'button' : undefined}
                             tabIndex={editable ? 0 : undefined}
-                            onClick={editable ? () => setEditBlockId(m.block.id) : undefined}
+                            onClick={editable ? () => openEditSheet(m.block.id) : undefined}
                             onKeyDown={
                                 editable
                                     ? (e) => {
                                           if (e.key === 'Enter' || e.key === ' ') {
                                               e.preventDefault()
-                                              setEditBlockId(m.block.id)
+                                              openEditSheet(m.block.id)
                                           }
                                       }
                                     : undefined
@@ -500,7 +710,12 @@ export function SupersetStepV3({
                                 <span className="exec-v3-exletter" aria-hidden>{m.letter}</span>
                                 <span className="exec-v3-exinfo">
                                     <span className="exec-v3-exnm">{m.exercise.name}</span>
-                                    <span className="exec-v3-exrx tabular-nums">{m.rxLabel}</span>
+                                    {/* Hecho el hold, lo que hizo manda sobre el objetivo (R7). */}
+                                    <span className="exec-v3-exrx tabular-nums">
+                                        {doneHoldLine && doneHoldLog
+                                            ? `Serie ${doneHoldLog.set_number} · ${doneHoldLine}`
+                                            : m.rxLabel}
+                                    </span>
                                 </span>
                                 <span className="exec-v3-exhead-end">
                                     {state === 'next' && isNext && <span className="exec-v3-exstate is-after">Sigue</span>}
@@ -581,18 +796,22 @@ export function SupersetStepV3({
                     <>
                         <motion.button
                             type="button"
-                            aria-label="Cerrar edición"
-                            onClick={() => setEditBlockId(null)}
-                            className="exec-v3-sheet-scrim"
+                            aria-label={promptCopy ? 'Cerrar sin guardar' : 'Cerrar edición'}
+                            onClick={() => closeEditSheet('dismissed')}
+                            className={cn('exec-v3-sheet-scrim', activePrompt && 'exec-v3-holdsheet-scrim')}
                             initial={reducedMotion ? false : { opacity: 0 }}
                             animate={{ opacity: 1 }}
                             exit={reducedMotion ? undefined : { opacity: 0 }}
                         />
                         <motion.div
-                            className="exec-v3-settings"
+                            ref={sheetRef}
+                            className={cn('exec-v3-settings', activePrompt && 'exec-v3-holdsheet')}
                             role="dialog"
                             aria-modal="true"
-                            aria-label={`Editar ${editVM.exercise.name}`}
+                            // Nombre accesible PROPIO cuando es el prompt de huecos: jamás «Descanso»
+                            // (el assert del E2E cuenta ese diálogo en 0).
+                            aria-label={promptCopy ? `Anotar la serie ${promptCopy.setNumber}` : `Editar ${editVM.exercise.name}`}
+                            data-testid={promptCopy ? 'hold-gap-sheet' : undefined}
                             initial={reducedMotion ? { opacity: 0 } : { y: '100%' }}
                             animate={reducedMotion ? { opacity: 1 } : { y: 0 }}
                             exit={reducedMotion ? { opacity: 0 } : { y: '100%' }}
@@ -602,10 +821,25 @@ export function SupersetStepV3({
                                 <span className="exec-v3-handle" aria-hidden />
                             </div>
                             <div className="exec-v3-settings-hd">
-                                <span className="exec-v3-settings-t">Editar {editVM.exercise.name}</span>
+                                <span>
+                                    {promptCopy && (
+                                        <span className="exec-v3-holdsheet-k">
+                                            Serie {promptCopy.setNumber}
+                                            {promptHoldSec != null ? ` · guardada con ${promptHoldSec} s` : ''}
+                                        </span>
+                                    )}
+                                    {/* Copy de SPEC §6; desde el tap en la tarjeta hecha, la cabecera de siempre. */}
+                                    <span className="exec-v3-settings-t">
+                                        {promptCopy
+                                            ? promptCopy.focus === 'weight'
+                                                ? '¿Con cuánto peso?'
+                                                : '¿Cuántas reps hiciste?'
+                                            : `Editar ${editVM.exercise.name}`}
+                                    </span>
+                                </span>
                                 <button
                                     type="button"
-                                    onClick={() => setEditBlockId(null)}
+                                    onClick={() => closeEditSheet('dismissed')}
                                     aria-label="Cerrar"
                                     className="-mr-1 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-on-dark-muted transition-colors hover:bg-white/[0.06] hover:text-on-dark"
                                 >
@@ -653,9 +887,21 @@ export function SupersetStepV3({
                                                       }
                                                     : null
                                             }
+                                            // R10: sin esto, editar la serie de un miembro de FUERZA
+                                            // POR TIEMPO la guardaría sin la caja de segundos y el
+                                            // UPDATE escribiría `actual_hold_sec = NULL`
+                                            // (`workout-log.actions.ts:168`): la sheet borraba el hold.
+                                            strengthTimeMode={editIsStrengthTime}
+                                            // Abre en edición la serie que el prompt vino a completar
+                                            // (las demás siguen colapsadas como chip, igual que hoy).
+                                            reopenNonce={
+                                                activePrompt && activePrompt.setNumber === log.set_number
+                                                    ? activePrompt.nonce
+                                                    : undefined
+                                            }
                                             v3
                                             heroV3
-                                            onLogged={onLogged}
+                                            onLogged={handleEditLogged}
                                             onResult={onResult}
                                         />
                                     ))
@@ -665,6 +911,20 @@ export function SupersetStepV3({
                                     </p>
                                 )}
                             </div>
+                            {/* R7/R9: «Sin reps» cierra sin guardar — la serie ya quedó con sus segundos. */}
+                            {promptCopy && (
+                                <button
+                                    type="button"
+                                    className="exec-v3-holdmod-btn2 mt-2"
+                                    onClick={() => closeEditSheet('dismissed')}
+                                    aria-label={
+                                        promptCopy.focus === 'weight' ? 'Dejar la serie sin peso' : 'Dejar la serie sin reps'
+                                    }
+                                    data-testid="hold-gap-skip"
+                                >
+                                    {promptCopy.focus === 'weight' ? 'Sin peso' : 'Sin reps'}
+                                </button>
+                            )}
                         </motion.div>
                     </>
                 )}

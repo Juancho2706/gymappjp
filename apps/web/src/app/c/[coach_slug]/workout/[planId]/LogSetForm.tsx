@@ -139,6 +139,13 @@ interface Props {
             /** Reps POR LADO en fuerza (R3, tren «ciclo real y por lado»): siembra «Izq»/«Der». */
             left_reps?: number | null
             right_reps?: number | null
+            /**
+             * Fuente del hold ya guardada (`'timer'` | `'manual'`, A3/R19). La lee la fila al abrir en
+             * EDICIÓN para sembrar `holdSourceRef` (specs/reps-tras-el-reloj, R10): sin esto, un
+             * re-submit de una serie cerrada por el reloj —justo lo que hace la sheet de huecos— sale
+             * sin marca y el UPDATE, que reemplaza el jsonb ENTERO, la borra.
+             */
+            hold_source?: HoldSource | null
         } | null
         /**
          * Reconciliación (informe forense 2026-07-04): la serie está en `sessionLogs` porque la reconció
@@ -312,6 +319,13 @@ export type HoldPrefill = {
     submit?: boolean
     source?: HoldSource
     nonce: number
+    /**
+     * «Repetir» (specs/reps-tras-el-reloj, R8): el alumno rehizo una serie YA registrada, así que este
+     * auto-envío tiene que atravesar el gate `isLogged` del efecto de prefill y contar como serie
+     * NUEVA para el descanso. Es un permiso EXPLÍCITO por medición —nunca se relaja el gate para
+     * todos—: sin él, el reloj de una serie repetida llegaría a 0 y no guardaría nada en silencio.
+     */
+    repeat?: boolean
 }
 
 /** Estado de sincronización de una serie de cara al usuario (contrato a). */
@@ -506,6 +520,15 @@ function StrengthLogSetForm({
      * `'manual'` por defecto: `undefined` significa «no se sabe», no «lo tipeó a mano»).
      */
     const holdSourceRef = useRef<HoldSource | null>(null)
+    /**
+     * «Repetir» (R8): el próximo submit disparado por `holdPrefill` rehace una serie YA registrada. Es
+     * un ref y no state porque se lee DENTRO de `handleSubmit`, en el mismo tick del `requestSubmit()`
+     * — un state llegaría un render tarde. Se consume (vuelve a `false`) en la primera línea del
+     * submit: un save manual posterior nunca hereda el permiso.
+     */
+    const holdRepeatSubmitRef = useRef(false)
+    // Nota: sólo la fila de FUERZA usa este permiso — «Repetir» es de fuerza por tiempo (R8/R13), así
+    // que la fila TIPADA (movilidad/roller/cardio) conserva su gate `isLogged` tal cual.
     const formRef = useRef<HTMLFormElement>(null)
     // Analítica de producto (sin PII): `set_logged_per_side` sólo cuando la serie lleva desglose.
     const ph = usePostHog()
@@ -610,6 +633,17 @@ function StrengthLogSetForm({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [prefill?.nonce])
 
+    // Siembra de `holdSourceRef` desde el LOG (specs/reps-tras-el-reloj, R10 · riesgo 4). Cuando la
+    // fila abre en EDICIÓN sobre una serie ya cerrada por el reloj —la sheet de huecos, el lápiz, la
+    // tarjeta hecha de la superserie— este `useRef` nace en `null` y el efecto de prefill de abajo ni
+    // corre (`isLogged`), así que el re-submit armaría la metadata SIN `hold_source`… y el UPDATE
+    // reemplaza el jsonb ENTERO (`_actions/workout-log.actions.ts:177`), borrando la marca del reloj.
+    // Sólo siembra cuando el ref está vacío: una medición en vivo (`holdPrefill.source`) SIEMPRE manda.
+    const loggedHoldSource = existingLog?.metadata?.hold_source ?? null
+    useEffect(() => {
+        if (loggedHoldSource && holdSourceRef.current == null) holdSourceRef.current = loggedHoldSource
+    }, [loggedHoldSource])
+
     // Auto-registro del HOLD de FUERZA POR TIEMPO (W4.2b · V2). Espejo EXACTO del efecto de la fila
     // tipada (movilidad) y del de cardio: al cambiar `nonce` vuelca los segundos medidos en los inputs
     // uncontrolled y —si el reloj llegó a 0 (`submit`)— dispara el submit real por `requestSubmit()`,
@@ -618,9 +652,13 @@ function StrengthLogSetForm({
     // ⚠ Gate `|| isLogged` (el que ya tiene cardio): sin `submit` era inofensivo; con `submit`
     // permitiría RE-ENVIAR una serie ya logueada. Sin este efecto, la fuerza por tiempo —que se pinta
     // en ESTA fila, no en la tipada— no auto-guardaba en web y el fallo era silencioso (H1).
+    //
+    // R8 «Repetir»: la ÚNICA excepción al gate es un prefill marcado `repeat`, que el paso sólo emite
+    // cuando el alumno pidió rehacer esa serie desde el reloj. El gate NO se relaja para todos: sin la
+    // marca, una serie ya logueada sigue siendo intocable para el auto-envío.
     const holdPrefillNonce = holdPrefill?.nonce
     useEffect(() => {
-        if (holdPrefillNonce == null || isLogged) return
+        if (holdPrefillNonce == null || (isLogged && !holdPrefill?.repeat)) return
         if (perSideHold) {
             if (holdPrefill?.leftSec != null && holdLeftRef.current) holdLeftRef.current.value = String(Math.round(holdPrefill.leftSec))
             if (holdPrefill?.rightSec != null && holdRightRef.current) holdRightRef.current.value = String(Math.round(holdPrefill.rightSec))
@@ -631,7 +669,12 @@ function StrengthLogSetForm({
         keypad?.refreshDisplay()
         // La mutación por ref no dispara `input`: el flag de serie vacía se sincroniza a mano.
         syncEmptyCapture()
-        if (holdPrefill?.submit) formRef.current?.requestSubmit()
+        if (holdPrefill?.submit) {
+            // R8: el permiso de repetición viaja por REF porque `handleSubmit` corre dentro de este
+            // mismo `requestSubmit()` — un state llegaría un render tarde.
+            holdRepeatSubmitRef.current = holdPrefill.repeat === true
+            formRef.current?.requestSubmit()
+        }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [holdPrefillNonce])
 
@@ -768,9 +811,10 @@ function StrengthLogSetForm({
 
     const collapsed = isLogged && !editing
 
-    const buildRest = () => {
-        // Editar una serie ya cerrada no toca el descanso en curso.
-        if (isLogged) return
+    const buildRest = (repeatSubmit = false) => {
+        // Editar una serie ya cerrada no toca el descanso en curso… salvo que sea una REPETICIÓN
+        // (R8): ahí la serie se volvió a hacer de verdad y merece su descanso como cualquier otra.
+        if (isLogged && !repeatSubmit) return
         // Canal de supresión del descanso (W4.6 · CA-80). Con la preferencia OFF no se arranca ningún
         // descanso —eso ya era así— y **tampoco se corta el que ya corre**: con el CTA «Descansar N s»
         // de R24, OFF pasó a significar «no arranco uno nuevo», no «mato el que hay». El `cancelRest()`
@@ -967,6 +1011,10 @@ function StrengthLogSetForm({
     }
 
     const handleSubmit = (formData: FormData) => {
+        // R8 «Repetir»: se CONSUME el permiso (una repetición = un submit). Todo lo que sigue es
+        // idéntico a un submit normal; sólo el descanso lo trata como serie nueva pese a `isLogged`.
+        const repeatSubmit = holdRepeatSubmitRef.current
+        holdRepeatSubmitRef.current = false
         // RPE y RIR viajan por el submit igual que siempre; su origen son los controles segmentados.
         if (rpe != null) formData.set('rpe', String(rpe))
         else formData.delete('rpe')
@@ -1139,7 +1187,7 @@ function StrengthLogSetForm({
             // conexión la serie se registraba (cola offline) pero el descanso NUNCA arrancaba. El
             // descanso es LOCAL (un cronómetro, cero red): se arma igual. Va sólo en la rama `backedUp`
             // —acá la serie SÍ quedó registrada—; la rama de error de arriba no lo hace a propósito.
-            buildRest()
+            buildRest(repeatSubmit)
             return
         }
 
@@ -1149,7 +1197,7 @@ function StrengthLogSetForm({
         setSyncStatus('pending')
         setNoteOpen(false)
         setEditing(false)
-        buildRest()
+        buildRest(repeatSubmit)
 
         // La petición sale ANTES del optimismo del padre: `onLogged` dispara un `flushSync` que puede
         // DESMONTAR esta fila (superserie), y el envío no puede depender de que el fiber siga vivo.
