@@ -2324,6 +2324,24 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
     setPendingRoundRest(null)
   }, [stepIndex])
 
+  /**
+   * Navegación MANUAL (flechas «‹ ›», swipe, puntos del riel). Reporte del owner 12-09: volver con la
+   * flecha a un ejercicio ya completo lo «teletransportaba» al primer incompleto a los 350 ms, porque el
+   * auto-avance de abajo corre sobre el paso ACTIVO sin distinguir cómo se llegó a él y su guard sólo
+   * conoce los pasos que él mismo avanzó en ESTE montaje (un paso cerrado en otra apertura, o cuyo
+   * avance se resolvió desde otro camino, no figura). Regla: si el alumno se mueve solo a un paso ya
+   * resuelto, ese paso queda marcado como «no auto-avanzar» — moverse fue su decisión. Un paso
+   * incompleto no se marca: completarlo ahí sigue avanzando como siempre.
+   */
+  const handleManualIndexChange = useCallback(
+    (i: number) => {
+      const target = steps[i]
+      if (target && isStepComplete(target, completionLogs)) autoAdvancedRef.current.add(target.key)
+      setStepIndex(i)
+    },
+    [steps, completionLogs],
+  )
+
   // Auto-avance de paso (paridad ExecutorV2): al RESOLVER el paso activo —todas sus series hechas U
   // omitido— reposiciona al primer paso sin resolver; una sola vez por paso (guard).
   //
@@ -2491,7 +2509,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         <StepperExecution
           steps={stepViews}
           currentIndex={stepIndex}
-          onIndexChange={setStepIndex}
+          onIndexChange={handleManualIndexChange}
           renderStep={renderStep}
           bottomClearance={128}
         />
