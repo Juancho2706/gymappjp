@@ -12,6 +12,19 @@ source_of_truth: apps/web responsive + apps/mobile
 
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
 
+> **2026-09-12 (tren «Reps tras el reloj» — fuerza por tiempo; commits locales `da0525fe` motor · `170a6424` RN · `57fa541d` web sobre el SDD
+> `9917f444` y el fix del share `b49cc0da`, SIN PUSH ni OTA al cierre de esta entrada; [SDD](../specs/reps-tras-el-reloj/SPEC.md))**. Motor
+> compartido `captureGapsFor` + `KeypadTarget.holdSource/prompt` (`@eva/workout-engine`) — **paridad nueva**; **timbre a 0** del hold en RN
+> (`playTimerCue('done')` con el silencio del alumno; la web ya sonaba por `useExecCountdown`) — **brecha cerrada**; **teclado/sheet que se
+> abre solo** si faltan reps (o kg) al cerrar el reloj, misma regla R3 en `v3/hold-capture-prompt.ts` de cada app (RN `KeypadHost` como
+> `Modal` sobre el interstitial; web sheet `.exec-v3-holdsheet` z-62 sobre el descanso z-60) — **paridad nueva**; **línea «Serie N · 60 kg
+> × 8 · 30 s · Editar · Repetir»** en el interstitial (`lastSet`) y sobre el CTA con la pref OFF — **paridad nueva**; **«Repetir»** en pantalla
+> sola en las dos (RN `repeatRequest`/nonce + `sentSetsRef.clear()` en `resetKey`; web `HoldPrefill.repeat` sin relajar el gate `isLogged`)
+> — **paridad nueva**; edición de una serie cerrada por el reloj **conserva `metadata.hold_source`** (RN `holdSource` en el target; web
+> `holdSourceRef` sembrado desde el log) — **paridad nueva**; **solo web** fixes de paso: la sheet de edición de superserie no pasaba
+> `strengthTimeMode` (re-guardar borraba `actual_hold_sec`) y el teclado numérico quedaba detrás de las sheets (z-50 ⇒ 70/71). Fuera:
+> «Repetir» en superserie y borrar series (ninguna plataforma).
+
 > **2026-09-11 23:48Z (tren chico «Despegue rápido» — EN PRODUCCIÓN: `master` = `rnmobiledenuevo` = `f77d8400`, deploy `dpl_H2B91dcRpiz9EmbfBRqEVGBbZNtw` READY 23:47Z, OTA 1.1.2 `production` android `a349abee-d7c0-450d-87e8-b4fd87dd1e99` (run 34659420827) / ios `d7b9a9d5-ddb1-4a53-99c2-8c3e3c6308c1` (run 34659425829); sin migraciones; E2E `prod-suave` 9/9 (run 34659439531); [SDD](../specs/despegue-rapido/SPEC.md); **QA del owner PENDIENTE** (5 puntos del SPEC))**: **solo RN**
 > `useWorkoutSession` pinta el plan desde la caché y baja `loading` ANTES de esperar auth/perfil (`ExecutorV3` avisa «escena lista» sin esperar la
 > red), `plan-cache-hint.ts` + `appState` en el aviso de Sentry; **solo web** la señal `eva:exec-v3-ready` sale también sin marca de morph con la

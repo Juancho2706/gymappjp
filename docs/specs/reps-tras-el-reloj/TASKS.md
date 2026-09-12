@@ -25,13 +25,13 @@ Orden duro: **W0 → W1 → (W2 ‖ W3) → W4**.
       el backend (§8) y los 10 puntos del QA del owner (§10). Cada `archivo:línea` verificado contra
       HEAD.
       **Done:** los tres archivos existen y ninguna cita apunta a una línea inexistente.
-- [ ] **W0.2 Commit previo del fix del share.** Los 5 archivos sueltos del working tree
+- [x] **W0.2 Commit previo del fix del share (`b49cc0da`).** Los 5 archivos sueltos del working tree
       (`apps/mobile/components/alumno/share/ShareCanvas.tsx`, `StickerGestureLayer.tsx`,
       `WorkoutShareComposer.tsx`, `index.ts`, `share-types.ts`) salen **antes** de este tren en un
       commit `fix(share): …`, sin push.
       **Done:** `git status --porcelain` limpio en `apps/mobile/components/alumno/share/` y el commit
       existe en `rnmobiledenuevo`.
-- [ ] **W0.3 Commit del SDD.** `docs(specs): SDD del tren «Reps tras el reloj»` en `rnmobiledenuevo`,
+- [x] **W0.3 Commit del SDD (`9917f444`).** `docs(specs): SDD del tren «Reps tras el reloj»` en `rnmobiledenuevo`,
       sin push.
       **Done:** el commit contiene solo `docs/specs/reps-tras-el-reloj/*`.
 - [x] **W0.4 Decisiones cerradas antes de repartir (12-09).** Los tres puntos de
@@ -47,7 +47,7 @@ Archivos: `packages/workout-engine/hold-autolog.ts`, `packages/workout-engine/ke
 `packages/workout-engine/hold-autolog.test.ts`, `packages/workout-engine/keypad-flow.test.ts`.
 El barrel `packages/workout-engine/index.ts` ya re-exporta los dos módulos (`:28`, `:46`): **no se toca**.
 
-- [ ] **W1.1 (R2) `captureGapsFor`.** Helper puro nuevo en `hold-autolog.ts`, junto a `holdSidesFor`
+- [x] **W1.1 (R2) `captureGapsFor`.** Helper puro nuevo en `hold-autolog.ts`, junto a `holdSidesFor`
       (`:205`) y `mergeHoldCaptureValues` (`:234`):
       `captureGapsFor(values: Record<string, string>, kind: HoldModuleKind): Array<'weight' | 'reps'>`.
       `strength_time`: `'reps'` si las reps no son un entero > 0 (misma regla que `optionalReps`,
@@ -56,7 +56,7 @@ El barrel `packages/workout-engine/index.ts` ya re-exporta los dos módulos (`:2
       **Done:** el helper es puro (cero imports de RN/Next), se exporta por el barrel existente y
       `pnpm vitest run packages/workout-engine/hold-autolog.test.ts` pasa con los 6 casos de
       [PLAN §5](PLAN.md#5-tests-por-capa-r15).
-- [ ] **W1.2 (R5/R6) `KeypadTarget` gana `holdSource` y `prompt`.** En `keypad-flow.ts:29-84`, dos campos
+- [x] **W1.2 (R5/R6) `KeypadTarget` gana `holdSource` y `prompt`.** En `keypad-flow.ts:29-84`, dos campos
       opcionales: `holdSource?: HoldSource | null` (para que la edición no degrade
       `metadata.hold_source` a `'manual'`) y `prompt?: 'hold-gap'` (para el copy de SPEC §6).
       `keypadStepsForTarget` (`:205-229`) **no cambia**: la rama `strengthTimeMode` de `:220-224` ya
@@ -64,42 +64,42 @@ El barrel `packages/workout-engine/index.ts` ya re-exporta los dos módulos (`:2
       **Done:** `pnpm typecheck` y `pnpm --filter @eva/mobile exec tsc --noEmit` en 0; el test de
       `keypad-flow.test.ts` prueba que un target con los campos nuevos devuelve **exactamente** los
       mismos pasos que hoy.
-- [ ] **W1.3 Tests del motor.** Casos de W1.1 + no-regresión de W1.2.
+- [x] **W1.3 Tests del motor.** Casos de W1.1 + no-regresión de W1.2.
       **Done:** `pnpm vitest run packages/workout-engine` verde y sin tests saltados nuevos.
 
 ## W2 · RN (worker Opus)
 
 Archivos en [PLAN §2](PLAN.md#2-reparto-de-archivos--ningún-archivo-aparece-en-dos-workers). Depende de W1.
 
-- [ ] **W2.1 (R1) Timbre a 0.** En `use-hold-module.ts:257`, junto a `timerHaptics.holdDone()` y con el
+- [x] **W2.1 (R1) Timbre a 0.** En `use-hold-module.ts:257`, junto a `timerHaptics.holdDone()` y con el
       **mismo gate**, `playTimerCue('done')` **sin `force`** (`timers/sound.ts:148`). Actualizar el
       comentario de `:255-256` (la invariante W3.8/R31 «nunca suena» queda derogada para el hold) y el
       test `tests/mobile/executor-v3-hold-module.test.ts:367`.
       **Done:** el cue se dispara una sola vez en `expired` + foreground; **no** se dispara con
       `expiredWhileAway`, ni en `done-early`, ni con el mute activado (`sound.ts:149`); el test lo
       prueba por los cuatro caminos.
-- [ ] **W2.2 (R2) `captureGaps` en el commit.** `HoldCommitInfo` (`use-hold-module.ts:93-98`) gana
+- [x] **W2.2 (R2) `captureGaps` en el commit.** `HoldCommitInfo` (`use-hold-module.ts:93-98`) gana
       `captureGaps`, calculado con `captureGapsFor(values, a.kind)` sobre los **mismos** `values`
       mezclados de `:260-267` y enviado en `a.onCommit(payload, source, { ... })` (`:305-310`).
       **Done:** el test cubre single, `left` (siempre sin prompt porque no hay `submit`), `right` y
       movilidad.
-- [ ] **W2.3 (R8) Candado limpio al cambiar `resetKey`.** Agregar `sentSetsRef.current.clear()`
+- [x] **W2.3 (R8) Candado limpio al cambiar `resetKey`.** Agregar `sentSetsRef.current.clear()`
       (`:184`) al efecto de reset (`:338-349`). `remeasure` (`:465-472`) no cambia `resetKey` ⇒ sigue
       conservando el candado.
       **Done:** test **por negación**: con el código viejo, cambiar `resetKey` y volver a vencer NO
       llama a `onCommit`; con el nuevo, sí. Los casos de auto-envío único por serie siguen verdes.
-- [ ] **W2.4 (R4) Las pantallas deciden y abren.** `ExerciseScreenV3.commitSet(payload, info)`
+- [x] **W2.4 (R4) Las pantallas deciden y abren.** `ExerciseScreenV3.commitSet(payload, info)`
       (`:236-250`, montaje `:440`) y `SupersetScreenV3.handleCommit(payload, source, info)`
       (`:365-372`, montaje `:534`) aplican la regla R3 y llaman a `onOpenSet` con
       `{ seed: payload, focus, prompt: 'hold-gap' }`. Las firmas de `onOpenSet`
       (`ExerciseScreenV3.tsx:149`, `SupersetScreenV3.tsx:152`) ganan el `opts` **al final**.
       **Done:** las cuatro condiciones de R3 se evalúan en un helper puro con test; con reps ya tipeadas
       o con `expiredWhileAway` no se abre nada.
-- [ ] **W2.5 (R4) `ExecutorV3` propaga el `opts`.** `openSet` pasa a
+- [x] **W2.5 (R4) `ExecutorV3` propaga el `opts`.** `openSet` pasa a
       `(blockId, setNumber, prefill?, opts?)` (`:689-817`) y los **seis** montajes lo reenvían:
       `:1683` (superserie, directo), `:1762`, `:1799`, `:1828`, `:1859`, `:1890` (envueltos).
       **Done:** ningún montaje descarta el `opts` en silencio; revisado uno por uno en el juicio de W4.1.
-- [ ] **W2.6 (R5) `openSet` aprende fuerza por tiempo.** Rama nueva **antes** de la clásica
+- [x] **W2.6 (R5) `openSet` aprende fuerza por tiempo.** Rama nueva **antes** de la clásica
       (`:767`): con `isStrengthTimeBlock(block, exercise)` el target lleva `strengthTimeMode: true`,
       `sideMode`, `isEdit: true`, `holdSource` (del seed o del log), `prompt`, `initialValues` sembrados
       **desde `opts.seed`** (nunca desde `sessionLogs`, riesgo 3 del PLAN) y, sin seed, desde
@@ -107,7 +107,7 @@ Archivos en [PLAN §2](PLAN.md#2-reparto-de-archivos--ningún-archivo-aparece-en
       campo de foco en `keypadStepsForTarget` (0 `weight`, 1 `reps`).
       **Done:** editar una serie cerrada por reloj conserva `metadata.hold_source = 'timer'`; el teclado
       abre en REPS con los segundos ya puestos; el camino clásico de fuerza queda byte-idéntico.
-- [ ] **W2.7 (R6) Tercera rama del `KeypadHost`.** En `KeypadHost.tsx:234-238`, `strengthTimeMode` ⇒
+- [x] **W2.7 (R6) Tercera rama del `KeypadHost`.** En `KeypadHost.tsx:234-238`, `strengthTimeMode` ⇒
       `buildStrengthTimePayload(v, blockId, setNumber, { sideMode, holdSource: target.holdSource ?? 'manual' })`.
       `isEmptyCapture` (`:162`) en modo tiempo replica `SetRow.tsx:952-962` (el peso no cuenta). Copy de
       SPEC §6 cuando `target.prompt === 'hold-gap'`, con el secundario «Sin reps»
@@ -115,7 +115,7 @@ Archivos en [PLAN §2](PLAN.md#2-reparto-de-archivos--ningún-archivo-aparece-en
       **Done:** test nuevo `tests/mobile/executor-v3-keypad-strength-time.test.ts` con el payload
       completo (`actual_hold_sec`, `reps_done`, `metadata.hold_source`); «Sin reps» cierra sin commitear
       y la serie guardada no cambia.
-- [ ] **W2.8 (R7) Línea «Serie N».** `RestInterstitialData` (`v3/RestInterstitialV3.tsx:84-99`) gana
+- [x] **W2.8 (R7) Línea «Serie N».** `RestInterstitialData` (`v3/RestInterstitialV3.tsx:84-99`) gana
       `lastSet?: { line: string; onEdit(): void; onRepeat?(): void }`, alimentado desde el
       `interstitialDataRef` de `ExecutorV3.tsx:2042-2052` (sin tocar el registro de `:2063-2066`); con la
       pref OFF la línea va en `ExerciseScreenV3` encima de `RestOfferV3` (`:559-568`); en superserie solo
@@ -123,19 +123,19 @@ Archivos en [PLAN §2](PLAN.md#2-reparto-de-archivos--ningún-archivo-aparece-en
       guion inventado**.
       **Done:** los callbacks leen refs estables (nunca capturan `sessionLogs`); la línea aparece con la
       pref ON dentro del descanso y con la pref OFF sobre el CTA, y desaparece al cambiar de serie.
-- [ ] **W2.9 (R8) «Repetir».** `activeSet = repeatSet ?? firstUnlogged` (`ExerciseScreenV3.tsx:180`);
+- [x] **W2.9 (R8) «Repetir».** `activeSet = repeatSet ?? firstUnlogged` (`ExerciseScreenV3.tsx:180`);
       `resetKey` con nonce (`:433`); siembra del hero desde el log por el carril `seedValues` (`:314`);
       `timers.cancelRest()` al repetir; `onCommitSet(payload, { repeat: true })` para que
       `ExecutorV3.handleCommit` (`:853-1109`) trate el re-commit como serie nueva pese a `wasLogged`
       (`:866`, `:1036`); `repeatSet` se limpia al commitear.
       **Done:** el reloj vuelve a 0:30 con «Iniciar serie», el segundo commit **reemplaza** la fila (no
       hay serie extra en `sessionLogs`), el descanso vuelve a arrancar y el test lo prueba.
-- [ ] **W2.10 (R12) Analítica.** `hold_capture_prompted` y `hold_capture_resolved` los emite la
+- [x] **W2.10 (R12) Analítica.** `hold_capture_prompted` y `hold_capture_resolved` los emite la
       **pantalla**; `hold_set_repeated`, el botón. Todo con `captureAppEvent`
       (`apps/mobile/lib/analytics.ts:157-164`), sin PII.
       **Done:** las propiedades son exactamente las de SPEC §7 y los tres eventos heredados
       (`use-hold-module.ts:286-304`, `:427-432`) no cambian de forma.
-- [ ] **W2.11 Gates del worker.** `pnpm vitest run tests/mobile` (focalizado en los archivos tocados) y
+- [x] **W2.11 Gates del worker.** `pnpm vitest run tests/mobile` (focalizado en los archivos tocados) y
       `pnpm --filter @eva/mobile exec tsc --noEmit`.
       **Done:** ambos en 0, con el resultado real anotado en el reporte del worker.
 
@@ -144,7 +144,7 @@ Archivos en [PLAN §2](PLAN.md#2-reparto-de-archivos--ningún-archivo-aparece-en
 Archivos en [PLAN §2](PLAN.md#2-reparto-de-archivos--ningún-archivo-aparece-en-dos-workers). Depende de W1.
 Base: `apps/web/src/app/c/[coach_slug]/workout/[planId]/`.
 
-- [ ] **W3.1 (R10) Sheet de captura en pantalla sola.** En `v3/ExerciseStepV3.tsx`, sheet gemela de la
+- [x] **W3.1 (R10) Sheet de captura en pantalla sola.** En `v3/ExerciseStepV3.tsx`, sheet gemela de la
       de `v3/SupersetStepV3.tsx:580-670`: `.exec-v3-settings` (`globals.css:5143-5148`, `z-index: 61`
       sobre el interstitial `z-index: 60` de `globals.css:4348-4355`), `role="dialog"` con nombre
       accesible **propio** (nunca «Descanso»), la `LogSetForm` de la serie N en `editing` con
@@ -152,24 +152,24 @@ Base: `apps/web/src/app/c/[coach_slug]/workout/[planId]/`.
       «Sin reps».
       **Done:** la sheet se pinta encima del descanso; cerrarla no altera la serie guardada; el assert
       `dialog 'Descanso' count 0` del E2E sigue válido porque el nombre accesible es distinto.
-- [ ] **W3.2 (R3) Apertura automática.** La abre `onMeasured` / `onLogged` (`v3/ExerciseStepV3.tsx:159-174`,
+- [x] **W3.2 (R3) Apertura automática.** La abre `onMeasured` / `onLogged` (`v3/ExerciseStepV3.tsx:159-174`,
       `:248-250`) con las cuatro condiciones de R3, usando `captureGapsFor` del motor sobre los valores
       de la fila. En `v3/SupersetStepV3.tsx` se reutiliza `editBlockId` (`:161`) con foco en REPS.
       **Done:** los tres casos del test nuevo (abre / no abre con reps tipeadas / no abre con
       `expiredWhileAway`) pasan.
-- [ ] **W3.3 (R10) `hold_source` sobrevive al re-submit.** `holdSourceRef` (`LogSetForm.tsx:508`) se
+- [x] **W3.3 (R10) `hold_source` sobrevive al re-submit.** `holdSourceRef` (`LogSetForm.tsx:508`) se
       siembra desde `existingLog.metadata.hold_source` cuando la fila abre en edición — hoy nace en
       `null` y el efecto de prefill se saltea con `isLogged` (`:623`), así que cada `LogSetForm` de la
       sheet perdería la marca al re-guardar (el UPDATE reemplaza el jsonb entero,
       `_actions/workout-log.actions.ts:177`).
       **Done:** caso nuevo en `LogSetForm.test.tsx` — re-submit de una serie cerrada por reloj ⇒
       `reps_done = '5'` y `metadata.hold_source = 'timer'`.
-- [ ] **W3.4 (R7) Línea «Serie N».** `RestInterstitialData` (`v3/RestInterstitialV3.tsx:51-58`) gana
+- [x] **W3.4 (R7) Línea «Serie N».** `RestInterstitialData` (`v3/RestInterstitialV3.tsx:51-58`) gana
       `lastSet` y `WorkoutExecutionClient.tsx:2932-2934` lo alimenta en el
       `RestInterstitialDataProvider`; con la pref OFF la línea va bajo el anillo «¡Listo!», sobre
       `RestOfferV3` (`v3/ExerciseStepV3.tsx:359`); en superserie solo «Editar» (`v3/SupersetStepV3.tsx:473`).
       **Done:** mismo texto que RN (`formatStrengthTimeSetLine`) y misma regla de aparición.
-- [ ] **W3.5 (R8) «Repetir» en pantalla sola.** Override local al step:
+- [x] **W3.5 (R8) «Repetir» en pantalla sola.** Override local al step:
       `activeSetNumber = repeatSet ?? firstUnlogged` reemplazando los cinco usos de la prop dentro de
       `v3/ExerciseStepV3.tsx` (`:238`, `:247`, `:307`, `:320`, `:335`); corta el descanso con el
       equivalente de `useWorkoutTimer` (`:148`); `resetKey` con nonce (`:247`); el re-commit se trata
@@ -177,46 +177,46 @@ Base: `apps/web/src/app/c/[coach_slug]/workout/[planId]/`.
       `firstUnlogged` del cliente (`WorkoutExecutionClient.tsx:2575-2576`).
       **Done:** repetir la serie N la vuelve activa con el reloj armado y el nuevo commit reemplaza la
       fila (upsert de `_actions/workout-log.actions.ts:180-191`), sin serie extra.
-- [ ] **W3.6 (R12) Analítica web.** Los tres eventos de SPEC §7 con el `usePostHog()` que ya usa
+- [x] **W3.6 (R12) Analítica web.** Los tres eventos de SPEC §7 con el `usePostHog()` que ya usa
       `v3/HoldModuleV3.tsx`, con `platform: 'web'`.
       **Done:** mismas propiedades que RN, sin PII.
-- [ ] **W3.7 (R15) E2E W6.10.** Ajustar `tests/exec-hold-superset.spec.ts` según la decisión de W0.4 y
+- [x] **W3.7 (R15) E2E W6.10.** Ajustar `tests/exec-hold-superset.spec.ts` según la decisión de W0.4 y
       [PLAN §6](PLAN.md#6-e2e-w610--qué-cambia-y-qué-no): tras el 0 del bloque suelto (paso 5,
       `:156-178`) assertar la sheet y cerrarla con «Sin reps» **antes** de los asserts de
       `10 kg × 5 s` (`:175`) y `rest-offer-strength-*` (`:176-177`). Los pasos 1 a 4 (`:130-154`) y el
       test 2 (`:185-233`) **no se tocan**.
       **Done:** el spec compila y su lectura deja claro por qué `reps_done IS NULL` sigue siendo el
       resultado esperado.
-- [ ] **W3.8 Gates del worker.** `pnpm vitest run` focalizado en `LogSetForm.test.tsx`,
+- [x] **W3.8 Gates del worker.** `pnpm vitest run` focalizado en `LogSetForm.test.tsx`,
       `v3/ExerciseStepV3.test.tsx`, `v3/auto-rest-matrix.test.tsx`, `v3/HoldModuleV3.analytics.test.tsx`
       + `pnpm typecheck`.
       **Done:** ambos en 0, con el resultado real anotado en el reporte del worker.
 
 ## W4 · Juicio, gates y salida (Fable)
 
-- [ ] **W4.1 Juicio de los diffs.** Los tres diffs contra R1–R16 y contra los 9 riesgos de
+- [x] **W4.1 Juicio de los diffs (12-09).** Veredicto: W1 una devolución (regla de reps alineada a `optionalReps`: `'0,5'` no es hueco); W2 sin devoluciones; W3 una devolución (test R12 de `ExerciseStepV3.test.tsx`: stub de framer-motion como `CheckInForm.test.tsx`). Aceptados dos fixes de paso de W3 fuera del brief: la sheet de edición de superserie no pasaba `strengthTimeMode` (re-guardar borraba `actual_hold_sec`) y el teclado numérico quedaba detrás de las sheets (z-50 ⇒ 70/71 por CSS, deuda: moverlo al componente). Los tres diffs contra R1–R16 y contra los 9 riesgos de
       [PLAN §4](PLAN.md#4-riesgos-y-mitigaciones): ningún archivo fuera de su lista, cero lógica de más,
       los seis montajes de `openSet` reenviando el `opts`, `hold_source` conservado en los dos lados,
       tests focalizados de verdad. Lo deficiente vuelve al **mismo** worker con archivo, línea y qué
       falta; nada se arregla «de paso» desde el jefe.
       **Done:** veredicto escrito por worker y cero devoluciones abiertas.
-- [ ] **W4.2 Commit por wave.** `feat(engine):`, `feat(exec):` (RN) y `feat(exec):` (web), con los
+- [x] **W4.2 Commit por wave (12-09):** `da0525fe` feat(engine) · `170a6424` feat(exec) RN · `57fa541d` feat(exec) web, sobre `9917f444` (SDD) y `b49cc0da` (fix del share). Sin push. `feat(engine):`, `feat(exec):` (RN) y `feat(exec):` (web), con los
       prefijos canónicos de la casa. Sin push.
       **Done:** un commit local por worker, cada uno compilando por su cuenta.
-- [ ] **W4.3 Gates completos sobre el árbol final** (ninguna celda se llena sin ejecución real):
+- [x] **W4.3 Gates completos sobre el árbol final `57fa541d`** (12-09, PC libre por el owner; ninguna celda se llenó sin ejecución real):
 
 | Gate | Comando | Resultado real | Fecha |
 |---|---|---|---|
-| Tests | `pnpm test` | | |
-| Typecheck web | `pnpm typecheck` | | |
-| Typecheck mobile | `pnpm --filter @eva/mobile exec tsc --noEmit` | | |
-| Lint | `pnpm lint` | | |
-| Lint mobile | `pnpm lint:mobile` | | |
-| Tokens | `pnpm check:tokens` | | |
-| Docs | `pnpm docs:check` | | |
-| Bundle mobile | `pnpm --filter @eva/mobile exec expo export --platform android` | | |
+| Tests | `pnpm test` | 800 archivos / 10 994 tests verdes, 2 archivos y 4 tests skipped, 0 rojos (sobre `57fa541d`; la corrida previa sobre el working tree tenía 1 rojo, el test R12 que corrigió W3) | 12-09 |
+| Typecheck web | `pnpm typecheck` | 0 errores | 12-09 |
+| Typecheck mobile | `pnpm --filter @eva/mobile exec tsc --noEmit` | 0 errores | 12-09 |
+| Lint | `pnpm lint` | 0 errores / 572 warnings preexistentes (scripts y tests viejos) | 12-09 |
+| Lint mobile | `pnpm lint:mobile` | 0 errores | 12-09 |
+| Tokens | `pnpm check:tokens` | OK (86 tokens + 5 seal) | 12-09 |
+| Docs | `pnpm docs:check` | OK (CURRENT 15,8 KB, tope 16) | 12-09 |
+| Bundle mobile | `pnpm --filter @eva/mobile exec expo export --platform android` | Exported (bundle 20 MB) | 12-09 |
 
-- [ ] **W4.4 Documentos canónicos.** `docs/status/CURRENT.md` (**≤ 16 KB**: el bloque de este tren entra
+- [x] **W4.4 Documentos canónicos (12-09).** `docs/status/CURRENT.md` (**≤ 16 KB**: el bloque de este tren entra
       **reemplazando** el del tren anterior, no sumando — lo valida `pnpm docs:check`),
       `docs/status/MOBILE_PARITY.md` (RN gana el timbre a 0 ⇒ paridad con web; «Repetir» en las dos
       plataformas o la divergencia declarada si se recortó) y `docs/testing/TEST_STATUS.md` (tests

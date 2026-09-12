@@ -478,6 +478,21 @@ SDD en [`../specs/arreglos-chicos-pre-ota/`](../specs/arreglos-chicos-pre-ota/TA
 
 **Gates nuevos que deja el tren:** `tests/mobile/logout-cleanup.test.ts` (`getSession()` en el logout, guard de marca por `coachId`), `tests/mobile/exercise-usage-memo.test.ts` (memo solo camino feliz + invalidación en crear/editar/clonar/borrar), casos nuevos en `packages/workout-engine/keypad-logic.test.ts` (`formatThousandsEsCl`), `packages/profile-analytics/agenda-label.test.ts` (`limitedWindow`), `tests/mobile/share-block-data.test.ts` (12340,6 ⇒ «12.341»; 12450 ⇒ «12.450»), `tests/mobile/coach-dashboard-agenda.test.ts` (caso reescrito: «Sin check-in reciente»), `tests/mobile-coach-nutrition-detail-logic.test.ts` (`deriveNutritionWeekDelta` con semana nula ⇒ «—»), `tests/mobile/executor-v3-hold-module.test.ts` (+12: `restoredHold`, `saveHold`, `pickRestorableHold`), `tests/mobile/executor-v3-typed-screens.test.ts` (`strengthTimeTileLayout`), `tests/mobile-nutrition-v2-portions.test.ts` (+3: `classifyExchangeListError`). Sin test unitario para los headers brandeados (JSX; el repo no renderiza componentes RN en vitest): la cobertura es el QA de device (TASKS W3.10, 7a/7b/7c).
 
+## Tren «Reps tras el reloj» (fuerza por tiempo) — W1–W3, 12-09 (rama `rnmobiledenuevo`, commits locales `b49cc0da` fix share · `9917f444` SDD · `da0525fe` motor · `170a6424` RN · `57fa541d` web, SIN PUSH al cierre de esta sección)
+
+SDD en [`../specs/reps-tras-el-reloj/`](../specs/reps-tras-el-reloj/TASKS.md). Gates W4.3 sobre `57fa541d` (12-09, PC libre por el owner; workers sin gates por pedido del owner «acumula gates para el final»):
+
+| Gate | Resultado |
+|---|---|
+| `pnpm test` | 800 archivos / 10 994 tests verdes (2 archivos, 4 tests skipped). La corrida previa sobre el working tree tenía 1 rojo (`v3/ExerciseStepV3.test.tsx`, R12: `AnimatePresence` mantenía el diálogo montado en jsdom) corregido por W3 con el stub de framer-motion de `CheckInForm.test.tsx`. El `TypeError: formRef.current?.scrollIntoView is not a function` que se imprime dentro de la suite es ruido de jsdom en un test que pasa (jsdom no implementa `scrollIntoView`); no es un fallo |
+| `tsc --noEmit` mobile · `pnpm typecheck` | 0 · 0 |
+| `pnpm lint` · `pnpm lint:mobile` | 0 errores / 572 warnings preexistentes · 0 |
+| `pnpm check:tokens` · `pnpm docs:check` | OK · OK (CURRENT 15,8 KB, tope 16) |
+| `expo export --platform android` | Exported (bundle 20 MB) |
+| `pnpm test:e2e` | no corrido en local (sin vars `E2E_*`; sin cambios de auth/RLS/pagos). `tests/exec-hold-superset.spec.ts` (W6.10) ajustado: el bloque suelto cierra la sheet con «Sin reps» y el assert de `10 kg × 5 s` apunta a `hold-lastset`. E2E `prod-suave` se corre tras el deploy |
+
+**Gates nuevos que deja el tren:** `packages/workout-engine/hold-autolog.test.ts` (`captureGapsFor`: tabla de parseo alineada a `optionalReps`), `keypad-flow.test.ts` (no-regresión con `holdSource`/`prompt`), `tests/mobile/executor-v3-hold-module.test.ts` (+12: timbre a 0 en foreground y nunca con `expiredWhileAway`/`done-early`, `captureGaps` por lado y kind, candado limpio al cambiar `resetKey` probado por negación), `tests/mobile/keypad-flow.test.ts` (pasos y `initialFieldIndex` en modo tiempo), `tests/mobile/executor-v3-keypad-strength-time.test.ts` (nuevo: monta `KeypadHost` real — payload con `hold_source` conservado, per_side, `isEmptyCapture`, copy R9, «Sin reps» no commitea), `tests/mobile/hold-capture-prompt.test.ts` (nuevo: las 4 condiciones de R3 + foco), web `v3/hold-capture-prompt.test.ts` (nuevo, 9 casos), `v3/ExerciseStepV3.test.tsx` (nuevo, 8 casos: abre / no abre con reps / no abre away / foco KG / analítica / línea pref OFF / «Repetir»), `LogSetForm.test.tsx` (+3: re-submit conserva `hold_source: 'timer'`, per_side, negativo).
+
 ## Pendientes actuales
 
 - [x] Artefactos del run `30185211552` retenidos (`D:\tmp\eva-artifacts-856829fa\`: build.aab + build.ipa) y procesamiento en TestFlight/Play internal verificado por el owner (2026-07-25).
