@@ -225,12 +225,52 @@ Base: `apps/web/src/app/c/[coach_slug]/workout/[planId]/`.
 - [x] **W4.5 OK del owner (12-09 21:15Z: «si a todo»).** Pedirlo con la tabla de gates llena y el resumen de los tres diffs.
       **Sin ese OK no se pushea nada.**
       **Done:** respuesta del owner citada en esta tarea.
-- [x] **W4.6 Salida (12-09 21:27Z):** push `rnmobiledenuevo` + `master` = `055269f2`; deploy `dpl_8jx73Xxz5L734uKTXHmgs2n6pQtB` READY 21:24Z, OTA 1.1.2 `production` android `01a09783-5424-7702-b3f6-b44d7cb774c1` (grupo `89e5fc36…`, run 34719802498) / ios `01a09783-2049-7be3-94cf-2c4838d42aac` (grupo `c6128d24…`, run 34719804242), E2E `prod-suave` 9/9 (run 34719982237, 41,0 s). Push de `rnmobiledenuevo` + `master` → deploy web → verificar READY → **una sola
+- [x] **W4.6 Salida (12-09 21:27Z, primera salida; la Enmienda E1 sale en W5):** push `rnmobiledenuevo` + `master` = `055269f2`; deploy `dpl_8jx73Xxz5L734uKTXHmgs2n6pQtB` READY 21:24Z, OTA 1.1.2 `production` android `01a09783-5424-7702-b3f6-b44d7cb774c1` (grupo `89e5fc36…`, run 34719802498) / ios `01a09783-2049-7be3-94cf-2c4838d42aac` (grupo `c6128d24…`, run 34719804242), E2E `prod-suave` 9/9 (run 34719982237, 41,0 s). Push de `rnmobiledenuevo` + `master` → deploy web → verificar READY → **una sola
       OTA 1.1.2 android + ios** que lleve el fix del share (W0.2) y este tren → anotar los dos ids de
       update → E2E `prod-suave`.
       **Done:** deploy READY, los dos ids de OTA anotados y el E2E con su resultado real.
 - [ ] **W4.7 QA del owner (device + web).** Los 10 puntos de [SPEC §10](SPEC.md#10-qa-del-owner-r16--lista-cerrada).
       **Done:** los 10 verdes ⇒ SPEC y TASKS a `status: done` con commit `docs(specs):`.
+
+## W5 · Enmienda E1 — descanso minimizado mientras el prompt está abierto (R3b)
+
+Pedido del owner tras ver la salida en producción (12-09): el teclado sobre la pantalla del ejercicio,
+el descanso corriendo en la barra mini y la pantalla grande recién al confirmar, con el mismo reloj.
+Mismos workers que W2/W3. Sin gates hasta que el owner libere la CPU.
+
+- [ ] **W5.1 (RN, worker W2)** Contrato: `RestOpts.minimized?: boolean` en `timers/TimerProvider.tsx` y
+      `timers.expandRest()`; el estado `minimized` de `RestTimerHost.tsx:71` sube al provider (o llega
+      como prop + señal) para que arranque minimizado y se expanda por API sin remontar el host ni
+      reiniciar el motor. `ExecutorV3.handleCommit`: los dos `startRest` automáticos (`:1217` ronda,
+      `:1260` solo) reciben `minimized: opts?.minimizeRest === true`; `resolveHoldPrompt` (saved o
+      dismissed) llama `timers.expandRest()`. `ExerciseScreenV3.commitSet` y `SupersetScreenV3.handleCommit`
+      calculan `holdCapturePromptFor` ANTES de `onCommitSet` y pasan `{ minimizeRest: true }` cuando van a
+      abrir el prompt (la apertura sigue DESPUÉS del commit). «Repetir» cancela el descanso como hoy.
+      **Done:** con pref ON y reps vacías, a 0 se ve la pantalla del ejercicio + barra mini + teclado;
+      Guardar/Sin reps ⇒ interstitial con el reloj ya avanzado; con reps tipeadas o pref OFF byte-idéntico;
+      tests del provider (arranque minimizado + expandRest) y del executor/helper.
+- [ ] **W5.2 (web, worker W3)** Contrato: `RestOptions.minimized?: boolean` en `WorkoutTimerProvider.tsx`
+      y `expandRest()` en el contexto; el `minimized` de `RestTimer.tsx:54` se inicializa desde la opción y
+      responde a la señal de expandir sin remontar. Pantalla sola: `HoldPrefill.minimizeRestIfGaps`
+      (lo pone `onMeasured` cuando `submit && !expiredWhileAway`); `StrengthLogSetForm.buildRest` pasa
+      `minimized: true` a `startRest` cuando viene la marca y `captureGapsFor` sobre lo enviado da huecos;
+      `ExerciseStepV3.closeCaptureSheet` llama `expandRest()`. Superserie: el descanso de ronda que arranca
+      `WorkoutExecutionClient` recibe `minimized` vía `opts` desde `SupersetStepV3.handleActiveLogged`
+      (decidir ANTES de `onLogged`) y `closeEditSheet` llama `expandRest()`.
+      **Done:** test en `ExerciseStepV3.test.tsx` (`startRest` recibe `minimized: true` y `expandRest`
+      se llama al cerrar) y en `LogSetForm.test.tsx`; E2E W6.10 sin cambios (pref OFF).
+- [ ] **W5.1b (RN, worker W2)** Chip vivo «Descanso 1:27» en el header del `KeypadHost` con `prompt: 'hold-gap'`
+      (a la derecha del eyebrow), alimentado por `restClockRef` + `subscribeRestClock` + `useRestRemainingSec`
+      en `timers/` (sin `setState` por tick en el provider). Test con fake timers en
+      `tests/mobile/rest-minimized-hold-prompt.test.ts`.
+      **Done:** el chip cuenta mientras el teclado está abierto y desaparece sin descanso activo.
+- [ ] **W5.2b (web, worker W3)** Mismo chip en el header de la sheet de huecos (pantalla sola y superserie)
+      con un `useRestRemainingSec` del `WorkoutTimerProvider` (mismo diseño: ref + suscripción, intervalo
+      solo en el chip). Test en `ExerciseStepV3.test.tsx`.
+      **Done:** ídem RN.
+- [ ] **W5.3 (Fable)** Juicio, gates completos cuando el owner libere la CPU, commit, push, deploy, OTA
+      1.1.2 android+ios, E2E `prod-suave`, docs; mockup v4.
+- [ ] **W5.4 (owner)** QA §10 con el punto 1 enmendado.
 
 ## Backlog (no bloquea el cierre)
 

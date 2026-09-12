@@ -99,6 +99,17 @@ hueco que abrió: las reps existen pero el alumno no tiene manos para escribirla
 
 ## 4. Requisitos
 
+> **Enmienda E1 (owner, 12-09 tras ver la salida en producción — decisión literal, no se reabre):** «el
+> teclado debe aparecer aún en la pantalla del ejercicio, no en la del descanso. Si se le termina el
+> tiempo, el teclado para hacer el input de kilo y de repeticiones tiene que estar en la misma pantalla
+> del ejercicio. No pases al descanso hasta que él termine de confirmar su kilo y sus repeticiones, a
+> menos que él ya manualmente vaya al descanso; pero no pase automático al descanso y el teclado
+> afuera sin ver la pantalla del músculo que estaba haciendo». Precisión posterior del owner: «coloca el contador mini que tenemos al terminar, que el usuario
+> coloque sus pesos y luego siga normal a la pantalla grande del descanso continuando con el timer que
+> ya tenía el mini». Se implementa como **R3b** (§4) y la matriz de §5 cambia en la columna «Teclado
+> solo». Sale en una segunda OTA/deploy (W5).
+
+
 Cada requisito es un criterio verificable: si no se puede probar con un test o con un paso del QA
 de §10, no es un requisito de este SPEC.
 
@@ -122,6 +133,29 @@ de §10, no es un requisito de este SPEC.
   (c) `captureGaps.length > 0`; (d) **no** `expiredWhileAway`. Foco: `reps` si falta reps; si además
   falta el peso, el foco va a `weight`. Nada se abre en el **lado izquierdo** de `per_side`, en
   **movilidad**, ni cuando **venció con la app fuera** (R6/R27 heredados). La matriz completa está en §5.
+- **R3b · Con el prompt abierto, el descanso arranca MINIMIZADO y se expande al confirmar (Enmienda E1,
+  precisión del owner: «coloca el contador mini que tenemos al terminar, que el usuario coloque sus
+  pesos y luego siga normal a la pantalla grande del descanso continuando con el timer que ya tenía el
+  mini»).** Cuando R3 decide abrir el teclado/sheet y la preferencia «Pasar solo al descanso» está ON,
+  el descanso arranca en el MISMO commit y con los MISMOS segundos/warmup/contexto de siempre, pero en su
+  presentación **minimizada** (la barra compacta que ya existe: RN `RestTimerBar`, web la barra de
+  `RestTimer` v3): el alumno se queda en la pantalla del ejercicio (video, anillo en «¡Listo!», chip
+  «Guardado · 30 s») con el teclado encima y el conteo corriendo abajo. Al **resolver** el prompt por
+  cualquiera de las dos vías —«Guardar» (el re-commit no arranca uno nuevo: `wasLogged`) o «Sin
+  reps»/scrim/X— el descanso se **expande** a la pantalla grande con el mismo reloj (nunca se reinicia).
+  Si el alumno toca la barra mini antes, se expande igual (comportamiento de hoy). Contrato nuevo en
+  los providers: `startRest(secs, { …, minimized: true })` y `expandRest()` (RN `timers`, web
+  `useWorkoutTimer`); el estado `minimized` sube del host al provider para que sea imperable desde el
+  orquestador. En superserie aplica al descanso de RONDA que cierra el último miembro; entre miembros no
+  hay descanso (V4). Con la pref OFF nada cambia. El teclado abierto desde «Editar» del interstitial NO
+  minimiza nada. La línea «Serie N · Editar · Repetir» (R7) sigue en el interstitial expandido.
+  **El contador tiene que verse mientras se escribe**: el teclado (RN, `Modal` con sheet abajo) y la sheet
+  web tapan la barra mini, así que con `prompt: 'hold-gap'` el header del teclado/sheet muestra un chip vivo
+  «Descanso 1:27» (acento, `tabular-nums`, `accessibilityLabel`/`aria-label` con el tiempo). Lo alimenta un
+  mini-store del provider (`restClockRef` + `subscribeRestClock` + hook `useRestRemainingSec`) que publica
+  el fin absoluto y las pausas/ajustes SIN `setState` por tick en el provider; el hook recalcula con su
+  propio intervalo solo mientras el chip existe. Si el descanso llega a 0 con el teclado abierto, el chip
+  dice «¡A entrenar!» hasta que el host cierre y `expandRest()` es no-op (punto de QA).
 - **R4 · Quién lo abre (RN).** `ExerciseScreenV3.commitSet(payload, info)` pasa a recibir el `info` del
   hook (hoy lo descarta en `:440`) y, tras `onCommitSet(payload)`, si aplica R3 llama
   `onOpenSet(setNumber, { seed: payload, focus, prompt: 'hold-gap' })`. `SupersetScreenV3.handleCommit(payload, source, info)`
@@ -206,7 +240,7 @@ como anotado.
 
 | Situación | Timbre a 0 (RN) | Teclado / sheet solos | Línea «Serie N» |
 |---|---|---|---|
-| Reloj llega a 0 con **reps vacío** (KG sugerido puesto) | Sí | **Sí**, foco en REPS | Sí, con «Editar» y «Repetir» |
+| Reloj llega a 0 con **reps vacío** (KG sugerido puesto) | Sí | **Sí**, foco en REPS, **sobre la pantalla del ejercicio, con el descanso corriendo MINIMIZADO abajo; se expande al Guardar / Sin reps (R3b)** | Sí, con «Editar» y «Repetir» (en el descanso que arranca después) |
 | Reps **tipeadas antes** de «Iniciar serie» | Sí | No (`captureGaps` vacío) | Sí |
 | **«Listo» antes de 0** con reps vacío | No (el alumno ya está tocando) | **Sí**, foco en REPS | Sí |
 | **Sin KG ni reps** (bloque sin peso objetivo) | Sí | **Sí**, foco en **KG** | Sí |
@@ -219,8 +253,9 @@ como anotado.
 
 Notas de estado:
 
-- El descanso **sigue contando detrás** del teclado. Si termina con el teclado abierto, su alarma suena
-  igual y el interstitial queda detrás hasta que el alumno cierre (RN: `KeypadHost` es un `Modal` nativo,
+- **(R3b, Enmienda E1)** Con el prompt abierto por el reloj el descanso ya corre pero **minimizado** (barra): detrás del teclado está la
+  pantalla del ejercicio. Se expande al resolver el prompt, con el mismo reloj. Solo cuando el teclado se abre desde «Editar» del interstitial el descanso ya
+  corre detrás; si termina con el teclado abierto, su alarma suena igual y el interstitial queda detrás hasta que el alumno cierre (RN: `KeypadHost` es un `Modal` nativo,
   `KeypadHost.tsx:286`, que se pinta sobre el overlay del `TimerProvider`; web: la sheet es `z-61` sobre
   el interstitial `z-60`).
 - Cerrar sin guardar **no borra nada**: la serie ya quedó guardada con `reps_done = NULL` (V2 intacto).
@@ -313,8 +348,10 @@ re-commit. Es aceptable y buscado.
 Device (RN) y navegador (web). Ninguna tarea de este SDD pasa a `done` sin estos diez puntos.
 
 1. **Reps vacío, pref ON.** Fuerza por tiempo, tocar «Iniciar serie», dejar correr hasta 0: **suena** el
-   timbre del descanso una vez y el teclado se abre en REPS **encima** del descanso. Escribir 8 y
-   «Guardar» ⇒ la línea dice `Serie 1 · 60 kg × 8 · 30 s`.
+   timbre del descanso una vez y el teclado se abre en REPS **sobre la pantalla del ejercicio** (se ve el
+   video y el anillo en «¡Listo!»; abajo corre la barra mini del descanso, R3b). Escribir 8 y «Guardar»
+   ⇒ el descanso se expande a la pantalla grande SIN reiniciar (ya bajó unos segundos) y su línea dice
+   `Serie 1 · 60 kg × 8 · 30 s`. Variante: «Sin reps» ⇒ también se expande, con `Serie 1 · 60 kg × 30 s`.
 2. **Reps tipeadas antes.** Escribir las reps antes de «Iniciar serie» y dejar llegar a 0: **suena** y
    **no** se abre nada (comportamiento de hoy).
 3. **Pref OFF.** Mismo caso 1 con «Pasar solo al descanso» apagada: se abre el teclado y detrás quedan
