@@ -27,6 +27,7 @@ import {
 import { FONT } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
 import { haptics } from '../../../../lib/haptics'
+import { captureAppEvent } from '../../../../lib/analytics'
 import { extractYoutubeVideoId } from '../../../../lib/youtube'
 import { EXERCISE_TYPE_META, exerciseTypeColor } from '../../../../lib/exercise-type-meta'
 import { parseRestTime, useWorkoutTimers } from '../timers'
@@ -46,8 +47,9 @@ import { DualWheelPicker } from './DualWheelPicker'
 import { dismissWheelHint } from './wheel-hint'
 import { ExecMediaV3, execMediaKind } from './ExecMediaV3'
 import { HoldModuleV3 } from './HoldModuleV3'
+import { holdCapturePromptFor, type OpenSetOpts } from './hold-capture-prompt'
 import { RestOfferV3 } from './RestOfferV3'
-import type { HoldModuleStatus } from './use-hold-module'
+import type { HoldCommitInfo, HoldModuleKind, HoldModuleStatus } from './use-hold-module'
 import type { ExecTheme } from './exec-theme'
 import { activeRound, memberLetter, nextMemberIdInRound, roundDotStates, totalRounds } from './superset-screen-model'
 import type { PendingRoundRest } from './RestInterstitialV3'
@@ -149,7 +151,11 @@ export function SupersetScreenV3({
   /** Sustitución activa de un miembro (máquina ocupada), o null. */
   getMemberSub: (block: SessionBlock) => SupersetMemberSub | null
   onOpenTechnique: (exercise: SessionExercise) => void
-  onOpenSet: (blockId: string, setNumber: number) => void
+  /**
+   * Abre el teclado de una serie. El `opts` (R4, «Reps tras el reloj») va AL FINAL y es opcional: lo
+   * usa el prompt de huecos cuando el reloj cierra un miembro de FUERZA POR TIEMPO sin reps.
+   */
+  onOpenSet: (blockId: string, setNumber: number, opts?: OpenSetOpts) => void
   onCommitSet: (payload: OptimisticLogPayload) => void
   onRpeUpdate?: (payload: OptimisticLogPayload) => void
   onDraftChange: (blockId: string, setNumber: number, values: Record<string, string>, fieldIndex: number) => void
@@ -362,13 +368,42 @@ export function SupersetScreenV3({
   // LA serie de la ronda actual del miembro activo (QA3: editar una serie pasada — tarjeta hecha / keypad —
   // reusa el mismo motor y NO debe avisar). Si queda otro miembro en la MISMA ronda, muestra su nombre.
   // Payload intacto → motor sin tocar.
-  const handleCommit = (payload: OptimisticLogPayload, source?: HoldSource) => {
+  const handleCommit = (
+    payload: OptimisticLogPayload,
+    source?: HoldSource,
+    /** R2/R4: `captureGaps` + `expiredWhileAway` del hook. Sólo llega desde el módulo de hold. */
+    info?: HoldCommitInfo,
+    /** Eje del reloj que cerró: sólo `strength_time` puede pedir reps/peso (R3 b). */
+    holdKind?: HoldModuleKind,
+  ) => {
     const esSerieActiva = payload.blockId === activeBlockId && payload.setNumber === round
     if (esSerieActiva && nextMemberId != null) {
       const nextVM = memberVMs.find((m) => m.block.id === nextMemberId)
       if (nextVM) setCue({ name: nextVM.exercise.name, nonce: Date.now(), long: source === 'timer' })
     }
     onCommitSet(payload)
+    // R3/R4: la MISMA regla que la pantalla sola, con el mismo helper puro. Se abre DESPUÉS de
+    // `onCommitSet` (riesgo 2 del PLAN) y el avance de miembro (V4) sigue ocurriendo por detrás: el
+    // alumno cierra el teclado y la ronda continúa donde estaba. «Repetir» no existe acá (R8/R13).
+    if (info && source && holdKind) {
+      const gap = holdCapturePromptFor({
+        kind: holdKind,
+        captureGaps: info.captureGaps,
+        expiredWhileAway: info.expiredWhileAway,
+      })
+      if (gap) {
+        captureAppEvent('hold_capture_prompted', {
+          block_id: payload.blockId,
+          exercise_type: 'strength',
+          context: 'superset',
+          // Misma adaptación que la pantalla sola: `AppEventProps` sólo admite escalares.
+          missing: info.captureGaps.join(','),
+          trigger: source === 'timer' ? 'timer' : 'manual',
+          platform: 'mobile',
+        })
+        onOpenSet(payload.blockId, payload.setNumber, { seed: payload, focus: gap.focus, prompt: 'hold-gap' })
+      }
+    }
   }
   const nextMemberName = nextMemberId ? memberVMs.find((m) => m.block.id === nextMemberId)?.exercise.name ?? null : null
 
@@ -531,7 +566,10 @@ export function SupersetScreenV3({
                       nextLabel={nextMemberName}
                       getCaptureValues={() => captureRef.current}
                       onSeed={(values, nonce) => setSeedPatch({ values, nonce })}
-                      onCommit={(payload, source) => handleCommit(payload, source)}
+                      // R2/R4: el `info` del hook ya no se descarta — trae los `captureGaps` con los
+                      // que la pantalla decide si abre el teclado; `holdKind` distingue movilidad
+                      // (nunca pide nada más) de fuerza por tiempo.
+                      onCommit={(payload, source, info) => handleCommit(payload, source, info, holdKind)}
                       onStatusChange={setHoldStatus}
                       saveHold={saveHold}
                       restoredHold={restoredHold}
@@ -644,6 +682,13 @@ export function SupersetScreenV3({
               layout={reducedMotion ? undefined : CARD_LAYOUT}
               style={{ gap: 8, borderRadius: 18, padding: 12, borderWidth: 2, backgroundColor: '#17171f', borderColor: s.border, opacity: isDoneInRound ? 0.9 : 0.62 }}
             >
+              {/* R7 en superserie — «Editar» YA EXISTE acá y no se duplica: toda la tarjeta del
+                  miembro hecho es el botón de edición (abre el sheet «Editar {nombre}» con las filas
+                  clásicas del motor, cuyo tap llama a `onOpenSet` y entra a la rama de fuerza por
+                  tiempo de `openSet`, R5). Agregar una segunda línea «Serie N · Editar» dentro de la
+                  tarjeta sería una tercera affordance para la misma acción en la misma card, así que
+                  la línea de superserie vive donde SÍ hace falta: el interstitial de descanso, sin
+                  «Repetir» (R8/R13). Decisión documentada, no omisión. */}
               <Pressable
                 onPress={isDoneInRound ? () => setEditBlockId(m.block.id) : undefined}
                 disabled={!isDoneInRound}

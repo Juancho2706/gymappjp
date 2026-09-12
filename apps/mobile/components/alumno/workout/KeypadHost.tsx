@@ -17,6 +17,7 @@ import {
   type KeypadTarget,
   // Mapeo PURO valores->payload, compartido con la `ActiveSetRow` (sin drift entre superficies).
   buildStrengthPayload,
+  buildStrengthTimePayload,
   buildTypedPayload,
   type TypedPayloadContext,
 } from '@eva/workout-engine'
@@ -159,7 +160,12 @@ export function KeypadHost({
   // "Toca para registrar" de la fila V2), así que sin la guarda seguía siendo una vía para escribir una fila
   // con todos los ejes en NULL — que cuenta como serie hecha. "Siguiente" nunca se bloquea: navegar entre
   // campos es justo lo que lleva a llenar el eje que falta.
-  const isEmptyCapture = fields.every((f) => (values[f.key] ?? '').trim() === '')
+  // Fuerza POR TIEMPO (R6, «Reps tras el reloj»): el peso NO cuenta como captura — MISMA regla que la
+  // fila (`SetRow.tsx:952-962`). El peso sugerido ya viene puesto en el target, así que contarlo
+  // dejaría «Guardar» habilitado sobre una serie sin segundos ni reps: trabajo que nadie hizo.
+  const isEmptyCapture = (target.strengthTimeMode ? fields.filter((f) => f.key !== 'weight') : fields).every(
+    (f) => (values[f.key] ?? '').trim() === '',
+  )
   const emptyHint = EMPTY_CAPTURE_HINT[target.typed?.mode ?? 'strength']
   const doneBlocked = !primaryIsNext && isEmptyCapture
 
@@ -233,9 +239,19 @@ export function KeypadHost({
     const v = valuesRef.current
     const payload = target.typed
       ? buildTypedPayload(target.typed.mode, v, target.blockId, target.setNumber, typedContext)
-      // Fuerza POR LADO (W3.10): el teclado de EDICIÓN admite lados sólo en esta rama (`target.sideMode`
-      // lo pone `openSet` únicamente en strength); el motor escribe `reps_done = min` + `metadata`.
-      : buildStrengthPayload(v, target.blockId, target.setNumber, target.sideMode ?? null)
+      : target.strengthTimeMode
+        // Fuerza POR TIEMPO (R6, «Reps tras el reloj»): tercera rama. El contexto viaja como OBJETO
+        // porque el UPDATE reemplaza el jsonb ENTERO — el `holdSource` del target (R5: leído del seed
+        // o del log) tiene que ir junto a `{left_sec, right_sec}` o el re-guardado degrada
+        // `metadata.hold_source` a `'manual'` y rompe el E2E W6.10. Sin marca que conservar cae a
+        // `'manual'`, que es la verdad: esa serie la está escribiendo una persona.
+        ? buildStrengthTimePayload(v, target.blockId, target.setNumber, {
+            sideMode: target.sideMode ?? null,
+            holdSource: target.holdSource ?? 'manual',
+          })
+        // Fuerza POR LADO (W3.10): el teclado de EDICIÓN admite lados sólo en esta rama (`target.sideMode`
+        // lo pone `openSet` únicamente en strength); el motor escribe `reps_done = min` + `metadata`.
+        : buildStrengthPayload(v, target.blockId, target.setNumber, target.sideMode ?? null)
     onCommit(payload)
   }
 
@@ -277,6 +293,32 @@ export function KeypadHost({
   // la perdería (la fila queda oculta tras el modal). Se conserva a propósito.
   const doneLabel = target.isEdit ? 'Guardar' : 'Listo'
   const noteTrimmed = (values.note ?? '').trim()
+
+  // ── Prompt de huecos del hold (R9 · copy de SPEC §6) ─────────────────────────
+  // El teclado lo abrió el RELOJ porque la serie se guardó sola sin reps (o sin peso), no el alumno
+  // con «Editar». Cambia el encabezado y las acciones: una pregunta concreta, un secundario que
+  // CIERRA sin guardar (la serie ya está guardada, V2 intacto) y un primario que guarda de una — sin
+  // «Siguiente» ni paso de nota, que acá serían dos toques de peaje para escribir un número.
+  const gapPrompt = target.prompt === 'hold-gap'
+  // El campo con el que ABRIÓ (`initialFieldIndex`, congelado por `openSet`), no el activo: mirar los
+  // segundos en otra pestaña no puede reescribir la pregunta que se le hizo al alumno.
+  const gapAsksWeight = gapPrompt && (fields[target.initialFieldIndex ?? 0]?.key ?? 'reps') === 'weight'
+  // «guardada con X s»: los segundos que el reloj YA dejó en la fila — se leen de `initialValues`
+  // (lo guardado) y no de `values` (lo que el alumno esté tipeando ahora). En `per_side` es la suma,
+  // el MISMO total que `buildStrengthTimePayload` escribe en `actual_hold_sec`.
+  const gapHoldSec = (() => {
+    if (!gapPrompt) return null
+    const iv = target.initialValues ?? {}
+    const int = (v: string | undefined) => {
+      const n = parseInt((v ?? '').trim(), 10)
+      return Number.isFinite(n) ? n : null
+    }
+    const single = int(iv.actual_hold_sec)
+    if (single != null) return single
+    const left = int(iv.hold_left_sec)
+    const right = int(iv.hold_right_sec)
+    return left != null || right != null ? (left ?? 0) + (right ?? 0) : null
+  })()
 
   // Sombra SIEMPRE dark: el panel es `bg-ink-950` fijo (no depende del esquema de la cuenta); con la
   // cuenta en claro salía la elevación clara y el panel quedaba "flotando" sin profundidad.
@@ -338,6 +380,20 @@ export function KeypadHost({
               objectiveLine={objectiveLine}
               last={lastPrev}
             />
+
+            {/* Prompt de huecos (R9 · SPEC §6): eyebrow con lo que el reloj YA guardó + la pregunta
+                concreta. Va DEBAJO del header de objetivo (que sigue diciendo «4×30s · 60 kg», R6) y
+                no lo reemplaza: el alumno tiene que poder ver contra qué objetivo está anotando. */}
+            {gapPrompt ? (
+              <View className="mt-2 px-1">
+                <Text style={KEYPAD_EYEBROW_STYLE} className="text-on-dark-muted" numberOfLines={1}>
+                  {`Serie ${target.setNumber}${gapHoldSec != null ? ` · guardada con ${gapHoldSec} s` : ''}`}
+                </Text>
+                <Text style={textStyle('lg', FONT.displayBold)} className="text-on-dark" numberOfLines={2}>
+                  {gapAsksWeight ? '¿Con cuánto peso?' : '¿Cuántas reps hiciste?'}
+                </Text>
+              </View>
+            ) : null}
 
             {phase === 'note' ? (
               /* ── Paso OPCIONAL de NOTA — sólo fuerza, siempre saltable (DB-5). El esfuerzo (RPE/RIR)
@@ -483,6 +539,50 @@ export function KeypadHost({
                   onClear={onClear}
                 />
 
+                {/* Prompt de huecos (R9): DOS acciones en vez de la única de siempre. El secundario
+                    CIERRA sin guardar —equivale al scrim y a la X— y la serie sigue guardada tal cual
+                    la dejó el reloj (V2 intacto); el primario guarda de una, sin «Siguiente» ni paso
+                    de nota, porque acá el alumno vino a escribir UN número. */}
+                {gapPrompt ? (
+                  <View className="mt-2">
+                    {isEmptyCapture ? (
+                      <Text style={textStyle('3xs', FONT.uiMedium)} className="mb-1.5 text-center text-on-dark-muted">
+                        {emptyHint}
+                      </Text>
+                    ) : null}
+                    <View className="flex-row gap-2">
+                      <Pressable
+                        testID="keypad-gap-dismiss"
+                        onPress={onClose}
+                        accessibilityRole="button"
+                        accessibilityLabel={gapAsksWeight ? 'Dejar la serie sin peso' : 'Dejar la serie sin reps'}
+                        className="h-14 flex-1 items-center justify-center rounded-control border border-inverse/10 bg-white/[0.06] active:scale-[0.98] active:bg-white/[0.10]"
+                      >
+                        <Text style={KEYPAD_ACTION_STYLE} className="text-on-dark">
+                          {gapAsksWeight ? 'Sin peso' : 'Sin reps'}
+                        </Text>
+                      </Pressable>
+                      <Pressable
+                        testID="keypad-gap-save"
+                        onPress={commit}
+                        disabled={isEmptyCapture}
+                        accessibilityRole="button"
+                        accessibilityState={{ disabled: isEmptyCapture }}
+                        accessibilityLabel={isEmptyCapture ? `Guardar. ${emptyHint}` : 'Guardar, guardar serie'}
+                        className={`h-14 flex-row items-center justify-center gap-2 rounded-control ${
+                          isEmptyCapture ? 'opacity-50' : 'active:scale-[0.98]'
+                        } ${accent ? '' : 'bg-sport-500'}`}
+                        style={[{ flex: 1.4 }, accent ? { backgroundColor: accent } : null]}
+                      >
+                        <Check size={20} color={accent ? accentText ?? WHITE : WHITE} />
+                        <Text style={[KEYPAD_ACTION_STYLE, accent ? { color: accentText ?? WHITE } : null]} className={accent ? undefined : 'text-white'}>
+                          Guardar
+                        </Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ) : (
+                <>
                 {/* Acción — un ÚNICO botón: "Siguiente" avanza; "Listo" guarda (mirror web §5.4). Sólo el que
                     GUARDA se bloquea con la serie vacía; "Siguiente" sigue navegando entre campos. */}
                 <View className="mt-2">
@@ -526,6 +626,8 @@ export function KeypadHost({
                     )}
                   </Pressable>
                 </View>
+                </>
+                )}
               </>
             )}
           </View>

@@ -2,13 +2,15 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { MotiView } from 'moti'
 import { LinearTransition } from 'react-native-reanimated'
-import { ArrowUp, Hand, Keyboard, Pencil, TrendingUp, X } from 'lucide-react-native'
+import { ArrowUp, Hand, Keyboard, Pencil, RotateCcw, TrendingUp, X } from 'lucide-react-native'
 import {
   compactDuration,
   isStrengthTimeBlock,
+  formatStrengthTimeSetLine,
   formatWeightEsCl,
   resolveEffectiveRest,
   sessionLogKey,
+  type HoldSource,
   type OptimisticLogPayload,
   type ReconciledSessionLog,
   type RepeatSeedEntry,
@@ -17,6 +19,7 @@ import {
 import { FONT } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
 import { haptics } from '../../../../lib/haptics'
+import { captureAppEvent } from '../../../../lib/analytics'
 import { EXERCISE_TYPE_META, exerciseTypeColor } from '../../../../lib/exercise-type-meta'
 import type { EffectiveTarget } from '../../../../lib/workout/progression'
 import type { PrevSet, SessionBlock, SessionDraft, SessionExercise, SessionHold } from '../../../../lib/workout-session'
@@ -27,6 +30,8 @@ import { DualWheelPicker } from './DualWheelPicker'
 import { dismissWheelHint, useWheelHintDismissed } from './wheel-hint'
 import { ExecMediaV3 } from './ExecMediaV3'
 import { HoldModuleV3 } from './HoldModuleV3'
+import { holdCapturePromptFor, type OpenSetOpts } from './hold-capture-prompt'
+import type { HoldCommitInfo } from './use-hold-module'
 import { RestOfferV3 } from './RestOfferV3'
 import { parseRestTime, useWorkoutTimers } from '../timers'
 import { EXEC_SKIP_AMBER, ExerciseActionChips } from './exercise-actions'
@@ -103,6 +108,7 @@ export function ExerciseScreenV3({
   recentSet,
   syncErrors,
   onRetrySet,
+  repeatRequest = null,
 }: {
   block: SessionBlock
   exercise: SessionExercise
@@ -146,8 +152,16 @@ export function ExerciseScreenV3({
   canSkip?: boolean
   onOpenSkip?: () => void
   onOpenTechnique: () => void
-  onOpenSet: (setNumber: number) => void
-  onCommitSet: (payload: OptimisticLogPayload) => void
+  /**
+   * Abre el teclado de una serie. El `opts` (R4, «Reps tras el reloj») va AL FINAL y es opcional: lo
+   * usa el prompt de huecos (semilla + foco + copy) y el «Editar» de la línea «Serie N».
+   */
+  onOpenSet: (setNumber: number, opts?: OpenSetOpts) => void
+  /**
+   * `opts.repeat` (R8): este commit REEMPLAZA una serie ya guardada porque el alumno tocó «Repetir».
+   * El orquestador tiene que tratarlo como serie NUEVA (descanso + celebración) pese a `wasLogged`.
+   */
+  onCommitSet: (payload: OptimisticLogPayload, opts?: { repeat?: boolean }) => void
   onRpeUpdate?: (payload: OptimisticLogPayload) => void
   onDraftChange: (blockId: string, setNumber: number, values: Record<string, string>, fieldIndex: number) => void
   onOpenSubstitute: () => void
@@ -155,6 +169,13 @@ export function ExerciseScreenV3({
   recentSet?: { blockId: string; setNumber: number; pr: boolean } | null
   syncErrors?: Record<string, string>
   onRetrySet?: (blockId: string, setNumber: number) => void
+  /**
+   * «Repetir» pedido desde FUERA de esta pantalla (R7/R8): la línea «Serie N» que vive dentro del
+   * interstitial de descanso la pinta `ExecutorV3`, que no puede tocar el estado local de acá. Llega
+   * como pedido con `nonce` y se aplica una sola vez por nonce; el estado de repetición sigue siendo
+   * de esta pantalla (es la dueña de la serie activa y del `resetKey` del reloj).
+   */
+  repeatRequest?: { setNumber: number; nonce: number } | null
 }) {
   const s = exec.surface
   const [autofill, setAutofill] = useState<{ weight: number | null; reps: number | null; nonce: number } | null>(null)
@@ -174,10 +195,18 @@ export function ExerciseScreenV3({
   for (let i = 1; i <= block.sets; i += 1) {
     if (!loggedSetNumbers.has(i)) { firstUnlogged = i; break }
   }
+  /**
+   * «Repetir» (R8): el alumno quiere REHACER una serie ya guardada, así que la serie N vuelve a ser la
+   * activa aunque esté logueada. Lleva su propia semilla —tomada del log EN EL MOMENTO del toque, no
+   * derivada de `blockLogs` en cada render— para que el hero abra con el KG/REPS de esa serie
+   * (riesgo 7 del PLAN) sin que un cambio posterior de `blockLogs` reescriba la captura a medio tipear.
+   * El `nonce` es lo que hace que el reloj vuelva a `idle` (`resetKey`) al repetir la MISMA serie.
+   */
+  const [repeat, setRepeat] = useState<{ setNumber: number; nonce: number; values: Record<string, string> | null } | null>(null)
   // Bloque OMITIDO ⇒ no hay serie activa: se retiran hero de captura, fila "Anterior", hint de la
   // rueda y el botón de teclado. El historial de series YA registradas antes de omitir se conserva
   // (siguen siendo entrenamiento real).
-  const activeSet = skipped ? null : firstUnlogged
+  const activeSet = skipped ? null : repeat?.setNumber ?? firstUnlogged
 
   const suggestedWeightKg = eff?.weightKg ?? block.target_weight_kg
   const overloadLabel = overloadChipLabel(block, eff, currentWeek)
@@ -225,16 +254,65 @@ export function ExerciseScreenV3({
   const holdSec = strengthTime ? (block.duration_sec ?? 0) : 0
   const timers = useWorkoutTimers()
   const [seedPatch, setSeedPatch] = useState<{ values: Record<string, string>; nonce: number } | null>(null)
-  const [restOffer, setRestOffer] = useState<{ setNumber: number; seconds: number; warmup: boolean } | null>(null)
+  // `line` (R7): resumen de la serie recién cerrada por el reloj — vive DENTRO del par «Descansar /
+  // Siguiente» a propósito, así aparece y desaparece exactamente con él y no hay un segundo ciclo de
+  // vida que limpiar. Con la preferencia ON esta línea no existe acá: la pinta el interstitial.
+  const [restOffer, setRestOffer] = useState<{ setNumber: number; seconds: number; warmup: boolean; line: string | null } | null>(null)
+  /** Traducción log → valores tipeables de fuerza, la MISMA del día repetido (sin drift). */
+  const repeatValuesFromLog = (log: ReconciledSessionLog | undefined): Record<string, string> | null =>
+    strengthSeedValues(
+      log
+        ? {
+            weightKg: log.weight_kg ?? null,
+            repsDone: log.reps_done ?? null,
+            rpe: log.rpe ?? null,
+            rir: log.rir ?? null,
+            // Los ejes tipados no entran al hero de fuerza; los segundos los vuelve a poner el reloj.
+            actualDurationSec: null,
+            actualDistanceM: null,
+            actualHoldSec: null,
+            actualAvgHr: null,
+            metadata: null,
+          }
+        : null,
+    )
   // Lo tipeado AHORA en el hero (base de la mezcla del auto-envío): arranca con el peso sugerido, que
-  // es lo que la fila muestra antes de que el alumno toque nada.
+  // es lo que la fila muestra antes de que el alumno toque nada. Al REPETIR (R8) arranca con lo que la
+  // serie ya tenía guardado: si no, el auto-envío del reloj borraría las reps que el alumno ya anotó.
   const captureRef = useRef<Record<string, string>>({})
   useEffect(() => {
-    captureRef.current = suggestedWeightKg != null ? { weight: formatWeightEsCl(suggestedWeightKg) } : {}
+    captureRef.current = repeat?.values ?? (suggestedWeightKg != null ? { weight: formatWeightEsCl(suggestedWeightKg) } : {})
     setSeedPatch(null)
-  }, [activeSet, suggestedWeightKg])
-  const commitSet = (payload: OptimisticLogPayload) => {
-    onCommitSet(payload)
+  }, [activeSet, suggestedWeightKg, repeat])
+
+  /**
+   * «Repetir» (R8): el reloj de la serie N vuelve a 0:30 con «Iniciar serie». Corta el descanso en
+   * curso (el alumno va a entrenar AHORA) y retira el par «Descansar / Siguiente», que ya no aplica.
+   * El nuevo commit REEMPLAZA la fila (upsert por bloque+serie+día, SPEC §8): no hay serie extra.
+   */
+  const startRepeat = (setNumber: number) => {
+    haptics.tap()
+    timers.cancelRest()
+    setRestOffer(null)
+    setRepeat({ setNumber, nonce: Date.now(), values: repeatValuesFromLog(blockLogs.find((l) => l.set_number === setNumber)) })
+    captureAppEvent('hold_set_repeated', { block_id: block.id, set_number: setNumber })
+  }
+  // Pedido de «Repetir» que llega desde el interstitial de descanso (R7): se aplica UNA vez por nonce.
+  const repeatRequestNonce = repeatRequest?.nonce ?? null
+  const appliedRepeatNonce = useRef<number | null>(null)
+  useEffect(() => {
+    if (repeatRequest == null || appliedRepeatNonce.current === repeatRequest.nonce) return
+    appliedRepeatNonce.current = repeatRequest.nonce
+    startRepeat(repeatRequest.setNumber)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repeatRequestNonce])
+
+  const commitSet = (payload: OptimisticLogPayload, hold?: { source: HoldSource; info: HoldCommitInfo }) => {
+    // R8: el re-commit de una serie repetida viaja MARCADO para que el orquestador lo trate como serie
+    // nueva (descanso + celebración) aunque la fila ya exista en `sessionLogs`.
+    const isRepeat = repeat != null && repeat.setNumber === payload.setNumber
+    onCommitSet(payload, isRepeat ? { repeat: true } : undefined)
+    if (isRepeat) setRepeat(null)
     // Segundos EFECTIVOS por SERIE (reporte 11-09): MISMA regla que el orquestador — warmup válido en
     // la serie 1 de un bloque de ≥3 → `rest_time` → fallback de 60 s. Antes era una constante por
     // bloque (`parseRestTime(block.rest_time)`), así que un `rest_time` vacío dejaba el CTA en «0 s» y
@@ -245,7 +323,41 @@ export function ExerciseScreenV3({
         warmupRestSec: parseRestTime(block.warmup_rest_time),
         useWarmup: payload.setNumber === 1 && block.sets >= 3,
       })
-      setRestOffer({ setNumber: payload.setNumber, seconds: eff.seconds, warmup: eff.warmup })
+      // R7: el texto sale de `formatStrengthTimeSetLine` TAL CUAL (sin guion inventado) y se arma con
+      // el PAYLOAD, no con `blockLogs` — el optimista todavía no propagó a este render.
+      const line = strengthTime
+        ? formatStrengthTimeSetLine({
+            weight_kg: payload.weightKg ?? null,
+            reps_done: payload.repsDone ?? null,
+            actual_hold_sec: payload.actualHoldSec ?? null,
+            metadata: payload.metadata ?? null,
+          })
+        : null
+      setRestOffer({ setNumber: payload.setNumber, seconds: eff.seconds, warmup: eff.warmup, line })
+    }
+    // R3/R4: la pantalla DECIDE y abre, siempre DESPUÉS de `onCommitSet` — `handleCommit` limpia el
+    // teclado con un `setKeypadTarget(null)` síncrono en su primera línea (riesgo 2 del PLAN), así que
+    // abrir antes se borraría solo. La regla vive en el helper puro `holdCapturePromptFor`.
+    if (hold) {
+      const gap = holdCapturePromptFor({
+        kind: 'strength_time',
+        captureGaps: hold.info.captureGaps,
+        expiredWhileAway: hold.info.expiredWhileAway,
+      })
+      if (gap) {
+        captureAppEvent('hold_capture_prompted', {
+          block_id: block.id,
+          exercise_type: 'strength',
+          context: 'solo',
+          // SPEC §7 pide `missing: string[]`, pero `AppEventProps` de RN sólo admite escalares
+          // (`analytics.ts:87`, y ese archivo no es de este worker): viaja como lista separada por
+          // comas — «reps», «weight» o «reps,weight» —, que en PostHog se filtra igual de bien.
+          missing: hold.info.captureGaps.join(','),
+          trigger: hold.source === 'timer' ? 'timer' : 'manual',
+          platform: 'mobile',
+        })
+        onOpenSet(payload.setNumber, { seed: payload, focus: gap.focus, prompt: 'hold-gap' })
+      }
     }
   }
   const startOfferedRest = () => {
@@ -290,12 +402,15 @@ export function ExerciseScreenV3({
   // guardado/draft/cola/keypad es intocable; sólo cambia la piel a los tiles + esfuerzo + CTA del mockup.
   const activeHero = activeSet != null ? (() => {
     const setNumber = activeSet
-    // Precedencia de la captura: draft restaurado (lo último tipeado, resiliencia E2-03) > semilla del
-    // día repetido > peso sugerido por progresión (lo resuelve la propia fila con `suggestedWeight`).
+    // Precedencia de la captura: serie REPETIDA (R8: lo que esa serie ya tenía guardado) > draft
+    // restaurado (lo último tipeado, resiliencia E2-03) > semilla del día repetido > peso sugerido por
+    // progresión (lo resuelve la propia fila con `suggestedWeight`).
     const seed =
-      restoredDraft && restoredDraft.blockId === block.id && restoredDraft.setNumber === setNumber
-        ? restoredDraft.values
-        : strengthSeedValues(repeatSeed?.get(sessionLogKey(block.id, setNumber)))
+      repeat != null && repeat.setNumber === setNumber
+        ? repeat.values
+        : restoredDraft && restoredDraft.blockId === block.id && restoredDraft.setNumber === setNumber
+          ? restoredDraft.values
+          : strengthSeedValues(repeatSeed?.get(sessionLogKey(block.id, setNumber)))
     return (
       <ActiveSetRow
         key={`hero-${setNumber}`}
@@ -430,14 +545,18 @@ export function ExerciseScreenV3({
           sideMode={block.side_mode ?? null}
           context="solo"
           closesRound={false}
-          resetKey={`${block.id}:${activeSet}:1`}
+          // El NONCE de «Repetir» (R8) es lo que devuelve el módulo a `idle` cuando la serie activa no
+          // cambia de número: sin él, repetir la serie N dejaría el anillo en «¡Listo!».
+          resetKey={`${block.id}:${activeSet}:${repeat != null && repeat.setNumber === activeSet ? `repeat:${repeat.nonce}` : 1}`}
           exec={exec}
           accent={exec.accent}
           accentText={exec.accentText}
           reducedMotion={reducedMotion}
           getCaptureValues={() => captureRef.current}
           onSeed={(values, nonce) => setSeedPatch({ values, nonce })}
-          onCommit={(payload) => commitSet(payload)}
+          // R2/R4: el `info` del hook YA NO se descarta — trae los `captureGaps` con los que la
+          // pantalla decide si abre el teclado, y el `source` distingue reloj de «Listo» para R12.
+          onCommit={(payload, source, info) => commitSet(payload, { source, info })}
           saveHold={saveHold}
           restoredHold={restoredHold}
           testIDPrefix="hold-strength"
@@ -552,6 +671,60 @@ export function ExerciseScreenV3({
 
       {/* HERO de la serie activa (tiles + esfuerzo + CTA "Aplastar serie"). Una serie a la vez (mockup). */}
       {activeHero}
+
+      {/* R7 · línea «Serie N · 60 kg × 8 · 30 s · Editar · Repetir» con la preferencia APAGADA. Con la
+          preferencia ON la misma línea vive dentro del interstitial de descanso (`RestInterstitialV3`),
+          que es lo que el alumno tiene delante. El texto lo arma `formatStrengthTimeSetLine` tal cual:
+          sin reps la línea es «60 kg × 30 s», sin guion inventado (decisión W0.4). */}
+      {restOffer?.line && !autoRestEnabled ? (
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 10,
+            borderRadius: 16,
+            borderWidth: 1.5,
+            borderColor: hexToRgba(exec.accent, 0.34),
+            backgroundColor: hexToRgba(exec.accent, 0.08),
+            paddingHorizontal: 12,
+            paddingVertical: 10,
+          }}
+        >
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ fontFamily: FONT.uiExtra, fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: exec.accent }}>
+              Serie {restOffer.setNumber}
+            </Text>
+            <Text
+              style={{ fontFamily: FONT.monoSemibold, fontSize: 13, color: s.text, marginTop: 2, fontVariant: ['tabular-nums'] }}
+              numberOfLines={1}
+            >
+              {restOffer.line}
+            </Text>
+          </View>
+          <Pressable
+            testID="hold-last-set-edit"
+            onPress={() => onOpenSet(restOffer.setNumber, { focus: 'reps' })}
+            hitSlop={8}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+            accessibilityRole="button"
+            accessibilityLabel={`Editar la serie ${restOffer.setNumber}`}
+          >
+            <Pencil size={13} color={exec.accent} />
+            <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: exec.accent }}>Editar</Text>
+          </Pressable>
+          <Pressable
+            testID="hold-last-set-repeat"
+            onPress={() => startRepeat(restOffer.setNumber)}
+            hitSlop={8}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+            accessibilityRole="button"
+            accessibilityLabel={`Repetir la serie ${restOffer.setNumber} desde el reloj`}
+          >
+            <RotateCcw size={13} color={exec.accent} />
+            <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: exec.accent }}>Repetir</Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       {/* R24: con la preferencia «Pasar solo al descanso» APAGADA, tras cerrar cualquier serie (tocada o
           por reloj) el alumno elige «Descansar N s» o «Siguiente serie». Con la preferencia ON el

@@ -15,7 +15,7 @@ import Animated, {
 } from 'react-native-reanimated'
 import { Gesture, GestureDetector } from 'react-native-gesture-handler'
 import { Image } from 'expo-image'
-import { Check, CheckCheck, ChevronDown, Dumbbell, Medal, MessageSquareText, SkipForward } from 'lucide-react-native'
+import { Check, CheckCheck, ChevronDown, Dumbbell, Medal, MessageSquareText, Pencil, RotateCcw, SkipForward } from 'lucide-react-native'
 import { FONT } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
 import { haptics } from '../../../../lib/haptics'
@@ -94,6 +94,19 @@ export interface RestInterstitialData {
   celebratePr?: boolean
   /** Contexto de ronda cerrada (E3.5): reemplaza la micro-celebracion por el banner de ronda. */
   roundContext?: RestRoundContext | null
+  /**
+   * Serie de FUERZA POR TIEMPO recién cerrada («Reps tras el reloj», R7): «Serie 2 · 60 kg × 8 · 30 s»
+   * con «Editar» y «Repetir». Con la preferencia D5 encendida el descanso TAPA la fila, así que esta
+   * es la única superficie desde la que el alumno puede corregir lo que el reloj guardó solo.
+   *
+   * `setNumber` va aparte de `line` a propósito: el eyebrow dice «SERIE 2» y `line` es sólo la marca
+   * (`formatStrengthTimeSetLine` del motor, sin guion inventado) — juntarlos en un solo string
+   * repetiría «Serie 2» dos veces en la tarjeta.
+   *
+   * `onRepeat` es OPCIONAL porque «Repetir» no existe en superserie (R8/R13: la unidad de repetición
+   * ahí es la ronda, no la serie). Los callbacks los provee el orquestador desde refs estables.
+   */
+  lastSet?: { setNumber: number; line: string; onEdit: () => void; onRepeat?: () => void } | null
   exec: ExecTheme
   reducedMotion: boolean
 }
@@ -405,6 +418,63 @@ export function RestInterstitialV3({
             <RestButton testID="rest-interstitial-skip" label="Saltar" onPress={handleSkip} exec={exec} primary icon={<SkipForward size={16} color={exec.accentText} strokeWidth={2.6} />} accessibilityLabel="Saltar el descanso" />
             <RestButton testID="rest-interstitial-add-15" label="+15s" onPress={() => engine.adjust(15)} exec={exec} accessibilityLabel="Sumar 15 segundos" />
           </View>
+
+          {/* R7 · «Serie N · 60 kg × 8 · 30 s» con «Editar» y «Repetir». Va DEBAJO de los controles del
+              anillo y ANTES de la tarjeta «Siguiente»: es lo que el alumno acaba de hacer, no lo que
+              viene. Sin esta línea, con la preferencia D5 encendida el descanso tapa la fila y la
+              serie que el reloj guardó sin reps queda inalcanzable hasta el final del ejercicio. */}
+          {data.lastSet && (
+            <View
+              style={{
+                width: '100%',
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 10,
+                backgroundColor: hexToRgba(exec.accent, 0.08),
+                borderWidth: 1.5,
+                borderColor: hexToRgba(exec.accent, 0.34),
+                borderRadius: 16,
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+              }}
+            >
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontFamily: FONT.uiExtra, fontSize: 10, letterSpacing: 1, textTransform: 'uppercase', color: exec.accent }}>
+                  Serie {data.lastSet.setNumber}
+                </Text>
+                <Text
+                  style={{ fontFamily: FONT.monoSemibold, fontSize: 13, color: s.text, marginTop: 2, fontVariant: ['tabular-nums'] }}
+                  numberOfLines={1}
+                >
+                  {data.lastSet.line}
+                </Text>
+              </View>
+              <Pressable
+                testID="rest-interstitial-last-set-edit"
+                onPress={data.lastSet.onEdit}
+                hitSlop={8}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                accessibilityRole="button"
+                accessibilityLabel={`Editar la serie ${data.lastSet.setNumber}`}
+              >
+                <Pencil size={13} color={exec.accent} />
+                <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: exec.accent }}>Editar</Text>
+              </Pressable>
+              {data.lastSet.onRepeat && (
+                <Pressable
+                  testID="rest-interstitial-last-set-repeat"
+                  onPress={data.lastSet.onRepeat}
+                  hitSlop={8}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Repetir la serie ${data.lastSet.setNumber} desde el reloj`}
+                >
+                  <RotateCcw size={13} color={exec.accent} />
+                  <Text style={{ fontFamily: FONT.uiBold, fontSize: 12, color: exec.accent }}>Repetir</Text>
+                </Pressable>
+              )}
+            </View>
+          )}
 
           {/* Tarjeta SIGUIENTE + mini-media estatica. */}
           {next && (

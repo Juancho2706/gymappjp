@@ -124,6 +124,59 @@ describe('keypad-flow · keypadStepsForTarget: pasos que ve el alumno', () => {
   })
 })
 
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+// «Reps tras el reloj» (R5/R6) — el target de FUERZA POR TIEMPO que arma `openSet` en RN
+// ═══════════════════════════════════════════════════════════════════════════════════════════════
+//
+// Lo que se protege es el `initialFieldIndex`: `openSet` lo calcula como el ÍNDICE del campo de foco
+// DENTRO de `keypadStepsForTarget(target)`, no con una constante. En `per_side` el flujo tiene cuatro
+// pasos, así que cualquier número hardcodeado abriría el teclado en la caja equivocada.
+
+/** Igual que `openSet`: el índice del campo de foco sobre los pasos REALES del target. */
+const focusIndex = (t: KeypadTarget, focus: 'reps' | 'weight') =>
+  keypadStepsForTarget(t).findIndex((s) => s.key === focus)
+
+describe('keypad-flow · fuerza POR TIEMPO: pasos y foco del prompt de huecos (R5/R6)', () => {
+  const timeTarget = (over: Partial<KeypadTarget> = {}): KeypadTarget => ({
+    blockId: 'b1',
+    setNumber: 2,
+    exerciseName: 'Plancha frontal',
+    targetReps: '30s',
+    targetSets: 4,
+    suggestedWeight: 60,
+    effortKind: 'rir',
+    isEdit: true,
+    strengthTimeMode: true,
+    ...over,
+  })
+
+  it('bilateral: peso → reps → segundos, con el foco de REPS en el índice 1 y el de PESO en el 0', () => {
+    const t = timeTarget()
+    expect(stepKeys(t)).toEqual(['weight', 'reps', 'actual_hold_sec'])
+    expect(focusIndex(t, 'reps')).toBe(1)
+    expect(focusIndex(t, 'weight')).toBe(0)
+  })
+
+  it('`per_side`: peso → reps → hold izq → hold der; el foco de REPS sigue siendo el índice 1', () => {
+    const t = timeTarget({ sideMode: 'per_side' })
+    expect(stepKeys(t)).toEqual(['weight', 'reps', 'hold_left_sec', 'hold_right_sec'])
+    expect(focusIndex(t, 'reps')).toBe(1)
+  })
+
+  it('`alternating` NO es por lado para el eje TIEMPO (H7): una sola caja de segundos', () => {
+    expect(stepKeys(timeTarget({ sideMode: 'alternating' }))).toEqual(['weight', 'reps', 'actual_hold_sec'])
+  })
+
+  it('los campos nuevos del target (`holdSource`, `prompt`) NO alteran los pasos (no-regresión W1.2)', () => {
+    const plain = timeTarget()
+    const withNewFields = timeTarget({ holdSource: 'timer', prompt: 'hold-gap' })
+    expect(keypadStepsForTarget(withNewFields)).toEqual(keypadStepsForTarget(plain))
+    // Y tampoco en el flujo de fuerza CLÁSICA: el camino sin `strengthTimeMode` queda byte-idéntico.
+    const classic = { ...plain, strengthTimeMode: undefined }
+    expect(keypadStepsForTarget({ ...classic, holdSource: 'timer' })).toEqual(STRENGTH_KEYPAD_STEPS)
+  })
+})
+
 describe('keypad-flow · end-to-end bloque -> pasos (TODOS los tipos rutean bien)', () => {
   const cases: Array<{ name: string; block: BlockForKeypad; exercise: ExerciseForKeypad; keys: string[] }> = [
     { name: 'strength', block: {}, exercise: { exercise_type: 'strength' }, keys: ['weight', 'reps'] },

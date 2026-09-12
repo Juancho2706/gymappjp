@@ -26,7 +26,8 @@
  *  · Ítem 12: el reloj ARMADO (quién y su fin absoluto) viaja al snapshot de la sesión por `saveHold`
  *    y vuelve por `restoredHold`, para que matar la app desde el multitarea no borre la evidencia.
  *    Al rehidratar se ARMA (`prime`), nunca se arranca — el vencimiento lo decide `expiredWhileAwayFrom`.
- *  · Un envío por serie: `sentSetsRef` por `block:set:side`, calco de `CardioScreenV3.tsx:364`.
+ *  · Un envío por serie: `sentSetsRef` por `block:set:side`, calco de `CardioScreenV3.tsx:364`. El
+ *    candado se limpia con `resetKey` (R8: «Repetir» reusa la MISMA clave) y NO con «Re-medir».
  *  · La siembra de la fila va por `onSeed(values, nonce)` → `typedSeedPatch` (`SetRow.tsx:894-901`),
  *    **nunca** por `seedValues`: eso remonta la fila y cierra el keypad abierto a mitad de escritura
  *    (comentario explícito en `CardioScreenV3.tsx:610`).
@@ -42,6 +43,7 @@ import { AppState } from 'react-native'
 import {
   buildStrengthTimePayload,
   buildTypedPayload,
+  captureGapsFor,
   createHoldElapsed,
   decideHoldAutolog,
   expiredWhileAwayFrom,
@@ -51,6 +53,7 @@ import {
   readHoldElapsed,
   startHoldElapsed,
   type HoldAdvance,
+  type HoldCaptureGap,
   type HoldContext,
   type HoldElapsedState,
   type HoldEndReason,
@@ -60,6 +63,8 @@ import {
 } from '@eva/workout-engine'
 import { captureAppEvent } from '../../../../lib/analytics'
 import { timerHaptics } from '../../../../lib/haptics'
+// Timbre de 0 (R1, «Reps tras el reloj»): el MISMO cue del descanso, no una alarma nueva.
+import { playTimerCue } from '../timers/sound'
 // Sólo el TIPO del reloj persistido (import type ⇒ se borra en compilación): este hook no puede
 // arrastrar `workout-session` —AsyncStorage, supabase— y aun así la forma del snapshot es una sola.
 import type { SessionHold } from '../../../../lib/workout-session'
@@ -95,6 +100,13 @@ export interface HoldCommitInfo {
   closesRound: boolean
   expiredWhileAway: boolean
   advance: HoldAdvance
+  /**
+   * Qué quedó SIN anotar en la fila que se acaba de guardar sola (R2, «Reps tras el reloj»). Lo
+   * calcula el motor (`captureGapsFor`) sobre los MISMOS valores mezclados que fueron al payload:
+   * en movilidad siempre `[]` (el hold ES el dato); en fuerza por tiempo puede faltar `reps` y/o
+   * `weight`. La PANTALLA decide con esto si abre el teclado (R3/R4); el hook no abre nada.
+   */
+  captureGaps: HoldCaptureGap[]
 }
 
 export interface UseHoldModuleArgs {
@@ -252,9 +264,19 @@ export function useHoldModule(args: UseHoldModuleArgs): UseHoldModuleApi {
       // persistido ya no aplica. Si toca lado siguiente ARMADO y corriendo, más abajo se reescribe.
       writeHold(null)
 
-      // Háptica de 0 en FOREGROUND (W3.8/R31): «vibra y avisa», nunca «suena». Con la app fuera el
-      // canal es la notificación local, no la vibración (el JS puede estar congelado).
-      if (reason === 'expired' && !away && AppState.currentState === 'active') timerHaptics.holdDone()
+      // Señal de 0 en FOREGROUND: vibra Y SUENA. La invariante W3.8/R31 («vibra y avisa, nunca
+      // suena») queda DEROGADA para el hold por R1 de «Reps tras el reloj» — la web ya suena a 0
+      // desde el primer día (`v3/useExecCountdown.ts:105`, `triggerDone`), así que esto es paridad,
+      // no ruido nuevo. Un solo disparo, nunca la alarma repetida del descanso
+      // (`useRestTimerEngine.ts:207-216`). SIN `force` (divergencia deliberada con
+      // `timers/HoldTimer.tsx:70`, que fuerza): el timbre es el que el alumno eligió para el
+      // descanso y RESPETA su silencio (`sound.ts:149`). Con la app fuera el canal es la
+      // notificación local, no la vibración ni el audio (el JS puede estar congelado), y con
+      // «Listo» antes de 0 (`done-early`) no suena: el alumno ya está tocando la pantalla.
+      if (reason === 'expired' && !away && AppState.currentState === 'active') {
+        timerHaptics.holdDone()
+        playTimerCue('done')
+      }
 
       // (1) Rellenar la caja del lado que se cerró — MISMA mezcla que el payload.
       let values = seededRef.current
@@ -307,6 +329,10 @@ export function useHoldModule(args: UseHoldModuleArgs): UseHoldModuleApi {
           closesRound: a.closesRound,
           expiredWhileAway: away,
           advance: decision.advance,
+          // R2: los MISMOS `values` que armaron el payload — si acá se recalculara con
+          // `a.getCaptureValues()` la fila podría ya haber propagado el patch del hold y los huecos
+          // dejarían de describir lo que se guardó.
+          captureGaps: captureGapsFor(values, a.kind),
         })
       }
 
@@ -343,6 +369,11 @@ export function useHoldModule(args: UseHoldModuleArgs): UseHoldModuleApi {
     elapsedRef.current = createHoldElapsed()
     seededRef.current = {}
     startedEventRef.current = false
+    // R8 «Repetir» (riesgo 1 del PLAN): el candado `block:set:side` vive lo que vive la INSTANCIA del
+    // hook, y al repetir la serie N la clave se repite ⇒ el segundo vencimiento no volvería a enviar.
+    // Limpiarlo acá es seguro porque `resetKey` ya significa «otra serie / otro miembro / otra ronda»,
+    // y «Re-medir» (`remeasure`) NO cambia `resetKey`, así que sigue conservando el candado como hoy.
+    sentSetsRef.current.clear()
     countdownRef.current.prime(argsRef.current.prescribedSec)
     killNotif()
     writeHold(null)

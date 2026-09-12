@@ -19,15 +19,20 @@ import {
   buildSkipMetadata,
   buildStepModel,
   cardioHasDistanceAxis,
+  compactDuration,
   countLoggedSetsByBlock,
   derivedPaceSecPerKm,
   effectiveExerciseType,
   firstIncompleteInRounds,
   firstIncompleteStepIndex,
+  formatStrengthTimeSetLine,
   formatWeightEsCl,
+  holdSidesFor,
   isRoundComplete,
   isSkippedSetRow,
   isStepComplete,
+  isStrengthTimeBlock,
+  keypadStepsForTarget,
   metersToDistanceCapture,
   PAST_SET_NOT_FOUND_ERROR,
   repsUnitForModality,
@@ -38,6 +43,7 @@ import {
   skippedBlockIdsFromLogs,
   typedTargetFor,
   type DayCompletionBlock,
+  type HoldSource,
   type LoggedSetRow,
   type OptimisticLogPayload,
   type RepeatSeedEntry,
@@ -113,6 +119,7 @@ import { ExerciseScreenV3, strengthSeedValues } from './ExerciseScreenV3'
 import { SupersetScreenV3, type SupersetMemberSub } from './SupersetScreenV3'
 import { supersetGroupLetter, memberLetter, roundRestStartArgs, shouldDeferRoundRest } from './superset-screen-model'
 import { holdEditValues } from './typed-screen-model'
+import type { OpenSetOpts } from './hold-capture-prompt'
 import { MobilityScreenV3 } from './MobilityScreenV3'
 import { RollerScreenV3 } from './RollerScreenV3'
 import { CardioScreenV3 } from './CardioScreenV3'
@@ -685,9 +692,52 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
     [blocks, isBlockComplete, headerActiveBlockId],
   )
 
+  /**
+   * «Repetir» pedido desde la línea «Serie N» del interstitial de descanso (R7/R8). El ESTADO de la
+   * repetición vive en `ExerciseScreenV3` (es la dueña de la serie activa y del `resetKey` del reloj);
+   * acá sólo viaja el pedido con su `nonce`, que la pantalla aplica una sola vez.
+   */
+  const [repeatRequest, setRepeatRequest] = useState<{ blockId: string; setNumber: number; nonce: number } | null>(null)
+  /**
+   * Última serie de FUERZA POR TIEMPO cerrada (R7): alimenta la línea «Serie N · 60 kg × 8 · 30 s» del
+   * interstitial. Es un REF y no estado porque su único lector es `interstitialDataRef`, que el
+   * renderer del descanso relee en cada tick (PLAN §3c); con `useState` cada serie re-renderizaría el
+   * ejecutor entero sin cambiar nada más de la pantalla.
+   */
+  const lastHoldSetRef = useRef<{ blockId: string; setNumber: number; line: string; canRepeat: boolean } | null>(null)
+  /**
+   * Prompt de huecos ABIERTO (R12 · `hold_capture_resolved`). Vive en el ORQUESTADOR y no en la
+   * pantalla porque el cierre del teclado sólo se ve acá: `KeypadHost` reporta `onClose`/`onCommit` al
+   * ejecutor, nunca a la pantalla que pidió abrirlo. Se resuelve UNA vez por apertura.
+   */
+  const holdPromptRef = useRef<{ blockId: string; setNumber: number; context: 'solo' | 'superset'; weightKg: number | null } | null>(null)
+  /** `payload` ⇒ se guardó; `null` ⇒ se cerró sin guardar («Sin reps», scrim o X). */
+  const resolveHoldPrompt = useCallback((payload: OptimisticLogPayload | null) => {
+    const open = holdPromptRef.current
+    if (!open) return
+    if (payload && (payload.blockId !== open.blockId || payload.setNumber !== open.setNumber)) return
+    holdPromptRef.current = null
+    captureAppEvent('hold_capture_resolved', {
+      block_id: open.blockId,
+      context: open.context,
+      outcome: payload ? 'saved' : 'dismissed',
+      reps_filled: payload?.repsDone != null,
+      weight_changed: payload != null && (payload.weightKg ?? null) !== open.weightKg,
+    })
+  }, [])
+
   // ── Abrir teclado para una serie (copia de ExecutorV2: sin cambios al motor). ──
   const openSet = useCallback(
-    (blockId: string, setNumber: number, prefill?: { weight: number | null; reps: number | null }) => {
+    (
+      blockId: string,
+      setNumber: number,
+      prefill?: { weight: number | null; reps: number | null },
+      /**
+       * R4 · «Reps tras el reloj»: semilla + foco + copy del prompt de huecos. Va AL FINAL (PLAN §8.3)
+       * porque `prefill` ya ocupaba el tercer lugar; sin `opts` el comportamiento es el de siempre.
+       */
+      opts?: OpenSetOpts,
+    ) => {
       const block = blocks.find((b) => b.id === blockId)
       if (!block) return
       const exercise = resolveExercise(block)
@@ -764,6 +814,96 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         return
       }
 
+      // ── Fuerza POR TIEMPO (R5, «Reps tras el reloj») ──────────────────────────────────────────
+      // Rama nueva ANTES de la clásica. El bloque ES strength (por eso `typedTargetFor` devolvió
+      // `null` y hasta hoy caía al teclado peso→reps de siempre), pero se prescribe en SEGUNDOS: el
+      // teclado tiene que abrir peso → reps → segundos y el commit tiene que ir por
+      // `buildStrengthTimePayload`. Sin esta rama, editar una serie cerrada por el reloj la
+      // reescribía con `buildStrengthPayload`: adiós `actual_hold_sec` y adiós `hold_source`.
+      if (isStrengthTimeBlock(block, exercise)) {
+        const holdEff = effByBlock.get(blockId) ?? null
+        const holdSuggested = holdEff?.weightKg ?? block.target_weight_kg
+        const holdSideMode: 'per_side' | 'alternating' | null =
+          block.side_mode === 'per_side' ? 'per_side' : block.side_mode === 'alternating' ? 'alternating' : null
+        const seed = opts?.seed ?? null
+        // Riesgo 3 del PLAN: con `seed` NO se mira `sessionLogs`. El optimista de `logSet` todavía no
+        // propagó al re-render cuando la pantalla abre el prompt, así que `existingLog` sería
+        // `undefined` justo en el camino que más lo necesita y el teclado saldría vacío.
+        const holdLog = seed ? null : sessionLogs.find((l) => l.block_id === blockId && l.set_number === setNumber)
+        const readHoldSource = (m: unknown): HoldSource | null => {
+          const v = (m as { hold_source?: string } | null | undefined)?.hold_source
+          return v === 'timer' || v === 'manual' ? v : null
+        }
+        let holdValues: Record<string, string> | undefined
+        if (seed) {
+          const v: Record<string, string> = {}
+          if (seed.weightKg != null) v.weight = formatWeightEsCl(seed.weightKg)
+          if (seed.repsDone != null) v.reps = String(seed.repsDone)
+          // Los lados salen del MISMO jsonb que acaba de escribir el payload; bilateral y
+          // `alternating` van con la caja única (`holdSidesFor`, R34/H7).
+          if (holdSidesFor(holdSideMode).length === 2) {
+            const sides = seed.metadata as { left_sec?: number | null; right_sec?: number | null } | null | undefined
+            if (sides?.left_sec != null) v.hold_left_sec = String(Math.round(sides.left_sec))
+            if (sides?.right_sec != null) v.hold_right_sec = String(Math.round(sides.right_sec))
+          } else if (seed.actualHoldSec != null) {
+            v.actual_hold_sec = String(Math.round(seed.actualHoldSec))
+          }
+          if (seed.rpe != null) v.rpe = String(seed.rpe)
+          if (seed.rir != null) v.rir = String(seed.rir)
+          if (seed.note) v.note = seed.note
+          holdValues = v
+        } else if (holdLog) {
+          // Sin seed («Editar»): los segundos vuelven con la MISMA regla de lados que el registro
+          // (`holdEditValues` → `holdSidesFor`), y el resto de los ejes como en la rama clásica.
+          holdValues = {
+            ...holdEditValues(block.side_mode ?? null, holdLog),
+            weight: holdLog.weight_kg != null ? formatWeightEsCl(holdLog.weight_kg) : '',
+            reps: holdLog.reps_done != null ? String(holdLog.reps_done) : '',
+            rpe: holdLog.rpe != null ? String(holdLog.rpe) : '',
+            rir: holdLog.rir != null && holdLog.rir >= 0 && holdLog.rir <= 10 ? String(holdLog.rir) : '',
+            note: holdLog.note ?? '',
+          }
+        }
+        const holdPrev = bestPrevOf(previousHistory[exercise?.id ?? ''] ?? [])
+        const holdTarget: KeypadTarget = {
+          blockId,
+          setNumber,
+          exerciseName,
+          // El objetivo del header se lee «4×30s · 60 kg» (R6): en modo tiempo la prescripción son los
+          // SEGUNDOS, no `block.reps` — misma traducción que el hero (`ExerciseScreenV3`).
+          targetReps: compactDuration(block.duration_sec ?? 0),
+          targetSets: block.sets,
+          suggestedWeight: holdSuggested ?? null,
+          lastPrev: holdPrev ? { weightKg: holdPrev.weight_kg, reps: holdPrev.reps_done } : null,
+          effortKind: block.rir ? 'rir' : 'rpe',
+          initialValues: holdValues,
+          // Siempre EDICIÓN: a este teclado sólo se llega con la serie YA guardada (la cerró el reloj,
+          // V2) — por el prompt de huecos o por «Editar». El primario dice «Guardar».
+          isEdit: true,
+          sideMode: holdSideMode,
+          strengthTimeMode: true,
+          // R5/riesgo 4: la marca viaja EN EL TARGET. Sin ella el re-commit degradaría
+          // `metadata.hold_source` a `'manual'` y rompería el E2E W6.10.
+          holdSource: readHoldSource(seed?.metadata ?? holdLog?.metadata),
+          prompt: opts?.prompt,
+        }
+        // `initialFieldIndex` sobre los pasos REALES del target: en `per_side` el flujo tiene cuatro
+        // pasos, así que el índice del campo de foco no es una constante.
+        const focusIdx = keypadStepsForTarget(holdTarget).findIndex((s) => s.key === (opts?.focus ?? 'reps'))
+        if (opts?.prompt === 'hold-gap') {
+          const members = supersetMembersByBlock.get(blockId)
+          holdPromptRef.current = {
+            blockId,
+            setNumber,
+            context: members && members.length >= 2 ? 'superset' : 'solo',
+            weightKg: seed?.weightKg ?? holdLog?.weight_kg ?? null,
+          }
+        }
+        setKeypadTarget(focusIdx >= 0 ? { ...holdTarget, initialFieldIndex: focusIdx } : holdTarget)
+        haptics.tap()
+        return
+      }
+
       const eff = effByBlock.get(blockId) ?? null
       const suggested = eff?.weightKg ?? block.target_weight_kg
       const existingLog = sessionLogs.find((l) => l.block_id === blockId && l.set_number === setNumber)
@@ -813,8 +953,29 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
       })
       haptics.tap()
     },
-    [blocks, effByBlock, restoredDraft, previousHistory, sessionLogs, repeatSeed],
+    [blocks, effByBlock, restoredDraft, previousHistory, sessionLogs, repeatSeed, supersetMembersByBlock],
   )
+
+  /**
+   * Acciones de la línea «Serie N» del interstitial (R7). Leen `lastHoldSetRef` DENTRO del cuerpo y
+   * nunca capturan `sessionLogs` (PLAN §3c): el renderer del descanso se registra una sola vez y vive
+   * con deps vacías, así que un closure sobre datos de render quedaría viejo para siempre.
+   */
+  const editLastHoldSet = useCallback(() => {
+    const last = lastHoldSetRef.current
+    if (!last) return
+    openSet(last.blockId, last.setNumber, undefined, { focus: 'reps' })
+  }, [openSet])
+  const repeatLastHoldSet = useCallback(() => {
+    const last = lastHoldSetRef.current
+    if (!last) return
+    setRepeatRequest({ blockId: last.blockId, setNumber: last.setNumber, nonce: Date.now() })
+  }, [])
+  /** Cerrar el teclado SIN guardar: cierra el prompt de huecos como `dismissed` (R12). */
+  const closeKeypad = useCallback(() => {
+    resolveHoldPrompt(null)
+    setKeypadTarget(null)
+  }, [resolveHoldPrompt])
 
   /**
    * Contexto de campos del bloque cuyo teclado está abierto — el `KeypadHost` lo necesita para que el
@@ -851,10 +1012,17 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
   // ── Commit de una serie (copia de ExecutorV2 sin el auto-scroll de la lista: en stepper el avance lo
   // maneja el efecto de auto-avance). Motor INTOCABLE: solo se INVOCA logSet/timers. ──
   const handleCommit = useCallback(
-    async (payload: OptimisticLogPayload) => {
+    /**
+     * `opts.repeat` (R8): el alumno rehízo la serie N desde el reloj. Es el ÚNICO consumidor del
+     * segundo argumento; el resto de los llamadores (filas, teclado, `retryCommit`) siguen pasando
+     * sólo el payload y su comportamiento es byte-idéntico.
+     */
+    async (payload: OptimisticLogPayload, opts?: { repeat?: boolean }) => {
       const block = blocks.find((b) => b.id === payload.blockId)
       const sub = block ? getSubstitution(block) : null
       setKeypadTarget(null)
+      // R12: si este commit viene del prompt de huecos, la apertura queda resuelta como `saved`.
+      resolveHoldPrompt(payload)
       // El descanso que arranque tras este commit muestra la micro-celebracion "+1 serie" (E3.1).
       restCelebrateRef.current = true
       // Por defecto NO es un cierre de ronda; el branch de superserie lo setea si corresponde (E3.5).
@@ -863,7 +1031,16 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
       // reentra acá con una serie que YA está en `sessionLogs`, y como `maybeStartRest` se saltea con
       // `wasLogged === true` nadie volvía a armar el `pendingRoundRest` que esta línea borraba ⇒ un
       // reintento dejaba al alumno sin «Ronda lista · Descansar N s».
-      const wasLogged = sessionLogs.some((l) => l.block_id === payload.blockId && l.set_number === payload.setNumber)
+      // R8 «Repetir»: la fila EXISTE (el upsert por bloque+serie+día la reemplaza, SPEC §8), pero para
+      // el descanso y la celebración esto es una serie NUEVA — el alumno acaba de entrenarla. Sin el
+      // `&& !opts?.repeat` final, `maybeStartRest` se saltearía entero y repetir dejaría al alumno sin
+      // descanso. El orden de los operandos NO es cosmético: `exec-autorest-matrix.test.ts` localiza
+      // esta línea por el literal `const wasLogged = sessionLogs.some(` para verificar que la limpieza
+      // del CTA de ronda viene DESPUÉS.
+      const wasLogged = sessionLogs.some((l) => l.block_id === payload.blockId && l.set_number === payload.setNumber) && !opts?.repeat
+      // El pedido de repetición queda CONSUMIDO: sin esto un remonte de la pantalla (volver al mismo
+      // ejercicio desde el rail) volvería a aplicar el mismo `nonce` y reabriría el reloj de esa serie.
+      if (opts?.repeat) setRepeatRequest(null)
       // Limpieza (1 de 4) del descanso de ronda armado: un commit NUEVO lo invalida — el de otro
       // miembro o el de otra ronda. `maybeStartRest` lo vuelve a armar en la misma pasada si
       // corresponde. Un reintento/corrección de una serie ya logueada NO lo toca (ver arriba).
@@ -928,6 +1105,29 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
       // Marca de fuente del hold de ESTA serie (A3/R19): `'timer'` ⇒ la cerró la cuenta atrás sola
       // (V2), no un toque del alumno. Es lo que dispara D2 (el descanso de grupo espera el toque).
       const holdSource = (payload.metadata as { hold_source?: string } | null | undefined)?.hold_source ?? null
+      // R7 · línea «Serie N · 60 kg × 8 · 30 s» de la ÚLTIMA serie de fuerza por tiempo cerrada. Se
+      // escribe acá —el único punto por el que pasan TODOS los commits— y ANTES de `maybeStartRest`,
+      // que es quien puede montar el interstitial que la lee. Cualquier commit que no sea de fuerza
+      // por tiempo la BORRA: la línea habla de la serie recién cerrada, nunca de una anterior. El
+      // texto sale de `formatStrengthTimeSetLine` tal cual (sin guion inventado, decisión W0.4).
+      const holdLine =
+        block && isStrengthTimeBlock(block, prescribedEx)
+          ? formatStrengthTimeSetLine({
+              weight_kg: payload.weightKg ?? null,
+              reps_done: payload.repsDone ?? null,
+              actual_hold_sec: payload.actualHoldSec ?? null,
+              metadata: payload.metadata ?? null,
+            })
+          : null
+      lastHoldSetRef.current = holdLine
+        ? {
+            blockId: payload.blockId,
+            setNumber: payload.setNumber,
+            line: holdLine,
+            // «Repetir» no existe en superserie (R8/R13: ahí la unidad de repetición es la RONDA).
+            canRepeat: !(membersForTier && membersForTier.length >= 2),
+          }
+        : null
       const maybeStartRest = () => {
         // Superserie: descanso SOLO al cerrar la ronda (paridad ExecutorV2/web).
         const members = supersetMembersByBlock.get(payload.blockId)
@@ -1105,7 +1305,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
       }
       signalCommitted(payload.blockId, payload.setNumber, isPrLive && !error)
     },
-    [blocks, getSubstitution, logSet, timers, sessionLogs, supersetMembersByBlock, signalCommitted, effByBlock, cel, previousHistory, exerciseMaxes, readAutoRest],
+    [blocks, getSubstitution, logSet, timers, sessionLogs, supersetMembersByBlock, signalCommitted, effByBlock, cel, previousHistory, exerciseMaxes, readAutoRest, resolveHoldPrompt],
   )
 
   const retryCommit = useCallback(
@@ -1680,7 +1880,9 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
               return sub ? { exerciseId: sub.exerciseId, name: sub.name, prescribedName: sub.prescribedName, gif_url: sub.gif_url, thumbnail_url: sub.thumbnail_url, video_url: sub.video_url, video_start_time: sub.video_start_time, video_end_time: sub.video_end_time, instructions: sub.instructions } : null
             }}
             onOpenTechnique={(ex) => setTechniqueExercise(ex)}
-            onOpenSet={openSet}
+            // R4: la superserie declara `(blockId, setNumber, opts?)` y `openSet` tiene el
+            // `prefill` en el tercer lugar — pasarlo DIRECTO metería el `opts` en `prefill`.
+            onOpenSet={(blockId: string, setNumber: number, opts?: OpenSetOpts) => openSet(blockId, setNumber, undefined, opts)}
             onCommitSet={handleCommit}
             onRpeUpdate={handleRpeUpdate}
             onDraftChange={saveActiveDraft}
@@ -1759,7 +1961,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
             canSkip={!complete}
             onOpenSkip={() => setSkipBlockId(block.id)}
             onOpenTechnique={() => setTechniqueExercise(exercise)}
-            onOpenSet={(setNumber) => openSet(block.id, setNumber)}
+            onOpenSet={(setNumber: number, opts?: OpenSetOpts) => openSet(block.id, setNumber, undefined, opts)}
             onCommitSet={handleCommit}
             onRpeUpdate={handleRpeUpdate}
             onDraftChange={saveActiveDraft}
@@ -1768,6 +1970,9 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
             recentSet={recentSet}
             syncErrors={syncErrors}
             onRetrySet={retryCommit}
+            // R7/R8: «Repetir» tocado en la línea «Serie N» del interstitial. Sólo llega al bloque que
+            // cerró esa serie; el estado de la repetición sigue viviendo en la pantalla.
+            repeatRequest={repeatRequest?.blockId === block.id ? { setNumber: repeatRequest.setNumber, nonce: repeatRequest.nonce } : null}
           />
         )
       }
@@ -1796,7 +2001,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
             canSkip={!complete}
             onOpenSkip={() => setSkipBlockId(block.id)}
             onOpenTechnique={() => setTechniqueExercise(exercise)}
-            onOpenSet={(setNumber) => openSet(block.id, setNumber)}
+            onOpenSet={(setNumber: number, opts?: OpenSetOpts) => openSet(block.id, setNumber, undefined, opts)}
             onCommitSet={handleCommit}
             onDraftChange={saveActiveDraft}
             recentSet={recentSet}
@@ -1825,7 +2030,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
             canSkip={!complete}
             onOpenSkip={() => setSkipBlockId(block.id)}
             onOpenTechnique={() => setTechniqueExercise(exercise)}
-            onOpenSet={(setNumber) => openSet(block.id, setNumber)}
+            onOpenSet={(setNumber: number, opts?: OpenSetOpts) => openSet(block.id, setNumber, undefined, opts)}
             onCommitSet={handleCommit}
             recentSet={recentSet}
             syncErrors={syncErrors}
@@ -1856,7 +2061,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
             canSkip={!complete}
             onOpenSkip={() => setSkipBlockId(block.id)}
             onOpenTechnique={() => setTechniqueExercise(exercise)}
-            onOpenSet={(setNumber) => openSet(block.id, setNumber)}
+            onOpenSet={(setNumber: number, opts?: OpenSetOpts) => openSet(block.id, setNumber, undefined, opts)}
             onCommitSet={handleCommit}
             onRpeUpdate={handleRpeUpdate}
             onDraftChange={saveActiveDraft}
@@ -1887,7 +2092,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
           reducedMotion={motion.reduced}
           onToggleDetails={() => setOpenDetails((p) => ({ ...p, [block.id]: !p[block.id] }))}
           onOpenTechnique={() => setTechniqueExercise(exercise)}
-          onOpenSet={(setNumber) => openSet(block.id, setNumber)}
+          onOpenSet={(setNumber: number, opts?: OpenSetOpts) => openSet(block.id, setNumber, undefined, opts)}
           onCommitSet={handleCommit}
           onRpeUpdate={handleRpeUpdate}
           onDraftChange={saveActiveDraft}
@@ -1899,7 +2104,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         />
       )
     },
-    [supersetMembersByBlock, sessionLogs, skippedBlockIds, skipReasonByBlock, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, getSubstitution, openSet, hrZones, hrProfile, restoredDraft, restoredHold, saveHold, repeatSeed, motion.reduced, exec, execSettings.showRpeRir, handleCommit, handleRpeUpdate, saveActiveDraft, recentSet, syncErrors, retryCommit, pendingRoundRest, startPendingRoundRest, dismissPendingRoundRest, autoRestEnabled, handleRestOfferChange],
+    [supersetMembersByBlock, sessionLogs, skippedBlockIds, skipReasonByBlock, effByBlock, currentWeek, activeBlockId, previousHistory, openDetails, getSubstitution, openSet, hrZones, hrProfile, restoredDraft, restoredHold, saveHold, repeatSeed, motion.reduced, exec, execSettings.showRpeRir, handleCommit, handleRpeUpdate, saveActiveDraft, recentSet, syncErrors, retryCommit, pendingRoundRest, startPendingRoundRest, dismissPendingRoundRest, autoRestEnabled, handleRestOfferChange, repeatRequest],
   )
 
   // ── Modelo de pasos (engine) + vistas del rail + auto-avance ──
@@ -2047,6 +2252,16 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
     celebrate: restCelebrateRef.current,
     celebratePr: restPrRef.current,
     roundContext: restRoundContextRef.current,
+    // R7: la línea «Serie N …» viaja como un campo más de este objeto (PLAN §3c) — el renderer y su
+    // efecto de registro no se tocan, y el repintado llega gratis con cada tick del descanso.
+    lastSet: lastHoldSetRef.current
+      ? {
+          setNumber: lastHoldSetRef.current.setNumber,
+          line: lastHoldSetRef.current.line,
+          onEdit: editLastHoldSet,
+          onRepeat: lastHoldSetRef.current.canRepeat ? repeatLastHoldSet : undefined,
+        }
+      : null,
     exec,
     reducedMotion: motion.reduced,
   }
@@ -2383,7 +2598,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         // usa las mismas conversiones que la fila (km ×1000, conteo rep-based en `reps_done`). NO toca
         // el flujo del botón primario ("Listo"/"Guardar" siguen commiteando, decisión CEO PR #168).
         typedContext={keypadTypedContext}
-        onClose={() => setKeypadTarget(null)}
+        onClose={closeKeypad}
         onCommit={handleCommit}
         onDraftChange={handleDraftChange}
         accent={exec.accent}

@@ -51,6 +51,7 @@ function emitAppState(next: string) {
 }
 
 const holdDone = vi.fn()
+const playTimerCue = vi.fn()
 const captureAppEvent = vi.fn()
 const notif = {
   schedule: vi.fn(async () => {}),
@@ -73,6 +74,11 @@ vi.doMock(mobileFile('lib', 'haptics.ts'), () => ({
 // `expo-constants` y `expo-updates` a un test de node.
 vi.doMock(mobileFile('lib', 'analytics.ts'), () => ({
   captureAppEvent,
+}))
+// Timbre de 0 (R1, «Reps tras el reloj»). Se mockea por path absoluto porque `timers/sound.ts`
+// importa `expo-audio` y arrastraría toda la cadena nativa a un test de node.
+vi.doMock(mobileFile('components', 'alumno', 'workout', 'timers', 'sound.ts'), () => ({
+  playTimerCue,
 }))
 vi.doMock(mobileFile('components', 'alumno', 'workout', 'timers', 'hold-notification.ts'), () => ({
   scheduleHoldEndNotification: notif.schedule,
@@ -121,6 +127,7 @@ beforeEach(() => {
   appState.currentState = 'active'
   appState.listeners.clear()
   holdDone.mockClear()
+  playTimerCue.mockClear()
   captureAppEvent.mockClear()
   notif.schedule.mockClear()
   notif.cancel.mockClear()
@@ -364,13 +371,24 @@ describe('useHoldModule · V2 — a 0 se anota y se envía solo, con la marca de
     expect(result.current.expiredWhileAway).toBe(true)
   })
 
-  it('la háptica de 0 suena en foreground y NO cuando venció con la app fuera (W3.8/R31)', () => {
+  /**
+   * R1 («Reps tras el reloj»): a 0 el hold VIBRA **y SUENA**. La invariante W3.8/R31 («vibra y avisa,
+   * nunca suena») queda derogada para el hold — la web ya suena desde el primer día
+   * (`v3/useExecCountdown.ts:105`), así que esto es paridad. El cue va SIN `force`, o sea que respeta
+   * el mute del cronómetro; ese camino lo cubre `sound.ts` (acá el módulo está mockeado).
+   */
+  it('a 0 en foreground vibra Y suena una sola vez (R1, paridad con la web)', () => {
     const a = mountHold({ prescribedSec: 3 })
     act(() => a.result.current.start())
     advance(3_200)
     expect(holdDone).toHaveBeenCalledTimes(1)
+    expect(playTimerCue).toHaveBeenCalledTimes(1)
+    // SIN `force`: divergencia deliberada con `timers/HoldTimer.tsx:70`. Con `force` el timbre
+    // sonaría incluso con el cronómetro silenciado (punto 10 del QA del owner).
+    expect(playTimerCue).toHaveBeenCalledWith('done')
+  })
 
-    holdDone.mockClear()
+  it('vencido con la app FUERA: ni vibra ni suena (el canal es el aviso del SO)', () => {
     const b = mountHold({ prescribedSec: 30, blockId: 'blk-2' })
     act(() => b.result.current.start())
     act(() => {
@@ -379,6 +397,27 @@ describe('useHoldModule · V2 — a 0 se anota y se envía solo, con la marca de
     vi.setSystemTime(Date.now() + 300_000)
     advance(250)
     expect(holdDone).not.toHaveBeenCalled()
+    expect(playTimerCue).not.toHaveBeenCalled()
+  })
+
+  it('«Listo» antes de 0 NO suena: el alumno ya está tocando la pantalla', () => {
+    const { result } = mountHold({ prescribedSec: 30 })
+    act(() => result.current.start())
+    vi.setSystemTime(Date.now() + 9_000)
+    advance(250)
+    act(() => result.current.doneEarly())
+    expect(playTimerCue).not.toHaveBeenCalled()
+    expect(holdDone).not.toHaveBeenCalled()
+  })
+
+  it('la PAUSA y «re-medir» tampoco suenan (no son fines de serie)', () => {
+    const { result } = mountHold({ prescribedSec: 30 })
+    act(() => result.current.start())
+    vi.setSystemTime(Date.now() + 5_000)
+    advance(250)
+    act(() => result.current.pause())
+    act(() => result.current.remeasure())
+    expect(playTimerCue).not.toHaveBeenCalled()
   })
 
   it('un envío por serie: el guard `block:set:side` impide el doble commit', () => {
@@ -678,6 +717,112 @@ describe('useHoldModule · fuerza por tiempo', () => {
     act(() => result.current.start())
     advance(3_200)
     expect(commitAt(h).payload.repsDone).toBeNull()
+  })
+})
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+// R2 · `captureGaps` en el `HoldCommitInfo` — lo que la PANTALLA usa para decidir si abre el teclado
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+//
+// Lo que se protege: los huecos describen los valores QUE SE GUARDARON, no lo que la fila tenga
+// después. Se calculan sobre la MISMA mezcla que armó el payload (`mergeHoldCaptureValues`), así que
+// un cambio que los recalcule con `getCaptureValues()` —ya contaminado por el patch del hold— rompe
+// estos asserts.
+
+describe('useHoldModule · R2 captureGaps en el commit', () => {
+  it('fuerza por tiempo con el peso sugerido puesto y las reps vacías ⇒ ["reps"]', () => {
+    const { result, h } = mountHold({ kind: 'strength_time', prescribedSec: 3 })
+    h.typed = { weight: '60' }
+    act(() => result.current.start())
+    advance(3_200)
+    expect(commitAt(h).info.captureGaps).toEqual(['reps'])
+  })
+
+  it('con las reps ya tipeadas ⇒ sin huecos (la pantalla no abre nada)', () => {
+    const { result, h } = mountHold({ kind: 'strength_time', prescribedSec: 3 })
+    h.typed = { weight: '60', reps: '8' }
+    act(() => result.current.start())
+    advance(3_200)
+    expect(commitAt(h).info.captureGaps).toEqual([])
+  })
+
+  it('bloque sin peso objetivo y sin reps ⇒ ["reps","weight"], en ese orden', () => {
+    const { result, h } = mountHold({ kind: 'strength_time', prescribedSec: 3 })
+    h.typed = {}
+    act(() => result.current.start())
+    advance(3_200)
+    expect(commitAt(h).info.captureGaps).toEqual(['reps', 'weight'])
+  })
+
+  it('MOVILIDAD nunca tiene huecos: el hold ES el dato', () => {
+    const { result, h } = mountHold({ kind: 'mobility', prescribedSec: 3 })
+    act(() => result.current.start())
+    advance(3_200)
+    expect(commitAt(h).info.captureGaps).toEqual([])
+  })
+
+  it('per_side: el IZQUIERDO no commitea (nunca hay prompt) y el DERECHO trae los huecos de la serie', () => {
+    const { result, h } = mountHold({ kind: 'strength_time', sideMode: 'per_side', prescribedSec: 4 })
+    h.typed = { weight: '20' }
+    act(() => result.current.start())
+    advance(4_200)
+    // Lado 1: sólo semilla — sin `onCommit` no hay `captureGaps` que mirar, y por eso R3 (a) nunca
+    // se cumple en el izquierdo.
+    expect(h.onCommit).not.toHaveBeenCalled()
+    advance(4_200)
+    expect(commitAt(h).info.captureGaps).toEqual(['reps'])
+  })
+
+  it('«Listo» antes de 0 también trae los huecos (R3 admite `done-early`)', () => {
+    const { result, h } = mountHold({ kind: 'strength_time', prescribedSec: 30 })
+    h.typed = { weight: '60' }
+    act(() => result.current.start())
+    vi.setSystemTime(Date.now() + 11_000)
+    advance(250)
+    act(() => result.current.doneEarly())
+    expect(commitAt(h).source).toBe('manual')
+    expect(commitAt(h).info.captureGaps).toEqual(['reps'])
+  })
+})
+
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+// R8 · el candado `sentSetsRef` se limpia con `resetKey` («Repetir» reusa la MISMA clave)
+// ═════════════════════════════════════════════════════════════════════════════════════════════════
+
+describe('useHoldModule · R8 el candado de auto-envío se limpia al cambiar `resetKey`', () => {
+  /**
+   * Test POR NEGACIÓN (riesgo 1 del PLAN). El candado es `blockId:setNumber:side` y vive lo que vive
+   * la INSTANCIA del hook. Con el orden viejo —el efecto de reset NO tocaba `sentSetsRef`— repetir la
+   * serie 1 producía exactamente esta secuencia: primer vencimiento ⇒ `onCommit`; `resetKey` nuevo
+   * (mismo bloque, misma serie, otro nonce); segundo vencimiento ⇒ la clave YA estaba en el set y
+   * `onCommit` **no se volvía a llamar**. O sea: el alumno rehacía la plancha y no se guardaba nada.
+   * El assert de abajo es 2, así que si alguien saca el `.clear()` este test cae con `1`.
+   */
+  it('repetir la MISMA serie vuelve a enviar (con el orden viejo el segundo cierre no llamaba a onCommit)', () => {
+    const { result, rerender, args, h } = mountHold({ kind: 'strength_time', prescribedSec: 3 })
+    act(() => result.current.start())
+    advance(3_200)
+    expect(h.onCommit).toHaveBeenCalledTimes(1)
+
+    // «Repetir»: mismo bloque y misma serie, `resetKey` con nonce.
+    act(() => {
+      rerender({ ...args, resetKey: 'blk-1:1:repeat:1757600000000' })
+    })
+    expect(result.current.status).toBe('idle')
+    act(() => result.current.start())
+    advance(3_200)
+    expect(h.onCommit).toHaveBeenCalledTimes(2)
+  })
+
+  it('«Re-medir» NO cambia `resetKey` ⇒ el candado SIGUE puesto (un envío por serie, R8 lo exige)', () => {
+    const { result, h } = mountHold({ kind: 'strength_time', prescribedSec: 3 })
+    act(() => result.current.start())
+    advance(3_200)
+    expect(h.onCommit).toHaveBeenCalledTimes(1)
+    act(() => result.current.remeasure())
+    act(() => result.current.start())
+    advance(3_200)
+    expect(h.onCommit).toHaveBeenCalledTimes(1)
   })
 })
 
