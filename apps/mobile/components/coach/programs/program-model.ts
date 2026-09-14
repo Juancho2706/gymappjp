@@ -190,3 +190,34 @@ export function defaultDuplicateName(program: ProgramItem): string {
   if (program.client?.full_name) return `Copia de ${program.client.full_name}`
   return `${program.name} (Copia)`
 }
+
+// ── «Asignar plantilla»: buscador de alumnos + copy del botón (paridad con web) ──────────
+// Web (`WorkoutProgramsClient.tsx`) muestra el buscador solo con más de 5 alumnos y pone la
+// lista ANTES de la duración. RN tenía la duración arriba y sin filtro: una coach tomó el
+// campo por un buscador (video 2026-09-14) y cerró sin marcar a nadie.
+
+/** Umbral del buscador: aparece solo si hay MÁS de este número de alumnos (regla web). */
+export const ASSIGN_CLIENT_SEARCH_MIN_CLIENTS = 5
+
+/** Sin acentos, sin espacios sobrantes, minúsculas. «Ángela» ⇒ «angela». */
+export function normalizeSearchText(value: string): string {
+  return value.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase()
+}
+
+export function showsAssignClientSearch(clientCount: number): boolean {
+  return clientCount > ASSIGN_CLIENT_SEARCH_MIN_CLIENTS
+}
+
+/** Filtra por nombre ignorando acentos y mayúsculas; consulta vacía ⇒ lista intacta (mismo orden). */
+export function filterAssignClients<T extends Pick<ClientLite, 'full_name'>>(clients: T[], search: string): T[] {
+  const query = normalizeSearchText(search)
+  if (!query) return clients
+  return clients.filter((client) => normalizeSearchText(client.full_name ?? '').includes(query))
+}
+
+/** Copy del CTA: dice qué falta con 0 marcados (igual que `AssignClientsSheet`). */
+export function assignTemplateButtonLabel(selectedCount: number, busy: boolean): string {
+  if (busy) return 'Asignando...'
+  if (selectedCount === 0) return 'Selecciona alumnos'
+  return `Asignar a ${selectedCount}`
+}
