@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { CARD_CHANGE_DISCLOSURE, CHANGE_CARD_ENABLED } from '@/lib/constants'
 import { CardChangeForm } from './_components/CardChangeForm'
@@ -32,9 +32,12 @@ export default async function UpdateCardPage() {
     if (user?.id) {
         const { data: coach } = await supabase
             .from('coaches')
-            .select('subscription_provider')
+            .select('subscription_provider, subscription_tier')
             .eq('id', user.id)
             .maybeSingle()
+        // Free no tiene suscripción recurrente: nada que cambiar. Su camino es elegir un plan pago en
+        // /coach/subscription (caso Gabriel 14-09: llegaba acá y el server respondía WRONG_PROVIDER).
+        if (coach?.subscription_tier === 'free') redirect('/coach/subscription')
         if (coach?.subscription_provider === 'flow') subscriptionProvider = 'flow'
     }
 

@@ -52,6 +52,8 @@ export type ChangeCardResult =
           retryable?: boolean
       }
 
+/** Valores de `payment_provider` que NO son un gateway (Free por defecto, cortesías, internas). */
+const NON_GATEWAY_PROVIDERS = new Set(['admin', 'beta', 'internal'])
 /** Estados terminales: no se puede PUTear un preapproval cancelado/vencido → ruta a reactivate. */
 const TERMINAL_STATUSES = new Set(['canceled', 'cancelled', 'expired'])
 /**
@@ -95,8 +97,12 @@ export async function changeCardForCoach(
         return { ok: false, code: 'COACH_NOT_FOUND', status: 404, message: 'Coach no encontrado.' }
     }
 
+    // `admin`/`beta`/`internal` no son gateways: son cuentas Free, cortesías o internas sin
+    // preapproval. Deben caer en NO_ACTIVE_SUBSCRIPTION (mensaje que orienta al plan pago), no en
+    // WRONG_PROVIDER, que sugiere una suscripción de otro gateway (caso Gabriel 14-09).
+    const isGatewayProvider = !NON_GATEWAY_PROVIDERS.has(coach.payment_provider ?? '')
     // Solo MercadoPago soporta el swap in-place hoy (el StripeProvider lanza NotImplemented).
-    if (coach.payment_provider && coach.payment_provider !== provider.name) {
+    if (coach.payment_provider && isGatewayProvider && coach.payment_provider !== provider.name) {
         return {
             ok: false,
             code: 'WRONG_PROVIDER',
@@ -112,7 +118,8 @@ export async function changeCardForCoach(
             ok: false,
             code: 'NO_ACTIVE_SUBSCRIPTION',
             status: 409,
-            message: 'Necesitas una suscripción recurrente activa para cambiar la tarjeta.',
+            message:
+                'Aún no tienes un plan pago con cobro recurrente. Elige un plan en Suscripción y ahí registras tu tarjeta.',
         }
     }
 

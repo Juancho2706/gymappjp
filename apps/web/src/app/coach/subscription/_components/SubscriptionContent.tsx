@@ -697,9 +697,12 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                                     </div>
                                 )}
 
-                                {/* Cambiar tarjeta (Modalidad A) — flag ON + sub activa/en prueba o en dunning
-                                    (paused/past_due): cambiar la tarjeta es la recuperación del cobro fallido (P0-3b). */}
+                                {/* Cambiar tarjeta (Modalidad A) — flag ON + plan PAGO con sub activa/en prueba o en
+                                    dunning (paused/past_due): cambiar la tarjeta es la recuperación del cobro fallido (P0-3b).
+                                    Free también es `active` pero no tiene preapproval: el coach caía en update-card y el
+                                    server respondía WRONG_PROVIDER (caso Gabriel 14-09). Su camino es el picker de abajo. */}
                                 {changeCardEnabled &&
+                                    coach.subscription_tier !== 'free' &&
                                     ['active', 'trialing', 'paused', 'past_due'].includes(coach.subscription_status) && (
                                         <div className="mt-3.5 flex items-center gap-2.5 rounded-control bg-white/[0.06] px-3 py-2.5">
                                             <CreditCard className="h-[18px] w-[18px] text-on-dark" />

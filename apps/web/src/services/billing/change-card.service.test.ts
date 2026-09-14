@@ -75,6 +75,15 @@ describe('changeCardForCoach — guards', () => {
         expect(r).toMatchObject({ ok: false, code: 'NO_ACTIVE_SUBSCRIPTION' })
     })
 
+    it('coach Free (payment_provider admin, sin preapproval) → NO_ACTIVE_SUBSCRIPTION, no WRONG_PROVIDER', async () => {
+        const r = await changeCardForCoach(
+            fakeDb(coachWith({ payment_provider: 'admin', subscription_mp_id: null })) as never,
+            provider,
+            { ...baseInput, coachId: 'c1' }
+        )
+        expect(r).toMatchObject({ ok: false, code: 'NO_ACTIVE_SUBSCRIPTION' })
+    })
+
     it('provider distinto (stripe) → WRONG_PROVIDER', async () => {
         const r = await changeCardForCoach(
             fakeDb(coachWith({ payment_provider: 'stripe' })) as never,
