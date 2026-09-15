@@ -29,6 +29,7 @@ import { normalizeCouponCode } from '@/services/billing/coupons.normalize'
 import { newMetaEventId, queueMetaCapiEvent } from '@/lib/meta/capi'
 import { persistCheckoutIntent } from '@/lib/payments/checkout-intent'
 import { parseUtmCookie, resolveRegistrationUtm, UTM_COOKIE_NAME } from '@/lib/auth/registration-utm'
+import { passwordRejectionMessage } from '@eva/schemas'
 
 export type RegisterState = {
     error?: string
@@ -234,6 +235,10 @@ export async function registerAction(
             // dijo que no. Es una carrera o un hueco del check — separado se ve, colapsado no.
             return reject('auth_email_taken', 'Este correo ya está registrado en la plataforma. Usa otro correo o inicia sesión si ya tienes cuenta.')
         }
+        // GoTrue contesta en inglés cuando la contraseña aparece en filtraciones (HIBP). Mismo
+        // mapeo que usa el cambio de contraseña; `null` para cualquier otro error.
+        const passwordMessage = passwordRejectionMessage(authError)
+        if (passwordMessage) return reject('weak_password', passwordMessage)
         return reject('auth_create_failed', authError?.message || 'Error al crear la cuenta')
     }
 

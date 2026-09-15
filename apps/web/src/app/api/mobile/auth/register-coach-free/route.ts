@@ -19,6 +19,7 @@ import { sendFreeCoachOnboardingEmails } from '@/lib/email/free-coach-onboarding
 import { captureCoachRegisteredServer } from '@/lib/posthog/registration-events'
 import { resolveRegistrationPlatform } from '@/lib/posthog/registration'
 import { resolveRegistrationUtm } from '@/lib/auth/registration-utm'
+import { passwordRejectionMessage } from '@eva/schemas'
 
 const RESERVED_SLUGS = new Set([
     'admin', 'api', 'coach', 'coaches', 'register', 'login', 'logout', 'pricing',
@@ -139,12 +140,16 @@ export async function POST(request: NextRequest) {
     })
 
     if (authError || !authData.user) {
+        // GoTrue contesta en inglés (HIBP: «Password is known to be weak and easy to guess…») y RN
+        // pinta este `error` tal cual en el toast (bug visto por el socio 2026-09-15 en el build 61).
+        // `passwordRejectionMessage` ya traduce ese caso y devuelve `null` para el resto.
+        const passwordMessage = passwordRejectionMessage(authError)
         return NextResponse.json(
             {
                 error: authError && isAuthDuplicateEmailMessage(authError.message)
                     ? 'Este correo ya esta registrado en la plataforma. Usa otro correo o inicia sesion si ya tienes cuenta.'
-                    : authError?.message || 'Error al crear la cuenta.',
-                code: 'AUTH_CREATE_FAILED',
+                    : passwordMessage ?? (authError?.message || 'Error al crear la cuenta.'),
+                code: passwordMessage ? 'WEAK_PASSWORD' : 'AUTH_CREATE_FAILED',
             },
             { status: 400 }
         )
