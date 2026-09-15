@@ -85,23 +85,23 @@ Orden duro: **W0 → W1 → W2 → W3 → W4 → W5**.
 
 ## W4 · Build y QA del owner
 
-- [ ] **W4.1 Build EAS iOS producción 1.1.3.** Es el primer lugar donde se compila el módulo nativo:
+- [x] **W4.1 Build EAS iOS producción 1.1.3.** ✅ 15-09: run `34987242677` de `mobile-build.yml` (build 28 min, verde; el módulo compiló con `newArchEnabled: true`). Antes falló el run `34986277903` en el guard `expo install --check` por el pin de `@react-navigation/native` ⇒ fix `801be7d5` (`expo.install.exclude`). Es el primer lugar donde se compila el módulo nativo:
       valida el riesgo de la nueva arquitectura (SPEC §7).
-- [ ] **W4.2 Subir a TestFlight.**
-- [ ] **W4.3 QA del owner en device**, los 7 puntos del [SPEC §8](SPEC.md).
-- [ ] **W4.4 Android:** decidir si el mismo build sube a Play o espera (SPEC §6).
+- [x] **W4.2 Subir a TestFlight.** ✅ 15-09 14:31: 1.1.3 (60) «Lista para enviar», grupo Prueba EVA INT. `eas submit` estuvo 1 h 45 min en «Queued · Free Tier Queue» de EAS (submission `c66fbe7f`); no reenviar, esperar.
+- [~] **W4.3 QA del owner en device** — parcial 15-09: el socio instaló 1.1.3 por TestFlight y el diálogo ATT apareció y se aceptó (binario + módulo arrancan). Evento en Events Manager pendiente de verificar (lag ≤30 min). **Enviada a App Review 15-09 15:08 con publicación automática** por decisión del owner («mandarlo a producción»)., los 7 puntos del [SPEC §8](SPEC.md).
+- [ ] **W4.4 Android:** sin build; Play sigue con el borrador 86 (1.1.2). decidir si el mismo build sube a Play o espera (SPEC §6).
 
 ## W5 · Pasos manuales del owner (Meta y Apple)
 
 Detalle en [MANUAL_TASKS](../../operations/MANUAL_TASKS.md), bloque «Meta SDK iOS (2026-09-15)».
 
-- [ ] **W5.1** App EVA en modo **Activo** en developers.facebook.com.
-- [ ] **W5.2** App `28862306396704276` añadida al Business Portfolio y asignada a la cuenta
+- [ ] **W5.1** ~~App EVA en modo **Activo**~~ — NO EXISTE el interruptor en el panel nuevo (app sin casos de uso); no hace falta para eventos. Reabrir solo si Ads Manager exige app «live» para campañas de promoción de app. en developers.facebook.com.
+- [x] **W5.2** ✅ 15-09 (owner conectó el portfolio desde «Verificación»; Claude asignó la cuenta publicitaria en Business Settings). App `28862306396704276` añadida al Business Portfolio y asignada a la cuenta
       publicitaria `260969077862943`.
-- [ ] **W5.3** Origen de datos de app conectado (Administrador de eventos → Conectar datos → App →
+- [x] **W5.3** ✅ 15-09: el píxel EVA Web se convirtió en DATASET unificado con la app («Vincular con conjunto de datos → a partir del píxel»); URL ahora `/list/dataset/1586483219694806/`. Origen de datos de app conectado (Administrador de eventos → Conectar datos → App →
       SDK de Meta), unido al dataset «EVA Web» si la consola lo ofrece.
 - [ ] **W5.4** Medición de eventos agregados con `CompleteRegistration` en **prioridad 1**.
-- [ ] **W5.5** App Store Connect → Privacidad de la app → «Datos usados para rastrearte»:
+- [x] **W5.5** ✅ 15-09: ID del dispositivo + Interacción con el producto marcados «con fines de seguimiento» + «Publicidad o marketing del desarrollador»; la ficha muestra «Datos usados para rastrearte: Datos de uso, Identificadores». App Store Connect → Privacidad de la app → «Datos usados para rastrearte»:
       Identificadores del dispositivo e Interacción con el producto.
 - [ ] **W5.6** «Probar eventos» con el build 1.1.3: llegan `fb_mobile_activate_app` y
       `fb_mobile_complete_registration`.
