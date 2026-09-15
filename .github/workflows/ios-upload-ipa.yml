@@ -1,0 +1,62 @@
+name: iOS Upload IPA (altool, sin EAS Submit)
+
+# Sube a App Store Connect / TestFlight un IPA YA COMPILADO por `mobile-build.yml`, usando
+# `xcrun altool` con la API key de ASC que ya vive en secrets. Existe porque `eas submit` cae en
+# la «Free Tier Queue» de EAS y el 2026-09-15 estuvo 1 h 45 min (build 60) y >1 h 30 min (build 61)
+# esperando un worker. Apple procesa la subida directa en minutos.
+#
+# Uso: Actions → este workflow → `run_id` = id del run de mobile-build.yml que produjo el IPA
+# (el artifact se llama `mobile-ios-<profile>-<run_number>`; el run_number se lee del run).
+# Si el mismo build ya llegó a Apple por EAS, altool falla con «bundle version must be higher»
+# y no pasa nada más.
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'ID del run de mobile-build.yml que generó el IPA'
+        required: true
+      profile:
+        description: 'Build profile usado (nombre del artifact)'
+        required: true
+        default: 'production'
+
+jobs:
+  upload-ios:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - name: Resolve artifact name from run
+        id: art
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          NUM=$(gh run view "${{ inputs.run_id }}" --repo "${{ github.repository }}" --json number --jq .number)
+          echo "name=mobile-ios-${{ inputs.profile }}-${NUM}" >> "$GITHUB_OUTPUT"
+          echo "artifact: mobile-ios-${{ inputs.profile }}-${NUM}"
+
+      - name: Download IPA artifact
+        uses: actions/download-artifact@v6
+        with:
+          name: ${{ steps.art.outputs.name }}
+          run-id: ${{ inputs.run_id }}
+          github-token: ${{ github.token }}
+          path: ipa
+
+      - name: Validate and upload with altool
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_API_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_API_ISSUER_ID }}
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          [ -z "${ASC_KEY_ID// /}" ] && { echo "ERROR: ASC_API_KEY_ID vacío"; exit 1; }
+          [ -z "${ASC_ISSUER_ID// /}" ] && { echo "ERROR: ASC_API_ISSUER_ID vacío"; exit 1; }
+          [ -z "${ASC_API_KEY_P8// /}" ] && { echo "ERROR: ASC_API_KEY_P8 vacío"; exit 1; }
+          mkdir -p ~/.private_keys
+          printf '%s' "$ASC_API_KEY_P8" > ~/.private_keys/AuthKey_${ASC_KEY_ID}.p8
+          IPA=$(ls ipa/*.ipa | head -1)
+          echo "IPA: $IPA ($(du -h "$IPA" | cut -f1))"
+          xcrun altool --validate-app -f "$IPA" -t ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
+          xcrun altool --upload-app -f "$IPA" -t ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
+          rm -f ~/.private_keys/AuthKey_${ASC_KEY_ID}.p8
