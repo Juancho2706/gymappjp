@@ -100,8 +100,16 @@ Detalle en [MANUAL_TASKS](../../operations/MANUAL_TASKS.md), bloque «Meta SDK i
       publicitaria `260969077862943`.
 - [x] **W5.3** ✅ 15-09: el píxel EVA Web se convirtió en DATASET unificado con la app («Vincular con conjunto de datos → a partir del píxel»); URL ahora `/list/dataset/1586483219694806/`. Origen de datos de app conectado (Administrador de eventos → Conectar datos → App →
       SDK de Meta), unido al dataset «EVA Web» si la consola lo ofrece.
-- [ ] **W5.4** Medición de eventos agregados con `CompleteRegistration` en **prioridad 1**.
+- [x] **W5.4** ✅ 15-09 23:35Z (Claude, con OK del owner): Events Manager → EVA Web → Configuración →
+      «Atribución de Meta para iOS 14+» → «Confirmar y crear anuncios» ⇒ «Tu aplicación cumple los requisitos».
+      La consola nueva ya no pide priorizar eventos a mano (Meta lo automatiza). **SKAdNetwork «Configurar
+      eventos» BLOQUEADO**: la opción «Usar el SDK de Facebook para administrar SKAdNetwork» sale gris hasta
+      que el SDK haya mandado suficientes eventos; reintentar en unos días con más instalaciones.
 - [x] **W5.5** ✅ 15-09: ID del dispositivo + Interacción con el producto marcados «con fines de seguimiento» + «Publicidad o marketing del desarrollador»; la ficha muestra «Datos usados para rastrearte: Datos de uso, Identificadores». App Store Connect → Privacidad de la app → «Datos usados para rastrearte»:
       Identificadores del dispositivo e Interacción con el producto.
-- [ ] **W5.6** «Probar eventos» con el build 1.1.3: llegan `fb_mobile_activate_app` y
-      `fb_mobile_complete_registration`.
+- [~] **W5.6** «Probar eventos» con el build 1.1.3: llegan `fb_mobile_activate_app` y
+      `fb_mobile_complete_registration`. Parcial 15-09 noche (verificado en el dataset EVA Web): por «SDK de
+      Facebook» llegaron `ActivateApp` ×4, «Instalaciones de la aplicación» ×3, `fb_sdk_initialize` ×2 y
+      `fb_mobile_deactivate_app` ×1 (última recepción hace 1 h). `Completar registro` desde la app: el socio
+      registró al coach de prueba `violarjuan69` (DB 23:25:08Z, build 61 TestFlight); a las 23:35Z aún no
+      figuraba en Events Manager (lag ≤30 min) ⇒ re-verificar.
