@@ -15,9 +15,11 @@ const path = require('path')
  * `fb_mobile_complete_registration`). Van `Linked: false` — EVA no los cruza con la cuenta del
  * coach: el evento viaja sin correo, sin nombre y sin uid (ver `lib/meta-sdk.ts`).
  *
- * `NSPrivacyTrackingDomains` NO va acá: los dominios de tracking los declara el manifiesto PROPIO
- * de FBSDKCoreKit, que Apple agrega al del binario en el build. Duplicarlos sería mantener a mano
- * una lista que ya viene con el pod y que cambia con cada versión del SDK.
+ * `NSPrivacyTrackingDomains` SÍ va acá (aprendido con el rechazo ITMS-91064 de la build 60, 15-09):
+ * cuando `NSPrivacyTracking` es `true`, Apple exige que el manifiesto DE LA APP liste los dominios
+ * de tracking; no alcanza con que el pod de FBSDKCoreKit los declare en el suyo. El dominio es el
+ * mismo que declara ese SDK (`ep1.facebook.com`): si sube de versión y cambia, hay que actualizarlo
+ * acá también (se comprueba abriendo el IPA: `Frameworks/FBSDKCoreKit.framework/PrivacyInfo.xcprivacy`).
  *
  * El resto de los tipos (nombre, correo, ejercicio, salud, fotos) queda igual: son de
  * FUNCIONALIDAD de la app, `Tracking: false`, y no los toca ningún SDK de publicidad.
@@ -152,6 +154,10 @@ const PRIVACY_MANIFEST = `<?xml version="1.0" encoding="UTF-8"?>
   </array>
   <key>NSPrivacyTracking</key>
   <true/>
+  <key>NSPrivacyTrackingDomains</key>
+  <array>
+    <string>ep1.facebook.com</string>
+  </array>
 </dict>
 </plist>`
 
