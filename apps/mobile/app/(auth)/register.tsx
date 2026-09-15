@@ -26,7 +26,9 @@ import { getTierCapabilities, getTierMaxClients, studentCountLabel, type SaleTie
 import { useTheme } from '../../context/ThemeContext'
 import { AuthDivider, Button, Card, GoogleSignInButton, HapticPressable, Input } from '../../components'
 import { toast } from '../../components/Toast'
+import { captureAppEvent } from '../../lib/analytics'
 import { ApiError, completeCoachOnboarding, registerCoachFree } from '../../lib/api'
+import { trackMetaCoachRegistered } from '../../lib/meta-sdk'
 import { clearPendingSignup, rememberPendingSignup } from '../../lib/pending-signup'
 import { postRegisterRoute, verifyEmailHref } from '../../lib/register-flow'
 import { supabase } from '../../lib/supabase'
@@ -147,6 +149,10 @@ export default function RegisterScreen() {
           acceptHealthData: true,
           acceptMarketing,
         })
+        // La cuenta YA existe en el server. Espejo del `CompleteRegistration` que la web manda por
+        // píxel + CAPI en su alta: sin esto Meta no puede atribuir el registro móvil a la campaña.
+        trackMetaCoachRegistered('google')
+        captureAppEvent('coach_registered', { platform: 'rn', method: 'google' })
         await AsyncStorage.setItem('eva_user_role', 'coach')
         router.replace('/coach/home')
       } catch (err) {
@@ -182,6 +188,10 @@ export default function RegisterScreen() {
         acceptHealthData: true,
         acceptMarketing,
       })
+      // La cuenta YA existe en el server (una sola vez, antes de la bifurcación por `status`).
+      // Espejo del `CompleteRegistration` que la web manda por píxel + CAPI en su alta.
+      trackMetaCoachRegistered('email')
+      captureAppEvent('coach_registered', { platform: 'rn', method: 'email' })
       // Solo en memoria: la pantalla siguiente entra sola al panel apenas el correo esté confirmado,
       // y acá abajo son las credenciales con las que se abre sesión cuando el alta ya nace activa.
       rememberPendingSignup(parsed.data.email, parsed.data.password)

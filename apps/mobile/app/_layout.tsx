@@ -55,6 +55,7 @@ import { SessionMorphProvider } from '../components/alumno/workout/v3/session-mo
 import { observeAppStateForRelock, shouldArmBiometricLock } from '../lib/biometric'
 import { useUpdates } from 'expo-updates'
 import { checkForOtaUpdate, promptReloadOnce } from '../lib/ota'
+import { bootMetaSdk, syncMetaTrackingConsent } from '../lib/meta-sdk'
 import { registerRestNotificationEvents } from '../components/alumno/workout/timers/rest-remote-commands'
 import { registerCardioNotificationEvents } from '../components/alumno/workout/timers/cardio-remote-commands'
 import { registerLiveActivityCommandDrain } from '../components/alumno/workout/timers/live-activity-commands'
@@ -63,6 +64,9 @@ import { AppState, View } from 'react-native'
 // Retain the native launch screen until stored branding and fonts are ready.
 // During Fast Refresh it may already be hidden, so that rejection is harmless.
 void SplashScreen.preventAutoHideAsync().catch(() => {})
+
+// SDK de Meta: init explícito porque en iOS el config plugin no toca el AppDelegate (ver `lib/meta-sdk.ts`).
+bootMetaSdk()
 
 // Telemetría de errores (E0-G1 / G11 §1.8): el `Sentry.init` y la integración de navegación viven
 // en `lib/sentry-boot.ts`, importado PRIMERO arriba. Acá solo se consumen `SENTRY_DSN` y
@@ -338,6 +342,12 @@ function RootLayoutWithFonts({ branding }: { branding: CoachBranding | null }) {
     void SplashScreen.hideAsync().catch(() => {
       splashHiddenRef.current = false
     })
+    // El diálogo de ATT va DESPUÉS de que el splash nativo se fue y con un respiro: encima del
+    // splash Apple lo rechaza (5.1.2) y el usuario lo cierra sin leer. Fire-and-forget: nunca
+    // bloquea el primer frame.
+    setTimeout(() => {
+      void syncMetaTrackingConsent()
+    }, 800)
   }, [])
 
   if (!fontsLoaded) return null

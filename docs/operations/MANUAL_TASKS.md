@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-owner
-last_verified: "2026-09-05"
+last_verified: "2026-09-15"
 canonical: true
 ---
 
@@ -60,6 +60,33 @@ web y app: Postgres exige SELECT sobre la columna también para FILTRAR, y hoy h
 Matriz transversal corrida por el owner en una sesión única sobre el **binario vigente**: Android **1.1.2 build 86** e iPhone **1.1.2 build 59** (ambos con el OTA del 04-09 android `d8220490` / ios `54487ddd`) más web `www.eva-app.cl` `dpl_ASZExsTB…` = `f9ba8a3f` — **QA del owner VERDE 05-09 (artifact `6bd32370`, 102 verificaciones en 11 áreas)**: smoke de alumno y coach en light/dark con marca EVA y custom, navegación, safe areas, teclado, cámara/scanner, offline/reintentos y cambio de workspace; cero defectos que registrar. Resultado consolidado en [MOBILE_PARITY.md](../status/MOBILE_PARITY.md); detalle por ítem en [QA_DEVICE_PENDIENTE.md](../testing/QA_DEVICE_PENDIENTE.md).
 
 Residual declarado (no bloquea esta tarea): la **experiencia de entrada** (config plugin del splash) no es certificable por OTA — su certificación con build EAS propia queda para **1.1.3**.
+
+### MOB-META-01 — Encender la medición de la app en Meta (2026-09-15)
+
+El binario 1.1.3 lleva el SDK de Meta y el permiso ATT ([SDD](../specs/meta-app-events-ios/SPEC.md)).
+Del lado del código ya está todo; lo que falta son consolas a las que solo entra el dueño. Hasta que
+(a)-(d) estén hechos, los eventos de la app no llegan a ningún dataset y las campañas siguen
+midiendo solo las altas web.
+
+- [ ] (a) developers.facebook.com → app **EVA** (`28862306396704276`) → pasarla de «Desarrollo» a
+      modo **Activo**. En desarrollo el SDK solo acepta eventos de usuarios con rol en la app.
+- [ ] (b) Business Settings → Cuentas → **Aplicaciones** → añadir `28862306396704276` al portfolio y
+      **asignarla a la cuenta publicitaria** `260969077862943`. Sin esa asignación la campaña no
+      puede optimizar por un evento de la app.
+- [ ] (c) Administrador de eventos → **Conectar datos** → **App** → EVA → **SDK de Meta**. Si la
+      consola ofrece unir el origen al dataset **«EVA Web»** (`1586483219694806`), aceptarlo: web y
+      app en un solo dataset se leen juntas.
+- [ ] (d) En el dataset → **Medición de eventos agregados** → configurar los eventos de app de iOS
+      con **`CompleteRegistration` en prioridad 1**. Sin esta lista, iOS con ATT denegado no reporta
+      nada por SKAdNetwork.
+- [ ] (e) App Store Connect → **Privacidad de la app** → declarar la sección **«Datos usados para
+      rastrearte»** con *Identificadores del dispositivo* e *Interacción con el producto*. Tiene que
+      coincidir con el manifiesto del binario (`NSPrivacyTracking: true`) o el review lo marca.
+- [ ] (f) Con el build **1.1.3** instalado desde TestFlight: Administrador de eventos → **«Probar
+      eventos»** → verificar que lleguen `fb_mobile_activate_app` (al abrir la app) y
+      `fb_mobile_complete_registration` (al registrar un coach de prueba, por correo y por Google).
+
+Los pasos (a)-(e) no necesitan el build; (f) sí.
 
 ## P1 — Operación de datos
 

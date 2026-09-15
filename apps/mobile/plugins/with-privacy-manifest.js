@@ -2,6 +2,26 @@ const { withDangerousMod } = require('expo/config-plugins')
 const fs = require('fs')
 const path = require('path')
 
+/**
+ * Manifiesto de privacidad de iOS (`PrivacyInfo.xcprivacy`).
+ *
+ * POR QUÉ `NSPrivacyTracking` pasó a `true` el 2026-09-15: entró el SDK de Meta
+ * (`react-native-fbsdk-next`) y con él la hoja de ATT (`expo-tracking-transparency`). Cuando el
+ * usuario ACEPTA el diálogo, el SDK usa el IDFA para atribuir la instalación y el registro a la
+ * campaña que los trajo — eso es *tracking* según la definición de Apple, y declararlo `false`
+ * con el SDK adentro es un rechazo seguro en review. Los dos tipos nuevos de
+ * `NSPrivacyCollectedDataTypes` son exactamente lo que ese SDK manda: el identificador del device
+ * (IDFA/IDFV) y la interacción con el producto (`fb_mobile_activate_app`,
+ * `fb_mobile_complete_registration`). Van `Linked: false` — EVA no los cruza con la cuenta del
+ * coach: el evento viaja sin correo, sin nombre y sin uid (ver `lib/meta-sdk.ts`).
+ *
+ * `NSPrivacyTrackingDomains` NO va acá: los dominios de tracking los declara el manifiesto PROPIO
+ * de FBSDKCoreKit, que Apple agrega al del binario en el build. Duplicarlos sería mantener a mano
+ * una lista que ya viene con el pod y que cambia con cada versión del SDK.
+ *
+ * El resto de los tipos (nombre, correo, ejercicio, salud, fotos) queda igual: son de
+ * FUNCIONALIDAD de la app, `Tracking: false`, y no los toca ningún SDK de publicidad.
+ */
 const PRIVACY_MANIFEST = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -103,9 +123,35 @@ const PRIVACY_MANIFEST = `<?xml version="1.0" encoding="UTF-8"?>
         <string>NSPrivacyCollectedDataTypePurposeAppFunctionality</string>
       </array>
     </dict>
+    <dict>
+      <key>NSPrivacyCollectedDataType</key>
+      <string>NSPrivacyCollectedDataTypeDeviceID</string>
+      <key>NSPrivacyCollectedDataTypeLinked</key>
+      <false/>
+      <key>NSPrivacyCollectedDataTypeTracking</key>
+      <true/>
+      <key>NSPrivacyCollectedDataTypePurposes</key>
+      <array>
+        <string>NSPrivacyCollectedDataTypePurposeDeveloperAdvertising</string>
+        <string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
+      </array>
+    </dict>
+    <dict>
+      <key>NSPrivacyCollectedDataType</key>
+      <string>NSPrivacyCollectedDataTypeProductInteraction</string>
+      <key>NSPrivacyCollectedDataTypeLinked</key>
+      <false/>
+      <key>NSPrivacyCollectedDataTypeTracking</key>
+      <true/>
+      <key>NSPrivacyCollectedDataTypePurposes</key>
+      <array>
+        <string>NSPrivacyCollectedDataTypePurposeDeveloperAdvertising</string>
+        <string>NSPrivacyCollectedDataTypePurposeAnalytics</string>
+      </array>
+    </dict>
   </array>
   <key>NSPrivacyTracking</key>
-  <false/>
+  <true/>
 </dict>
 </plist>`
 

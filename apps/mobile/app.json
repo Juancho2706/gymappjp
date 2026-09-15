@@ -3,7 +3,7 @@
     "name": "EVA",
     "slug": "eva",
     "scheme": "eva",
-    "version": "1.1.2",
+    "version": "1.1.3",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#07080C",
@@ -253,6 +253,24 @@
         {
           "organization": "eva-zs",
           "project": "eva-mobile"
+        }
+      ],
+      [
+        "react-native-fbsdk-next",
+        {
+          "appID": "28862306396704276",
+          "clientToken": "676a3d7fbfd5d973a694933bed98b3cc",
+          "displayName": "EVA",
+          "scheme": "fb28862306396704276",
+          "isAutoInitEnabled": true,
+          "autoLogAppEventsEnabled": true,
+          "advertiserIDCollectionEnabled": true
+        }
+      ],
+      [
+        "expo-tracking-transparency",
+        {
+          "userTrackingPermission": "EVA usa este permiso solo para saber si los anuncios que te trajeron funcionan. No vende tus datos ni los usa para perfilarte."
         }
       ]
     ],
