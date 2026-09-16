@@ -12,6 +12,7 @@ import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { PhotoLightbox } from '../../../components/PhotoLightbox'
 import { ClientHero, type HeroChips, type HeroStatusLevel } from '../../../components/coach/clientDetail/ClientHero'
+import { DossierExportSheet } from '../../../components/coach/clientDetail/DossierExportSheet'
 import { ClientTabBar, type ClientTab, type TabItem } from '../../../components/coach/clientDetail/ClientTabBar'
 import { tabBarBackdropProgress } from '../../../lib/client-tabbar-backdrop'
 import { ProfileFloatingActions } from '../../../components/coach/clientDetail/ProfileFloatingActions'
@@ -32,7 +33,9 @@ import {
 import { isUuid, reportInvalidRouteUuid } from '../../../lib/safe-uuid'
 import { useSheetKeyboardInset } from '../../../lib/use-sheet-keyboard-inset'
 import { formatTrainingAgeLabel } from '../../../lib/profile-analytics'
-import { exportClientDossierPdf } from '../../../lib/client-dossier-pdf'
+import { exportClientDossierPdf, exportClientMonthDossiersPdf } from '../../../lib/client-dossier-pdf'
+import { fetchClientMonthReports, photoRefsByCheckInId } from '../../../lib/client-month-reports'
+import { buildClientMonthDossier } from '@eva/client-dossier'
 import { getTodayInSantiago, isoDateAddDays } from '../../../lib/date-utils'
 import { daysBetweenCalendar } from '../../../lib/checkin-thresholds'
 import { filterPlansForStructureView, resolveActiveWeekVariantForDisplay } from '../../../lib/program-week-variant'
@@ -105,6 +108,7 @@ export default function ClientDetailScreen() {
   const [compact, setCompact] = useState(false)
   const [lightbox, setLightbox] = useState<{ photos: string[]; index: number } | null>(null)
   const [exportingPdf, setExportingPdf] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
   const [loginUrl, setLoginUrl] = useState<string | null>(null)
   const [resetOpen, setResetOpen] = useState(false)
   const [resetPassword, setResetPassword] = useState<string | null>(null)
@@ -675,8 +679,13 @@ export default function ClientDetailScreen() {
 
   // Export dossier PDF (E5-13): arma el dossier oscuro desde el modelo mobile + fotos firmadas
   // y abre el share sheet nativo. Cierra sobre statusLevel/statusLabel/derived del render actual.
-  async function handleExportPdf() {
-    if (!data || !client || !derived || exportingPdf) return
+  // El error ya NO va a un `Alert`: lo pinta INLINE la hoja de exportación que dispara esto (R21).
+  // Devuelve `true` SOLO si se generó y compartió: la hoja se cierra con eso, así que un
+  // `return` mudo la cerraría sin PDF. Falta de datos ⇒ error visible; exportación en curso ⇒
+  // `false` (no es un error, pero tampoco un éxito: la hoja queda abierta).
+  async function handleExportPdf(): Promise<boolean> {
+    if (exportingPdf) return false
+    if (!data || !client || !derived) throw new Error('La ficha todavía está cargando. Esperá un segundo.')
     setExportingPdf(true)
     try {
       await exportClientDossierPdf(clientId, data, {
@@ -687,9 +696,45 @@ export default function ClientDetailScreen() {
         lastActivityIso: derived.lastActivityIso,
         planCurrentWeek: derived.planCurrentWeek,
       })
+      return true
     } catch (e) {
       console.warn('[dossier-pdf] export failed', e)
-      Alert.alert('No se pudo exportar', 'Hubo un problema generando el dossier. Intenta de nuevo.')
+      throw new Error('Hubo un problema generando el dossier. Intenta de nuevo.')
+    } finally {
+      setExportingPdf(false)
+    }
+  }
+
+  // Informes mensuales (tren «Dossier por meses»): UN read al RPC con todos los meses pedidos, un
+  // modelo por mes (`generatedAtIso` ÚNICO para toda la exportación, R15) y un solo PDF. Las fotos
+  // viajan como ref SIN firmar en `photoUrls`: el generador las firma por lote de mes y aplica el
+  // presupuesto (3 por mes / 18 por exportación, R20). El error sube: lo pinta la hoja.
+  async function handleExportMonths(monthKeys: string[], opts: { includePhotos: boolean }): Promise<boolean> {
+    if (exportingPdf) return false
+    if (!client) throw new Error('La ficha todavía está cargando. Esperá un segundo.')
+    setExportingPdf(true)
+    try {
+      const reports = await fetchClientMonthReports(clientId, monthKeys)
+      if (reports.length === 0) throw new Error('No hay datos para los meses elegidos.')
+      const generatedAtIso = new Date().toISOString()
+      const identity = {
+        fullName: client.full_name,
+        email: client.email,
+        phone: client.phone,
+        isActive: client.is_active !== false,
+        clientSinceIso: client.subscription_start_date || client.created_at,
+      }
+      const models = reports.map((report, i) =>
+        buildClientMonthDossier(report, {
+          generatedAtIso,
+          identity,
+          index: i + 1,
+          total: reports.length,
+          photoUrls: opts.includePhotos ? photoRefsByCheckInId(report) : undefined,
+        })
+      )
+      await exportClientMonthDossiersPdf(clientId, models, { includePhotos: opts.includePhotos })
+      return true
     } finally {
       setExportingPdf(false)
     }
@@ -757,7 +802,7 @@ export default function ClientDetailScreen() {
           chips={heroChips}
           nutritionEnabled={nutritionEnabled}
           onMore={() => { if (!actionBusy) setMoreOpen(true) }}
-          onExportPdf={handleExportPdf}
+          onExportPdf={() => { if (!exportingPdf) setExportOpen(true) }}
           exportingPdf={exportingPdf}
         />
 
@@ -838,6 +883,16 @@ export default function ClientDetailScreen() {
 
       {/* Barra flotante persistente — solo WhatsApp (rediseno). */}
       <ProfileFloatingActions onWhatsApp={openWhatsApp} compact={compact} enabled={(client.phone ?? '').replace(/\D/g, '').length >= 10} />
+
+      {/* «Exportar dossier»: estado actual (lo de siempre) o informes por mes (un solo PDF). */}
+      <DossierExportSheet
+        open={exportOpen}
+        onClose={() => setExportOpen(false)}
+        clientId={clientId}
+        clientName={client.full_name}
+        onExportCurrent={handleExportPdf}
+        onExportMonths={handleExportMonths}
+      />
 
       <ClientActionsSheet
         visible={moreOpen}

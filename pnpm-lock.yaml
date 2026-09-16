@@ -254,6 +254,9 @@ importers:
       '@eva/cardio':
         specifier: workspace:*
         version: link:../../packages/cardio
+      '@eva/client-dossier':
+        specifier: workspace:*
+        version: link:../../packages/client-dossier
       '@eva/coach-nav':
         specifier: workspace:*
         version: link:../../packages/coach-nav
@@ -607,6 +610,8 @@ importers:
   packages/calc: {}
 
   packages/cardio: {}
+
+  packages/client-dossier: {}
 
   packages/coach-nav: {}
 

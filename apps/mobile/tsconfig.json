@@ -8,6 +8,7 @@
       "@eva/coach-nav": ["../../packages/coach-nav/index.ts"],
       "@eva/bodycomp": ["../../packages/bodycomp/index.ts"],
       "@eva/calc": ["../../packages/calc/index.ts"],
+      "@eva/client-dossier": ["../../packages/client-dossier/index.ts"],
       "@eva/profile-analytics": ["../../packages/profile-analytics/index.ts"],
       "@eva/schemas": ["../../packages/schemas/index.ts"],
       "@eva/schemas/persona": ["../../packages/schemas/persona.ts"],
