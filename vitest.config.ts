@@ -20,6 +20,7 @@ const alias = {
   '@eva/schemas/nutrition-exchanges': path.resolve(__dirname, './packages/schemas/nutrition-exchanges.ts'),
   '@eva/schemas': path.resolve(__dirname, './packages/schemas/index.ts'),
   '@eva/calc': path.resolve(__dirname, './packages/calc/index.ts'),
+  '@eva/client-dossier': path.resolve(__dirname, './packages/client-dossier/index.ts'),
   '@eva/tiers': path.resolve(__dirname, './packages/tiers/index.ts'),
   '@eva/nutrition-engine': path.resolve(__dirname, './packages/nutrition-engine/index.ts'),
   '@eva/module-catalog': path.resolve(__dirname, './packages/module-catalog/catalog.ts'),

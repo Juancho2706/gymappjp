@@ -135,3 +135,31 @@ Texto de `CURRENT.md` al momento del corte, movido acá para que el archivo siga
    `9e844b15` / ios `8de637b3`, **set chileno INTA/UDD ENCENDIDO (22 grupos del sistema vivos)**: picker con secciones y bump ½,
    conversión SMAE → chileno, metas «Solo el {día}», sheet del alumno con foto y genéricos primero. **QA del owner en device
    VERDE 10-09 ⇒ SDD `done`** (fixes post-cierre `653bd760`). Queda W6.11: avisos a coaches y respuesta a Pame (textos listos).
+
+## Corte del 2026-09-15 (para el tren «Dossier por meses»)
+
+`CURRENT.md` volvió a acercarse al tope de 16 KB (16.359 bytes). Se mudó acá la prosa de los trenes
+ya cerrados (QA VERDE / SDD `done`) para dejar sitio al tren nuevo «Dossier por meses» (pedido del
+coach Joaco, 15-09). En `CURRENT.md` quedó una línea por tren con su link y lo pendiente no bloqueante.
+
+### Fix «Google login sin cuenta de coach dejaba huérfano» — en producción 2026-09-04, QA VERDE 05-09 (texto de CURRENT al 15-09)
+
+**Fix 04-09 EN PRODUCCIÓN** (`master` = `rnmobiledenuevo` = `22644899`, deploy `dpl_CZKUwNthWaeQL2cvS6nG55k4eMGx` READY, OTA 1.1.2 android `d8220490` / ios `54487ddd`; **QA del owner VERDE 05-09** — artifact `6bd32370`: el alumno que toca Google en `/login` ve el copy nuevo y su correo queda libre; el coach nuevo va a `/register`): «Continuar con Google» sin cuenta de coach dejaba un `auth.users` huérfano que «ocupaba» el correo del alumno (caso Leonardo/Movens; huérfano borrado a mano en LIVE el 04-09). Ahora un LOGIN con Google sin fila `coaches` ya no cae en `/coach/onboarding/complete` (alta de coach): `resolvePostGoogleAuthUrl` (web) y `login.tsx` (RN) avisan a `POST /api/auth/google-orphan-cleanup` / `/api/mobile/auth/google-orphan-cleanup`, que borra solo al usuario demostrablemente vacío (`lib/auth/google-orphan-cleanup.ts`), cierran la sesión y rebotan a `/login` con copy que manda al alumno a su código y al coach nuevo a `/register` (el alta por Google sigue ahí). F2b (alta de alumno con cuenta existente) sigue en backlog. [Login y auth](../architecture/FLOWS_AND_COMPONENTS.md)
+
+### Deploys y OTAs del 11-09 (F2 «Descanso siempre», «Arreglos chicos pre-OTA» + F1, «Cuenta atrás en pantalla») — hashes retirados de la tabla de estado (texto de CURRENT al 15-09)
+
+**Web/PWA**: antes de «Despegue rápido» (`f77d8400` / `dpl_H2B91dcR…`), el deploy 22:54Z fue `e15a031c` / `dpl_5UDcjDBr…` — F2 «Descanso siempre» (QA VERDE). Antes, el 11-09: `091a19b0` (arreglos chicos + F1) y `6321a732` (cuenta atrás), ambos con QA del owner VERDE 11-09 y SDD `done`.
+
+**App nativa (RN)**: OTA 22:57Z @`e15a031c` (android `f0c0d18b` / ios `76bf4d26`) — F2 «Descanso siempre» (QA VERDE). OTA 02:58Z @`091a19b0` (arreglos chicos + F1, QA VERDE 11-09). OTA 00:13Z @`6321a732` (cuenta atrás). Antes, 10-09 @`27132cb9` y @`d5d7d188` (detalle de esos dos ya en la sección «Corte del 2026-09-10 ~20:30Z» de este historial).
+
+### «Retiro de Starter» S0–S3 y E0/E1 — en producción 2026-09-05, cerrado (texto de CURRENT al 15-09)
+
+**Retiro de Starter: S0–S3 y E0/E1 EN PRODUCCIÓN 05-09** (deploy `dpl_yJUsqXJ8…`, OTA android `ea487622` / ios `59f92afe`; humo `/coach/reactivate?tier=starter` ⇒ «Plan seleccionado: Pro» verificado con un coach de prueba elite expirado, creado y borrado) ([SDD](../specs/retiro-starter-y-enterprise/SPEC.md)); absorbió el fallback a starter (2) y el label «Starter» en `processing`/`flow-processing` (d) de la decisión de pricing «trial al tocar el cupo».
+
+### Tren «Cantidades honestas» (Nutrición V2) — W1–W4 en producción 2026-09-06, QA VERDE 10-09, SDD `done` (texto de CURRENT al 15-09)
+
+**Tren «Cantidades honestas» (Nutrición V2) — W1–W4 EN PRODUCCIÓN 06-09 ~23:07Z** ([SDD](../specs/nutrition-cantidades-honestas/SPEC.md)): `master` = `rnmobiledenuevo` = `2fe28d61`, deploy `dpl_C95u9ArN…` READY, 3 migraciones en LIVE (`20260906230222`…`230411`), OTA 1.1.2 android `27028d0f` / ios `ddf839b8`. W1 conversión al cambiar unidad + avisos de plausibilidad + huérfanos visibles; W2 medida casera «2 huevos (122 g)»; W3 linaje `source_item_id` + «Aplicar hoy/desde mañana»; W4 ficha del coach con Retirar/Editar. **QA del owner en device VERDE 10-09 ⇒ SDD `done`**; quedan los avisos a `jotap-coach`/`olympuswolf` (los manda el owner) y el dry-run del backfill USDA (TASKS C6/C7).
+
+### `EVA-NEXTJS-18` y `EVA-NEXTJS-19` — resueltos en Sentry, 2026-09-05 (texto de CURRENT al 15-09)
+
+**(a) `EVA-NEXTJS-18` (hidratación en `/c/[coach_slug]/dashboard?recuperar=…`) — causa confirmada y FIX EN PRODUCCIÓN 05-09 22:56Z (O7.7, deploy `dpl_yJUsqXJ8…`)**: el barrido O7.1 se salteó `WorkoutPlanCard.fmtShortDate` (client component del dashboard del ALUMNO); ahora usa `formatShortDayMonthEs` (tabla fija, cero `Intl`). Verificado en Sentry el 08-09 (72 h del deploy) sin recurrencia. **(b) `E394` = `EVA-NEXTJS-19` — 0 eventos desde el 01-09 18:42Z con tráfico alto (12.230 spans en la ruta) ⇒ O6.8 cumplida**, resuelto en Sentry con nota el 05-09 (C3 cerrada con la misma evidencia); O7.4 desestimado salvo regresión (decisión del jefe 05-09). [tareas § O7](../specs/cierre-sentry-vivos/TASKS.md)

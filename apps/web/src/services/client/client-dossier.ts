@@ -12,120 +12,31 @@
 
 import { workoutPlanMatchesVariant } from '@/lib/workout/programWeekVariant'
 
+import type {
+    ClientDossierData,
+    DossierCheckIn,
+    DossierMuscleVolume,
+    DossierPersonalRecord,
+    DossierProgramDay,
+    DossierStatusLevel,
+} from '@eva/client-dossier'
+
 // ─── Tipos de salida (serializables) ─────────────────────────────────────────
+// Viven en `@eva/client-dossier` (R13) porque el informe MENSUAL los arma desde RN también.
+// Se re-exportan tal cual para no tocar a los consumidores de este módulo (server action,
+// generador jsPDF, smoke test y test unitario siguen importando desde acá).
 
-/** Nivel de atención derivado del attentionScore (mismos umbrales que el War Room). */
-export type DossierStatusLevel = 'urgente' | 'atencion' | 'aldia'
-
-export type DossierCheckIn = {
-    /** ISO del check-in (created_at). */
-    dateIso: string
-    weightKg: number | null
-    /** Δ peso vs el check-in cronológicamente anterior (null si no hay con qué comparar). */
-    weightDeltaKg: number | null
-    energyLevel: number | null
-    /** Notas truncadas (~200 chars) — null si no hay. */
-    notes: string | null
-    /** URL firmada de la foto frontal (ya resuelta server-side, TTL corto) — puede ser null. */
-    photoUrl: string | null
-}
-
-export type DossierPersonalRecord = {
-    exerciseName: string
-    muscleGroup: string
-    maxWeightKg: number
-    repsAtMax: number
-}
-
-export type DossierMuscleVolume = {
-    muscleGroup: string
-    volume: number
-}
-
-export type DossierProgramDay = {
-    title: string
-    dayOfWeek: number | null
-    blockCount: number
-}
-
-export type ClientDossierData = {
-    /** ISO de generación (pasado por el caller, no calculado acá). */
-    generatedAtIso: string
-    identity: {
-        fullName: string
-        email: string
-        phone: string | null
-        isActive: boolean
-        /** ISO de "cliente desde" (subscription_start_date ?? created_at). */
-        clientSinceIso: string | null
-        streakDays: number
-        lastActivityIso: string | null
-    }
-    status: {
-        attentionScore: number
-        level: DossierStatusLevel
-    }
-    metrics: {
-        currentWeightKg: number | null
-        /** Δ peso último check-in vs anterior. */
-        weightDeltaKg: number | null
-        workoutsDone: number
-        workoutsTarget: number
-        adherenceWeeklyPct: number
-        /**
-         * Nutrición V2 — `null` = sin plan V2 vigente ⇒ el PDF muestra "—", nunca 0 %.
-         * Antes eran `todayMealsDone/Total` + `nutritionCompliancePercent` +
-         * `nutritionMonthlyAvgPct`, TODOS de las tablas V1 (auditoría §2.2).
-         */
-        nutritionTodayKcal: { consumed: number; target: number | null } | null
-        nutritionTodayPct: number | null
-        /** Días de la semana en rango / días transcurridos que cubre el plan. */
-        nutritionWeeklyInRangePct: number | null
-        checkInCompliancePct: number
-        planCurrentWeek: number
-        planTotalWeeks: number
-    }
-    program: {
-        name: string
-        currentWeek: number
-        totalWeeks: number
-        daysRemaining: number
-        days: DossierProgramDay[]
-    } | null
-    training: {
-        personalRecords: DossierPersonalRecord[]
-        muscleVolume: DossierMuscleVolume[]
-    }
-    /**
-     * Plan de nutrición V2 VIGENTE. `null` = el alumno no tiene plan V2 publicado vigente ⇒ el PDF
-     * imprime la nota "sin plan de nutrición vigente". NUNCA se exporta el plan V1 (que podía estar
-     * convertido u obsoleto y viajaba al alumno en el PDF: auditoría §2.2).
-     */
-    nutrition: {
-        planName: string
-        /** Metas del día vigente (variante que aplica hoy). */
-        goals: {
-            calories: number | null
-            protein: number | null
-            carbs: number | null
-            fats: number | null
-        }
-        /** Franjas prescritas para el día vigente. */
-        mealsTotal: number
-        /** true si el plan tiene más de una variante de día (metas que varían por día). */
-        hasDaySpecificMeals: boolean
-        /** Metas de energía por variante — se imprimen cuando el plan es multi-día. */
-        dayTargets: { label: string; calories: number | null }[]
-        /** Adherencia de la semana en curso (días en rango / días computados). `null` = sin dato. */
-        weeklyInRangePct: number | null
-        weeklyInRangeDays: number
-        weeklyTrackedDays: number
-    } | null
-    /** Últimos MAX_CHECKINS check-ins (DESC). El total real vive en checkInsTotal. */
-    checkIns: DossierCheckIn[]
-    /** Total de check-ins del alumno (para la nota "mostrando N de M" del PDF). */
-    checkInsTotal: number
-}
+export type {
+    ClientDossierData,
+    DossierCheckIn,
+    DossierMuscleVolume,
+    DossierPeriod,
+    DossierPersonalRecord,
+    DossierProgramDay,
+    DossierStatusLevel,
+    DossierTile,
+    DossierTone,
+} from '@eva/client-dossier'
 
 // ─── Tipo de entrada (estructural, desacoplado de Supabase/Next) ──────────────
 // Describe SOLO los campos que se leen del retorno de `getClientProfileData`.

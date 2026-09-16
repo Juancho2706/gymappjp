@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-09-11"
+last_verified: "2026-09-15"
 canonical: true
 ---
 
@@ -18,34 +18,32 @@ prevalecen sobre este resumen. La prosa retirada el 2026-09-02 está en
 
 | Frente | Estado | Fuente de detalle |
 |---|---|---|
-| Web/PWA | Pricing v3 productivo: Free = 1 alumno + white-label + sello «Hecho con EVA»; Pro 25 sin sello. **Deploy vigente 11-09 23:47Z: `master` = `rnmobiledenuevo` = `f77d8400`, `dpl_H2B91dcR…` READY** — «Despegue rápido» ([SDD](../specs/despegue-rapido/SPEC.md)). Anterior 22:54Z `e15a031c` / `dpl_5UDcjDBr…` — F2 «Descanso siempre» (QA VERDE). Anteriores del 11-09 (`091a19b0` arreglos chicos + F1, `6321a732` cuenta atrás; QA del owner VERDE 11-09, SDD `done`) y previos en el historial. Deploys anteriores en el [historial](../archive/current-historial-2026-09.md). | [Runbook](../operations/RUNBOOK.md) · [spec](../specs/pricing-v3/SPEC.md) |
-| App nativa (RN) | 1.1.2 es el piso OTA; canal `production` recibe android e ios por separado sobre el mismo commit. **OTA vigente 11-09 23:48Z** desde `master` @`f77d8400` (android `a349abee` / ios `d7b9a9d5`, runtime 1.1.2): «Despegue rápido» (QA pendiente). Antes 22:57Z @`e15a031c` (android `f0c0d18b` / ios `76bf4d26`): F2 «Descanso siempre» (QA VERDE). Antes 02:58Z @`091a19b0` (arreglos chicos + F1, QA VERDE 11-09), 00:13Z @`6321a732` (cuenta atrás), 10-09 @`27132cb9` y @`d5d7d188`. OTAs anteriores y QA de device en el [historial](../archive/current-historial-2026-09.md). | [Mobile parity](MOBILE_PARITY.md) · [OTA](../operations/MOBILE_RELEASES_OTA.md) |
-| Auth: Google en el login de coach | **Fix 04-09 EN PRODUCCIÓN** (`master` = `rnmobiledenuevo` = `22644899`, deploy `dpl_CZKUwNthWaeQL2cvS6nG55k4eMGx` READY, OTA 1.1.2 android `d8220490` / ios `54487ddd`; **QA del owner VERDE 05-09** — artifact `6bd32370`: el alumno que toca Google en `/login` ve el copy nuevo y su correo queda libre; el coach nuevo va a `/register`): «Continuar con Google» sin cuenta de coach dejaba un `auth.users` huérfano que «ocupaba» el correo del alumno (caso Leonardo/Movens; huérfano borrado a mano en LIVE el 04-09). Ahora un LOGIN con Google sin fila `coaches` ya no cae en `/coach/onboarding/complete` (alta de coach): `resolvePostGoogleAuthUrl` (web) y `login.tsx` (RN) avisan a `POST /api/auth/google-orphan-cleanup` / `/api/mobile/auth/google-orphan-cleanup`, que borra solo al usuario demostrablemente vacío (`lib/auth/google-orphan-cleanup.ts`), cierran la sesión y rebotan a `/login` con copy que manda al alumno a su código y al coach nuevo a `/register` (el alta por Google sigue ahí). F2b (alta de alumno con cuenta existente) sigue en backlog. | [Login y auth](../architecture/FLOWS_AND_COMPONENTS.md) |
+| Web/PWA | Pricing v3 productivo: Free = 1 alumno + white-label + sello «Hecho con EVA»; Pro 25 sin sello. **Deploy vigente 11-09 23:47Z: `master` = `rnmobiledenuevo` = `f77d8400`, `dpl_H2B91dcR…` READY** — «Despegue rápido» ([SDD](../specs/despegue-rapido/SPEC.md)). Deploys anteriores del 11-09 (F2 «Descanso siempre», arreglos chicos + F1, cuenta atrás — QA VERDE, SDD `done`) con sus hashes en el [historial](../archive/current-historial-2026-09.md). | [Runbook](../operations/RUNBOOK.md) · [spec](../specs/pricing-v3/SPEC.md) |
+| App nativa (RN) | 1.1.2 es el piso OTA; canal `production` recibe android e ios por separado sobre el mismo commit. **OTA vigente 11-09 23:48Z** desde `master` @`f77d8400` (android `a349abee` / ios `d7b9a9d5`, runtime 1.1.2): «Despegue rápido» (QA pendiente). OTAs anteriores del 11-09 (F2 «Descanso siempre», arreglos chicos + F1, cuenta atrás — QA VERDE) y de días previos, con sus hashes, en el [historial](../archive/current-historial-2026-09.md). | [Mobile parity](MOBILE_PARITY.md) · [OTA](../operations/MOBILE_RELEASES_OTA.md) |
+| Auth: Google en el login de coach | **Fix 04-09 EN PRODUCCIÓN, QA del owner VERDE 05-09** (hashes, deploy, OTA y detalle técnico en el [historial](../archive/current-historial-2026-09.md)): un LOGIN con Google sin fila `coaches` dejaba un `auth.users` huérfano que ocupaba el correo del alumno (caso Leonardo/Movens); ahora `resolvePostGoogleAuthUrl`/`login.tsx` lo limpian y rebotan a `/login` con el copy correcto. Queda F2b (alta de alumno con cuenta existente) en backlog. | [Login y auth](../architecture/FLOWS_AND_COMPONENTS.md) |
 | Archivado de alumnos | P0 de alta en producción (2026-08-03); **QA físico VERDE 05-09** (artifact `6bd32370`); queda la matriz Team. | [Spec de corte](../../specs/archive-nutrition-v2-cutover/SPEC.md) |
-| Nutrition V2 | Canónica para Standalone/Team; el programa de rediseño cerró el 2026-08-17. **«Porciones a la chilena» EN PRODUCCIÓN 10-09** (`95a1d39a`, RPC `get_nutrition_today_v2` `20260910015432`, set chileno INTA/UDD encendido: 22 grupos del sistema vivos). «Cantidades honestas» en producción 06-09, QA del owner VERDE 10-09 (SDD `done`). | [Porciones CL](../specs/nutrition-porciones-chilenas/SPEC.md) · [Programa](../specs/nutrition-flows-redesign/TASKS.md) · [Runbook de corte](../operations/NUTRITION_V2_CUTOVER_RUNBOOK.md) |
+| Nutrition V2 | Canónica para Standalone/Team; el programa de rediseño cerró el 2026-08-17. «Porciones a la chilena» EN PRODUCCIÓN 10-09 y «Cantidades honestas» EN PRODUCCIÓN 06-09, ambos con QA del owner VERDE (SDD `done`); hashes y RPC en el [historial](../archive/current-historial-2026-09.md). | [Porciones CL](../specs/nutrition-porciones-chilenas/SPEC.md) · [Programa](../specs/nutrition-flows-redesign/TASKS.md) · [Runbook de corte](../operations/NUTRITION_V2_CUTOVER_RUNBOOK.md) |
 | V1 nutrición | Congelada, **no se borra** (decisión owner 2026-08-03): solo migrar usuarios a V2. | [Delta del mapa](../audits/v1-deprecation-map-delta-2026-08-03.md) |
 | Teams | Pool, membresías y workspaces implementados. | [Flows](../architecture/FLOWS_AND_COMPONENTS.md#team) |
 | Enterprise | **ELIMINADO de EVA (decisión del owner 2026-09-01)**: E0+E1 EN PRODUCCIÓN 05-09 22:56Z (app Expo, specs y scripts borrados; `/enterprise` ⇒ 308 a `/pricing`); E2/E3 planificadas en el SDD. | [SDD retiro](../specs/retiro-starter-y-enterprise/SPEC.md) · [Ola de orden](../specs/ola-de-orden/TASKS.md) · [Flows](../architecture/FLOWS_AND_COMPONENTS.md#enterprise) |
 
 ## Prioridades vigentes
 
+**«Dossier por meses»** (SDD en [`docs/specs/dossier-por-meses`](../specs/dossier-por-meses/SPEC.md)): pedido del coach Joaco (15-09); modo «Por meses» en el export del dossier (web + RN), RPC `get_client_month_reports`; en implementación, sin push.
+
 0. **Fix RN «Asignar plantilla» — EN PRODUCCIÓN 14-09: `master` = `rnmobiledenuevo` = `deb1df75`, OTA 1.1.2 android `0ae8d63a` / ios `154980fb`** (detalle en [MOBILE_RELEASES_OTA](../operations/MOBILE_RELEASES_OTA.md)): alumnos arriba con buscador (paridad web), duración al pie, CTA «Selecciona alumnos». **Queda: QA del owner en device.**
 1. **Tren «Reps tras el reloj» (fuerza por tiempo) + Enmienda E1 — EN PRODUCCIÓN 12-09: `master` = `rnmobiledenuevo` = `9e153f23` (commits en [TEST_STATUS](../testing/TEST_STATUS.md)), deploy `dpl_5d2TczpX66aoGSsfAkkeqwW9BqVh` READY, OTA 1.1.2 android `01a097d4-0a6e-7bd9-8323-e7efd6cadeb0` / ios `01a097d4-2ebd-7a75-83c2-874454fd36fd`, E2E `prod-suave` 9/9 (run 34723934934)** ([SDD](../specs/reps-tras-el-reloj/SPEC.md) · [tareas](../specs/reps-tras-el-reloj/TASKS.md); mockup aprobado artifact `6ead4180` v3): a 0 la serie se guarda sola; reps/kg faltantes se piden sobre el ejercicio con el descanso corriendo (E1). Sin migraciones; gates verdes 12-09 ([TEST_STATUS](../testing/TEST_STATUS.md)). **Queda: QA del owner en device y web (10 puntos del SPEC §10; incluye el arrastre del share) ⇒ SDD `done`.**
-1. **F2 «Descanso siempre» EN PRODUCCIÓN 11-09 22:57Z, QA VERDE ⇒ `done`; «Despegue rápido» EN PRODUCCIÓN 11-09 23:48Z** (deploy `dpl_H2B91dcR…`, OTA android `a349abee` / ios `d7b9a9d5`, E2E 9/9; [SDD](../specs/despegue-rapido/SPEC.md)): RN pinta desde caché antes de esperar auth, web emite la señal sin marca de morph, TTL 20 s. **Queda: QA del owner (5 puntos) y Sentry a 72 h (~14-09).** Tren «Arreglos chicos pre-OTA» + F1 (tile REPS en fuerza por tiempo) — EN PRODUCCIÓN 11-09 02:58Z (deploy `dpl_6FXkTMyJ…` READY 02:52Z, OTA 1.1.2 android `d4701f84` / ios `369ec7af`), QA del owner pendiente** ([SDD](../specs/arreglos-chicos-pre-ota/SPEC.md) · [tareas](../specs/arreglos-chicos-pre-ota/TASKS.md)): `master` = `rnmobiledenuevo` = `091a19b0` (F1 `fe6e9b39` → docs → W1-A `ed9c9085` · W1-C `7d2eb3f1` · W1-B `09e5d9fa` → docs `091a19b0`); E2E `prod-suave` 9/9 (run 34556450253, 42,7 s). Entran 9 fixes chicos (detalle en el SDD). Gates completos en [TEST_STATUS](../testing/TEST_STATUS.md). **Queda: QA del owner en device (3 puntos con reps de F1 + 11 del tren, TASKS W3.10) ⇒ SDD `done` (este tren y W6.4 de cuenta atrás).** «Cuenta atrás en pantalla» ([SDD](../specs/cuenta-atras-en-pantalla/SPEC.md)): en producción desde 11-09 00:13Z, QA VERDE salvo los 3 puntos con reps ⇒ luego `done`; siguen aviso a Gerardo, seed E2E W6.10 y Sentry ~14-09.
-2. **Cerrados 10-09 con QA del owner VERDE ⇒ SDD `done`** (prosa en el [historial](../archive/current-historial-2026-09.md)): «Señales honestas para el coach» ([tareas](../specs/senales-honestas-coach/TASKS.md); `27132cb9`, `dpl_EjxDinR2…`, OTA android `a95c9e11` / ios `bd329833`; aviso a Movens enviado) · «Porciones a la chilena» ([SDD](../specs/nutrition-porciones-chilenas/SPEC.md); `95a1d39a`, RPC `20260910015432`, OTA android `9e844b15` / ios `8de637b3`, set chileno encendido; queda W6.11: avisos a coaches y respuesta a Pame, textos listos).
+1. **«Despegue rápido» EN PRODUCCIÓN 11-09 23:48Z** (deploy `dpl_H2B91dcR…`, OTA android `a349abee` / ios `d7b9a9d5`, E2E 9/9; [SDD](../specs/despegue-rapido/SPEC.md)): RN pinta desde caché antes de esperar auth, web emite la señal sin marca de morph, TTL 20 s. **Queda: QA del owner (5 puntos) y Sentry a 72 h (~14-09).** (F2 «Descanso siempre» cerró el mismo día, QA VERDE ⇒ `done`; ver [Estado por frente](#estado-por-frente).) Tren «Arreglos chicos pre-OTA» + F1 (tile REPS en fuerza por tiempo) — EN PRODUCCIÓN 11-09 02:58Z (deploy `dpl_6FXkTMyJ…` READY 02:52Z, OTA 1.1.2 android `d4701f84` / ios `369ec7af`), QA del owner pendiente** ([SDD](../specs/arreglos-chicos-pre-ota/SPEC.md) · [tareas](../specs/arreglos-chicos-pre-ota/TASKS.md)): `master` = `rnmobiledenuevo` = `091a19b0` (F1 `fe6e9b39` → docs → W1-A `ed9c9085` · W1-C `7d2eb3f1` · W1-B `09e5d9fa` → docs `091a19b0`); E2E `prod-suave` 9/9 (run 34556450253, 42,7 s). Entran 9 fixes chicos (detalle en el SDD). Gates completos en [TEST_STATUS](../testing/TEST_STATUS.md). **Queda: QA del owner en device (3 puntos con reps de F1 + 11 del tren, TASKS W3.10) ⇒ SDD `done` (este tren y W6.4 de cuenta atrás).** «Cuenta atrás en pantalla» ([SDD](../specs/cuenta-atras-en-pantalla/SPEC.md)): en producción desde 11-09 00:13Z, QA VERDE salvo los 3 puntos con reps ⇒ luego `done`; siguen aviso a Gerardo, seed E2E W6.10 y Sentry ~14-09.
+2. **Cerrados 10-09 con QA del owner VERDE ⇒ SDD `done`** (hashes, deploys y OTAs en el [historial](../archive/current-historial-2026-09.md)): «Señales honestas para el coach» ([tareas](../specs/senales-honestas-coach/TASKS.md); aviso a Movens enviado) · «Porciones a la chilena» ([SDD](../specs/nutrition-porciones-chilenas/SPEC.md); queda W6.11: avisos a coaches y respuesta a Pame, textos listos).
 3. **Cerrados con QA del owner VERDE (02/04/05-09); prosa completa en el [historial](../archive/current-historial-2026-09.md):**
    «Ciclo real y por lado» ([tareas](../specs/ciclo-real-y-por-lado/TASKS.md), `a567f6e2`, SDD `done`, aviso a coaches y E2E 9/9
    el 05-09) · «QA del owner 02-09» ([spec](../specs/qa-ejecutor-share-0209/SPEC.md), `0f545926`; quedan F7 y P3) · «billing +
    seguridad» (`16c06fba`; SEC-01 fase 3 en LIVE 05-09, frente cerrado) · «cierre de backlog 02-09» + ola 2 chica (`794aee52`;
    `QA_DEVICE_PENDIENTE.md` sin pendientes). Detalle de paridad en [MOBILE_PARITY](MOBILE_PARITY.md).
-5. **(a) `EVA-NEXTJS-18` (hidratación en `/c/[coach_slug]/dashboard?recuperar=…`) — causa confirmada
-   y FIX EN PRODUCCIÓN 05-09 22:56Z (O7.7, deploy `dpl_yJUsqXJ8…`)**: el barrido O7.1 se salteó
-   `WorkoutPlanCard.fmtShortDate` (client component del dashboard del ALUMNO); ahora usa
-   `formatShortDayMonthEs` (tabla fija, cero `Intl`). **Verificar en Sentry el 08-09 ~23:00Z (72 h del deploy).**
-   **(b) `E394` = `EVA-NEXTJS-19` — 0 eventos desde el 01-09
-   18:42Z con tráfico alto (12.230 spans en la ruta) ⇒ O6.8 cumplida**, **resuelto en Sentry con nota
-   el 05-09** (C3 cerrada con la misma evidencia); O7.4 desestimado salvo regresión (decisión del jefe
-   05-09). [tareas § O7](../specs/cierre-sentry-vivos/TASKS.md)
+5. **`EVA-NEXTJS-18` (hidratación en `/c/[coach_slug]/dashboard?recuperar=…`) y `EVA-NEXTJS-19`
+   (`E394`) — ambos con FIX EN PRODUCCIÓN y resueltos en Sentry el 05-09** (causa raíz, deploy y
+   verificación en el [historial](../archive/current-historial-2026-09.md)); O7.4 desestimado salvo
+   regresión. [tareas § O7](../specs/cierre-sentry-vivos/TASKS.md)
 7. **Errores al día (ola O6) — EN PRODUCCIÓN 01-09**, O6.8/O6.9/O7.6 cerrados 05-09; `EVA-MOBILE-F` (despegue sin escena) sigue abierto;
    Skia exige build nativo y P5 `noUncheckedIndexedAccess` (431 errores) como tanda propia. [tareas § O6/O7](../specs/cierre-sentry-vivos/TASKS.md)
 8. **PLAN «Cobros coach → alumno» — BLOQUEADO, nada implementado** ([spec](../specs/cobros-coach-alumno/SPEC.md)
@@ -83,9 +81,8 @@ prevalecen sobre este resumen. La prosa retirada el 2026-09-02 está en
     correo de dunning (`webhook-pipeline.ts:244/1241`) a `/coach/subscription/update-card`; (c) el camino Flow
     del dunning no tiene CTA (`changeCardForCoach` devuelve `WRONG_PROVIDER`); (d) label «Starter» en
     `processing`/`flow-processing`: **cerrado** por el mismo retiro.
-    **Retiro de Starter: S0–S3 y E0/E1 EN PRODUCCIÓN 05-09** (deploy `dpl_yJUsqXJ8…`, OTA android
-    `ea487622` / ios `59f92afe`; humo `/coach/reactivate?tier=starter` ⇒ «Plan seleccionado: Pro» verificado con un
-    coach de prueba elite expirado, creado y borrado) ([SDD](../specs/retiro-starter-y-enterprise/SPEC.md)); absorbió (2) y (d).
+    **Retiro de Starter: S0–S3 y E0/E1 EN PRODUCCIÓN 05-09** ([SDD](../specs/retiro-starter-y-enterprise/SPEC.md);
+    hashes, deploy, OTA y humo de verificación en el [historial](../archive/current-historial-2026-09.md)); absorbió (2) y (d).
 12. **iOS/Android — 1.1.2 aprobada y en tienda ⇒ piso OTA 1.1.2**: 1.1.3 no tiene motivo (cero cambio
    nativo desde la build 59); Android sigue en 1.1.2 (build 86, closed testing Alpha) y producción
    espera 12 testers × 14 días. [OTA](../operations/MOBILE_RELEASES_OTA.md)
@@ -96,11 +93,10 @@ prevalecen sobre este resumen. La prosa retirada el 2026-09-02 está en
 11. Regen completo de `database.types.ts` (deja 13 errores en 7 archivos V1; ahí se retiran los
     workarounds tipados de T2.3 y el cast `V2ReadClient`).
 12. Matriz RLS con JWTs reales + preflight V1→V2 (7 enlaces) — sin cambios desde 08-06.
-14. **Tren «Cantidades honestas» (Nutrición V2) — W1–W4 EN PRODUCCIÓN 06-09 ~23:07Z** ([SDD](../specs/nutrition-cantidades-honestas/SPEC.md)):
-    `master` = `rnmobiledenuevo` = `2fe28d61`, deploy `dpl_C95u9ArN…` READY, 3 migraciones en LIVE (`20260906230222`…`230411`),
-    OTA 1.1.2 android `27028d0f` / ios `ddf839b8`. W1 conversión al cambiar unidad + avisos de plausibilidad + huérfanos visibles;
-    W2 medida casera «2 huevos (122 g)»; W3 linaje `source_item_id` + «Aplicar hoy/desde mañana»; W4 ficha del coach con
-    Retirar/Editar. **QA del owner en device VERDE 10-09 ⇒ SDD `done`**; quedan los avisos a `jotap-coach`/`olympuswolf` (los manda el owner) y el dry-run del backfill USDA (TASKS C6/C7).
+14. **Tren «Cantidades honestas» (Nutrición V2) — W1–W4 EN PRODUCCIÓN 06-09, QA del owner en device VERDE 10-09 ⇒ SDD `done`**
+    ([SDD](../specs/nutrition-cantidades-honestas/SPEC.md); commits, migraciones y OTA en el [historial](../archive/current-historial-2026-09.md)):
+    conversión al cambiar unidad, medida casera, linaje `source_item_id` y ficha del coach con Retirar/Editar. Quedan los avisos
+    a `jotap-coach`/`olympuswolf` (los manda el owner) y el dry-run del backfill USDA (TASKS C6/C7).
 15. **TTFB del área alumno**: la causa medida era la REGIÓN y ya está corregida (`regions: ["pdx1"]`,
     `deb8aee3`). Queda re-medir el delta (p50/p75 de `/c/:coach_slug/dashboard`, 24 h antes vs
     después) y decidir QW3 (doble render móvil+desktop).

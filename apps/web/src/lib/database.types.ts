@@ -7144,12 +7144,20 @@ export type Database = {
           reps_at_max: number
         }[]
       }
+      get_client_month_reports: {
+        Args: { p_client_id: string; p_months: string[] }
+        Returns: Json
+      }
       get_client_muscle_volume: {
         Args: { p_client_id: string; p_days_back?: number }
         Returns: {
           muscle_group: string
           volume: number
         }[]
+      }
+      get_client_report_bounds: {
+        Args: { p_client_id: string }
+        Returns: Json
       }
       get_client_strength_series: {
         Args: { p_client_id: string }

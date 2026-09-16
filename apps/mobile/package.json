@@ -12,6 +12,7 @@
     "@eva/bodycomp": "workspace:*",
     "@eva/calc": "workspace:*",
     "@eva/cardio": "workspace:*",
+    "@eva/client-dossier": "workspace:*",
     "@eva/coach-nav": "workspace:*",
     "@eva/feature-prefs": "workspace:*",
     "@eva/module-catalog": "workspace:*",

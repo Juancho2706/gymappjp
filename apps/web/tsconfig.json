@@ -27,6 +27,7 @@
       "@eva/schemas/bodycomp": ["../../packages/schemas/bodycomp.ts"],
       "@eva/schemas/persona": ["../../packages/schemas/persona.ts"],
       "@eva/calc": ["../../packages/calc/index.ts"],
+      "@eva/client-dossier": ["../../packages/client-dossier/index.ts"],
       "@eva/brand-kit": ["../../packages/brand-kit/index.ts"],
       "@eva/tiers": ["../../packages/tiers/index.ts"],
       "@eva/nutrition-engine": ["../../packages/nutrition-engine/index.ts"],

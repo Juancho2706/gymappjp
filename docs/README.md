@@ -62,6 +62,10 @@ specs/<feature>/
 
 `specs/` contiene únicamente trabajo real en diseño o ejecución. Al terminar o cancelar una feature, se extrae cualquier decisión duradera y el material deja el árbol activo. Git conserva el historial; no mantener un segundo backlog en documentación.
 
+Tren en ejecución:
+
+- [Dossier por meses](specs/dossier-por-meses/SPEC.md) — informe mensual del alumno (web + RN): [PLAN](specs/dossier-por-meses/PLAN.md) · [TASKS](specs/dossier-por-meses/TASKS.md) · [DATA-TESTING](specs/dossier-por-meses/DATA-TESTING.md)
+
 ## Reglas de ciclo de vida
 
 Todo documento canónico comienza con:
