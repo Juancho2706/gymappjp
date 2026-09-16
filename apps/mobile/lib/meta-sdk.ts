@@ -98,17 +98,35 @@ export async function syncMetaTrackingConsent(): Promise<void> {
  * Se emite cuando el servidor YA creó la cuenta (después de que resuelve el endpoint), nunca al
  * tocar el botón: un evento de registro que se dispara antes del 200 mide intenciones, no altas.
  *
- * `method` es el ÚNICO parámetro (21.719, ver cabecera). Los nombres los da el propio SDK
- * (`AppEventsLogger.AppEvents.CompletedRegistration` = `fb_mobile_complete_registration`,
- * `AppEventParams.RegistrationMethod` = `fb_registration_method`): se leen de los constants del
- * módulo nativo, así que sin binario nativo son `undefined` y el try/catch se los come.
+ * `method` es el ÚNICO parámetro (21.719, ver cabecera).
+ *
+ * Los nombres van como STRING LITERAL, no como `AppEventsLogger.AppEvents.CompletedRegistration`:
+ * esas «constantes» salen de `NativeModules.FBAppEventsLogger.getConstants()` y en el build 61
+ * (1.1.3, nueva arquitectura) el registro del socio del 2026-09-15 llegó a PostHog
+ * (`coach_registered`, la línea de al lado) pero a Meta no llegó NADA, mientras que el
+ * `fb_mobile_activate_app` automático de esa misma sesión sí. Un nombre `undefined` el SDK lo
+ * descarta sin ruido (y el try/catch se traga el TypeError si las constantes no existen). Los
+ * literales son los nombres públicos y estables de Meta para eventos estándar, no dependen de
+ * ningún puente. Se conservan como fallback las constantes por si algún día difieren.
+ *
+ * `flush()` explícito: el SDK acumula y manda «solo» al pasar a segundo plano o por temporizador;
+ * el alta es UN evento por instalación y vale la pena que salga ya, no cuando el coach cierre la app.
  */
+const META_EVENT_COMPLETED_REGISTRATION = 'fb_mobile_complete_registration'
+const META_PARAM_REGISTRATION_METHOD = 'fb_registration_method'
+
 export function trackMetaCoachRegistered(method: 'email' | 'google'): void {
   if (!META_SDK_ENABLED) return
   try {
-    AppEventsLogger.logEvent(AppEventsLogger.AppEvents.CompletedRegistration, {
-      [AppEventsLogger.AppEventParams.RegistrationMethod]: method,
-    })
+    const eventName =
+      AppEventsLogger.AppEvents?.CompletedRegistration ?? META_EVENT_COMPLETED_REGISTRATION
+    const paramName =
+      AppEventsLogger.AppEventParams?.RegistrationMethod ?? META_PARAM_REGISTRATION_METHOD
+    AppEventsLogger.logEvent(
+      typeof eventName === 'string' ? eventName : META_EVENT_COMPLETED_REGISTRATION,
+      { [typeof paramName === 'string' ? paramName : META_PARAM_REGISTRATION_METHOD]: method },
+    )
+    AppEventsLogger.flush()
   } catch {
     // swallow — ver §fail-open.
   }
