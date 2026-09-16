@@ -107,7 +107,10 @@ Detalle en [MANUAL_TASKS](../../operations/MANUAL_TASKS.md), bloque «Meta SDK i
       que el SDK haya mandado suficientes eventos; reintentar en unos días con más instalaciones.
 - [x] **W5.5** ✅ 15-09: ID del dispositivo + Interacción con el producto marcados «con fines de seguimiento» + «Publicidad o marketing del desarrollador»; la ficha muestra «Datos usados para rastrearte: Datos de uso, Identificadores». App Store Connect → Privacidad de la app → «Datos usados para rastrearte»:
       Identificadores del dispositivo e Interacción con el producto.
-- [~] **W5.6** «Probar eventos» con el build 1.1.3: llegan `fb_mobile_activate_app` y
+- [x] **W5.6** ✅ 16-09 02:05Z: dataset EVA Web (15 sept Chile) por «SDK de Facebook»: `Completar registro` **2** (00:53Z
+      `violajuan2` con bundle embebido, 01:33Z `big-pee-pee-energy` de Víctor con la OTA `01a0a7a8`), Instalaciones 5,
+      ActivateApp 11. Meta tarda ~30–40 min en mostrar los eventos de app aunque el SDK los mande al momento.
+      ~~«Probar eventos» con el build 1.1.3: llegan `fb_mobile_activate_app` y~~
       `fb_mobile_complete_registration`. Parcial 15-09 noche (verificado en el dataset EVA Web): por «SDK de
       Facebook» llegaron `ActivateApp` ×4, «Instalaciones de la aplicación» ×3, `fb_sdk_initialize` ×2 y
       `fb_mobile_deactivate_app` ×1 (última recepción hace 1 h). `Completar registro` desde la app: el socio
