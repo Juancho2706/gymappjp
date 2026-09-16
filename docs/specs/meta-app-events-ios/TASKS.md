@@ -112,4 +112,8 @@ Detalle en [MANUAL_TASKS](../../operations/MANUAL_TASKS.md), bloque «Meta SDK i
       Facebook» llegaron `ActivateApp` ×4, «Instalaciones de la aplicación» ×3, `fb_sdk_initialize` ×2 y
       `fb_mobile_deactivate_app` ×1 (última recepción hace 1 h). `Completar registro` desde la app: el socio
       registró al coach de prueba `violarjuan69` (DB 23:25:08Z, build 61 TestFlight); a las 23:35Z aún no
-      figuraba en Events Manager (lag ≤30 min) ⇒ re-verificar.
+      figuraba en Events Manager (lag ≤30 min) ⇒ re-verificar. **00:30Z: NO llegó** (ni con la app cerrada y
+      reabierta; el ActivateApp de esa sesión sí: 4 → 6), pero PostHog tiene `coach_registered` rn/1.1.3/iOS a las
+      23:25:09Z ⇒ el código corrió y el evento de Meta se perdió en silencio. Fix `5f6f4962` (nombres literales +
+      `flush()`) + **OTA iOS runtime 1.1.3 grupo `d93896c7` (run 35040762143)**. Falta: alta de prueba con la OTA
+      puesta y ver `Completar registro` por «SDK de Facebook».
