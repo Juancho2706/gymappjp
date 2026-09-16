@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-09-15"
+last_verified: "2026-09-16"
 canonical: false
 ---
 
@@ -144,7 +144,7 @@ Salieron de dos refutaciones adversariales (datos/SQL = **D#n**; producto/genera
 
 ### 6.1 Entrada y estructura
 
-- **DM-02a** El icon-button «Exportar PDF» del hero (`ClientProfileHero.tsx:253-257`) deja de disparar la descarga y **abre `DossierExportDialog`** (`@/components/ui/dialog`, que ya existe). El `aria-label`/`title` pasa a «Exportar dossier».
+- **DM-02a** El icon-button «Exportar PDF» del hero (`ClientProfileHero.tsx:241-242`) deja de disparar la descarga y **abre `DossierExportDialog`** (`@/components/ui/dialog`, que ya existe). El `aria-label`/`title` **se mantienen en «Exportar PDF»** — el botón del hero web ya se llamaba así antes de este tren y no cambia de rótulo, solo de comportamiento (abre el diálogo en vez de descargar directo). El sheet RN sí se titula «Exportar dossier» (`DossierExportSheet.tsx:172`, prop `title`) porque ese componente es nuevo y no hereda ningún rótulo previo.
 - **DM-02b** Al abrir, el diálogo pide `getClientReportBounds(clientId)`. Mientras no llegan los bordes, el segmento «Por meses» está deshabilitado con un esqueleto; «Estado actual» ya es usable.
 - **DM-02c** Segmento (`@/components/ui/segmented-control`, `SegmentedControlProps` en `segmented-control.tsx:22-30`): **«Estado actual» | «Por meses»**, con «Estado actual» **preseleccionado** y el CTA con foco ⇒ el caso frecuente es **2 clics** (abrir + Enter).
 
@@ -181,7 +181,7 @@ Salieron de dos refutaciones adversariales (datos/SQL = **D#n**; producto/genera
 
 ### 7.2 Datos
 
-- **DM-03g** `fetchClientMonthReports(clientId, months)` y `fetchClientReportBounds(clientId)` viven en `apps/mobile/lib/coach-client-detail.ts`, al lado de las llamadas `supabase.rpc` que ya existen (`:860-883`), y usan el JWT del coach. El modelo se arma con `buildClientMonthDossier` de `@eva/client-dossier` — RN **no** reimplementa ni una regla.
+- **DM-03g** `fetchClientMonthReports(clientId, months)` y `fetchClientReportBounds(clientId)` viven en `apps/mobile/lib/client-month-reports.ts` (**nuevo**, no en `coach-client-detail.ts`: las lecturas mensuales se separaron en su propio módulo, junto con `MAX_EXPORT_MONTHS` y `photoRefsByCheckInId`), y usan el JWT del coach vía `supabase.rpc`. El modelo se arma con `buildClientMonthDossier` de `@eva/client-dossier` — RN **no** reimplementa ni una regla.
 
 ### 7.3 Generación (R23)
 
@@ -212,7 +212,7 @@ Los seis los **precomputa el modelo** como `tiles: DossierTile[]` de largo 6 (`{
 |---|---|---|---|
 | 1 | **Peso · jul 2026** | `weight.last_kg` + « kg», o `—` | Δ vs `prev_kg`: «−0,1 kg» / «+0,3 kg» / «sin cambio»; si `last_at` cae **fuera** del período ⇒ «último check-in dd mmm» |
 | 2 | **Adherencia · jul 2026** | `round(training_days ÷ planned_days × 100)` con tope 100, o `—` | «N de M días» · sin programa ⇒ «sin programa» |
-| 3 | **Días entrenados · jul 2026** | `training_days.length` | `/ planned_days` cuando hay programa; «N días» a secas cuando no |
+| 3 | **Días entrenados · jul 2026** | `training_days.length` («N») cuando no hay programa, o `training_days.length/planned_days` («N/M») cuando sí lo hay | «N sesiones» (usa `sessions`, no `training_days`) |
 | 4 | **Volumen · jul 2026** | `volume_total` con separador de miles + « kg» | «kg × reps» |
 | 5 | **Récords nuevos · jul 2026** | cantidad de `prs` con `isNew` | «de N ejercicios» |
 | 6 | **Check-ins · jul 2026** | `check_ins.length` | «en el mes» |
@@ -234,9 +234,9 @@ Los seis los **precomputa el modelo** como `tiles: DossierTile[]` de largo 6 (`{
 - **DM-24b** Subtítulo **«Semanas a–b de N»**, más **«· finalizó el dd mmm»** cuando `end_date < period.to`.
 - **DM-24c** Días del programa con su cantidad de ejercicios (`block_count`), igual que hoy.
 - **DM-24d** **Sin programa** (borrado duro o `start_date` nulo) pero con logs: el nombre pasa a **«Entrenamientos registrados»** y los días son los `plan_names_from_logs` **sin conteo** de ejercicios.
-- **DM-24e** Sin programa y sin logs: el empty-state actual («Sin programa activo asignado.»).
+- **DM-24e** Sin programa y sin logs: el empty-state **de mes**, «Sin programa ni entrenamientos registrados en el período.» (§8.7) — no el texto de «Estado actual» («Sin programa activo asignado.»), que es el que sigue usando el dossier de HOY sin tocarse (DM-04).
 - **DM-24f** **Días planificados** del período = `planned_per_week × días_del_período ÷ 7`, redondeado. `planned_per_week` = cantidad de `day_of_week` distintos de los `workout_plans` del programa con al menos un `workout_blocks`; si el programa es `ab_mode`, el **promedio de las variantes A y B**, redondeado.
-- **DM-24g** Sin programa ⇒ `planned_days = null` ⇒ **adherencia `null`**: el tile 2 imprime `—` y el tile 3 imprime «N días» **sin denominador**. Nunca se inventa un denominador de 7.
+- **DM-24g** Sin programa ⇒ `planned_days = null` ⇒ **adherencia `null`**: el tile 2 imprime `—` y el tile 3 imprime solo `N` (sin `/planned_days`), con sub «N sesiones» **sin denominador**. Nunca se inventa un denominador de 7.
 
 ### 8.5 Sección «Check-ins»
 
@@ -249,6 +249,19 @@ Los seis los **precomputa el modelo** como `tiles: DossierTile[]` de largo 6 (`{
 - **DM-26b** Los snapshots de día son **lazy**: `tracked_days` = filas existentes de `nutrition_day_snapshots_v2` en el período (`20260714190000:152-172`), no los días del calendario. Por eso el copy es «X de Y días registrados» y nunca «X de 31».
 - **DM-26c** Sin plan vigente en el mes ⇒ `nutrition = null` y el PDF imprime **«Sin plan de nutrición vigente.»**
 - **DM-26d** El cálculo de «en rango» **se copia, no se reinventa** — ver §15 D-3: hoy vive en TypeScript, no en el RPC de historia.
+
+### 8.7 Estados vacíos del informe mensual (DM-27)
+
+- **DM-27** Los cuatro estados vacíos del **modo mes** son **idénticos, carácter por carácter, en web y en RN** (`apps/web/src/lib/pdf/client-dossier-pdf.ts:77-85`, const `EMPTY`, campo `.month`; `apps/mobile/lib/client-dossier-pdf.ts:311,350-351,357,382`), para que el mismo mes exportado desde cualquiera de los dos lados diga lo mismo:
+
+  | Sección | Texto |
+  |---|---|
+  | Programa (sin programa y sin logs) | «Sin programa ni entrenamientos registrados en el período.» |
+  | Volumen por grupo | «Sin volumen de entrenamiento en el período.» |
+  | Nutrición | «Sin plan de nutrición vigente en el período.» |
+  | Check-ins | «Sin check-ins en el período.» |
+
+  El dossier **«Estado actual»** conserva sus propios cuatro textos de siempre («Sin programa activo asignado.», «Sin volumen de entrenamiento en los últimos 30 días.», «Sin plan de nutrición vigente.», «Sin check-ins registrados.») — DM-04, no se tocan.
 
 ---
 
@@ -329,7 +342,8 @@ Por mes: `month`, `period {from,to}`, `training_days[]`, `sessions`, `planned_da
   2. el **RPC** se llama con el **cliente de cookies** (`createClient()` de `@/lib/supabase/server`, `server.ts:14`) ⇒ el guard de 3 vías corre con el JWT real del coach;
   3. el **service-role** (`createServiceRoleClient()`, `admin-client.ts:7`) se usa **únicamente** dentro de `resolveCheckinPhotoUrls` (`checkin-photos.ts:85`), porque los coaches no tienen policy de SELECT en storage.
 - **DM-42a** Esa separación es un **invariante escrito en el código** (comentario en la server action) y en este SPEC: llamar el RPC con service-role saltearía el guard IDOR entero y convertiría la action en un agujero cross-tenant. El precedente correcto ya existe: `client-detail.service.ts:702` pasa `createServiceRoleClient()` **solo** a `resolveCheckinPhotoUrls`.
-- **DM-42b** Un `42501` del RPC se traduce a `Error('No tenés acceso a este alumno')`; nunca se filtra el mensaje crudo de Postgres a la UI.
+- **DM-42b** Un `42501` del RPC se traduce a `Error('No tenés acceso a este alumno')` y un `22023` a `Error('Selección de meses inválida')`; nunca se filtra el mensaje crudo de Postgres a la UI.
+- **DM-42b.1 · Estado real (ronda de revisión 16-09) — regla, no todavía código.** `translateReportRpcError` (`apps/web/src/services/client/client-month-report.service.ts:63-67`) traduce **solo** `42501` y `22023`; para **cualquier otro código** hoy devuelve `new Error(error.message || 'No se pudo leer el informe del alumno')`, es decir, **propaga el mensaje crudo de Postgres** en el objeto `Error` (con el comentario explícito «es un bug, no una decisión de producto», `:61`). En la web esto **no llega a filtrarse a la UI** porque `DossierExportDialog.messageFor()` (`DossierExportDialog.tsx:58-61`) solo muestra los dos mensajes de la allowlist `KNOWN_ERRORS` y cualquier otro texto cae a `GENERIC_ERROR` («No se pudo generar el PDF. Intentá de nuevo.») — la UI web es segura hoy pase lo que pase en el service. **En RN NO existe ese filtro**: `throwRpcError` (`apps/mobile/lib/client-month-reports.ts:25-30`) traduce el `42501` pero para cualquier otro código (incluido un futuro `22023` sin manejar explícito) hace `throw new Error(error?.message || fallback)`, y `DossierExportSheet.tsx:138` pinta `e.message` **directo** en el sheet — un coach en RN puede ver un mensaje de Postgres en crudo. **Regla de cierre de este tren** (pendiente de implementar, no confundir con lo que ya funciona en la web): (a) el service debe devolver un mensaje **genérico** («No se pudo leer el informe del alumno») para cualquier código que no sea `42501`/`22023`, y loguear el error original **server-side** (`console.error` o el logger que use el resto de `services/client`), nunca en el `Error` que sube al cliente; (b) `throwRpcError` en RN debe aplicar la misma allowlist que la web (solo `DENIED_MESSAGE` y el mensaje de `22023` viajan tal cual; cualquier otro código cae a su `fallback` genérico, nunca a `error.message`). **Cierre**: [TASKS.md](TASKS.md) tareas C10 y D9 (nuevas, sin marcar).
 - **DM-42c** El archivo de la action es `'use server'`: **solo exporta funciones async**; los tipos y constantes del diálogo viven fuera.
 
 ---
@@ -362,12 +376,13 @@ Por mes: `month`, `period {from,to}`, `training_days[]`, `sessions`, `planned_da
 
 ## 13. Fotos (R16, R20)
 
-- **DM-50 · Web.** `fullPhotoRows: 3` **por mes** y **solo `front_photo_url`** (`tailFields`), usando las opciones que `resolveCheckinPhotoUrls` ya expone (`checkin-photos.ts:32-41`). Tope global **18 fotos por exportación**: 6 meses × 3, y a partir de ahí el PDF deja de crecer.
+- **DM-50 · Web.** El service firma **como máximo 3 fotos por mes** y **solo `front_photo_url`**, pero lo hace con `{ fullPhotoRows: 0, tailFields: ['front_photo_url'] }` (`apps/web/src/services/client/client-month-report.service.ts:157-158`), **no** `fullPhotoRows: 3`: `resolveCheckinPhotoUrls` firma las **tres** fotos (front/side/back) en las filas dentro de `fullPhotoRows` y **solo** `tailFields` en el resto (`checkin-photos.ts:32-41,91,98,100`); como el informe mensual imprime únicamente la frontal, `fullPhotoRows: 0` + `tailFields: ['front_photo_url']` firma exactamente esa y nada más, en **todas** las filas. El tope de 3 por mes y 18 por exportación lo aplica `pickPhotoRefs` **antes** de llamar al firmador (`client-month-report.service.ts:124-139`), no la opción `fullPhotoRows`.
 - **DM-51 · RN.** Antes de embeber, cada foto pasa por
   `ImageManipulator.manipulateAsync(uri, [{ resize: { width: 700 } }], { compress: 0.6, format: JPEG, base64: true })`.
   El paquete ya está en la app (`apps/mobile/package.json:65`, `expo-image-manipulator ~14.0.8`) y el check-in ya lo usa con el mismo patrón (`apps/mobile/lib/exercises.ts:420-423`). Sin el resize, 18 fotos de cámara en base64 hacen un HTML de decenas de MB y `expo-print` se queda sin memoria en gama media.
 - **DM-51a** Mismo tope: **3 fotos por mes**, **18 por exportación**. Se firma **por lote de mes** (`signCheckinPhotos`, `apps/mobile/lib/api.ts:246`), no foto por foto.
-- **DM-52 · Ruta compartida.** `apps/web/src/app/api/mobile/coach/checkin-photos/route.ts:52` acota `refs` a **24** (`.slice(0, 24)`). Hoy la ruta firma **todo** lo que venga en el body: un cliente con un bug o un actor hostil puede pedir miles de firmas por request contra el service-role. Es un cambio de una línea y entra en este tren.
+- **DM-52 · Ruta compartida — estado actual (16-09): trunca, no rechaza.** `apps/web/src/app/api/mobile/coach/checkin-photos/route.ts:54` hoy hace `.slice(0, 24)` sobre `refs`: acota el trabajo del service-role, pero un caller que mande 100 `refs` recibe **200 con 24 URLs firmadas** y ningún aviso de que las otras 76 se descartaron.
+- **DM-52a · Corrección del revisor final (pendiente de aplicar).** Un array de `refs` con más de 24 elementos es una señal de bug del caller (nadie exporta más de 18 fotos, DM-50/DM-51a): la ruta debe **rechazar con `400`** (`{ error: 'Demasiadas fotos por request' }` o similar) en vez de truncar en silencio, para que el bug se vea en el caller y no se entierre en una respuesta 200 incompleta. **Todavía no está en el código** (verificado 16-09: la ruta sigue con `.slice(0, 24)`, sin el `if (refs.length > 24)` que devolvería 400) — regla escrita para que quien lo implemente no reabra la discusión; tarea sin marcar en [TASKS.md](TASKS.md) (D5).
 - **DM-53** El interruptor apagado ⇒ **no se firma ni una foto** (ni en web ni en RN): la sección de fotos no se imprime y no se hace ninguna llamada a storage.
 - **DM-54** Una foto que falla (path irreconocible, firma vencida, descarga caída) **no rompe el informe**: se pinta el placeholder que ya existe (`apps/mobile/lib/client-dossier-pdf.ts:170`, `client-dossier-pdf.ts:644`).
 
@@ -441,6 +456,12 @@ Cada hallazgo de las dos refutaciones quedó cerrado por una resolución. Ningun
 
 En device (RN) y en navegador (web). Ningún punto se da por bueno sin ejecutarlo.
 
+### Notas — cambios intencionales (no son regresión)
+
+- **RN · «null%» → «—».** El tile Nutrición del dossier **de HOY** en RN imprimía literalmente `null%` cuando `data.nutritionMonthlyAvgPct` era `null`. Ahora imprime `—` (`apps/mobile/lib/client-dossier-pdf.ts:598-599`, comentario «Micro-fix: sin dato el cuadro imprimía literalmente «null%»»). Si el QA del owner venía de una build vieja y esperaba ver `null%`, **no es un bug**: es el fix.
+- **Récord nuevo: marca distinta por plataforma.** Web marca el récord nuevo con el sufijo **«(nuevo)»** en vez de ★ (`apps/web/src/lib/pdf/client-dossier-pdf.ts:68`, `NEW_PR_MARKER`): las fuentes estándar de jsPDF van en WinAnsiEncoding y **no tienen** el carácter ★ (U+2605), que sale corrupto en el PDF. RN sí imprime **★** (`apps/mobile/lib/client-dossier-pdf.ts:334`), porque el HTML + `expo-print` no tiene esa limitación de encoding. El punto 13 de abajo distingue los dos casos.
+- **Modo «separado» web entrega un `.zip`.** Con «Un solo PDF» apagado y 2+ meses, la descarga es un archivo `dossier-<slug>-<primero>_<último>.zip` (no N PDF sueltos): ábrelo y verificá que tiene un PDF por mes adentro.
+
 ### Web
 
 1. Abrir la ficha de un alumno con historial (Joaco) y tocar «Exportar PDF»: **se abre un diálogo**, no se descarga nada.
@@ -452,10 +473,10 @@ En device (RN) y en navegador (web). Ningún punto se da por bueno sin ejecutarl
 7. Abrir el PDF de julio: el chip del encabezado dice **JUL 2026**, **no** hay chip de score, y la meta dice `Período 1–31 jul 2026`.
 8. Los seis cuadros dicen **«· jul 2026»** en su rótulo.
 9. Un mes **vacío** (sin entrenos ni check-ins) produce un informe con `—` en todos lados y los empty-states de siempre: **no crashea y no queda en blanco**.
-10. Un alumno **sin programa**: la adherencia dice `—` y «Días entrenados» dice «N días» sin denominador.
+10. Un alumno **sin programa**: la adherencia dice `—` y «Días entrenados» muestra solo el número entrenado (sin `/planificados`), con «N sesiones» debajo.
 11. Apagar «Incluir fotos»: el informe sale sin la grilla de fotos.
 12. Encendido: hasta 3 fotos por mes, ninguna partida entre páginas.
-13. Récords del mes: las filas con ★ son las que superan el máximo de meses anteriores; el tile «Récords nuevos» coincide con la cantidad de ★.
+13. Récords del mes: las filas marcadas (web: sufijo **«(nuevo)»**; ver nota arriba) son las que superan el máximo de meses anteriores; el tile «Récords nuevos» coincide con esa cantidad.
 14. Provocar un error (exportar un alumno de otro coach desde la URL): el mensaje sale **dentro del diálogo** y dice «No tenés acceso a este alumno».
 
 ### RN (device)

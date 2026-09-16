@@ -24,10 +24,8 @@ import {
     HeartPulse,
     PersonStanding,
     Scale,
-    Loader2,
 } from 'lucide-react'
-import { getClientDossier } from './_actions/client-detail.actions'
-import { downloadClientDossierPdf } from '@/lib/pdf/client-dossier-pdf'
+import { DossierExportDialog } from './DossierExportDialog'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { cn } from '@/lib/utils'
@@ -211,22 +209,9 @@ export function ClientProfileHero({
 
     const waHref = client.phone ? `https://wa.me/${client.phone.replace(/\D/g, '')}` : null
 
-    const [exporting, setExporting] = useState(false)
-    const [exportError, setExportError] = useState<string | null>(null)
-
-    const handleExport = async () => {
-        if (exporting) return
-        setExportError(null)
-        setExporting(true)
-        try {
-            const dossier = await getClientDossier(clientId)
-            await downloadClientDossierPdf(dossier)
-        } catch {
-            setExportError('No se pudo generar el PDF. Intenta de nuevo.')
-        } finally {
-            setExporting(false)
-        }
-    }
+    // El botón ya no descarga: abre el diálogo de exportación (R19). El estado de carga, los
+    // errores y la elección de meses viven ahí, no en el hero.
+    const [exportOpen, setExportOpen] = useState(false)
 
     return (
         <div className="relative flex min-w-0 max-w-full flex-col gap-3">
@@ -250,18 +235,14 @@ export function ClientProfileHero({
                 <div className="flex shrink-0 items-center gap-1.5 print:hidden">
                     <button
                         type="button"
-                        onClick={handleExport}
-                        disabled={exporting}
-                        aria-busy={exporting}
-                        aria-label={exporting ? 'Generando PDF…' : 'Exportar PDF'}
-                        title={exporting ? 'Generando PDF…' : 'Exportar PDF'}
+                        onClick={() => setExportOpen(true)}
+                        aria-haspopup="dialog"
+                        aria-expanded={exportOpen}
+                        aria-label="Exportar PDF"
+                        title="Exportar PDF"
                         className="flex h-10 w-10 items-center justify-center rounded-control border border-default bg-surface-card text-strong shadow-[var(--shadow-sm)] transition-colors hover:bg-surface-sunken disabled:opacity-70"
                     >
-                        {exporting ? (
-                            <Loader2 className="h-[18px] w-[18px] animate-spin" />
-                        ) : (
-                            <Download className="h-[18px] w-[18px]" />
-                        )}
+                        <Download className="h-[18px] w-[18px]" />
                     </button>
                     <button
                         type="button"
@@ -272,11 +253,6 @@ export function ClientProfileHero({
                     >
                         <MoreVertical className="h-[18px] w-[18px]" />
                     </button>
-                    {exportError && (
-                        <p role="alert" className="basis-full text-[11px] font-semibold text-[var(--danger-500)]">
-                            {exportError}
-                        </p>
-                    )}
                 </div>
             </div>
 
@@ -426,6 +402,13 @@ export function ClientProfileHero({
                     onClose={() => setEditingClient(null)}
                 />
             )}
+
+            {/* Exportación del informe (estado actual o por meses) — R19. */}
+            <DossierExportDialog
+                open={exportOpen}
+                onOpenChange={setExportOpen}
+                clientId={clientId}
+            />
         </div>
     )
 }

@@ -16,6 +16,11 @@ import {
     markCheckInReviewed as markCheckInReviewedService,
     unmarkCheckInReviewed as unmarkCheckInReviewedService,
 } from '@/services/client/client-detail.service'
+import {
+    getClientMonthReports as getClientMonthReportsService,
+    getClientReportBounds as getClientReportBoundsService,
+    MAX_MONTHS_PER_EXPORT,
+} from '@/services/client/client-month-report.service'
 import { assembleClientFichaPanel } from '../_data/ficha-panel.data'
 import { resolveNutritionTabV2 } from '../_data/nutrition-tab-v2.data'
 import { buildClientDossier } from '@/services/client/client-dossier'
@@ -64,6 +69,48 @@ export async function getClientDossier(clientId: string) {
         },
         { generatedAtIso: new Date().toISOString() }
     )
+}
+
+/** `YYYY-MM`. Los meses viajan como clave, nunca como `Date` (evita el corrimiento de TZ). */
+const MONTH_KEY_RE = /^\d{4}-\d{2}$/
+
+function assertClientId(clientId: string): string {
+    if (typeof clientId !== 'string' || clientId.trim() === '') {
+        throw new Error('clientId inválido')
+    }
+    return clientId.trim()
+}
+
+/**
+ * Rango de meses exportables del alumno (R11), en claves `YYYY-MM`. Lo pide el diálogo de
+ * exportación al abrir el modo «Por meses» para armar los chips.
+ */
+export async function getClientReportBounds(clientId: string) {
+    return getClientReportBoundsService(assertClientId(clientId))
+}
+
+/**
+ * Informes MENSUALES del alumno, uno por mes pedido, listos para el generador de PDF (R16).
+ *
+ * Validación de entrada acá (borde público): la action es un endpoint RPC — cualquiera con
+ * sesión puede postearle lo que quiera, así que el tope de 24 meses y el formato de las claves
+ * se verifican antes de llegar al service (y el guard de acceso, dentro del service).
+ */
+export async function getClientMonthDossiers(
+    clientId: string,
+    monthKeys: string[],
+    options?: { includePhotos?: boolean }
+) {
+    const id = assertClientId(clientId)
+    if (!Array.isArray(monthKeys) || monthKeys.length === 0 || monthKeys.length > MAX_MONTHS_PER_EXPORT) {
+        throw new Error('Selección de meses inválida')
+    }
+    if (!monthKeys.every((k) => typeof k === 'string' && MONTH_KEY_RE.test(k))) {
+        throw new Error('Selección de meses inválida')
+    }
+    return getClientMonthReportsService(id, monthKeys, {
+        includePhotos: options?.includePhotos !== false,
+    })
 }
 
 export async function addPayment(data: {

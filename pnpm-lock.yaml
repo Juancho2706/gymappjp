@@ -254,6 +254,9 @@ importers:
       '@eva/cardio':
         specifier: workspace:*
         version: link:../../packages/cardio
+      '@eva/client-dossier':
+        specifier: workspace:*
+        version: link:../../packages/client-dossier
       '@eva/coach-nav':
         specifier: workspace:*
         version: link:../../packages/coach-nav
@@ -570,6 +573,9 @@ importers:
       '@eva/cardio':
         specifier: workspace:*
         version: link:../../packages/cardio
+      '@eva/client-dossier':
+        specifier: workspace:*
+        version: link:../../packages/client-dossier
       '@eva/coach-nav':
         specifier: workspace:*
         version: link:../../packages/coach-nav
@@ -588,6 +594,9 @@ importers:
       '@sentry/nextjs':
         specifier: ^10.53.1
         version: 10.53.1(@opentelemetry/core@2.8.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.7.1(@opentelemetry/api@1.9.1))(next@16.3.0(@babel/core@7.29.7)(@opentelemetry/api@1.9.1)(@playwright/test@1.61.1)(@types/node@20.19.37)(babel-plugin-react-compiler@1.0.0)(react-dom@19.1.0(react@19.1.0))(react@19.1.0))(react@19.1.0)(webpack@5.107.1(lightningcss@1.31.1))
+      fflate:
+        specifier: 0.8.3
+        version: 0.8.3
       jose:
         specifier: ^6.2.3
         version: 6.2.3
@@ -613,6 +622,8 @@ importers:
   packages/calc: {}
 
   packages/cardio: {}
+
+  packages/client-dossier: {}
 
   packages/coach-nav: {}
 

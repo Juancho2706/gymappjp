@@ -17,6 +17,9 @@ import { toCheckinPath } from '@/lib/storage/checkin-photos'
  * cliente token-scoped (RLS). Cambio ADITIVO: el camino cookie de la web queda intacto.
  */
 
+/** R20: tope de refs por request (18 fotos = exportación mensual completa, + margen). */
+const MAX_REFS_PER_REQUEST = 24
+
 function bearerToken(request: NextRequest): string | null {
     const auth = request.headers.get('authorization') || request.headers.get('Authorization')
     if (!auth?.startsWith('Bearer ')) return null
@@ -51,6 +54,13 @@ export async function POST(request: NextRequest) {
     const clientId = body.clientId
     const refs = Array.isArray(body.refs) ? body.refs.filter((r): r is string => typeof r === 'string') : []
     if (!clientId) return NextResponse.json({ error: 'clientId requerido' }, { status: 400 })
+    // R20 (dossier por meses): techo de 24 refs por request — 18 fotos es el tope de una
+    // exportación mensual completa y firmar de a cientos es carísimo (y un vector de abuso).
+    // Se RECHAZA en vez de truncar: truncar en silencio devolvería un lote incompleto que el
+    // cliente leería como "estas fotos no existen".
+    if (refs.length > MAX_REFS_PER_REQUEST) {
+        return NextResponse.json({ error: 'Demasiadas fotos por request' }, { status: 400 })
+    }
 
     // Authorize: the coach is the client's direct coach OR an active org member assigned to them.
     const { data: client } = await rls

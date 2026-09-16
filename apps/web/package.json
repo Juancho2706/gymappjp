@@ -11,12 +11,14 @@
   },
   "dependencies": {
     "@eva/cardio": "workspace:*",
+    "@eva/client-dossier": "workspace:*",
     "@eva/coach-nav": "workspace:*",
     "@eva/onboarding": "workspace:*",
     "@eva/plan-builder": "workspace:*",
     "@eva/profile-analytics": "workspace:*",
     "@eva/workout-engine": "workspace:*",
     "@sentry/nextjs": "^10.53.1",
+    "fflate": "0.8.3",
     "jose": "^6.2.3",
     "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zxing-wasm": "^3.1.2"

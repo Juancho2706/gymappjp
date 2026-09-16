@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-09-15"
+last_verified: "2026-09-16"
 canonical: false
 ---
 
@@ -53,7 +53,7 @@ packages/client-dossier/                           @eva/client-dossier — PURO 
         │     .../[clientId]/ClientProfileHero.tsx    el botón abre el diálogo
         │
         └── RN                                                                          (W3)
-              lib/coach-client-detail.ts   + fetchClientMonthReports / fetchClientReportBounds
+              lib/client-month-reports.ts (nuevo)   fetchClientMonthReports / fetchClientReportBounds
               lib/client-dossier-pdf.ts    renderDossierHtml(model, photoMap) separado de
                                            exportClientDossierPdfs(models[], opts)
               components/coach/clientDetail/DossierExportSheet.tsx  (nuevo, sobre Sheet.tsx)
@@ -179,7 +179,7 @@ En este orden, sin saltear pasos, y **antes** de `apply_migration`:
 | Archivo | Cambio |
 |---|---|
 | `apps/web/src/lib/database.types.ts` (bloque `Functions`) | **R17**: `get_client_month_reports` con `Args: { p_client_id: string; p_months: string[] }` y `Returns: Json`; `get_client_report_bounds` con `Args: { p_client_id: string }` y `Returns: Json`. Van en orden alfabético, entre `get_client_exercise_prs` (`:7137`) y `get_client_muscle_volume`. **Sin `as any` en ningún consumidor.** |
-| `apps/web/src/app/coach/clients/[clientId]/_actions/client-detail.actions.ts` | Dos exports nuevos: `getClientReportBounds(clientId)` y `getClientMonthDossiers(clientId, months, { includePhotos })`. Los dos validan `clientId` como ya hace `getClientDossier` (`:48-50`). El segundo: `assertCoachClientReadAccess` → RPC con `createClient()` de cookies → `resolveCheckinPhotoUrls(createServiceRoleClient(), rows, { fullPhotoRows: 3, tailFields: ['front_photo_url'] })` por mes cuando `includePhotos` → `buildClientMonthDossier` por mes con `generatedAtIso` **único** → `ClientDossierData[]`. El `42501` se traduce a `Error('No tenés acceso a este alumno')`. **Archivo `'use server'`: solo exporta funciones async**; los tipos del diálogo viven fuera (regla de AGENTS.md). |
+| `apps/web/src/app/coach/clients/[clientId]/_actions/client-detail.actions.ts` | Dos exports nuevos, finos: `getClientReportBounds(clientId)` y `getClientMonthDossiers(clientId, months, { includePhotos })`, que delegan en `apps/web/src/services/client/client-month-report.service.ts` (**nuevo**, no en el archivo de actions). El service: `assertCoachClientReadAccess` → RPC con `createClient()` de cookies → `resolveCheckinPhotoUrls(createServiceRoleClient(), rows, { fullPhotoRows: 0, tailFields: ['front_photo_url'] })` por mes cuando `includePhotos` (el `0` evita firmar side/back en las primeras filas — con `fullPhotoRows: 3` esas filas traerían las tres fotos; el informe solo imprime la frontal) → `buildClientMonthDossier` por mes con `generatedAtIso` **único** → `ClientDossierData[]`. El `42501` se traduce a `Error('No tenés acceso a este alumno')`. **Archivo `'use server'`: solo exporta funciones async**; los tipos del diálogo viven fuera (regla de AGENTS.md). |
 | `apps/web/src/lib/pdf/client-dossier-pdf.ts` | **R18**: extraer el cuerpo de `downloadClientDossierPdf` (`:66-663`) a `renderDossierReport(doc, ctx, dossier, { index, total })`, con los helpers (`paintBg`, `addPage`, `checkPage`, `card`, `sectionHeader`, `emptyState`, `:83-127`) **fuera del bucle**, en el `ctx`. Firma nueva: `downloadClientDossierPdf(input: ClientDossierData \| ClientDossierData[], opts?: { separate?: boolean })`. **Junto**: un `doc`, `doc.addPage()` entre informes, footer con página **global** «p/total». **Separado**: N `doc` ⇒ un zip con `zipSync` de `fflate`. Los tiles se leen de `dossier.tiles ?? buildTodayTiles(dossier)`: el grid de `:243-266` deja de calcular nada. |
 | `apps/web/package.json` (`dependencies`) | `"fflate": "0.8.3"` — la versión que ya resuelve el lockfile y la que exige el override de seguridad del `package.json` raíz. `pnpm install` para el lockfile. |
 | `apps/web/src/lib/pdf/client-dossier-pdf.smoke.test.ts` | El holder pasa de un blob a `captured: ArrayBuffer[]`; casos nuevos en [DATA-TESTING](DATA-TESTING.md) §5.5. |
@@ -205,7 +205,7 @@ En este orden, sin saltear pasos, y **antes** de `apply_migration`:
 
 | Archivo | Cambio |
 |---|---|
-| `apps/mobile/lib/coach-client-detail.ts` | `fetchClientMonthReports(clientId, months): Promise<MonthReportsJson>` y `fetchClientReportBounds(clientId): Promise<ClientReportBoundsJson>`, vía `supabase.rpc`, al lado de las llamadas que ya existen (`:860-883`). El cliente RN (`apps/mobile/lib/supabase.ts`) **no** está tipado con `Database`, así que no hace falta tocar tipos: se castea al contrato del package, que es la fuente. |
+| `apps/mobile/lib/client-month-reports.ts` (**nuevo** — no en `coach-client-detail.ts`: las lecturas mensuales viven en su propio módulo, junto con `MAX_EXPORT_MONTHS` y `photoRefsByCheckInId`, para no engordar el archivo de 1.6k líneas) | `fetchClientMonthReports(clientId, months): Promise<MonthReportJson[]>` y `fetchClientReportBounds(clientId): Promise<ClientReportBounds>`, vía `supabase.rpc`. El cliente RN (`apps/mobile/lib/supabase.ts`) **no** está tipado con `Database`, así que no hace falta tocar tipos: se castea al contrato del package, que es la fuente. |
 | `apps/mobile/lib/client-dossier-pdf.ts` | **R23**: separar `renderDossierHtml(model: ClientDossierData, photoMap)` de la exportación; nuevo `exportClientDossierPdfs(models[], opts)` que concatena bloques `<div class="report">` con `page-break-after: always` y comparte **un** archivo. `kpiCard` (`:176`) pasa a recibir un `DossierTile`. El stem (`:329`) usa `dossierFileStem` del package. **Fixes de corte** en `STYLES` (`:130+`): `.vol-row, tr, .photo-cell { page-break-inside: avoid }`, `.photos-block { break-inside: avoid }` envolviendo el bloque de fotos de `:280-286`, y `.vol-track/.vol-bar { display: block }`. |
 | `apps/mobile/lib/client-dossier-pdf.ts` (`embedCheckinPhotos`, `:92-127`) | **R20**: pasa por `ImageManipulator.manipulateAsync(uri, [{ resize: { width: 700 } }], { compress: 0.6, format: JPEG, base64: true })` antes de embeber (patrón ya usado en `apps/mobile/lib/exercises.ts:420-423`). Topes: **3 fotos por mes**, **18 por exportación**. Firma **por lote de mes** con `signCheckinPhotos` (`apps/mobile/lib/api.ts:246`). |
 | `apps/web/src/app/api/mobile/coach/checkin-photos/route.ts:52` | **R20**: `.slice(0, 24)` sobre `refs`. Hoy la ruta firma todo lo que venga en el body contra el service-role. Cambio de una línea, entra en este tren. |

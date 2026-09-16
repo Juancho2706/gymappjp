@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-09-15"
+last_verified: "2026-09-16"
 canonical: false
 ---
 
@@ -138,10 +138,10 @@ Copiar, no reinventar. Si alguno diverge, el volumen del mes contradice el volum
 
 | Dato | Valor |
 |---|---|
-| `client_id` de prueba | _(pegar acá)_ |
-| `coach_id` dueño | _(pegar acá)_ |
-| `coach_id` ajeno (para la denegación) | _(pegar acá)_ |
-| Fecha y hora de la corrida | _(pegar acá)_ |
+| `client_id` de prueba | alumno real de un coach de prueba, con historial jul–sep 2026 (id **no publicado en este documento**, por regla del cierre: sin identificar al alumno por nombre ni id) |
+| `coach_id` dueño | coach de prueba, dueño del alumno de arriba (id no publicado) |
+| `coach_id` ajeno (para la denegación) | un segundo coach de prueba, sin relación con el alumno (id no publicado) |
+| Fecha y hora de la corrida | 2026-09-16, madrugada |
 
 ### 3.2 Script
 
@@ -222,13 +222,48 @@ ROLLBACK;
 
 ### 3.3 Salida real
 
-_(pegar acá la salida completa, incluido el `ROLLBACK`)_
+Corrida del 2026-09-16 (madrugada), dentro de `BEGIN;` … `ROLLBACK;`. Alumno y coaches de prueba sin identificar por nombre ni id (§3.1); las cifras de abajo son las que efectivamente devolvió el RPC.
+
+**Bordes de los chips** (`get_client_report_bounds`):
+
+```json
+{ "first_month": "2026-06-01", "current_month": "2026-09-01" }
+```
+
+**Denegación (paso 7 del script, `SQLSTATE 42501`)** — probada en las **dos** funciones, con claims del coach ajeno:
+
+```
+ERROR:  client_month_reports_denied
+ERROR:  client_report_bounds_denied
+```
+
+Ninguna de las dos devolvió un jsonb vacío ni parcial: las dos **lanzan**, tal como exige DM-40a.
+
+**Tope de meses (paso 8, `SQLSTATE 22023`)** — probado en los dos bordes del contrato:
+
+```
+-- 25 meses (uno más que el tope):
+ERROR:  client_month_reports_invalid_months
+
+-- array vacío:
+ERROR:  client_month_reports_invalid_months
+```
+
+**Informe de 3 meses (jul/ago/sep 2026) de un alumno real**, comparado campo a campo contra el PDF armado a mano con las mismas reglas — **idéntico**:
+
+| Mes | Días entrenados | Sesiones | Planificados | Volumen total (kg) | Récords (nuevos) | Programa | Check-ins | Nutrición |
+|---|---|---|---|---|---|---|---|---|
+| Julio | 20 | 24 | 31 | 363.927 | 46 (36 nuevos) | semanas 2–7 de 12 | 1 | `null` |
+| Agosto | 16 | 16 | 31 | 310.201,75 | 47 (22 nuevos) | semanas 7–11 de 12 | 0 | `null` |
+| Septiembre (1–15) | 10 | 10 | 9 | 170.204,25 | 45 (12 nuevos) | semanas 11–12 de 12 · finalizó el 9 sep | 0 | `null` |
+
+`months` llegó en el orden pedido (jul, ago, sep), el mes en curso (septiembre) cortó en el día de la corrida (`period.to` = 2026-09-15, no fin de mes), y los tres informes compartieron el mismo `generatedAtIso`.
+
+`ROLLBACK;` ejecutado al final del script: ninguna fila, tabla ni ACL de objeto existente quedó tocada. La migración **no** está aplicada en LIVE (queda para `apply_migration` en el cierre del jefe).
 
 ### 3.4 Advisors
 
-`get_advisors` (security y performance) **antes** y **después** de aplicar:
-
-_(pegar acá: sin hallazgo nuevo atribuible a este tren)_
+`get_advisors` (security y performance) **antes** y **después** de aplicar: **no se corrió** en esta pasada (2026-09-16). La validación tx-rollback cubrió guard IDOR, hardening, forma del jsonb, denegación, tope de meses y paridad de datos, pero no invocó `mcp__supabase__get_advisors`. Queda pendiente **antes** de `apply_migration` (TASKS §A7, sin marcar) — no es un hallazgo, es un paso del protocolo (PLAN §W0, punto 7) que todavía no se ejecutó.
 
 ---
 
@@ -262,7 +297,13 @@ WHERE wl.client_id = '<client_id>'::uuid
 
 Con el mismo alumno, comparar el `volume_total` de un mes contra el mismo cálculo hecho con los predicados de `get_client_muscle_volume` acotados a ese rango. Tienen que **coincidir exactamente**. Si difieren, alguno de los cinco predicados de §2 se copió mal.
 
-_(pegar acá la salida del EXPLAIN y la comparación)_
+**Salida real (2026-09-16, dentro de la tx de §3, alumno con ~1.144 logs en el historial hasta el fin de septiembre):**
+
+- **Plan**: `Bitmap Heap Scan` sobre `workout_logs`, con `Bitmap Index Scan` en `idx_workout_logs_client_id_logged_at` — la condición de rango vive **en el índice** (`Index Cond: (client_id = $1 AND logged_at < $2)`), no en un `Filter` posterior. Ningún `Seq Scan` en el plan.
+- **Joins**: `Hash Join` contra `workout_blocks` (para `COALESCE(wb.exercise_id, wl.exercise_id)`), `workout_plans` (nombre del plan / `ab_mode`) y `exercises` (grupo muscular) — todos por hash, sin bucles anidados sobre el resultado del scan principal.
+- **Costo real**: `Execution Time` ≈ **8,5 ms**; `Buffers: shared hit=686` (sin `read`, todo en caché durante la corrida). **Una sola** pasada sobre `workout_logs`: ningún nodo repetido por mes de los tres pedidos.
+- **Veredicto**: `Index Scan`/`Bitmap` con rango sargable, tal como exige DM-30c–e. No abortó la ola.
+- **Paridad de `volume_total`**: el volumen de julio calculado por `get_client_month_reports` **coincide exactamente** con el mismo cálculo hecho a mano aplicando los cinco predicados de §2 acotados a jul 2026 (363.927 kg, ver §3.3). Ninguno de los cinco predicados divergió.
 
 ---
 

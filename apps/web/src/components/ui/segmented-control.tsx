@@ -26,6 +26,11 @@ export interface SegmentedControlProps
   onChange?: (value: string) => void
   /** Control height/typography. `sm` = 34px, `md` = 42px. */
   size?: "sm" | "md"
+  /**
+   * Values that cannot be picked right now (e.g. a segment whose data is still loading).
+   * Additive and optional: omitted = every segment is selectable, exactly as before.
+   */
+  disabledValues?: readonly string[]
 }
 
 function SegmentedControl({
@@ -33,6 +38,7 @@ function SegmentedControl({
   value,
   onChange,
   size = "md",
+  disabledValues,
   className,
   ...rest
 }: SegmentedControlProps) {
@@ -52,12 +58,14 @@ function SegmentedControl({
     >
       {norm.map((o) => {
         const active = o.value === value
+        const disabled = disabledValues?.includes(o.value) ?? false
         return (
           <button
             key={o.value}
             type="button"
             role="radio"
             aria-checked={active}
+            disabled={disabled}
             data-active={active ? "" : undefined}
             onClick={() => onChange?.(o.value)}
             className={cn(
@@ -69,7 +77,10 @@ function SegmentedControl({
               size === "sm" ? "h-[34px] text-[13px]" : "h-[42px] text-sm",
               active
                 ? "bg-surface-card font-bold text-strong shadow-[var(--shadow-sm)]"
-                : "bg-transparent font-semibold text-muted"
+                : "bg-transparent font-semibold text-muted",
+              // Va al final: `twMerge` deja ganar a la última clase del mismo grupo
+              // (`cursor-*`), así que acá sí pisa al `cursor-pointer` de la base.
+              disabled && "cursor-not-allowed opacity-50"
             )}
           >
             {o.label}
