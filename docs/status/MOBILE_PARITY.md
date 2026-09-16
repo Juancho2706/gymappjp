@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-09-15"
+last_verified: "2026-09-16"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -12,14 +12,16 @@ source_of_truth: apps/web responsive + apps/mobile
 
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
 
-> **2026-09-15 (tren «Meta SDK iOS» — EN CÓDIGO, sin build todavía; [SDD](../specs/meta-app-events-ios/SPEC.md))**. Entra el SDK
+> **2026-09-15/16 (tren «Meta SDK iOS» — EN TESTFLIGHT Y MIDIENDO: build 61 (1.1.3) en App Review, eventos verificados en
+> Events Manager el 16-09 02:05Z; [SDD](../specs/meta-app-events-ios/SPEC.md))**. Entra el SDK
 > de Meta al binario para que las campañas puedan atribuir instalaciones y altas hechas desde el celular: `lib/meta-sdk.ts` (gate
 > `!__DEV__`, todo fail-open), hoja de **ATT** disparada 800 ms DESPUÉS de que se va el splash nativo (`_layout.tsx`), y
 > `CompletedRegistration` + PostHog `coach_registered` en el alta de coach por **correo y por Google** (`(auth)/register.tsx`) —
 > **paridad de medición nueva**: la web ya mandaba `CompleteRegistration` por píxel + CAPI y el móvil no mandaba nada. Manifiesto de
-> privacidad con `NSPrivacyTracking: true` + identificador de device e interacción con el producto. **El runtime pasa a 1.1.3 ⇒
-> requiere build EAS, NO viaja por OTA**; quedan pendientes el build, el QA del owner (SPEC §8) y los pasos manuales del owner en Meta y
-> App Store Connect (`MOB-META-01` en [MANUAL_TASKS](../operations/MANUAL_TASKS.md)).
+> privacidad con `NSPrivacyTracking: true` + identificador de device e interacción con el producto. **El runtime pasó a 1.1.3 ⇒ exigió
+> build EAS (61), no viaja por OTA**; sobre ese runtime ya corre la OTA ios 1.1.3 grupo `d93896c7` con el fix de
+> `CompletedRegistration` (nombres literales + `flush()`). Los pasos manuales de Meta y App Store Connect (`MOB-META-01` en
+> [MANUAL_TASKS](../operations/MANUAL_TASKS.md)) están hechos salvo SKAN; quedan la aprobación de Apple y el QA del owner (SPEC §8).
 
 > **2026-09-12 (Enmienda E1 de «Reps tras el reloj» — EN PRODUCCIÓN: `master` = `rnmobiledenuevo` = `9e153f23` (`2ef37ff2` RN ·
 > `31a9dfc1` web), deploy `dpl_5d2TczpX66aoGSsfAkkeqwW9BqVh` READY, OTA 1.1.2 `production` android `01a097d4-0a6e-7bd9-8323-e7efd6cadeb0` / ios `01a097d4-2ebd-7a75-83c2-874454fd36fd`, E2E `prod-suave` 9/9 (run 34723934934))**. Con el prompt de huecos abierto el descanso arranca MINIMIZADO y se

@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-09-15"
+last_verified: "2026-09-16"
 canonical: true
 ---
 
@@ -18,8 +18,8 @@ prevalecen sobre este resumen. La prosa retirada el 2026-09-02 está en
 
 | Frente | Estado | Fuente de detalle |
 |---|---|---|
-| Web/PWA | Pricing v3 productivo: Free = 1 alumno + white-label + sello «Hecho con EVA»; Pro 25 sin sello. **Deploy vigente 11-09 23:47Z: `master` = `rnmobiledenuevo` = `f77d8400`, `dpl_H2B91dcR…` READY** — «Despegue rápido» ([SDD](../specs/despegue-rapido/SPEC.md)). Deploys anteriores del 11-09 (F2 «Descanso siempre», arreglos chicos + F1, cuenta atrás — QA VERDE, SDD `done`) con sus hashes en el [historial](../archive/current-historial-2026-09.md). | [Runbook](../operations/RUNBOOK.md) · [spec](../specs/pricing-v3/SPEC.md) |
-| App nativa (RN) | 1.1.2 es el piso OTA; canal `production` recibe android e ios por separado sobre el mismo commit. **OTA vigente 11-09 23:48Z** desde `master` @`f77d8400` (android `a349abee` / ios `d7b9a9d5`, runtime 1.1.2): «Despegue rápido» (QA pendiente). OTAs anteriores del 11-09 (F2 «Descanso siempre», arreglos chicos + F1, cuenta atrás — QA VERDE) y de días previos, con sus hashes, en el [historial](../archive/current-historial-2026-09.md). | [Mobile parity](MOBILE_PARITY.md) · [OTA](../operations/MOBILE_RELEASES_OTA.md) |
+| Web/PWA | Pricing v3 productivo: Free = 1 alumno + white-label + sello «Hecho con EVA»; Pro 25 sin sello. **Deploy vigente 16-09 ~02:30Z: `master` = `rnmobiledenuevo` = `0748acd3`, `dpl_HQH52H1T…` READY** — «Dossier por meses» ([SDD](../specs/dossier-por-meses/SPEC.md)), migración LIVE `20260916014833`. Anteriores: 11-09 `f77d8400` / `dpl_H2B91dcR…` («Despegue rápido») y el resto del 11-09, con sus hashes en el [historial](../archive/current-historial-2026-09.md). | [Runbook](../operations/RUNBOOK.md) · [spec](../specs/pricing-v3/SPEC.md) |
+| App nativa (RN) | 1.1.2 sigue siendo el piso OTA mientras Apple no apruebe 1.1.3; el runtime 1.1.3 existe porque el SDK de Meta es cambio nativo y su build 61 está en App Review. **OTAs vigentes 16-09 ~02:30Z** («Dossier por meses»): ios runtime **1.1.3** grupo `a73f71a0` (run 35047893693, desde `master` @`0748acd3`) + android/ios runtime **1.1.2** desde el tag `ota/1.1.2-20260916` = `64ad9615` (runs 35048341298 / 35048343745). Sin Android 1.1.3 (no hay binario). OTAs anteriores (11-09 android `a349abee` / ios `d7b9a9d5` y previas) en el [historial](../archive/current-historial-2026-09.md). | [Mobile parity](MOBILE_PARITY.md) · [OTA](../operations/MOBILE_RELEASES_OTA.md) |
 | Auth: Google en el login de coach | **Fix 04-09 EN PRODUCCIÓN, QA del owner VERDE 05-09** (hashes, deploy, OTA y detalle técnico en el [historial](../archive/current-historial-2026-09.md)): un LOGIN con Google sin fila `coaches` dejaba un `auth.users` huérfano que ocupaba el correo del alumno (caso Leonardo/Movens); ahora `resolvePostGoogleAuthUrl`/`login.tsx` lo limpian y rebotan a `/login` con el copy correcto. Queda F2b (alta de alumno con cuenta existente) en backlog. | [Login y auth](../architecture/FLOWS_AND_COMPONENTS.md) |
 | Archivado de alumnos | P0 de alta en producción (2026-08-03); **QA físico VERDE 05-09** (artifact `6bd32370`); queda la matriz Team. | [Spec de corte](../../specs/archive-nutrition-v2-cutover/SPEC.md) |
 | Nutrition V2 | Canónica para Standalone/Team; el programa de rediseño cerró el 2026-08-17. «Porciones a la chilena» EN PRODUCCIÓN 10-09 y «Cantidades honestas» EN PRODUCCIÓN 06-09, ambos con QA del owner VERDE (SDD `done`); hashes y RPC en el [historial](../archive/current-historial-2026-09.md). | [Porciones CL](../specs/nutrition-porciones-chilenas/SPEC.md) · [Programa](../specs/nutrition-flows-redesign/TASKS.md) · [Runbook de corte](../operations/NUTRITION_V2_CUTOVER_RUNBOOK.md) |
@@ -29,7 +29,11 @@ prevalecen sobre este resumen. La prosa retirada el 2026-09-02 está en
 
 ## Prioridades vigentes
 
-**«Dossier por meses»** (SDD en [`docs/specs/dossier-por-meses`](../specs/dossier-por-meses/SPEC.md)): pedido del coach Joaco (15-09); modo «Por meses» en el export del dossier (web + RN), RPC `get_client_month_reports`; en implementación, sin push.
+**«Dossier por meses» — EN PRODUCCIÓN 16-09 ~02:30Z** ([SDD](../specs/dossier-por-meses/SPEC.md)): modo «Por meses» en el export del dossier (web + RN), RPC `get_client_month_reports`; `master` = `rnmobiledenuevo` = `0748acd3`, deploy `dpl_HQH52H1T…` READY, migración LIVE `20260916014833`, OTA ios 1.1.3 `a73f71a0` + 1.1.2 android/ios desde `ota/1.1.2-20260916`.
+**Queda: QA del owner §17 (14 web + 8 device + 2 comunes) ⇒ SDD `done`; el E2E `tests/dossier-export.spec.ts` se corre solo con su OK.**
+
+**Tren «Meta SDK iOS» — MIDIENDO DE PUNTA A PUNTA 16-09 02:10Z** ([SDD](../specs/meta-app-events-ios/SPEC.md)): instalaciones y altas desde iPhone llegan a Events Manager (2 «Completar registro» verificados), atribución AEM iOS 14+ confirmada, OTA ios 1.1.3 `d93896c7` con el fix de `CompletedRegistration` y fix HIBP del alta en prod (`dpl_CqWXmQLg…`).
+**Queda: aprobación de Apple (build 61 en App Review + Beta Review del grupo EXT), SKAN cuando Meta habilite «Configurar eventos», confirmar si el socio vio la hoja ATT en inglés (⇒ `locales`, build nueva) y borrar los 3 coaches de prueba.**
 
 0. **Fix RN «Asignar plantilla» — EN PRODUCCIÓN 14-09: `master` = `rnmobiledenuevo` = `deb1df75`, OTA 1.1.2 android `0ae8d63a` / ios `154980fb`** (detalle en [MOBILE_RELEASES_OTA](../operations/MOBILE_RELEASES_OTA.md)): alumnos arriba con buscador (paridad web), duración al pie, CTA «Selecciona alumnos». **Queda: QA del owner en device.**
 1. **Tren «Reps tras el reloj» (fuerza por tiempo) + Enmienda E1 — EN PRODUCCIÓN 12-09: `master` = `rnmobiledenuevo` = `9e153f23` (commits en [TEST_STATUS](../testing/TEST_STATUS.md)), deploy `dpl_5d2TczpX66aoGSsfAkkeqwW9BqVh` READY, OTA 1.1.2 android `01a097d4-0a6e-7bd9-8323-e7efd6cadeb0` / ios `01a097d4-2ebd-7a75-83c2-874454fd36fd`, E2E `prod-suave` 9/9 (run 34723934934)** ([SDD](../specs/reps-tras-el-reloj/SPEC.md) · [tareas](../specs/reps-tras-el-reloj/TASKS.md); mockup aprobado artifact `6ead4180` v3): a 0 la serie se guarda sola; reps/kg faltantes se piden sobre el ejercicio con el descanso corriendo (E1). Sin migraciones; gates verdes 12-09 ([TEST_STATUS](../testing/TEST_STATUS.md)). **Queda: QA del owner en device y web (10 puntos del SPEC §10; incluye el arrastre del share) ⇒ SDD `done`.**
@@ -83,9 +87,11 @@ prevalecen sobre este resumen. La prosa retirada el 2026-09-02 está en
     `processing`/`flow-processing`: **cerrado** por el mismo retiro.
     **Retiro de Starter: S0–S3 y E0/E1 EN PRODUCCIÓN 05-09** ([SDD](../specs/retiro-starter-y-enterprise/SPEC.md);
     hashes, deploy, OTA y humo de verificación en el [historial](../archive/current-historial-2026-09.md)); absorbió (2) y (d).
-12. **iOS/Android — 1.1.2 aprobada y en tienda ⇒ piso OTA 1.1.2**: 1.1.3 no tiene motivo (cero cambio
-   nativo desde la build 59); Android sigue en 1.1.2 (build 86, closed testing Alpha) y producción
-   espera 12 testers × 14 días. [OTA](../operations/MOBILE_RELEASES_OTA.md)
+12. **iOS/Android — 1.1.2 aprobada y en tienda ⇒ piso OTA 1.1.2**: 1.1.3 **ya tiene motivo** — el SDK de
+   Meta es cambio nativo y exige binario; la build 61 (1.1.3) está en App Review con publicación automática
+   y en TestFlight (INT + Beta Review del grupo EXT), así que recibe OTA aunque el piso siga en 1.1.2 hasta
+   que Apple apruebe. Android sigue en 1.1.2 (build 86, closed testing Alpha) y producción espera 12 testers
+   × 14 días. [OTA](../operations/MOBILE_RELEASES_OTA.md)
 13. **Share Entreno — rediseño «bloque único» (owner 06-09) — EN PRODUCCIÓN 06-09 21:03Z** (master
     `19d1ffb0`, OTA 1.1.2 android `45819218` / ios `eac94332`): se retiran los 6 presets, los toggles
     y los stickers sueltos; queda un solo bloque de texto en Inter (drag + pellizco, sin build

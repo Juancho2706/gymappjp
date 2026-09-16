@@ -100,7 +100,7 @@ No son tareas: son el marco que ya decidió el owner. **Por eso van sin checkbox
 - [x] **E4** `docs/status/CURRENT.md` — una línea del tren con enlace a esta spec, midiendo con `wc -c` **antes y después** (tope duro 16 KB, `scripts/check-docs.mjs:117`). Volver a correr `pnpm docs:check`. — línea del tren ya presente (`docs/status/CURRENT.md:32`); tamaño antes (commit previo a `c6297976`) **16.359 B**, después **14.892 B**; `pnpm docs:check` OK.
 - [ ] **E5** `docs/status/MOBILE_PARITY.md` si cambia la paridad web ↔ RN; `docs/testing/TEST_STATUS.md` **solo** si cambia un gate obligatorio o por E3. — no tocado en esta pasada (fuera de `docs/specs/dossier-por-meses/`); `MOBILE_PARITY.md` no menciona el tren todavía — pendiente de evaluar si corresponde una línea.
 - [ ] **E6** **Owner**: QA de [SPEC](SPEC.md) §17 **completo** — 14 puntos en web, 8 en device (RN) y 2 comunes. Sin los dos lados verdes el SDD **no** pasa a `done`. — sin ejecutar.
-- [ ] **E7** **Solo a pedido del owner**: commit, push, deploy web y OTA. Nada de esto sale de esta sesión por iniciativa propia. — sin ejecutar.
+- [x] **E7** **Solo a pedido del owner**: commit, push, deploy web y OTA. — autorizado por el owner («Q1 a») y ejecutado el 16-09 ~02:30Z: `master` = `rnmobiledenuevo` = `0748acd3` (`d0e50cf2` SDD/RPC/package → `0748acd3` web + RN), deploy `dpl_HQH52H1T6nMba2Qfzek7QnzpfBjB` READY, migración LIVE `20260916014833`, OTA ios runtime 1.1.3 grupo `a73f71a0` (run 35047893693) + runtime 1.1.2 desde el tag `ota/1.1.2-20260916` = `64ad9615` (android run 35048341298 / ios run 35048343745). Detalle en [MOBILE_RELEASES_OTA](../../operations/MOBILE_RELEASES_OTA.md).
 
 ---
 
