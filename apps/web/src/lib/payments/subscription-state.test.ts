@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mapProviderStatus, resolveCurrentPeriodEnd, resolveTerminalEvent } from '@/lib/payments/subscription-state'
+import { mapProviderStatus, resolveCurrentPeriodEnd, resolvePeriodDrift, resolveTerminalEvent } from '@/lib/payments/subscription-state'
 
 describe('mapProviderStatus', () => {
     it('maps trialing', () => {
@@ -123,5 +123,63 @@ describe('resolveTerminalEvent', () => {
                 providerStatus: 'rejected',
             })
         ).toBe('ignore-free')
+    })
+})
+
+// ── Drift de período (incidente 2026-09-18, coach JB fitness) ────────────────────────────────────
+// El coach pagó el 26-08 y le fechamos el corte al 26-09 (`charged_at + 1 mes`), pero MP siguió
+// facturando su día 18. El 18-09 cobró, la tarjeta rechazó, y quedó en dunning con OCHO DÍAS
+// pagados por delante. Las dos fechas llevaban un mes separadas y nada las comparaba.
+describe('resolvePeriodDrift — nuestro corte vs. el calendario del gateway', () => {
+    it('el caso real: corte 26-09 vs MP cobrando el 18-09 ⇒ drift de 8 días', () => {
+        const r = resolvePeriodDrift('2026-09-26T15:14:13Z', '2026-09-18T22:18:00Z')
+        expect(r.comparable).toBe(true)
+        expect(r.driftDays).toBe(8)
+        expect(r.drifted).toBe(true)
+    })
+
+    it('fechas alineadas ⇒ sin drift', () => {
+        const r = resolvePeriodDrift('2026-09-26T15:14:13Z', '2026-09-26T15:14:13Z')
+        expect(r.driftDays).toBe(0)
+        expect(r.drifted).toBe(false)
+    })
+
+    it('unas horas de diferencia NO son drift (reintentos, husos, fines de semana)', () => {
+        const r = resolvePeriodDrift('2026-09-26T00:00:00Z', '2026-09-26T20:00:00Z')
+        expect(r.drifted).toBe(false)
+    })
+
+    it('la tolerancia es de 2 días: 2 no alerta, 3 sí', () => {
+        expect(resolvePeriodDrift('2026-09-26T00:00:00Z', '2026-09-24T00:00:00Z').drifted).toBe(false)
+        expect(resolvePeriodDrift('2026-09-26T00:00:00Z', '2026-09-23T00:00:00Z').drifted).toBe(true)
+    })
+
+    it('es simétrico: da igual si el gateway cobra antes o después', () => {
+        const antes = resolvePeriodDrift('2026-09-26T00:00:00Z', '2026-09-18T00:00:00Z')
+        const despues = resolvePeriodDrift('2026-09-18T00:00:00Z', '2026-09-26T00:00:00Z')
+        expect(antes.driftDays).toBe(despues.driftDays)
+        expect(antes.drifted).toBe(despues.drifted)
+    })
+
+    it('sin fecha de alguno de los dos lados ⇒ NO comparable, que no es lo mismo que «sin drift»', () => {
+        for (const [ours, theirs] of [
+            [null, '2026-09-18T00:00:00Z'],
+            ['2026-09-26T00:00:00Z', null],
+            [null, null],
+            [undefined, undefined],
+            ['no-es-fecha', '2026-09-18T00:00:00Z'],
+        ] as const) {
+            const r = resolvePeriodDrift(ours, theirs)
+            expect(r.comparable).toBe(false)
+            expect(r.driftDays).toBeNull()
+            // `drifted` false para no inundar de alertas falsas, pero `comparable` lo distingue.
+            expect(r.drifted).toBe(false)
+        }
+    })
+
+    it('la tolerancia es inyectable (un ciclo anual admite más holgura)', () => {
+        const r = resolvePeriodDrift('2026-09-26T00:00:00Z', '2026-09-18T00:00:00Z', 10)
+        expect(r.driftDays).toBe(8)
+        expect(r.drifted).toBe(false)
     })
 })
