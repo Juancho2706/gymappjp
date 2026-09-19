@@ -34,8 +34,53 @@ export type EnabledModules = Partial<Record<ModuleKey, boolean>>
  * SUBSCRIPTION_BLOCKED_STATUSES (apps/web/src/lib/constants.ts) y de la copia de
  * workspace-core.ts (mobile). `canceled` NO esta (conserva acceso hasta current_period_end);
  * `org_managed`/`team_managed` tampoco (acceso siempre).
+ *
+ * ⚠️ Este SET solo describe "estados sin gracia". NO alcanza para decidir el bloqueo: `paused` y
+ * `past_due` estan aca pero conservan acceso hasta `current_period_end` (dunning involuntario).
+ * Para gatear usa `navHasEffectiveAccess` / el campo `blocked` del ctx — NUNCA el set crudo.
  */
 export const SUBSCRIPTION_BLOCKED_STATUSES = ['pending_payment', 'expired', 'past_due', 'paused'] as const
+
+/** Coach "managed" (billing de la org/team): acceso siempre, sin fecha de corte que mirar. */
+function isManagedStatus(status: string | null | undefined): boolean {
+    return status === 'org_managed' || status === 'team_managed'
+}
+
+/**
+ * ¿El coach tiene acceso EFECTIVO por estado + fecha de corte?
+ *
+ * Espejo de `hasEffectiveAccess` (apps/web/src/lib/coach-subscription-gate.ts), de su copia RN
+ * (apps/mobile/lib/workspace-core.ts) y de `private.coach_has_effective_access` (SQL).
+ *
+ * POR QUE EXISTE (incidente 2026-09-18, coach JB fitness): el nav decidia con el SET crudo de
+ * arriba, sin mirar `current_period_end`. Un coach en `past_due` con periodo PAGADO vigente pasaba
+ * los gates de ruta (proxy web + layout RN, que si respetan la gracia desde el fix del 10-09) pero
+ * el menu se le colapsaba a un unico item «Reactivar»: entraba a un panel vacio y lo leia como
+ * "no puedo entrar". La politica vivia escrita en 5 lugares y ese fix solo toco 2.
+ *
+ * DEUDA CONOCIDA: esta es la 4a copia TS de la misma regla. La unificacion de las 4 + el test de
+ * contrato contra la funcion SQL van en su propio paso (no en este hotfix, que toca acceso vivo).
+ */
+export function navHasEffectiveAccess(
+    subscriptionStatus: string | null | undefined,
+    currentPeriodEnd: string | null | undefined,
+    now: number = Date.now(),
+): boolean {
+    if (isManagedStatus(subscriptionStatus)) return true
+    const status = subscriptionStatus ?? ''
+
+    // Gracia hasta el corte: cancel voluntario, trial y dunning INVOLUNTARIO (paused/past_due).
+    if (status === 'canceled' || status === 'trialing' || status === 'paused' || status === 'past_due') {
+        if (!currentPeriodEnd) return false
+        const end = new Date(currentPeriodEnd).getTime()
+        return Number.isNaN(end) ? false : end > now
+    }
+
+    // Estados duros SIN gracia (pending_payment, expired): bloqueo inmediato.
+    if (new Set<string>(SUBSCRIPTION_BLOCKED_STATUSES).has(status)) return false
+
+    return true
+}
 
 /** Los 3 contextos (flujos) del coach — subset coach de WorkspaceType (web). */
 export type CoachWorkspaceType = 'coach_standalone' | 'enterprise_coach' | 'coach_team'
@@ -234,6 +279,20 @@ export type VisibleNavContext = {
      */
     activeWorkspaceType?: string | null
     subscriptionStatus?: string | null
+    /**
+     * Fin del periodo PAGADO (`coaches.current_period_end`, ISO). Load-bearing: sin este dato un
+     * `past_due`/`paused`/`canceled` con dias pagados por delante se trata como bloqueado y el
+     * menu se colapsa a «Reactivar» (incidente 2026-09-18). Ausente => sin gracia, igual que antes.
+     */
+    currentPeriodEnd?: string | null
+    /**
+     * Veredicto de bloqueo YA resuelto por el caller. Tiene PRECEDENCIA sobre
+     * status+currentPeriodEnd: lo usa RN, donde `useCoachAccess()` ya resolvio el acceso (incluido
+     * el cupo free del workspace) y re-derivarlo aca daria un veredicto distinto al del layout.
+     */
+    blocked?: boolean | null
+    /** Reloj inyectable (tests deterministas). Default `Date.now()`. */
+    now?: number
     /** Modulos habilitados del CONTEXTO activo. Ausente => los items con `entitlement` se ocultan (default OFF). */
     enabledModules?: EnabledModules | null
     /**
@@ -266,7 +325,9 @@ export function coachWorkspaceTypeFromKind(kind: CoachWorkspaceKind): CoachWorks
 
 /**
  * Modulos visibles para el contexto activo. Reglas:
- *  1. Status bloqueado (past_due/expired/...) => solo "Reactivar".
+ *  1. Sin acceso EFECTIVO (estado + fecha de corte, o el `blocked` que trae el caller) => solo
+ *     "Reactivar". Un `past_due`/`paused` con periodo pagado vigente NO entra aca: conserva el
+ *     menu completo mientras el gateway reintenta el cobro (gracia de dunning).
  *  2. Cada modulo se muestra solo en sus `contexts`. Sin workspace => standalone.
  *  3. Cuentas managed (org_managed/team_managed) nunca ven "Opciones" standalone NI "Funciones"
  *     (cinturon extra): a un coach administrado por team/org el panel se lo define el tenant, y
@@ -278,7 +339,13 @@ export function coachWorkspaceTypeFromKind(kind: CoachWorkspaceKind): CoachWorks
  */
 export function getVisibleNavItems(ctx: VisibleNavContext): NavModule[] {
     const status = ctx.subscriptionStatus ?? ''
-    if (new Set<string>(SUBSCRIPTION_BLOCKED_STATUSES).has(status)) {
+    // El veredicto del caller manda (RN ya lo resolvio con el cupo del workspace incluido); si no
+    // lo trae, se deriva del estado + la fecha de corte. NUNCA del set crudo: ver navHasEffectiveAccess.
+    const blocked =
+        typeof ctx.blocked === 'boolean'
+            ? ctx.blocked
+            : !navHasEffectiveAccess(status, ctx.currentPeriodEnd, ctx.now ?? Date.now())
+    if (blocked) {
         return [REACTIVATE_NAV_ITEM]
     }
 

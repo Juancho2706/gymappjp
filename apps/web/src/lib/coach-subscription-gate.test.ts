@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { hasEffectiveAccess, resolveCoachSubscriptionRedirect } from '@/lib/coach-subscription-gate'
+import { navHasEffectiveAccess, SUBSCRIPTION_BLOCKED_STATUSES } from '@eva/coach-nav'
 
 /** ISO futuro: `trialing` / `canceled` solo tienen acceso si `current_period_end` > ahora */
 const periodEndFuture = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
@@ -180,5 +181,51 @@ describe('hasEffectiveAccess — gracia de dunning (P0-3a)', () => {
     })
     it('managed (org_managed) → acceso', () => {
         expect(hasEffectiveAccess('org_managed', null)).toBe(true)
+    })
+})
+
+// ── PARIDAD: el gate de RUTA y el gate del NAV deben decir lo MISMO ──────────────────────────────
+// Incidente 2026-09-18 (coach JB fitness): la politica "past_due con periodo pagado vigente ⇒ tiene
+// acceso" estaba escrita en 5 lugares y el fix del 10-09 solo toco 2. El proxy lo dejaba entrar y el
+// nav le colapsaba el menu a «Reactivar»: un panel vacio que el coach reporto como "no puedo entrar".
+//
+// Este test recorre la matriz completa (estado x fecha) contra las DOS implementaciones. Si alguien
+// vuelve a tocar una sola, el build se cae aca en vez de caerse en el telefono de un coach.
+describe('paridad hasEffectiveAccess (ruta) ↔ navHasEffectiveAccess (nav)', () => {
+    const NOW = Date.parse('2026-09-19T01:00:00Z')
+    const FECHAS = [
+        null,
+        undefined,
+        '2026-09-26T15:14:13Z', // futuro (el corte real del incidente)
+        '2026-09-10T00:00:00Z', // pasado
+        'no-es-una-fecha',
+    ] as const
+    const ESTADOS = [
+        'active', 'trialing', 'canceled', 'paused', 'past_due',
+        'pending_payment', 'expired', 'org_managed', 'team_managed',
+        null, undefined, '', 'un_estado_que_no_existe',
+    ] as const
+
+    it('coinciden en las 65 combinaciones de estado × fecha', () => {
+        for (const estado of ESTADOS) {
+            for (const fecha of FECHAS) {
+                expect(
+                    navHasEffectiveAccess(estado, fecha, NOW),
+                    `divergencia en estado=${String(estado)} fecha=${String(fecha)}`,
+                ).toBe(hasEffectiveAccess(estado, fecha, NOW))
+            }
+        }
+    })
+
+    it('el caso exacto del incidente: past_due + corte futuro ⇒ acceso en AMBOS', () => {
+        expect(hasEffectiveAccess('past_due', '2026-09-26T15:14:13Z', NOW)).toBe(true)
+        expect(navHasEffectiveAccess('past_due', '2026-09-26T15:14:13Z', NOW)).toBe(true)
+    })
+
+    it('el SET crudo por si solo NO alcanza para gatear (la trampa que causo el incidente)', () => {
+        // `past_due` esta en el set, pero con periodo vigente TIENE acceso. Cualquier superficie
+        // que gatee con `SUBSCRIPTION_BLOCKED_STATUSES.has(status)` reproduce el bug.
+        expect(new Set<string>(SUBSCRIPTION_BLOCKED_STATUSES).has('past_due')).toBe(true)
+        expect(navHasEffectiveAccess('past_due', '2026-09-26T15:14:13Z', NOW)).toBe(true)
     })
 })

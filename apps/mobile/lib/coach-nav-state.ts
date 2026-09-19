@@ -3,6 +3,7 @@ import type { Persona } from '@eva/schemas'
 import { coachWorkspaceTypeFromKind, getVisibleNavItems, type NavModule } from '@eva/coach-nav'
 import { resolveNavOrder, type FeatureDomain } from '@eva/feature-prefs'
 import { getCachedCoachPersonaStatus } from './coach-persona'
+import { useCoachAccess } from './coach-access'
 import { useEntitlements } from './entitlements'
 import { disabledDomainsFromFlags } from './entitlements-core'
 import { useWorkspace } from './workspace'
@@ -36,10 +37,16 @@ export type CoachNavState = {
 export function useCoachNavState(): CoachNavState {
     const { kind, subscriptionState } = useWorkspace()
     const { hasModule, domains, navOrder } = useEntitlements()
+    // El STATUS sigue viniendo de `useWorkspace` (es el que colapsa a org_managed/team_managed
+    // segun el workspace ACTIVO; cambiarlo rompería el switcher). De `useCoachAccess` solo sale
+    // la FECHA DE CORTE, que ese store no lee a proposito — sin ella el nav no puede distinguir un
+    // dunning con dias pagados de una cuenta vencida (incidente 2026-09-18).
+    const { currentPeriodEnd } = useCoachAccess()
 
     const visible = getVisibleNavItems({
         activeWorkspaceType: coachWorkspaceTypeFromKind(kind),
         subscriptionStatus: subscriptionState,
+        currentPeriodEnd,
         enabledModules: {
             cardio: hasModule('cardio'),
             movement_assessment: hasModule('movement_assessment'),

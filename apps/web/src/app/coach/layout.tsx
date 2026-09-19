@@ -363,6 +363,10 @@ export default async function CoachLayout({
                             ? 'team_managed'
                             : coach.subscription_status
                     }
+                    // Load-bearing junto al status: un `past_due`/`paused` con periodo pagado
+                    // vigente conserva el menu completo (gracia de dunning) en vez de colapsar a
+                    // «Reactivar». Mismo criterio que el gate de ruta del proxy.
+                    currentPeriodEnd={coach.current_period_end}
                     enterpriseContext={enterpriseContext}
                     workspaces={workspaces}
                     currentWorkspaceLabel={currentWorkspaceLabel}
