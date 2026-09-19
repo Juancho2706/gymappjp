@@ -71,7 +71,21 @@ async function fetchMpPreapproval(preapprovalId: string, accessToken: string) {
     const headers: Record<string, string> = { Authorization: `Bearer ${accessToken}` }
     if (accessToken.startsWith('TEST-')) headers['X-scope'] = 'stage'
     const res = await fetch(`https://api.mercadopago.com/preapproval/${preapprovalId}`, { headers })
-    if (!res.ok) return null
+    if (!res.ok) {
+        // POR QUE SE LOGUEA EL STATUS (corrida del 19-09): este helper devolvía `null` para
+        // CUALQUIER respuesta no-OK y el caller solo podía decir «MP returned null». Con eso, un 404
+        // —la suscripción ya no existe en MP, o sea NO va a haber reintento de cobro y el coach cae
+        // al vencer el período— es indistinguible de un 429/500 pasajero, que se arregla solo.
+        // Son dos situaciones opuestas y las estábamos viendo como la misma línea de log.
+        const body = await res.text().catch(() => '')
+        console.error('[cron/mp-reconcile] GET /preapproval no-OK', {
+            preapprovalId,
+            status: res.status,
+            // Recorte: el cuerpo de error de MP es corto y no trae datos del pagador.
+            body: body.slice(0, 300),
+        })
+        return null
+    }
     return res.json() as Promise<MpPreapproval>
 }
 
@@ -247,6 +261,16 @@ export async function GET(req: Request) {
             // El gate real es `comparable`: si MP no devuelve `next_payment_date` (sub cancelada o
             // sin cobro programado) no hay nada que comparar y `drifted` queda en false.
             const periodDrift = resolvePeriodDrift(coach.current_period_end, mpData.next_payment_date)
+            // El otro camino SILENCIOSO: si MP no manda `next_payment_date` el chequeo no compara
+            // nada y no alerta — indistinguible de «comparé y está todo bien». Se deja traza para
+            // que un coach sin cobro programado no pase por alineado.
+            if (!periodDrift.comparable) {
+                console.warn('[cron/mp-reconcile] período NO comparable (sin next_payment_date de MP)', {
+                    coachSlug: coach.slug,
+                    mpStatus,
+                    dbPeriodEnd: coach.current_period_end,
+                })
+            }
             if (periodDrift.drifted) {
                 addonAlerts.push({
                     coachId: coach.id,
