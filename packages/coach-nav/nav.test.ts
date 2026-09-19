@@ -77,6 +77,7 @@ describe('getVisibleNavItems — matriz por contexto', () => {
         }
     })
 
+
     it('el registro declara "team" SOLO en coach_team y "options" (hub marca+suscripción) SOLO en standalone', () => {
         const team = NAV_MODULES.find((m) => m.key === 'team')!
         expect(team.contexts).toEqual(['coach_team'])
@@ -91,6 +92,117 @@ describe('getVisibleNavItems — matriz por contexto', () => {
         const k = keys(getVisibleNavItems({ activeWorkspaceType: 'enterprise_coach', subscriptionStatus: 'org_managed' }))
         expect(k).not.toContain('options')
         expect(k).not.toContain('settings_team')
+    })
+})
+
+
+// ── Gracia de dunning (incidente 2026-09-18, coach JB fitness) ───────────────────────────────────
+// El nav decidia con el SET crudo de estados y sin `current_period_end`: un coach en `past_due` con
+// periodo PAGADO vigente pasaba los gates de ruta (proxy web + layout RN) pero se quedaba con un
+// menu de un solo item. Entraba a un panel vacio y lo reportaba como "no puedo entrar".
+describe('getVisibleNavItems — gracia hasta current_period_end', () => {
+    const NOW = Date.parse('2026-09-19T01:00:00Z')
+    const FUTURO = '2026-09-26T15:14:13Z' // el corte real de Joaquin: 7 dias por delante
+    const PASADO = '2026-09-10T00:00:00Z'
+
+    it('past_due con periodo vigente ⇒ menu COMPLETO (el caso del incidente)', () => {
+        const k = keys(getVisibleNavItems({
+            activeWorkspaceType: 'coach_standalone',
+            subscriptionStatus: 'past_due',
+            currentPeriodEnd: FUTURO,
+            now: NOW,
+        }))
+        expect(k).toEqual(STANDALONE_FULL)
+        expect(k).not.toContain('reactivate')
+    })
+
+    it('paused con periodo vigente ⇒ menu COMPLETO (mismo dunning involuntario)', () => {
+        const k = keys(getVisibleNavItems({
+            activeWorkspaceType: 'coach_standalone',
+            subscriptionStatus: 'paused',
+            currentPeriodEnd: FUTURO,
+            now: NOW,
+        }))
+        expect(k).toEqual(STANDALONE_FULL)
+    })
+
+    it('canceled con periodo vigente ⇒ menu COMPLETO (conserva lo pagado)', () => {
+        const k = keys(getVisibleNavItems({
+            activeWorkspaceType: 'coach_standalone',
+            subscriptionStatus: 'canceled',
+            currentPeriodEnd: FUTURO,
+            now: NOW,
+        }))
+        expect(k).toEqual(STANDALONE_FULL)
+    })
+
+    it('past_due con periodo VENCIDO ⇒ solo Reactivar', () => {
+        const items = getVisibleNavItems({
+            activeWorkspaceType: 'coach_standalone',
+            subscriptionStatus: 'past_due',
+            currentPeriodEnd: PASADO,
+            now: NOW,
+        })
+        expect(keys(items)).toEqual(['reactivate'])
+    })
+
+    it('expired / pending_payment NO tienen gracia: bloquean aunque llegue una fecha futura', () => {
+        for (const status of ['expired', 'pending_payment'] as const) {
+            const items = getVisibleNavItems({
+                activeWorkspaceType: 'coach_standalone',
+                subscriptionStatus: status,
+                currentPeriodEnd: FUTURO,
+                now: NOW,
+            })
+            expect(keys(items)).toEqual(['reactivate'])
+        }
+    })
+
+    it('sin currentPeriodEnd se mantiene el comportamiento viejo (bloquea): no afloja nada', () => {
+        const items = getVisibleNavItems({
+            activeWorkspaceType: 'coach_standalone',
+            subscriptionStatus: 'past_due',
+            now: NOW,
+        })
+        expect(keys(items)).toEqual(['reactivate'])
+    })
+
+    it('una fecha ilegible NO abre el panel (fail-closed)', () => {
+        const items = getVisibleNavItems({
+            activeWorkspaceType: 'coach_standalone',
+            subscriptionStatus: 'past_due',
+            currentPeriodEnd: 'no-es-una-fecha',
+            now: NOW,
+        })
+        expect(keys(items)).toEqual(['reactivate'])
+    })
+
+    it('`blocked` del caller MANDA sobre status+fecha (RN ya resolvio el cupo del workspace)', () => {
+        // blocked:true con periodo vigente => bloquea igual (p. ej. free sobre cupo).
+        expect(keys(getVisibleNavItems({
+            activeWorkspaceType: 'coach_standalone',
+            subscriptionStatus: 'past_due',
+            currentPeriodEnd: FUTURO,
+            blocked: true,
+            now: NOW,
+        }))).toEqual(['reactivate'])
+        // blocked:false con periodo vencido => abre (el caller ya dijo que hay acceso).
+        expect(keys(getVisibleNavItems({
+            activeWorkspaceType: 'coach_standalone',
+            subscriptionStatus: 'past_due',
+            currentPeriodEnd: PASADO,
+            blocked: false,
+            now: NOW,
+        }))).toEqual(STANDALONE_FULL)
+    })
+
+    it('managed (org/team) nunca depende de la fecha', () => {
+        expect(keys(getVisibleNavItems({
+            activeWorkspaceType: 'enterprise_coach',
+            subscriptionStatus: 'org_managed',
+            currentPeriodEnd: PASADO,
+            now: NOW,
+        }))).toEqual(ENTERPRISE_FULL)
     })
 })
 
