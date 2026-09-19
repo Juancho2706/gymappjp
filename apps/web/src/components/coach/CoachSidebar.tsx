@@ -48,6 +48,12 @@ interface CoachSidebarProps {
     coachBrand: string
     primaryColor?: string
     subscriptionStatus?: string | null
+    /**
+     * `coaches.current_period_end` (ISO). Sin este dato el nav no puede distinguir un dunning con
+     * dias pagados por delante de una cuenta vencida, y le colapsa el menu a «Reactivar» a un
+     * coach que SI tiene acceso (incidente 2026-09-18).
+     */
+    currentPeriodEnd?: string | null
     enterpriseContext?: {
         orgSlug: string
         orgName: string
@@ -155,7 +161,7 @@ const NAV_GLYPH_BY_KEY: Record<string, CoachNavConcept> = {
     movement: 'movimiento',
 }
 
-export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterpriseContext, activeWorkspaceType, enabledModules, disabledDomains, persona, navOrder, logoUrl, logoUrlDark }: CoachSidebarProps) {
+export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, currentPeriodEnd, enterpriseContext, activeWorkspaceType, enabledModules, disabledDomains, persona, navOrder, logoUrl, logoUrlDark }: CoachSidebarProps) {
     const pathname = usePathname()
     const [manualCollapsed, setManualCollapsed] = useState(false)
     // Hoja «Más» (W2.6): rescata lo visible que no entró en la cápsula. Solo móvil.
@@ -215,7 +221,7 @@ export function CoachSidebar({ coachName, coachBrand, subscriptionStatus, enterp
     const isOrgAdmin = enterpriseContext?.orgRole === 'org_owner' || enterpriseContext?.orgRole === 'org_admin'
 
     const disabledDomainSet = disabledDomains && disabledDomains.length > 0 ? new Set(disabledDomains) : null
-    const visibleNavItems = getVisibleNavItems({ activeWorkspaceType, subscriptionStatus, enabledModules, disabledDomains: disabledDomainSet })
+    const visibleNavItems = getVisibleNavItems({ activeWorkspaceType, subscriptionStatus, currentPeriodEnd, enabledModules, disabledDomains: disabledDomainSet })
     const groups = groupNavItems(visibleNavItems)
 
     // W2.4 (mockup 1A) — las 3 secciones del sidebar, ya sin las vacías: si un coach apagó los

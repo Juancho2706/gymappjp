@@ -12,6 +12,10 @@ export type CoachSession = Pick<
     | 'full_name'
     | 'brand_name'
     | 'subscription_status'
+    // Fin del periodo PAGADO: sin este dato el nav trata a un `past_due`/`paused` con dias
+    // pagados por delante como bloqueado y colapsa el menu a «Reactivar» (incidente 2026-09-18).
+    // `findCoachById` YA lo trae en el select — exponerlo no agrega ni una query.
+    | 'current_period_end'
     | 'primary_color'
     | 'slug'
     | 'invite_code'

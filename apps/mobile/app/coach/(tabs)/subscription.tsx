@@ -253,9 +253,13 @@ export default function SubscriptionScreen() {
   const hasModuleAccess = hasEffectiveAccess(status, coach.currentPeriodEnd)
 
   const periodDate = coach.currentPeriodEnd ? shortDate(coach.currentPeriodEnd) : null
+  // En dunning (past_due/paused) la fecha NO es una renovación: es hasta cuándo alcanza lo que el
+  // coach YA pagó. Llamarla «Renovación» hacía leer «me van a cobrar ese día» a quien acababa de
+  // ver un cobro rechazado (incidente 2026-09-18).
   const periodLabel =
     status === 'trialing' ? 'Prueba hasta'
-      : status === 'canceled' || status === 'expired' ? 'Acceso hasta'
+      : status === 'canceled' || status === 'expired' || status === 'past_due' || status === 'paused'
+        ? 'Acceso hasta'
         : 'Renovación'
 
   // Cupo de alumnos = estado del plan, no venta (permitido dentro de la app).
@@ -271,7 +275,18 @@ export default function SubscriptionScreen() {
   // Aviso de estado (dunning / cancelado / vencido) — informativo, sin acción de cobro.
   const notice: { tone: BadgeTone; text: string } | null =
     status === 'past_due' || status === 'paused'
-      ? { tone: 'warning', text: 'Tu último pago no se procesó y tu plan quedó en pausa.' }
+      // «Tu plan quedó en pausa» era FALSO mientras el período pagado sigue corriendo: el coach
+      // conserva el acceso completo y la pasarela reintenta el cobro. Decirle que estaba en pausa
+      // lo hizo creer que lo habíamos echado (incidente 2026-09-18). Solo hablamos de pausa
+      // cuando de verdad no queda período por delante.
+      ? {
+          tone: 'warning',
+          // `hasModuleAccess` es `hasEffectiveAccess(status, currentPeriodEnd)`: true SOLO si al
+          // período pagado le queda cuerda. Sin eso, prometeríamos acceso «hasta» una fecha ya pasada.
+          text: hasModuleAccess && periodDate
+            ? `No pudimos cobrar la renovación. Tu acceso sigue activo hasta el ${periodDate} — actualiza tu tarjeta para no perderlo.`
+            : 'No pudimos cobrar la renovación. Actualiza tu tarjeta para recuperar el acceso.',
+        }
       : status === 'pending_payment'
         ? { tone: 'warning', text: 'Tu pago está siendo procesado. Puede tardar unos minutos en confirmarse.' }
         : status === 'canceled'

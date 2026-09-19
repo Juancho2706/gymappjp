@@ -310,6 +310,14 @@ export interface CoachAccessValue {
     status: CoachAccessStatus
     /** `subscription_status` crudo (para copy; NUNCA para gatear — usar `blocked`). */
     subscriptionStatus: string | null
+    /**
+     * `coaches.current_period_end` (ISO) — el fin del periodo PAGADO. Se expone porque el NAV
+     * (`useCoachNavState`) lo necesita para no colapsar el menu a «Reactivar» en un dunning con
+     * dias pagados por delante: `useWorkspace()` no lee esta columna (ver nota de cabecera) y sin
+     * ella el nav trataba a un `past_due` vigente como bloqueado (incidente 2026-09-18).
+     * `null` mientras no se resolvio.
+     */
+    currentPeriodEnd: string | null
     /** Fuerza una revalidacion (tras volver a Free, pull-to-refresh, reintento manual). */
     refresh: (force?: boolean) => Promise<void>
 }
@@ -335,7 +343,14 @@ function toAccessValue(s: AccessState, now: number): CoachAccessValue {
             freeClientLimit: s.maxClients,
         })
     const status: CoachAccessStatus = s.errored && !s.ready ? 'error' : !s.ready ? 'resolving' : blocked ? 'blocked' : 'allowed'
-    return { ready: s.ready, blocked, status, subscriptionStatus: s.subscriptionStatus, refresh: refreshCoachAccess }
+    return {
+        ready: s.ready,
+        blocked,
+        status,
+        subscriptionStatus: s.subscriptionStatus,
+        currentPeriodEnd: s.currentPeriodEnd,
+        refresh: refreshCoachAccess,
+    }
 }
 
 /** Lectura puntual del acceso, sin hook (tests y callers fuera de React). */
