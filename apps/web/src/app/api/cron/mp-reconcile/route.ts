@@ -240,8 +240,14 @@ export async function GET(req: Request) {
             //
             // ALERTA PURA, nunca auto-fix: mover un corte es tocar el acceso pagado de alguien, y eso
             // no lo decide un cron. Mismo criterio que el drift de MONTO de arriba.
+            //
+            // NO se gatea con `mpIsActive` (a diferencia del drift de MONTO de arriba): el coach que
+            // más necesita este chequeo es justamente el que YA está en dunning, y su preapproval
+            // puede no estar `authorized`. Gatearlo saltearía el único caso que motivó la alerta.
+            // El gate real es `comparable`: si MP no devuelve `next_payment_date` (sub cancelada o
+            // sin cobro programado) no hay nada que comparar y `drifted` queda en false.
             const periodDrift = resolvePeriodDrift(coach.current_period_end, mpData.next_payment_date)
-            if (mpIsActive && periodDrift.drifted) {
+            if (periodDrift.drifted) {
                 addonAlerts.push({
                     coachId: coach.id,
                     slug: coach.slug,
@@ -257,6 +263,10 @@ export async function GET(req: Request) {
                         coach_slug: coach.slug,
                         db_current_period_end: coach.current_period_end,
                         mp_next_payment_date: mpData.next_payment_date ?? null,
+                        // Contexto que se perdía al no gatear por estado: un drift sobre un
+                        // preapproval pausado/cancelado se lee distinto que sobre uno vivo.
+                        mp_status: mpStatus,
+                        db_status: dbStatus,
                         mp_start_date: mpData.auto_recurring?.start_date ?? null,
                         drift_days: periodDrift.driftDays,
                         mp_preapproval_id: coach.subscription_mp_id,
