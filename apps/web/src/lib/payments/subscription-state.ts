@@ -45,6 +45,46 @@ export function resolveCurrentPeriodEnd(input: {
     return addMonths(now, months).toISOString()
 }
 
+/**
+ * Tolerancia del desfase entre NUESTRO corte y el calendario de la pasarela. Dos días: las
+ * pasarelas mueven el cobro unas horas (reintentos, husos, fines de semana) y eso no es un bug.
+ */
+export const PERIOD_DRIFT_TOLERANCE_DAYS = 2
+
+export type PeriodDriftResult =
+    | { comparable: false; driftDays: null; drifted: false }
+    | { comparable: true; driftDays: number; drifted: boolean }
+
+/**
+ * Compara `coaches.current_period_end` contra la fecha en que la PASARELA piensa cobrar de nuevo
+ * (`next_payment_date`). Pura, sin red: el cron le pasa los dos valores.
+ *
+ * POR QUE EXISTE (incidente 2026-09-18, coach JB fitness): el coach pagó el 26-08 y le fechamos el
+ * corte al 26-09 (`charged_at + 1 mes`), pero MP siguió facturando su día 18 — heredado de un
+ * preapproval anterior. El 18-09 MP cobró, la tarjeta rechazó, y el coach entró en dunning con
+ * OCHO DÍAS pagados por delante. Las dos fechas llevaban un mes separadas y nada lo miraba: los
+ * webhooks guardan QUÉ se cobró, no CUÁNDO se piensa cobrar, así que el desfase era invisible
+ * hasta que el coach reclamaba.
+ *
+ * NO corrige nada por su cuenta: solo reporta. Mover un corte es tocar el acceso pagado de alguien
+ * y eso no lo decide un cron — igual criterio que el drift de MONTO, que también es alerta pura.
+ */
+export function resolvePeriodDrift(
+    dbPeriodEnd: string | null | undefined,
+    providerNextPaymentDate: string | null | undefined,
+    toleranceDays: number = PERIOD_DRIFT_TOLERANCE_DAYS
+): PeriodDriftResult {
+    const ours = parseDate(dbPeriodEnd)
+    const theirs = parseDate(providerNextPaymentDate)
+    // Sin alguna de las dos no hay nada que comparar (sub sin cobro programado, corte nulo…).
+    // «No comparable» NUNCA es «sin drift»: son casos distintos y el caller los separa.
+    if (!ours || !theirs) return { comparable: false, driftDays: null, drifted: false }
+
+    const diffMs = Math.abs(ours.getTime() - theirs.getTime())
+    const driftDays = Math.round(diffMs / 86_400_000)
+    return { comparable: true, driftDays, drifted: driftDays > toleranceDays }
+}
+
 export type TerminalEventDecision = 'expire' | 'past-due' | 'ignore-free' | 'none'
 
 /**

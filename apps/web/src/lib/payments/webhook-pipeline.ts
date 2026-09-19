@@ -26,7 +26,7 @@ import {
 import { resolveActiveDiscountSpec, resolveActiveDiscountDetail, buildAmountPutIdempotencyKey } from '@/services/billing/discount.service'
 import { decrementCouponCycleForCharge, revertActiveCouponForCoach } from '@/services/billing/coupons.service'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
-import { cancelCoachEmails, DRIP_SALES_KEYS } from '@/services/email/coach-email-ledger.service'
+import { cancelCoachEmails, scheduleCoachEmail, DRIP_SALES_KEYS } from '@/services/email/coach-email-ledger.service'
 import { buildAddonActivationReceiptEmail } from '@/lib/email/addon-receipt-templates'
 import { buildPaymentFailedEmail, buildPaymentRecoveredEmail } from '@/lib/email/payment-dunning-templates'
 import {
@@ -59,8 +59,36 @@ export type RunWebhookPipelineArgs = {
 }
 
 /**
+ * Identidad del correo de dunning en el ledger. Es la mitad de la clave de dedupe
+ * (`coach_email_ledger_dedupe_uidx`), así que elegir bien `eventKey` decide DOS cosas:
+ *
+ *  · **Idempotencia** — las pasarelas reintentan webhooks. Con el id del pago en la key, el
+ *    reintento del MISMO cobro fallido no le escribe al coach dos veces.
+ *  · **Recurrencia** — el dunning se repite cada ciclo. Una key ESTÁTICA (`payment_failed` a secas)
+ *    chocaría con el índice único y dejaría al coach SIN AVISO del segundo mes en adelante: el
+ *    mismo fallo silencioso que el ledger existe para evitar. Lo dice el propio servicio: «para
+ *    repetir de verdad, el correo necesita una key distinta».
+ *
+ * Sin id de pago cae al corte del período, estable dentro del ciclo ⇒ un aviso por ciclo.
+ */
+export function buildDunningTemplateKey(
+    kind: 'failed' | 'recovered',
+    eventKey: string | null | undefined
+): string {
+    const base = kind === 'failed' ? 'payment_failed' : 'payment_recovered'
+    const suffix = eventKey?.trim()
+    return `${base}:${suffix && suffix.length > 0 ? suffix : 'unknown'}`
+}
+
+/**
  * P0-2: email de dunning (pago fallido / recuperado), fire-and-forget. NUNCA bloquea la mutación de
  * cobro: si Resend falla, se loggea y sigue. `subscriptionUrl` apunta a /coach/subscription.
+ *
+ * Pasa por `scheduleCoachEmail` —y no por `sendTransactionalEmail` pelado— desde el incidente
+ * 2026-09-18: el correo salía SIN dejar fila en `coach_email_ledger`, así que cuando el coach
+ * reclamó que no sabía nada del cobro rechazado no hubo manera de saber si se le había avisado.
+ * Un aviso de cobro sin rastro no es auditable, y es justo el que hay que poder probar.
+ * `scheduleCoachEmail` tampoco lanza y es fail-open, así que esto sigue sin poder tumbar un webhook.
  */
 async function sendDunningEmail(
     adminClient: ReturnType<typeof createServiceRoleClient>,
@@ -68,7 +96,8 @@ async function sendDunningEmail(
     coachName: string,
     kind: 'failed' | 'recovered',
     subscriptionUrl: string,
-    accessUntil: string | null
+    accessUntil: string | null,
+    eventKey: string | null | undefined
 ): Promise<void> {
     try {
         const { data } = await adminClient.auth.admin.getUserById(coachId)
@@ -78,7 +107,22 @@ async function sendDunningEmail(
             kind === 'failed'
                 ? buildPaymentFailedEmail({ coachName, accessUntil, subscriptionUrl })
                 : buildPaymentRecoveredEmail({ coachName, subscriptionUrl })
-        await sendTransactionalEmail({ to: email, subject, html })
+        const res = await scheduleCoachEmail(adminClient, {
+            coachId,
+            templateKey: buildDunningTemplateKey(kind, eventKey),
+            trigger: 'transactional',
+            to: email,
+            subject,
+            html,
+            payload: { kind, accessUntil },
+        })
+        if (!res.ok) {
+            console.error('[payments.webhook] dunning email failed (fire-and-forget)', {
+                coachId,
+                kind,
+                message: res.error,
+            })
+        }
     } catch (err) {
         console.error('[payments.webhook] dunning email failed (fire-and-forget)', {
             coachId,
@@ -249,6 +293,11 @@ export async function runWebhookPipeline(
                   year: 'numeric',
               })
             : null
+        // Identidad del EVENTO de cobro para el ledger (ver `buildDunningTemplateKey`). El id del
+        // pago primero: es lo que hace que un reintento del webhook no reescriba al coach. Sin él,
+        // el corte del período — estable dentro del ciclo ⇒ un aviso por ciclo, nunca cero.
+        const dunningEventKey =
+            result.providerPaymentId ?? result.eventId ?? `period:${coach.current_period_end ?? 'unknown'}`
         if (recurringStatus === 'active') {
             const tierForCharge = (coach.subscription_tier ?? 'free') as SubscriptionTier
             const cycleForCharge = (coach.billing_cycle ?? 'monthly') as BillingCycle
@@ -355,7 +404,7 @@ export async function runWebhookPipeline(
                 }
                 // P0-2: si el coach venía de dunning (past_due), avisar que el pago se recuperó.
                 if (wasPastDue) {
-                    await sendDunningEmail(admin, coach.id, dunningCoachName, 'recovered', dunningSubscriptionUrl, null)
+                    await sendDunningEmail(admin, coach.id, dunningCoachName, 'recovered', dunningSubscriptionUrl, null, dunningEventKey)
                 }
             } catch (chargeErr) {
                 console.error('[payments.webhook] recurring authorized_payment (approved) hooks failed', {
@@ -391,7 +440,7 @@ export async function runWebhookPipeline(
                 coachId: coach.id,
                 status: result.providerStatus,
             })
-            await sendDunningEmail(admin, coach.id, dunningCoachName, 'failed', dunningSubscriptionUrl, dunningAccessUntil)
+            await sendDunningEmail(admin, coach.id, dunningCoachName, 'failed', dunningSubscriptionUrl, dunningAccessUntil, dunningEventKey)
         } else {
             // `scheduled`/`pending`/`in_process`/`processed`: el cobro está EN CAMINO, NO rechazado. No
             // marcamos dunning (el evento `approved` lo confirma aparte). Solo log + el upsert de abajo.
@@ -1241,6 +1290,9 @@ export async function runWebhookPipeline(
             'failed',
             `${process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'}/coach/subscription`,
             dunningAccessUntil,
+            // Esta es la rama que avisó a Joaquín el 18-09 (el rechazo llegó por el topic `payment`,
+            // no por `authorized_payment`), así que es la que más importa que quede en el ledger.
+            result.providerPaymentId ?? result.eventId ?? `period:${coach.current_period_end ?? 'unknown'}`,
         )
     } else if (terminalDecision === 'ignore-free') {
         // Free-tier coach has no paid subscription to terminate. A stale cancellation

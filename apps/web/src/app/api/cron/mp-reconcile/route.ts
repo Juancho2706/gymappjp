@@ -12,6 +12,7 @@ import {
 import { isModuleKilledByOperator, type ModuleKey } from '@/services/entitlements.service'
 import { applyExpiry, listLive } from '@/infrastructure/db/coach-addons.repository'
 import { getPaymentsProviderForCoach } from '@/lib/payments/provider'
+import { resolvePeriodDrift } from '@/lib/payments/subscription-state'
 import {
     getCompositeAmountClp,
     toBillableAddons,
@@ -54,7 +55,13 @@ type MpPreapproval = {
     status?: string
     id?: string
     date_created?: string
-    auto_recurring?: { transaction_amount?: number | null }
+    /**
+     * Cuándo piensa cobrar MP de nuevo. Es la ÚNICA fuente del calendario real del gateway: los
+     * webhooks solo cuentan qué se cobró, nunca cuándo viene el próximo. Sin esto, un desfase entre
+     * el día de MP y nuestro `current_period_end` es invisible (incidente 2026-09-18).
+     */
+    next_payment_date?: string | null
+    auto_recurring?: { transaction_amount?: number | null; start_date?: string | null }
 }
 
 async function fetchMpPreapproval(preapprovalId: string, accessToken: string) {
@@ -218,6 +225,40 @@ export async function GET(req: Request) {
                         coach_slug: coach.slug,
                         mp_amount_clp: mpAmount,
                         expected_clp: expectedClp,
+                        mp_preapproval_id: coach.subscription_mp_id,
+                        triggered_by: 'cron/mp-reconcile',
+                    },
+                })
+            }
+
+            // ── (c1) DRIFT DE PERÍODO (incidente 2026-09-18) ────────────────────────────────────
+            // Nuestro corte vs. el día en que MP piensa cobrar. Cuando se separan, el coach entra en
+            // dunning ANTES de que se le acabe lo pagado: MP cobra, la tarjeta rechaza y lo marcamos
+            // `past_due` con días pagados por delante. Le pasó a JB fitness con 8 días de desfase que
+            // llevaban un mes invisibles, porque los webhooks guardan qué se cobró y no cuándo viene
+            // el próximo cobro.
+            //
+            // ALERTA PURA, nunca auto-fix: mover un corte es tocar el acceso pagado de alguien, y eso
+            // no lo decide un cron. Mismo criterio que el drift de MONTO de arriba.
+            const periodDrift = resolvePeriodDrift(coach.current_period_end, mpData.next_payment_date)
+            if (mpIsActive && periodDrift.drifted) {
+                addonAlerts.push({
+                    coachId: coach.id,
+                    slug: coach.slug,
+                    kind: 'period_drift',
+                    detail: `corte=${coach.current_period_end} MP cobra=${mpData.next_payment_date} (${periodDrift.driftDays}d)`,
+                })
+                await admin.from('admin_audit_logs').insert({
+                    admin_email: 'cron',
+                    action: 'coach.period_drift',
+                    target_table: 'coaches',
+                    target_id: coach.id,
+                    payload: {
+                        coach_slug: coach.slug,
+                        db_current_period_end: coach.current_period_end,
+                        mp_next_payment_date: mpData.next_payment_date ?? null,
+                        mp_start_date: mpData.auto_recurring?.start_date ?? null,
+                        drift_days: periodDrift.driftDays,
                         mp_preapproval_id: coach.subscription_mp_id,
                         triggered_by: 'cron/mp-reconcile',
                     },
@@ -498,8 +539,8 @@ export async function GET(req: Request) {
             .join('')
 
         const addonBlock = addonAlerts.length > 0 ? `
-<h2 style="margin:0 0 8px;font-size:16px;font-weight:700;color:#111827;">Alertas de add-ons (${addonAlerts.length})</h2>
-<p style="margin:0 0 12px;font-size:13px;color:#6b7280;">Drift de monto, kill-switch facturado o preapproval pausado prolongado. Sin auto-fix — revisar según RUNBOOK.</p>
+<h2 style="margin:0 0 8px;font-size:16px;font-weight:700;color:#111827;">Alertas de cobro (${addonAlerts.length})</h2>
+<p style="margin:0 0 12px;font-size:13px;color:#6b7280;">Drift de monto o de PERÍODO, kill-switch facturado o preapproval pausado prolongado. Sin auto-fix — revisar según RUNBOOK. Un <code>period_drift</code> significa que el gateway cobra en una fecha distinta a nuestro corte: ese coach va a entrar en dunning ANTES de que se le acabe lo pagado.</p>
 <table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;margin-bottom:24px;">
     <tr style="background-color:#f9fafb;">
         <th style="padding:8px;font-size:12px;font-weight:700;color:#6b7280;text-align:left;text-transform:uppercase;letter-spacing:0.8px;">Coach</th>
@@ -512,7 +553,7 @@ export async function GET(req: Request) {
         const body = `
 <h1 style="margin:0 0 8px;font-size:20px;font-weight:800;color:#111827;">⚠️ Reconciliación MP</h1>
 <p style="margin:0 0 20px;font-size:14px;color:#374151;line-height:1.6;">
-    El cron de reconciliación encontró <strong>${divergences.length}</strong> divergencia(s) de estado y <strong>${addonAlerts.length}</strong> alerta(s) de add-ons.
+    El cron de reconciliación encontró <strong>${divergences.length}</strong> divergencia(s) de estado y <strong>${addonAlerts.length}</strong> alerta(s) de cobro.
     <strong>No se realizó ninguna acción automática</strong> — requiere revisión manual.
 </p>
 ${divergenceBlock}
@@ -523,7 +564,7 @@ ${addonBlock}
             headerTitle: 'EVA Reconciliación',
             previewText: `${divergences.length} divergencia(s) MP, ${addonAlerts.length} alerta(s) add-ons — ${now.toISOString().slice(0, 10)}`,
         })
-        const subject = `[EVA] ${divergences.length} divergencia(s) + ${addonAlerts.length} alerta(s) add-ons — ${now.toISOString().slice(0, 10)}`
+        const subject = `[EVA] ${divergences.length} divergencia(s) + ${addonAlerts.length} alerta(s) de cobro — ${now.toISOString().slice(0, 10)}`
 
         if (suppressed) {
             console.info('[cron/mp-reconcile] digest idéntico al anterior, suprimido')
