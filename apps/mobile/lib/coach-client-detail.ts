@@ -15,6 +15,7 @@ import type {
   WeeklyWeightPR,
 } from './profile-analytics'
 import { selectStrengthCardsFromSeries } from './profile-analytics'
+import type { HealthIntakeSource } from '@eva/profile-analytics'
 import {
   normalizeMealForMacros,
   sumMealMacros,
@@ -709,6 +710,8 @@ export async function getCoachClientDetail(clientId: string, workspace?: ClientA
   dailyHabitsSummary: DailyHabitsSummary
   lastWorkoutAt: string | null
   hasTrained: boolean
+  /** Ficha de salud del alumno (`client_intake`) para la tarjeta «Salud»; `null` si no hay fila. */
+  healthIntake: HealthIntakeSource | null
 }> {
   // Cliente primero (independiente) → el detalle SIEMPRE abre, aunque las queries
   // ricas fallen en una prod sin columnas enterprise/Codex.
@@ -764,6 +767,9 @@ export async function getCoachClientDetail(clientId: string, workspace?: ClientA
     dailyHabitsSummary: summarizeDailyHabits([], getTodayInSantiago().iso),
     lastWorkoutAt: null as string | null,
     hasTrained: false,
+    // Ficha de salud (solo lectura) — `null` cuando no hay fila: `buildHealthIntakeView` ya trata
+    // «sin fila» y «los cinco campos vacios» como el MISMO caso (solo la nota al pie).
+    healthIntake: null as HealthIntakeSource | null,
   }
   if (!baseClient) return EMPTY
   try {
@@ -809,7 +815,14 @@ export async function getCoachClientDetail(clientId: string, workspace?: ClientA
       // Biometria (talla/peso inicial/sexo) vive en client_intake, NO en clients (esas
       // columnas no existen en clients). El coach la lee por RLS (client_intake_coach FOR ALL).
       // El INSERT placeholder (alumnos sin intake) mete 0 en height/weight NOT NULL → 0 = "sin dato".
-      supabase.from('client_intake').select('height_cm, weight_kg, sex').eq('client_id', clientId).maybeSingle(),
+      // La ficha de SALUD del alumno (lesiones, condiciones, objetivo, experiencia, disponibilidad)
+      // vive en la MISMA fila: se suma al select en vez de abrir una lectura nueva. `updated_at`
+      // firma el pie «Actualizado el {12 sept}».
+      supabase
+        .from('client_intake')
+        .select('height_cm, weight_kg, sex, injuries, medical_conditions, goals, experience_level, availability, updated_at')
+        .eq('client_id', clientId)
+        .maybeSingle(),
       // Tiers defensivos (columna faltante = 400 al select entero → degradar en orden):
       //  1) reviewed_at + side_photo_url  (side = 3ra foto opcional, hoy inexistente en prod)
       //  2) reviewed_at                    (prod actual)  3) base (DB legacy)
@@ -1098,7 +1111,7 @@ export async function getCoachClientDetail(clientId: string, workspace?: ClientA
     activityByDate.get(day) && (activityByDate.get(day)!.checkIn = true)
   }
 
-  const intake = intakeRes.data as { height_cm?: number | null; weight_kg?: number | null; sex?: string | null } | null
+  const intake = intakeRes.data as ({ height_cm?: number | null; weight_kg?: number | null; sex?: string | null } & HealthIntakeSource) | null
   // Placeholder 0 (INSERT sin dato) → null al leer (se muestra "—").
   const intakeNum = (v: unknown): number | null => { const n = Number(v); return Number.isFinite(n) && n > 0 ? n : null }
   const rawSex = intake?.sex
@@ -1181,6 +1194,18 @@ export async function getCoachClientDetail(clientId: string, workspace?: ClientA
       ((muscleVolumeRes.data as any[] | null)?.length ?? 0) > 0 ||
       ((strengthSeriesRes.data as any[] | null)?.length ?? 0) > 0 ||
       enterpriseFallback?.hasTrained === true,
+    // La tarjeta «Salud» de la ficha: la fila cruda, sin recortar ni clasificar acá — la regla vive
+    // una sola vez en `buildHealthIntakeView` (@eva/profile-analytics) y web y RN la comparten.
+    healthIntake: intake
+      ? {
+          injuries: intake.injuries ?? null,
+          medical_conditions: intake.medical_conditions ?? null,
+          goals: intake.goals ?? null,
+          experience_level: intake.experience_level ?? null,
+          availability: intake.availability ?? null,
+          updated_at: intake.updated_at ?? null,
+        }
+      : null,
   }
   } catch (e) {
     console.warn('[coach-client-detail] partial load', e)

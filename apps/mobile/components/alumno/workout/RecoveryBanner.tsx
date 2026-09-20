@@ -1,5 +1,6 @@
 import { Pressable, Text, View } from 'react-native'
 import { Pencil, RotateCcw, X } from 'lucide-react-native'
+import { shortDayMonthEs } from '@eva/profile-analytics'
 import { FONT } from '../../../lib/typography'
 
 /**
@@ -8,7 +9,8 @@ import { FONT } from '../../../lib/typography'
  *   · `recoverDate` (param `recuperar`): franja AMBAR solida "Recuperando: {dia}…". El alumno entrena
  *     HOY y su log cae hoy — que es exactamente la semantica de recuperacion (la atribucion greedy del
  *     dashboard, E1.1, marca luego ese dia como hecho). El banner solo comunica el contexto.
- *   · `editDate` (param `fecha`): franja NEUTRA "Editando registros del {dia}". Ya es literal: el motor
+ *   · `editDate` (param `fecha`): franja NEUTRA "Corrigiendo el {martes 16 sept}" + "No cuenta como
+ *     entreno de hoy" + la salida "Entrenar hoy" (SPEC `vuelta-nueva-salud-y-reloj` §3.5). Ya es literal: el motor
  *     corre en modo SOLO-UPDATE sobre la ventana de ESA fecha (`useWorkoutSession(..., editDate)`) y
  *     corrige las series de ese dia sin insertar nunca una nueva. Antes era solo informativo (el guardado
  *     RN escribia HOY) porque el solo-UPDATE existia unicamente como server action web (E1.5).
@@ -39,11 +41,17 @@ export function RecoveryBanner({
   editDate,
   repeatDate,
   onDismiss,
+  onTrainToday,
 }: {
   recoverDate?: string
   editDate?: string
   /** Dia ya entrenado que se esta repitiendo hoy (ymd Santiago, ya validado por la ruta). */
   repeatDate?: string
+  /**
+   * Salida del modo CORRECCION (`editDate`): «Entrenar hoy» a la derecha del banner. Lo resuelve el
+   * consumidor navegando al mismo plan sin query. Sin la prop el boton no se pinta.
+   */
+  onTrainToday?: () => void
   /**
    * QA4: si se pasa, el banner muestra una X para descartarlo (estado local por sesión, lo posee el
    * consumidor). Solo el ejecutor V3 la pasa; V2 lo omite → banner byte-idéntico (sin X).
@@ -83,16 +91,31 @@ export function RecoveryBanner({
   }
 
   if (editDate) {
-    const dia = weekdayEs(editDate)
+    // «martes 16 sept»: `weekdayEs` sólo da el día de la semana, así que el día+mes sale de
+    // `shortDayMonthEs` (tabla fija compartida con la web, sin `Intl`) — el mismo texto letra por
+    // letra que la hoja «Ya hiciste» y que el banner de la PWA.
+    const dia = `${weekdayEs(editDate).toLowerCase()} ${shortDayMonthEs(editDate)}`
     return (
       <View className="flex-row items-center gap-3 px-4 py-2.5" style={{ backgroundColor: NEUTRAL_BG, borderBottomWidth: 1, borderBottomColor: NEUTRAL_BORDER }}>
         <Pencil size={16} color={NEUTRAL_ICON} strokeWidth={2} />
         <View style={{ flex: 1, minWidth: 0 }}>
-          <Text style={{ color: NEUTRAL_TITLE, fontFamily: FONT.uiBold, fontSize: 13 }}>Editando registros del {dia.toLowerCase()}</Text>
+          <Text numberOfLines={1} style={{ color: NEUTRAL_TITLE, fontFamily: FONT.uiBold, fontSize: 13 }}>Corrigiendo el {dia}</Text>
           <Text numberOfLines={1} style={{ color: NEUTRAL_SUB, fontFamily: FONT.uiSemibold, fontSize: 11.5, marginTop: 1 }}>
-            Corrige tus series de ese dia
+            No cuenta como entreno de hoy
           </Text>
         </View>
+        {/* Salida del modo corrección: el alumno que entró acá queriendo entrenar HOY no tenía cómo
+            volver sin salir del ejecutor. Botón de TEXTO a la derecha, antes de la X; navega al
+            mismo plan SIN query (el guardado y las rutas de `?fecha=`/`?repetir=` no se tocan). */}
+        {onTrainToday ? (
+          <Pressable onPress={onTrainToday} accessibilityRole="button" hitSlop={8}>
+            {({ pressed }) => (
+              <Text style={{ color: NEUTRAL_TITLE, fontFamily: FONT.uiBold, fontSize: 12.5, opacity: pressed ? 0.6 : 1 }}>
+                Entrenar hoy
+              </Text>
+            )}
+          </Pressable>
+        ) : null}
         {onDismiss ? <DismissButton onPress={onDismiss} color={DISMISS_NEUTRAL} /> : null}
       </View>
     )

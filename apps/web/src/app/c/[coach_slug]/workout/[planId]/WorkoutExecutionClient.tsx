@@ -97,7 +97,7 @@ import Image from 'next/image'
 import { WorkoutSummaryOverlay } from './WorkoutSummaryOverlay'
 import { WorkoutTimerSettingsPanel } from './WorkoutTimerSettingsPanel'
 import { cn } from '@/lib/utils'
-import { formatRelativeDate, getTodayInSantiago } from '@/lib/date-utils'
+import { formatRelativeDate, formatShortDayMonthEs, getTodayInSantiago } from '@/lib/date-utils'
 import {
     readSessionStart,
     persistSessionStart,
@@ -1859,7 +1859,16 @@ export function WorkoutExecutionClient({
             setStepperEnabled(true)
             // `expandSkippedSets`: un bloque omitido en una sesión anterior de HOY no debe volver a ser
             // el punto de arranque del pager (ya está resuelto).
-            setCurrentStepIndex(firstIncompleteStepIndex(steps, expandSkippedSets(blocks, logs)))
+            const startLogs = expandSkippedSets(blocks, logs)
+            // Q7-A (SPEC `vuelta-nueva-salud-y-reloj` §2.1): con TODO registrado
+            // `firstIncompleteStepIndex` devuelve el ÚLTIMO paso (`workout-stepper.ts:86-90`), y el
+            // alumno aterrizaba junto a "Finalizar", sin serie activa ni reloj — justo lo que pasa al
+            // corregir un día pasado o al reabrir el día hecho hoy. Arrancar en el primero deja la
+            // sesión navegable. Sólo el ARRANQUE inicial: el auto-avance y el toggle del stepper
+            // siguen usando `firstIncompleteStepIndex` tal cual (son los que mueven el paso al
+            // registrar una serie, y ahí caer en el último es lo correcto).
+            const todoRegistrado = steps.length > 0 && steps.every((s) => isStepComplete(s, startLogs))
+            setCurrentStepIndex(todoRegistrado ? 0 : firstIncompleteStepIndex(steps, startLogs))
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
@@ -1903,7 +1912,14 @@ export function WorkoutExecutionClient({
     // del early return "Rutina sin ejercicios") porque además lo consume el efecto de fusión de abajo.
     const enterExecV3Session = useCallback(() => {
         markExecV3Entered()
-        if (stepperEnabled) setCurrentStepIndex(firstIncompleteStepIndex(steps, expandSkippedSets(blocks, sessionLogs)))
+        if (stepperEnabled) {
+            // Misma regla que el montaje (Q7-A): esto también es ARRANQUE, no auto-avance. Con TODO
+            // registrado, `firstIncompleteStepIndex` devolvería el último paso y desharía el
+            // aterrizaje en el primero que acaba de hacer el montaje.
+            const startLogs = expandSkippedSets(blocks, sessionLogs)
+            const todoRegistrado = steps.length > 0 && steps.every((s) => isStepComplete(s, startLogs))
+            setCurrentStepIndex(todoRegistrado ? 0 : firstIncompleteStepIndex(steps, startLogs))
+        }
         setExecV3Phase('session')
     }, [markExecV3Entered, stepperEnabled, steps, blocks, sessionLogs])
 
@@ -2930,6 +2946,12 @@ export function WorkoutExecutionClient({
     // Banners de Ola 1 (mockup v3.3): "Editando" (día pasado, `?fecha=`) y "Recuperando" (pendiente de
     // la semana, `?recuperar=`). Sólo uno suele estar activo; el nombre del día sale de la fecha validada.
     const editWeekday = targetDate ? weekdayNameFromIso(targetDate) : ''
+    // "martes 16 sept" — día + mes del banner de corrección (SPEC `vuelta-nueva-salud-y-reloj` §3.5).
+    // `weekdayNameFromIso` sólo da el día de la semana y la fecha corta sale de la tabla fija de
+    // `date-utils` (nunca `Intl`: este banner se hidrata, Sentry EVA-NEXTJS-18).
+    const editDayLabel = targetDate ? `${editWeekday.toLowerCase()} ${formatShortDayMonthEs(targetDate)}` : ''
+    // Ruta del plan SIN query: "Entrenar hoy" sale del modo corrección y abre la sesión normal de hoy.
+    const trainTodayHref = `${base}/workout/${plan.id}`
     const recoverWeekday = recoverDate ? weekdayNameFromIso(recoverDate) : ''
     // Repetir un día ya entrenado (`?repetir=`): mismo patrón de banner, sólo informativo.
     const repeatWeekday = repeatDate ? weekdayNameFromIso(repeatDate) : ''
@@ -2956,7 +2978,11 @@ export function WorkoutExecutionClient({
         const startIso = targetDate ?? getTodayInSantiago().iso
         const weekday = weekdayNameFromIso(startIso)
         const dayNum = Number(startIso.slice(8, 10)) || null
-        const eyebrow = `${targetDate ? '' : 'Hoy · '}${weekday}${dayNum ? ` ${dayNum}` : ''}`.trim()
+        // Con `targetDate` el Inicio deja de decir sólo la fecha: nombra el modo («Corrigiendo ·
+        // martes 16»), que es lo que el alumno necesita saber antes de tocar nada (SPEC §3.5).
+        const eyebrow = targetDate
+            ? `Corrigiendo · ${weekday.toLowerCase()}${dayNum ? ` ${dayNum}` : ''}`.trim()
+            : `Hoy · ${weekday}${dayNum ? ` ${dayNum}` : ''}`.trim()
 
         const chips: string[] = []
         if (currentWeek != null) chips.push(`Semana ${currentWeek}`)
@@ -3217,17 +3243,28 @@ export function WorkoutExecutionClient({
                     </div>
                 ))}
 
-                {/* Editando un día PASADO (Ola 1): cada serie edita esa fecha en modo solo-UPDATE.
-                    QA4: descartable con la X (estado local por sesión; el guardado en esa fecha NO cambia). */}
+                {/* Corrigiendo un día PASADO (Ola 1): cada serie edita esa fecha en modo solo-UPDATE.
+                    QA4: descartable con la X (estado local por sesión; el guardado en esa fecha NO cambia).
+                    SPEC `vuelta-nueva-salud-y-reloj` §3.5: el tono sigue siendo NEUTRO y full-bleed (el
+                    ámbar es de "Recuperando"); lo que cambia es que dice qué NO cuenta y ofrece la salida
+                    "Entrenar hoy", porque desde el arreglo del ciclo llegar acá por error deja de ser raro. */}
                 {targetDate && !editBannerDismissed && (
                     <div className="flex items-center gap-2.5 border-b border-white/10 bg-white/[0.05] px-4 py-2.5 backdrop-blur-sm">
                         <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-control bg-[var(--sport-500)]/15 text-[var(--sport-300)]">
                             <Pencil className="h-3.5 w-3.5" />
                         </span>
-                        <p className="min-w-0 flex-1 text-xs font-semibold text-on-dark">
-                            Editando registros del{' '}
-                            <span className="font-bold text-on-dark">{editWeekday.toLowerCase()}</span>
-                        </p>
+                        <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-bold text-on-dark">Corrigiendo el {editDayLabel}</p>
+                            <p className="mt-0.5 truncate text-[11px] font-semibold text-[#8f8f9c]">
+                                No cuenta como entreno de hoy
+                            </p>
+                        </div>
+                        <Link
+                            href={trainTodayHref}
+                            className="shrink-0 rounded-control px-2 py-1 text-[11px] font-extrabold text-[var(--sport-300)] transition-colors hover:bg-white/10 active:scale-95"
+                        >
+                            Entrenar hoy
+                        </Link>
                         <button
                             type="button"
                             onClick={() => setEditBannerDismissed(true)}

@@ -675,6 +675,60 @@ describe('deriveWeekWorkoutStatus', () => {
             expect(r.days.every((d) => d.doneOnDate === null && d.doneOnLabel === null)).toBe(true)
         })
 
+        /**
+         * 2.ª vuelta (SPEC `vuelta-nueva-salud-y-reloj` §3.2-§3.3, CA1.1/CA1.2). El bug de Movens: la
+         * tira pintaba «Hecho» cualquier día cerrado dentro de los 30 días, así que desde la 2.ª
+         * vuelta TODAS las tarjetas decían «Hecho» y ninguna «Hoy» — y al tocarlas salía «Ya hiciste
+         * este entrenamiento». La tarjeta «Hoy» de esta pantalla sale de `slot.state === 'today'`
+         * (`weekPendingWorkouts.ts:483`), así que el arreglo del motor se ve acá o no se ve en ningún lado.
+         */
+        it('vuelta 1 completa ⇒ la 2.ª arranca con el Día 1 en «Hoy» y NINGÚN día en «Hecho»', () => {
+            const r = deriveWeekWorkoutStatus({
+                userLocalDate: TODAY_DATE,
+                todayIso: TODAY_ISO,
+                program: CYCLE_PROGRAM,
+                activePlans: CYCLE_PLANS,
+                logs: [
+                    ...fullDay(CY1, ['cb1a', 'cb1b'], '2026-07-05T15:00:00.000Z'),
+                    ...fullDay(CY2, ['cb2a', 'cb2b'], '2026-07-06T15:00:00.000Z'),
+                    ...fullDay(CY3, ['cb3a', 'cb3b'], '2026-07-07T15:00:00.000Z'),
+                ],
+            })
+
+            expect(r.days.map((d) => [d.dayOfWeek, d.status])).toEqual([
+                [1, 'today'],
+                [2, 'upcoming'],
+                [3, 'upcoming'],
+            ])
+            expect(r.days.filter((d) => d.isToday)).toHaveLength(1)
+            // Sin `done` no hay fecha que abrir: la celda pierde el «Hecho {fecha}» a propósito (§3.4).
+            expect(r.days.every((d) => d.dateIso === '')).toBe(true)
+            expect(r.pending).toEqual([])
+        })
+
+        it('2.ª vuelta a medias: sólo el día cerrado EN ESTA vuelta queda «Hecho», con su fecha nueva', () => {
+            const r = deriveWeekWorkoutStatus({
+                userLocalDate: TODAY_DATE,
+                todayIso: TODAY_ISO,
+                program: CYCLE_PROGRAM,
+                activePlans: CYCLE_PLANS,
+                // Vuelta 1 completa (4, 5 y 6 de julio) + el Día 1 de la vuelta 2, cerrado el 7.
+                logs: [
+                    ...fullDay(CY1, ['cb1a', 'cb1b'], '2026-07-04T15:00:00.000Z'),
+                    ...fullDay(CY2, ['cb2a', 'cb2b'], '2026-07-05T15:00:00.000Z'),
+                    ...fullDay(CY3, ['cb3a', 'cb3b'], '2026-07-06T15:00:00.000Z'),
+                    ...fullDay(CY1, ['cb1a', 'cb1b'], '2026-07-07T15:00:00.000Z'),
+                ],
+            })
+
+            expect(r.days.map((d) => [d.dayOfWeek, d.status, d.dateIso])).toEqual([
+                [1, 'done', '2026-07-07'],
+                [2, 'today', ''],
+                [3, 'upcoming', ''],
+            ])
+            expect(r.pending).toEqual([])
+        })
+
         it('días pasados sin entrenar NO generan pendientes ni recuperables (no hay «día perdido»)', () => {
             const r = deriveWeekWorkoutStatus({
                 userLocalDate: TODAY_DATE,

@@ -38,6 +38,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { MetricInfo, type MetricTerm } from '@/components/ui/metric-info'
+import { buildHealthIntakeView, type HealthIntakeSource } from '@eva/profile-analytics'
 import { formatShortDayMonthEs, getSantiagoIsoYmdForUtcInstant } from '@/lib/date-utils'
 import { cn } from '@/lib/utils'
 import { updateClientBiometrics } from './_actions/client-detail.actions'
@@ -112,6 +113,12 @@ type ProfileOverviewB3Props = {
     initialWeightKg?: number | null
     /** Sexo del intake — precarga el selector del editor. Default `null`. */
     initialSex?: 'male' | 'female' | 'other' | null
+    /**
+     * Fila `client_intake` del alumno — alimenta la sección «Salud» (SOLO LECTURA). Ya viaja entera
+     * en el query de la ficha (`client-detail.service.ts:102`, `client_intake (*)`): acá sólo se leen
+     * lesiones, condiciones, objetivo, experiencia, disponibilidad y `updated_at`.
+     */
+    clientIntake?: HealthIntakeSource | null
     /** Entitlements de módulos de pago (espejo del gate server-side). */
     moduleFlags?: { cardio: boolean; movement: boolean; bodycomp: boolean }
     /** Deep-link a la Zona A (Progreso) del hogar único de nutrición. No recomputa
@@ -146,6 +153,7 @@ export function ProfileOverviewB3({
     initialHeightCm,
     initialWeightKg,
     initialSex = null,
+    clientIntake = null,
     moduleFlags,
     onViewNutrition,
     onViewProgress,
@@ -162,6 +170,10 @@ export function ProfileOverviewB3({
         () => longestActivityStreakFromCalendar(calendarData),
         [calendarData]
     )
+
+    // «Salud» — misma función pura que pinta la app, así la web y RN no pueden decir cosas distintas
+    // sobre un dato sensible (SPEC `vuelta-nueva-salud-y-reloj` §5). Solo lectura, sin analítica.
+    const healthView = useMemo(() => buildHealthIntakeView(clientIntake), [clientIntake])
 
     const target = Math.max(1, compliance.workoutsTarget ?? 1)
     const wThis = compliance.workoutsThisWeek ?? 0
@@ -441,6 +453,46 @@ export function ProfileOverviewB3({
                 </div>
                 {/* ===== COL DER — seguimiento / media ===== */}
                 <div className="space-y-6">
+            {/* ===== Salud (ficha inicial del alumno · solo lectura) =====
+                Va PRIMERA de la columna derecha: lo que el alumno declaró al registrarse —lesiones y
+                condiciones médicas— no se veía en ninguna parte de la ficha. En una sola columna
+                (< 1024 px del contenedor) queda después de «Métricas clave». Texto COMPLETO, sin chip
+                y sin «ver más»; nada de esto va a PostHog ni a Sentry. */}
+            <div>
+                <SectionTitle>Salud</SectionTitle>
+                <Card padding="md">
+                    {healthView.isEmpty ? (
+                        <p className="text-[12px] leading-[1.45] text-muted">{healthView.pendingIntakeNote}</p>
+                    ) : (
+                        <>
+                            <dl className="space-y-3">
+                                {healthView.rows.map((r) => (
+                                    <div key={r.key}>
+                                        <dt className="text-[11px] font-semibold uppercase tracking-wide text-muted">
+                                            {r.label}
+                                        </dt>
+                                        <dd
+                                            className={cn(
+                                                'mt-0.5 whitespace-pre-line text-[13px] leading-[1.45] break-words',
+                                                r.isEmpty ? 'text-muted' : 'text-strong'
+                                            )}
+                                        >
+                                            {r.value}
+                                        </dd>
+                                    </div>
+                                ))}
+                            </dl>
+                            {healthView.updatedLabel ? (
+                                <p className="mt-3 text-[11px] text-muted">{healthView.updatedLabel}</p>
+                            ) : null}
+                            {healthView.pendingIntakeNote ? (
+                                <p className="mt-1 text-[11px] text-muted">{healthView.pendingIntakeNote}</p>
+                            ) : null}
+                        </>
+                    )}
+                </Card>
+            </div>
+
             {/* ===== Hábitos diarios (mini-widget · cosecha Fase 0) ===== */}
             <HabitsMiniWidget summary={dailyHabitsSummary} rows={dailyHabits} />
 
