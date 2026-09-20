@@ -54,9 +54,9 @@ jobs:
           [ -z "${ASC_ISSUER_ID// /}" ] && { echo "ERROR: ASC_API_ISSUER_ID vacío"; exit 1; }
           [ -z "${ASC_API_KEY_P8// /}" ] && { echo "ERROR: ASC_API_KEY_P8 vacío"; exit 1; }
           mkdir -p ~/.private_keys
-          printf '%s' "$ASC_API_KEY_P8" > ~/.private_keys/AuthKey_${ASC_KEY_ID}.p8
-          IPA=$(ls ipa/*.ipa | head -1)
+          printf '%s' "$ASC_API_KEY_P8" > "$HOME/.private_keys/AuthKey_${ASC_KEY_ID}.p8"
+          IPA=$(find ipa -maxdepth 1 -name '*.ipa' -print -quit)
           echo "IPA: $IPA ($(du -h "$IPA" | cut -f1))"
           xcrun altool --validate-app -f "$IPA" -t ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
           xcrun altool --upload-app -f "$IPA" -t ios --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
-          rm -f ~/.private_keys/AuthKey_${ASC_KEY_ID}.p8
+          rm -f "$HOME/.private_keys/AuthKey_${ASC_KEY_ID}.p8"

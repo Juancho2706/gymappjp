@@ -58,7 +58,7 @@ instalación desde un anuncio y el registro que la sigue son invisibles. La camp
 | Manifiesto de privacidad | [`apps/mobile/plugins/with-privacy-manifest.js`](../../../apps/mobile/plugins/with-privacy-manifest.js) | Escribe `PrivacyInfo.xcprivacy` con 5 tipos de dato, todos `Tracking: false`, y `NSPrivacyTracking: false` |
 | App ID de Facebook para share | `app.json` `extra.facebookAppId` | Solo para «compartir a Stories». **No se toca** |
 | Alta de coach en RN | [`apps/mobile/app/(auth)/register.tsx`](<../../../apps/mobile/app/(auth)/register.tsx>) | Dos caminos: Google (`completeCoachOnboarding`) y correo (`registerCoachFree`) |
-| Regla de tiendas | [`apps/mobile/AGENTS.md`](../../../apps/mobile/AGENTS.md) §«Pagos y tiendas» | El rail de cobro es la web. Por eso acá **no** hay evento de compra (§6) |
+| Regla de tiendas | `apps/mobile/AGENTS.md` §«Pagos y tiendas» | El rail de cobro es la web. Por eso acá **no** hay evento de compra (§6) |
 
 ---
 

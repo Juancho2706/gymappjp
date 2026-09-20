@@ -163,3 +163,49 @@ coach Joaco, 15-09). En `CURRENT.md` quedó una línea por tren con su link y lo
 ### `EVA-NEXTJS-18` y `EVA-NEXTJS-19` — resueltos en Sentry, 2026-09-05 (texto de CURRENT al 15-09)
 
 **(a) `EVA-NEXTJS-18` (hidratación en `/c/[coach_slug]/dashboard?recuperar=…`) — causa confirmada y FIX EN PRODUCCIÓN 05-09 22:56Z (O7.7, deploy `dpl_yJUsqXJ8…`)**: el barrido O7.1 se salteó `WorkoutPlanCard.fmtShortDate` (client component del dashboard del ALUMNO); ahora usa `formatShortDayMonthEs` (tabla fija, cero `Intl`). Verificado en Sentry el 08-09 (72 h del deploy) sin recurrencia. **(b) `E394` = `EVA-NEXTJS-19` — 0 eventos desde el 01-09 18:42Z con tráfico alto (12.230 spans en la ruta) ⇒ O6.8 cumplida**, resuelto en Sentry con nota el 05-09 (C3 cerrada con la misma evidencia); O7.4 desestimado salvo regresión (decisión del jefe 05-09). [tareas § O7](../specs/cierre-sentry-vivos/TASKS.md)
+
+## Corte del 2026-09-20 (gate docs:check, worker W0 del tren «Vuelta nueva, salud y reloj»)
+
+`CURRENT.md` pesaba 16.365 bytes contra el tope de 16 KB de `pnpm docs:check`. Se mudó acá la prosa
+completa de los ítems ya cerrados con QA verde (puntos 2, 3, 5, 7 y el tren «Cantidades honestas»
+marcado `done`), sin perder hashes, deploys ni OTAs; en `CURRENT.md` quedó una línea por ítem con su
+puntero a esta sección.
+
+### Ítem 1 — detalle recortado de «Arreglos chicos pre-OTA» + F1 (texto de CURRENT al 20-09)
+
+Texto completo antes del recorte de bytes del 20-09 (el punto 1 de «Prioridades vigentes» sigue activo
+en `CURRENT.md`, esto es solo el detalle de commits/gates que se movió acá): `master` = `rnmobiledenuevo`
+= `091a19b0` (F1 `fe6e9b39` → docs → W1-A `ed9c9085` · W1-C `7d2eb3f1` · W1-B `09e5d9fa` → docs
+`091a19b0`); E2E `prod-suave` 9/9 (run 34556450253, 42,7 s). Gates completos en
+[TEST_STATUS](../testing/TEST_STATUS.md).
+
+### Ítem 2 — «Señales honestas para el coach» y «Porciones a la chilena», cerrados 10-09 (texto de CURRENT al 20-09)
+
+**Cerrados 10-09 con QA del owner VERDE ⇒ SDD `done`** (hashes, deploys y OTAs en el [historial](../archive/current-historial-2026-09.md)): «Señales honestas para el coach» ([tareas](../specs/senales-honestas-coach/TASKS.md); aviso a Movens enviado) · «Porciones a la chilena» ([SDD](../specs/nutrition-porciones-chilenas/SPEC.md); queda W6.11: avisos a coaches y respuesta a Pame, textos listos).
+
+### Ítem 3 — trenes cerrados 02/04/05-09 (texto de CURRENT al 20-09)
+
+**Cerrados con QA del owner VERDE (02/04/05-09); prosa completa en el [historial](../archive/current-historial-2026-09.md):**
+«Ciclo real y por lado» ([tareas](../specs/ciclo-real-y-por-lado/TASKS.md), `a567f6e2`, SDD `done`, aviso a coaches y E2E 9/9
+el 05-09) · «QA del owner 02-09» ([spec](../specs/qa-ejecutor-share-0209/SPEC.md), `0f545926`; quedan F7 y P3) · «billing +
+seguridad» (`16c06fba`; SEC-01 fase 3 en LIVE 05-09, frente cerrado) · «cierre de backlog 02-09» + ola 2 chica (`794aee52`;
+`QA_DEVICE_PENDIENTE.md` sin pendientes). Detalle de paridad en [MOBILE_PARITY](../status/MOBILE_PARITY.md).
+
+### Ítem 5 — `EVA-NEXTJS-18` y `EVA-NEXTJS-19`, resueltos en Sentry 05-09 (texto de CURRENT al 20-09)
+
+**`EVA-NEXTJS-18` (hidratación en `/c/[coach_slug]/dashboard?recuperar=…`) y `EVA-NEXTJS-19`
+(`E394`) — ambos con FIX EN PRODUCCIÓN y resueltos en Sentry el 05-09** (causa raíz, deploy y
+verificación en el [historial](../archive/current-historial-2026-09.md)); O7.4 desestimado salvo
+regresión. [tareas § O7](../specs/cierre-sentry-vivos/TASKS.md)
+
+### Ítem 7 — ola O6 «Errores al día», en producción 01-09, `EVA-MOBILE-F` sigue abierto (texto de CURRENT al 20-09)
+
+**Errores al día (ola O6) — EN PRODUCCIÓN 01-09**, O6.8/O6.9/O7.6 cerrados 05-09; `EVA-MOBILE-F` (despegue sin escena) sigue abierto;
+Skia exige build nativo y P5 `noUncheckedIndexedAccess` (431 errores) como tanda propia. [tareas § O6/O7](../specs/cierre-sentry-vivos/TASKS.md)
+
+### Ítem 14 — Tren «Cantidades honestas» (Nutrición V2), W1–W4 en producción 06-09, QA VERDE 10-09, SDD `done` (texto de CURRENT al 20-09)
+
+**Tren «Cantidades honestas» (Nutrición V2) — W1–W4 EN PRODUCCIÓN 06-09, QA del owner en device VERDE 10-09 ⇒ SDD `done`**
+([SDD](../specs/nutrition-cantidades-honestas/SPEC.md); commits, migraciones y OTA en el [historial](../archive/current-historial-2026-09.md)):
+conversión al cambiar unidad, medida casera, linaje `source_item_id` y ficha del coach con Retirar/Editar. Quedan los avisos
+a `jotap-coach`/`olympuswolf` (los manda el owner) y el dry-run del backfill USDA (TASKS C6/C7).
