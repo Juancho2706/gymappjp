@@ -422,7 +422,8 @@ describe('CA4.7 — tira semanal del ejecutor con A/B', () => {
   }
 
   it('semana B: la tira marca SOLO martes y jueves (antes marcaba tambien lunes y miercoles)', () => {
-    const { variant, plans } = activePlans(new Date(2026, 8, 15))
+    // Instante absoluto (mediodía UTC), no medianoche local: ver la nota de `home-hero-ab.test.ts`.
+    const { variant, plans } = activePlans(new Date('2026-09-15T12:00:00Z'))
     expect(variant).toBe('B')
     expect([...plannedDatesForWeek(plans, weekB)].sort()).toEqual(['2026-09-15', '2026-09-17'])
     // Sin el filtro, los cuatro dias quedaban marcados: ese era el bug.
@@ -433,7 +434,7 @@ describe('CA4.7 — tira semanal del ejecutor con A/B', () => {
 
   it('semana A: la tira marca SOLO lunes y miercoles', () => {
     const weekA = weekDatesMondayToSunday('2026-09-08')
-    const { variant, plans } = activePlans(new Date(2026, 8, 8))
+    const { variant, plans } = activePlans(new Date('2026-09-08T12:00:00Z'))
     expect(variant).toBe('A')
     expect([...plannedDatesForWeek(plans, weekA)].sort()).toEqual(['2026-09-07', '2026-09-09'])
   })
