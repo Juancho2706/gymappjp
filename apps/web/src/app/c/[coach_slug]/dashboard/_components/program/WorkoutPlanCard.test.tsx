@@ -1,6 +1,8 @@
-import { afterAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, describe, expect, it } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 
+import { getTodayInSantiago } from '@/lib/date-utils'
 import { WorkoutPlanCards, type WorkoutPlanCardItem } from './WorkoutPlanCard'
 
 /**
@@ -23,6 +25,10 @@ const TZ_ORIGINAL = process.env.TZ
 
 afterAll(() => {
     process.env.TZ = TZ_ORIGINAL
+})
+
+afterEach(() => {
+    cleanup()
 })
 
 /** Día de ciclo YA cerrado: es el único camino que pinta una fecha en el render inicial. */
@@ -84,5 +90,54 @@ describe('WorkoutPlanCard — fecha del sub-label sin Intl (EVA-NEXTJS-18, O7.7)
         const html = htmlDelServidor([diaDeCicloHecho({ dateIso: '' })])
         expect(html).toContain('Hecho')
         expect(html).not.toContain('Invalid Date')
+    })
+})
+
+/**
+ * Hoja «Ya hiciste» (SPEC `vuelta-nueva-salud-y-reloj` §3.5, CA1.5). Lo que pinnea:
+ *
+ *  · Un día hecho ANTES de hoy intercambia las dos opciones —posición, jerarquía y DESTINO—: primero
+ *    «Entrenarlo hoy» (`?repetir=`) y debajo «Corregir registros del {fecha}» (`?fecha=`). El bug que
+ *    evita es el clásico de este cambio: renombrar los botones y dejar los `href` cruzados.
+ *  · El día hecho HOY no cambia nada: «Revisar y editar» sola, sin «Repetir hoy» (índice único por
+ *    día: repetir hoy sobre hoy pisaría la misma fila).
+ *
+ * La hoja es el MISMO componente en las dos superficies de la web: bottom sheet en móvil y modal
+ * centrado en `md+` (overrides `md:` de `WorkoutDoneSheet.tsx`), así que el contenido se prueba una vez.
+ */
+function abrirLaHoja(item: WorkoutPlanCardItem): void {
+    render(<WorkoutPlanCards coachSlug="mi-coach" plans={[item]} />)
+    fireEvent.click(screen.getByRole('button', { name: /revisar o repetir/i }))
+}
+
+describe('WorkoutPlanCard — hoja «Ya hiciste» de un día de ciclo', () => {
+    it('día hecho ANTES de hoy: «Entrenarlo hoy» primero y «Corregir registros del 26 ago» debajo', () => {
+        abrirLaHoja(diaDeCicloHecho())
+
+        // El título NO cambia (decisión del SPEC: la hoja deja de aparecer en la vuelta nueva; cuando
+        // aparece, es verdad).
+        expect(screen.getByText('Ya hiciste este entrenamiento')).toBeTruthy()
+
+        const opciones = screen.getAllByRole('link')
+        expect(opciones.map((a) => a.textContent)).toEqual([
+            'Entrenarlo hoySesión nueva de hoy, con tus valores del 26 ago ya cargados',
+            'Corregir registros del 26 agoCambia lo que anotaste ese día. No cuenta como entreno de hoy.',
+        ])
+        // Los destinos viajan CON el rótulo: entrenar hoy siembra (`?repetir=`), corregir edita esa fecha.
+        expect(opciones[0].getAttribute('href')).toBe('/c/mi-coach/workout/plan-1?repetir=2026-08-26')
+        expect(opciones[1].getAttribute('href')).toBe('/c/mi-coach/workout/plan-1?fecha=2026-08-26')
+    })
+
+    it('día hecho HOY: «Revisar y editar» sola, sin repetir y sin el copy de corrección', () => {
+        const hoy = getTodayInSantiago().iso
+        abrirLaHoja(diaDeCicloHecho({ dateIso: hoy, isToday: true }))
+
+        const opciones = screen.getAllByRole('link')
+        expect(opciones).toHaveLength(1)
+        expect(opciones[0].textContent).toBe('Revisar y editarAbre tus registros de ese día y corrige lo que quieras')
+        // `?desde=hecho`: la sesión es de hoy, así que jamás se abre el modo solo-UPDATE del día pasado.
+        expect(opciones[0].getAttribute('href')).toBe('/c/mi-coach/workout/plan-1?desde=hecho')
+        expect(screen.queryByText('Entrenarlo hoy')).toBeNull()
+        expect(screen.queryByText('Repetir hoy')).toBeNull()
     })
 })

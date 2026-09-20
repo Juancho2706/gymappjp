@@ -286,6 +286,9 @@ export function ClientProfileDashboard({
                             initialHeightCm={client.client_intake?.height_cm ?? null}
                             initialWeightKg={client.client_intake?.weight_kg ?? null}
                             initialSex={(client.client_intake?.sex as 'male' | 'female' | 'other' | null) ?? null}
+                            // Sección «Salud»: la fila entera ya viaja en el query de la ficha
+                            // (`client_intake (*)`), así que no hace falta tocar el servicio.
+                            clientIntake={client.client_intake ?? null}
                             moduleFlags={moduleFlags}
                             dailyHabitsSummary={data.dailyHabitsSummary}
                             dailyHabits={data.dailyHabits}

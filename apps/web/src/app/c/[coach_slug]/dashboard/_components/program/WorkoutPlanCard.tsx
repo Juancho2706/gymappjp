@@ -254,6 +254,11 @@ export function WorkoutPlanCards({
                     repeatHref={buildWorkoutRepeatHref(base, sheetItem.id, sessionDate)}
                     // Si esa sesión es de HOY, repetir pisaría la misma fila (índice único por día) → se oculta.
                     showRepeat={sessionDate !== todayIso}
+                    // Modo corrección (SPEC `vuelta-nueva-salud-y-reloj` §3.5): el orden y los destinos
+                    // se intercambian cuando la sesión es REALMENTE pasada — el mismo criterio que
+                    // `showRepeat`, y el mismo que aplica la app. El día hecho HOY conserva "Revisar y
+                    // editar" sola. El título no se toca en ninguna de las dos ramas.
+                    sessionDateLabel={sessionDate !== todayIso ? fmtShortDate(sessionDate) : undefined}
                     onLaunch={launch}
                 />
             ) : null}

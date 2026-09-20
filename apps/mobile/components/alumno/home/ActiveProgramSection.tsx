@@ -3,6 +3,7 @@ import { ScrollView, Text, TouchableOpacity, View } from 'react-native'
 import { ArrowRight, Calendar, CheckCircle2, ChevronRight, CircleDashed, Pencil, Play, RotateCcw } from 'lucide-react-native'
 import { cssInterop } from 'nativewind'
 import { deriveSportTokens } from '@eva/brand-kit'
+import { shortDayMonthEs } from '@eva/profile-analytics'
 import { useTheme } from '../../../context/ThemeContext'
 import { getTodayInSantiago } from '../../../lib/date-utils'
 import { FONT } from '../../../lib/typography'
@@ -289,17 +290,23 @@ export function DoubleIntentSheet({
   // Día a medias → otro título/subtítulo, mismas acciones (ver nota del componente).
   const incomplete = view?.status === 'in_progress'
 
+  // Fecha corta «16 sept» del copy canónico (SPEC §3.5): tabla fija compartida con la web
+  // (`shortDayMonthEs`), sin `Intl`, así la app y la PWA dicen la MISMA palabra. `fmtSheetDate`
+  // sigue firmando el subtítulo («martes 16 de julio»), que no cambia.
+  const dayMonth = reviewDate ? shortDayMonthEs(reviewDate) : ''
+
   // `nativeModal`: gorhom 5.2.14 bajo reanimated 4 puede montar el sheet fuera de pantalla si el
-  // hosting container todavía no midió (ver SheetProps.nativeModal). `dynamicSizing` se retira
-  // porque en esta ruta el content-hug es nativo y `snapPoints` pasa a ser el tope de max-height
-  // — mismo alto resultante, una prop menos que engañe al próximo que lea esto.
+  // hosting container todavía no midió (ver SheetProps.nativeModal). En esta ruta el content-hug ES
+  // nativo y `dynamicSizing` sería una prop muerta: `snapPoints` queda como el TOPE de max-height.
+  // Sube de 42 % a 52 % porque las dos opciones nuevas traen subtítulo largo y en un iPhone SE el
+  // tope viejo recortaba «Corregir registros del …» detrás del scroll.
   return (
     <Sheet
       open={!!view}
       onClose={onClose}
       nativeModal
       title={incomplete ? 'Entrenamiento incompleto' : 'Ya hiciste este entrenamiento'}
-      snapPoints={['42%']}
+      snapPoints={['52%']}
     >
       <View style={{ gap: 16 }}>
         {view ? (
@@ -320,47 +327,61 @@ export function DoubleIntentSheet({
           </View>
         ) : null}
 
-        {/* Revisar y editar — abre los registros de esa sesión para corregirlos: día pasado ⇒ modo
-            solo-UPDATE (`?fecha=`), hoy ⇒ flujo normal. Sólo se omite si el caller no pasó `onReview`. */}
-        {canReview ? (
-          <TouchableOpacity
-            testID="double-intent-review"
-            onPress={() => view && reviewDate && onReview?.(view.plan.id, reviewDate, !!view.isToday)}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            className="rounded-control border border-sport-500/25 bg-sport-100 dark:bg-sport-100/[0.16]"
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 13 }}
-          >
-            <View className="bg-sport-500" style={{ width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' }}>
-              <Pencil size={17} color="#fff" strokeWidth={2} />
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text className="text-strong" style={{ fontFamily: FONT.uiBold, fontSize: 14 }}>Revisar y editar</Text>
-              <Text className="text-muted" numberOfLines={2} style={{ fontFamily: FONT.ui, fontSize: 11.5, marginTop: 1 }}>
-                {reviewIsToday ? 'Abre tus registros de hoy y corrige lo que quieras' : 'Abre tus registros de ese día y corrige lo que quieras'}
-              </Text>
-            </View>
-            <ChevronRight size={18} color={theme.mutedForeground} />
-          </TouchableOpacity>
-        ) : null}
-
-        {/* Repetir hoy — instancia NUEVA de hoy, con cada serie precargada con lo que se registró esa
-            vez (editable). No se ofrece cuando la sesión hecha ya es de HOY (decisión CEO, ver nota). */}
+        {/* SESIÓN PASADA de la vuelta actual (`showRepeat`): «Entrenarlo hoy» es la PRIMARIA y
+            «Corregir registros del {16 sept}» la secundaria neutra. Se intercambian posición,
+            jerarquía Y DESTINO (`?repetir=` ↔ `?fecha=`), no sólo el rótulo: entrenar de nuevo es lo
+            que el alumno quiere casi siempre, y corregir la semana pasada era el camino por el que
+            se caía solo (feedback Movens 19-09). Íconos y chevrons se conservan en las dos. */}
         {showRepeat ? (
           <TouchableOpacity
             testID="double-intent-repeat"
             onPress={() => view && onRepeat(view.plan.id, reviewDate)}
             activeOpacity={0.85}
             accessibilityRole="button"
-            className="rounded-control border border-sport-500/25 bg-sport-100 dark:bg-sport-100/[0.16]"
+            className="rounded-control border-2 border-sport-500/55 bg-sport-100/60 dark:bg-sport-100/[0.16]"
             style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 13 }}
           >
-            <View className="bg-sport-500" style={{ width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' }}>
-              <RotateCcw size={17} color="#fff" strokeWidth={2.25} />
+            <View className="bg-sport-500/[0.18]" style={{ width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' }}>
+              <RotateCcw size={17} color={theme.primary} strokeWidth={2.25} />
             </View>
             <View style={{ flex: 1, minWidth: 0 }}>
-              <Text className="text-strong" style={{ fontFamily: FONT.uiBold, fontSize: 14 }}>Repetir hoy</Text>
-              <Text className="text-muted" numberOfLines={2} style={{ fontFamily: FONT.ui, fontSize: 11.5, marginTop: 1 }}>Sesión nueva con tus valores de esa vez ya cargados</Text>
+              <Text className="text-strong" style={{ fontFamily: FONT.uiBold, fontSize: 14 }}>Entrenarlo hoy</Text>
+              <Text className="text-muted" numberOfLines={2} style={{ fontFamily: FONT.ui, fontSize: 11.5, marginTop: 1 }}>Sesión nueva de hoy, con tus valores del {dayMonth} ya cargados</Text>
+            </View>
+            <ChevronRight size={18} color={theme.primary} />
+          </TouchableOpacity>
+        ) : null}
+
+        {/* Corregir / Revisar — abre los registros de esa sesión: día pasado ⇒ modo solo-UPDATE
+            (`?fecha=`), hoy ⇒ flujo normal. Con la sesión pasada baja a secundaria NEUTRA; el día
+            hecho HOY no cambia de orden ni de copy («Revisar y editar» sola, destacada como siempre).
+            Sólo se omite si el caller no pasó `onReview`. */}
+        {canReview ? (
+          <TouchableOpacity
+            testID="double-intent-review"
+            onPress={() => view && reviewDate && onReview?.(view.plan.id, reviewDate, !!view.isToday)}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            className={showRepeat
+              ? 'rounded-control border border-subtle bg-surface-card'
+              : 'rounded-control border-2 border-sport-500/55 bg-sport-100/60 dark:bg-sport-100/[0.16]'}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 13 }}
+          >
+            <View
+              className={showRepeat ? 'bg-surface-sunken' : 'bg-sport-500/[0.18]'}
+              style={{ width: 38, height: 38, borderRadius: 19, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Pencil size={17} color={showRepeat ? theme.mutedForeground : theme.primary} strokeWidth={2} />
+            </View>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text className="text-strong" style={{ fontFamily: FONT.uiBold, fontSize: 14 }}>
+                {showRepeat ? `Corregir registros del ${dayMonth}` : 'Revisar y editar'}
+              </Text>
+              <Text className="text-muted" numberOfLines={2} style={{ fontFamily: FONT.ui, fontSize: 11.5, marginTop: 1 }}>
+                {showRepeat
+                  ? 'Cambia lo que anotaste ese día. No cuenta como entreno de hoy.'
+                  : reviewIsToday ? 'Abre tus registros de hoy y corrige lo que quieras' : 'Abre tus registros de ese día y corrige lo que quieras'}
+              </Text>
             </View>
             <ChevronRight size={18} color={theme.mutedForeground} />
           </TouchableOpacity>

@@ -43,8 +43,10 @@ import { isUuid } from '../../../lib/safe-uuid'
 import { daysBetweenCalendar } from '../../../lib/checkin-thresholds'
 import { StatCard } from './shared'
 import {
+  buildHealthIntakeView,
   buildProfileActivityCalendar,
   longestActivityStreak,
+  type HealthIntakeSource,
 } from '../../../lib/profile-analytics'
 import { getProfileTopAlert, type ProfileAlertType } from '../../../lib/profile-top-alert'
 import { buildClientKpiCards, type ClientKpiCard, type ClientKpiIcon, type ClientKpiTone } from '../../../lib/client-kpi-cards'
@@ -159,6 +161,7 @@ export function OverviewTab({
     lastWorkoutAt,
     dailyHabits,
     dailyHabitsSummary,
+    healthIntake,
   } = data
 
   const calendar = useMemo(
@@ -302,6 +305,8 @@ export function OverviewTab({
         reload={reload}
         workspace={workspace}
       />
+
+      <HealthIntakeCard intake={healthIntake} />
 
       <HabitsMiniWidget summary={dailyHabitsSummary} rows={dailyHabits} />
 
@@ -543,6 +548,40 @@ function CompactProgramPhasesBar({ phases }: { phases: NonNullable<CoachClientDe
           }}
         />
       ))}
+    </View>
+  )
+}
+
+/**
+ * Tarjeta «Salud» de la ficha (SPEC `docs/specs/vuelta-nueva-salud-y-reloj` §5) — SOLO LECTURA.
+ * El alumno llena «Salud y seguridad» al registrarse y hasta ahora no se veía en ningún lado de la
+ * app: 6 de los 10 alumnos de Movens habían cargado lesiones y su coach nunca las leyó.
+ *
+ * La REGLA vive una sola vez, en `buildHealthIntakeView` (@eva/profile-analytics): qué fila se
+ * pinta, qué dice un campo de salud vacío y cuándo va la nota al pie. Acá sólo se imprime, así la
+ * app y la ficha web no pueden decir cosas distintas sobre un dato de salud. Sin chip «Lesión
+ * informada», sin «ver más» —el texto libre va COMPLETO y la tarjeta crece— y SIN analytics: ni un
+ * evento a PostHog o Sentry con lesiones o condiciones médicas.
+ */
+function HealthIntakeCard({ intake }: { intake: HealthIntakeSource | null }) {
+  const view = useMemo(() => buildHealthIntakeView(intake), [intake])
+  return (
+    <View style={styles.sectionBlock}>
+      <SectionTitle>Salud</SectionTitle>
+      <StatCard>
+        {view.rows.map((row) => (
+          <View key={row.key} style={styles.healthRow}>
+            <Text className="text-muted" style={styles.healthLabel}>{row.label}</Text>
+            {/* `isEmpty` = «Sin lesiones informadas», no algo que alguien escribió: se atenúa. */}
+            <Text className={row.isEmpty ? 'text-muted' : 'text-strong'} style={styles.healthValue}>{row.value}</Text>
+          </View>
+        ))}
+        {/* «Actualizado el {12 sept}», sin autoría: `client_intake` no guarda quién escribió y el
+            coach edita esas mismas columnas desde la web. */}
+        {view.updatedLabel ? <Text className="text-muted" style={styles.healthFoot}>{view.updatedLabel}</Text> : null}
+        {/* Nota al pie, NUNCA en reemplazo de la tarjeta: con lesiones cargadas se ven igual. */}
+        {view.pendingIntakeNote ? <Text className="text-muted" style={styles.healthFoot}>{view.pendingIntakeNote}</Text> : null}
+      </StatCard>
     </View>
   )
 }
@@ -945,6 +984,10 @@ function dayLabel(day: number): string {
 const styles = StyleSheet.create({
   root: { gap: 24 },
   sectionBlock: { gap: 12 },
+  healthRow: { gap: 2 },
+  healthLabel: { fontSize: 11.5, fontFamily: FONT.uiSemibold, letterSpacing: 0.1 },
+  healthValue: { fontSize: 13.5, lineHeight: 19, fontFamily: FONT.ui },
+  healthFoot: { fontSize: 11.5, fontFamily: FONT.uiSemibold },
   sectionTitleRow: { minHeight: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
   sectionTitle: { flex: 1, fontSize: 17, fontFamily: FONT.displayBold, letterSpacing: -0.34 },
   alertBanner: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderLeftWidth: 3, borderRadius: 14, paddingHorizontal: 12, paddingVertical: 11 },

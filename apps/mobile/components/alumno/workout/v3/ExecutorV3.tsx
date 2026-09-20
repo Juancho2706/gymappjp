@@ -73,6 +73,7 @@ import { haptics } from '../../../../lib/haptics'
 import { supabase } from '../../../../lib/supabase'
 import { getTodayInSantiago, formatRelativeDate, getSantiagoIsoYmdForUtcInstant, getSantiagoUtcBoundsForDay } from '../../../../lib/date-utils'
 import { computeCheckInReminder } from '../../../../lib/checkin-thresholds'
+import { effectiveWeekVariantFromPlans, programWeekIndex1Based, weekIndexToVariantLetter, workoutPlanMatchesVariant } from '../../../../lib/program-week-variant'
 import { computeEffectiveTarget, type EffectiveTarget } from '../../../../lib/workout/progression'
 import {
   resolveExercise,
@@ -148,6 +149,7 @@ import {
   type PlanWeekCompletionSource,
   type WeeklyStreak,
 } from './weekly-streak'
+import { initialStepIndex } from './initial-step'
 
 const ON_DARK_MUTED = '#939DAB'
 // Letras de miembro por posicion (A, B, C…) para la senal "Sigue con {label}" de las superseries.
@@ -234,7 +236,17 @@ export default function ExecutorV3({ planId, recoverDate, editDate, repeatDate }
   return (
     <ForceScheme scheme="dark">
       <WorkoutTimerProvider>
-        <ExecutorV3Inner planId={planId} recoverDate={recoverDate} editDate={editDate} repeatDate={repeatDate} />
+        {/* `key` por MODO de fecha: «Entrenar hoy» del banner de corrección hace un `replace` a la
+            MISMA ruta sin query, así que expo-router reusa la pantalla y el interior conservaría su
+            estado de sesión (paso hidratado, logs de esa fecha). Con la key el Inner se remonta y la
+            sesión de hoy arranca limpia. Sin cambios cuando los params no cambian. */}
+        <ExecutorV3Inner
+          key={`${planId}|${editDate ?? ''}|${repeatDate ?? ''}|${recoverDate ?? ''}`}
+          planId={planId}
+          recoverDate={recoverDate}
+          editDate={editDate}
+          repeatDate={repeatDate}
+        />
       </WorkoutTimerProvider>
     </ForceScheme>
   )
@@ -1724,7 +1736,9 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
           // no cuentan — misma regla que las day-cards, consistencia con la racha del dashboard.
           supabase
             .from('workout_programs')
-            .select('program_structure_type, workout_plans ( id, day_of_week, assigned_date, workout_blocks ( id, sets ) )')
+            // `ab_mode`, `start_date` y `weeks_to_repeat` + `week_variant` de cada plan: sin ellos la
+            // tira no sabe qué semana del A/B corre y marcaba los días de LAS DOS variantes (CA4.7).
+            .select('program_structure_type, ab_mode, start_date, weeks_to_repeat, workout_plans ( id, day_of_week, assigned_date, week_variant, workout_blocks ( id, sets ) )')
             .eq('client_id', clientId)
             .eq('is_active', true)
             .maybeSingle(),
@@ -1751,7 +1765,18 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
           setWeeklyStreak(null)
           return
         }
-        const rawPlans = ((programRow as { workout_plans?: Array<{ id: string; day_of_week: number | null; assigned_date: string | null; workout_blocks?: Array<{ id: string; sets: number | null }> }> } | null)?.workout_plans) ?? []
+        const abProgram = programRow as ({ ab_mode?: boolean | null; start_date?: string | null; weeks_to_repeat?: number | null } | null)
+        const allPlans = ((programRow as { workout_plans?: Array<{ id: string; day_of_week: number | null; assigned_date: string | null; week_variant?: string | null; workout_blocks?: Array<{ id: string; sets: number | null }> }> } | null)?.workout_plans) ?? []
+        // Variante A/B EFECTIVA de la semana en curso — MISMOS helpers que el home
+        // (`hero-plans.ts` → `lib/program-week-variant.ts`): sin ab_mode no filtra nada (`'A'` es el
+        // default de `week_variant`), con ab_mode deja sólo los días de la variante que toca y cae a
+        // la otra si la del ciclo está vacía (A/B mal armado). Antes la tira marcaba los días de las
+        // DOS variantes: en semana B el alumno veía marcado el Lun/Mié de la semana A.
+        const weekAnchor = new Date(); weekAnchor.setHours(0, 0, 0, 0)
+        const abMode = !!abProgram?.ab_mode
+        const weekIdx = programWeekIndex1Based({ start_date: abProgram?.start_date ?? null, weeks_to_repeat: abProgram?.weeks_to_repeat ?? null }, weekAnchor)
+        const activeVariant = effectiveWeekVariantFromPlans(allPlans, weekIdx ? weekIndexToVariantLetter(weekIdx) : 'A', abMode)
+        const rawPlans = allPlans.filter((p) => workoutPlanMatchesVariant(p, activeVariant, abMode))
         const plans = rawPlans.map((p) => ({ id: p.id, day_of_week: p.day_of_week ?? null, assigned_date: p.assigned_date ?? null }))
         const plannedDates = plannedDatesForWeek(plans, weekDates)
         // Series de la semana por (plan, dia) — MISMA fuente que las day-cards de la home: el bucketing por
@@ -2311,11 +2336,14 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
     return () => setToastDark(false)
   }, [])
 
-  // Hidratacion: aterriza en el primer paso incompleto una sola vez cuando cargan los pasos.
+  // Hidratacion: aterriza en el primer paso incompleto una sola vez cuando cargan los pasos. Con
+  // TODO registrado (dia cerrado HOY que se reabre, o «Corregir registros» de un dia pasado) abre en
+  // el PRIMER ejercicio, no en el ultimo paso — Q7-A, ver `initial-step.ts`. El auto-avance y el
+  // toggle de mas abajo siguen con `firstIncompleteStepIndex` intacto.
   useEffect(() => {
     if (loading || steps.length === 0 || didHydrateStepPosRef.current) return
     didHydrateStepPosRef.current = true
-    setStepIndex(firstIncompleteStepIndex(steps, completionLogs))
+    setStepIndex(initialStepIndex(steps, completionLogs))
   }, [loading, steps, completionLogs])
 
   // Limpieza (2 de 4) del descanso de ronda armado: cambiar de paso lo invalida (el CTA vive en la
@@ -2500,6 +2528,9 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
           editDate={editDate}
           repeatDate={repeatDate}
           onDismiss={() => setBannerDismissed(true)}
+          // Salida del modo corrección: MISMO plan, SIN query. `replace` (no `push`) para no apilar
+          // dos ejecutores del mismo plan; el `key` del wrapper remonta la sesión limpia.
+          onTrainToday={editDate ? () => router.replace({ pathname: '/alumno/workout/[planId]', params: { planId } }) : undefined}
         />
       )}
 

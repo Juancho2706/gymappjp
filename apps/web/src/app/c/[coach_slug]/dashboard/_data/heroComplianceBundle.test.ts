@@ -196,6 +196,60 @@ describe('getHeroComplianceBundle — weekly (identidad con la resolución previ
     })
 })
 
+/**
+ * A/B (SPEC `vuelta-nueva-salud-y-reloj` §4, CA4.6). La web YA filtra por variante antes de resolver
+ * el cursor (`heroComplianceBundle.ts:161-165`); la app no, y por eso en semana B mostraba el entreno
+ * de la semana A. Este candado fija el lado WEB del contrato —el que la app tiene que igualar en
+ * `tests/mobile/home-hero-ab.test.ts` con el mismo fixture—, porque hasta ahora las dos únicas
+ * apariciones de `ab_mode` en esta suite eran `false` (`:74`, `:218`).
+ *
+ * `start_date` = 2026-08-24 (lunes) con hoy jueves 2026-09-03 ⇒ semana 2 ⇒ variante **B**
+ * (`programWeekIndex1Based` + `weekIndexToVariantLetter`).
+ */
+describe('getHeroComplianceBundle — semanal A/B en semana B', () => {
+    const AB_START = '2026-08-24'
+
+    function abProgram(plans: PlanFixture[], blocksByPlan: Record<string, BlockFixture[]> = {}) {
+        return { ...weeklyProgram(plans, blocksByPlan), ab_mode: true, start_date: AB_START }
+    }
+
+    it('jueves con plan A y plan B ⇒ el hero toma el de la variante ACTIVA (B)', async () => {
+        const plans = [
+            plan({ id: 'w-jue-a', day_of_week: 4, week_variant: 'A', title: 'Pierna A' }),
+            plan({ id: 'w-jue-b', day_of_week: 4, week_variant: 'B', title: 'Pierna B', workout_blocks: [{ id: 'bb1', sets: 3 }] }),
+        ]
+        state.plans = plans
+        state.program = abProgram(plans, {
+            'w-jue-b': [{ id: 'bb1', sets: 3, reps: '10', exercise_id: 'e1', exercises: { id: 'e1', name: 'Sentadilla' } }],
+        })
+
+        const { hero, cycle } = await getHeroComplianceBundle('u1', 'coach')
+
+        expect(hero.planId).toBe('w-jue-b')
+        expect(hero.planTitle).toBe('Pierna B')
+        expect(cycle.todayPlanId).toBe('w-jue-b')
+        expect(hero.totalSetsTarget).toBe(3)
+    })
+
+    it('el día sólo existe en la variante A ⇒ hoy no hay entreno (descanso), no el plan de la otra semana', async () => {
+        const plans = [
+            plan({ id: 'w-jue-a', day_of_week: 4, week_variant: 'A', title: 'Pierna A' }),
+            plan({ id: 'w-vie-b', day_of_week: 5, week_variant: 'B', title: 'Torso B' }),
+        ]
+        state.plans = plans
+        state.program = abProgram(plans)
+
+        const { hero, cycle } = await getHeroComplianceBundle('u1', 'coach')
+
+        expect(hero.hasWorkout).toBe(false)
+        expect(hero.planId).toBeNull()
+        // «Próximo» también sale de la variante activa y no da la vuelta a la semana.
+        expect(cycle.nextPlanId).toBe('w-vie-b')
+        expect(hero.nextWorkoutTitle).toBe('Torso B')
+        expect(hero.nextWorkoutDayLabel).toBe('Mañana')
+    })
+})
+
 describe('getHeroComplianceBundle — ciclo (fixture compartido del motor)', () => {
     /** Los 3 días del ciclo tal como los devuelve `getClientWorkoutPlans` (con su denominador). */
     const cyclePlans: PlanFixture[] = CYCLE_FIXTURE_PLANS.map((p) => ({
