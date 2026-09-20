@@ -22,6 +22,12 @@
  *     `todayState: 'in_progress'` en ese plan; el cursor NO adelanta.
  *   · El día calendario no participa: un alumno que vuelve el domingo tras dos semanas ve el día
  *     siguiente al último que cerró.
+ *   · `slots` se pinta por VUELTA, no por la ventana de 30 días (tren `vuelta-nueva-salud-y-reloj`,
+ *     SPEC §3.2): `today` gana siempre salvo que el día ya esté cerrado HOY, `done` sólo alcanza a
+ *     los días de la vuelta en curso (`currentLapDoneDates`) y el resto queda `upcoming`. Antes
+ *     cualquier día cerrado en 30 días decía "Hecho", así que desde la 2.ª vuelta ninguna tarjeta
+ *     decía "Hoy" y tocarlas abría "Ya hiciste este entrenamiento" (feedback Movens, 2026-09-19).
+ *     El cursor —`todayPlanId`, `todayState`, `next*`, `lastCompleted`, `programState`— NO cambió.
  *
  * WEEKLY = IDENTIDAD. En `weekly` la salida es exactamente la resolución de hoy
  * (`day_of_week === ISODOW`, `heroComplianceBundle.ts:95-105,150-162` en web y `home.tsx:350` en RN):
@@ -265,6 +271,54 @@ function resolveWeeklyCursor(
     }
 }
 
+/** Completitud utilizable (dentro de la ventana y de un plan que participa) ya resuelta a su plan. */
+interface UsableCompletion {
+    entry: IndexedPlan
+    dateIso: string
+}
+
+/**
+ * Fechas `done` de la VUELTA ACTUAL, por plan (SPEC §3.2 de `vuelta-nueva-salud-y-reloj`). El bug que
+ * arregla: la tira pintaba `done` cualquier día cerrado dentro de los 30 días, así que desde la 2.ª
+ * vuelta TODAS las tarjetas decían "Hecho" y ninguna "Hoy" (feedback Movens, 2026-09-19).
+ *
+ * `ordered` llega en ORDEN CANÓNICO, así que `ordered[0]` es `L` —la última completitud— y la cadena
+ * se recorre hacia atrás desde ahí:
+ *   · Si el ciclo dio la vuelta (`todayState !== 'done'` y el día que toca no es posterior a `L`), la
+ *     vuelta recién arranca y NINGÚN día queda hecho.
+ *   · Si no, se aceptan índices estrictamente menores, se saltan las repeticiones del mismo índice
+ *     (queda la fecha más reciente, que por el orden canónico es la primera) y se corta en el primer
+ *     índice mayor: ahí empieza la vuelta anterior.
+ *
+ * `todayCycleIndexBeforeOverride` es `T`: el día que calcula el cursor ANTES del override de
+ * `inProgress`. Con un día empezado hoy sobre otro ya hecho en ESTA vuelta, el wrap se juzga con el
+ * día que tocaba, no con el que el alumno abrió.
+ */
+function currentLapDoneDates(
+    ordered: readonly UsableCompletion[],
+    todayCycleIndexBeforeOverride: number,
+    todayState: CycleTodayState
+): Map<string, string> {
+    const done = new Map<string, string>()
+    const last = ordered.length > 0 ? ordered[0] : null
+    if (!last) return done
+    if (todayState !== 'done' && todayCycleIndexBeforeOverride <= last.entry.index) return done
+
+    let accepted: number | null = null
+    for (const completion of ordered) {
+        const index = completion.entry.index
+        if (accepted !== null) {
+            // Mismo índice que el último aceptado: repetición de ese día, ya quedó la fecha reciente.
+            if (index === accepted) continue
+            // Primer índice MAYOR: de acá para atrás es la vuelta anterior.
+            if (index > accepted) break
+        }
+        accepted = index
+        done.set(completion.entry.plan.id, completion.dateIso)
+    }
+    return done
+}
+
 /** Resolución `cycle` — el cursor por completitud (D1). */
 function resolveCycleModeCursor(input: CycleCursorInput, programState: CycleProgramState): CycleCursorResult {
     const { program, plans, completions, todayIso } = input
@@ -274,19 +328,20 @@ function resolveCycleModeCursor(input: CycleCursorInput, programState: CycleProg
     for (const entry of entries) if (!entryByPlanId.has(entry.plan.id)) entryByPlanId.set(entry.plan.id, entry)
 
     // Completitudes utilizables: dentro de la ventana de 30 días y de un plan que participa del ciclo.
-    let last: { entry: IndexedPlan; dateIso: string } | null = null
-    const doneDateByPlan = new Map<string, string>()
+    const usable: UsableCompletion[] = []
     for (const completion of completions) {
         const entry = entryByPlanId.get(completion.planId)
         if (!entry) continue
         if (!isWithinCycleWindow(completion.dateIso, todayIso)) continue
-        const previous = doneDateByPlan.get(entry.plan.id)
-        if (!previous || completion.dateIso > previous) doneDateByPlan.set(entry.plan.id, completion.dateIso)
-        // Más reciente por FECHA (R11), no por orden de inserción; empate ⇒ mayor índice.
-        if (!last || completion.dateIso > last.dateIso || (completion.dateIso === last.dateIso && entry.index > last.entry.index)) {
-            last = { entry, dateIso: completion.dateIso }
-        }
+        usable.push({ entry, dateIso: completion.dateIso })
     }
+    // ORDEN CANÓNICO `(dateIso desc, cycleIndex desc)`: el motor no puede depender del orden en que
+    // llegan las completitudes. El productor desempata la misma fecha por `planId.localeCompare`
+    // (`cycle-completions.ts:202`), así que con dos días cerrados el mismo día el resultado lo
+    // decidiría un UUID. El `sort` es estable (ES2019) ⇒ empate de fecha E índice conserva el orden de
+    // entrada, igual que la elección de `L` de siempre (R11: manda la FECHA; empate ⇒ mayor índice).
+    usable.sort((a, b) => (a.dateIso === b.dateIso ? b.entry.index - a.entry.index : a.dateIso < b.dateIso ? 1 : -1))
+    const last: { entry: IndexedPlan; dateIso: string } | null = usable.length > 0 ? usable[0] : null
 
     let todayState: CycleTodayState = 'todo'
     let todayIndexRaw: number
@@ -299,6 +354,9 @@ function resolveCycleModeCursor(input: CycleCursorInput, programState: CycleProg
     }
 
     let todayEntry = findFromIndex(todayIndexRaw, n, byIndex)
+    // `T` de la regla de vuelta (SPEC §3.2): se captura ACÁ porque el override de `inProgress` de
+    // abajo muta `todayEntry`, y el wrap se juzga con el día que tocaba, no con el que el alumno abrió.
+    const todayIndexBeforeOverride = todayEntry ? todayEntry.index : todayIndexRaw
 
     // Día empezado y NO cerrado hoy: manda sobre el índice calculado (el cursor no adelanta). Nunca
     // pisa un día ya completado hoy — ése es un estado más avanzado.
@@ -313,6 +371,7 @@ function resolveCycleModeCursor(input: CycleCursorInput, programState: CycleProg
 
     const todayCycleIndex = todayEntry ? todayEntry.index : todayIndexRaw
     const nextEntry = todayEntry ? nextEntryAfter(todayEntry.index, n, byIndex) : null
+    const doneDateByPlan = currentLapDoneDates(usable, todayIndexBeforeOverride, todayState)
 
     return {
         mode: 'cycle',
@@ -324,13 +383,19 @@ function resolveCycleModeCursor(input: CycleCursorInput, programState: CycleProg
         nextCycleIndex: nextEntry?.index ?? null,
         ...(last ? { lastCompleted: { planId: last.entry.plan.id, cycleIndex: last.entry.index, dateIso: last.dateIso } } : {}),
         slots: entries.map((entry) => {
+            // `today` gana a `done` (SPEC §3.2, orden invertido respecto de la regla vieja): el día
+            // que toca se pinta "Hoy" aunque se haya hecho en la vuelta ANTERIOR, y un día en progreso
+            // sobre uno ya hecho deja de abrir la hoja "Ya hiciste" a mitad del entreno. Sólo cede
+            // cuando ese día ya está cerrado HOY (`todayState === 'done'`), que es un estado posterior.
+            if (todayState !== 'done' && todayEntry && entry.plan.id === todayEntry.plan.id) {
+                return { planId: entry.plan.id, cycleIndex: entry.index, state: 'today' as const }
+            }
+            // `done` SÓLO si el día pertenece a la vuelta actual, con la fecha de esa completitud.
             const doneDateIso = doneDateByPlan.get(entry.plan.id)
-            // `done` gana a `today`: un día cerrado HOY se pinta hecho, con su fecha.
             if (doneDateIso) {
                 return { planId: entry.plan.id, cycleIndex: entry.index, state: 'done' as const, doneDateIso }
             }
-            const state: CycleSlotState = todayEntry && entry.plan.id === todayEntry.plan.id ? 'today' : 'upcoming'
-            return { planId: entry.plan.id, cycleIndex: entry.index, state }
+            return { planId: entry.plan.id, cycleIndex: entry.index, state: 'upcoming' as const }
         }),
     }
 }

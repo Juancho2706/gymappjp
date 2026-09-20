@@ -78,6 +78,43 @@ const NEUTRAL_NOISE: readonly CycleCompletionLogRow[] = [
     { block_id: 'otro-programa-b1', set_number: 1, logged_at: '2026-09-03T15:00:00.000Z', workout_blocks: { plan_id: 'plan-de-otro-programa' } },
 ]
 
+/**
+ * VUELTA 2 — los cuatro días crudos del tren «Vuelta nueva, salud y reloj» (SPEC §3.3): la 1.ª vuelta
+ * completa (Días 1, 2 y 3 cerrados el 30-08, 31-08 y 01-09) más el Día 1 de la 2.ª vuelta cerrado el
+ * 02-09. Es el escenario exacto de la queja de Movens: antes del arreglo las TRES tarjetas decían
+ * "Hecho" y ninguna "Hoy"; ahora sólo el Día 1 queda hecho —con su fecha nueva— y el Día 2 es el de
+ * hoy. Todo entra como filas de log, no como completitudes: así el fixture prueba también que el
+ * productor fecha cada día por su `logged_at` y no por el orden de inserción (R11).
+ */
+const LAP1_DAY1_30_AGO: readonly CycleCompletionLogRow[] = [
+    { block_id: 'b1a', set_number: 1, logged_at: '2026-08-30T15:00:00.000Z', workout_blocks: { plan_id: 'p1' } },
+    { block_id: 'b1a', set_number: 2, logged_at: '2026-08-30T15:05:00.000Z', workout_blocks: { plan_id: 'p1' } },
+    { block_id: 'b1b', set_number: 1, logged_at: '2026-08-30T15:10:00.000Z', workout_blocks: { plan_id: 'p1' } },
+    { block_id: 'b1b', set_number: 2, logged_at: '2026-08-30T15:15:00.000Z', workout_blocks: { plan_id: 'p1' } },
+]
+
+const LAP1_DAY2_31_AGO: readonly CycleCompletionLogRow[] = [
+    { block_id: 'b2a', set_number: 1, logged_at: '2026-08-31T15:00:00.000Z', workout_blocks: { plan_id: 'p2' } },
+    { block_id: 'b2a', set_number: 2, logged_at: '2026-08-31T15:05:00.000Z', workout_blocks: { plan_id: 'p2' } },
+    { block_id: 'b2b', set_number: 1, logged_at: '2026-08-31T15:10:00.000Z', workout_blocks: { plan_id: 'p2' } },
+    { block_id: 'b2b', set_number: 2, logged_at: '2026-08-31T15:15:00.000Z', workout_blocks: { plan_id: 'p2' } },
+]
+
+const LAP1_DAY3_01_SEP: readonly CycleCompletionLogRow[] = [
+    { block_id: 'b3a', set_number: 1, logged_at: '2026-09-01T15:00:00.000Z', workout_blocks: { plan_id: 'p3' } },
+    { block_id: 'b3a', set_number: 2, logged_at: '2026-09-01T15:05:00.000Z', workout_blocks: { plan_id: 'p3' } },
+    { block_id: 'b3b', set_number: 1, logged_at: '2026-09-01T15:10:00.000Z', workout_blocks: { plan_id: 'p3' } },
+    { block_id: 'b3b', set_number: 2, logged_at: '2026-09-01T15:15:00.000Z', workout_blocks: { plan_id: 'p3' } },
+]
+
+/** Día 1 de la SEGUNDA vuelta, cerrado ayer: es el único `done` que sobrevive a la vuelta nueva. */
+const LAP2_DAY1_02_SEP: readonly CycleCompletionLogRow[] = [
+    { block_id: 'b1a', set_number: 1, logged_at: '2026-09-02T15:00:00.000Z', workout_blocks: { plan_id: 'p1' } },
+    { block_id: 'b1a', set_number: 2, logged_at: '2026-09-02T15:05:00.000Z', workout_blocks: { plan_id: 'p1' } },
+    { block_id: 'b1b', set_number: 1, logged_at: '2026-09-02T15:10:00.000Z', workout_blocks: { plan_id: 'p1' } },
+    { block_id: 'b1b', set_number: 2, logged_at: '2026-09-02T15:15:00.000Z', workout_blocks: { plan_id: 'p1' } },
+]
+
 export interface CycleCursorFixture {
     /** Nombre del caso — se reutiliza como título del `it` en cada plataforma. */
     name: string
@@ -211,6 +248,38 @@ export const CYCLE_CURSOR_FIXTURES: readonly CycleCursorFixture[] = [
                 { planId: 'p1', cycleIndex: 1, state: 'done', doneDateIso: '2026-09-01' },
                 { planId: 'p2', cycleIndex: 2, state: 'done', doneDateIso: '2026-09-02' },
                 { planId: 'p3', cycleIndex: 3, state: 'done', doneDateIso: '2026-09-03' },
+            ],
+        },
+    },
+    {
+        name: '2.ª vuelta: la 1.ª completa + el Día 1 de nuevo => sólo ese Día 1 queda hecho y el Día 2 es el de hoy',
+        program: CYCLE_FIXTURE_PROGRAM,
+        plans: CYCLE_FIXTURE_PLANS,
+        blocksByPlan: CYCLE_FIXTURE_BLOCKS,
+        logs: [...LAP1_DAY1_30_AGO, ...LAP1_DAY2_31_AGO, ...LAP1_DAY3_01_SEP, ...LAP2_DAY1_02_SEP, ...NEUTRAL_NOISE],
+        todayIso: CYCLE_FIXTURE_TODAY_ISO,
+        expectedCompletions: [
+            { planId: 'p1', dateIso: '2026-08-30' },
+            { planId: 'p2', dateIso: '2026-08-31' },
+            { planId: 'p3', dateIso: '2026-09-01' },
+            { planId: 'p1', dateIso: '2026-09-02' },
+        ],
+        expectedInProgress: null,
+        expectedCursor: {
+            mode: 'cycle',
+            programState: 'active',
+            todayPlanId: 'p2',
+            todayCycleIndex: 2,
+            todayState: 'todo',
+            nextPlanId: 'p3',
+            nextCycleIndex: 3,
+            lastCompleted: { planId: 'p1', cycleIndex: 1, dateIso: '2026-09-02' },
+            slots: [
+                // El Día 1 de ESTA vuelta conserva su fecha nueva; los Días 2 y 3 son de la vuelta
+                // anterior, así que vuelven a "Próximo" y el Día 2 pasa a ser el de hoy.
+                { planId: 'p1', cycleIndex: 1, state: 'done', doneDateIso: '2026-09-02' },
+                { planId: 'p2', cycleIndex: 2, state: 'today' },
+                { planId: 'p3', cycleIndex: 3, state: 'upcoming' },
             ],
         },
     },
