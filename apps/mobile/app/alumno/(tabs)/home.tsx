@@ -26,7 +26,7 @@ import { SectionTitle } from '../../../components/alumno/home/SectionTitle'
 import { WeekStrip } from '../../../components/alumno/home/WeekStrip'
 import { CheckInBanner } from '../../../components/alumno/home/CheckInBanner'
 import { computeCheckInReminder } from '../../../lib/checkin-thresholds'
-import { programWeekIndex1Based, weekIndexToVariantLetter, effectiveWeekVariantFromPlans, workoutPlanMatchesVariant } from '../../../lib/program-week-variant'
+import { heroPlansFromCursor, selectProgramPlans } from '../../../components/alumno/home/hero-plans'
 import { HeroSection } from '../../../components/alumno/home/HeroSection'
 import { useSessionMorph } from '../../../components/alumno/workout/v3/session-morph'
 import { deriveWeeklyStreak, greedyPlanDone, plannedDatesForWeek, weekDatesMondayToSunday, type PlanWeekCompletionSource } from '../../../components/alumno/workout/v3/weekly-streak'
@@ -359,28 +359,20 @@ export default function AlumnoHomeScreen() {
   }
 
   const derived = useMemo(() => {
-    const { iso: todayIso, dayOfWeek: todayDbDay } = getTodayInSantiago()
+    const { iso: todayIso } = getTodayInSantiago()
     const today = new Date(); today.setHours(0, 0, 0, 0)
     const plans = data?.program?.plans ?? []
     const workoutDates = data?.workoutDates ?? new Set<string>()
 
-    // Semana del programa + variante A/B EFECTIVA (paridad web ActiveProgramSection.tsx:37-46 /
-    // weekPendingWorkouts.ts:108-117): sólo en ab_mode; cae a la variante que tenga planes si la
-    // del ciclo está vacía (A/B mal armado). weekIdx alimenta también currentWeek (C3).
-    const abMode = data?.program?.abMode ?? false
-    const weekIdx = data?.program
-      ? programWeekIndex1Based({ start_date: data.program.startDate, weeks_to_repeat: data.program.weeksToRepeat }, today)
-      : null
-    const cycleVariant = weekIdx ? weekIndexToVariantLetter(weekIdx) : 'A'
-    const activeVariant = effectiveWeekVariantFromPlans(plans, cycleVariant, abMode)
+    // Semana del programa + variante A/B EFECTIVA + planes que participan (helper puro
+    // `hero-plans.ts`, testeado sin montar la pantalla): sólo filtra en ab_mode y cae a la variante
+    // que tenga planes si la del ciclo está vacía. weekIdx alimenta también currentWeek (C3), y
+    // `programPlans` es la entrada del cursor.
+    const { abMode, weekIdx, activeVariant, programPlans } = selectProgramPlans(plans, data?.program, today)
 
     // Estructura del programa (W3.3): decide si `day_of_week` es un ISODOW o el INDICE de un ciclo.
     const structureType = data?.program?.structureType ?? 'weekly'
     const isCycle = structureType === 'cycle'
-
-    // Planes que participan del programa, filtrados por la variante A/B efectiva (web
-    // ActiveProgramSection.tsx:49). Se calculan ACA arriba porque son la entrada del cursor.
-    const programPlans = plans.filter((p) => p.day_of_week != null && workoutPlanMatchesVariant(p, activeVariant, abMode))
 
     // CURSOR DEL PROGRAMA (W3.5, D1) — UNICA resolucion de "hoy toca". En `weekly` es la IDENTIDAD de
     // lo de siempre (`day_of_week === ISODOW`); en `cycle` es el cursor por COMPLETITUD sobre la
@@ -394,19 +386,16 @@ export default function AlumnoHomeScreen() {
     })
     const planById = new Map(plans.map((p) => [p.id, p]))
 
-    // `plans` viene ANIDADO del programa ACTIVO ⇒ son TODOS planes de programa, cuya identidad de dia
-    // es `day_of_week`. El atajo por `assigned_date` (que solo tiene sentido en un plan SUELTO de fecha
-    // fija, aca imposible) hacia que durante la semana del `start_date` —estampado por el builder en
-    // TODOS los dias del programa— el dia resolviera a un plan arbitrario (incidente 2026-08-25).
-    // En `cycle` el hero lo lee del cursor: buscar por `todayDbDay` seria leer el indice del ciclo como
-    // dia de la semana (el jueves de un ciclo de 3 dias dejaba el hero VACIO). En `weekly` se conserva
-    // la busqueda historica sobre TODOS los planes (el cursor solo ve los de la variante activa).
-    const todayPlan = isCycle
-      ? (cursor.todayPlanId ? planById.get(cursor.todayPlanId) ?? null : null)
-      : (plans.find((p) => p.day_of_week === todayDbDay) ?? null)
-    const nextPlan = isCycle
-      ? (cursor.nextPlanId ? planById.get(cursor.nextPlanId) ?? null : null)
-      : (plans.find((p) => p.id !== todayPlan?.id) ?? null)
+    // HERO Y «PRÓXIMO» SALEN DEL CURSOR EN LAS DOS ESTRUCTURAS (punto 4 del SPEC
+    // `vuelta-nueva-salud-y-reloj`). Antes `weekly` conservaba la búsqueda histórica sobre TODOS los
+    // planes y eso era el bug: en semana B el hero pintaba el plan de la semana A (el cursor ya sólo
+    // ve los de la variante activa), y en un día SIN plan `plans.find(p => p.id !== todayPlan?.id)`
+    // devolvía `plans[0]` —lista ordenada por `day_of_week`, home.tsx:267— así que un martes de un
+    // Lun/Mié/Vie anunciaba «Próximo: el del lunes», un día que ya pasó. El cursor da el siguiente
+    // ISODOW con plan sin dar la vuelta a la semana, igual que la web (heroComplianceBundle.ts:256).
+    // En `cycle` no cambia nada: ya se leía del cursor (buscar por `todayDbDay` sería leer el índice
+    // del ciclo como día de la semana, y el jueves de un ciclo de 3 días dejaba el hero VACÍO).
+    const { todayPlan, nextPlan } = heroPlansFromCursor(cursor, planById)
 
     // Semana Lun..Dom + planificados.
     const monday = startOfWeekMonday(today)
@@ -419,8 +408,10 @@ export default function AlumnoHomeScreen() {
       for (let i = 0; i < 7; i++) {
         const dIso = weekDates[i]
         const dbDay = jsDayToDbDay(new Date(monday.getTime() + i * MS_DAY).getDay())
-        // Solo `day_of_week`: ver `todayPlan` — un plan de programa no se resuelve por fecha.
-        if (plans.some((p) => p.day_of_week === dbDay)) plannedDays.add(dIso)
+        // Solo `day_of_week`: ver `todayPlan` — un plan de programa no se resuelve por fecha. Sobre
+        // `programPlans` (variante A/B activa), no sobre TODOS: en semana B la tira marcaba como
+        // planificados también los días de la semana A (punto 4 del SPEC).
+        if (programPlans.some((p) => p.day_of_week === dbDay)) plannedDays.add(dIso)
       }
     }
     const momentumDays: MomentumDay[] = weekDates.map((dIso, i) => ({

@@ -20,6 +20,12 @@ import {
   WEEK_LETTERS_ES,
   type PlanWeekCompletionSource,
 } from '../../apps/mobile/components/alumno/workout/v3/weekly-streak'
+import {
+  effectiveWeekVariantFromPlans,
+  programWeekIndex1Based,
+  weekIndexToVariantLetter,
+  workoutPlanMatchesVariant,
+} from '../../apps/mobile/lib/program-week-variant'
 
 /** Arma la fuente de completitud del movil: bloques por plan + series por `planId|ymd`. */
 function sourceOf(
@@ -383,5 +389,61 @@ describe('estructura `cycle` — la grilla Lun→Dom no aplica (R12)', () => {
     expect(r.dots.some((d) => d.state === 'pending')).toBe(false)
     expect(r.doneCount).toBe(2)
     expect(r.plannedCount).toBe(2)
+  })
+})
+
+/**
+ * CA4.7 — TIRA SEMANAL DEL EJECUTOR EN SEMANA B (punto 4 del SPEC `vuelta-nueva-salud-y-reloj`).
+ *
+ * La lectura de la tira (`ExecutorV3.tsx`, efecto de `weeklyStreak`) traia `workout_plans` del
+ * programa activo SIN `week_variant` y sin `ab_mode`/`start_date`/`weeks_to_repeat`, asi que
+ * `plannedDatesForWeek` marcaba los dias de LAS DOS variantes: en semana B el alumno veia marcado
+ * el Lun/Mie de la semana A ademas de los suyos. Aca se prueba la MISMA composicion que hace el
+ * ejecutor —filtrar por la variante efectiva y recien ahi calcular los planificados— con los
+ * helpers reales de `lib/program-week-variant`.
+ */
+describe('CA4.7 — tira semanal del ejecutor con A/B', () => {
+  // 2026-09-07 es lunes: la semana del 14-09 es la 2.a del programa => variante B.
+  const abProgram = { ab_mode: true, start_date: '2026-09-07', weeks_to_repeat: 8 }
+  const abPlans = [
+    { id: 'a-lun', day_of_week: 1, assigned_date: null, week_variant: 'A' },
+    { id: 'a-mie', day_of_week: 3, assigned_date: null, week_variant: 'A' },
+    { id: 'b-mar', day_of_week: 2, assigned_date: null, week_variant: 'B' },
+    { id: 'b-jue', day_of_week: 4, assigned_date: null, week_variant: 'B' },
+  ]
+  const weekB = weekDatesMondayToSunday('2026-09-15') // Lun 14 -> Dom 20
+
+  /** Espejo del filtro inline del ejecutor. */
+  function activePlans(now: Date) {
+    const abMode = !!abProgram.ab_mode
+    const weekIdx = programWeekIndex1Based(abProgram, now)
+    const variant = effectiveWeekVariantFromPlans(abPlans, weekIdx ? weekIndexToVariantLetter(weekIdx) : 'A', abMode)
+    return { variant, plans: abPlans.filter((p) => workoutPlanMatchesVariant(p, variant, abMode)) }
+  }
+
+  it('semana B: la tira marca SOLO martes y jueves (antes marcaba tambien lunes y miercoles)', () => {
+    const { variant, plans } = activePlans(new Date(2026, 8, 15))
+    expect(variant).toBe('B')
+    expect([...plannedDatesForWeek(plans, weekB)].sort()).toEqual(['2026-09-15', '2026-09-17'])
+    // Sin el filtro, los cuatro dias quedaban marcados: ese era el bug.
+    expect([...plannedDatesForWeek(abPlans, weekB)].sort()).toEqual([
+      '2026-09-14', '2026-09-15', '2026-09-16', '2026-09-17',
+    ])
+  })
+
+  it('semana A: la tira marca SOLO lunes y miercoles', () => {
+    const weekA = weekDatesMondayToSunday('2026-09-08')
+    const { variant, plans } = activePlans(new Date(2026, 8, 8))
+    expect(variant).toBe('A')
+    expect([...plannedDatesForWeek(plans, weekA)].sort()).toEqual(['2026-09-07', '2026-09-09'])
+  })
+
+  it('sin `ab_mode` el filtro no recorta nada (los planes viven con `week_variant` nulo)', () => {
+    const plainPlans = [
+      { id: 'lun', day_of_week: 1, assigned_date: null, week_variant: null },
+      { id: 'mie', day_of_week: 3, assigned_date: null, week_variant: null },
+    ]
+    const kept = plainPlans.filter((p) => workoutPlanMatchesVariant(p, 'A', false))
+    expect(kept).toHaveLength(2)
   })
 })

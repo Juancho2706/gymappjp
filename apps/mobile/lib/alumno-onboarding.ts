@@ -42,7 +42,13 @@ export async function submitIntake(input: IntakeInput): Promise<{ ok: boolean; e
   if (!Number.isFinite(input.heightCm) || input.heightCm <= 0) return { ok: false, error: 'Indicá una altura válida.' }
   if (!input.goals || !input.experienceLevel || !input.availability) return { ok: false, error: 'Completa los campos obligatorios.' }
 
-  const { error: intakeErr } = await supabase.from('client_intake').insert({
+  // UPSERT (no INSERT), igual que la web (`c/[coach_slug]/onboarding/_actions/onboarding.actions.ts`):
+  // si el coach ya creó la fila de intake al setear biometría desde la ficha, las respuestas REALES
+  // del alumno tienen que sobreescribir ese placeholder. Antes el INSERT se tragaba el 23505 y las
+  // lesiones y condiciones que el alumno escribía acá se perdían EN SILENCIO (dato sensible).
+  // `onConflict: 'client_id'` = el UNIQUE de la tabla; `sex` NO va en el objeto, así que el upsert no
+  // pisa el valor que puso el coach.
+  const { error: intakeErr } = await supabase.from('client_intake').upsert({
     client_id: user.id,
     weight_kg: input.weightKg,
     height_cm: input.heightCm,
@@ -51,9 +57,8 @@ export async function submitIntake(input: IntakeInput): Promise<{ ok: boolean; e
     availability: input.availability,
     injuries: input.injuries?.trim() || null,
     medical_conditions: input.medicalConditions?.trim() || null,
-  })
-  // 23505 = ya existe intake (idempotente) → seguimos a marcar completado.
-  if (intakeErr && intakeErr.code !== '23505') return { ok: false, error: 'No se pudo guardar tu información.' }
+  }, { onConflict: 'client_id' })
+  if (intakeErr) return { ok: false, error: 'No se pudo guardar tu información.' }
 
   const { error: clientErr } = await supabase
     .from('clients')
