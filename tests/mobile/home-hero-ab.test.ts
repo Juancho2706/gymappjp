@@ -62,11 +62,16 @@ function heroOf(prog: Program, todayIso: string, today: Date) {
 }
 
 // Semana 2 del programa (variante B) — lunes 14, martes 15, jueves 17, sábado 19, domingo 20.
-const MON_B = { iso: '2026-09-14', date: new Date(2026, 8, 14) }
-const TUE_B = { iso: '2026-09-15', date: new Date(2026, 8, 15) }
-const THU_B = { iso: '2026-09-17', date: new Date(2026, 8, 17) }
-const SAT_B = { iso: '2026-09-19', date: new Date(2026, 8, 19) }
-const SUN_B = { iso: '2026-09-20', date: new Date(2026, 8, 20) }
+// `date` es un INSTANTE absoluto a mediodía UTC, no `new Date(2026, 8, 14)` (medianoche local):
+// `programWeekIndex1Based` parsea `start_date` como medianoche UTC y cuenta días con `ceil`, así
+// que a medianoche local el lunes 14 cae en el borde exacto de 7 días y la semana depende de la
+// zona horaria del runner (en Chile 7 d + 3 h ⇒ semana 2; en el CI, UTC, 7 d justos ⇒ semana 1).
+// Ese borde es comportamiento heredado de la web (pendiente #15 del TASKS); el test no lo pisa.
+const MON_B = { iso: '2026-09-14', date: new Date('2026-09-14T12:00:00Z') }
+const TUE_B = { iso: '2026-09-15', date: new Date('2026-09-15T12:00:00Z') }
+const THU_B = { iso: '2026-09-17', date: new Date('2026-09-17T12:00:00Z') }
+const SAT_B = { iso: '2026-09-19', date: new Date('2026-09-19T12:00:00Z') }
+const SUN_B = { iso: '2026-09-20', date: new Date('2026-09-20T12:00:00Z') }
 
 describe('CA4.1/CA4.2 — semanal A/B: el hero es el de la variante que toca', () => {
   const abPlans = [
