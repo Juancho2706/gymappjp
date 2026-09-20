@@ -140,13 +140,27 @@ Archivos: `apps/web/src/app/c/[coach_slug]/dashboard/_components/program/Workout
 
 ## W4 · Juicio, gates, deploy, OTA y QA (jefe) — 3-4 h-a
 
-- [ ] **W4.1 Juicio de los diffs de W1–W3** contra SPEC §3–§5 y el reparto de archivos; lo deficiente vuelve al MISMO worker con feedback concreto. Incluye revisar el candado de H7 (`heroComplianceBundle.test.ts:272/310/359`), que es archivo de W3 y cambio de W1, y que el copy de la hoja y el banner sea **idéntico letra por letra** entre web y app.
-- [ ] **W4.2 Revisión de privacidad.** Grep de `captureAppEvent` / `posthog` / `Sentry` en los archivos tocados: cero eventos nuevos con lesiones o condiciones médicas. **Valida:** invariante de privacidad de [PLAN §4](./PLAN.md).
-- [ ] **W4.3 Verificar que la OTA es JS puro.** El diff no toca `package.json`, lockfile, `apps/mobile/app.json`, `eas.json` ni `plugins/`.
-- [ ] **W4.4 Gates de cierre.** `pnpm vitest run` · `pnpm typecheck` · `pnpm --filter @eva/mobile exec tsc --noEmit` · `pnpm lint` · `pnpm lint:mobile` · `pnpm check:tokens` · `pnpm docs:check` · `pnpm build` · `pnpm --filter @eva/mobile exec expo export --platform android`. **`pnpm test` NO se usa:** `package.json:14` es `"test": "vitest"` sin `run` y `vitest.config.ts` no fija `watch: false` ⇒ queda en watch y no termina (el CI no sufre porque usa `npx vitest run --shard`, `ci.yml:96`).
-- [ ] **W4.5 Deploy web.** Push a `master`; esperar el deploy READY de Vercel **antes** de las OTAs.
-- [ ] **W4.6 OTA runtime 1.1.3 (iOS) desde `master`.** `mobile-ota.yml` con `platform=ios`, `branch=production`. Android 1.1.3 no existe (sin binario): no se publica.
-- [ ] **W4.7 OTA runtime 1.1.2 (Android + flota iOS 1.1.2) desde tag.** Procedimiento de [PLAN §5.3](./PLAN.md): rama desde `ota/1.1.2-20260916`, `git cherry-pick 90d79075` (menú de dunning, hoy ausente en 1.1.2 — pendiente #7), cherry-pick del tren limitado a `apps/mobile/`, `packages/` y `tests/mobile/`, confirmar `app.json` en 1.1.2 y sin plugin de Meta, gates en la rama, tag nuevo y `mobile-ota.yml` una vez `android` y otra `ios`.
+> **W4.1–W4.7 hechos 20-09 (~15:30–19:05Z).** Juicio de los diffs de W1–W3 línea a línea (una
+> corrección del jefe: `enterExecV3Session` también es arranque). Privacidad: 0 eventos nuevos. OTA JS
+> puro verificado por diff. Gates de cierre reales: `pnpm vitest run` 814 archivos / 11 340 tests / 0
+> fallos · `pnpm typecheck` OK · `tsc` mobile OK · `pnpm lint` 0 errores · `check:tokens` OK ·
+> `docs:check` OK · `pnpm build` OK (relanzado solo: el primero lo mató el sistema por RAM al correr
+> en paralelo con `expo export`) · `expo export android` OK. **PR #192** (rebase) con CI verde
+> (quality, hygiene, unit ×3; el primer run falló `unit (2)` por un test de fecha en hora local,
+> fix `1c67ecd1`) ⇒ `master` = `rnmobiledenuevo` = `1c67ecd1`. Deploy `dpl_DmV8kF7Nz1U2xw1hjFjtAsAq7R3D`
+> READY. OTAs: ios 1.1.3 grupo `7d51660d-cd0a-4294-9524-4c3e416d207d` (run 35530907927) desde
+> `master`; runtime 1.1.2 desde el tag `ota/1.1.2-20260920` = `234e1ab0` (base `55c3568e` + dossier
+> + `#188` dunning + W1 + W2 solo móviles + fix TZ; gates en la rama: `tsc` 0, vitest 5 151/0, `expo
+> export` OK): android `da488aa0-0844-45b6-aa5a-a1c2ed272c37` (run 35530926715), ios
+> `e30a7a89-1669-4d1e-a993-aac52befaabd` (run 35530934434). Orden R35 respetado (deploy → OTAs).
+
+- [x] **W4.1 Juicio de los diffs de W1–W3** contra SPEC §3–§5 y el reparto de archivos; lo deficiente vuelve al MISMO worker con feedback concreto. Incluye revisar el candado de H7 (`heroComplianceBundle.test.ts:272/310/359`), que es archivo de W3 y cambio de W1, y que el copy de la hoja y el banner sea **idéntico letra por letra** entre web y app.
+- [x] **W4.2 Revisión de privacidad.** Grep de `captureAppEvent` / `posthog` / `Sentry` en los archivos tocados: cero eventos nuevos con lesiones o condiciones médicas. **Valida:** invariante de privacidad de [PLAN §4](./PLAN.md).
+- [x] **W4.3 Verificar que la OTA es JS puro.** El diff no toca `package.json`, lockfile, `apps/mobile/app.json`, `eas.json` ni `plugins/`.
+- [x] **W4.4 Gates de cierre.** `pnpm vitest run` · `pnpm typecheck` · `pnpm --filter @eva/mobile exec tsc --noEmit` · `pnpm lint` · `pnpm lint:mobile` · `pnpm check:tokens` · `pnpm docs:check` · `pnpm build` · `pnpm --filter @eva/mobile exec expo export --platform android`. **`pnpm test` NO se usa:** `package.json:14` es `"test": "vitest"` sin `run` y `vitest.config.ts` no fija `watch: false` ⇒ queda en watch y no termina (el CI no sufre porque usa `npx vitest run --shard`, `ci.yml:96`).
+- [x] **W4.5 Deploy web.** Push a `master`; esperar el deploy READY de Vercel **antes** de las OTAs.
+- [x] **W4.6 OTA runtime 1.1.3 (iOS) desde `master`.** `mobile-ota.yml` con `platform=ios`, `branch=production`. Android 1.1.3 no existe (sin binario): no se publica.
+- [x] **W4.7 OTA runtime 1.1.2 (Android + flota iOS 1.1.2) desde tag.** Procedimiento de [PLAN §5.3](./PLAN.md): rama desde `ota/1.1.2-20260916`, `git cherry-pick 90d79075` (menú de dunning, hoy ausente en 1.1.2 — pendiente #7), cherry-pick del tren limitado a `apps/mobile/`, `packages/` y `tests/mobile/`, confirmar `app.json` en 1.1.2 y sin plugin de Meta, gates en la rama, tag nuevo y `mobile-ota.yml` una vez `android` y otra `ios`.
 - [ ] **W4.8 E2E post-deploy.** `pnpm qa:prod:suave` (regla del owner: E2E solo al cierre).
 - [ ] **W4.8b Preparar las cuentas de QA (antes de entregar el checklist).** Tabla de estados en [PLAN §7](./PLAN.md), **citados por nombre, no por número de punto**: (a) **ciclo de 2 en 2.ª vuelta** — para todos los puntos del **punto 1**, con dos días cerrados al 100 % de series en fechas pasadas dentro de la ventana de 30 días (`packages/workout-engine/cycle-completions.ts:192-199`, `cycle-cursor.ts:120`); (b) **semanal A/B en semana B** — para los del **punto 4** de A/B, con `ab_mode=true`, planes A y B reales y `start_date` en semana par (`apps/mobile/lib/program-week-variant.ts:7-21`) y `weeks_to_repeat` vigente; (c) **semanal sin A/B Lun/Mié/Vie** — para el del **punto 4** de «Próximo» (martes/jueves y sábado/domingo); (d) **alumno con lesiones y alumno sin ficha** — para los del **punto 3**. **Nunca sobre cuentas reales de coaches.** Se anota qué cuenta, qué programa y qué fechas se usaron.
 - [ ] **W4.9 QA del owner.** Todos los puntos de [SPEC §8](./SPEC.md) en las **cuatro superficies**: web móvil/PWA, web desktop (≥ `md`), app iOS (1.1.3 y 1.1.2) y app Android (1.1.2). Con el QA verde el SDD pasa a `done`.

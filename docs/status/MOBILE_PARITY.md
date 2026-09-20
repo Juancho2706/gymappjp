@@ -23,6 +23,17 @@ source_of_truth: apps/web responsive + apps/mobile
 > `CompletedRegistration` (nombres literales + `flush()`). Los pasos manuales de Meta y App Store Connect (`MOB-META-01` en
 > [MANUAL_TASKS](../operations/MANUAL_TASKS.md)) están hechos salvo SKAN; quedan la aprobación de Apple y el QA del owner (SPEC §8).
 
+> **2026-09-20 ~19:05Z (tren «Vuelta nueva, salud y reloj» — feedback Movens — EN PRODUCCIÓN: `master` = `rnmobiledenuevo` = `1c67ecd1`
+> (PR #192, rebase de `323c2a1f` W0 · `88cbd48c` SDD · `6d2b7716` W1 · `c994a033` W2+W3 · `1c67ecd1` fix TZ), deploy
+> `dpl_DmV8kF7Nz1U2xw1hjFjtAsAq7R3D` READY, OTA `production` ios runtime 1.1.3 desde `master` grupo `7d51660d-cd0a-4294-9524-4c3e416d207d`
+> (run 35530907927) y runtime 1.1.2 desde el tag `ota/1.1.2-20260920` = `234e1ab0` — android `da488aa0-0844-45b6-aa5a-a1c2ed272c37`
+> (run 35530926715) / ios `e30a7a89-1669-4d1e-a993-aac52befaabd` (run 35530934434); detalle en
+> [MOBILE_RELEASES_OTA](../operations/MOBILE_RELEASES_OTA.md))**. Paridad web ↔ RN de este tren: motor del ciclo compartido (`slots` por
+> vuelta con orden canónico, INV-4), hoja «Ya hiciste» con el mismo copy e intercambio de destino en ambas (RN copia la jerarquía que la web ya
+> tenía), banner de corrección neutro con «Entrenar hoy», arranque en el primer ejercicio con todo registrado (RN `initialStepIndex`, web
+> montaje + `enterExecV3Session`), tarjeta «Salud» pintando `buildHealthIntakeView` en ambas, y el hero A/B de RN pasa a leer del cursor como
+> la web (la web no cambia en el punto 4). Sin migraciones, OTA JS puro. QA del owner pendiente en las cuatro superficies (SPEC §8).
+
 > **2026-09-12 (Enmienda E1 de «Reps tras el reloj» — EN PRODUCCIÓN: `master` = `rnmobiledenuevo` = `9e153f23` (`2ef37ff2` RN ·
 > `31a9dfc1` web), deploy `dpl_5d2TczpX66aoGSsfAkkeqwW9BqVh` READY, OTA 1.1.2 `production` android `01a097d4-0a6e-7bd9-8323-e7efd6cadeb0` / ios `01a097d4-2ebd-7a75-83c2-874454fd36fd`, E2E `prod-suave` 9/9 (run 34723934934))**. Con el prompt de huecos abierto el descanso arranca MINIMIZADO y se
 > expande al confirmar, con el mismo reloj: contrato `startRest(secs, { minimized })` + `expandRest()` en los dos providers (RN el

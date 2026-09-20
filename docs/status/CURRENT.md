@@ -29,6 +29,8 @@ prevalecen sobre este resumen. La prosa retirada el 2026-09-02 está en
 
 ## Prioridades vigentes
 
+**«Vuelta nueva, salud y reloj» (feedback Movens 19-09) — EN PRODUCCIÓN 20-09 ~19:00Z** ([SDD](../specs/vuelta-nueva-salud-y-reloj/SPEC.md) · [tareas](../specs/vuelta-nueva-salud-y-reloj/TASKS.md)): PR #192 (rebase) ⇒ `master` = `rnmobiledenuevo` = `1c67ecd1`, deploy `dpl_DmV8kF7N…` READY; OTA `production` ios 1.1.3 `7d51660d` (desde `master`) · 1.1.2 android `da488aa0` / ios `e30a7a89` (desde el tag `ota/1.1.2-20260920`); runs y detalle en [MOBILE_RELEASES_OTA](../operations/MOBILE_RELEASES_OTA.md). Ciclo por vuelta con orden fijo, hoja «Entrenarlo hoy», hero A/B y «Próximo» desde el cursor, arranque en el primer ejercicio (Q7-A), tarjeta «Salud», `upsert` del alta RN. **Queda: QA del owner (SPEC §8, 12 puntos, 4 superficies) ⇒ SDD `done`; aviso a Movens y a los 3 coaches A/B (SPEC §9); Sentry ~23-09.** El punto 2 (FC de toda la sesión) es plan aparte.
+
 **«Dossier por meses» — EN PRODUCCIÓN 16-09 ~02:30Z** ([SDD](../specs/dossier-por-meses/SPEC.md)): modo «Por meses» en el export del dossier (web + RN), RPC `get_client_month_reports`; `master` = `rnmobiledenuevo` = `0748acd3`, deploy `dpl_HQH52H1T…` READY, migración LIVE `20260916014833`, OTA ios 1.1.3 `a73f71a0` + 1.1.2 android/ios desde `ota/1.1.2-20260916`.
 **Queda: QA del owner §17 (14 web + 8 device + 2 comunes) ⇒ SDD `done`; el E2E `tests/dossier-export.spec.ts` se corre solo con su OK.**
 
