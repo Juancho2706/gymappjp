@@ -251,3 +251,20 @@ el 27, que es un ARREGLA chico y es condición previa a cualquier «dejá la ban
 21. **FC con la pantalla bloqueada en iOS:** exige `UIBackgroundModes: bluetooth-central` ⇒ build de tienda. De paso, corregir el texto del permiso Bluetooth que dice «durante el cardio» (`apps/mobile/app.json:35`). **Quién:** agente. **Disparador:** próxima build nativa.
 22. **FC de sesión en web/PWA:** solo Chrome Android; iPhone web no tiene Bluetooth ni Salud. **Quién:** owner decide. **Cuándo:** después del plan aparte.
 23. **Curva y zonas de FC visibles para el coach:** hoy `metadata.hr.zone_sec` y `samples` no se muestran en ningún lado. **Quién:** agente. **Cuándo:** después del plan aparte.
+
+---
+
+## Post-cierre — parche «next + sharp + REVOKE anon» (21-09) — CERRADO
+
+Salió de la revisión de dos semanas posterior al tren (Sentry, Vercel, Supabase, Dependabot). Sin SDD
+propio por tamaño; se registra acá para que quede evidencia. Push directo a `master` con OK del owner
+(bump primero, REVOKE después, gates en su PC, PR #182 cerrado).
+
+- [x] **P1 Bump `next` 16.3.0 → 16.3.5 y `sharp` 0.35.3 → 0.35.4** (raíz; cierra Dependabot #114/#115/#116). **Done:** `67073b2c`. `^16.3.3` resolvió a 16.3.5; changelogs 16.3.1–16.3.5 leídos, sin breaking (16.3.4 re-habilita AVIF con libheif parchado). Lockfile solo mueve next/@next/swc/sharp/@img. `eslint-config-next` 16.1.6 intacto. Gates: `pnpm install --frozen-lockfile --ignore-scripts` OK · typecheck OK · lint 0 errores · vitest 814 archivos / 11 340 tests / 0 fallos · `pnpm build` OK · `pnpm audit --prod` sin next ni sharp. CI de master verde (run 35615601886).
+- [x] **P2 REVOKE EXECUTE a `PUBLIC`/`anon` en las 5 helpers SECURITY DEFINER de RLS org** (restos de Enterprise; E2 pendiente). **Done:** migración `20260921150000_revoke_anon_execute_rls_org_helpers.sql` (`b5c29c0d`), dry-run en LIVE con rollback y aplicada tras el deploy READY. Verificado: `anon=f pub=f auth=t svc=t` en las 5; REST anon 401 `42501` en `organization_members`/`client_memberships` y en el RPC; `authenticated` sin cambios; branding público 200; advisor `anon_security_definer_function_executable` 8 → 3. Evidencia previa: 48 h de logs sin requests anon a esas tablas; único RPC desde código bajo `if (user)` (`proxy.ts:99`).
+- [x] **P3 Deploy y docs.** **Done:** deploy `dpl_FoNY1RGVj6vud7tnGryGwMkLY4av` READY (276 s); humo HTTP: home, `/login`, `/c/movens/login`, `/enterprise` 308, `/_next/image` → `image/webp`; docs `71c9c610`.
+- [x] **P4 QA del owner** (login coach, imágenes y logos, subida, login alumno con branding, guardar en builder, nutrición y buscador). **Done:** **VERDE 21-09** («QA pasó»). Cerrado.
+
+Quedan para un tren aparte: alertas js-yaml ×2 (transitivas), vitest/@vitest-mocker (dev) y
+baseline-browser-mapping (moderate); `purge_old_audit_logs` inexistente en LIVE; probe
+`side_photo_url`/`receipt_url` en `coach-client-detail.ts:830,837`; E2 de Enterprise.
