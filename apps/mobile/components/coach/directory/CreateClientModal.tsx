@@ -4,7 +4,7 @@ import type { ViewStyle } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
-import { Archive, CheckCircle2, ChevronDown, ChevronRight, Eye, EyeOff, Lock, MessageCircle, UserPlus, X } from 'lucide-react-native'
+import { Archive, CheckCircle2, ChevronDown, ChevronRight, Eye, EyeOff, Lock, MessageCircle, RefreshCw, UserPlus, X } from 'lucide-react-native'
 import type { LucideIcon } from 'lucide-react-native'
 import { CreateClientSchema, personaNoun, type MobileCreateClientResponse, type Persona } from '@eva/schemas'
 import { type SubscriptionTier } from '@eva/tiers'
@@ -357,6 +357,9 @@ export function CreateClientModal({
     }
     // Clave nueva por apertura: dos altas seguidas no pueden compartir la misma contraseña.
     if (guided) setGuidedPassword(generateGuidedTempPassword())
+    // Clásico: la clave llega YA generada (editable). Una clave tipeada a mano puede estar filtrada
+    // y Supabase (HIBP) la rechaza al crear — incidente Ani 2026-09-22.
+    else setForm((f) => ({ ...f, tempPassword: generateGuidedTempPassword() }))
     // Cada alta cuenta sus propios canales elegidos.
     sentChannelsRef.current = []
     selfBlockedEmailRef.current = null
@@ -972,21 +975,48 @@ export function CreateClientModal({
                   ) : null}
 
                   {guided ? null : (
-                    <Input
-                      testID="create-client-tempPassword"
-                      label="Contraseña temporal"
-                      value={form.tempPassword}
-                      onChangeText={(v) => setForm((f) => ({ ...f, tempPassword: v }))}
-                      placeholder="Mín. 8 caracteres"
-                      secureTextEntry={!showPw}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      rightIcon={showPw ? EyeOff : Eye}
-                      onRightIconPress={() => setShowPw((v) => !v)}
-                      rightIconLabel={showPw ? 'Ocultar contraseña' : 'Mostrar contraseña'}
-                      hint="Comparte esta clave con tu alumno. Se le pedirá cambiarla al entrar."
-                      error={fieldErrors.temp_password?.[0]}
-                    />
+                    <View style={styles.pwGroup}>
+                      <Input
+                        testID="create-client-tempPassword"
+                        label="Contraseña temporal"
+                        value={form.tempPassword}
+                        onChangeText={(v) => setForm((f) => ({ ...f, tempPassword: v }))}
+                        placeholder="Mín. 8 caracteres"
+                        secureTextEntry={!showPw}
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        rightIcon={showPw ? EyeOff : Eye}
+                        onRightIconPress={() => setShowPw((v) => !v)}
+                        rightIconLabel={showPw ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                        error={fieldErrors.temp_password?.[0]}
+                      />
+                      {/* El hint sale del Input para compartir fila con «Generar otra». Con error
+                          se oculta: el Input ya lo pinta en ese mismo slot (`error || hint`). */}
+                      <View style={styles.pwHintRow}>
+                        {fieldErrors.temp_password?.[0] ? (
+                          <View style={styles.pwHintSpacer} />
+                        ) : (
+                          <Text style={[styles.pwHint, { color: theme.mutedForeground }]}>
+                            Comparte esta clave con tu alumno. Se le pedirá cambiarla al entrar.
+                          </Text>
+                        )}
+                        <Pressable
+                          testID="create-client-regenPassword"
+                          accessibilityRole="button"
+                          accessibilityLabel="Generar otra clave"
+                          hitSlop={12}
+                          onPress={() => {
+                            setForm((f) => ({ ...f, tempPassword: generateGuidedTempPassword() }))
+                            // La clave nueva siempre es válida: el error de la anterior ya no aplica.
+                            setFieldErrors((e) => ({ ...e, temp_password: undefined }))
+                          }}
+                          style={({ pressed }) => [styles.pwRegen, pressed ? styles.pwRegenPressed : null]}
+                        >
+                          <RefreshCw size={14} color={theme.primary} />
+                          <Text style={[styles.pwRegenLabel, { color: theme.primary }]}>Generar otra</Text>
+                        </Pressable>
+                      </View>
+                    </View>
                   )}
 
                   {/* Confirmación de edad — Ley 21.719 */}
@@ -1093,6 +1123,14 @@ const styles = StyleSheet.create({
   checkboxRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginTop: 2 },
   checkbox: { width: 20, height: 20, borderRadius: 6, borderWidth: 1.5, marginTop: 1, alignItems: 'center', justifyContent: 'center' },
   checkboxLabel: { flex: 1, fontSize: 12, lineHeight: 17, fontFamily: FONT.ui },
+  // Contraseña temporal del alta clásica: mismo gap interno que el Input (6) y el hint con su tipo.
+  pwGroup: { gap: 6 },
+  pwHintRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 },
+  pwHint: { flex: 1, fontSize: 12, lineHeight: 16, fontFamily: FONT.ui },
+  pwHintSpacer: { flex: 1 },
+  pwRegen: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  pwRegenPressed: { opacity: 0.6 },
+  pwRegenLabel: { fontSize: 13, fontFamily: FONT.uiSemibold },
   footer: { flexDirection: 'row', gap: 12, marginTop: 8 },
   modalButton: {
     height: 44,
