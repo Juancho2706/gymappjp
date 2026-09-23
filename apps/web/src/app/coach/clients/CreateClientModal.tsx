@@ -10,12 +10,13 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, UserPlus, MessageCircle, CheckCircle2, Lock, Sparkles } from 'lucide-react'
+import { Loader2, UserPlus, MessageCircle, CheckCircle2, Lock, Sparkles, RefreshCw } from 'lucide-react'
 import Link from 'next/link'
 import { createClientAction, type CreateClientState } from './_actions/clients.actions'
 import { useAddStudentFlow } from './_components/add-student-flow-context'
 import { isCoachOwnEmail, SELF_INVITE_BLOCKED_ES } from './_lib/add-student-invite'
 import { useCaptureUpgradeGate } from '@/lib/posthog/events'
+import { generateStudentTempPassword } from '@/lib/auth/temp-credentials'
 import { cn } from '@/lib/utils'
 
 const initialState: CreateClientState = {}
@@ -85,14 +86,27 @@ export function CreateClientModal({ open, onClose, initialValues, onCreated }: C
     const [typedEmail, setTypedEmail] = useState(initialValues?.email ?? '')
     const selfBlockedEmailRef = useRef<string | null>(null)
     const isOwnEmail = isCoachOwnEmail(typedEmail, coachEmail)
+    // Clave temporal pre-generada (formato `Eva${pin}!`, el mismo del alta guiada y del reset):
+    // si el coach la inventa, GoTrue puede rechazarla por filtrada (HIBP, incidente Ani
+    // 2026-09-22). Sigue editable. Arranca en '' y se sortea en el efecto de apertura, no en el
+    // render: `Math.random` en el estado inicial desincronizaría la hidratación del SSR.
+    const [tempPassword, setTempPassword] = useState('')
 
-    // El form es no controlado y el modal NO se desmonta al cerrar: sin esto, el espejo del correo
+    // El form es no controlado (salvo la clave) y el modal NO se desmonta al cerrar: sin esto, el espejo del correo
     // sobreviviría a un `reset()` y el aviso quedaría pegado en la apertura siguiente.
     useEffect(() => {
         if (!open) return
         setTypedEmail(initialValues?.email ?? '')
         selfBlockedEmailRef.current = null
     }, [open, initialValues?.email])
+
+    // Clave nueva en cada apertura (y por ende tras cada alumno creado, que cierra el modal).
+    // Efecto propio con `[open]`: un cambio de precarga con el modal abierto no debe re-sortearla.
+    // Tras un rechazo del server el modal sigue abierto ⇒ el coach ve la misma clave que envió.
+    useEffect(() => {
+        if (!open) return
+        setTempPassword(generateStudentTempPassword())
+    }, [open])
 
     // `add_student_self_blocked`: el coach se está por agregar a sí mismo (SPEC «Vive tu app»
     // directo §5). Una vez por correo detectado, no por tecla.
@@ -364,15 +378,28 @@ export function CreateClientModal({ open, onClose, initialValues, onCreated }: C
                         <Label htmlFor="temp_password" className="text-sm text-foreground font-semibold">
                             Contraseña temporal
                         </Label>
-                        <Input
-                            id="temp_password"
-                            name="temp_password"
-                            type="text"
-                            placeholder="Mín. 8 caracteres"
-                            required
-                            minLength={8}
-                            className="h-10 bg-secondary border-border text-foreground rounded-xl placeholder:text-muted-foreground/50 focus:border-primary font-mono"
-                        />
+                        <div className="flex gap-2">
+                            <Input
+                                id="temp_password"
+                                name="temp_password"
+                                type="text"
+                                placeholder="Mín. 8 caracteres"
+                                value={tempPassword}
+                                onChange={(e) => setTempPassword(e.target.value)}
+                                required
+                                minLength={8}
+                                className="h-10 flex-1 min-w-0 bg-secondary border-border text-foreground rounded-xl placeholder:text-muted-foreground/50 focus:border-primary font-mono"
+                            />
+                            <button
+                                type="button"
+                                onClick={() => setTempPassword(generateStudentTempPassword())}
+                                aria-label="Generar otra clave"
+                                title="Generar otra clave"
+                                className="h-10 w-11 shrink-0 flex items-center justify-center rounded-xl border border-border bg-secondary text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--focus-ring)]"
+                            >
+                                <RefreshCw className="h-4 w-4" />
+                            </button>
+                        </div>
                         <p className="text-xs text-muted-foreground">
                             Comparte esta clave con tu alumno. Se le pedirá cambiarla al entrar.
                         </p>

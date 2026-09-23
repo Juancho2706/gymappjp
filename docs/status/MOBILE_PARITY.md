@@ -381,6 +381,11 @@ source_of_truth: apps/web responsive + apps/mobile
 > (guards `tests/mobile-no-prices` y `tests/mobile/store-copy` verdes). Nota declarada: `showsCupo` se apaga
 > si `guidedCapNote` ya está en pantalla, para no decir dos veces que el demo no gasta cupo.
 >
+> **Clave temporal pre-generada (2026-09-23, incidente Ani)**: en el alta manual clásica la clave llega
+> generada (`Eva${pin}!`, `generateGuidedTempPassword`), editable, con «Generar otra» bajo el campo; espejo
+> del botón ↻ del modal web. El rechazo HIBP de una clave tipeada llega traducido desde el servidor
+> (400 `WEAK_PASSWORD`). QA en device pendiente.
+>
 > Gates verdes al cierre: `tsc` mobile, `tests/mobile/{guia-reload,native-intent,vive-tu-app-explainer,store-compliance,guided-invite,directory-status}`
 > y los guards de tiendas. **Requiere OTA a los runtimes 1.1.1 + 1.1.2** (disparada en el cierre de esta ola;
 > sin cambios nativos ⇒ no hay binario) **+ QA device**: `eva://coach/guia` y el `intent://` de Android con la
