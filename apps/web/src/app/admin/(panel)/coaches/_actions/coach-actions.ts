@@ -1,7 +1,7 @@
 'use server'
 
 import { z } from 'zod'
-import { AdminCreateCoachSchema } from '@eva/schemas'
+import { AdminCreateCoachSchema, passwordRejectionMessage } from '@eva/schemas'
 import { revalidatePath, revalidateTag } from 'next/cache'
 import { assertAdmin, logAdminAction } from '@/lib/admin/admin-action-wrapper'
 import { assertPlatformEmailAvailable, sanitizePlatformEmail } from '@/lib/auth/platform-email'
@@ -74,7 +74,9 @@ export async function createCoachAction(
         email_confirm: true,
     })
     if (authError || !authData.user) {
-        return { error: authError?.message ?? 'Error al crear el usuario' }
+        // GoTrue contesta en inglés cuando la contraseña (tipeada acá a mano) aparece en
+        // filtraciones (HIBP) — incidente Ani 2026-09-22.
+        return { error: passwordRejectionMessage(authError) ?? authError?.message ?? 'Error al crear el usuario' }
     }
 
     const periodEnd = trial_days > 0

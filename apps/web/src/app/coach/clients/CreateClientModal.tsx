@@ -1,7 +1,6 @@
 'use client'
 
-import { useActionState, useEffect, useRef, useState } from 'react'
-import { useFormStatus } from 'react-dom'
+import { startTransition, useActionState, useEffect, useRef, useState, type FormEvent } from 'react'
 import { usePostHog } from 'posthog-js/react'
 import {
     Dialog,
@@ -21,8 +20,9 @@ import { cn } from '@/lib/utils'
 
 const initialState: CreateClientState = {}
 
-function SubmitButton({ disabled = false }: { disabled?: boolean }) {
-    const { pending } = useFormStatus()
+// `pending` llega por prop: el form ya no usa `<form action>` (ver `handleSubmit`), así que
+// `useFormStatus` nunca se enteraría del envío.
+function SubmitButton({ pending, disabled = false }: { pending: boolean; disabled?: boolean }) {
     return (
         <button
             type="submit"
@@ -68,7 +68,7 @@ interface CreateClientModalProps {
 }
 
 export function CreateClientModal({ open, onClose, initialValues, onCreated }: CreateClientModalProps) {
-    const [state, formAction] = useActionState(createClientAction, initialState)
+    const [state, formAction, isPending] = useActionState(createClientAction, initialState)
     const formRef = useRef<HTMLFormElement>(null)
     const notifiedIdRef = useRef<string | null>(null)
     const ph = usePostHog()
@@ -138,6 +138,17 @@ export function CreateClientModal({ open, onClose, initialValues, onCreated }: C
     const handleClose = () => {
         formRef.current?.reset()
         onClose()
+    }
+
+    // Submit por `onSubmit` + transición y NO `<form action={formAction}>`: React 19 resetea los
+    // campos no controlados del form al terminar la acción, AUNQUE vuelva con error. Así un rechazo
+    // del server (clave filtrada, correo tomado) dejaba todo en blanco y la casilla desmarcada
+    // (incidente Ani 2026-09-22). El reset en éxito sigue siendo explícito (efecto + `handleClose`).
+    // `required`/`minLength` siguen valiendo: el navegador valida antes de disparar `submit`.
+    const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+        e.preventDefault()
+        const fd = new FormData(e.currentTarget)
+        startTransition(() => formAction(fd))
     }
 
     // WhatsApp CTA step
@@ -274,7 +285,7 @@ export function CreateClientModal({ open, onClose, initialValues, onCreated }: C
                     </button>
                 )}
 
-                <form ref={formRef} action={formAction} className="space-y-4 mt-2">
+                <form ref={formRef} onSubmit={handleSubmit} className="space-y-4 mt-2">
                     {/* Full Name */}
                     <div className="space-y-1.5">
                         <Label htmlFor="full_name" className="text-sm text-foreground font-semibold">
@@ -411,7 +422,7 @@ export function CreateClientModal({ open, onClose, initialValues, onCreated }: C
                             Cancelar
                         </button>
                         <div className="flex-1">
-                            <SubmitButton disabled={isOwnEmail} />
+                            <SubmitButton pending={isPending} disabled={isOwnEmail} />
                         </div>
                     </div>
                 </form>

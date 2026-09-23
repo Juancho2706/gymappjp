@@ -5,6 +5,7 @@ import { revalidatePath } from 'next/cache'
 import { assertAdmin, logAdminAction } from '@/lib/admin/admin-action-wrapper'
 import { assertPlatformEmailAvailable, sanitizePlatformEmail } from '@/lib/auth/platform-email'
 import { createClientIdentity } from '@/infrastructure/db/client-membership.repository'
+import { passwordRejectionMessage } from '@eva/schemas'
 
 const UpdateClientSchema = z.object({
     clientId: z.string().uuid(),
@@ -105,7 +106,9 @@ export async function createClientAction(
         email_confirm: true,
     })
     if (authError || !authData.user) {
-        return { error: authError?.message ?? 'Error al crear el usuario' }
+        // GoTrue contesta en inglés cuando la contraseña (tipeada acá a mano) aparece en
+        // filtraciones (HIBP) — incidente Ani 2026-09-22.
+        return { error: passwordRejectionMessage(authError) ?? authError?.message ?? 'Error al crear el usuario' }
     }
 
     const { error: clientError } = await adminClient.from('clients').insert({

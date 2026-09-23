@@ -1,7 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { CreateTeamAdminSchema, UpdateTeamAdminSchema } from '@eva/schemas'
+import { CreateTeamAdminSchema, UpdateTeamAdminSchema, passwordRejectionMessage } from '@eva/schemas'
 import { assertAdmin, logAdminAction } from '@/lib/admin/admin-action-wrapper'
 import { assertPlatformEmailAvailable, sanitizePlatformEmail } from '@/lib/auth/platform-email'
 import { generateUniqueCoachSlug } from '@/services/org/org.service'
@@ -71,7 +71,9 @@ export async function createTeamAction(_prev: CreateTeamResult | null, formData:
             user_metadata: { full_name: owner_full_name },
             app_metadata: { requires_password_change: true },
         })
-        if (authError || !authData.user) return { error: authError?.message ?? 'No se pudo crear el usuario owner' }
+        // GoTrue contesta en inglés cuando la clave del owner (si el admin la tipeó) aparece en
+        // filtraciones (HIBP) — incidente Ani 2026-09-22.
+        if (authError || !authData.user) return { error: passwordRejectionMessage(authError) ?? authError?.message ?? 'No se pudo crear el usuario owner' }
         ownerCoachId = authData.user.id
         createdNewOwner = true
 

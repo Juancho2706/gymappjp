@@ -2,6 +2,7 @@
 
 import { headers } from 'next/headers'
 import { z } from 'zod/v4'
+import { passwordRejectionMessage } from '@eva/schemas'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { rateLimitInviteAccept } from '@/lib/rate-limit'
 import { resolveInvite } from '../_lib/resolve-invite'
@@ -86,7 +87,9 @@ export async function joinViaInviteAction(inviteCode: string, _prev: unknown, fo
         email_confirm: true,
         user_metadata: { full_name: parsed.data.full_name },
     })
-    if (authErr) return { error: authErr.message }
+    // GoTrue contesta en inglés cuando la contraseña aparece en filtraciones (HIBP): acá quien
+    // tipea la clave es el ALUMNO, no un admin (incidente Ani 2026-09-22). `null` para el resto.
+    if (authErr) return { error: passwordRejectionMessage(authErr) ?? authErr.message }
 
     const { error: insertErr } = await admin.from('clients').insert({
         id: newUser.user.id,

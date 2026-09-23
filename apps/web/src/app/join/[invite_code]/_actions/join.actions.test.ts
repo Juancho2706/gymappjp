@@ -227,6 +227,41 @@ describe('joinViaInviteAction', () => {
         expect(assignmentsQuery.insert).not.toHaveBeenCalled()
     })
 
+    // Incidente Ani 2026-09-22 (panel web): acá quien tipea la contraseña es el ALUMNO al
+    // unirse por código. GoTrue (HIBP) rechaza en inglés; `passwordRejectionMessage` debe
+    // traducirlo y el alta no debe insertar nada.
+    it('contraseña filtrada (HIBP) → error en español, sin crear la fila clients', async () => {
+        const { admin, clientsQuery } = buildAdmin()
+        createServiceRoleClientMock.mockReturnValue(admin)
+        resolveInviteMock.mockResolvedValue({
+            scope: 'team',
+            coachId: 'owner-1',
+            orgId: null,
+            teamId: 'team-1',
+            brandName: 'Equipo',
+            primaryColor: null,
+            logoUrl: null,
+            welcomeMessage: null,
+            loginHref: '/t/equipo/login',
+        })
+        admin.auth.admin.createUser.mockResolvedValueOnce({
+            data: { user: null },
+            error: {
+                name: 'AuthWeakPasswordError',
+                status: 422,
+                code: 'weak_password',
+                message: 'Password is known to be weak and easy to guess, please choose a different one.',
+                reasons: ['pwned'],
+            },
+        })
+
+        const result = await joinViaInviteAction('CODE-TEAM', null, buildFormData())
+
+        expect((result as { error?: string }).error).toMatch(/filtraciones/i)
+        expect((result as { error?: string }).error).not.toMatch(/Password is known/i)
+        expect(clientsQuery.insert).not.toHaveBeenCalled()
+    })
+
     it('enterprise → creates the auth.user + clients row + org assignment (flow intact)', async () => {
         const { admin, clientsQuery, assignmentsQuery } = buildAdmin()
         createServiceRoleClientMock.mockReturnValue(admin)

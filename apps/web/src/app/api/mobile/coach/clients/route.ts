@@ -1,6 +1,6 @@
 import { publicAppUrl } from '@/lib/site-url'
 import { NextRequest, NextResponse } from 'next/server'
-import { CreateClientSchema, type MobileCreateClientResponse } from '@eva/schemas'
+import { CreateClientSchema, passwordRejectionMessage, type MobileCreateClientResponse } from '@eva/schemas'
 import { z } from 'zod'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Tables } from '@/lib/database.types'
@@ -279,6 +279,14 @@ export async function POST(request: NextRequest) {
                 { error: EMAIL_TAKEN_CLIENT_CREATE_ES, code: 'EMAIL_TAKEN' },
                 { status: 409 }
             )
+        }
+        // GoTrue contesta en inglés (HIBP: «Password is known to be weak and easy to guess…») y RN
+        // pinta ese `error` tal cual en el banner del alta manual (mismo rechazo que vio Ani en el
+        // modal web, incidente 2026-09-22). `passwordRejectionMessage` ya traduce ese caso y
+        // devuelve `null` para el resto (sesión, red, rate limit...).
+        const passwordMessage = passwordRejectionMessage(authError)
+        if (passwordMessage) {
+            return NextResponse.json({ error: passwordMessage, code: 'WEAK_PASSWORD' }, { status: 400 })
         }
         return NextResponse.json({ error: `Error al crear el usuario: ${authError.message}`, code: 'AUTH_CREATE_FAILED' }, { status: 500 })
     }

@@ -7,7 +7,8 @@ import { NextRequest } from 'next/server'
  * Este archivo cubre UNA cosa del contrato, la que otra superficie consume: la respuesta trae el
  * `clientId` de la fila recién creada. Sin él, el PATCH `converted` de `coach_leads` no tiene a
  * quién copiarle la atribución de la tarjeta compartida ni sobre quién emitir
- * `coach_client_referred` (deuda declarada de coach-leads W3).
+ * `coach_client_referred` (deuda declarada de coach-leads W3). También fija que el rechazo HIBP de
+ * la clave temporal llegue traducido (RN lo pinta tal cual; incidente Ani 2026-09-22).
  *
  * El resto del alta (muro de cupo, correos, workspaces) tiene su propia cobertura y no se re-prueba
  * acá: lo que se mockea es todo lo que sale del proceso.
@@ -164,5 +165,33 @@ describe('POST /api/mobile/coach/clients', () => {
 
         expect(res.status).toBe(401)
         await expect(res.json()).resolves.toMatchObject({ code: 'INVALID_TOKEN' })
+    })
+
+    // Incidente Ani 2026-09-22: clave temporal tipeada a mano rechazada por HIBP (GoTrue 422
+    // weak_password/pwned) — RN pintaba el inglés crudo de GoTrue en el banner.
+    it('clave temporal rechazada por HIBP: traduce el mensaje y NO inserta el alumno', async () => {
+        const { admin, clients } = makeAdmin()
+        const createUser = vi.fn(async () => ({
+            data: { user: null },
+            error: {
+                name: 'AuthWeakPasswordError',
+                status: 422,
+                code: 'weak_password',
+                message: 'Password is known to be weak and easy to guess, please choose a different one.',
+                reasons: ['pwned'],
+            },
+        }))
+        admin.auth.admin.createUser = createUser as never
+        createServiceRoleClientMock.mockReturnValue(admin)
+
+        const res = await POST(req(VALID_BODY))
+
+        expect(res.status).toBe(400)
+        const json = await res.json()
+        expect(json.code).toBe('WEAK_PASSWORD')
+        expect(json.error).toContain('filtraciones')
+        expect(json.error).not.toContain('Password is known')
+        expect(createUser).toHaveBeenCalled()
+        expect(clients.insert).not.toHaveBeenCalled()
     })
 })

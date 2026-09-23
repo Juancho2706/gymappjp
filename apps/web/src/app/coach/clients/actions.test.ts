@@ -194,6 +194,78 @@ describe('createClientAction', () => {
     expect(revalidatePathMock).toHaveBeenCalledWith('/coach/clients')
   })
 
+  // Incidente Ani 2026-09-22: la clave temporal tipeada por la coach estaba en HIBP y GoTrue
+  // contestó en inglés; el banner la pintaba cruda («Error al crear el usuario: Password is…»).
+  describe('rechazo de la clave temporal por GoTrue', () => {
+    function buildUnderLimit(createUserResult: unknown) {
+      const coachesQuery = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: { id: 'coach-1', slug: 'coach', subscription_tier: 'pro', max_clients: 10 },
+        }),
+      }
+      const clientsQuery = {
+        select: vi.fn().mockReturnThis(),
+        eq: vi.fn().mockReturnThis(),
+        is: vi.fn().mockResolvedValue({ count: 2, error: null }),
+        insert: vi.fn().mockResolvedValue({ error: null }),
+      }
+      const supabase = {
+        auth: { getUser: vi.fn().mockResolvedValue({ data: { user: { id: 'coach-1' } } }) },
+        from: vi.fn((table: string) => {
+          if (table === 'coaches') return coachesQuery
+          if (table === 'clients') return clientsQuery
+          throw new Error(`Unexpected table: ${table}`)
+        }),
+        rpc: vi.fn().mockResolvedValue({ data: { available: true }, error: null }),
+      }
+      const authAdmin = {
+        auth: {
+          admin: {
+            createUser: vi.fn().mockResolvedValue(createUserResult),
+            deleteUser: vi.fn(),
+          },
+        },
+      }
+      createClientMock.mockResolvedValue(supabase)
+      createServiceRoleClientMock.mockReturnValue(authAdmin)
+      return { clientsQuery }
+    }
+
+    it('clave filtrada (HIBP) ⇒ mensaje en español con code weak_password, sin insertar', async () => {
+      const { clientsQuery } = buildUnderLimit({
+        data: { user: null },
+        error: {
+          name: 'AuthWeakPasswordError',
+          status: 422,
+          code: 'weak_password',
+          message: 'Password is known to be weak and easy to guess, please choose a different one.',
+          reasons: ['pwned'],
+        },
+      })
+
+      const result = await createClientAction({}, buildFormData())
+      expect(result.code).toBe('weak_password')
+      expect(result.error).toContain('filtraciones')
+      expect(result.error).not.toContain('Password is known')
+      expect(result.fieldErrors).toBeUndefined()
+      expect(result.success).toBeUndefined()
+      expect(clientsQuery.insert).not.toHaveBeenCalled()
+    })
+
+    it('otro error de GoTrue conserva el texto de siempre', async () => {
+      buildUnderLimit({
+        data: { user: null },
+        error: { name: 'AuthApiError', status: 500, message: 'Database error creating new user' },
+      })
+
+      const result = await createClientAction({}, buildFormData())
+      expect(result.error).toBe('Error al crear el usuario: Database error creating new user')
+      expect(result.code).toBeUndefined()
+    })
+  })
+
   // SPEC «Vive tu app» directo §5 (caso Job Palacios 23-08): agregarse a uno mismo gastaba el
   // cupo y el rechazo —cuando llegaba— era el 409 opaco anti-enumeración. Con SU propio correo no
   // hay nada que filtrar: se devuelve el camino real y NO se crea ninguna cuenta.
@@ -445,5 +517,48 @@ describe('resetClientPasswordAction — reenvío del acceso', () => {
     })
 
     expect((await resetClientPasswordAction('client-1')).resend?.persona).toBe('strength')
+  })
+
+  // Incidente Ani 2026-09-22: la clave la genera el server, así que «elige otra» no aplica.
+  it('si HIBP rechaza la clave generada pide reintentar, sin el inglés de GoTrue', async () => {
+    const { supabase, clientsUpdate } = buildSupabase(
+      { id: 'client-1', full_name: 'Ana', email: 'ana@example.com', phone: '+56911112222' },
+      { slug: 'studio', invite_code: 'ABC123', brand_name: 'Studio Fuerza', persona: 'strength' }
+    )
+    createClientMock.mockResolvedValue(supabase)
+    createServiceRoleClientMock.mockReturnValue({
+      auth: {
+        admin: {
+          updateUserById: vi.fn().mockResolvedValue({
+            data: { user: null },
+            error: {
+              name: 'AuthWeakPasswordError',
+              status: 422,
+              code: 'weak_password',
+              message: 'Password is known to be weak and easy to guess, please choose a different one.',
+              reasons: ['pwned'],
+            },
+          }),
+        },
+      },
+    })
+
+    const result = await resetClientPasswordAction('client-1')
+    expect(result.error).toBe('No pudimos generar la clave temporal. Intenta de nuevo.')
+    expect(result.tempPassword).toBeUndefined()
+    expect(clientsUpdate.update).not.toHaveBeenCalled()
+  })
+
+  it('otro error de GoTrue en el reset conserva el texto de siempre', async () => {
+    const { supabase } = buildSupabase(
+      { id: 'client-1', full_name: 'Ana', email: 'ana@example.com', phone: null },
+      null
+    )
+    createClientMock.mockResolvedValue(supabase)
+    createServiceRoleClientMock.mockReturnValue({
+      auth: { admin: { updateUserById: vi.fn().mockResolvedValue({ error: { message: 'User not found' } }) } },
+    })
+
+    expect((await resetClientPasswordAction('client-1')).error).toBe('Error al actualizar: User not found')
   })
 })

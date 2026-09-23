@@ -6,7 +6,7 @@ import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import type { Tables } from '@/lib/database.types'
 import { revalidatePath } from 'next/cache'
 import { z } from 'zod'
-import { CreateClientSchema, UpdateClientDataSchema, PERSONAS, type Persona } from '@eva/schemas'
+import { CreateClientSchema, UpdateClientDataSchema, PERSONAS, passwordRejectionMessage, type Persona } from '@eva/schemas'
 import { studentCountLabel, tierMaxClientsFor, type SubscriptionTier } from '@/lib/constants'
 import { sendTransactionalEmail } from '@/lib/email/send-email'
 import {
@@ -124,8 +124,9 @@ export type CreateClientState = {
     /**
      * 'email_taken' ⇒ el modal muestra estado informativo (no error destructivo).
      * 'own_email' ⇒ el coach se está agregando a sí mismo: el camino es «Vive tu app», no un alta.
+     * 'weak_password' ⇒ el coach tipeó una clave filtrada (HIBP); el banner la pinta como error normal.
      */
-    code?: 'email_taken' | 'own_email'
+    code?: 'email_taken' | 'own_email' | 'weak_password'
 }
 
 export async function createClientAction(
@@ -248,6 +249,11 @@ export async function createClientAction(
             })
             return { error: EMAIL_TAKEN_CLIENT_CREATE_ES, code: 'email_taken' }
         }
+        // GoTrue contesta en inglés cuando la clave temporal aparece en filtraciones (HIBP) y el
+        // banner lo pintaba crudo (incidente Ani 2026-09-22). Sin `fieldErrors` a propósito: el
+        // stepper manda la clave en un hidden y solo pinta `error`, igual que CreateClientModal.
+        const passwordMessage = passwordRejectionMessage(authError)
+        if (passwordMessage) return { error: passwordMessage, code: 'weak_password' }
         return { error: `Error al crear el usuario: ${authError.message}` }
     }
 
@@ -545,7 +551,14 @@ export async function resetClientPasswordAction(clientId: string): Promise<Reset
         password: tempPassword,
     })
 
-    if (authError) return { error: `Error al actualizar: ${authError.message}` }
+    if (authError) {
+        // La clave la generamos nosotros: «elige otra» no aplica al coach y reintentar sortea otro
+        // PIN. Sin esto el rechazo HIBP salía crudo en inglés (incidente Ani 2026-09-22).
+        if (passwordRejectionMessage(authError)) {
+            return { error: 'No pudimos generar la clave temporal. Intenta de nuevo.' }
+        }
+        return { error: `Error al actualizar: ${authError.message}` }
+    }
 
     let resetQuery = supabase
         .from('clients')

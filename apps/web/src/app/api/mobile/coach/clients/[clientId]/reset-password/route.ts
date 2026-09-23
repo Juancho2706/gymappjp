@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { passwordRejectionMessage } from '@eva/schemas'
 import { generateStudentTempPassword } from '@/lib/auth/temp-credentials'
 import {
     applyMobileClientScope,
@@ -20,7 +21,19 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     // PIN puro numérico lo rechaza la protección HIBP de Supabase (422). Eva${pin}! pasa.
     const tempPassword = generateStudentTempPassword()
     const { error: authError } = await ctx.admin.auth.admin.updateUserById(clientId, { password: tempPassword })
-    if (authError) return NextResponse.json({ error: `Error al actualizar: ${authError.message}`, code: 'RESET_FAILED' }, { status: 500 })
+    if (authError) {
+        // La clave es GENERADA acá (no la tipeó el coach), así que un rechazo HIBP no tiene un campo
+        // que corregir: mismo copy genérico de siempre, solo evita filtrar el inglés de GoTrue si
+        // pasa a ser ese el motivo (incidente Ani 2026-09-22, mismo traductor que el alta).
+        const passwordMessage = passwordRejectionMessage(authError)
+        if (passwordMessage) {
+            return NextResponse.json(
+                { error: 'No pudimos generar la clave temporal. Intenta de nuevo.', code: 'RESET_FAILED' },
+                { status: 500 },
+            )
+        }
+        return NextResponse.json({ error: `Error al actualizar: ${authError.message}`, code: 'RESET_FAILED' }, { status: 500 })
+    }
 
     await applyMobileClientScope(
         ctx.admin.from('clients').update({ force_password_change: true }).eq('id', clientId),
