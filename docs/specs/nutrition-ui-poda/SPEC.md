@@ -1,3 +1,10 @@
+---
+status: done
+owner: product-engineering
+last_verified: "2026-08-17"
+canonical: false
+---
+
 # SPEC — Poda UI + selector de día + wizard 2 pasos · Nutrición V2
 
 > **CERRADA — 2026-08-17.** Implementación verificada en el árbol (auditoría specs-vs-código);

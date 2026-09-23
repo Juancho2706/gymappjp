@@ -1,3 +1,10 @@
+---
+status: done
+owner: product-engineering
+last_verified: "2026-09-05"
+canonical: false
+---
+
 # SPEC — Reemplazos autorizados por el coach (F-02) · Nutrición V2
 
 ## Problema

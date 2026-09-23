@@ -1,3 +1,10 @@
+---
+status: done
+owner: product-engineering
+last_verified: "2026-08-17"
+canonical: false
+---
+
 # SPEC — T2.7 Re-skin del alumno + paleta de macros fija
 
 > **CERRADA — 2026-08-17.** Implementación verificada en el árbol (auditoría specs-vs-código);

@@ -1,3 +1,10 @@
+---
+status: done
+owner: product-engineering
+last_verified: "2026-09-05"
+canonical: false
+---
+
 # SPEC — Notas del coach por franja y por grupo («el globito»)
 
 - **Origen:** feedback de un nutricionista en prueba (audios 2026-08-17) + decisión del

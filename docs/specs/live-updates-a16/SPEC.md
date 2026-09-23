@@ -1,3 +1,10 @@
+---
+status: draft
+owner: product-engineering
+last_verified: "2026-09-02"
+canonical: false
+---
+
 # SPEC — Timer fijo en lockscreen via Live Updates (Android 16 QPR1+)
 
 ## Problema

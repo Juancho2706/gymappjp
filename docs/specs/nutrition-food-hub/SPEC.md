@@ -1,3 +1,10 @@
+---
+status: done
+owner: product-engineering
+last_verified: "2026-09-05"
+canonical: false
+---
+
 # SPEC — T2.3 Hub de Alimentos: una sola casa
 
 - **Programa padre:** [nutrition-flows-redesign](../nutrition-flows-redesign/SPEC.md) — Ola 2, tarea T2.3.

@@ -1,3 +1,10 @@
+---
+status: done
+owner: product-engineering
+last_verified: "2026-09-05"
+canonical: false
+---
+
 # SPEC — Estado "En progreso" del dia de entrenamiento (day-cards alumno)
 
 ## Problema

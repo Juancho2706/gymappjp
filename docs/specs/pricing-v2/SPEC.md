@@ -1,3 +1,10 @@
+---
+status: superseded
+owner: product-engineering
+last_verified: "2026-08-17"
+canonical: false
+---
+
 # SPEC — Pricing v2: Free total (2), Pro 25, Elite 60, Starter fuera de venta
 
 > **CERRADA — 2026-08-17.** Implementación verificada en el árbol (auditoría specs-vs-código);

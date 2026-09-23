@@ -11,102 +11,85 @@ Vista global mínima: solo prioridades vigentes y punteros. Cada prioridad ocupa
 (título, estado, qué queda, link). La cronología, los commits intermedios, los gates y la evidencia
 viven en la spec de cada frente (`docs/specs/*/TASKS.md` § «Cierre»), en `docs/audits/` y en el
 historial de git — no aquí. El código, las migraciones aplicadas y el estado remoto (Vercel/Supabase)
-prevalecen sobre este resumen. La prosa retirada el 2026-09-02 está en
-[current-historial-2026-09](../archive/current-historial-2026-09.md).
+prevalecen sobre este resumen. La prosa retirada está en
+[current-historial-2026-09](../archive/current-historial-2026-09.md) (último corte: 23-09, «Casa en orden»).
 
 ## Estado por frente
 
 | Frente | Estado | Fuente de detalle |
 |---|---|---|
-| Web/PWA | Pricing v3 productivo: Free = 1 alumno + white-label + sello «Hecho con EVA»; Pro 25 sin sello. **Deploy vigente 23-09: `master` = `rnmobiledenuevo`** — «Elige cómo pagar» (ver [Prioridades](#prioridades-vigentes)). Anteriores (23-09 `50d5cbf9` clave temporal, 21-09 `b5c29c0d`, 20-09 `1c67ecd1`, 16-09 `0748acd3`) en [Prioridades](#prioridades-vigentes) y el [historial](../archive/current-historial-2026-09.md). | [Runbook](../operations/RUNBOOK.md) · [spec](../specs/pricing-v3/SPEC.md) |
-| App nativa (RN) | **Apple aprobó 1.1.3 (61) ⇒ 1.1.3 pública en App Store desde el 16-09 14:04Z y el piso OTA iOS sube a 1.1.3**; Android sigue en 1.1.2 (build 86 «En revisión» en Play desde el 10-09, tienda aún no pública). El runtime 1.1.3 existe porque el SDK de Meta es cambio nativo y su build 61 está en App Review. **OTAs vigentes 23-09** (clave temporal pre-generada): ios runtime **1.1.3** grupo `6041fa25` (desde `master` @`50d5cbf9`) + runtime **1.1.2** desde el tag `ota/1.1.2-20260923` = `5079a947` (android `49d04dd1` / ios `2c87e903`). Sin Android 1.1.3 (no hay binario). Anteriores (20-09, 16-09 y previas) en [Prioridades](#prioridades-vigentes) y el [historial](../archive/current-historial-2026-09.md). | [Mobile parity](MOBILE_PARITY.md) · [OTA](../operations/MOBILE_RELEASES_OTA.md) |
-| Auth: Google en el login de coach | **Fix 04-09 EN PRODUCCIÓN, QA del owner VERDE 05-09** (hashes, deploy, OTA y detalle técnico en el [historial](../archive/current-historial-2026-09.md)): un LOGIN con Google sin fila `coaches` dejaba un `auth.users` huérfano que ocupaba el correo del alumno (caso Leonardo/Movens); ahora `resolvePostGoogleAuthUrl`/`login.tsx` lo limpian y rebotan a `/login` con el copy correcto. Queda F2b (alta de alumno con cuenta existente) en backlog. | [Login y auth](../architecture/FLOWS_AND_COMPONENTS.md) |
-| Archivado de alumnos | P0 de alta en producción (2026-08-03); **QA físico VERDE 05-09** (artifact `6bd32370`); queda la matriz Team. | [Spec de corte](../../specs/archive-nutrition-v2-cutover/SPEC.md) |
-| Nutrition V2 | Canónica para Standalone/Team; el programa de rediseño cerró el 2026-08-17. «Porciones a la chilena» EN PRODUCCIÓN 10-09 y «Cantidades honestas» EN PRODUCCIÓN 06-09, ambos con QA del owner VERDE (SDD `done`); hashes y RPC en el [historial](../archive/current-historial-2026-09.md). | [Porciones CL](../specs/nutrition-porciones-chilenas/SPEC.md) · [Programa](../specs/nutrition-flows-redesign/TASKS.md) · [Runbook de corte](../operations/NUTRITION_V2_CUTOVER_RUNBOOK.md) |
-| V1 nutrición | Congelada, **no se borra** (decisión owner 2026-08-03): solo migrar usuarios a V2. | [Delta del mapa](../audits/v1-deprecation-map-delta-2026-08-03.md) |
-| Teams | Pool, membresías y workspaces implementados. | [Flows](../architecture/FLOWS_AND_COMPONENTS.md#team) |
-| Enterprise | **ELIMINADO de EVA (decisión del owner 2026-09-01)**: E0+E1 EN PRODUCCIÓN 05-09 22:56Z (app Expo, specs y scripts borrados; `/enterprise` ⇒ 308 a `/pricing`); E2/E3 planificadas en el SDD. | [SDD retiro](../specs/retiro-starter-y-enterprise/SPEC.md) · [Ola de orden](../specs/ola-de-orden/TASKS.md) · [Flows](../architecture/FLOWS_AND_COMPONENTS.md#enterprise) |
+| Web/PWA | Pricing v3 productivo: Free = 1 alumno + white-label + sello «Hecho con EVA»; Pro 25 sin sello. **Deploy vigente 23-09: `master` = `rnmobiledenuevo` = `111460b0`** («Elige cómo pagar», `dpl_b6qKULbc…`). | [Runbook](../operations/RUNBOOK.md) · [spec](../specs/pricing-v3/SPEC.md) |
+| App nativa (RN) | iOS **1.1.3** pública desde el 16-09 (piso OTA iOS = 1.1.3); Android **1.1.2** (build 86 «En revisión» en Play desde el 10-09; sin binario 1.1.3). **OTAs vigentes 23-09**: ios 1.1.3 grupo `6041fa25` + 1.1.2 desde el tag `ota/1.1.2-20260923` (android `49d04dd1` / ios `2c87e903`). | [Mobile parity](MOBILE_PARITY.md) · [OTA](../operations/MOBILE_RELEASES_OTA.md) |
+| Nutrition V2 | Canónica para Standalone/Team. «Porciones a la chilena» y «Cantidades honestas» cerrados con QA VERDE (SDD `done`). V1 congelada, **no se borra** (decisión owner 03-08): solo migrar usuarios. | [Porciones CL](../specs/nutrition-porciones-chilenas/SPEC.md) · [Runbook de corte](../operations/NUTRITION_V2_CUTOVER_RUNBOOK.md) · [Delta V1](../audits/v1-deprecation-map-delta-2026-08-03.md) |
+| Teams | Pool, membresías y workspaces implementados; queda la matriz Team del archivado. | [Flows](../architecture/FLOWS_AND_COMPONENTS.md#team) · [Archivado](../../specs/archive-nutrition-v2-cutover/SPEC.md) |
+| Enterprise | **ELIMINADO (owner 01-09)**: E0+E1 en producción 05-09 (`/enterprise` ⇒ 308 a `/pricing`). **Queda E2**: ruta `/e/…`, tablas/funciones org y 2 RPC `SECURITY DEFINER` ejecutables por `anon` (`get_enterprise_alumno_context`, `get_org_branding`). | [SDD retiro](../specs/retiro-starter-y-enterprise/SPEC.md) |
 
 ## Prioridades vigentes
 
-**«Vuelta nueva, salud y reloj» (feedback Movens 19-09) — EN PRODUCCIÓN 20-09, QA del owner VERDE 21-09 ⇒ SDD `done`** ([SDD](../specs/vuelta-nueva-salud-y-reloj/SPEC.md) · [tareas](../specs/vuelta-nueva-salud-y-reloj/TASKS.md)): PR #192 ⇒ `master` = `rnmobiledenuevo` = `1c67ecd1`, deploy `dpl_DmV8kF7N…`; OTA ios 1.1.3 `7d51660d` · 1.1.2 android `da488aa0` / ios `e30a7a89`. **Queda: aviso a Movens y a los 3 coaches A/B (SPEC §9); Sentry ~23-09.** Punto 2 (FC de la sesión) = plan aparte.
+### 1. En producción, esperan QA del owner (⇒ SDD `done`)
 
-**«Elige cómo pagar» — deploy a producción 23-09, sin OTA** (sin SDD; mockup `JQtEuDvT`; caso Cristóbal: 4 de los 6 que pagan por Flow probaron antes MP): alta free→pago, registro y `/coach/reactivate` eligen medio con Webpay primero (Redcompra/prepago a la vista) + rescate al volver de MP sin pagar. RN no cambia (sin camino de pago). **Queda: QA del owner (web móvil y desktop).** Incidente Ani y parche 21-09 (cerrados) en el [historial](../archive/current-historial-2026-09.md).
+1. **«Elige cómo pagar»** (23-09, sin OTA, sin SDD; mockup `JQtEuDvT`): alta free→pago, registro y
+   `/coach/reactivate` eligen medio con Webpay primero + rescate al volver de MP. **QA celular VERDE 23-09;
+   queda la prueba en navegador de escritorio.**
+2. **«Dossier por meses»** (16-09, [SDD](../specs/dossier-por-meses/SPEC.md)): **QA §17 (14 web + 8 device + 2
+   comunes)**; el E2E `tests/dossier-export.spec.ts` se corre solo con su OK.
+3. **«Reps tras el reloj» + E1** (12-09, [SDD](../specs/reps-tras-el-reloj/SPEC.md)): **QA §10 (10 puntos,
+   incluye el arrastre del share).**
+4. **«Despegue rápido»** (11-09, [SDD](../specs/despegue-rapido/SPEC.md)): **QA de 5 puntos.** Sentry 23-09:
+   `EVA-NEXTJS-1P`/`1Q` («exec-v3: fallback 4.6s ganó la carrera») reaparecieron hoy.
+5. **Fix RN «Asignar plantilla»** (14-09, [OTA](../operations/MOBILE_RELEASES_OTA.md)): **QA en device.**
 
-**«Dossier por meses» — EN PRODUCCIÓN 16-09 ~02:30Z** ([SDD](../specs/dossier-por-meses/SPEC.md)): modo «Por meses» en el export del dossier (web + RN), RPC `get_client_month_reports`; `master` = `rnmobiledenuevo` = `0748acd3`, deploy `dpl_HQH52H1T…` READY, migración LIVE `20260916014833`, OTA ios 1.1.3 `a73f71a0` + 1.1.2 android/ios desde `ota/1.1.2-20260916`.
-**Queda: QA del owner §17 (14 web + 8 device + 2 comunes) ⇒ SDD `done`; el E2E `tests/dossier-export.spec.ts` se corre solo con su OK.**
+### 2. Frentes abiertos
 
-**Tren «Meta SDK iOS» — MIDIENDO DE PUNTA A PUNTA 16-09 02:10Z** ([SDD](../specs/meta-app-events-ios/SPEC.md)): instalaciones y altas desde iPhone llegan a Events Manager (2 «Completar registro» verificados), atribución AEM iOS 14+ confirmada, OTA ios 1.1.3 `d93896c7` con el fix de `CompletedRegistration` y fix HIBP del alta en prod (`dpl_CqWXmQLg…`).
-**Apple aprobó 1.1.3 el 16-09 (pública 14:04Z; ASC «Listo para distribución», build 61 «En pruebas» en INT y EXT ⇒ Beta Review también aprobada). Queda: SKAN cuando Meta habilite «Configurar eventos», confirmar si el socio vio la hoja ATT en inglés (⇒ `locales`, build nueva).**
+1. **Meta SDK iOS** ([SDD](../specs/meta-app-events-ios/SPEC.md)): mide de punta a punta desde el 16-09.
+   Queda SKAN cuando Meta habilite «Configurar eventos» y confirmar si la hoja ATT salió en inglés
+   (⇒ `locales`, build nueva). Pasos de consola en [MANUAL_TASKS](../operations/MANUAL_TASKS.md) (MOB-META-01).
+2. **Onboarding del coach v2 — correos W6 en ENSAYO desde el 06-09** ([spec](../specs/coach-onboarding-v2/SPEC.md),
+   [auditoría](../audits/correos-y-crons-2026-09-05.md)): `..._DRY_RUN=true` en Production. Falta aprobar el copy
+   y quitar el DRY_RUN; W8.4.2B a medias (`enqueueBehaviorCheck` sin sus 3 call sites); D13
+   `OWNER_WHATSAPP_URL`; W7, F5.3–F5.5 RN y D4. `FREE_COACH_DRIP_ENABLED` **no** se setea.
+3. **Embudo Free→Pro** ([spec](../specs/embudo-free-pro/SPEC.md)): W0–W6 en producción; queda App Store Connect (W7.4).
+4. **FC de toda la sesión** (punto 2 de Movens, fuera del tren «Vuelta nueva»): plan aparte, arranca preguntándole
+   a Movens qué banda usa ([SDD §6](../specs/vuelta-nueva-salud-y-reloj/SPEC.md)).
 
-0. **Fix RN «Asignar plantilla» — EN PRODUCCIÓN 14-09: `master` = `rnmobiledenuevo` = `deb1df75`, OTA 1.1.2 android `0ae8d63a` / ios `154980fb`** (detalle en [MOBILE_RELEASES_OTA](../operations/MOBILE_RELEASES_OTA.md)): alumnos arriba con buscador (paridad web), duración al pie, CTA «Selecciona alumnos». **Queda: QA del owner en device.**
-1. **Tren «Reps tras el reloj» (fuerza por tiempo) + Enmienda E1 — EN PRODUCCIÓN 12-09: `master` = `rnmobiledenuevo` = `9e153f23` (commits en [TEST_STATUS](../testing/TEST_STATUS.md)), deploy `dpl_5d2TczpX66aoGSsfAkkeqwW9BqVh` READY, OTA 1.1.2 android `01a097d4-0a6e-7bd9-8323-e7efd6cadeb0` / ios `01a097d4-2ebd-7a75-83c2-874454fd36fd`, E2E `prod-suave` 9/9 (run 34723934934)** ([SDD](../specs/reps-tras-el-reloj/SPEC.md) · [tareas](../specs/reps-tras-el-reloj/TASKS.md); mockup aprobado artifact `6ead4180` v3): a 0 la serie se guarda sola; reps/kg faltantes se piden sobre el ejercicio con el descanso corriendo (E1). Sin migraciones; gates verdes 12-09 ([TEST_STATUS](../testing/TEST_STATUS.md)). **Queda: QA del owner en device y web (10 puntos del SPEC §10; incluye el arrastre del share) ⇒ SDD `done`.**
-1. **«Despegue rápido» EN PRODUCCIÓN 11-09 23:48Z** (deploy `dpl_H2B91dcR…`, OTA android `a349abee` / ios `d7b9a9d5`, E2E 9/9; [SDD](../specs/despegue-rapido/SPEC.md)): RN pinta desde caché antes de esperar auth, web emite la señal sin marca de morph, TTL 20 s. **Queda: QA del owner (5 puntos) y Sentry a 72 h (~14-09).** (F2 «Descanso siempre» cerró el mismo día, QA VERDE ⇒ `done`; ver [Estado por frente](#estado-por-frente).) Tren «Arreglos chicos pre-OTA» + F1 (tile REPS en fuerza por tiempo) — EN PRODUCCIÓN 11-09 02:58Z (deploy `dpl_6FXkTMyJ…` READY 02:52Z, OTA 1.1.2 android `d4701f84` / ios `369ec7af`)** ([SDD](../specs/arreglos-chicos-pre-ota/SPEC.md) · [tareas](../specs/arreglos-chicos-pre-ota/TASKS.md)): `master` = `rnmobiledenuevo` = `091a19b0`; entran 9 fixes chicos (detalle en el SDD y en el [historial](../archive/current-historial-2026-09.md), corte 20-09, ítem 1). **Queda: QA del owner en device (3 puntos con reps de F1 + 11 del tren, TASKS W3.10) ⇒ SDD `done` (este tren y W6.4 de cuenta atrás).** «Cuenta atrás en pantalla» ([SDD](../specs/cuenta-atras-en-pantalla/SPEC.md)): en producción desde 11-09 00:13Z, QA VERDE salvo los 3 puntos con reps ⇒ luego `done`; siguen aviso a Gerardo, seed E2E W6.10 y Sentry ~14-09.
-2. **Cerrados 10-09 con QA del owner VERDE ⇒ SDD `done`** («Señales honestas para el coach», «Porciones a la chilena»); prosa completa en el [historial](../archive/current-historial-2026-09.md) (corte 20-09, ítem 2).
-3. **Cerrados con QA del owner VERDE (02/04/05-09)** («Ciclo real y por lado», «QA del owner 02-09», «billing + seguridad», «cierre de backlog 02-09» + ola 2 chica); prosa completa en el [historial](../archive/current-historial-2026-09.md) (corte 20-09, ítem 3).
-5. **`EVA-NEXTJS-18` y `EVA-NEXTJS-19` — ambos resueltos en Sentry el 05-09**; causa raíz, deploy y verificación en el [historial](../archive/current-historial-2026-09.md) (corte 20-09, ítem 5). [tareas § O7](../specs/cierre-sentry-vivos/TASKS.md)
-7. **Errores al día (ola O6) — EN PRODUCCIÓN 01-09**; `EVA-MOBILE-F` sigue abierto (detalle en el [historial](../archive/current-historial-2026-09.md), corte 20-09, ítem 7). [tareas § O6/O7](../specs/cierre-sentry-vivos/TASKS.md)
-8. **PLAN «Cobros coach → alumno» — BLOQUEADO, nada implementado** ([spec](../specs/cobros-coach-alumno/SPEC.md)
-   `draft`, versionada en `edf6a07c`; artifact `046f3bb1`): esperan 8 decisiones del owner (§18.1) y
-   3 verificaciones externas (§18.2: contador SII, abogado retracto, smoke MP con plata real).
-   Estimación 26-32 días-agente + 2-3 semanas de beta.
-9. **Embudo Free→Pro — W0–W6 EN PRODUCCIÓN** ([spec](../specs/embudo-free-pro/SPEC.md); último OTA
-   1.1.2 `28ca5f8d` / `8cced802`): **W4.6 y W6.8 con QA del owner en device VERDE 05-09** (artifact
-   `6bd32370`); queda App Store Connect (W7.4).
-10. **Onboarding del coach v2 — W1–W4.7 y W5 parcial EN PRODUCCIÓN** ([spec](../specs/coach-onboarding-v2/SPEC.md),
-   último `8cf7b886`): **W6 (correos por comportamiento) EN PRODUCCIÓN 05-09 22:56Z**, detrás de
-   `ONBOARDING_BEHAVIOR_EMAILS_ENABLED` (default APAGADO; **no encender hasta aprobar el copy**) — F6.1 y F6.2
-   hechos, F6.3 con tests verdes (pie del html pinneado en `651762a6`). D11 ejecutado: el drip por calendario queda apagado por defecto y
-   `FREE_COACH_DRIP_ENABLED=true` lo resucita. W8.4.1 / W8.4.2A / W8.4.4 hechos; **W8.4.2B (disparo en línea)
-   a medias**: `enqueueBehaviorCheck` exportada pero sin sus 3 call sites. D13 (WhatsApp del owner) entra por
-   `OWNER_WHATSAPP_URL`. Quedan W7 (medición/Playwright/Maestro), F5.3–F5.5 RN y la revisión D4 del contenido de
-   ejemplo; de [vive-tu-app-directo](../specs/vive-tu-app-directo/SPEC.md) quedan V5.4 y V2.13.
-   **W6 en ENSAYO desde el 06-09 02:45Z**: `ONBOARDING_BEHAVIOR_EMAILS_ENABLED=true` + `..._DRY_RUN=true` en
-   Vercel Production. El primer ensayo (03:00Z) daba 83 correos de golpe ⇒ **tanda 1 de correos EN PRODUCCIÓN
-   06-09 03:41Z** (`2bdd9aa5`, deploy `dpl_CijuEuGmwmmkuHVWVzURuDVNrSTT`): corte de lanzamiento (solo coaches
-   creados desde el 06-09), 24 h entre correos a un mismo coach, `drip-hygiene` cancela solo por rebote real,
-   cuentas de prueba sin correo de cupo ni bienvenida, digests admin sin repetición. Reenvío único del día 2
-   «pásate a Pro» a 22 coaches agendado para el 06-09 13:00Z (`day2_pro_catchup`). Falta aprobar el copy y
-   quitar el DRY_RUN; `OWNER_WHATSAPP_URL` (D13) sigue pendiente; `FREE_COACH_DRIP_ENABLED` **no** se setea.
-   Detalle en [auditoría de correos](../audits/correos-y-crons-2026-09-05.md).
-11. **Pricing — «trial al tocar el cupo»: decisión del owner POSTERGADA al 08-09** (recordatorio
-    automático). Los 3 huecos previos quedaron **EN PRODUCCIÓN 05-09 22:56Z**: (1) el cerco de cupo
-    del `/join` ya estaba cableado (`join-capacity.ts`) — se agregó el pin del Free con columna = 1;
-    (2) fallback a starter: **cerrado** por el retiro de Starter; (3) callejón de `paused`:
-    `/coach/subscription/update-card` queda exenta del gate y `/coach/reactivate` suma el CTA
-    «Cambiar tarjeta» cuando hay preapproval MP vivo.
-    **DECISIONES DEL OWNER pendientes:** (a) la gracia de dunning para `paused` es letra muerta porque el
-    webhook nulea `current_period_end` (`subscription-state.ts:32` vía `webhook-pipeline.ts:1098`) ⇒ hacerla
-    simétrica a `past_due` (otorgar días de acceso) o borrar la gracia del comentario; (b) apuntar el CTA del
-    correo de dunning (`webhook-pipeline.ts:244/1241`) a `/coach/subscription/update-card`; (c) el camino Flow
-    del dunning no tiene CTA (`changeCardForCoach` devuelve `WRONG_PROVIDER`); (d) label «Starter» en
-    `processing`/`flow-processing`: **cerrado** por el mismo retiro.
-    **Retiro de Starter: S0–S3 y E0/E1 EN PRODUCCIÓN 05-09** ([SDD](../specs/retiro-starter-y-enterprise/SPEC.md);
-    hashes, deploy, OTA y humo de verificación en el [historial](../archive/current-historial-2026-09.md)); absorbió (2) y (d).
-12. **iOS — 1.1.3 (61) APROBADA y pública 16-09 14:04Z ⇒ piso OTA iOS 1.1.3; Android sigue en 1.1.2**: 1.1.3 **tuvo motivo** — el SDK de
-   Meta es cambio nativo y exige binario; la build 61 (1.1.3) está en App Review con publicación automática
-   y en TestFlight (INT + Beta Review del grupo EXT), así que recibe OTA aunque el piso siga en 1.1.2 hasta
-   que Apple apruebe. Android sigue en 1.1.2 (build 86, closed testing Alpha) y producción espera 12 testers
-   × 14 días. [OTA](../operations/MOBILE_RELEASES_OTA.md)
-13. **Share Entreno — rediseño «bloque único» (owner 06-09) — EN PRODUCCIÓN 06-09 21:03Z** (master
-    `19d1ffb0`, OTA 1.1.2 android `45819218` / ios `eac94332`): se retiran los 6 presets, los toggles
-    y los stickers sueltos; queda un solo bloque de texto en Inter (drag + pellizco, sin build
-    nativa). Falta el QA en device del owner (11 puntos). [SDD](../specs/share-bloque/SPEC.md)
-11. Regen completo de `database.types.ts` (deja 13 errores en 7 archivos V1; ahí se retiran los
-    workarounds tipados de T2.3 y el cast `V2ReadClient`).
-12. Matriz RLS con JWTs reales + preflight V1→V2 (7 enlaces) — sin cambios desde 08-06.
-14. **Tren «Cantidades honestas» (Nutrición V2) — W1–W4 EN PRODUCCIÓN 06-09, QA del owner en device VERDE 10-09 ⇒ SDD `done`**
-    ([SDD](../specs/nutrition-cantidades-honestas/SPEC.md)); commits, migraciones, OTA y detalle completo en el
-    [historial](../archive/current-historial-2026-09.md) (corte 20-09, ítem 14).
-    Queda: avisos a `jotap-coach`/`olympuswolf` (los manda el owner) y el dry-run del backfill USDA (TASKS C6/C7).
-15. **TTFB del área alumno**: la causa medida era la REGIÓN y ya está corregida (`regions: ["pdx1"]`,
-    `deb8aee3`). Queda re-medir el delta (p50/p75 de `/c/:coach_slug/dashboard`, 24 h antes vs
-    después) y decidir QW3 (doble render móvil+desktop).
-    [historial](../archive/current-historial-2026-09.md)
-16. **Cerrado (ver spec; backlog residual en cada TASKS):** Ejercicios propios ([tareas](../specs/ejercicios-propios-web/TASKS.md)) ·
-    Ola de orden W1→W4 ([tareas](../specs/ola-de-orden/TASKS.md)) · Pricing v3 ([spec](../specs/pricing-v3/SPEC.md)) ·
-    Programa nutrición T2.5–T2.7 ([programa](../specs/nutrition-flows-redesign/TASKS.md)) · hydration 15-08 y
-    catálogo sólidos ([historial](../archive/current-historial-2026-09.md)).
+### 3. Decisiones del owner pendientes
+
+1. **Prueba Pro 14 días al registrarse** (plan 14-09, artifact `WSXBg586`): veredicto variante B (día 15 vuelve
+   a Free-1 + muro de cupo). Nada implementado; esperan Q1–Q4. Reemplaza la idea previa «trial al tocar el cupo».
+2. **Dunning de `paused`**: (a) la gracia es letra muerta porque el webhook nulea `current_period_end`
+   (`subscription-state.ts` vía `webhook-pipeline.ts`) ⇒ hacerla simétrica a `past_due` o borrarla del comentario;
+   (b) apuntar el CTA del correo de dunning a `/coach/subscription/update-card`; (c) el camino Flow no tiene CTA.
+3. **«Cobros coach → alumno» — BLOQUEADO** ([spec](../specs/cobros-coach-alumno/SPEC.md) `draft`, artifact `046f3bb1`):
+   8 decisiones (§18.1) + 3 verificaciones externas (§18.2). Estimación 26-32 días-agente + 2-3 semanas de beta.
+
+### 4. Bloqueado por terceros
+
+1. **Push iOS caída desde el 07-09** (APNs `InvalidCredentials`): falta una Push Key `.p8`; el Apple ID del owner
+   no tiene rol para crearla en el team `5GKWMMZ46Q` ⇒ Guimel crea la key o sube al owner a Admin.
+2. **Android 1.1.2 en revisión de Play** desde el 10-09; producción espera 12 testers × 14 días.
+
+### 5. Higiene y deuda técnica (tren «Casa en orden», ola C)
+
+1. Dependabot: `js-yaml` (alta ×2) y `vitest`/`@vitest/mocker` (media ×2), todas dev.
+2. DB: 3 tablas `_bak_*` (19-08, 21-08, 05-09) listas para retiro; el cron `purge-data` llama a
+   `purge_old_audit_logs`, que no existe en LIVE; probe de columnas `side_photo_url`/`receipt_url`
+   inexistentes (~12 errores `42703`/día, revisión 21-09).
+3. Regen completo de `database.types.ts` (deja 13 errores en 7 archivos V1; retira los workarounds de T2.3
+   y el cast `V2ReadClient`) · matriz RLS con JWTs reales + preflight V1→V2 (sin cambios desde 08-06).
+4. **TTFB del área alumno**: región corregida (`regions: ["pdx1"]`, `deb8aee3`); queda re-medir p50/p75 de
+   `/c/:coach_slug/dashboard` y decidir QW3 (doble render móvil+desktop).
+
+### 6. Avisos a coaches pendientes (los manda el owner)
+
+Movens y los 4 coaches A/B de «Vuelta nueva» ([SPEC §9](../specs/vuelta-nueva-salud-y-reloj/SPEC.md)) ·
+`jotap-coach`/`olympuswolf` de «Cantidades honestas» (TASKS C7) · Ani (clave temporal HIBP).
+
+### Cerrados recientes (detalle en cada spec)
+
+Con QA VERDE ⇒ SDD `done`: «Vuelta nueva, salud y reloj» (21-09) · parche next 16.3.5 + REVOKE anon (21-09) ·
+incidente Ani (23-09) · «Arreglos chicos pre-OTA», «Cuenta atrás», «Share bloque», «Señales honestas»,
+«Porciones a la chilena», «Cantidades honestas» (10/11-09) · «Ciclo real y por lado» y cierres 02/04/05-09.
+Prosa completa en el [historial](../archive/current-historial-2026-09.md).
 
 ## Reglas de actualización
 

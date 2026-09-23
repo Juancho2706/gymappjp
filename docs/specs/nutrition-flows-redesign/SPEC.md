@@ -1,3 +1,10 @@
+---
+status: done
+owner: product-engineering
+last_verified: "2026-09-05"
+canonical: false
+---
+
 # SPEC — Rediseño de flujos de Nutricion V2 (programa)
 
 - **Rama de trabajo:** `rnmobiledenuevo` (decision owner 2026-08-06). Web a prod = merge a master con OK del owner.

@@ -1,3 +1,10 @@
+---
+status: done
+owner: product-engineering
+last_verified: "2026-09-05"
+canonical: false
+---
+
 # SPEC — W-brand: consolidación de color white-label (muerte total de las ruedas hex)
 
 - **Origen:** decisión del dueño (2026-08-17) tras la auditoría de la oferta white-label:

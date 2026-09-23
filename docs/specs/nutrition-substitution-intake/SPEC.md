@@ -1,3 +1,10 @@
+---
+status: done
+owner: product-engineering
+last_verified: "2026-09-02"
+canonical: false
+---
+
 # SPEC — T2.4 Sustituciones FULL: registrar un reemplazo autorizado
 
 - **Programa padre:** [nutrition-flows-redesign](../nutrition-flows-redesign/SPEC.md) — Ola 2, tarea T2.4.

@@ -131,7 +131,7 @@ Detalle operativo y consultas de auditoría: [RUNBOOK.md](RUNBOOK.md#ledger-de-c
 Los templates legales todavía describen al proveedor como persona natural. No inferir una razón social ni un RUT.
 
 - [ ] Confirmar nombre legal, RUT, domicilio y representante del proveedor.
-- [ ] Obtener revisión jurídica de Términos, Privacidad y contrato Enterprise.
+- [ ] Obtener revisión jurídica de Términos y Privacidad (el contrato Enterprise quedó sin uso: Enterprise se eliminó el 2026-09-01).
 - [ ] Confirmar que los correos y canales de derechos ARCO están operativos.
 - [ ] Retirar las notas internas antes de publicar o enviar un contrato.
 

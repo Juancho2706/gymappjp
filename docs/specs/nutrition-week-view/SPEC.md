@@ -1,3 +1,10 @@
+---
+status: done
+owner: product-engineering
+last_verified: "2026-08-17"
+canonical: false
+---
+
 # SPEC — Semana completa de nutrición (week view) · Nutrición V2 coach + alumno
 
 > **CERRADA — 2026-08-17.** Implementación verificada en el árbol (auditoría specs-vs-código);

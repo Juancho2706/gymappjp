@@ -1,3 +1,10 @@
+---
+status: done
+owner: product-engineering
+last_verified: "2026-09-05"
+canonical: false
+---
+
 # SPEC — T3.1 Editor unico de nutricion (convergencia wizard + quick-edit)
 
 - **Programa padre:** [nutrition-flows-redesign](../nutrition-flows-redesign/SPEC.md) — Ola 3, tareas T3.1 (esta SPEC), T3.2 (web) y T3.3 (RN Android).
