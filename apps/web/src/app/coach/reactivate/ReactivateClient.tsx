@@ -1,9 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import Image from 'next/image'
 import { useSearchParams } from 'next/navigation'
-import { AlertTriangle, ArrowRight, Check, CheckCircle2, CreditCard, Users } from 'lucide-react'
+import { AlertTriangle, ArrowRight, Check, CheckCircle2, CreditCard, LockKeyhole, Users } from 'lucide-react'
 import {
     BILLING_CYCLE_CONFIG,
     FLOW_ENABLED,
@@ -34,6 +33,7 @@ import {
     type ReactivateActiveDiscount,
 } from './_lib/reactivate-price'
 import { ReactivateArchivePanel, type ReactivateArchiveClient } from './_components/ReactivateArchivePanel'
+import { PaymentMethodPicker, type PaymentGatewayChoice } from '../subscription/_components/PaymentMethodPicker'
 
 // Solo se ofertan tiers a la venta (free/pro/elite). growth/scale quedan fuera de la oferta:
 // LEGACY, grandfathered.
@@ -42,6 +42,13 @@ const cycleOptions = Object.entries(BILLING_CYCLE_CONFIG) as [
     BillingCycle,
     (typeof BILLING_CYCLE_CONFIG)[BillingCycle],
 ][]
+
+// Línea de confianza bajo el botón de pagar: cada cuánto se renueva el ciclo elegido.
+const RENEWAL_LABEL: Record<BillingCycle, string> = {
+    monthly: 'cada mes',
+    quarterly: 'cada 3 meses',
+    annual: 'cada año',
+}
 
 interface ReactivateClientProps {
     currentTier: SubscriptionTier
@@ -163,6 +170,9 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
     const [errorCopy, setErrorCopy] = useState<CheckoutErrorCopy | null>(null)
     // Medio del último intento: "Reintentar" repite el MISMO medio que falló.
     const [lastGateway, setLastGateway] = useState<'mercadopago' | 'flow'>('mercadopago')
+    // Medio elegido en el selector. Webpay por defecto: los coaches que pagan por Flow usan
+    // Redcompra/prepago y varios probaron antes Mercado Pago sin poder terminar (caso 23-09).
+    const [checkoutGateway, setCheckoutGateway] = useState<PaymentGatewayChoice>('flow')
     const hasAutoCheckedRef = useRef(false)
     const hasAutoStartedCheckoutRef = useRef(false)
     const pollingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
@@ -254,6 +264,16 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
             setBillingCycle(getDefaultBillingCycleForTier(tier))
         }
     }, [tier, billingCycle])
+
+    // Volver con «atrás» desde la pasarela restaura la página desde el bfcache con el botón en
+    // «Redirigiendo...»: se libera para poder elegir otro medio o reintentar.
+    useEffect(() => {
+        function onPageShow(e: PageTransitionEvent) {
+            if (e.persisted) setIsLoading(false)
+        }
+        window.addEventListener('pageshow', onPageShow)
+        return () => window.removeEventListener('pageshow', onPageShow)
+    }, [])
 
     useEffect(() => {
         if (!fromSuccessfulCheckout || hasAutoCheckedRef.current) return
@@ -729,8 +749,36 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
                             El plan gratuito cubre hasta {freeLimit} alumno{freeLimit !== 1 ? 's' : ''} activo{freeLimit !== 1 ? 's' : ''}. Tus datos y tu historial quedan intactos.
                         </p>
                     </>
+                ) : FLOW_ENABLED ? (
+                    // Mismo selector que el alta en /coach/subscription (caso 23-09): se ELIGE el medio,
+                    // Webpay preseleccionado, y un solo botón continúa. Antes el botón grande era MP.
+                    <>
+                        <div className="mb-2">
+                            <PaymentMethodPicker
+                                value={checkoutGateway}
+                                onChange={setCheckoutGateway}
+                                disabled={isLoading || tierBlockedByClients || exceedsTopSaleTier}
+                            />
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => void handleCheckout(checkoutGateway)}
+                            disabled={isLoading || tierBlockedByClients || exceedsTopSaleTier}
+                            className="flex h-[54px] w-full items-center justify-center gap-2.5 rounded-control bg-sport-500 px-5 text-[15px] font-extrabold tracking-tight text-white shadow-[0_12px_24px_-10px_color-mix(in_srgb,var(--sport-500)_70%,transparent)] transition-colors hover:bg-sport-600 disabled:opacity-60 disabled:shadow-none disabled:hover:bg-sport-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                        >
+                            {isLoading ? 'Redirigiendo...' : (
+                                <>
+                                    <span>{checkoutGateway === 'flow' ? 'Continuar con Webpay' : 'Continuar con Mercado Pago'}</span>
+                                    <ArrowRight className="h-[18px] w-[18px]" strokeWidth={2.4} aria-hidden="true" />
+                                </>
+                            )}
+                        </button>
+                        <p className="mb-1 text-center text-[11.5px] leading-snug text-subtle">
+                            <LockKeyhole className="mr-1 inline h-3.5 w-3.5 -translate-y-px" aria-hidden="true" />
+                            Se renueva {RENEWAL_LABEL[billingCycle]} · Cancelas cuando quieras
+                        </p>
+                    </>
                 ) : (
-                <>
                 <button
                     type="button"
                     onClick={() => void handleCheckout('mercadopago')}
@@ -739,47 +787,11 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
                 >
                     {isLoading ? 'Redirigiendo...' : (
                         <>
-                            {FLOW_ENABLED && (
-                                <Image src="/payments/mercadopago.svg" alt="" aria-hidden="true" width={18} height={18} />
-                            )}
                             <span>Continuar al pago con Mercado Pago</span>
                             <ArrowRight className="h-4 w-4" />
                         </>
                     )}
                 </button>
-
-                {FLOW_ENABLED && (
-                    <>
-                        <button
-                            type="button"
-                            onClick={() => void handleCheckout('flow')}
-                            disabled={isLoading || tierBlockedByClients || exceedsTopSaleTier}
-                            className="inline-flex h-11 items-center justify-center gap-2 rounded-control border border-default px-6 text-sm font-semibold text-strong hover:bg-surface-sunken transition-colors disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                        >
-                            <Image
-                                src="/payments/webpay-light.svg"
-                                alt=""
-                                aria-hidden="true"
-                                width={73}
-                                height={18}
-                                className="dark:hidden"
-                            />
-                            <Image
-                                src="/payments/webpay-dark.svg"
-                                alt=""
-                                aria-hidden="true"
-                                width={73}
-                                height={18}
-                                className="hidden dark:block"
-                            />
-                            <span>Pagar con Webpay (Flow)</span>
-                        </button>
-                        <p className="text-xs text-muted">
-                            Webpay procesado por Flow.cl — tarjetas de crédito, débito y prepago chilenas.
-                        </p>
-                    </>
-                )}
-                </>
                 )}
 
                 <button
@@ -857,7 +869,9 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
             </section>
 
             <p className="mt-4 text-xs text-subtle">
-                Pagos procesados por Mercado Pago (PCI). EVA no almacena los datos de tu tarjeta.
+                {FLOW_ENABLED
+                    ? 'Pagos procesados por Webpay (Flow) o Mercado Pago. EVA no almacena los datos de tu tarjeta.'
+                    : 'Pagos procesados por Mercado Pago (PCI). EVA no almacena los datos de tu tarjeta.'}
             </p>
         </main>
     )

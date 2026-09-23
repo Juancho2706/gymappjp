@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-09-16"
+last_verified: "2026-09-23"
 canonical: true
 ---
 
@@ -18,7 +18,7 @@ prevalecen sobre este resumen. La prosa retirada el 2026-09-02 está en
 
 | Frente | Estado | Fuente de detalle |
 |---|---|---|
-| Web/PWA | Pricing v3 productivo: Free = 1 alumno + white-label + sello «Hecho con EVA»; Pro 25 sin sello. **Deploy vigente 23-09: `master` = `rnmobiledenuevo` (código `50d5cbf9`, `dpl_BpKWwrwY…` READY)** — clave temporal pre-generada (incidente Ani). Anteriores (21-09 `b5c29c0d`, 20-09 `1c67ecd1`, 16-09 `0748acd3`) en [Prioridades](#prioridades-vigentes) y el [historial](../archive/current-historial-2026-09.md). | [Runbook](../operations/RUNBOOK.md) · [spec](../specs/pricing-v3/SPEC.md) |
+| Web/PWA | Pricing v3 productivo: Free = 1 alumno + white-label + sello «Hecho con EVA»; Pro 25 sin sello. **Deploy vigente 23-09: `master` = `rnmobiledenuevo`** — «Elige cómo pagar» (ver [Prioridades](#prioridades-vigentes)). Anteriores (23-09 `50d5cbf9` clave temporal, 21-09 `b5c29c0d`, 20-09 `1c67ecd1`, 16-09 `0748acd3`) en [Prioridades](#prioridades-vigentes) y el [historial](../archive/current-historial-2026-09.md). | [Runbook](../operations/RUNBOOK.md) · [spec](../specs/pricing-v3/SPEC.md) |
 | App nativa (RN) | **Apple aprobó 1.1.3 (61) ⇒ 1.1.3 pública en App Store desde el 16-09 14:04Z y el piso OTA iOS sube a 1.1.3**; Android sigue en 1.1.2 (build 86 «En revisión» en Play desde el 10-09, tienda aún no pública). El runtime 1.1.3 existe porque el SDK de Meta es cambio nativo y su build 61 está en App Review. **OTAs vigentes 23-09** (clave temporal pre-generada): ios runtime **1.1.3** grupo `6041fa25` (desde `master` @`50d5cbf9`) + runtime **1.1.2** desde el tag `ota/1.1.2-20260923` = `5079a947` (android `49d04dd1` / ios `2c87e903`). Sin Android 1.1.3 (no hay binario). Anteriores (20-09, 16-09 y previas) en [Prioridades](#prioridades-vigentes) y el [historial](../archive/current-historial-2026-09.md). | [Mobile parity](MOBILE_PARITY.md) · [OTA](../operations/MOBILE_RELEASES_OTA.md) |
 | Auth: Google en el login de coach | **Fix 04-09 EN PRODUCCIÓN, QA del owner VERDE 05-09** (hashes, deploy, OTA y detalle técnico en el [historial](../archive/current-historial-2026-09.md)): un LOGIN con Google sin fila `coaches` dejaba un `auth.users` huérfano que ocupaba el correo del alumno (caso Leonardo/Movens); ahora `resolvePostGoogleAuthUrl`/`login.tsx` lo limpian y rebotan a `/login` con el copy correcto. Queda F2b (alta de alumno con cuenta existente) en backlog. | [Login y auth](../architecture/FLOWS_AND_COMPONENTS.md) |
 | Archivado de alumnos | P0 de alta en producción (2026-08-03); **QA físico VERDE 05-09** (artifact `6bd32370`); queda la matriz Team. | [Spec de corte](../../specs/archive-nutrition-v2-cutover/SPEC.md) |
@@ -31,7 +31,7 @@ prevalecen sobre este resumen. La prosa retirada el 2026-09-02 está en
 
 **«Vuelta nueva, salud y reloj» (feedback Movens 19-09) — EN PRODUCCIÓN 20-09, QA del owner VERDE 21-09 ⇒ SDD `done`** ([SDD](../specs/vuelta-nueva-salud-y-reloj/SPEC.md) · [tareas](../specs/vuelta-nueva-salud-y-reloj/TASKS.md)): PR #192 ⇒ `master` = `rnmobiledenuevo` = `1c67ecd1`, deploy `dpl_DmV8kF7N…`; OTA ios 1.1.3 `7d51660d` · 1.1.2 android `da488aa0` / ios `e30a7a89`. **Queda: aviso a Movens y a los 3 coaches A/B (SPEC §9); Sentry ~23-09.** Punto 2 (FC de la sesión) = plan aparte.
 
-**Incidente Ani 22-09 «no puede poner la contraseña» — EN PRODUCCIÓN 23-09, QA del owner VERDE ⇒ CERRADO** (sin SDD; mockup `UrVVyw1F`): `c625a8af` traduce el rechazo HIBP de GoTrue (alta web/RN, join, admin, resets) y el modal manual ya no se vacía tras un error; `ff282b6b`/`50d5cbf9` traen la clave temporal pre-generada (`Eva${pin}!`) con «Generar otra» en web y RN clásico. El parche «next + sharp + REVOKE anon» (21-09, cerrado) pasó al [historial](../archive/current-historial-2026-09.md).
+**«Elige cómo pagar» — deploy a producción 23-09, sin OTA** (sin SDD; mockup `JQtEuDvT`; caso Cristóbal: 4 de los 6 que pagan por Flow probaron antes MP): alta free→pago, registro y `/coach/reactivate` eligen medio con Webpay primero (Redcompra/prepago a la vista) + rescate al volver de MP sin pagar. RN no cambia (sin camino de pago). **Queda: QA del owner (web móvil y desktop).** Incidente Ani y parche 21-09 (cerrados) en el [historial](../archive/current-historial-2026-09.md).
 
 **«Dossier por meses» — EN PRODUCCIÓN 16-09 ~02:30Z** ([SDD](../specs/dossier-por-meses/SPEC.md)): modo «Por meses» en el export del dossier (web + RN), RPC `get_client_month_reports`; `master` = `rnmobiledenuevo` = `0748acd3`, deploy `dpl_HQH52H1T…` READY, migración LIVE `20260916014833`, OTA ios 1.1.3 `a73f71a0` + 1.1.2 android/ios desde `ota/1.1.2-20260916`.
 **Queda: QA del owner §17 (14 web + 8 device + 2 comunes) ⇒ SDD `done`; el E2E `tests/dossier-export.spec.ts` se corre solo con su OK.**

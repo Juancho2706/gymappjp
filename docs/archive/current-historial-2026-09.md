@@ -215,3 +215,9 @@ a `jotap-coach`/`olympuswolf` (los manda el owner) y el dry-run del backfill USD
 ### Parche «next + sharp + REVOKE anon» — en producción 21-09, QA VERDE, cerrado (texto de CURRENT al 23-09)
 
 **Parche «next + sharp + REVOKE anon» — EN PRODUCCIÓN 21-09** (`master` = `rnmobiledenuevo` = `b5c29c0d`, deploy `dpl_FoNY1RGV…`, sin OTA): `next` 16.3.0 → 16.3.5 y `sharp` 0.35.4 cierran Dependabot #114/#115/#116 (dos RCE critical); migración `20260921150000` revoca EXECUTE a `PUBLIC`/`anon` en 5 helpers RLS org (advisor 8 → 3; evidencia en commit). **QA del owner VERDE 21-09 ⇒ CERRADO.**
+
+## Corte del 2026-09-23 (tren «Elige cómo pagar»)
+
+### Incidente Ani «no puede poner la contraseña» — en producción 23-09, QA VERDE, cerrado (texto de CURRENT al 23-09)
+
+**Incidente Ani 22-09 «no puede poner la contraseña» — EN PRODUCCIÓN 23-09, QA del owner VERDE ⇒ CERRADO** (sin SDD; mockup `UrVVyw1F`): `c625a8af` traduce el rechazo HIBP de GoTrue (alta web/RN, join, admin, resets) y el modal manual ya no se vacía tras un error; `ff282b6b`/`50d5cbf9` traen la clave temporal pre-generada (`Eva${pin}!`) con «Generar otra» en web y RN clásico. Deploy `dpl_BpKWwrwY…` desde `master` @`50d5cbf9`.

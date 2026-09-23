@@ -4,15 +4,19 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import Image from 'next/image'
 import Link from 'next/link'
+import { ArrowRight, LockKeyhole } from 'lucide-react'
 import {
     BILLING_CYCLE_CONFIG,
     BILLING_CYCLE_PRICE_SUFFIX,
     FLOW_ENABLED,
+    getTierCapabilities,
     LEGACY_TIER_ALIASES,
     TIER_CONFIG,
     type BillingCycle,
     type SubscriptionTier,
 } from '@/lib/constants'
+import { CheckoutPlanTicket } from '../_components/CheckoutPlanTicket'
+import { PaymentMethodPicker, type PaymentGatewayChoice } from '../_components/PaymentMethodPicker'
 import {
     CHECKOUT_TIER_MISSING,
     resolveCheckoutError,
@@ -91,6 +95,9 @@ export default function SubscriptionProcessingPage() {
     // El salto al gateway ya se disparó: los botones se apagan mientras el navegador navega (una
     // navegación full-page puede tardar; sin esto el coach vuelve a apretar y pide otro checkout).
     const [redirecting, setRedirecting] = useState(false)
+    // Medio elegido en la card del alta paga. Webpay por defecto (caso 23-09: los que pagan por Flow
+    // usan Redcompra/prepago y varios probaron antes Mercado Pago sin poder terminar).
+    const [registerGateway, setRegisterGateway] = useState<PaymentGatewayChoice>('flow')
     // Medio del último intento: el botón "Reintentar" repite el MISMO medio que falló.
     const [lastGateway, setLastGateway] = useState<CheckoutGateway>('mercadopago')
     const [canRetry, setCanRetry] = useState(false)
@@ -637,6 +644,95 @@ export default function SubscriptionProcessingPage() {
         const previewTierLabel = TIER_CONFIG[checkoutPreview.tier]?.label ?? checkoutPreview.tier
         const previewCycleLabel =
             BILLING_CYCLE_CONFIG[checkoutPreview.billingCycle]?.label ?? checkoutPreview.billingCycle
+
+        // Con los dos medios disponibles: se ELIGE el medio (Webpay preseleccionado) y un solo botón
+        // continúa. MP reusa el checkout ya creado; Webpay pide su enrolamiento como antes. Sin Webpay
+        // (flag apagado / vuelta de MP) queda la card de siempre, más abajo.
+        if (canPayWithFlow) {
+            const previewTier = checkoutPreview.tier
+            const renewal =
+                checkoutPreview.billingCycle === 'annual'
+                    ? 'cada año'
+                    : checkoutPreview.billingCycle === 'quarterly'
+                    ? 'cada 3 meses'
+                    : 'cada mes'
+            return (
+                <main className="flex min-h-dvh items-center justify-center px-4 py-10 pt-safe pb-safe bg-background">
+                    <div className="w-full max-w-md rounded-card border border-subtle bg-surface-card p-6 shadow-xl sm:p-8">
+                        <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-sport-500/30 bg-sport-100 px-3 py-1 text-xs font-semibold text-sport-600">
+                            {previewTierLabel} · {previewCycleLabel}
+                        </div>
+                        <h1 className="font-display text-[22px] font-extrabold tracking-tight text-strong">
+                            Confirma tu suscripción
+                        </h1>
+
+                        <div className="mt-4">
+                            <CheckoutPlanTicket
+                                overline={`Plan ${previewTierLabel}`}
+                                amountClp={checkoutPreview.amountClp}
+                                priceSuffix={BILLING_CYCLE_PRICE_SUFFIX[checkoutPreview.billingCycle]}
+                                maxClients={TIER_CONFIG[previewTier]?.maxClients ?? null}
+                                withoutEvaBadge={!getTierCapabilities(previewTier).showsEvaBadge}
+                            />
+                        </div>
+
+                        <div className="mt-5">
+                            <PaymentMethodPicker
+                                value={registerGateway}
+                                onChange={setRegisterGateway}
+                                disabled={redirecting}
+                                compact
+                            />
+                        </div>
+
+                        <div className="mt-4 flex flex-col gap-2.5">
+                            <button
+                                type="button"
+                                disabled={redirecting}
+                                onClick={() => {
+                                    // Tier/ciclo del SERVER (los de la card): es lo que se va a cobrar.
+                                    captureCheckoutGatewayOpened({
+                                        tier: checkoutPreview.tier,
+                                        billingCycle: checkoutPreview.billingCycle,
+                                        gateway: registerGateway,
+                                        source: 'register',
+                                    })
+                                    if (registerGateway === 'flow') {
+                                        void startCheckoutFromRegister('flow')
+                                        return
+                                    }
+                                    setRedirecting(true)
+                                    window.location.href = checkoutPreview.checkoutUrl
+                                }}
+                                className="flex h-[52px] w-full items-center justify-center gap-2.5 rounded-control bg-sport-500 px-6 text-[15px] font-extrabold tracking-tight text-white shadow-[0_12px_24px_-10px_color-mix(in_srgb,var(--sport-500)_70%,transparent)] transition-colors hover:bg-sport-600 disabled:opacity-60 disabled:hover:bg-sport-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                            >
+                                {redirecting ? (
+                                    'Redirigiendo…'
+                                ) : (
+                                    <>
+                                        <span>{registerGateway === 'flow' ? 'Continuar con Webpay' : 'Continuar con Mercado Pago'}</span>
+                                        <ArrowRight className="h-[18px] w-[18px]" strokeWidth={2.4} aria-hidden="true" />
+                                    </>
+                                )}
+                            </button>
+                            <p className="text-center text-[11.5px] leading-snug text-subtle">
+                                <LockKeyhole className="mr-1 inline h-3.5 w-3.5 -translate-y-px" aria-hidden="true" />
+                                Se renueva {renewal} · Cancelas cuando quieras
+                            </p>
+                            {/* Verdadero desde la ola 25-08: el alta pago ya NO nace bloqueada en
+                                pending_payment, así que volverse deja la cuenta usable (A1). */}
+                            <Link
+                                href="/coach/dashboard"
+                                className="inline-flex h-11 items-center justify-center rounded-control px-6 text-sm font-semibold text-muted transition-colors hover:text-strong"
+                            >
+                                Volver — tu cuenta queda activa igual
+                            </Link>
+                        </div>
+                    </div>
+                </main>
+            )
+        }
+
         return (
             <main className="flex min-h-dvh items-center justify-center px-4 py-12 pt-safe pb-safe bg-background">
                 <div className="w-full max-w-md rounded-card border border-subtle bg-surface-card p-8 shadow-xl">

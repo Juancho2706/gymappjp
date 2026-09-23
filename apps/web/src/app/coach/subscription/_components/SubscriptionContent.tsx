@@ -1,7 +1,6 @@
 'use client'
 
-import { useEffect, useId, useRef, useState } from 'react'
-import Image from 'next/image'
+import { useCallback, useEffect, useId, useRef, useState } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
     ADDON_CONFIG,
@@ -32,6 +31,15 @@ import Link from 'next/link'
 import { Check, CheckCircle2, Info, LockKeyhole, ArrowLeft, ArrowRight, CreditCard, HeartPulse, Activity, Ruler, Utensils, X, type LucideIcon } from 'lucide-react'
 import { CouponRedeemCard } from './CouponRedeemCard'
 import { OpenInAppCard } from './OpenInAppCard'
+import { CheckoutPlanTicket } from './CheckoutPlanTicket'
+import { MpCheckoutRescueCard } from './MpCheckoutRescueCard'
+import { PaymentMethodPicker, type PaymentGatewayChoice } from './PaymentMethodPicker'
+import {
+    clearMpRescueMark,
+    readMpRescueMark,
+    writeMpRescueMark,
+    type MpRescueMark,
+} from '../_lib/mp-checkout-rescue'
 
 const TIER_BADGE: Partial<Record<SubscriptionTier, { label: string; cls: string }>> = {
     pro:    { label: 'Más popular', cls: 'bg-violet-500/15 text-violet-400' },
@@ -117,6 +125,13 @@ function extractAmountClpFromEventPayload(payload: unknown): number | null {
 const tierOptions = SALE_TIERS.filter((t) => t !== 'free')
 const cycleOptions = Object.keys(BILLING_CYCLE_CONFIG) as BillingCycle[]
 
+// Línea de confianza bajo el botón de pagar del alta: cada cuánto se renueva el ciclo elegido.
+const RENEWAL_LABEL: Record<BillingCycle, string> = {
+    monthly: 'cada mes',
+    quarterly: 'cada 3 meses',
+    annual: 'cada año',
+}
+
 export function SubscriptionContent({ embedded = false }: { embedded?: boolean }) {
     const router = useRouter()
     const searchParams = useSearchParams()
@@ -160,6 +175,19 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
     const [selectedCycle, setSelectedCycle] = useState<BillingCycle>('monthly')
     const [events, setEvents] = useState<SubscriptionEvent[]>([])
     const [showUpgradeConfirm, setShowUpgradeConfirm] = useState(false)
+    // Medio elegido en el modal del alta free → pago. Webpay por defecto: los 6 coaches que pagan
+    // por Flow usan Redcompra/prepago y 4 probaron antes Mercado Pago sin poder terminar (23-09).
+    const [paymentGateway, setPaymentGateway] = useState<PaymentGatewayChoice>('flow')
+    // Rescate «volvió de Mercado Pago sin pagar» (marca en sessionStorage, ver _lib/mp-checkout-rescue).
+    const [mpRescue, setMpRescue] = useState<MpRescueMark | null>(null)
+    // Esta pestaña salió hacia MP: si la página vuelve desde el bfcache o de una hoja externa (PWA),
+    // el estado «Procesando...» queda congelado; al volver se libera y se re-evalúa el rescate.
+    const leftToMpRef = useRef(false)
+    // Foco inicial del modal. Callback ESTABLE: uno inline se re-ejecuta en cada render y le
+    // robaría el foco al selector de medio cada vez que el coach cambia de opción.
+    const focusOnMount = useCallback((el: HTMLButtonElement | null) => {
+        if (el) el.focus()
+    }, [])
     // Alumnos activos standalone (del endpoint) — bloquea downgrades que no caben (OVER_CAPACITY).
     const [activeClientCount, setActiveClientCount] = useState(0)
 
@@ -340,6 +368,52 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
         }
     }, [selectedTier, selectedCycle])
 
+    // ── Rescate «volvió de Mercado Pago sin pagar» ─────────────────────────────
+    // Con el coach cargado: si hay marca reciente y sigue free (con Webpay disponible), se muestra
+    // la tarjeta y se re-elige el mismo plan/ciclo. Si ya pagó (o no hay Webpay) la marca sobra.
+    useEffect(() => {
+        if (!coach) return
+        const mark = readMpRescueMark(Date.now())
+        if (!mark) {
+            setMpRescue(null)
+            return
+        }
+        if (!FLOW_ENABLED || coach.subscription_tier !== 'free') {
+            clearMpRescueMark()
+            setMpRescue(null)
+            return
+        }
+        setMpRescue(mark)
+        setSelectedTier(mark.tier)
+        setSelectedCycle(mark.cycle)
+    }, [coach])
+
+    // Vuelta a esta misma página tras salir a MP: bfcache (`pageshow` persistido) o una hoja externa
+    // que se cierra encima de la PWA (visibilitychange/focus). Sin esto el botón queda en
+    // «Procesando...» para siempre. Solo actúa si ESTA pestaña salió hacia MP.
+    useEffect(() => {
+        function onReturn() {
+            if (!leftToMpRef.current) return
+            leftToMpRef.current = false
+            setSaving(false)
+            void refreshStatus()
+        }
+        function onPageShow(e: PageTransitionEvent) {
+            if (e.persisted) onReturn()
+        }
+        function onVisibility() {
+            if (document.visibilityState === 'visible') onReturn()
+        }
+        window.addEventListener('pageshow', onPageShow)
+        window.addEventListener('focus', onReturn)
+        document.addEventListener('visibilitychange', onVisibility)
+        return () => {
+            window.removeEventListener('pageshow', onPageShow)
+            window.removeEventListener('focus', onReturn)
+            document.removeEventListener('visibilitychange', onVisibility)
+        }
+    }, [])
+
     async function handleChangePlan(gateway: 'mercadopago' | 'flow' = 'mercadopago') {
         setSaving(true)
         setError(null)
@@ -389,6 +463,14 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
             if (!payload.checkoutUrl) {
                 failureCode = 'missing_checkout_url'
                 throw new Error('No se recibió URL de checkout')
+            }
+            // Rescate: solo el alta free que se va a Mercado Pago deja marca (si vuelve sin pagar, se
+            // le ofrece Webpay). Cualquier otra salida la borra: Webpay ya es la alternativa.
+            if (gateway === 'mercadopago' && canUseFlowForPlanChange) {
+                writeMpRescueMark(selectedTier, selectedCycle, Date.now())
+                leftToMpRef.current = true
+            } else {
+                clearMpRescueMark()
             }
             window.location.href = payload.checkoutUrl
         } catch (err) {
@@ -482,6 +564,8 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
     // completa) puede pagar con Flow. Con coach pago activo el modal muestra únicamente MP con su
     // texto 'Confirmar' original — sin ofrecer un botón que reventaría en el server.
     const canUseFlowForPlanChange = FLOW_ENABLED && coachTier === 'free'
+    // Alta free → plan pago: el modal muestra el ticket del plan en vez del copy de «cambio al corte».
+    const isFreeCheckout = coachTier === 'free'
     // B2: un coach con SUSCRIPCION Flow ACTIVA no puede cambiar de plan todavia — el server responde 400
     // FLOW_PLAN_CHANGE_UNSUPPORTED por CUALQUIER gateway (confirm-upgrade y el PUT del preapproval son
     // MP-only; changeSubscriptionPlan de Flow se cablea en la proxima ola). La UI no debe dejar pagar algo
@@ -626,6 +710,22 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
             {/* Puente web→app tras un cambio de plan YA cobrado (W6.7). Legal en ambas tiendas: lo
                 prohibido es el sentido contrario (app→web hacia pago). */}
             {justChangedPlan ? <OpenInAppCard /> : null}
+
+            {/* Rescate: volvió de Mercado Pago sin pagar ⇒ Webpay con el mismo plan ya elegido. */}
+            {mpRescue && coach && canUseFlowForPlanChange ? (
+                <MpCheckoutRescueCard
+                    planLabel={`${TIER_CONFIG[selectedTier].label} · ${BILLING_CYCLE_CONFIG[selectedCycle].label}`}
+                    amountClp={selectedCompositeNet}
+                    priceSuffix={BILLING_CYCLE_PRICE_SUFFIX[selectedCycle]}
+                    busy={saving}
+                    onPayWithFlow={() => void handleChangePlan('flow')}
+                    onRetryMp={() => void handleChangePlan('mercadopago')}
+                    onDismiss={() => {
+                        clearMpRescueMark()
+                        setMpRescue(null)
+                    }}
+                />
+            ) : null}
 
             {loading ? (
                 <p role="status" aria-live="polite" className="mb-4 text-sm text-muted">Cargando estado de suscripción...</p>
@@ -922,7 +1022,7 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                 {/* CTA full-width (diseño) — muestra el precio compuesto neto en la etiqueta */}
                 <button
                     type="button"
-                    onClick={(e) => { modalTriggerRef.current = e.currentTarget; setShowUpgradeConfirm(true) }}
+                    onClick={(e) => { modalTriggerRef.current = e.currentTarget; setPaymentGateway('flow'); setShowUpgradeConfirm(true) }}
                     disabled={saving || isNoOpChange}
                     title={isNoOpChange ? 'Ya tienes este plan y ciclo. Elige un plan o ciclo distinto.' : undefined}
                     className="flex h-12 w-full items-center justify-center gap-2 rounded-control bg-sport-500 px-5 text-sm font-bold text-white transition-colors hover:bg-sport-600 disabled:opacity-60 disabled:hover:bg-sport-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
@@ -957,6 +1057,42 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                         className="w-full rounded-t-sheet bg-surface-card p-6 pb-[calc(env(safe-area-inset-bottom,0px)+1.5rem)] shadow-[var(--shadow-sheet)] max-h-[88dvh] overflow-y-auto md:max-w-md md:rounded-card md:border md:border-subtle md:shadow-2xl md:max-h-[90dvh]"
                     >
                         <div className="mx-auto mb-4 h-1 w-[38px] rounded-full bg-[var(--ink-200)] md:hidden" aria-hidden="true" />
+                        {isFreeCheckout ? (
+                            // Alta free → pago: no hay «fecha de corte» que citar (los free no tienen
+                            // current_period_end; el copy viejo decía «A partir de esa fecha» sin fecha).
+                            // Se muestra qué plan, cuánto y qué gana, en formato ticket.
+                            <>
+                                <h2 id={upgradeModalTitleId} className="font-display text-[22px] font-extrabold leading-tight tracking-tight text-strong md:text-2xl">
+                                    Activa tu plan {TIER_CONFIG[selectedTier].label}
+                                </h2>
+                                <p className="mt-1 text-[13.5px] leading-snug text-muted">Queda activo apenas se confirme el pago.</p>
+                                <div className="mt-4">
+                                    <CheckoutPlanTicket
+                                        overline={`${TIER_CONFIG[selectedTier].label} · ${BILLING_CYCLE_CONFIG[selectedCycle].label}`}
+                                        amountClp={selectedCompositeNet}
+                                        originalAmountClp={selectedCouponDiscount > 0 ? selectedComposite : null}
+                                        priceSuffix={BILLING_CYCLE_PRICE_SUFFIX[selectedCycle]}
+                                        maxClients={coachLimitFor(selectedTier)}
+                                        withoutEvaBadge={!getTierCapabilities(selectedTier).showsEvaBadge}
+                                    />
+                                </div>
+                                {selectedCouponDiscount > 0 && activeCoupon && (
+                                    <p className="mt-2 px-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                                        Cupón {activeCoupon.code} aplicado · −${selectedCouponDiscount.toLocaleString('es-CL')}
+                                    </p>
+                                )}
+                                {addons.some((a) => a.source === 'self_service' && a.status !== 'cancelled') && (
+                                    <p className="mt-2 px-1 text-xs text-muted">
+                                        Tus módulos add-on activos ({addons
+                                            .filter((a) => a.source === 'self_service' && a.status !== 'cancelled')
+                                            .map((a) => ADDON_CONFIG[a.moduleKey].label)
+                                            .join(', ')}) se mantienen y se suman al monto del nuevo plan en el
+                                        checkout.
+                                    </p>
+                                )}
+                            </>
+                        ) : (
+                        <>
                         <h2 id={upgradeModalTitleId} className="font-display text-xl font-extrabold tracking-tight text-strong">Confirmar cambio de plan</h2>
                         <div className="mt-4 space-y-2 rounded-control border border-subtle bg-surface-sunken p-4 text-sm">
                             {/* Issue #1: el copy depende de la DIRECCIÓN del cambio. Un UPGRADE de un pago
@@ -1034,6 +1170,44 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                                 </p>
                             )}
                         </div>
+                        </>
+                        )}
+                        {canUseFlowForPlanChange ? (
+                            // Alta free con los dos medios: se ELIGE el medio (Webpay preseleccionado) y un
+                            // solo botón continúa con lo elegido. Antes eran dos botones y el grande era MP.
+                            <>
+                                <div className="mt-5">
+                                    <PaymentMethodPicker value={paymentGateway} onChange={setPaymentGateway} disabled={saving} />
+                                </div>
+                                <div className="mt-4 flex flex-col gap-2.5">
+                                    <button
+                                        type="button"
+                                        onClick={() => { setShowUpgradeConfirm(false); void handleChangePlan(paymentGateway) }}
+                                        disabled={saving}
+                                        className="flex h-[54px] w-full items-center justify-center gap-2.5 rounded-control bg-sport-500 text-[15px] font-extrabold tracking-tight text-white shadow-[0_12px_24px_-10px_color-mix(in_srgb,var(--sport-500)_70%,transparent)] transition-colors hover:bg-sport-600 disabled:opacity-60 disabled:hover:bg-sport-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                    >
+                                        {saving ? 'Procesando...' : (
+                                            <>
+                                                <span>{paymentGateway === 'flow' ? 'Continuar con Webpay' : 'Continuar con Mercado Pago'}</span>
+                                                <ArrowRight className="h-[18px] w-[18px]" strokeWidth={2.4} aria-hidden="true" />
+                                            </>
+                                        )}
+                                    </button>
+                                    <p className="text-center text-[11.5px] leading-snug text-subtle">
+                                        <LockKeyhole className="mr-1 inline h-3.5 w-3.5 -translate-y-px" aria-hidden="true" />
+                                        Se renueva {RENEWAL_LABEL[selectedCycle]} · Cancelas cuando quieras
+                                    </p>
+                                    <button
+                                        type="button"
+                                        ref={focusOnMount}
+                                        onClick={() => setShowUpgradeConfirm(false)}
+                                        className="h-11 w-full rounded-control text-sm font-semibold text-muted hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                                    >
+                                        Ahora no
+                                    </button>
+                                </div>
+                            </>
+                        ) : (
                         <div className="mt-4 flex flex-col gap-1.5">
                             {isFlowActivePlanChange && (
                                 <p className="text-xs font-medium text-amber-600 dark:text-amber-400">
@@ -1046,48 +1220,18 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                                 disabled={saving || isFlowActivePlanChange}
                                 className="flex h-12 w-full items-center justify-center gap-2 rounded-control bg-sport-500 text-sm font-bold text-white transition-colors hover:bg-sport-600 disabled:opacity-60 disabled:hover:bg-sport-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                             >
-                                {saving ? 'Procesando...' : canUseFlowForPlanChange ? (
-                                    <>
-                                        <Image src="/payments/mercadopago.svg" alt="" aria-hidden="true" width={18} height={18} />
-                                        <span>Pagar con Mercado Pago</span>
-                                    </>
-                                ) : 'Confirmar'}
+                                {saving ? 'Procesando...' : 'Confirmar'}
                             </button>
-                            {canUseFlowForPlanChange && (
-                                <button
-                                    type="button"
-                                    onClick={() => { setShowUpgradeConfirm(false); void handleChangePlan('flow') }}
-                                    disabled={saving}
-                                    className="flex h-11 w-full items-center justify-center gap-2 rounded-control border border-default bg-surface-sunken text-sm font-semibold text-strong transition-colors hover:bg-surface-card disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                                >
-                                    <Image
-                                        src="/payments/webpay-light.svg"
-                                        alt=""
-                                        aria-hidden="true"
-                                        width={73}
-                                        height={18}
-                                        className="dark:hidden"
-                                    />
-                                    <Image
-                                        src="/payments/webpay-dark.svg"
-                                        alt=""
-                                        aria-hidden="true"
-                                        width={73}
-                                        height={18}
-                                        className="hidden dark:block"
-                                    />
-                                    <span>Pagar con Webpay (Flow)</span>
-                                </button>
-                            )}
                             <button
                                 type="button"
-                                ref={(el) => { if (el) el.focus() }}
+                                ref={focusOnMount}
                                 onClick={() => setShowUpgradeConfirm(false)}
                                 className="h-11 w-full rounded-control text-sm font-semibold text-muted hover:text-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                             >
                                 Cancelar
                             </button>
                         </div>
+                        )}
                     </div>
                 </div>
             )}
