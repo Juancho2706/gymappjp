@@ -209,3 +209,9 @@ Skia exige build nativo y P5 `noUncheckedIndexedAccess` (431 errores) como tanda
 ([SDD](../specs/nutrition-cantidades-honestas/SPEC.md); commits, migraciones y OTA en el [historial](../archive/current-historial-2026-09.md)):
 conversión al cambiar unidad, medida casera, linaje `source_item_id` y ficha del coach con Retirar/Editar. Quedan los avisos
 a `jotap-coach`/`olympuswolf` (los manda el owner) y el dry-run del backfill USDA (TASKS C6/C7).
+
+## Corte del 2026-09-23 (cierre del incidente Ani: clave temporal HIBP)
+
+### Parche «next + sharp + REVOKE anon» — en producción 21-09, QA VERDE, cerrado (texto de CURRENT al 23-09)
+
+**Parche «next + sharp + REVOKE anon» — EN PRODUCCIÓN 21-09** (`master` = `rnmobiledenuevo` = `b5c29c0d`, deploy `dpl_FoNY1RGV…`, sin OTA): `next` 16.3.0 → 16.3.5 y `sharp` 0.35.4 cierran Dependabot #114/#115/#116 (dos RCE critical); migración `20260921150000` revoca EXECUTE a `PUBLIC`/`anon` en 5 helpers RLS org (advisor 8 → 3; evidencia en commit). **QA del owner VERDE 21-09 ⇒ CERRADO.**

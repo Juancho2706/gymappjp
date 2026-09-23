@@ -384,7 +384,7 @@ source_of_truth: apps/web responsive + apps/mobile
 > **Clave temporal pre-generada (2026-09-23, incidente Ani)**: en el alta manual clásica la clave llega
 > generada (`Eva${pin}!`, `generateGuidedTempPassword`), editable, con «Generar otra» bajo el campo; espejo
 > del botón ↻ del modal web. El rechazo HIBP de una clave tipeada llega traducido desde el servidor
-> (400 `WEAK_PASSWORD`). QA en device pendiente.
+> (400 `WEAK_PASSWORD`). QA en device VERDE 23-09 (OTAs ios 1.1.3 `6041fa25`, 1.1.2 android `49d04dd1` / ios `2c87e903`).
 >
 > Gates verdes al cierre: `tsc` mobile, `tests/mobile/{guia-reload,native-intent,vive-tu-app-explainer,store-compliance,guided-invite,directory-status}`
 > y los guards de tiendas. **Requiere OTA a los runtimes 1.1.1 + 1.1.2** (disparada en el cierre de esta ola;

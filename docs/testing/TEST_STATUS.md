@@ -184,7 +184,9 @@ Costo de `pnpm test:changed` según qué se toque (medido con `vitest related`, 
 
 Aviso honesto: mientras `vitest.setup.ts` o `vitest.config.ts` estén en el diff contra `origin/master`, `--changed` corre la suite **entera** — el setup está en el grafo de todos los tests. Es correcto, no es un bug; en un diff normal de producto el número es el de la tabla.
 
-**Última corrida completa anterior: 2026-08-26** (cierre de la ola VTA + FCN W0/W1, pre-push): **589 archivos / 7.747 tests — 7.741 passed, 4 skipped, 2 corregidos en la misma tanda** (los gemelos de `client-status`/`directory-status` pinneaban «corte en el futuro» con la constante real, que ese mismo día se fijó al ISO del deploy; re-corridos 37/37 verdes). Además: `pnpm typecheck` y `tsc` mobile 0 errores, lint 0 errores (517 warnings preexistentes), `docs:check`, `check:tokens`, boundaries y `expo export --platform android` VERDES, todos sobre el árbol asentado.
+**Última corrida completa: 2026-09-23** (cierre del incidente Ani, pre-push de `50d5cbf9`): **817 archivos / 11.355 tests — 11.351 passed, 4 skipped, 0 fallos**. Además: `pnpm typecheck` y `tsc` mobile 0 errores, eslint de los archivos tocados 0 errores, `docs:check` y `check:tokens` verdes. `pnpm build` local cae en el prerender de páginas internas por el invariant `workStore` del toolchain local (Node 24.12); Vercel buildeó limpio (`dpl_BpKWwrwY…`).
+
+**Corrida completa anterior: 2026-08-26** (cierre de la ola VTA + FCN W0/W1, pre-push): **589 archivos / 7.747 tests — 7.741 passed, 4 skipped, 2 corregidos en la misma tanda** (los gemelos de `client-status`/`directory-status` pinneaban «corte en el futuro» con la constante real, que ese mismo día se fijó al ISO del deploy; re-corridos 37/37 verdes). Además: `pnpm typecheck` y `tsc` mobile 0 errores, lint 0 errores (517 warnings preexistentes), `docs:check`, `check:tokens`, boundaries y `expo export --platform android` VERDES, todos sobre el árbol asentado.
 
 ## Comandos locales
 
