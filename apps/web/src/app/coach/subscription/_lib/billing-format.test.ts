@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest'
-import { mpBrandLabel, extractAmountClpFromEventPayload } from './billing-format'
+import {
+    describeSubscriptionEvent,
+    extractAmountClpFromEventPayload,
+    isInternalSubscriptionEvent,
+    mpBrandLabel,
+} from './billing-format'
 
 /**
  * Golden master del slice 1 (Fase 2). Pinea el comportamiento EXACTO de las dos funciones
@@ -81,5 +86,52 @@ describe('extractAmountClpFromEventPayload', () => {
         expect(extractAmountClpFromEventPayload('12990')).toBeNull()
         expect(extractAmountClpFromEventPayload({})).toBeNull()
         expect(extractAmountClpFromEventPayload({ foo: 'bar' })).toBeNull()
+    })
+})
+
+describe('historial de pagos en lenguaje del coach', () => {
+    it('oculta las marcas internas, empezando por el intento de checkout', () => {
+        expect(isInternalSubscriptionEvent('flow_checkout_intent')).toBe(true)
+        expect(isInternalSubscriptionEvent('mercadopago_checkout_intent')).toBe(true)
+        expect(isInternalSubscriptionEvent('superseded_by_mp')).toBe(true)
+        expect(isInternalSubscriptionEvent('superseded_by_reenrollment')).toBe(true)
+        expect(isInternalSubscriptionEvent('orphan_persist_failed')).toBe(true)
+        expect(isInternalSubscriptionEvent('card_change_pending')).toBe(true)
+        expect(isInternalSubscriptionEvent('approved')).toBe(false)
+        expect(isInternalSubscriptionEvent(null)).toBe(false)
+    })
+
+    it('traduce los estados reales y el medio de pago', () => {
+        expect(describeSubscriptionEvent({ provider_status: 'approved', provider: 'mercadopago' })).toEqual({
+            label: 'Pago aprobado',
+            tone: 'success',
+            source: 'Mercado Pago',
+        })
+        expect(describeSubscriptionEvent({ provider_status: 'authorized', provider: 'flow' })).toEqual({
+            label: 'Suscripción activada',
+            tone: 'success',
+            source: 'Webpay (Flow)',
+        })
+        expect(describeSubscriptionEvent({ provider_status: 'rejected', provider: 'mercadopago' }).tone).toBe('danger')
+        expect(describeSubscriptionEvent({ provider_status: 'cancelled', provider: 'mercadopago' }).label).toBe(
+            'Suscripción cancelada'
+        )
+    })
+
+    it('activar el plan Free no se presenta como un cobro de Mercado Pago', () => {
+        expect(describeSubscriptionEvent({ provider_status: 'active', provider: 'mercadopago' })).toEqual({
+            label: 'Plan Free activado',
+            tone: 'neutral',
+            source: null,
+        })
+    })
+
+    it('un estado desconocido nunca se pinta crudo ni con check verde', () => {
+        const view = describeSubscriptionEvent({ provider_status: 'algo_nuevo_del_gateway', provider: 'flow' })
+        expect(view.label).toBe('Movimiento de suscripción')
+        expect(view.tone).toBe('neutral')
+        expect(describeSubscriptionEvent({ provider_status: null, provider: 'flow' }).label).toBe(
+            'Movimiento de suscripción'
+        )
     })
 })

@@ -29,8 +29,11 @@ prevalecen sobre este resumen. La prosa retirada está en
 ### 1. En producción, esperan QA del owner (⇒ SDD `done`)
 
 1. **«Elige cómo pagar»** (23-09, sin OTA, sin SDD; mockup `JQtEuDvT`): alta free→pago, registro y
-   `/coach/reactivate` eligen medio con Webpay primero + rescate al volver de MP. **QA celular VERDE 23-09;
-   queda la prueba en navegador de escritorio.**
+   `/coach/reactivate` eligen medio con Webpay primero + rescate al volver de MP. **QA celular VERDE 23-09.
+   Escritorio 24-09: selector, Webpay→Flow y oscuro OK; 3 bugs arreglados en local SIN deploy (botón muerto
+   al volver de Webpay en `/coach/subscription` y en el alta paga, historial con estados crudos, subtítulo
+   «Standalone»). Abierto: MP respondió 400 «User bad request» con un correo alias «+» (no confirmado si
+   afecta a correos normales); rescate MP y alta con plan pago sin probar en escritorio.**
 2. **«Dossier por meses»** (16-09, [SDD](../specs/dossier-por-meses/SPEC.md)): **QA §17 (14 web + 8 device + 2
    comunes)**; el E2E `tests/dossier-export.spec.ts` se corre solo con su OK.
 3. **«Reps tras el reloj» + E1** (12-09, [SDD](../specs/reps-tras-el-reloj/SPEC.md)): **QA §10 (10 puntos,

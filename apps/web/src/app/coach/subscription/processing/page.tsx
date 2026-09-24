@@ -108,6 +108,25 @@ export default function SubscriptionProcessingPage() {
     const [scheduled, setScheduled] = useState(false)
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
     const pollStartRef = useRef<number>(0)
+    // Volver con «atrás» desde la pasarela revive la página desde el bfcache congelada en
+    // «Redirigiendo…» (y, si eligió Webpay, sin la card, que se limpia antes de salir). Se guarda la
+    // última card mostrada para devolverle al coach la elección de medio (QA escritorio 24-09).
+    const lastPreviewRef = useRef<CheckoutPreview | null>(null)
+    useEffect(() => {
+        if (checkoutPreview) lastPreviewRef.current = checkoutPreview
+    }, [checkoutPreview])
+    useEffect(() => {
+        function onPageShow(e: PageTransitionEvent) {
+            if (!e.persisted) return
+            setRedirecting(false)
+            if (lastPreviewRef.current) {
+                setStatusText('')
+                setCheckoutPreview(lastPreviewRef.current)
+            }
+        }
+        window.addEventListener('pageshow', onPageShow)
+        return () => window.removeEventListener('pageshow', onPageShow)
+    }, [])
     // REGISTER-CODE: disclosure del cupón antes del primer checkout. El consentimiento = el botón
     // "Confirmar y pagar con descuento" (R4.2). Código inválido NUNCA bloquea (cae a precio lleno).
     const [couponPhase, setCouponPhase] = useState<'idle' | 'preview' | 'applying'>('idle')

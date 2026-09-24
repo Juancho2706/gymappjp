@@ -28,7 +28,7 @@ import type { ModuleKey } from '@/services/entitlements.service'
 import { resolveCheckoutError, type CheckoutErrorCopy } from '@/lib/payments/checkout-errors'
 import { useCaptureCheckoutFailed, useCaptureCheckoutStarted } from '@/lib/posthog/events'
 import Link from 'next/link'
-import { Check, CheckCircle2, Info, LockKeyhole, ArrowLeft, ArrowRight, CreditCard, HeartPulse, Activity, Ruler, Utensils, X, type LucideIcon } from 'lucide-react'
+import { Check, CheckCircle2, Clock, Info, LockKeyhole, ArrowLeft, ArrowRight, CreditCard, HeartPulse, Activity, Ruler, Utensils, X, type LucideIcon } from 'lucide-react'
 import { CouponRedeemCard } from './CouponRedeemCard'
 import { OpenInAppCard } from './OpenInAppCard'
 import { CheckoutPlanTicket } from './CheckoutPlanTicket'
@@ -40,6 +40,7 @@ import {
     writeMpRescueMark,
     type MpRescueMark,
 } from '../_lib/mp-checkout-rescue'
+import { describeSubscriptionEvent, isInternalSubscriptionEvent } from '../_lib/billing-format'
 
 const TIER_BADGE: Partial<Record<SubscriptionTier, { label: string; cls: string }>> = {
     pro:    { label: 'Más popular', cls: 'bg-violet-500/15 text-violet-400' },
@@ -180,9 +181,10 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
     const [paymentGateway, setPaymentGateway] = useState<PaymentGatewayChoice>('flow')
     // Rescate «volvió de Mercado Pago sin pagar» (marca en sessionStorage, ver _lib/mp-checkout-rescue).
     const [mpRescue, setMpRescue] = useState<MpRescueMark | null>(null)
-    // Esta pestaña salió hacia MP: si la página vuelve desde el bfcache o de una hoja externa (PWA),
-    // el estado «Procesando...» queda congelado; al volver se libera y se re-evalúa el rescate.
-    const leftToMpRef = useRef(false)
+    // Esta pestaña salió hacia la pasarela (MP o Webpay): si la página vuelve desde el bfcache o de una
+    // hoja externa (PWA), el estado «Procesando...» queda congelado; al volver se libera y se re-evalúa
+    // el rescate. QA 24-09: marcarla solo para MP dejaba el botón muerto al volver de Webpay con «atrás».
+    const leftToCheckoutRef = useRef(false)
     // Foco inicial del modal. Callback ESTABLE: uno inline se re-ejecuta en cada render y le
     // robaría el foco al selector de medio cada vez que el coach cambia de opción.
     const focusOnMount = useCallback((el: HTMLButtonElement | null) => {
@@ -388,13 +390,13 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
         setSelectedCycle(mark.cycle)
     }, [coach])
 
-    // Vuelta a esta misma página tras salir a MP: bfcache (`pageshow` persistido) o una hoja externa
-    // que se cierra encima de la PWA (visibilitychange/focus). Sin esto el botón queda en
-    // «Procesando...» para siempre. Solo actúa si ESTA pestaña salió hacia MP.
+    // Vuelta a esta misma página tras salir a la pasarela: bfcache (`pageshow` persistido) o una hoja
+    // externa que se cierra encima de la PWA (visibilitychange/focus). Sin esto el botón queda en
+    // «Procesando...» para siempre. Solo actúa si ESTA pestaña salió hacia MP o Webpay.
     useEffect(() => {
         function onReturn() {
-            if (!leftToMpRef.current) return
-            leftToMpRef.current = false
+            if (!leftToCheckoutRef.current) return
+            leftToCheckoutRef.current = false
             setSaving(false)
             void refreshStatus()
         }
@@ -468,10 +470,10 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
             // le ofrece Webpay). Cualquier otra salida la borra: Webpay ya es la alternativa.
             if (gateway === 'mercadopago' && canUseFlowForPlanChange) {
                 writeMpRescueMark(selectedTier, selectedCycle, Date.now())
-                leftToMpRef.current = true
             } else {
                 clearMpRescueMark()
             }
+            leftToCheckoutRef.current = true
             window.location.href = payload.checkoutUrl
         } catch (err) {
             const message = err instanceof Error ? err.message : 'Error inesperado'
@@ -624,6 +626,9 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
           })()
         : null
 
+    // El historial muestra movimientos, no la plomería del checkout (intentos, relevos, candados).
+    const visibleEvents = events.filter((event) => !isInternalSubscriptionEvent(event.provider_status))
+
     return (
         <Wrapper className={embedded ? '' : 'mx-auto max-w-2xl px-5 pb-12 pt-6'}>
             {/* TopBar — título · subtítulo · estado. Embebido: el panehd de Opciones ya rotula
@@ -641,7 +646,7 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                     </Link>
                     <div className="min-w-0 flex-1">
                         <h1 className="font-display text-xl font-extrabold leading-tight tracking-tight text-strong">Suscripción</h1>
-                        <p className="text-xs text-muted">Standalone</p>
+                        <p className="text-xs text-muted">Tu plan, facturación, alumnos activos y métodos de pago.</p>
                     </div>
                     {statusBadge}
                 </div>
@@ -1238,31 +1243,40 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
 
             <section className="mb-5">
                 <p className="mb-2 px-1 text-[13px] font-bold uppercase tracking-wide text-muted">Historial de pagos</p>
-                {events.length === 0 ? (
+                {visibleEvents.length === 0 ? (
                     <div className="rounded-card border border-subtle bg-surface-card p-4 text-sm text-muted">
                         Aún no hay movimientos de suscripción registrados.
                     </div>
                 ) : (
                     <div className="overflow-hidden rounded-card border border-subtle bg-surface-card">
-                        {events.map((event, i) => {
+                        {visibleEvents.map((event, i) => {
                             const amount = extractAmountClpFromEventPayload(event.payload)
                             const dateLabel = new Date(event.created_at).toLocaleDateString('es-CL', {
                                 day: 'numeric', month: 'short',
                             })
                             const ref = event.provider_checkout_id?.trim()
+                            const view = describeSubscriptionEvent(event)
+                            const detail = [view.source, ref].filter(Boolean).join(' · ')
+                            const ToneIcon = view.tone === 'success' ? Check : view.tone === 'danger' ? X : Clock
+                            const toneCls =
+                                view.tone === 'success'
+                                    ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'
+                                    : view.tone === 'danger'
+                                      ? 'bg-[var(--danger-100)] text-[var(--danger-600)]'
+                                      : 'bg-[var(--border-subtle)] text-muted'
                             return (
                                 <div key={event.id}>
                                     {i > 0 && <div className="mx-3.5 h-px bg-[var(--border-subtle)]" />}
                                     <div className="flex items-center gap-2.5 px-3.5 py-2.5">
-                                        <span className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400">
-                                            <Check className="h-[15px] w-[15px]" />
+                                        <span className={`flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full ${toneCls}`}>
+                                            <ToneIcon className="h-[15px] w-[15px]" aria-hidden="true" />
                                         </span>
                                         <div className="min-w-0 flex-1">
                                             <p className="text-[13.5px] font-bold text-strong">
                                                 {dateLabel}
-                                                {event.provider_status ? <span className="font-medium text-muted"> · {event.provider_status}</span> : null}
+                                                <span className="font-medium text-muted"> · {view.label}</span>
                                             </p>
-                                            <p className="eva-mono text-[11px] text-subtle">{ref ? `${event.provider} · ${ref}` : event.provider}</p>
+                                            {detail ? <p className="eva-mono truncate text-[11px] text-subtle">{detail}</p> : null}
                                         </div>
                                         <span className="eva-mono shrink-0 text-[13.5px] font-bold text-strong">
                                             {amount != null ? `$${amount.toLocaleString('es-CL')}` : '—'}
@@ -1274,7 +1288,7 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                     </div>
                 )}
                 <p className="mt-2 px-1 text-[11px] text-subtle">
-                    Eventos registrados por Mercado Pago y confirmaciones manuales (zona horaria local en fechas).
+                    Movimientos informados por Mercado Pago y Webpay (Flow), con fechas en tu zona horaria.
                 </p>
             </section>
 

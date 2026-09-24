@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 /**
  * Pantalla de vuelta del checkout MercadoPago (`/coach/subscription/processing`).
@@ -102,5 +102,47 @@ describe('processing — vuelta del checkout sin ?tier (retiro de Starter, D2=A)
         expect(requestedUrls(fetchMock).some((u) => u.includes('create-preference'))).toBe(false)
         expect(captureCheckoutStarted).not.toHaveBeenCalled()
         expect(captureCheckoutFailed).not.toHaveBeenCalled()
+    })
+})
+
+describe('processing — volver con «atrás» desde la pasarela (QA escritorio 24-09)', () => {
+    beforeEach(() => {
+        setQuery('from=register&tier=pro&cycle=monthly')
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue({
+                ok: true,
+                status: 200,
+                text: async () =>
+                    JSON.stringify({
+                        checkoutUrl: 'https://pasarela.test/checkout',
+                        amountClp: 29990,
+                        tier: 'pro',
+                        billingCycle: 'monthly',
+                    }),
+            })
+        )
+    })
+
+    afterEach(() => {
+        cleanup()
+        vi.unstubAllGlobals()
+    })
+
+    it('la página que revive del bfcache devuelve el botón en vez de quedar en «Redirigiendo…»', async () => {
+        render(<SubscriptionProcessingPage />)
+
+        const boton = await screen.findByRole('button', { name: /Continuar a MercadoPago/ })
+        fireEvent.click(boton)
+        expect(await screen.findByRole('button', { name: /Redirigiendo/ })).toBeDisabled()
+
+        // El navegador restaura la página desde el bfcache al volver con «atrás».
+        const pageshow = new Event('pageshow') as PageTransitionEvent
+        Object.defineProperty(pageshow, 'persisted', { value: true })
+        act(() => {
+            window.dispatchEvent(pageshow)
+        })
+
+        expect(await screen.findByRole('button', { name: /Continuar a MercadoPago/ })).toBeEnabled()
     })
 })
