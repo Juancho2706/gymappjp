@@ -141,7 +141,9 @@ Precondición: W0.2–W0.6 hechos y el deploy web (privacidad + AASA) en producc
 - [ ] **W3.1 [agente] 48 h de vigilancia:** Sentry `eva-mobile` filtrado por release 1.1.3 (87) y
       Play → Android vitals: sin crashes nuevos. Reporte al owner.
 - [ ] **W3.2 [owner] Panel de la versión de producción:** P1 desaparecido; captura para el registro.
-- [ ] **W3.3 [owner] Pistas de prueba:** alpha (y prueba interna si tiene algo) pausadas o con 87,
+- [x] **W3.3 [owner] Pistas de prueba:** 25-09, con OK del owner: prueba interna (1.1.0/81) PAUSADA (se
+      publica al instante); alpha (1.1.2/86) pausa ENVIADA a revisión. Al aprobarse, ningún artefacto activo
+      carga los servicios ⇒ debería caer la declaración pendiente de FGS (verificar en Contenido de la app). alpha (y prueba interna si tiene algo) pausadas o con 87,
       para que ningún artefacto activo ≤ 86 siga cargando los servicios.
 - [ ] **W3.4 [agente] OTA de transición:** mientras `eas channel:insights --channel production
       --runtime-version 1.1.2` muestre usuarios Android, cada OTA sale doble (runtime 1.1.3 desde
