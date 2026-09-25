@@ -39,10 +39,21 @@ on:
         default: false
         type: boolean
       submit_android:
-        description: 'Auto-submit Android AAB to Google Play closed testing / Alpha after build (profile production only)'
+        description: 'Auto-submit Android AAB to Google Play after build (profile production only; track below)'
         required: false
         default: false
         type: boolean
+      # 2026-09-25 (docs/specs/android-113-play, D6): el owner sube los binarios Android DIRECTO a
+      # producción, sin pista de prueba. `alpha` sigue siendo el default para que ninguna corrida
+      # vieja cambie de destino sin querer.
+      android_track:
+        description: 'Google Play track for submit_android (alpha = closed testing; production = 100 % rollout)'
+        required: false
+        default: 'alpha'
+        type: choice
+        options:
+          - alpha
+          - production
 
 jobs:
   build-android:
@@ -152,21 +163,45 @@ jobs:
           path: apps/${{ inputs.app }}/build.${{ steps.android_artifact.outputs.ext }}
           retention-days: 14
 
+      # 2026-09-25 (docs/specs/android-113-play): Play marca «servicios en primer plano restringidos
+      # que se inician desde BOOT_COMPLETED» si el AAB declara servicios mediaPlayback/microphone/…
+      # (venían de expo-audio; los quita plugins/with-android-strip-audio-services.js). El manifest
+      # que cuenta es el FUSIONADO con todas las librerías, y ese solo existe en el AAB: este guard lo
+      # lee con bundletool y corta ANTES del submit. Un AAB con esos servicios, o sin los receptores
+      # de reinicio de los que dependen los recordatorios, no llega a Play.
+      # bundletool fijado por versión y SHA-256 (digest de la release en GitHub); nunca `latest`.
+      - name: Guard manifest del AAB (servicios en primer plano + receptores de reinicio)
+        if: ${{ inputs.profile == 'production' }}
+        working-directory: apps/${{ inputs.app }}
+        env:
+          BUNDLETOOL_VERSION: '1.18.3'
+          BUNDLETOOL_SHA256: 'a099cfa1543f55593bc2ed16a70a7c67fe54b1747bb7301f37fdfd6d91028e29'
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/bundletool.jar" \
+            "https://github.com/google/bundletool/releases/download/${BUNDLETOOL_VERSION}/bundletool-all-${BUNDLETOOL_VERSION}.jar"
+          echo "${BUNDLETOOL_SHA256}  $RUNNER_TEMP/bundletool.jar" | sha256sum -c -
+          java -jar "$RUNNER_TEMP/bundletool.jar" dump manifest --bundle ./build.aab > "$RUNNER_TEMP/aab-manifest.xml"
+          node "$GITHUB_WORKSPACE/scripts/mobile/verify-android-aab.mjs" --manifest "$RUNNER_TEMP/aab-manifest.xml"
+
       # Requiere que la app exista en Play Console y que la PRIMERA subida se haya
       # hecho manual por la UI (limitación de la Google Play Developer API).
-      # El track destino (alpha = Prueba cerrada) vive en eas.json → submit.production.android.
+      # El track destino vive en eas.json: submit.production → alpha (Prueba cerrada) y
+      # submit.production-store → production (lanzamiento al 100 %, releaseStatus completed).
       # 2026-08-07: era `internal`; se movió a `alpha` porque solo el closed testing cuenta
       # para el requisito de 12 testers × 14 días que exige Play para acceder a producción.
-      # OJO: subir al track alpha mientras hay una versión EN REVISIÓN la reemplaza y reinicia
-      # la revisión. Si hay una pendiente, correr con submit_android=false y subir después.
-      - name: Submit AAB to Google Play (closed testing / Alpha)
+      # 2026-09-25: `android_track=production` sube directo a producción (D6 de
+      # docs/specs/android-113-play); la cuenta de servicio necesita permiso de publicar ahí.
+      # OJO: subir a una pista mientras hay una versión EN REVISIÓN en ella la reemplaza y
+      # reinicia la revisión. Si hay una pendiente, correr con submit_android=false y subir después.
+      - name: Submit AAB to Google Play (${{ inputs.android_track }})
         if: ${{ inputs.submit_android == true && inputs.profile == 'production' }}
         working-directory: apps/${{ inputs.app }}
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+          SUBMIT_PROFILE: ${{ inputs.android_track == 'production' && 'production-store' || 'production' }}
         run: |
           printf '%s' "$GOOGLE_SERVICE_ACCOUNT_JSON" > ./google-service-account.json
-          eas submit --platform android --profile production --path ./build.aab --non-interactive
+          eas submit --platform android --profile "$SUBMIT_PROFILE" --path ./build.aab --non-interactive
 
   build-ios:
     if: ${{ inputs.platform == 'ios' || inputs.platform == 'all' }}

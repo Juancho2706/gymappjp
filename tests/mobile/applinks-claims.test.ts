@@ -101,11 +101,18 @@ describe('App Links Android — app.json solo reclama la puerta del alumno', () 
         ])
     })
 
-    it('/reset-password y /coach/subscription siguen reclamados en ambos hosts', () => {
-        for (const claimed of ['/reset-password', '/coach/subscription']) {
-            const hosts = allData.filter((data) => data.path === claimed).map((data) => data.host)
-            expect(hosts).toEqual(['eva-app.cl', 'www.eva-app.cl'])
-        }
+    it('/reset-password sigue reclamado en ambos hosts', () => {
+        const hosts = allData.filter((data) => data.path === '/reset-password').map((data) => data.host)
+        expect(hosts).toEqual(['eva-app.cl', 'www.eva-app.cl'])
+    })
+
+    // D5 de docs/specs/android-113-play: los CTA de los correos de venta apuntan a
+    // /coach/subscription; si la app lo reclama, el coach cae en «Mi plan», que no puede cobrar.
+    it('/coach/subscription NO se reclama (los correos de venta abren la web, que sí cobra)', () => {
+        const claims = allData.filter((data) =>
+            [data.path, data.pathPrefix, data.pathPattern].some((value) => value?.includes('/coach')),
+        )
+        expect(claims).toEqual([])
     })
 })
 
@@ -135,6 +142,7 @@ describe('App Links iOS — el AASA excluye el árbol del alumno pero conserva l
         expect(aasaClaims(mainPaths, '/c/ana-fit/login')).toBe(true)
         expect(aasaClaims(mainPaths, '/c/ana-fit')).toBe(true)
         expect(aasaClaims(mainPaths, '/reset-password')).toBe(true)
-        expect(aasaClaims(mainPaths, '/coach/subscription')).toBe(true)
+        // D5 (android-113-play): «Mi plan» no cobra; el CTA de venta tiene que abrir la web.
+        expect(aasaClaims(mainPaths, '/coach/subscription')).toBe(false)
     })
 })

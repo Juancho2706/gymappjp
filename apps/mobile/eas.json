@@ -65,6 +65,14 @@
         "track": "alpha"
       }
     },
+    "production-store": {
+      "extends": "production",
+      "android": {
+        "serviceAccountKeyPath": "./google-service-account.json",
+        "track": "production",
+        "releaseStatus": "completed"
+      }
+    },
     "previewv2": {
       "ios": {
         "appleId": "jvillegas.dev@gmail.com",

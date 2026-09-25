@@ -17,8 +17,7 @@
           "NOT /c/*/suspended*",
           "NOT /c/*/workout*",
           "/c/*",
-          "/reset-password",
-          "/coach/subscription"
+          "/reset-password"
         ]
       }
     ]

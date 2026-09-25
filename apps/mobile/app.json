@@ -64,6 +64,9 @@
         "android.permission.health.READ_DISTANCE",
         "android.permission.health.READ_ACTIVE_CALORIES_BURNED"
       ],
+      "blockedPermissions": [
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ],
       "intentFilters": [
         {
           "action": "VIEW",
@@ -118,36 +121,6 @@
               "scheme": "https",
               "host": "www.eva-app.cl",
               "path": "/reset-password"
-            }
-          ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
-        },
-        {
-          "action": "VIEW",
-          "autoVerify": true,
-          "data": [
-            {
-              "scheme": "https",
-              "host": "eva-app.cl",
-              "path": "/coach/subscription"
-            }
-          ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
-        },
-        {
-          "action": "VIEW",
-          "autoVerify": true,
-          "data": [
-            {
-              "scheme": "https",
-              "host": "www.eva-app.cl",
-              "path": "/coach/subscription"
             }
           ],
           "category": [
@@ -224,6 +197,7 @@
         }
       ],
       "./plugins/with-android-cleartext",
+      "./plugins/with-android-strip-audio-services",
       "./plugins/with-gradle-jvmargs",
       "./plugins/with-privacy-manifest",
       [

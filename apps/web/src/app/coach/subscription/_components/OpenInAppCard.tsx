@@ -9,13 +9,14 @@ import { Smartphone } from 'lucide-react'
  * puente permitido: web→app SÍ es legal en ambas tiendas — lo prohibido es app→web hacia pago.
  *
  * Es TEXTO, sin botón, a propósito. Un «Abrir EVA en el teléfono» solo funciona si el destino está
- * cubierto por un universal link (iOS) / app link (Android), y hoy `/coach/subscription` NO lo
- * está: el AASA (`public/.well-known/apple-app-site-association`) y los `intentFilters` de
- * `apps/mobile/app.json` cubren `/c/*`, `/invite/*` y `/reset-password`. Ambos ya quedaron
- * preparados para esta ruta, pero el `intentFilter` viaja en un BINARIO nuevo (no por OTA) y el
- * AASA tarda en propagar por la CDN de Apple, así que un botón hoy sería una promesa que el sistema
- * operativo no cumple: abriría otra pestaña del navegador en la misma página. Vuelve cuando el
- * binario con el filtro esté en las tiendas y el AASA propagado (W6.7 en TASKS).
+ * cubierto por un universal link (iOS) / app link (Android), y `/coach/subscription` NO lo está ni
+ * lo va a estar: el 2026-09-25 se retiró del AASA (`public/.well-known/apple-app-site-association`)
+ * y de los `intentFilters` de `apps/mobile/app.json` (D5 de `docs/specs/android-113-play`), porque
+ * los CTA de los correos de venta apuntan a esta página y, reclamada por la app, el coach caía en
+ * «Mi plan», que no puede cobrar. Un botón acá abriría otra pestaña del navegador en la misma
+ * página. Si algún día vuelve el puente web→app, que use `eva://` (en Android envuelto en
+ * `intent://…;scheme=eva;package=cl.evaapp.eva;end`, como `/auth/confirm`) con su rama en
+ * `apps/mobile/app/+native-intent.ts`, no un app link sobre esta ruta.
  *
  * Lo que sí sirve siempre es la instrucción: decirle exactamente qué tocar para que la app se ponga
  * al día — «Actualizar estado», en Mi plan.
