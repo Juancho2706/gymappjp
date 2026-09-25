@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     alternates: { canonical: '/privacidad' },
 }
 
-const LAST_UPDATED = '12 de junio de 2026'
+const LAST_UPDATED = '25 de septiembre de 2026'
 const CONTACT_EMAIL = 'privacidad@eva-app.cl'
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -77,8 +77,10 @@ export default function PrivacidadPage() {
                                     <li><strong className="text-foreground">Identificación:</strong> nombre completo, correo electrónico, contraseña (hash bcrypt).</li>
                                     <li><strong className="text-foreground">Marca:</strong> nombre de marca, slug de URL, logo, colores personalizados.</li>
                                     <li><strong className="text-foreground">Datos de salud (categoría sensible — Art. 16 Ley 21.719):</strong> registros de entrenamiento, métricas corporales, check-ins de bienestar, planes de nutrición y logs de alimentación de los alumnos del coach.</li>
-                                    <li><strong className="text-foreground">Pago:</strong> historial de transacciones procesado por MercadoPago. EVA no almacena datos de tarjetas.</li>
+                                    <li><strong className="text-foreground">Pago:</strong> historial de transacciones procesado por MercadoPago o Flow. EVA no almacena datos de tarjetas.</li>
                                     <li><strong className="text-foreground">Uso:</strong> eventos de sesión y navegación para análisis anonimizado del producto.</li>
+                                    <li><strong className="text-foreground">Diagnóstico:</strong> informes de errores y cierres inesperados de la web y la app (modelo y sistema del dispositivo, versión de la app y detalle técnico del error).</li>
+                                    <li><strong className="text-foreground">Identificadores publicitarios y eventos de la app:</strong> en la app móvil, el identificador de publicidad del dispositivo (Android) o el IDFA si lo autorizas (iOS), junto con la instalación, cada apertura de la app y el alta de una cuenta de coach. Se usan solo para medir anuncios (ver sección 9).</li>
                                 </ul>
                             </Section>
 
@@ -86,7 +88,8 @@ export default function PrivacidadPage() {
                                 <ul className="list-disc list-inside space-y-1.5 ml-2">
                                     <li><strong className="text-foreground">Ejecución del contrato:</strong> datos necesarios para prestar el servicio (Art. 13 Ley 21.719).</li>
                                     <li><strong className="text-foreground">Consentimiento explícito:</strong> datos de salud de los alumnos (Art. 16 Ley 21.719) — otorgado al momento del registro.</li>
-                                    <li><strong className="text-foreground">Consentimiento opcional:</strong> envío de comunicaciones de marketing.</li>
+                                    <li><strong className="text-foreground">Consentimiento opcional:</strong> envío de comunicaciones de marketing; cookies analíticas y píxel de Meta en la web; permiso de seguimiento en iPhone.</li>
+                                    <li><strong className="text-foreground">Interés legítimo, con derecho de oposición:</strong> diagnóstico de errores y medición de anuncios en la app de Android (puedes desactivarla como se indica en la sección 9).</li>
                                     <li><strong className="text-foreground">Obligación legal:</strong> retención de registros contables conforme a la Ley SII (mínimo 6 años).</li>
                                 </ul>
                             </Section>
@@ -99,16 +102,22 @@ export default function PrivacidadPage() {
                                     <li>Enviar comunicaciones transaccionales del servicio (bienvenida, límites, facturación).</li>
                                     <li>Enviar comunicaciones de marketing si el usuario otorgó consentimiento explícito.</li>
                                     <li>Mejorar el producto mediante análisis agregado y anonimizado de uso.</li>
+                                    <li>Detectar y corregir errores de la plataforma.</li>
+                                    <li>Medir la efectividad de nuestros anuncios: saber qué campaña trajo una instalación de la app o el alta de un coach.</li>
                                 </ul>
                             </Section>
 
-                            <Section title="5. Subprocesadores">
+                            <Section title="5. Subprocesadores y terceros">
                                 <ul className="list-disc list-inside space-y-1.5 ml-2">
                                     <li><strong className="text-foreground">Supabase Inc.</strong> — base de datos y autenticación. AWS us-east-1, EE.UU.</li>
                                     <li><strong className="text-foreground">Vercel Inc.</strong> — hosting de la aplicación. EE.UU. y UE.</li>
                                     <li><strong className="text-foreground">MercadoPago S.A.</strong> — procesamiento de pagos. Argentina y región.</li>
+                                    <li><strong className="text-foreground">Flow</strong> (flow.cl) — procesamiento de pagos. Chile.</li>
                                     <li><strong className="text-foreground">Resend Inc.</strong> — correos transaccionales. EE.UU.</li>
                                     <li><strong className="text-foreground">PostHog Inc.</strong> — analítica anonimizada. EE.UU.</li>
+                                    <li><strong className="text-foreground">Functional Software, Inc. (Sentry)</strong> — registro de errores de la web y la app. EE.UU.</li>
+                                    <li><strong className="text-foreground">Google LLC</strong> — inicio de sesión con Google, solo si eliges ese método. EE.UU.</li>
+                                    <li><strong className="text-foreground">Meta Platforms, Inc.</strong> — medición de anuncios (píxel en la web, SDK en la app y envío de servidor a servidor al registrarse un coach). Meta recibe estos datos como tercero y los trata también según sus propias políticas. EE.UU. e Irlanda.</li>
                                 </ul>
                                 <p>
                                     Las transferencias internacionales se realizan con garantías adecuadas mediante cláusulas contractuales estándar.
@@ -154,17 +163,34 @@ export default function PrivacidadPage() {
                                 <ul className="list-disc list-inside space-y-1.5 ml-2">
                                     <li>Los datos personales de tus alumnos serán anonimizados (nombre, email, teléfono).</li>
                                     <li>Los registros de entrenamiento y nutrición serán eliminados.</li>
-                                    <li>Tu suscripción activa será cancelada en MercadoPago.</li>
+                                    <li>Tu suscripción activa será cancelada en la pasarela donde la contrataste (MercadoPago o Flow).</li>
                                     <li>Serás eliminado de todas las listas de email de marketing.</li>
                                     <li>Los registros contables se conservarán anonimizados por obligación legal (6 años).</li>
                                 </ul>
                             </Section>
 
-                            <Section title="9. Cookies y analítica">
+                            <Section title="9. Cookies, analítica y medición de anuncios">
                                 <p>
                                     EVA utiliza cookies de sesión estrictamente necesarias para la autenticación.
-                                    No usamos cookies de rastreo de terceros. La analítica se realiza con datos anonimizados
-                                    mediante PostHog, configurado sin perfiles identificados por defecto (conforme a Ley 21.719, Art. 4).
+                                    La analítica de producto se realiza con datos anonimizados mediante PostHog,
+                                    configurado sin perfiles identificados por defecto (conforme a Ley 21.719, Art. 4).
+                                </p>
+                                <p>
+                                    <strong className="text-foreground">Web:</strong> solo si aceptas las cookies analíticas en el aviso de cookies,
+                                    cargamos el píxel de Meta, que mide visitas y registros en las páginas públicas de EVA. Nunca se
+                                    activa en las páginas de los alumnos de un coach. Puedes rechazarlo en ese mismo aviso.
+                                </p>
+                                <p>
+                                    <strong className="text-foreground">Registro de coach en la web:</strong> al crear la cuenta, EVA envía a Meta,
+                                    de servidor a servidor, el evento de registro con tu correo y un identificador interno cifrados
+                                    (hash SHA-256), tu dirección IP y tu navegador, para atribuir el registro a la campaña que te trajo.
+                                </p>
+                                <p>
+                                    <strong className="text-foreground">App móvil:</strong> el SDK de Meta registra la instalación, cada apertura
+                                    de la app y el alta de una cuenta de coach, junto con el identificador de publicidad del dispositivo
+                                    (Android) o el IDFA solo si aceptas el permiso de seguimiento (iOS). No envía datos de salud,
+                                    entrenamiento ni nutrición, ni tu nombre o correo. Para desactivarlo: en Android, Ajustes → Google →
+                                    Anuncios → «Borrar ID de publicidad»; en iPhone, Ajustes → Privacidad y seguridad → Rastreo.
                                 </p>
                             </Section>
 
