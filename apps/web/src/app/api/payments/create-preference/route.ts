@@ -49,6 +49,10 @@ const schema = z.object({
     // Gateway de pago elegido por la UI. El server NUNCA confía en el body para montos ni secretos;
     // este selector solo enruta al provider (validado por Zod). Default 'mercadopago' → cero regresión.
     gateway: z.enum(['mercadopago', 'flow']).default('mercadopago'),
+    // Solo cotizar: valida y calcula el monto EXACTO que se cobraría, sin tocar la pasarela ni
+    // escribir nada. Lo usa la card del alta paga para mostrar el precio antes de que el coach elija
+    // medio (ver el corte antes de `provider.createCheckout`).
+    quoteOnly: z.boolean().optional(),
 })
 
 /**
@@ -237,6 +241,21 @@ export async function POST(request: Request) {
             )
         }
 
+        // ── Cotización sin pasarela (QA en prod 24-09) ───────────────────────────────────────────────
+        // La card del alta paga creaba un preapproval de MercadoPago en CADA carga solo para mostrar el
+        // precio, aunque el coach terminara eligiendo Webpay. Cada recarga cancelaba el anterior (P0-2)
+        // → correo «Suscriptor cancelado» de MP a EVA por cada intento, y un 429 `local_rate_limited`
+        // de MP tras varios intentos. La cotización recorre las MISMAS validaciones y el MISMO cálculo
+        // compuesto, y corta antes de la pasarela. Solo para el alta (free→pago y reactivación): el
+        // cambio de plan de un pago activo tiene su propio camino (one-shot / agenda al corte).
+        const quoteOnly = parsed.data.quoteOnly === true
+        if (quoteOnly && isActiveUpgrade) {
+            return NextResponse.json(
+                { code: 'QUOTE_UNSUPPORTED', error: 'La cotización solo está disponible para el alta de un plan.' },
+                { status: 400 }
+            )
+        }
+
         // Dirección del cambio de plan respecto del tier vigente (TIER_RANK). Solo se ramifica
         // cuando el coach es un suscriptor pago ACTIVO (isActiveUpgrade): para free→paid (primera
         // compra) y reactivación (canceled/expired) el camino sigue siendo el preapproval compuesto
@@ -271,6 +290,7 @@ export async function POST(request: Request) {
         // canceled/expired tienen la sub muerta → nada que cancelar. La trazabilidad del switch (archivar
         // el external_id viejo) la deja confirm-subscription B3 al reclamar la sub para MP.
         if (
+            !quoteOnly &&
             gateway === 'mercadopago' &&
             currentCoach?.subscription_provider === 'flow' &&
             currentCoach.subscription_provider_external_id &&
@@ -534,6 +554,12 @@ export async function POST(request: Request) {
                   // dato se pierde para siempre — hay que ponerlo ANTES de la primera venta. Mismo
                   // par que ya viaja en el failureUrl/pendingUrl (`retryQuery`).
                   `${appUrl}/coach/subscription/processing?${retryQuery}`
+
+        // Cotización: monto neto ya validado (cupón, add-ons, NET_NOT_CHARGEABLE). Nada se creó en la
+        // pasarela ni en la DB hasta acá — el U2 de arriba se salta con `quoteOnly`.
+        if (quoteOnly) {
+            return NextResponse.json({ quote: true, tier, billingCycle, amountClp, addons: checkoutAddons })
+        }
 
         const checkout = await provider.createCheckout({
             coachId: user.id,

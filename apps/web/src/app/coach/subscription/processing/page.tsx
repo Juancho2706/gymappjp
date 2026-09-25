@@ -53,17 +53,21 @@ function extractPreapprovalId(rawSubscriptionParam: string, searchParams: URLSea
 }
 
 /**
- * Lo que el SERVER dice de este checkout, ya creado y listo para pagarse. El monto y el tier salen
- * de la respuesta de create-preference (compuesto neto, con cupón y add-ons ya aplicados): esta
- * pantalla NUNCA calcula ni hardcodea un precio. `amountClp` es null si el server no lo mandó —
- * mejor no mostrar monto que mostrar uno inventado.
+ * Lo que el SERVER cotiza para esta alta. El monto y el tier salen de create-preference en modo
+ * `quoteOnly` (compuesto neto, con cupón y add-ons ya aplicados): esta pantalla NUNCA calcula ni
+ * hardcodea un precio. `amountClp` es null si el server no lo mandó — mejor no mostrar monto que
+ * mostrar uno inventado. La cotización no crea nada en la pasarela: el checkout real se pide recién
+ * cuando el coach elige medio (QA 24-09: crear el preapproval de MP en cada carga dejaba uno
+ * cancelado por recarga, un correo «Suscriptor cancelado» por cada uno y un 429 de MP).
  */
 type CheckoutPreview = {
-    checkoutUrl: string
     amountClp: number | null
     tier: SubscriptionTier
     billingCycle: BillingCycle
 }
+
+/** `'quote'` = cotizar para la card (sin pasarela); un medio = crear su checkout y salir hacia él. */
+type RegisterCheckoutStep = 'quote' | CheckoutGateway
 
 /** Fecha del corte (current_period_end) para mostrar cuándo se aplica un cambio agendado. */
 async function fetchCurrentPeriodEnd(): Promise<string | null> {
@@ -98,8 +102,8 @@ export default function SubscriptionProcessingPage() {
     // Medio elegido en la card del alta paga. Webpay por defecto (caso 23-09: los que pagan por Flow
     // usan Redcompra/prepago y varios probaron antes Mercado Pago sin poder terminar).
     const [registerGateway, setRegisterGateway] = useState<PaymentGatewayChoice>('flow')
-    // Medio del último intento: el botón "Reintentar" repite el MISMO medio que falló.
-    const [lastGateway, setLastGateway] = useState<CheckoutGateway>('mercadopago')
+    // Último paso intentado (cotizar o salir a un medio): el botón "Reintentar" repite ESE paso.
+    const [lastStep, setLastStep] = useState<RegisterCheckoutStep>('quote')
     const [canRetry, setCanRetry] = useState(false)
     // Cambio agendado al corte (downgrade / cambio de ciclo): confirm-subscription responde
     // { scheduled: true } sin mutar al coach (el tier vivo NO cambia hasta el corte). En ese caso
@@ -122,7 +126,11 @@ export default function SubscriptionProcessingPage() {
             if (lastPreviewRef.current) {
                 setStatusText('')
                 setCheckoutPreview(lastPreviewRef.current)
+                return
             }
+            // Salió a la pasarela sin haber visto la card (p. ej. «Probar con Webpay» tras un error):
+            // no hay qué restaurar y el spinner quedaría congelado ⇒ se recarga y vuelve a cotizar.
+            window.location.reload()
         }
         window.addEventListener('pageshow', onPageShow)
         return () => window.removeEventListener('pageshow', onPageShow)
@@ -246,16 +254,24 @@ export default function SubscriptionProcessingPage() {
         )
     }
 
-    async function startCheckoutFromRegister(gateway: CheckoutGateway = 'mercadopago') {
+    /**
+     * `'quote'` (default): pide SOLO el monto para la card — create-preference con `quoteOnly`, sin
+     * pasarela. Un medio (`'mercadopago'` / `'flow'`): el coach ya lo eligió viendo plan y monto, así
+     * que se crea el checkout de ESE medio y se sale directo hacia él.
+     */
+    async function startCheckoutFromRegister(step: RegisterCheckoutStep = 'quote') {
         if (!tierForCheckout) {
             failWithMissingTier()
             return
         }
+        const isQuote = step === 'quote'
+        // En la cotización el funnel registra el medio que la card trae preseleccionado.
+        const gateway: CheckoutGateway = isQuote ? (canPayWithFlow ? 'flow' : 'mercadopago') : step
         setError(null)
         setErrorCopy(null)
         setCheckoutPreview(null)
         setRedirecting(false)
-        setLastGateway(gateway)
+        setLastStep(step)
         setCanRetry(false)
         setStatusText('Preparando tu suscripción...')
         // E1 (P8): el registro pago confirmo su plan y se va a pedir la preference. Aca tier/cycle
@@ -277,7 +293,9 @@ export default function SubscriptionProcessingPage() {
                 body: JSON.stringify({
                     tier: tierForCheckout,
                     billingCycle: cycleFromUrl,
-                    gateway,
+                    // La cotización no toca pasarela: va por MP, que existe con cualquier flag.
+                    gateway: isQuote ? 'mercadopago' : gateway,
+                    ...(isQuote ? { quoteOnly: true } : {}),
                     ...(addonsFromUrl.length > 0 ? { addons: addonsFromUrl } : {}),
                 }),
             })
@@ -287,21 +305,19 @@ export default function SubscriptionProcessingPage() {
                 failureCode = typeof payload.code === 'string' ? payload.code : `http_${response.status}`
                 throw new Error(payload.error ?? 'No se pudo iniciar el checkout.')
             }
-            if (!payload.checkoutUrl) {
-                failureCode = 'missing_checkout_url'
-                throw new Error('No se recibió URL de checkout.')
-            }
-            // Webpay/Flow: el coach ya eligió el medio DESDE la card de confirmación (ya vio plan y
-            // monto), así que el enrolamiento arranca de inmediato. MercadoPago es el que pasa por
-            // la card, porque es el medio al que se llega sin haberlo elegido.
-            if (gateway === 'flow') {
-                setStatusText('Redirigiendo a Webpay...')
+            if (!isQuote) {
+                if (!payload.checkoutUrl) {
+                    failureCode = 'missing_checkout_url'
+                    throw new Error('No se recibió URL de checkout.')
+                }
+                // El coach ya eligió el medio DESDE la card (ya vio plan y monto): se sale directo.
+                setRedirecting(true)
+                setStatusText(gateway === 'flow' ? 'Redirigiendo a Webpay...' : 'Redirigiendo a Mercado Pago...')
                 window.location.href = payload.checkoutUrl
                 return
             }
             setStatusText('')
             setCheckoutPreview({
-                checkoutUrl: payload.checkoutUrl,
                 // Monto y plan SIEMPRE del server (compuesto neto: cupón y add-ons ya aplicados).
                 amountClp:
                     typeof payload.amountClp === 'number' && payload.amountClp > 0
@@ -327,12 +343,13 @@ export default function SubscriptionProcessingPage() {
                 message,
             })
             // P1: el coach ve un mensaje humano y una salida, nunca el JSON crudo del gateway.
-            // Webpay se ofrece como plan B solo si el backend lo soporta acá Y no es el que falló.
+            // Webpay se ofrece como plan B solo si el backend lo soporta acá Y no es el que falló
+            // (si falló la cotización, Webpay sigue siendo una salida válida).
             setErrorCopy(
                 resolveCheckoutError({
                     code: failureCode,
                     message,
-                    flowAvailable: canPayWithFlow && gateway !== 'flow',
+                    flowAvailable: canPayWithFlow && step !== 'flow',
                 })
             )
             setCanRetry(true)
@@ -656,16 +673,16 @@ export default function SubscriptionProcessingPage() {
     }
 
     // ── P2: paso previo a MercadoPago ────────────────────────────────────────────────────────────
-    // El checkout ya está creado en el gateway (por eso hubo spinner), pero el salto lo aprieta el
-    // coach: primero ve QUÉ plan, CUÁNTO se cobra, POR DÓNDE se cobra y que puede volverse sin
-    // perder nada. Plan y monto salen de la respuesta del server — cero precios en el cliente.
+    // El server ya cotizó (por eso hubo spinner) pero todavía no se creó nada en la pasarela: el salto
+    // lo aprieta el coach. Primero ve QUÉ plan, CUÁNTO se cobra, POR DÓNDE se cobra y que puede
+    // volverse sin perder nada. Plan y monto salen de la respuesta del server — cero precios en el cliente.
     if (checkoutPreview && !error && !errorCopy) {
         const previewTierLabel = TIER_CONFIG[checkoutPreview.tier]?.label ?? checkoutPreview.tier
         const previewCycleLabel =
             BILLING_CYCLE_CONFIG[checkoutPreview.billingCycle]?.label ?? checkoutPreview.billingCycle
 
         // Con los dos medios disponibles: se ELIGE el medio (Webpay preseleccionado) y un solo botón
-        // continúa. MP reusa el checkout ya creado; Webpay pide su enrolamiento como antes. Sin Webpay
+        // continúa y recién ahí se crea el checkout de ese medio. Sin Webpay
         // (flag apagado / vuelta de MP) queda la card de siempre, más abajo.
         if (canPayWithFlow) {
             const previewTier = checkoutPreview.tier
@@ -716,12 +733,7 @@ export default function SubscriptionProcessingPage() {
                                         gateway: registerGateway,
                                         source: 'register',
                                     })
-                                    if (registerGateway === 'flow') {
-                                        void startCheckoutFromRegister('flow')
-                                        return
-                                    }
-                                    setRedirecting(true)
-                                    window.location.href = checkoutPreview.checkoutUrl
+                                    void startCheckoutFromRegister(registerGateway)
                                 }}
                                 className="flex h-[52px] w-full items-center justify-center gap-2.5 rounded-control bg-sport-500 px-6 text-[15px] font-extrabold tracking-tight text-white shadow-[0_12px_24px_-10px_color-mix(in_srgb,var(--sport-500)_70%,transparent)] transition-colors hover:bg-sport-600 disabled:opacity-60 disabled:hover:bg-sport-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                             >
@@ -796,8 +808,7 @@ export default function SubscriptionProcessingPage() {
                                     gateway: 'mercadopago',
                                     source: 'register',
                                 })
-                                setRedirecting(true)
-                                window.location.href = checkoutPreview.checkoutUrl
+                                void startCheckoutFromRegister('mercadopago')
                             }}
                             className="inline-flex h-11 items-center justify-center gap-2 rounded-control bg-sport-500 px-6 text-sm font-semibold text-white transition-colors hover:bg-sport-600 disabled:opacity-60 disabled:hover:bg-sport-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
                         >
@@ -925,7 +936,7 @@ export default function SubscriptionProcessingPage() {
                                     type="button"
                                     onClick={() =>
                                         void startCheckoutFromRegister(
-                                            action.kind === 'try_flow' ? 'flow' : lastGateway
+                                            action.kind === 'try_flow' ? 'flow' : lastStep
                                         )
                                     }
                                     className={
@@ -946,21 +957,27 @@ export default function SubscriptionProcessingPage() {
                         >
                             Reintentar
                         </button>
-                    ) : canRetry ? (
-                        <Link
-                            href="/coach/reactivate"
-                            className="inline-flex h-11 items-center justify-center rounded-control bg-sport-500 px-6 text-sm font-semibold text-white transition-colors hover:bg-sport-600"
-                        >
-                            Ir a reactivación
-                        </Link>
                     ) : null}
 
-                    <Link
-                        href="/coach/reactivate"
-                        className="inline-flex h-11 items-center justify-center rounded-control border border-default px-6 text-sm font-semibold text-strong hover:bg-surface-sunken transition-colors"
-                    >
-                        Ir a reactivación
-                    </Link>
+                    {/* Una sola salida, según el caso (QA 24-09). Antes era «Ir a reactivación» fijo (y
+                        doble con canRetry): al coach del alta —Free y activo— el gate lo rebotaba al
+                        dashboard. `/coach/subscription` ya enruta bien: el gate manda a /coach/reactivate
+                        SOLO a quien está bloqueado; los demás ven su suscripción. */}
+                    {fromRegister && !preapprovalId ? (
+                        <Link
+                            href="/coach/dashboard"
+                            className="inline-flex h-11 items-center justify-center rounded-control px-6 text-sm font-semibold text-muted transition-colors hover:text-strong"
+                        >
+                            Volver al panel — tu cuenta queda activa igual
+                        </Link>
+                    ) : (
+                        <Link
+                            href="/coach/subscription"
+                            className="inline-flex h-11 items-center justify-center rounded-control border border-default px-6 text-sm font-semibold text-strong hover:bg-surface-sunken transition-colors"
+                        >
+                            Volver a mi suscripción
+                        </Link>
+                    )}
                 </div>
             </div>
         </main>

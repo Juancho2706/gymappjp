@@ -15,6 +15,22 @@ type Preview = {
 
 const clp = (n: number) => `$${n.toLocaleString('es-CL')}`
 
+/** Lo que la tarjeta necesita de subscription-status para decidir si se muestra. */
+export type CouponCardStatus = {
+    tier: string | null
+    subscriptionStatus: string | null
+    activeCouponCode: string | null
+}
+
+/** Gate de la tarjeta: plan pago activo O free activo (el server acepta exactamente esas dos). */
+function deriveCouponGate(s: CouponCardStatus | undefined) {
+    if (!s) return { enabled: false, isFreePlan: false, activeCode: null as string | null }
+    const paidActive =
+        Boolean(s.tier) && s.tier !== 'free' && (s.subscriptionStatus === 'active' || s.subscriptionStatus === 'trialing')
+    const freeActive = s.tier === 'free' && s.subscriptionStatus === 'active'
+    return { enabled: paidActive || freeActive, isFreePlan: freeActive, activeCode: s.activeCouponCode }
+}
+
 /**
  * Tarjeta de canje de código (coach). Flujo SERNAC: Aplicar → PREVIEW server-priced → disclosure
  * bloqueante (texto + precio del SERVER) → Confirmar (commit). Self-contained: lee subscription-status
@@ -24,22 +40,28 @@ const clp = (n: number) => `$${n.toLocaleString('es-CL')}`
  * plan que esté eligiendo más abajo en la pantalla → recibe `selectedTier`/`selectedCycle` del padre y los
  * manda como `previewTier`/`previewCycle`. Sin plan elegido no se dispara el POST (el server responde
  * 422 PLAN_REQUIRED igual). Para un coach PAGO el body NO cambia: sigue siendo `{ code, commit }`.
+ *
+ * `status` (opcional): el estado que el padre YA cargó. Con él la tarjeta no pide subscription-status
+ * por su cuenta y aparece junto con el resto de la pantalla (QA 24-09: cargaba «por partes»).
  */
 export function CouponRedeemCard({
     selectedTier,
     selectedCycle,
     onRedeemed,
+    status,
 }: {
     /** Plan elegido en el selector de la página — solo se usa (y se envía) cuando el coach es free. */
     selectedTier?: SaleTier
     selectedCycle?: BillingCycle
     /** Se dispara tras un commit exitoso de un coach FREE, para que el padre recargue el precio con descuento. */
     onRedeemed?: () => void
+    status?: CouponCardStatus
 }) {
-    const [enabled, setEnabled] = useState(false)
+    const initialGate = deriveCouponGate(status)
+    const [enabled, setEnabled] = useState(initialGate.enabled)
     // Coach en plan gratuito con cuenta activa: canje pre-checkout (precia sobre el plan elegido).
-    const [isFreePlan, setIsFreePlan] = useState(false)
-    const [activeCode, setActiveCode] = useState<string | null>(null)
+    const [isFreePlan, setIsFreePlan] = useState(initialGate.isFreePlan)
+    const [activeCode, setActiveCode] = useState<string | null>(initialGate.activeCode)
     const [code, setCode] = useState('')
     const [phase, setPhase] = useState<'idle' | 'checking' | 'preview' | 'applying' | 'done'>('idle')
     const [preview, setPreview] = useState<Preview | null>(null)
@@ -78,26 +100,48 @@ export function CouponRedeemCard({
         }
     }
 
+    function applyGate(gate: ReturnType<typeof deriveCouponGate>) {
+        setEnabled(gate.enabled)
+        setIsFreePlan(gate.isFreePlan)
+        setActiveCode(gate.activeCode)
+    }
+
     async function loadStatus() {
         try {
             const res = await fetch('/api/payments/subscription-status')
             if (!res.ok) return
             const data = await res.json()
-            const tier = data?.coach?.subscription_tier
-            const status = data?.coach?.subscription_status
-            const paidActive = tier && tier !== 'free' && (status === 'active' || status === 'trialing')
-            // Free ACTIVO = puede canjear pre-checkout (el server acepta esa combinación exacta).
-            const freeActive = tier === 'free' && status === 'active'
-            setEnabled(Boolean(paidActive || freeActive))
-            setIsFreePlan(Boolean(freeActive))
-            setActiveCode(data?.activeCoupon?.code ?? null)
+            applyGate(
+                deriveCouponGate({
+                    tier: data?.coach?.subscription_tier ?? null,
+                    subscriptionStatus: data?.coach?.subscription_status ?? null,
+                    activeCouponCode: data?.activeCoupon?.code ?? null,
+                })
+            )
         } catch {
             /* tolerante a fallos */
         }
     }
+
+    // Con `status` del padre no hay fetch propio; se re-aplica cuando el padre recarga su estado.
+    const statusTier = status?.tier ?? null
+    const statusSubscription = status?.subscriptionStatus ?? null
+    const statusCouponCode = status?.activeCouponCode ?? null
+    const hasParentStatus = status !== undefined
     useEffect(() => {
+        if (hasParentStatus) {
+            applyGate(
+                deriveCouponGate({
+                    tier: statusTier,
+                    subscriptionStatus: statusSubscription,
+                    activeCouponCode: statusCouponCode,
+                })
+            )
+            return
+        }
         void loadStatus()
-    }, [])
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- loadStatus/applyGate solo usan setters estables
+    }, [hasParentStatus, statusTier, statusSubscription, statusCouponCode])
 
     // Coach free: si cambia el plan/ciclo elegido, el preview pre-commit deja de coincidir con lo
     // que se cobrará → se invalida y hay que re-aplicar (la disclosure SERNAC debe mostrar el plan real).

@@ -191,7 +191,7 @@ Archivos centrales: `services/auth/workspace-brand.service.ts`, `@eva/brand-kit`
 ## Suscripción standalone
 
 1. Coach elige tier/ciclo en `/coach/subscription`.
-2. `api/payments/create-preference` valida identidad, transición y monto canónico de `@eva/tiers`.
+2. `api/payments/create-preference` valida identidad, transición y monto canónico de `@eva/tiers`. Con `quoteOnly` (card «Confirma tu suscripción» del alta paga) solo cotiza: mismas validaciones y monto, sin tocar la pasarela ni la DB; el checkout real se pide cuando el coach elige medio.
 3. El provider abre checkout MercadoPago o, cuando está habilitado, enrolamiento Flow/Webpay.
 4. Webhook firmado reconsulta/normaliza el evento y ejecuta el pipeline idempotente.
 5. La suscripción actualizada gobierna acceso, cupo y branding.

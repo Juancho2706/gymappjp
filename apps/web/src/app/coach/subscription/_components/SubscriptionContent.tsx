@@ -29,6 +29,7 @@ import { resolveCheckoutError, type CheckoutErrorCopy } from '@/lib/payments/che
 import { useCaptureCheckoutFailed, useCaptureCheckoutStarted } from '@/lib/posthog/events'
 import Link from 'next/link'
 import { Check, CheckCircle2, Clock, Info, LockKeyhole, ArrowLeft, ArrowRight, CreditCard, HeartPulse, Activity, Ruler, Utensils, X, type LucideIcon } from 'lucide-react'
+import { EvaRouteLoader } from '@/components/ui/EvaRouteLoader'
 import { CouponRedeemCard } from './CouponRedeemCard'
 import { OpenInAppCard } from './OpenInAppCard'
 import { CheckoutPlanTicket } from './CheckoutPlanTicket'
@@ -151,7 +152,9 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
     const [coach, setCoach] = useState<CoachSubscription | null>(null)
     // Flag server-only del cambio de tarjeta — llega del endpoint subscription-status (no NEXT_PUBLIC).
     const [changeCardEnabled, setChangeCardEnabled] = useState(false)
-    const [loading, setLoading] = useState(false)
+    // Arranca en true: hasta que llega subscription-status la pantalla muestra UN loader y no sus
+    // secciones sueltas (QA 24-09: el historial vacío y «Cancelar» aparecían antes que el plan).
+    const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState<string | null>(null)
     // P1 — copy accionable del fallo del checkout: el banner mostraba el `error` CRUDO del server
@@ -629,6 +632,18 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
     // El historial muestra movimientos, no la plomería del checkout (intentos, relevos, candados).
     const visibleEvents = events.filter((event) => !isInternalSubscriptionEvent(event.provider_status))
 
+    // Carga inicial: un solo loader (el del panel, con la marca del coach) y recién después la pantalla
+    // completa. Un error de la carga cae al render normal, que muestra el banner.
+    if (loading && !coach && !error) {
+        return (
+            <Wrapper className={embedded ? '' : 'mx-auto max-w-2xl px-5 pb-12 pt-6'}>
+                <div role="status" aria-live="polite" className="flex min-h-[360px] items-center justify-center">
+                    <EvaRouteLoader size="md" subtitle="Cargando tu suscripción" />
+                </div>
+            </Wrapper>
+        )
+    }
+
     return (
         <Wrapper className={embedded ? '' : 'mx-auto max-w-2xl px-5 pb-12 pt-6'}>
             {/* TopBar — título · subtítulo · estado. Embebido: el panehd de Opciones ya rotula
@@ -730,10 +745,6 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                         setMpRescue(null)
                     }}
                 />
-            ) : null}
-
-            {loading ? (
-                <p role="status" aria-live="polite" className="mb-4 text-sm text-muted">Cargando estado de suscripción...</p>
             ) : null}
 
             {/* Plan actual — tarjeta inversa (diseño Suscripcion.jsx) */}
@@ -839,6 +850,15 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
                     selectedTier={isSaleTier(selectedTier) && selectedTier !== 'free' ? selectedTier : undefined}
                     selectedCycle={selectedCycle}
                     onRedeemed={() => void refreshStatus()}
+                    status={
+                        coach
+                            ? {
+                                  tier: coach.subscription_tier,
+                                  subscriptionStatus: coach.subscription_status,
+                                  activeCouponCode: activeCoupon?.code ?? null,
+                              }
+                            : undefined
+                    }
                 />
             </div>
 

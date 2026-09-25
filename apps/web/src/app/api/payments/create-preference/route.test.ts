@@ -1072,3 +1072,61 @@ describe('POST /api/payments/create-preference — A1 alta paga del registro (co
         expect(arg.successUrl).toContain('cycle=annual')
     })
 })
+
+// ════════════════════════════════════════════════════════════════════════════════════
+// Cotización sin pasarela (QA en prod 24-09): la card del alta paga creaba un preapproval de MP en
+// cada carga solo para mostrar el precio → uno cancelado por recarga, correo «Suscriptor cancelado»
+// de MP por cada uno y 429 `local_rate_limited`. `quoteOnly` calcula el MISMO monto y no crea nada.
+// ════════════════════════════════════════════════════════════════════════════════════
+describe('POST /api/payments/create-preference — quoteOnly (cotizar sin pasarela)', () => {
+    it('coach Free: devuelve el monto del plan sin crear checkout ni escribir en la DB', async () => {
+        currentCoachMaybeSingle.mockResolvedValue({ data: { ...FREE_COACH, subscription_mp_id: 'preapproval-OLD' }, error: null })
+        const res = await POST(makeRequest({ tier: 'pro', billingCycle: 'monthly', quoteOnly: true }))
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual({ quote: true, tier: 'pro', billingCycle: 'monthly', amountClp: 29990, addons: [] })
+        expect(createCheckout).not.toHaveBeenCalled()
+        // Ni cancela el preapproval pendiente anterior (eso disparaba el correo de MP) ni persiste nada.
+        expect(cancelCheckoutAtProvider).not.toHaveBeenCalled()
+        expect(adminUpsert).not.toHaveBeenCalled()
+        expect(lastUpdatePayload()).toBeUndefined()
+    })
+
+    it('cotiza el mismo monto que cobra el checkout real', async () => {
+        currentCoachMaybeSingle.mockResolvedValue({ data: FREE_COACH, error: null })
+        const quote = await (await POST(makeRequest({ tier: 'elite', billingCycle: 'annual', quoteOnly: true }))).json()
+        const real = await (await POST(makeRequest({ tier: 'elite', billingCycle: 'annual' }))).json()
+        expect(quote.amountClp).toBe(real.amountClp)
+        expect(createCheckout).toHaveBeenCalledOnce()
+    })
+
+    it('coach con sub Flow viva: la cotización NO cancela la sub Flow (el U2 queda para el checkout real)', async () => {
+        currentCoachMaybeSingle.mockResolvedValue({
+            data: {
+                subscription_status: 'pending_payment',
+                subscription_tier: 'pro',
+                billing_cycle: 'monthly',
+                current_period_end: null,
+                subscription_mp_id: null,
+                provider_customer_id: 'cus_flow',
+                subscription_provider: 'flow',
+                subscription_provider_external_id: 'flowsub-live-1',
+            },
+            error: null,
+        })
+        const res = await POST(makeRequest({ tier: 'pro', billingCycle: 'monthly', quoteOnly: true }))
+        expect(res.status).toBe(200)
+        expect(cancelCheckoutAtProvider).not.toHaveBeenCalled()
+        expect(adminInsert).not.toHaveBeenCalled()
+        expect(createCheckout).not.toHaveBeenCalled()
+    })
+
+    it('suscriptor pago activo: 400 QUOTE_UNSUPPORTED sin claim, one-shot ni checkout', async () => {
+        currentCoachMaybeSingle.mockResolvedValue({ data: ACTIVE_PRO_COACH, error: null })
+        const res = await POST(makeRequest({ tier: 'elite', billingCycle: 'monthly', quoteOnly: true }))
+        expect(res.status).toBe(400)
+        expect((await res.json()).code).toBe('QUOTE_UNSUPPORTED')
+        expect(claimUpgradeInFlight).not.toHaveBeenCalled()
+        expect(createOneShotPayment).not.toHaveBeenCalled()
+        expect(createCheckout).not.toHaveBeenCalled()
+    })
+})

@@ -105,23 +105,29 @@ describe('processing — vuelta del checkout sin ?tier (retiro de Starter, D2=A)
     })
 })
 
-describe('processing — volver con «atrás» desde la pasarela (QA escritorio 24-09)', () => {
+describe('processing — alta paga: cotiza al cargar y crea el checkout recién al elegir medio (QA 24-09)', () => {
+    let fetchMock: ReturnType<typeof vi.fn>
+
+    /** Body JSON de la llamada N a create-preference. */
+    function preferenceBody(n: number): Record<string, unknown> {
+        const calls = fetchMock.mock.calls.filter((call) => String(call[0]).includes('create-preference'))
+        return JSON.parse(String((calls[n]?.[1] as RequestInit | undefined)?.body ?? '{}'))
+    }
+
     beforeEach(() => {
         setQuery('from=register&tier=pro&cycle=monthly')
-        vi.stubGlobal(
-            'fetch',
-            vi.fn().mockResolvedValue({
-                ok: true,
-                status: 200,
-                text: async () =>
-                    JSON.stringify({
-                        checkoutUrl: 'https://pasarela.test/checkout',
-                        amountClp: 29990,
-                        tier: 'pro',
-                        billingCycle: 'monthly',
-                    }),
-            })
-        )
+        fetchMock = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            text: async () =>
+                JSON.stringify({
+                    checkoutUrl: 'https://pasarela.test/checkout',
+                    amountClp: 29990,
+                    tier: 'pro',
+                    billingCycle: 'monthly',
+                }),
+        })
+        vi.stubGlobal('fetch', fetchMock)
     })
 
     afterEach(() => {
@@ -129,12 +135,22 @@ describe('processing — volver con «atrás» desde la pasarela (QA escritorio 
         vi.unstubAllGlobals()
     })
 
-    it('la página que revive del bfcache devuelve el botón en vez de quedar en «Redirigiendo…»', async () => {
+    it('al cargar solo cotiza: no se crea un checkout en la pasarela para mostrar el precio', async () => {
         render(<SubscriptionProcessingPage />)
 
-        const boton = await screen.findByRole('button', { name: /Continuar a MercadoPago/ })
-        fireEvent.click(boton)
-        expect(await screen.findByRole('button', { name: /Redirigiendo/ })).toBeDisabled()
+        await screen.findByRole('button', { name: /Continuar a MercadoPago/ })
+        expect(requestedUrls(fetchMock).filter((u) => u.includes('create-preference'))).toHaveLength(1)
+        expect(preferenceBody(0)).toMatchObject({ tier: 'pro', billingCycle: 'monthly', quoteOnly: true })
+        expect(screen.getByText('$29.990')).toBeInTheDocument()
+    })
+
+    it('el checkout de MP se crea al apretar el botón, y la página que revive del bfcache devuelve la card', async () => {
+        render(<SubscriptionProcessingPage />)
+
+        fireEvent.click(await screen.findByRole('button', { name: /Continuar a MercadoPago/ }))
+        expect(await screen.findByText('Redirigiendo a Mercado Pago...')).toBeInTheDocument()
+        expect(preferenceBody(1)).toMatchObject({ tier: 'pro', gateway: 'mercadopago' })
+        expect(preferenceBody(1)).not.toHaveProperty('quoteOnly')
 
         // El navegador restaura la página desde el bfcache al volver con «atrás».
         const pageshow = new Event('pageshow') as PageTransitionEvent
@@ -144,5 +160,42 @@ describe('processing — volver con «atrás» desde la pasarela (QA escritorio 
         })
 
         expect(await screen.findByRole('button', { name: /Continuar a MercadoPago/ })).toBeEnabled()
+    })
+})
+
+describe('processing — una sola salida según el caso (QA 24-09)', () => {
+    beforeEach(() => {
+        vi.stubGlobal(
+            'fetch',
+            vi.fn().mockResolvedValue({
+                ok: true,
+                status: 200,
+                text: async () => JSON.stringify({ subscriptionStatus: 'pending' }),
+            })
+        )
+    })
+
+    afterEach(() => {
+        cleanup()
+        vi.unstubAllGlobals()
+    })
+
+    it('alta desde el registro: vuelve al panel (el coach Free no tiene nada que reactivar)', async () => {
+        setQuery('from=register')
+        render(<SubscriptionProcessingPage />)
+
+        const salida = await screen.findByRole('link', { name: 'Volver al panel — tu cuenta queda activa igual' })
+        expect(salida).toHaveAttribute('href', '/coach/dashboard')
+        expect(screen.queryByText('Ir a reactivación')).toBeNull()
+    })
+
+    it('vuelta de un pago: «Volver a mi suscripción» (el gate lleva a reactivación solo al bloqueado)', async () => {
+        setQuery('preapproval_id=2c938084-abc&tier=pro&cycle=monthly')
+        render(<SubscriptionProcessingPage />)
+
+        const salidas = await screen.findAllByRole('link', { name: 'Volver a mi suscripción' })
+        expect(salidas).toHaveLength(1)
+        expect(salidas[0]).toHaveAttribute('href', '/coach/subscription')
+        expect(screen.queryByText('Ir a reactivación')).toBeNull()
     })
 })

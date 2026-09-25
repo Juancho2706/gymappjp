@@ -50,54 +50,43 @@ export async function GET() {
         return NextResponse.json({ error: 'Coach not found' }, { status: 404 })
     }
 
-    const { data: events } = await supabase
-        .from('subscription_events')
-        .select('id, provider_status, provider, created_at, provider_checkout_id, payload')
-        .eq('coach_id', user.id)
-        .order('created_at', { ascending: false })
-        .limit(50)
+    // Las 4 lecturas de abajo solo dependen del coach ya verificado y son independientes entre sí:
+    // van en paralelo (QA 24-09: la pantalla de Suscripción tardaba 5-7 s encadenándolas). Cada una
+    // conserva su propio respaldo ante fallos, igual que cuando eran secuenciales.
+    const [events, addons, coupon, activeClientCount] = await Promise.all([
+        supabase
+            .from('subscription_events')
+            .select('id, provider_status, provider, created_at, provider_checkout_id, payload')
+            .eq('coach_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(50)
+            .then(({ data }) => data),
+        // Add-ons del coach (RLS SELECT propio: el client user-scoped solo ve sus filas) +
+        // billing compuesto. EL ÚNICO origen de montos para la UI — la página nunca calcula precios.
+        // tolerante a fallos: si la lectura de add-ons falla, el resto de la respuesta sigue viva.
+        listLive(supabase, user.id).catch((): Awaited<ReturnType<typeof listLive>> => []),
+        // F2a.2b: cupón vivo resuelto via RPC SECURITY DEFINER (cliente user-scoped no puede joinear el
+        // catálogo bajo RLS). El precio MOSTRADO == el COBRADO (SERNAC: disclosed == charged). spec null
+        // (sin cupón) → totalClp idéntico al compuesto de lista. tolerante a fallos: si la RPC falla, sin descuento.
+        resolveActiveDiscountFromRpc(supabase).catch(() => ({ spec: null as DiscountSpec | null, code: null as string | null })),
+        // Alumnos activos standalone (mismo filtro canónico que el cap gate de alta de alumno).
+        // La UI lo usa para bloquear downgrades a un tier cuyo max_clients < alumnos activos.
+        // Tolerante a fallos: si el count falla, 0 (no rompe el resto de la respuesta).
+        countActiveStandaloneClients(supabase, user.id).catch(() => 0),
+    ])
 
-    // Add-ons del coach (RLS SELECT propio: el client user-scoped solo ve sus filas) +
-    // billing compuesto. EL ÚNICO origen de montos para la UI — la página nunca calcula precios.
-    // tolerante a fallos: si la lectura de add-ons falla, el resto de la respuesta sigue viva.
     const tier = parseSubscriptionTier(coach.subscription_tier)
     const cycle = normalizeCycle(coach.billing_cycle)
-    let addons: Awaited<ReturnType<typeof listLive>> = []
-    try {
-        addons = await listLive(supabase, user.id)
-    } catch {
-        addons = []
-    }
     const billable = toBillableAddons(addons)
     const baseClp = getTierPriceClp(tier, cycle)
     const addonsClp = billable.reduce(
         (sum, a) => sum + getAddonCycleAmountClp(a.priceClpMensual, cycle),
         0
     )
-    // F2a.2b: cupón vivo resuelto via RPC SECURITY DEFINER (cliente user-scoped no puede joinear el
-    // catálogo bajo RLS). El precio MOSTRADO == el COBRADO (SERNAC: disclosed == charged). spec null
-    // (sin cupón) → totalClp idéntico al compuesto de lista. tolerante a fallos: si la RPC falla, sin descuento.
-    let couponSpec: DiscountSpec | null = null
-    let couponCode: string | null = null
-    try {
-        const resolved = await resolveActiveDiscountFromRpc(supabase)
-        couponSpec = resolved.spec
-        couponCode = resolved.code
-    } catch {
-        couponSpec = null
-    }
+    const couponSpec: DiscountSpec | null = coupon.spec
+    const couponCode: string | null = coupon.code
     const composite = getCompositeAmountClp(tier, cycle, billable, couponSpec)
     const totalClp = composite.totalClp
-
-    // Alumnos activos standalone (mismo filtro canónico que el cap gate de alta de alumno).
-    // La UI lo usa para bloquear downgrades a un tier cuyo max_clients < alumnos activos.
-    // Tolerante a fallos: si el count falla, 0 (no rompe el resto de la respuesta).
-    let activeClientCount = 0
-    try {
-        activeClientCount = await countActiveStandaloneClients(supabase, user.id)
-    } catch {
-        activeClientCount = 0
-    }
 
     return NextResponse.json({
         coach,
