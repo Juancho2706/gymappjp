@@ -108,7 +108,10 @@ Precondición: W0.2–W0.6 hechos y el deploy web (privacidad + AASA) en producc
       --ref master -f app=mobile -f platform=android -f profile=production -f submit_android=true
       -f android_track=production`. Guard del AAB verde; anotar run, versionCode (esperado 87) y la
       versión resuelta de `facebook-android-sdk` que imprime Gradle.
-- [ ] **W2.4 [owner] Play Console:** la versión 87 está en revisión en Producción; en su panel de
+- [x] **W2.4 [owner] Play Console:** 25-09: Google aprobó y PUBLICÓ la 1.1.3 (87) el mismo día, 18:35 (hora
+      de la consola), lanzamiento completo, 177 países. Panel de la versión: **1 problema** (solo ofuscación DEX 1 %,
+      que es B); P1 desapareció. La declaración «Permisos de servicios en primer plano» sigue pendiente: alpha
+      tiene la 86 (1.1.2) y prueba interna la 81 (1.1.0), ambas con los servicios ⇒ W3.3. la versión 87 está en revisión en Producción; en su panel de
       la versión **P1 ya no figura** (si figura: avisar, el guard no debería haberlo dejado pasar).
       Los cambios de ID de publicidad y Seguridad de los datos van en el mismo envío.
 - [ ] **W2.5 [owner, opcional] QA durante la revisión:** Explorador de app bundles → 87 →
