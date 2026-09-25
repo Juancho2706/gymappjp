@@ -6,6 +6,7 @@ import { Palette, ChevronRight, Users, CreditCard, SlidersHorizontal, LayoutGrid
 import { SupportPane } from './_components/SupportPane'
 import type { Persona } from '@eva/schemas'
 import { SubscriptionContent } from '../subscription/_components/SubscriptionContent'
+import { BrandCoachLoader } from '../_components/BrandCoachLoadingShell'
 import { DangerZone } from './_components/DangerZone'
 import { CoachSignOutCard } from './_components/CoachSignOut'
 import { ThemeToggleCard } from './_components/ThemeToggleCard'
@@ -267,7 +268,7 @@ export default async function CoachSettingsPage() {
         suscripcion: (
             <PaneBody desc="Tu plan, facturación, alumnos activos y métodos de pago.">
                 <Suspense fallback={<p className="text-sm text-muted">Cargando estado de suscripción…</p>}>
-                    <SubscriptionContent embedded />
+                    <SubscriptionContent embedded loader={<BrandCoachLoader />} />
                 </Suspense>
             </PaneBody>
         ),

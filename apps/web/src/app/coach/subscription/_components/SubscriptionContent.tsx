@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import {
     ADDON_CONFIG,
@@ -134,7 +134,14 @@ const RENEWAL_LABEL: Record<BillingCycle, string> = {
     annual: 'cada año',
 }
 
-export function SubscriptionContent({ embedded = false }: { embedded?: boolean }) {
+export function SubscriptionContent({
+    embedded = false,
+    loader,
+}: {
+    embedded?: boolean
+    /** Loader del panel con la identidad del coach (`BrandCoachLoader`, server), para la carga inicial. */
+    loader?: ReactNode
+}) {
     const router = useRouter()
     const searchParams = useSearchParams()
     // E1 (P8): checkout_started gated por consentimiento (no-op si el coach no acepto cookies).
@@ -632,13 +639,15 @@ export function SubscriptionContent({ embedded = false }: { embedded?: boolean }
     // El historial muestra movimientos, no la plomería del checkout (intentos, relevos, candados).
     const visibleEvents = events.filter((event) => !isInternalSubscriptionEvent(event.provider_status))
 
-    // Carga inicial: un solo loader (el del panel, con la marca del coach) y recién después la pantalla
-    // completa. Un error de la carga cae al render normal, que muestra el banner.
+    // Carga inicial: un solo loader —el MISMO del panel: marca del coach si la tiene; si no, solo la
+    // figura EVA sin letras— y recién después la pantalla completa. Un error de la carga cae al render
+    // normal, que muestra el banner.
     if (loading && !coach && !error) {
         return (
             <Wrapper className={embedded ? '' : 'mx-auto max-w-2xl px-5 pb-12 pt-6'}>
-                <div role="status" aria-live="polite" className="flex min-h-[360px] items-center justify-center">
-                    <EvaRouteLoader size="md" subtitle="Cargando tu suscripción" />
+                <div className="flex min-h-[360px] items-center justify-center">
+                    {loader ?? <EvaRouteLoader size="lg" className="py-1" iconMode="eva" showWordmark={false} />}
+                    <span className="sr-only">Cargando tu suscripción</span>
                 </div>
             </Wrapper>
         )

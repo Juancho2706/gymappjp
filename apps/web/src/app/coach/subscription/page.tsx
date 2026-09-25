@@ -1,4 +1,5 @@
 import { Suspense } from 'react'
+import { BrandCoachLoader } from '../_components/BrandCoachLoadingShell'
 import { SubscriptionContent } from './_components/SubscriptionContent'
 
 /**
@@ -9,7 +10,7 @@ import { SubscriptionContent } from './_components/SubscriptionContent'
 export default function CoachSubscriptionPage() {
     return (
         <Suspense fallback={null}>
-            <SubscriptionContent />
+            <SubscriptionContent loader={<BrandCoachLoader />} />
         </Suspense>
     )
 }

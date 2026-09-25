@@ -55,6 +55,23 @@ export async function BrandCoachLoadingShell({
 }: {
     children?: React.ReactNode
 }) {
+    return (
+        <div className="grid w-full animate-in fade-in duration-300 place-items-center px-4 min-h-[calc(100dvh-var(--mobile-content-top-offset)-var(--mobile-content-bottom-offset)-3rem)] md:min-h-[calc(100dvh-60px-5rem)]">
+            <div className="flex flex-col items-center justify-center py-2">
+                <BrandCoachLoader />
+            </div>
+            {children}
+        </div>
+    )
+}
+
+/**
+ * Solo el loader (sin el escenario de pantalla completa), con la MISMA regla de identidad de arriba.
+ * Lo usan las pantallas cliente que cargan su propio estado dentro del panel (Suscripción, QA 24-09)
+ * para no mostrar un loader distinto al de la navegación: sin marca propia ⇒ solo la figura EVA
+ * (negra en claro, blanca en oscuro), sin letras.
+ */
+export async function BrandCoachLoader() {
     const coach = await getCoach()
     // El layout principal ya gatea la marca, pero los loading.tsx se renderizan como
     // hermanos durante una navegación y no deben leer el payload crudo del coach.
@@ -104,29 +121,22 @@ export async function BrandCoachLoadingShell({
         : 'eva'
     const wordmark = fitWordmark(hasCustomText ? loaderText : coach?.brand_name)
 
-    return (
-        <div className="grid w-full animate-in fade-in duration-300 place-items-center px-4 min-h-[calc(100dvh-var(--mobile-content-top-offset)-var(--mobile-content-bottom-offset)-3rem)] md:min-h-[calc(100dvh-60px-5rem)]">
-            <div className="flex flex-col items-center justify-center py-2">
-                {branded ? (
-                    <EvaRouteLoader
-                        size="lg"
-                        className="py-1"
-                        customText={wordmark || undefined}
-                        /* `useCustom` acá significa «pintá el wordmark de la marca»: con marca y
-                           sin nombre utilizable, cae solo al wordmark EVA. */
-                        useCustom={Boolean(wordmark)}
-                        /* W-brand B4: loader_text_color almacenado deja de leerse — el texto se
-                           pinta con el gradiente derivado del primario (preset o legacy). */
-                        primaryColor={accent ?? undefined}
-                        iconMode={iconMode}
-                        coachLogoUrl={logoUrl ?? undefined}
-                        coachLogoDarkUrl={logoDarkUrl ?? undefined}
-                    />
-                ) : (
-                    <EvaRouteLoader size="lg" className="py-1" iconMode="eva" showWordmark={false} />
-                )}
-            </div>
-            {children}
-        </div>
+    return branded ? (
+        <EvaRouteLoader
+            size="lg"
+            className="py-1"
+            customText={wordmark || undefined}
+            /* `useCustom` acá significa «pintá el wordmark de la marca»: con marca y
+               sin nombre utilizable, cae solo al wordmark EVA. */
+            useCustom={Boolean(wordmark)}
+            /* W-brand B4: loader_text_color almacenado deja de leerse — el texto se
+               pinta con el gradiente derivado del primario (preset o legacy). */
+            primaryColor={accent ?? undefined}
+            iconMode={iconMode}
+            coachLogoUrl={logoUrl ?? undefined}
+            coachLogoDarkUrl={logoDarkUrl ?? undefined}
+        />
+    ) : (
+        <EvaRouteLoader size="lg" className="py-1" iconMode="eva" showWordmark={false} />
     )
 }
