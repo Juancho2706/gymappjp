@@ -28,8 +28,9 @@ Play hasta que A esté publicada**; W6 cierra.
       publicidad»; iOS: ATT; web: banner de cookies); §9 deja de decir «No usamos cookies de rastreo
       de terceros». `LAST_UPDATED` al día. **El owner aprueba el texto** antes del deploy.
       Verificación: `pnpm typecheck` + preview de Vercel; deploy a producción **antes** de W2.3.
-- [ ] **W0.3 [owner] Play Console → Contenido de la app → ID de publicidad = Sí**, fines Analítica y
-      Publicidad o marketing.
+- [x] **W0.3 [owner] Play Console → Contenido de la app → ID de publicidad = Sí**, fines Analítica y
+      Publicidad o marketing. Hecho 25-09 desde el navegador del owner (antes decía «No»); guardado sin
+      enviar a revisión: viaja con el envío de A.
 - [ ] **W0.4 [owner] Play Console → Seguridad de los datos:** agregar «Identificadores del
       dispositivo u otros» y «Actividad en la app → Interacciones con la app», recopilados **y
       compartidos**, fines Analítica + Publicidad o marketing, cifrados en tránsito. Guardar como
@@ -37,8 +38,13 @@ Play hasta que A esté publicada**; W6 cierra.
 - [ ] **W0.5 [owner] Permiso de la cuenta de servicio:** Play Console → Usuarios y permisos → la
       cuenta de servicio de CI tiene «Publicar en producción…» (hoy sube a alpha). Sin él, W2.3
       falla y el AAB se sube a mano el mismo día.
-- [ ] **W0.6 [owner] Publicación gestionada:** confirmar que sigue desactivada (A sale sola al
+- [x] **W0.6 [owner] Publicación gestionada:** confirmado 25-09: desactivada (A sale sola al
       aprobarse). Palanca opcional para B: encenderla solo durante B (W5.2).
+
+- [ ] **W0.7 [owner] Declaración «Permisos de servicios en primer plano» pendiente** (Contenido de la
+      app → Requiere atención; plazo vencido en ene 2024). Se resuelve por la vía «quitar el permiso»:
+      A ya no trae `FOREGROUND_SERVICE_MEDIA_PLAYBACK`. **No** declarar un tipo que la app no usa. Si al
+      subir A Play la sigue exigiendo por la 86 activa en alpha, pausar alpha (adelanta W3.3).
 
 ## W1 · Código del binario A
 
