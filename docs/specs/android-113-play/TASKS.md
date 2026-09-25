@@ -20,7 +20,7 @@ Play hasta que A esté publicada**; W6 cierra.
 
 - [x] **W0.1 [owner] Respuestas Q1–Q4** (25-09): D5 `/coach/subscription` fuera de ambas, D6 directo
       a producción sin pista de prueba, D7 `/privacidad` completa, D8 Meta igual que iOS.
-- [ ] **W0.2 [agente → owner] `/privacidad` completa (D7)** — texto escrito 25-09; falta el OK del owner al texto y el deploy (`apps/web/src/app/privacidad/page.tsx`): §5
+- [x] **W0.2 [agente → owner] `/privacidad` completa (D7)** — OK del owner 25-09; en producción con `89bd9d9c` (verificado por curl: fecha 25-09, Meta, Sentry, «Borrar ID de publicidad», sin «No usamos cookies de rastreo») (`apps/web/src/app/privacidad/page.tsx`): §5
       suma Meta Platforms (medición de anuncios: web y app), Functional Software/Sentry (errores de
       la app), Flow (pagos) y Google (inicio de sesión); §4 y §9 explican identificadores
       publicitarios y eventos de app (instalación, apertura, alta de coach; nunca datos de salud,
@@ -39,7 +39,7 @@ Play hasta que A esté publicada**; W6 cierra.
       dispositivo u otros» y «Actividad en la app → Interacciones con la app», recopilados **y
       compartidos**, fines Analítica + Publicidad o marketing, cifrados en tránsito. Guardar como
       borrador; se envía junto con A.
-- [ ] **W0.5 [owner] Permiso de la cuenta de servicio:** verificado 25-09: `eas-submit-eva@gplayeva.iam.gserviceaccount.com`
+- [x] **W0.5 [owner] Permiso de la cuenta de servicio:** el owner lo marcó 25-09 (4 → 7 permisos). verificado 25-09: `eas-submit-eva@gplayeva.iam.gserviceaccount.com`
       tiene «Lanzar aplicaciones en canales de pruebas» y «Gestionar canales de pruebas», **no** «Lanzar a
       producción…». Falta que el owner lo marque (cambio de permisos: no lo hace el agente). Play Console → Usuarios y permisos → la
       cuenta de servicio de CI tiene «Publicar en producción…» (hoy sube a alpha). Sin él, W2.3
@@ -85,21 +85,26 @@ Play hasta que A esté publicada**; W6 cierra.
       0 errores (antes hubo que regenerar los tipos de rutas con `next typegen`: el
       `.next/dev/types/routes.d.ts` estaba corrupto, gotcha conocido). `eas.json` validado con
       `@expo/eas-json` (`production-store` ⇒ track production, releaseStatus completed).
-- [ ] **W1.8 [agente] Commit** en `rnmobiledenuevo` con rutas explícitas. **Push / PR a `master`
-      solo con OK del owner.** CI del PR verde (`ci.yml`, `Mobile Integration CI`).
+- [x] **W1.8 [agente] Commit** en `rnmobiledenuevo` con rutas explícitas. **Push / PR a `master`
+      solo con OK del owner.** CI del PR verde (`ci.yml`, `Mobile Integration CI`). **25-09:** push directo a
+      `master` con OK del owner (`89bd9d9c`); CI y Mobile Integration CI verdes; deploy de Vercel OK; AASA sin
+      `/coach/subscription`.
 
 ## W2 · Build y producción de A (directo, D6)
 
 Precondición: W0.2–W0.6 hechos y el deploy web (privacidad + AASA) en producción.
 
-- [ ] **W2.1 [agente] Preflight OTA:** `eas update:list --branch production --json` — registrar el
+- [x] **W2.1 [agente] Preflight OTA:** `eas update:list --branch production --json` — registrar el
       último grupo Android de runtime 1.1.3 (hoy `4fea95fe`, viejo, de `90d7907`) y el último de
       1.1.2. `eas build:version:get -p android` = 86.
-- [ ] **W2.2 [agente, con OK] OTA de alineación, ANTES del binario:** `mobile-ota.yml`
+- [x] **W2.2 [agente, con OK] OTA de alineación, ANTES del binario:** 25-09 grupo
+      `0ef6dfe1-e86e-4fd2-a7b4-45e8aad493f3` (run 36184716825, verde), runtime 1.1.3 android. `mobile-ota.yml`
       `platform=android` desde el commit que se va a compilar, mensaje «alineación OTA Android 1.1.3
       con el binario 87». Hoy no hay ningún Android 1.1.3 instalado ⇒ no llega a nadie; deja de ser
       `4fea95fe` lo último del canal para Android 1.1.3. Verificar con `eas update:list`.
-- [ ] **W2.3 [agente, con OK] Build + submit a producción:** `gh workflow run mobile-build.yml
+- [x] **W2.3 [agente, con OK] Build + submit a producción:** 25-09 run 36184729637 verde: guard «Sin errores»
+      y sin avisos (1.1.3 / versionCode 87, 15 servicios, 3 receptores de reinicio, AD_ID sí); `eas submit`
+      perfil `production-store` → track production, status COMPLETED (submission `15072e5c`). `gh workflow run mobile-build.yml
       --ref master -f app=mobile -f platform=android -f profile=production -f submit_android=true
       -f android_track=production`. Guard del AAB verde; anotar run, versionCode (esperado 87) y la
       versión resuelta de `facebook-android-sdk` que imprime Gradle.
