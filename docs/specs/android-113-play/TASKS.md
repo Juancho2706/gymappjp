@@ -31,11 +31,17 @@ Play hasta que A esté publicada**; W6 cierra.
 - [x] **W0.3 [owner] Play Console → Contenido de la app → ID de publicidad = Sí**, fines Analítica y
       Publicidad o marketing. Hecho 25-09 desde el navegador del owner (antes decía «No»); guardado sin
       enviar a revisión: viaja con el envío de A.
-- [ ] **W0.4 [owner] Play Console → Seguridad de los datos:** agregar «Identificadores del
+- [x] **W0.4 [owner] Play Console → Seguridad de los datos:** hecho 25-09 desde el navegador del owner
+      (con su permiso explícito): «Interacciones con la aplicación» nueva (recogida + compartida, no
+      temporal, necesaria, Análisis + Publicidad); «IDs de dispositivo» pasa a compartida (Análisis +
+      Publicidad) y su recogida suma Publicidad (ya tenía Análisis + Comunicaciones). Guardado sin
+      enviar a revisión. agregar «Identificadores del
       dispositivo u otros» y «Actividad en la app → Interacciones con la app», recopilados **y
       compartidos**, fines Analítica + Publicidad o marketing, cifrados en tránsito. Guardar como
       borrador; se envía junto con A.
-- [ ] **W0.5 [owner] Permiso de la cuenta de servicio:** Play Console → Usuarios y permisos → la
+- [ ] **W0.5 [owner] Permiso de la cuenta de servicio:** verificado 25-09: `eas-submit-eva@gplayeva.iam.gserviceaccount.com`
+      tiene «Lanzar aplicaciones en canales de pruebas» y «Gestionar canales de pruebas», **no** «Lanzar a
+      producción…». Falta que el owner lo marque (cambio de permisos: no lo hace el agente). Play Console → Usuarios y permisos → la
       cuenta de servicio de CI tiene «Publicar en producción…» (hoy sube a alpha). Sin él, W2.3
       falla y el AAB se sube a mano el mismo día.
 - [x] **W0.6 [owner] Publicación gestionada:** confirmado 25-09: desactivada (A sale sola al
