@@ -1,5 +1,6 @@
 import type { HrMetadataV1 } from '@eva/cardio'
 import type { WorkoutSkipMetadata } from './day-completion'
+import type { WeightUnit } from './weight-unit'
 
 /**
  * Quién cerró un HOLD (specs/cuenta-atras-en-pantalla, A3/R19). `'timer'` = la cuenta atrás llegó a 0
@@ -99,6 +100,10 @@ export type WorkoutOfflineLog = {
     // Opcional/aditivo: los items legacy encolados (sin la key) siguen parseando; el flush lo reenvía
     // intacto a `workout_logs.metadata`.
     metadata?: WorkoutLogMetadata | null
+    // ── Unidad tecleada del peso (tren kg-lb-ejecutor) ──
+    // Opcional/aditivo: `weightKg` ya está en kilos; esto solo dice en qué unidad lo tipeó el alumno.
+    // Un item encolado antes del tren no la trae ⇒ kilos (nunca se reinterpreta ni se reconvierte).
+    weightUnit?: WeightUnit | null
     // ── Edición de día pasado (E1.5/E1.6) — fecha objetivo yyyy-mm-dd Santiago ──
     // Opcional/aditivo: solo presente cuando la serie se editó con `?fecha=` (modo solo-UPDATE).
     // Sin ella, el flush escribe HOY como siempre. CRÍTICO que viaje EN el item: el flush global de
@@ -136,6 +141,8 @@ export type ReconciledSessionLog = {
     // Espejo de `workout_logs.metadata` jsonb: hold por lado (E0.5) y/o `hr` del bloque cardio
     // (cardio-conectado). El server devuelve la columna tal cual tras reload.
     metadata?: WorkoutLogMetadata | null
+    // Espejo de `workout_logs.weight_unit` (tren kg-lb-ejecutor): unidad que tecleó el alumno.
+    weight_unit?: WeightUnit | null
     /** true ⇒ en la cola offline, sin confirmar por el server (ver doc del tipo). */
     _pending?: boolean
 }
@@ -203,6 +210,7 @@ export function reconcileSessionLogs(
             substituted_exercise_name: q.substitutedExerciseName ?? null,
             substitution_reason: q.substitutionReason ?? null,
             metadata: q.metadata ?? null,
+            ...(q.weightUnit != null ? { weight_unit: q.weightUnit } : {}),
             _pending: true,
         })
     }

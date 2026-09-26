@@ -48,6 +48,12 @@ export interface TypedKeypadContext {
      * Ausente / desconocida ⇒ ejes genéricos (Min · Distancia · FC), byte-idénticos a los previos.
      */
     cardioModality?: string | null
+    /**
+     * Unidad en que el alumno TECLEA el peso de fuerza (tren kg-lb-ejecutor): `'kg'` | `'lb'`. El
+     * payload convierte a kilos (`weightToKg`) y agrega `weightUnit`. Ausente ⇒ byte-idéntico a lo
+     * previo (el peso viaja tal cual y el payload no gana la key).
+     */
+    weightUnit?: string | null
 }
 
 /** Normaliza el 2º argumento histórico (`sideMode` suelto) al contexto tipado. */

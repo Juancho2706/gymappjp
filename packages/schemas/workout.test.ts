@@ -436,6 +436,22 @@ describe('WorkoutLogSetSchema — espejo polimórfico (AC4)', () => {
         expect(WorkoutLogSetSchema.safeParse({ ...baseLog, actual_avg_hr: 300 }).success).toBe(false)
     })
 
+    // Tren kg-lb-ejecutor: `weight_kg` llega en kilos y `weight_unit` solo registra cómo se tecleó.
+    it('weight_unit: acepta kg y lb, es opcional y rechaza cualquier otra cosa', () => {
+        const lb = WorkoutLogSetSchema.safeParse({ ...baseLog, weight_kg: '20.41', weight_unit: 'lb' })
+        expect(lb.success).toBe(true)
+        if (lb.success) {
+            expect(lb.data.weight_kg).toBe(20.41)
+            expect(lb.data.weight_unit).toBe('lb')
+        }
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, weight_unit: 'kg' }).success).toBe(true)
+        const sin = WorkoutLogSetSchema.safeParse({ ...baseLog, weight_kg: '60' })
+        expect(sin.success).toBe(true)
+        if (sin.success) expect(sin.data.weight_unit).toBeUndefined()
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, weight_unit: 'sec' }).success).toBe(false)
+        expect(WorkoutLogSetSchema.safeParse({ ...baseLog, weight_unit: 'LB' }).success).toBe(false)
+    })
+
     // Escalas executor-v3 (corrección CEO 2026-07-22): RPE 1-10; RIR 0-10 (0 = al fallo).
     it('acepta los bordes válidos: RPE 1 y 10, RIR 0 y 10', () => {
         expect(WorkoutLogSetSchema.safeParse({ ...baseLog, rpe: '1', rir: '0' }).success).toBe(true)

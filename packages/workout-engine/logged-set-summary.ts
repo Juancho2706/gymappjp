@@ -16,12 +16,18 @@
 
 import { sideRepsFromMetadata, type ExerciseType } from './workout-exercise-type'
 import { formatCardioReps, repsUnitForModality } from './cardio-modality'
+import { normalizeWeightUnit, weightFromKg } from './weight-unit'
 
 /** Subconjunto de `workout_logs` que necesita la línea (todas las columnas ya existen). */
 export interface LoggedSetLike {
     reps_done?: number | null
     /** Peso levantado (kg): sólo lo usa la línea de FUERZA por lado (`formatStrengthSetLine`). */
     weight_kg?: number | null
+    /**
+     * Unidad que TECLEÓ el alumno (`workout_logs.weight_unit`, tren kg-lb-ejecutor). `weight_kg` sigue
+     * siendo kilos; esto solo decide la anotación «(45 lb)» de la vista del coach. Ausente ⇒ kilos.
+     */
+    weight_unit?: string | null
     actual_duration_sec?: number | null
     actual_distance_m?: number | null
     actual_avg_hr?: number | null
@@ -162,6 +168,39 @@ export function formatLoggedSetLine(
 }
 
 /**
+ * Cómo se lee el peso de una serie (tren kg-lb-ejecutor). Ausente ⇒ «20 kg», idéntico a lo previo.
+ *  - `unit: 'lb'` ⇒ lectura del ALUMNO que eligió libras: «45 lb».
+ *  - `annotateEntered: true` ⇒ lectura del COACH (D5 = a): kilos correctos y, si el alumno tecleó en
+ *    libras (`log.weight_unit`), la unidad tecleada al lado: «20,4 kg (45 lb)».
+ */
+export interface WeightLineOptions {
+    unit?: string | null
+    annotateEntered?: boolean
+}
+
+/**
+ * Peso en texto para una lectura: «45 lb» (alumno en libras), «20,4 kg (45 lb)» (coach, tecleado en
+ * libras) o «20,4 kg». Un decimal como máximo, sin ceros de cola, sin `Intl`.
+ */
+export function formatLoggedWeight(
+    kg: number,
+    opts?: { unit?: string | null; enteredUnit?: string | null },
+): string {
+    if (normalizeWeightUnit(opts?.unit) === 'lb') {
+        return `${formatEsNumber(weightFromKg(kg, 'lb'), 1)} lb`
+    }
+    const base = `${formatEsNumber(kg, 1)} kg`
+    return opts?.enteredUnit === 'lb' ? `${base} (${formatEsNumber(weightFromKg(kg, 'lb'), 1)} lb)` : base
+}
+
+function weightText(kg: number, log: LoggedSetLike, opts?: WeightLineOptions): string {
+    return formatLoggedWeight(kg, {
+        unit: opts?.unit,
+        enteredUnit: opts?.annotateEntered ? log.weight_unit : null,
+    })
+}
+
+/**
  * Línea de una serie de FUERZA registrada POR LADO: «20 kg × 10 / 10» (R19, opción a).
  *
  * Export SEPARADO a propósito: `formatLoggedSetLine('strength')` sigue devolviendo `null` porque ese
@@ -172,13 +211,15 @@ export function formatLoggedSetLine(
  * Devuelve `null` cuando el log no trae los DOS lados válidos en `metadata` (`sideRepsFromMetadata`)
  * ⇒ una serie bilateral se pinta exactamente como hoy. Sin peso (peso corporal, `0` o `null`) la
  * línea es sólo «10 / 10»: el dato del alumno son los lados, no un «0 kg» inventado.
+ *
+ * 2º argumento opcional (`WeightLineOptions`): unidad de lectura del alumno o anotación del coach.
  */
-export function formatStrengthSetLine(log: LoggedSetLike): string | null {
+export function formatStrengthSetLine(log: LoggedSetLike, opts?: WeightLineOptions): string | null {
     const sides = sideRepsFromMetadata(log.metadata)
     if (!sides) return null
     const reps = `${formatEsNumber(sides.left)} / ${formatEsNumber(sides.right)}`
     const weight = positive(log.weight_kg)
-    return weight != null ? `${formatEsNumber(weight, 1)} kg × ${reps}` : reps
+    return weight != null ? `${weightText(weight, log, opts)} × ${reps}` : reps
 }
 
 /**
@@ -200,17 +241,18 @@ export function formatStrengthSetLine(log: LoggedSetLike): string | null {
  * el mismo que ya ve el coach en movilidad: mismo redondeo, mismos rótulos «Izq./Der.», misma regla
  * de simetría. Convención tipográfica R11: acá es `30 s` CON espacio (línea larga de ficha/log),
  * mientras que los chips cortos usan `30s` vía `compactDuration`.
+ *
+ * 2º argumento opcional (`WeightLineOptions`): mismo contrato que `formatStrengthSetLine`.
  */
-export function formatStrengthTimeSetLine(log: LoggedSetLike): string | null {
+export function formatStrengthTimeSetLine(log: LoggedSetLike, opts?: WeightLineOptions): string | null {
     const parts = mobilityParts(log)
     if (parts.length === 0) return null
     const hold = parts.join(' · ')
     const weight = positive(log.weight_kg)
     const reps = positive(log.reps_done)
     if (weight != null) {
-        return reps != null
-            ? `${formatEsNumber(weight, 1)} kg × ${formatEsNumber(reps)} · ${hold}`
-            : `${formatEsNumber(weight, 1)} kg × ${hold}`
+        const w = weightText(weight, log, opts)
+        return reps != null ? `${w} × ${formatEsNumber(reps)} · ${hold}` : `${w} × ${hold}`
     }
     return reps != null ? `${formatEsNumber(reps)} reps · ${hold}` : hold
 }

@@ -1,4 +1,5 @@
 import type { ReconciledSessionLog, WorkoutLogMetadata } from './session-logs.reconcile'
+import type { WeightUnit } from './weight-unit'
 
 /**
  * Payload de "serie recién confirmada localmente" que el hijo (`LogSetForm` / `TypedLogSetRow`)
@@ -28,6 +29,9 @@ export type OptimisticLogPayload = {
     // del bloque cardio bajo `hr` (cardio-conectado). Opcional — el camino strength/tipado bilateral
     // no lo manda. Debe PRESERVARSE (mismo bug forense del hold).
     metadata?: WorkoutLogMetadata | null
+    // Unidad que TECLEÓ el alumno (tren kg-lb-ejecutor): `weightKg` ya viene en kilos. Opcional — sin
+    // selector (o con series viejas) no viaja y todo queda byte-idéntico.
+    weightUnit?: WeightUnit | null
 }
 
 /**
@@ -56,6 +60,8 @@ export function buildOptimisticSessionLog(payload: OptimisticLogPayload): Reconc
         // Preserva el hold por lado (E0.5) igual que los demás ejes: sin esto, un optimismo sobre una
         // serie per_side viajaría sin {left_sec, right_sec} y la fila tipada los perdería al confirmar.
         metadata: payload.metadata ?? null,
+        // La unidad tecleada viaja solo si existe (misma convención de paridad que `metadata` en el payload).
+        ...(payload.weightUnit != null ? { weight_unit: payload.weightUnit } : {}),
     }
 }
 

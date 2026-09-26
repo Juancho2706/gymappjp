@@ -17,12 +17,26 @@ Push, deploy, OTA y cualquier `UPDATE` de datos en LIVE **solo a pedido del owne
 
 ## W1 · Motor y schema
 
-- [ ] **W1.1** `packages/workout-engine/weight-unit.ts`: `KG_PER_LB = 0.45359237`, `toKg`, `fromKg`,
-  `roundForUnit`, presets de rueda y teclado por unidad. Tests de ida y vuelta.
-- [ ] **W1.2** Formateadores con unidad: `formatWeightEsCl`, `formatStrengthSetLine`, línea de fuerza por
-  tiempo (`logged-set-summary.ts`). Los tests viejos en kg siguen verdes sin tocarlos.
-- [ ] **W1.3** `set-log-payload.ts`: único punto de conversión; agrega `weight_unit`.
-- [ ] **W1.4** `WorkoutLogSetSchema.weight_unit` opcional (`packages/schemas/workout.ts`).
+- [x] **W1.1** `packages/workout-engine/weight-unit.ts`: `KG_PER_LB = 0.45359237`, `toKg`, `fromKg`,
+  `roundForUnit`, presets de rueda y teclado por unidad. Tests de ida y vuelta. — 26-09: `weightToKg`,
+  `weightFromKg`, `convertTypedWeight` (cambio de selector), `resolveInitialWeightUnit` (D2),
+  `suggestedWeightInUnit` (2,5 lb), `WHEEL_WEIGHT_SPECS`, `KEYPAD_STEP_PRESETS_LB`/`DEFAULT_KEYPAD_STEP_LB`;
+  ida y vuelta exacta con `numeric(6,2)` para 16 valores (0–999 lb) en `weight-unit.test.ts`.
+- [x] **W1.2** Formateadores con unidad: `formatWeightEsCl`, `formatStrengthSetLine`, línea de fuerza por
+  tiempo (`logged-set-summary.ts`). Los tests viejos en kg siguen verdes sin tocarlos. — 26-09:
+  `formatLoggedWeight` + 2º argumento opcional `{ unit, annotateEntered }` en `formatStrengthSetLine` y
+  `formatStrengthTimeSetLine` («45 lb» alumno · «20,4 kg (45 lb)» coach); `LoggedSetLike.weight_unit`.
+  `formatWeightEsCl` no cambia (es texto del teclado, sin unidad).
+- [x] **W1.3** `set-log-payload.ts`: único punto de conversión; agrega `weight_unit`. — 26-09:
+  `TypedKeypadContext.weightUnit` → `buildStrengthPayload`/`buildStrengthTimePayload` convierten a kg y
+  agregan `weightUnit` solo si hay unidad (sin ella, byte-idéntico); `OptimisticLogPayload`,
+  `WorkoutOfflineLog` y `ReconciledSessionLog` cargan la unidad (optimismo y cola offline).
+- [x] **W1.4** `WorkoutLogSetSchema.weight_unit` opcional (`packages/schemas/workout.ts`). — 26-09:
+  `z.enum(['kg','lb']).optional()` + test.
+- **Gates W1 (26-09, salida real):** `vitest run packages/workout-engine packages/schemas/workout.test.ts`
+  41 archivos / 960 tests ✓ (40 nuevos en `weight-unit.test.ts`); ejecutor web + cola offline + ficha del
+  coach + `tests/mobile` 181 archivos / 2.381 tests ✓; `pnpm typecheck` exit 0; mobile `tsc --noEmit`
+  exit 0; eslint de los 10 archivos tocados exit 0. Sin UI todavía: nada cambia para el usuario.
 
 ## W2 · Base de datos (si D1 = a)
 

@@ -24,6 +24,7 @@ import {
   type TypedKeypadMode,
 } from './typed-keypad'
 import { cardioHasDistanceAxis, repsUnitForModality } from './cardio-modality'
+import { isWeightUnit, weightToKg, type WeightUnit } from './weight-unit'
 
 /** Parsea un string es-CL (coma decimal) a número, o null si vacío/NaN. */
 export function num(v: string | undefined): number | null {
@@ -256,6 +257,21 @@ export type WorkoutLogSideRepsMetadata = WorkoutLogSideMetadata & {
   right_reps?: number | null
 }
 
+/**
+ * Peso de FUERZA tipeado → kilos + la unidad que viaja (tren kg-lb-ejecutor, R2/R7). ÚNICO punto de
+ * conversión del ejecutor: la UI manda el número tal como lo ve el alumno y acá se pasa a kilos una
+ * sola vez (nunca dos). Sin `weightUnit` en el contexto ⇒ `{ weightKg: num(weight) }` sin key de
+ * unidad, byte-idéntico a lo previo.
+ */
+function strengthWeight(
+  raw: string | undefined,
+  weightUnit: string | null | undefined,
+): { weightKg: number | null; weightUnit?: WeightUnit } {
+  const typed = num(raw)
+  if (!isWeightUnit(weightUnit)) return { weightKg: typed }
+  return { weightKg: typed == null ? null : weightToKg(typed, weightUnit), weightUnit }
+}
+
 /** Rango válido de reps por lado: espejo exacto de la regex `^[0-9]{1,4}$` del SQL (R27). */
 const SIDE_REPS_MAX = 9999
 
@@ -289,7 +305,8 @@ export function buildStrengthPayload(
   // Nota rápida por serie (paridad web A.4.d / `handleSubmit` noteTrimmed, LogSetForm.tsx:365/443-458):
   // string crudo tipeado en la fila; vacío/espacios ⇒ null (misma normalización que `note.trim() || null`).
   const note = values.note?.trim()
-  const { sideMode } = typedKeypadContext(ctx)
+  const { sideMode, weightUnit } = typedKeypadContext(ctx)
+  const weight = strengthWeight(values.weight, weightUnit)
   const perSide = sideMode === 'per_side' || sideMode === 'alternating'
   const left = perSide ? sideReps(values.reps_left) : null
   const right = perSide ? sideReps(values.reps_right) : null
@@ -304,12 +321,13 @@ export function buildStrengthPayload(
   return {
     blockId,
     setNumber,
-    weightKg: num(values.weight),
+    weightKg: weight.weightKg,
     repsDone: hasSide ? Math.min(...([left, right].filter((r): r is number => r != null))) : int(values.reps),
     rpe: int(values.rpe),
     rir: int(values.rir),
     note: note ? note : null,
     ...(metadata !== undefined ? { metadata } : {}),
+    ...(weight.weightUnit !== undefined ? { weightUnit: weight.weightUnit } : {}),
   }
 }
 
@@ -387,13 +405,14 @@ export function buildStrengthTimePayload(
 ): OptimisticLogPayload {
   // Nota rápida por serie: misma normalización que `buildStrengthPayload` (`note.trim() || null`).
   const note = values.note?.trim()
-  const { sideMode } = typedKeypadContext(ctx)
+  const { sideMode, weightUnit } = typedKeypadContext(ctx)
+  const weight = strengthWeight(values.weight, weightUnit)
   const hold = strengthHoldValues(values, sideMode)
   const metadata = buildLogMetadata(hold.metadata, null, contextHoldSource(ctx))
   return {
     blockId,
     setNumber,
-    weightKg: num(values.weight),
+    weightKg: weight.weightKg,
     // F1: el tile REPS volvió a la fila de fuerza por tiempo y lo que el alumno escriba viaja acá.
     // Vacío ⇒ `null` (la serie se guarda igual, con el hold como único eje).
     repsDone: optionalReps(values.reps),
@@ -402,5 +421,6 @@ export function buildStrengthTimePayload(
     note: note ? note : null,
     actualHoldSec: hold.actualHoldSec,
     ...(metadata !== undefined ? { metadata } : {}),
+    ...(weight.weightUnit !== undefined ? { weightUnit: weight.weightUnit } : {}),
   }
 }

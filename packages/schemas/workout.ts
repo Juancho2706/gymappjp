@@ -297,6 +297,11 @@ export const WorkoutLogSetSchema = z.object({
     block_id: z.string().uuid(),
     set_number: z.coerce.number().int().min(1),
     weight_kg: z.coerce.number().min(0).optional(),
+    // Unidad que TECLEÓ el alumno (tren kg-lb-ejecutor, docs/specs/kg-lb-ejecutor). `weight_kg` llega
+    // SIEMPRE en kilos (la conversión la hace `@eva/workout-engine` en el payload); esto solo registra
+    // cómo lo escribió. Opcional: una serie sin selector o encolada antes del tren valida idéntica.
+    // Enum cerrado y sin CHECK en DB (tabla caliente, misma política que el resto del payload).
+    weight_unit: z.enum(['kg', 'lb']).optional(),
     reps_done: z.coerce.number().int().min(0).optional(),
     // Escalas executor-v3 (corrección CEO 2026-07-22): RPE 1-10 (un RPE 0 no significa nada en una
     // serie real); RIR 0-10 (RIR 0 = al fallo, sin reps en reserva).

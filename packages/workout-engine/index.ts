@@ -62,3 +62,6 @@ export * from './cycle-cursor.fixtures'
 export * from './program-day-label'
 export * from './target-date'
 export * from './notif-permission'
+// Kilos o libras (tren kg-lb-ejecutor): conversión única tipeado ↔ kg, unidad inicial del selector,
+// rueda/chips por unidad. `weight_kg` sigue siendo SIEMPRE kilos.
+export * from './weight-unit'
