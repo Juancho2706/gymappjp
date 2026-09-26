@@ -41,7 +41,7 @@ El job `quality` no los ejecuta, pero las reglas del repo y las specs vigentes l
 2. `pnpm check:meal-completions-deprecation` — guarda de la deprecación de `meal_completions`.
 3. `node scripts/cabina-visual-check.mjs` — gate visual Playwright del editor único (T3.v Cabina + Guía Viva + Sello v2): asserts BLOQUEANTES de geometría, contraste y recorrido de los tours sobre el harness `dev-harness/nutrition-editor` (308 declarados en el corte del Sello v2, 2026-08-17). Levanta el dev server de `apps/web` en el puerto 3123 salvo que reciba `BASE_URL`.
 4. `pnpm --filter @eva/mobile exec tsc --noEmit` — TypeScript móvil; el `typecheck` raíz solo cubre web.
-5. `tests/dossier-export.spec.ts` — Playwright del export «Dossier por meses» (diálogo web, segmento «Por meses», un chip, rótulo del CTA). **Escrito el 16-09-2026, no corrido**: se ejecuta solo en el gate final autorizado por el owner (`docs/specs/dossier-por-meses/TASKS.md` E3).
+5. `tests/dossier-export.spec.ts` — Playwright del export «Dossier por meses» (diálogo web, segmento «Por meses», un chip, rótulo del CTA). **Escrito el 16-09-2026, no corrido**: se ejecuta solo en el gate final autorizado por el owner (`docs/specs/dossier-por-meses/TASKS.md` E3). **26-09: el owner decidió no correrlo por ahora.** En prod ya no existen las cuentas que usa (`e2e-solo-coach@evatest.cl` ni ningún `clientId` de `tests/e2e-accounts.ts`; queda solo `qa-e2e-coach`, sin alumnos). Correrlo en local (`.env.e2e.local` apunta a Supabase local) cuando haya stack local con personas sembradas.
 
 ## Reglas eslint locales (`tools/eslint-rules/`)
 
