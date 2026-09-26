@@ -46,7 +46,7 @@ proyecto, ni eventos por sección.
 - Con Free = 1 alumno, casi nadie llega al segundo alumno ⇒ casi nadie ve la oferta. Hoy la única otra
   señal es un link chico «Ver planes →» en el panel (`app/coach/dashboard/_components/DashboardShell.tsx:403`).
 
-## 5. Lectura y recomendación
+## 5. Lectura y recomendación (decisiones del owner al final)
 
 1. **No reestructurar la landing a ciegas.** Convierte a registro dentro de lo esperable para B2B gratis y
    el cuello está después. Primero medir: eventos `landing_section_viewed` (uno por sección y sesión) y
@@ -56,3 +56,12 @@ proyecto, ni eventos por sección.
    Apple 3.1.1 y la regla del embudo (CAPA 1/1', `docs/specs/embudo-free-pro/SPEC.md`). Mockup antes de UI.
 3. **Link de Instagram:** sin código. Bio → `https://www.eva-app.cl/pricing?utm_source=instagram&utm_medium=bio`;
    el proxy guarda el UTM en la cookie first-touch `eva_utm` y queda asociado al alta.
+
+## 6. Decisiones del owner (26-09, opción múltiple)
+
+- **Landing:** medir primero (`landing_section_viewed` + `landing_cta_clicked`), rediseño recién con datos.
+- **Botones Pro:** **A** (tarjeta de plan en el panel, reemplaza «Ver planes →») + **C** (aviso una sola vez
+  al crear el alumno que llena el cupo), en la **web: escritorio y PWA**. **B** (botón fijo en la barra)
+  descartado por ahora. **En la app nada nuevo:** iOS sin botón/link/precio y Android con su línea sin link
+  (reglas de pago de las tiendas, CAPA 1/1' del embudo).
+- **Orden de implementación:** kg/lb → píxel de compra → botones Pro (A + C) → medición de la landing.

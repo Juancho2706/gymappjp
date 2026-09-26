@@ -11,7 +11,8 @@ canonical: false
 > sin importar si pagó por Mercado Pago o por Flow (Webpay) y sin depender de que acepte cookies.
 >
 > Origen: tarea de Sergio (marketing) en el correo «Tarea Sergio», 26-09: «Hacer pixel de compra a los
-> dos flujos». Estado: **borrador** — esperan D1–D4 (§4). Plan en [PLAN.md](PLAN.md); tareas en
+> dos flujos». Estado: **decidido el 26-09** (D1–D4 = (a)), en cola detrás de
+> [kg-lb-ejecutor](../kg-lb-ejecutor/SPEC.md). Plan en [PLAN.md](PLAN.md); tareas en
 > [TASKS.md](TASKS.md).
 
 ## 1. Qué hay hoy (HEAD `822153a7`)
@@ -60,7 +61,7 @@ cobros de `payment_provider = 'internal'` no se envían.
 **R7 · Observabilidad.** Log `[meta-capi] enviado Purchase <eid>` (ya existe en el helper) y fila en
 `admin_audit_logs` `meta.purchase_sent` con `provider` y `total_clp` (sin PII) para auditar después.
 
-## 4. Decisiones del owner (pendientes)
+## 4. Decisiones del owner (26-09, opción múltiple: todas (a))
 
 - **D1 · Qué cobros se envían.** (a) **Solo el primer cobro de cada coach.** **Recomendada**: es la
   conversión que produce el anuncio; las renovaciones caen fuera de la ventana de atribución y solo meten

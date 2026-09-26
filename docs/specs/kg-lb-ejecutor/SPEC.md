@@ -1,5 +1,5 @@
 ---
-status: draft
+status: active
 owner: product-engineering
 last_verified: "2026-09-26"
 canonical: false
@@ -13,8 +13,8 @@ canonical: false
 >
 > Origen: pedido de las coaches de **Doblemente Fit** (Silvia y Angela Montefusco, coach
 > `doblementefit-20de5n`) por WhatsApp, 26-09: «tener las dos opciones a la hora de ejecutar los
-> ejercicios y colocar si el alumno está con kilos o libras». Estado: **borrador** — esperan las
-> decisiones D1–D5 (§4) y el mockup (artifact de pedidos 26-09). Plan en [PLAN.md](PLAN.md);
+> ejercicios y colocar si el alumno está con kilos o libras». Estado: **decidido el 26-09** — D1–D5 = (a) y
+> mockup aprobado tal cual (artifact `WDwkaKEaKCjQneH7dtYUkG`). Primer tren a implementar. Plan en [PLAN.md](PLAN.md);
 > tareas en [TASKS.md](TASKS.md).
 
 ## 1. El problema, con evidencia (LIVE, 26-09)
@@ -76,7 +76,11 @@ del coach para toda la analítica queda en v2 (D5).
 `kg` (así se tecleó en esa versión). Nunca se convierte dos veces: la conversión ocurre una sola vez, en el
 payload (`packages/workout-engine/set-log-payload.ts`), y está cubierta por tests de ida y vuelta.
 
-## 4. Decisiones del owner (pendientes)
+## 4. Decisiones del owner (26-09, opción múltiple: todas (a))
+
+**Superficies (regla del owner, 26-09):** todo cambio cubre la **app nativa (iOS y Android)**, la
+**PWA en el celular** y el **escritorio web**. El ejecutor web (`/c/[coach_slug]/workout/…`) sirve a la
+PWA y al escritorio: se verifica en los dos anchos. El builder existe en web (escritorio/PWA) y en RN.
 
 - **D1 · Dónde se guarda la unidad tecleada.** (a) **Columna nueva `workout_logs.weight_unit text`,
   nullable, sin CHECK** (tabla caliente: la validación va en Zod, igual que el resto del payload). Es

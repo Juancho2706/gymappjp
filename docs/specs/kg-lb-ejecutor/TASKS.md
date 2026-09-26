@@ -1,5 +1,5 @@
 ---
-status: draft
+status: active
 owner: product-engineering
 last_verified: "2026-09-26"
 canonical: false
@@ -12,8 +12,8 @@ Push, deploy, OTA y cualquier `UPDATE` de datos en LIVE **solo a pedido del owne
 
 ## W0 · Decisiones y mockup
 
-- [ ] **W0.1** Owner responde D1–D5 (SPEC §4).
-- [ ] **W0.2** Owner aprueba el mockup del selector (ejecutor + builder).
+- [x] **W0.1** Owner responde D1–D5 (SPEC §4). — 26-09: todas (a) (columna nueva, última unidad por ejercicio, selector junto a «Peso objetivo», confirmar con cada coach, kg + «(45 lb)»).
+- [x] **W0.2** Owner aprueba el mockup del selector (ejecutor + builder). — 26-09: «aprobado tal cual» (artifact `WDwkaKEaKCjQneH7dtYUkG`).
 
 ## W1 · Motor y schema
 
