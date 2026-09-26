@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-09-23"
+last_verified: "2026-09-26"
 canonical: true
 ---
 
@@ -19,7 +19,7 @@ prevalecen sobre este resumen. La prosa retirada está en
 | Frente | Estado | Fuente de detalle |
 |---|---|---|
 | Web/PWA | Pricing v3 productivo: Free = 1 alumno + white-label + sello «Hecho con EVA»; Pro 25 sin sello. **Deploy vigente 23-09: `master` = `rnmobiledenuevo` = `111460b0`** («Elige cómo pagar», `dpl_b6qKULbc…`). | [Runbook](../operations/RUNBOOK.md) · [spec](../specs/pricing-v3/SPEC.md) |
-| App nativa (RN) | iOS **1.1.3** pública desde el 16-09 (piso OTA iOS = 1.1.3); Android **1.1.2** (build 86 «En revisión» en Play desde el 10-09; sin binario 1.1.3). **OTAs vigentes 23-09**: ios 1.1.3 grupo `6041fa25` + 1.1.2 desde el tag `ota/1.1.2-20260923` (android `49d04dd1` / ios `2c87e903`). | [Mobile parity](MOBILE_PARITY.md) · [OTA](../operations/MOBILE_RELEASES_OTA.md) |
+| App nativa (RN) | iOS **1.1.3** pública desde el 16-09 (piso OTA iOS = 1.1.3); Android **1.1.3 (87) pública en Play desde el 25-09** (producción 100 %, 177 países; verificado en consola 26-09). Pistas de prueba: interna y cerrada pausadas (la pausa de alpha sigue «en revisión» al 26-09), abierta nunca usada. Queda OTA doble mientras haya Android en 1.1.2 y el binario B (R8, antes de feb 2027). **OTAs vigentes 23-09**: ios 1.1.3 grupo `6041fa25` + 1.1.2 desde el tag `ota/1.1.2-20260923` (android `49d04dd1` / ios `2c87e903`). | [Mobile parity](MOBILE_PARITY.md) · [OTA](../operations/MOBILE_RELEASES_OTA.md) · [SDD Android 1.1.3](../specs/android-113-play/SPEC.md) |
 | Nutrition V2 | Canónica para Standalone/Team. «Porciones a la chilena» y «Cantidades honestas» cerrados con QA VERDE (SDD `done`). V1 congelada, **no se borra** (decisión owner 03-08): solo migrar usuarios. | [Porciones CL](../specs/nutrition-porciones-chilenas/SPEC.md) · [Runbook de corte](../operations/NUTRITION_V2_CUTOVER_RUNBOOK.md) · [Delta V1](../audits/v1-deprecation-map-delta-2026-08-03.md) |
 | Teams | Pool, membresías y workspaces implementados; queda la matriz Team del archivado. | [Flows](../architecture/FLOWS_AND_COMPONENTS.md#team) · [Archivado](../../specs/archive-nutrition-v2-cutover/SPEC.md) |
 | Enterprise | **ELIMINADO (owner 01-09)**: E0+E1 en producción 05-09 (`/enterprise` ⇒ 308 a `/pricing`). **Queda E2**: ruta `/e/…`, tablas/funciones org y 2 RPC `SECURITY DEFINER` ejecutables por `anon` (`get_enterprise_alumno_context`, `get_org_branding`). | [SDD retiro](../specs/retiro-starter-y-enterprise/SPEC.md) |
@@ -36,13 +36,11 @@ prevalecen sobre este resumen. La prosa retirada está en
    pasarela (`quoteOnly`) y el checkout se crea al elegir medio (antes: un preapproval MP por carga ⇒
    correo «Suscriptor cancelado» por recarga y 429 de MP), salida única según el caso en vez de «Ir a
    reactivación», y loader único en Suscripción (antes cargaba por partes).**
-2. **«Dossier por meses»** (16-09, [SDD](../specs/dossier-por-meses/SPEC.md)): **QA §17 (14 web + 8 device + 2
-   comunes)**; el E2E `tests/dossier-export.spec.ts` se corre solo con su OK.
-3. **«Reps tras el reloj» + E1** (12-09, [SDD](../specs/reps-tras-el-reloj/SPEC.md)): **QA §10 (10 puntos,
+2. **«Reps tras el reloj» + E1** (12-09, [SDD](../specs/reps-tras-el-reloj/SPEC.md)): **QA §10 (10 puntos,
    incluye el arrastre del share).**
-4. **«Despegue rápido»** (11-09, [SDD](../specs/despegue-rapido/SPEC.md)): **QA de 5 puntos.** Sentry 23-09:
+3. **«Despegue rápido»** (11-09, [SDD](../specs/despegue-rapido/SPEC.md)): **QA de 5 puntos.** Sentry 23-09:
    `EVA-NEXTJS-1P`/`1Q` («exec-v3: fallback 4.6s ganó la carrera») reaparecieron hoy.
-5. **Fix RN «Asignar plantilla»** (14-09, [OTA](../operations/MOBILE_RELEASES_OTA.md)): **QA en device.**
+4. **Fix RN «Asignar plantilla»** (14-09, [OTA](../operations/MOBILE_RELEASES_OTA.md)): **QA en device.**
 
 ### 2. Frentes abiertos
 
@@ -71,7 +69,6 @@ prevalecen sobre este resumen. La prosa retirada está en
 
 1. **Push iOS caída desde el 07-09** (APNs `InvalidCredentials`): falta una Push Key `.p8`; el Apple ID del owner
    no tiene rol para crearla en el team `5GKWMMZ46Q` ⇒ Guimel crea la key o sube al owner a Admin.
-2. **Android 1.1.2 en revisión de Play** desde el 10-09; producción espera 12 testers × 14 días.
 
 ### 5. Higiene y deuda técnica (tren «Casa en orden», ola C)
 
@@ -91,7 +88,8 @@ Movens y los 4 coaches A/B de «Vuelta nueva» ([SPEC §9](../specs/vuelta-nueva
 
 ### Cerrados recientes (detalle en cada spec)
 
-Con QA VERDE ⇒ SDD `done`: «Vuelta nueva, salud y reloj» (21-09) · parche next 16.3.5 + REVOKE anon (21-09) ·
+Con QA VERDE ⇒ SDD `done`: [«Dossier por meses»](../specs/dossier-por-meses/SPEC.md) (26-09; su E2E sigue
+sin correr, espera OK del owner) · «Vuelta nueva, salud y reloj» (21-09) · parche next 16.3.5 + REVOKE anon (21-09) ·
 incidente Ani (23-09) · «Arreglos chicos pre-OTA», «Cuenta atrás», «Share bloque», «Señales honestas»,
 «Porciones a la chilena», «Cantidades honestas» (10/11-09) · «Ciclo real y por lado» y cierres 02/04/05-09.
 Prosa completa en el [historial](../archive/current-historial-2026-09.md).

@@ -1,7 +1,7 @@
 ---
-status: active
+status: done
 owner: product-engineering
-last_verified: "2026-09-16"
+last_verified: "2026-09-26"
 canonical: false
 ---
 
@@ -98,8 +98,8 @@ No son tareas: son el marco que ya decidió el owner. **Por eso van sin checkbox
 - [x] **E2** **Suite completa, una sola vez**, en este orden: `pnpm docs:check` · `pnpm lint` · `pnpm lint:mobile` · `pnpm typecheck` · `pnpm --filter @eva/mobile exec tsc --noEmit` · `pnpm exec vitest run` · `pnpm check:tokens`. Registrar la **salida real** de cada uno. — `docs:check` OK · `lint` 0 errores/572 warnings preexistentes (el script ya encadena `eslint apps/web/src ...` + `eslint --config eslint.mobile.config.mjs apps/mobile`, cubre `lint:mobile`) · `typecheck` exit 0 · mobile `tsc --noEmit` exit 0 · `vitest run` 808 archivos/11.111 tests passed · `check:tokens` → «EVA DS token parity OK — 86 governed tokens + 5 seal tokens match across web and mobile (light + dark)» (corrido 16-09 en esta pasada). `pnpm build` también exit 0 (no es parte del orden original de E2 pero se corrió igual).
 - [x] **E3** **R25 · Spec E2E escrita, NO corrida** — `tests/dossier-export.spec.ts` existe (login de coach, ficha, «Exportar PDF», «Por meses», un chip, rótulo del CTA, Escape) y está anotada como «escrito, no corrido» en `docs/testing/TEST_STATUS.md` §Gates locales. **Se corre solo en el gate final autorizado por el owner.**
 - [x] **E4** `docs/status/CURRENT.md` — una línea del tren con enlace a esta spec, midiendo con `wc -c` **antes y después** (tope duro 16 KB, `scripts/check-docs.mjs:117`). Volver a correr `pnpm docs:check`. — línea del tren ya presente (`docs/status/CURRENT.md:32`); tamaño antes (commit previo a `c6297976`) **16.359 B**, después **14.892 B**; `pnpm docs:check` OK.
-- [ ] **E5** `docs/status/MOBILE_PARITY.md` si cambia la paridad web ↔ RN; `docs/testing/TEST_STATUS.md` **solo** si cambia un gate obligatorio o por E3. — no tocado en esta pasada (fuera de `docs/specs/dossier-por-meses/`); `MOBILE_PARITY.md` no menciona el tren todavía — pendiente de evaluar si corresponde una línea.
-- [ ] **E6** **Owner**: QA de [SPEC](SPEC.md) §17 **completo** — 14 puntos en web, 8 en device (RN) y 2 comunes. Sin los dos lados verdes el SDD **no** pasa a `done`. — sin ejecutar.
+- [x] **E5** `docs/status/MOBILE_PARITY.md` si cambia la paridad web ↔ RN; `docs/testing/TEST_STATUS.md` **solo** si cambia un gate obligatorio o por E3. — evaluado 26-09: sin cambios. `MOBILE_PARITY.md` no lista el dossier y el tren salió en las dos plataformas con el mismo modelo (`@eva/client-dossier`, R22), así que la paridad no cambia; `TEST_STATUS.md` ya anota el E2E como «escrito, no corrido» (E3) y sigue así.
+- [x] **E6** **Owner**: QA de [SPEC](SPEC.md) §17 **completo** — 14 puntos en web, 8 en device (RN) y 2 comunes. Sin los dos lados verdes el SDD **no** pasa a `done`. — **QA del owner VERDE 26-09** («el QA ya está verde») ⇒ SDD `done` (SPEC, PLAN, TASKS y DATA-TESTING). El E2E `tests/dossier-export.spec.ts` sigue sin correr: requiere OK explícito del owner (E3).
 - [x] **E7** **Solo a pedido del owner**: commit, push, deploy web y OTA. — autorizado por el owner («Q1 a») y ejecutado el 16-09 ~02:30Z: `master` = `rnmobiledenuevo` = `0748acd3` (`d0e50cf2` SDD/RPC/package → `0748acd3` web + RN), deploy `dpl_HQH52H1T6nMba2Qfzek7QnzpfBjB` READY, migración LIVE `20260916014833`, OTA ios runtime 1.1.3 grupo `a73f71a0` (run 35047893693) + runtime 1.1.2 desde el tag `ota/1.1.2-20260916` = `64ad9615` (android run 35048341298 / ios run 35048343745). Detalle en [MOBILE_RELEASES_OTA](../../operations/MOBILE_RELEASES_OTA.md).
 
 ---
