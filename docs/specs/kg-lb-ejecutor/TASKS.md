@@ -40,9 +40,19 @@ Push, deploy, OTA y cualquier `UPDATE` de datos en LIVE **solo a pedido del owne
 
 ## W2 · Base de datos (si D1 = a)
 
-- [ ] **W2.1** Migración aditiva `workout_logs.weight_unit text` (nullable, sin CHECK), validada con
-  `BEGIN`/`ROLLBACK` en LIVE y aplicada solo con OK del owner.
-- [ ] **W2.2** `database.types.ts` a mano (sin regen completo).
+- [x] **W2.1** Migración aditiva `workout_logs.weight_unit text` (nullable, sin CHECK), validada con
+  `BEGIN`/`ROLLBACK` en LIVE y aplicada solo con OK del owner. — 26-09: archivo
+  `supabase/migrations/20260926163000_workout_logs_weight_unit.sql` (`SET LOCAL lock_timeout = '5s'`).
+  Previo en LIVE: columna inexistente, ~29.800 filas / 18 MB, sin vistas dependientes, ninguna función con
+  `INSERT` sin lista de columnas ni `%rowtype`, grants a nivel de tabla. Dry-run en transacción descartada:
+  `text`, nullable, sin default, 0 filas con valor. **Aplicada con OK del owner** (versión remota
+  `20260926171235`, nombre `workout_logs_weight_unit`): 0 locks en espera, sin errores en `postgres_logs`.
+  Insert de prueba dentro de un `DO` que termina en `RAISE EXCEPTION` (rollback garantizado): `weight_kg`
+  20.41 + `weight_unit` 'lb' aceptados y el trigger `trg_workout_logs_set_exercise_id` completó `exercise_id`;
+  después 29.813 filas, 0 con unidad (nada quedó). Rollback: `DROP COLUMN IF EXISTS weight_unit` en un archivo nuevo.
+- [x] **W2.2** `database.types.ts` a mano (sin regen completo). — 26-09: `weight_unit` en Row/Insert/Update de
+  `workout_logs` (`apps/web/src/lib/database.types.ts`); RN usa el cliente sin tipos generados (nada que
+  tocar). `pnpm typecheck` exit 0.
 
 ## W3 · Web
 

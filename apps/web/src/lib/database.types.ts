@@ -6502,6 +6502,7 @@ export type Database = {
           target_reps_at_log: string | null
           target_weight_at_log: number | null
           weight_kg: number | null
+          weight_unit: string | null
         }
         Insert: {
           actual_avg_hr?: number | null
@@ -6528,6 +6529,7 @@ export type Database = {
           target_reps_at_log?: string | null
           target_weight_at_log?: number | null
           weight_kg?: number | null
+          weight_unit?: string | null
         }
         Update: {
           actual_avg_hr?: number | null
@@ -6554,6 +6556,7 @@ export type Database = {
           target_reps_at_log?: string | null
           target_weight_at_log?: number | null
           weight_kg?: number | null
+          weight_unit?: string | null
         }
         Relationships: [
           {
