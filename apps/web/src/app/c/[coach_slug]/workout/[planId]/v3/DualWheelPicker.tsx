@@ -3,7 +3,8 @@
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Dialog as DialogPrimitive } from '@base-ui/react/dialog'
 import { formatWeightEsCl } from '@eva/workout-engine'
-import { buildWheelRange, nearestWheelIndex, WHEEL_KG_SPEC, WHEEL_REPS_SPEC } from './wheel-range'
+import { buildWheelRange, nearestWheelIndex, WHEEL_REPS_SPEC } from './wheel-range'
+import { WHEEL_WEIGHT_SPECS, type WeightUnit } from '@eva/workout-engine'
 
 /**
  * Vibración de un paso — SOLO si el navegador la soporta (Android Chrome; iOS Safari es no-op).
@@ -33,12 +34,17 @@ const fmtReps = (n: number) => String(n)
 interface DualWheelPickerProps {
     open: boolean
     onOpenChange: (open: boolean) => void
-    /** Valor anterior de peso (kg) — centra la columna kg. */
+    /** Valor anterior de peso (en la unidad visible) — centra la columna de peso. */
     initialWeight: number | null
     /** Valor anterior de reps — centra la columna reps. */
     initialReps: number | null
     /** "Listo" entrega ambos valores; el caller los escribe en los inputs (camino del autollenado). */
     onDone: (weightKg: number, reps: number) => void
+    /**
+     * Kilos o libras (tren kg-lb-ejecutor): unidad de la columna de peso. kg = 0–400 / 2,5 (igual que
+     * siempre); lb = 0–900 / 2,5. El valor entregado a `onDone` está en ESTA unidad. Ausente ⇒ kg.
+     */
+    weightUnit?: WeightUnit
     reducedMotion: boolean | null
     /** Aditivos (mockup a3c): título "Serie N" + subtítulo "{ejercicio} · N de M". Sin ellos → título genérico. */
     setNumber?: number
@@ -63,6 +69,7 @@ export function DualWheelPicker({
     initialWeight,
     initialReps,
     onDone,
+    weightUnit = 'kg',
     reducedMotion,
     setNumber,
     exerciseName,
@@ -70,7 +77,7 @@ export function DualWheelPicker({
 }: DualWheelPickerProps) {
     // Rango COMPLETO y fijo (kg 0-400 · reps 0-100, decisión CEO QA4): no depende del anterior, así que
     // se construye una sola vez. El anterior sólo fija la posición inicial (kgStart/repsStart).
-    const kgRange = useMemo(() => buildWheelRange(WHEEL_KG_SPEC), [])
+    const kgRange = useMemo(() => buildWheelRange(WHEEL_WEIGHT_SPECS[weightUnit]), [weightUnit])
     const repsRange = useMemo(() => buildWheelRange(WHEEL_REPS_SPEC), [])
 
     const kgStart = useMemo(() => nearestWheelIndex(kgRange, initialWeight), [kgRange, initialWeight])
@@ -135,14 +142,14 @@ export function DualWheelPicker({
                     </div>
 
                     <div className="exec-wheel-head" aria-hidden>
-                        <span className="exec-wheel-lbl">Kg</span>
+                        <span className="exec-wheel-lbl">{weightUnit === 'lb' ? 'Lb' : 'Kg'}</span>
                         <span className="exec-wheel-lbl">Reps</span>
                     </div>
                     <div className="exec-wheel-wrap" style={{ height: ITEM_H * VISIBLE }}>
                         <div className="exec-wheel-cap" aria-hidden style={{ height: ITEM_H, marginTop: -(ITEM_H / 2) }} />
                         <WheelColumn
-                            key={`kg-${open}-${initialWeight}`}
-                            label="Kg"
+                            key={`kg-${open}-${initialWeight}-${weightUnit}`}
+                            label={weightUnit === 'lb' ? 'Lb' : 'Kg'}
                             range={kgRange}
                             initialIndex={kgStart}
                             onIndex={setKgIdx}

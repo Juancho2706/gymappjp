@@ -125,6 +125,15 @@ import { extractYoutubeVideoId, isYoutubeMediaUrl } from '@/lib/youtube'
 import { ExerciseVideo } from '@/components/exercise/ExerciseVideo'
 import type { ClientCardioView } from './_data/workout-execution.queries'
 import { TargetDateProvider } from './target-date-context'
+import {
+    WeightUnitProvider,
+    suggestionNum,
+    useWeightUnitLookup,
+    useWeightUnitState,
+    weightNum,
+    type BlockWeightUnitInfo,
+} from './weight-unit-context'
+import type { WeightUnit } from '@eva/workout-engine'
 import { weekdayNameFromIso } from '@/lib/workout/executor-recovery'
 
 export interface ExerciseType {
@@ -236,6 +245,8 @@ interface Props {
         block_id: string
         set_number: number
         weight_kg: number | null
+        // Unidad que tecleó el alumno (tren kg-lb-ejecutor). `weight_kg` es SIEMPRE kilos.
+        weight_unit?: string | null
         reps_done: number | null
         rpe: number | null
         rir?: number | null
@@ -257,6 +268,11 @@ interface Props {
         _pending?: boolean
     }>
     previousHistory?: Record<string, { weight_kg: number | null, reps_done: number | null, date: string }[]>
+    /**
+     * Kilos o libras (tren kg-lb-ejecutor, D2 = a): última unidad registrada por ejercicio en sesiones
+     * previas. Alimenta la unidad inicial del selector junto con las series de hoy y el `load_unit`.
+     */
+    lastWeightUnitByExercise?: Record<string, string>
     coachSlug: string
     exerciseMaxes?: Record<string, number>
     /** Fecha (ISO) del máximo histórico por ejercicio — el overlay muestra "superaste tus X kg del …". */
@@ -823,7 +839,10 @@ function overloadChipLabel(
     block: BlockType,
     eff: ReturnType<typeof computeEffectiveTarget> | null,
     currentWeek: number | null | undefined,
+    unit: WeightUnit = 'kg',
 ): string | null {
+    // Kilos o libras: objetivo e incremento en la unidad del ejercicio. En kg el texto es idéntico.
+    const tw = (kg: number | null) => (kg == null ? `${kg} ${unit}` : `${suggestionNum(kg, unit)} ${unit}`)
     if (!block.progression_type || block.progression_value == null) return null
     if (block.progression_type === 'weight' && block.target_weight_kg == null) return null
     const v = block.progression_value
@@ -832,10 +851,10 @@ function overloadChipLabel(
         return formatProgressionTag(block) ?? `+${v} rep/ses`
     }
     if (eff.mode === 'double') {
-        return eff.status === 'holding' ? `Mantén ${eff.weightKg} kg` : `Objetivo ${eff.weightKg} kg`
+        return eff.status === 'holding' ? `Mantén ${tw(eff.weightKg)}` : `Objetivo ${tw(eff.weightKg)}`
     }
-    if (eff.isProgressed && currentWeek != null) return `Sem ${currentWeek} · ${eff.weightKg} kg`
-    return `+${v} kg/sem`
+    if (eff.isProgressed && currentWeek != null) return `Sem ${currentWeek} · ${tw(eff.weightKg)}`
+    return `+${weightNum(v, unit)} ${unit}/sem`
 }
 
 /** Explicación completa de la sobrecarga (va a "Detalles", no a la card). */
@@ -843,24 +862,28 @@ function overloadDetailText(
     block: BlockType,
     eff: ReturnType<typeof computeEffectiveTarget> | null,
     currentWeek: number | null | undefined,
+    unit: WeightUnit = 'kg',
 ): string | null {
+    // Kilos o libras: mismos textos, con los pesos en la unidad del ejercicio (kg ⇒ idénticos).
+    const tw = (kg: number | null) => (kg == null ? `${kg} ${unit}` : `${suggestionNum(kg, unit)} ${unit}`)
+    const bw = (kg: number | null) => (kg == null ? kg : weightNum(kg, unit))
     if (!block.progression_type || block.progression_value == null) return null
     if (block.progression_type === 'weight' && block.target_weight_kg == null) return null
     const v = block.progression_value
     if (block.progression_type !== 'weight' || !eff?.modeImplemented) {
-        return `Sube +${v} ${block.progression_type === 'weight' ? 'kg cada semana' : 'rep cada sesión'}.`
+        return `Sube +${block.progression_type === 'weight' ? `${weightNum(v, unit)} ${unit} cada semana` : `${v} rep cada sesión`}.`
     }
     if (eff.mode === 'double') {
-        if (eff.status === 'holding') return `Doble progresión: mantén ${eff.weightKg} kg y completa ${eff.repsTopToUnlock} reps en todas las series para subir.`
+        if (eff.status === 'holding') return `Doble progresión: mantén ${tw(eff.weightKg)} y completa ${eff.repsTopToUnlock} reps en todas las series para subir.`
         if (eff.status === 'progressed') {
             return eff.isProgressed
-                ? `Doble progresión: ¡subiste! Objetivo ${eff.weightKg} kg (base ${eff.baseWeightKg}).`
-                : `Doble progresión: objetivo ${eff.weightKg} kg (aún por debajo de la base ${eff.baseWeightKg}).`
+                ? `Doble progresión: ¡subiste! Objetivo ${tw(eff.weightKg)} (base ${bw(eff.baseWeightKg)}).`
+                : `Doble progresión: objetivo ${tw(eff.weightKg)} (aún por debajo de la base ${bw(eff.baseWeightKg)}).`
         }
-        return `Doble progresión: sube +${v} kg cuando completes ${eff.repsTopToUnlock} reps en todas las series.`
+        return `Doble progresión: sube +${weightNum(v, unit)} ${unit} cuando completes ${eff.repsTopToUnlock} reps en todas las series.`
     }
-    if (eff.isProgressed && currentWeek != null) return `Semana ${currentWeek}: objetivo ${eff.weightKg} kg (base ${eff.baseWeightKg} +${eff.addedKg}).`
-    return `Sube +${v} kg cada semana (esta semana arrancas en la base).`
+    if (eff.isProgressed && currentWeek != null) return `Semana ${currentWeek}: objetivo ${tw(eff.weightKg)} (base ${bw(eff.baseWeightKg)} +${bw(eff.addedKg)}).`
+    return `Sube +${weightNum(v, unit)} ${unit} cada semana (esta semana arrancas en la base).`
 }
 
 interface SupersetGroupCardProps {
@@ -906,6 +929,8 @@ function SupersetGroupCard({
 }: SupersetGroupCardProps) {
     const { members, letterByBlock, groupRestSeconds, maxSets } = info
     const reducedMotion = useReducedMotion()
+    // Kilos o libras: unidad del ejercicio de cada miembro (el provider vive arriba, en el ejecutor).
+    const unitOf = useWeightUnitLookup()
     const [howToOpen, setHowToOpen] = useState(false)
 
     const memberVMs = members
@@ -1035,7 +1060,7 @@ function SupersetGroupCard({
                                 </span>
                                 {m.block.target_weight_kg != null && (
                                     <span className="inline-flex items-center rounded-full bg-white/[0.06] px-2 py-0.5 font-mono font-semibold text-on-dark">
-                                        {m.suggestedWeightKg ?? m.block.target_weight_kg}kg
+                                        {suggestionNum(m.suggestedWeightKg ?? m.block.target_weight_kg, unitOf(m.block.id))}{unitOf(m.block.id)}
                                     </span>
                                 )}
                                 {m.block.rest_time && (
@@ -1053,10 +1078,10 @@ function SupersetGroupCard({
                             </div>
                         )}
 
-                        {m.effType === 'strength' && overloadChipLabel(m.block, m.eff, currentWeek) && (
+                        {m.effType === 'strength' && overloadChipLabel(m.block, m.eff, currentWeek, unitOf(m.block.id)) && (
                             <span className="inline-flex items-center gap-1 rounded-full border border-[var(--sport-500)]/30 bg-[var(--sport-500)]/[0.10] px-2 py-0.5 text-[10.5px] font-bold text-[var(--sport-300)]">
                                 <TrendingUp className="w-3 h-3 shrink-0" />
-                                {overloadChipLabel(m.block, m.eff, currentWeek)}
+                                {overloadChipLabel(m.block, m.eff, currentWeek, unitOf(m.block.id))}
                             </span>
                         )}
 
@@ -1086,7 +1111,7 @@ function SupersetGroupCard({
                                         Sesión anterior · {formatRelativeDate(prev[0].date)}:
                                     </span>
                                     <span className="font-mono text-[11px] font-bold text-on-dark">
-                                        {best.weight_kg ? `${best.weight_kg}kg` : '-'} × {best.reps_done || '-'}
+                                        {best.weight_kg ? `${weightNum(best.weight_kg, unitOf(m.block.id))}${unitOf(m.block.id)}` : '-'} × {best.reps_done || '-'}
                                     </span>
                                     {beatIt && (
                                         <span className="inline-flex items-center gap-1 text-[10px] font-bold text-[var(--sport-300)]">
@@ -1244,6 +1269,7 @@ export function WorkoutExecutionClient({
     program,
     logs,
     previousHistory = {},
+    lastWeightUnitByExercise = {},
     coachSlug,
     exerciseMaxes = {},
     exerciseMaxDates = {},
@@ -1749,6 +1775,33 @@ export function WorkoutExecutionClient({
 
     const getExercise = (block: BlockType) => (Array.isArray(block.exercises) ? block.exercises[0] : block.exercises) || null
 
+    // ── Kilos o libras (tren kg-lb-ejecutor): unidad por EJERCICIO efectivo ────────────────────────────
+    // blockId → ejercicio efectivo (el sustituto si hay sustitución) + `load_unit` del coach.
+    const weightUnitBlocks = useMemo(() => {
+        const map: Record<string, BlockWeightUnitInfo> = {}
+        for (const block of plan.workout_blocks) {
+            const key = substitutionByBlock[block.id]?.id ?? getExercise(block)?.id
+            if (key) map[block.id] = { exerciseKey: key, loadUnit: block.load_unit ?? null }
+        }
+        return map
+    }, [plan.workout_blocks, substitutionByBlock])
+    // Última unidad por ejercicio: la serie de HOY con unidad (la de mayor número) pisa el historial.
+    const weightUnitLastByExercise = useMemo(() => {
+        const out: Record<string, string> = { ...lastWeightUnitByExercise }
+        const newest: Record<string, number> = {}
+        for (const log of sessionLogs) {
+            if (!log.weight_unit) continue
+            const info = weightUnitBlocks[log.block_id]
+            if (!info) continue
+            if (newest[info.exerciseKey] == null || log.set_number > newest[info.exerciseKey]) {
+                newest[info.exerciseKey] = log.set_number
+                out[info.exerciseKey] = log.weight_unit
+            }
+        }
+        return out
+    }, [lastWeightUnitByExercise, sessionLogs, weightUnitBlocks])
+    const weightUnits = useWeightUnitState({ blocks: weightUnitBlocks, lastUnitByExercise: weightUnitLastByExercise })
+
     // F5: agrupacion por AREA con fallback legacy (AC3: plan viejo — solo section o
     // clasicos — produce exactamente los grupos/titulos/subtitulos de siempre).
     const sectioned = useMemo(() => {
@@ -2247,12 +2300,16 @@ export function WorkoutExecutionClient({
         const loggedExercise = loggedBlock ? getExercise(loggedBlock) : null
         const holdLine =
             loggedBlock && loggedExercise && isStrengthTimeBlock(loggedBlock, loggedExercise)
-                ? formatStrengthTimeSetLine({
-                      weight_kg: payload.weightKg,
-                      reps_done: payload.repsDone,
-                      actual_hold_sec: payload.actualHoldSec ?? null,
-                      metadata: payload.metadata ?? null,
-                  })
+                ? formatStrengthTimeSetLine(
+                      {
+                          weight_kg: payload.weightKg,
+                          reps_done: payload.repsDone,
+                          actual_hold_sec: payload.actualHoldSec ?? null,
+                          metadata: payload.metadata ?? null,
+                      },
+                      // Kilos o libras: la línea del descanso en la unidad en que se tecleó la serie.
+                      payload.weightUnit ? { unit: payload.weightUnit } : undefined,
+                  )
                 : null
         setLastHoldSet(
             holdLine && !info ? { blockId: payload.blockId, setNumber: payload.setNumber, line: holdLine } : null,
@@ -2642,8 +2699,9 @@ export function WorkoutExecutionClient({
                     const cueLine = effType === 'strength'
                         ? (exercise.instructions?.[0]?.replace(/^Step:\d+\s*/i, '') ?? null)
                         : null
-                    const overloadLabel = effType === 'strength' ? overloadChipLabel(block, eff, currentWeek) : null
-                    const overloadDetail = effType === 'strength' ? overloadDetailText(block, eff, currentWeek) : null
+                    const blockUnit = weightUnits.unitForBlock(block.id)
+                    const overloadLabel = effType === 'strength' ? overloadChipLabel(block, eff, currentWeek, blockUnit) : null
+                    const overloadDetail = effType === 'strength' ? overloadDetailText(block, eff, currentWeek, blockUnit) : null
                     const prevList = previousHistory[exercise.id] ?? []
                     const bestPrev = prevList.length
                         ? prevList.reduce((m, s) => ((s.weight_kg ?? 0) > (m.weight_kg ?? 0) ? s : m), prevList[0])
@@ -2662,7 +2720,7 @@ export function WorkoutExecutionClient({
                         : block.id === activeBlockId ? 'active' : 'upcoming'
                     const recapWeight = suggestedWeightKg ?? block.target_weight_kg
                     const recapSub = effType === 'strength'
-                        ? `${block.sets} × ${block.reps}${recapWeight != null ? ` · ${recapWeight} kg` : ''}`
+                        ? `${block.sets} × ${block.reps}${recapWeight != null ? ` · ${suggestionNum(recapWeight, blockUnit)} ${blockUnit}` : ''}`
                         : `${block.sets} ${block.sets === 1 ? 'serie' : 'series'} · ${exercise.muscle_group}`
                     // «Omitir hoy» (mockup 3): si el bloque tiene log de omisión, el paso YA está resuelto
                     // — se reemplaza la captura entera por el estado «Omitido» (no hay nada que registrar).
@@ -2871,7 +2929,11 @@ export function WorkoutExecutionClient({
         const exercise = getExercise(block)
         if (!exercise) return null
         const rxParts: string[] = [`${block.sets} × ${block.reps}`]
-        if (block.target_weight_kg != null) rxParts.push(`${block.target_weight_kg} kg`)
+        if (block.target_weight_kg != null) {
+            // Kilos o libras: el próximo ejercicio del descanso se lee en SU unidad (kg ⇒ idéntico).
+            const u = weightUnits.unitForBlock(block.id)
+            rxParts.push(`${suggestionNum(block.target_weight_kg, u)} ${u}`)
+        }
         if (block.rir) rxParts.push(`RIR ${block.rir}`)
         return {
             name: exercise.name,
@@ -3040,6 +3102,7 @@ export function WorkoutExecutionClient({
               cuerpo del componente no puede usar el hook. No pinta nada. */}
           <WorkoutTimerBridge apiRef={timerApiRef} />
           <WorkoutKeypadProvider>
+          <WeightUnitProvider value={weightUnits}>
             <div
                 ref={execRootRef}
                 data-exec-v3={execV3Active ? '' : undefined}
@@ -3703,6 +3766,7 @@ export function WorkoutExecutionClient({
                 })()}
 
             </div>
+          </WeightUnitProvider>
           </WorkoutKeypadProvider>
         </WorkoutTimerProvider>
         </RestInterstitialDataProvider>

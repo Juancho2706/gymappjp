@@ -48,6 +48,7 @@ import { ExecMediaCard } from './ExecMediaCard'
 import { HoldModuleV3, type HoldModuleStatus } from './HoldModuleV3'
 import { RestOfferV3 } from './RestOfferV3'
 import { WheelHint } from './WheelHint'
+import { suggestionNum, useWeightUnitLookup, weightNum } from '../weight-unit-context'
 
 /** Mejor sesión previa por ejercicio (fila "Anterior" + autollenado del keypad). */
 type PrevSet = { weight_kg: number | null; reps_done: number | null; date: string }
@@ -151,6 +152,8 @@ export function SupersetStepV3({
     onStartPendingRoundRest,
     onDismissPendingRoundRest,
 }: SupersetStepV3Props) {
+    // Kilos o libras: unidad del ejercicio de cada miembro de la superserie.
+    const unitOf = useWeightUnitLookup()
     const { members, letterByBlock, groupLetter, groupRestSeconds, maxSets } = info
 
     // Aviso "¡Sigue sin detenerte!" (overlay efímero) + prefill "= última vez" del miembro activo. Ambos
@@ -259,7 +262,7 @@ export function SupersetStepV3({
                 ? prevList.reduce((mx, s) => ((s.weight_kg ?? 0) > (mx.weight_kg ?? 0) ? s : mx), prevList[0])
                 : null
             const rxLabel = effType === 'strength'
-                ? `${block.reps} reps${suggestedWeightKg != null ? ` · ${suggestedWeightKg} kg` : ''}`
+                ? `${block.reps} reps${suggestedWeightKg != null ? ` · ${suggestionNum(suggestedWeightKg, unitOf(block.id))} ${unitOf(block.id)}` : ''}`
                 : formatTypedObjective(block, effType)
             return {
                 block,
@@ -624,13 +627,13 @@ export function SupersetStepV3({
                                                 className="exec-v3-prev"
                                                 aria-label={
                                                     m.bestPrev.weight_kg
-                                                        ? `Autollenar la serie activa con ${m.bestPrev.weight_kg} kg por ${m.bestPrev.reps_done ?? '-'} reps`
+                                                        ? `Autollenar la serie activa con ${weightNum(m.bestPrev.weight_kg, unitOf(m.block.id))} ${unitOf(m.block.id)} por ${m.bestPrev.reps_done ?? '-'} reps`
                                                         : undefined
                                                 }
                                             >
                                                 <span className="exec-v3-prev-l">Anterior</span>
                                                 <span className="exec-v3-prev-r tabular-nums">
-                                                    {m.bestPrev.weight_kg ? `${m.bestPrev.weight_kg} kg` : '-'} × {m.bestPrev.reps_done || '-'}
+                                                    {m.bestPrev.weight_kg ? `${weightNum(m.bestPrev.weight_kg, unitOf(m.block.id))} ${unitOf(m.block.id)}` : '-'} × {m.bestPrev.reps_done || '-'}
                                                 </span>
                                                 <span className="exec-v3-prev-tap">1 tap ↻</span>
                                             </button>

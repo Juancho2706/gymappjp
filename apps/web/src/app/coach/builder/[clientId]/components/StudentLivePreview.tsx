@@ -1,5 +1,6 @@
 'use client'
 
+import { targetWeightLabel } from '../_lib/target-weight'
 import { useMemo } from 'react'
 import { Dumbbell, Moon, Smartphone, Timer, X } from 'lucide-react'
 import {
@@ -85,8 +86,9 @@ export function blockObjectiveLabel(block: BuilderBlock): string | null {
     }
     // Fuerza por tiempo (D3, W2.9): «3 × 30 s · 10 kg» — nunca «Sin prescripción» por no tener reps.
     if (isStrengthTimeBlock(builderTypedFields(block), { exercise_type: block.exercise_type })) {
-        const kg = String(block.target_weight_kg ?? '').trim()
-        return `${formatStrengthTimeObjectiveLong(builderTypedFields(block))}${kg ? ` · ${kg} kg` : ''}`
+        // Kilos o libras: el peso en la unidad del bloque (kg ⇒ idéntico a antes).
+        const weight = targetWeightLabel(block)
+        return `${formatStrengthTimeObjectiveLong(builderTypedFields(block))}${weight ? ` · ${weight}` : ''}`
     }
     // Sufijo «/lado» (R4): la vista previa dice lo mismo que el ejecutor va a pedir.
     if ((block.sets ?? 0) > 0 && block.reps?.trim()) return `${block.sets} × ${block.reps.trim()}${sideSuffix(block.side_mode)}`

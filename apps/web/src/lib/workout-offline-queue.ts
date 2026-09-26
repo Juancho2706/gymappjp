@@ -133,6 +133,9 @@ export function workoutLogToFormData(item: WorkoutOfflineLog): FormData {
     fd.set('block_id', item.blockId)
     fd.set('set_number', String(item.setNumber))
     if (item.weightKg != null) fd.set('weight_kg', String(item.weightKg))
+    // Kilos o libras (tren kg-lb-ejecutor): `weightKg` ya está en kilos; la unidad tecleada viaja con
+    // la serie para que el flush la escriba igual que el submit online. Items previos al tren: sin key.
+    if (item.weightUnit != null) fd.set('weight_unit', item.weightUnit)
     if (item.repsDone != null) fd.set('reps_done', String(item.repsDone))
     if (item.rpe != null) fd.set('rpe', String(item.rpe))
     if (item.rir != null) fd.set('rir', String(item.rir))

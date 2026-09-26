@@ -141,8 +141,9 @@ export type ReconciledSessionLog = {
     // Espejo de `workout_logs.metadata` jsonb: hold por lado (E0.5) y/o `hr` del bloque cardio
     // (cardio-conectado). El server devuelve la columna tal cual tras reload.
     metadata?: WorkoutLogMetadata | null
-    // Espejo de `workout_logs.weight_unit` (tren kg-lb-ejecutor): unidad que tecleó el alumno.
-    weight_unit?: WeightUnit | null
+    // Espejo de `workout_logs.weight_unit` (tren kg-lb-ejecutor): unidad que tecleó el alumno. Crudo de
+    // la columna (`text`, sin CHECK) ⇒ `string`; quien lo lea lo normaliza con `normalizeWeightUnit`.
+    weight_unit?: string | null
     /** true ⇒ en la cola offline, sin confirmar por el server (ver doc del tipo). */
     _pending?: boolean
 }

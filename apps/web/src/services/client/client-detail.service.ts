@@ -857,7 +857,7 @@ export async function getClientWorkoutForDate(clientId: string, date: string) {
         // `cardio_modality` (Fase C) da la UNIDAD del conteo de cardio: sin ella, 420 saltos de
         // cuerda se imprimirían como "420 reps".
         .select(`
-            set_number, weight_kg, reps_done, rpe, rir, note, logged_at,
+            set_number, weight_kg, weight_unit, reps_done, rpe, rir, note, logged_at,
             target_weight_at_log, target_reps_at_log,
             actual_duration_sec, actual_distance_m, actual_avg_hr, actual_hold_sec, actual_pace_sec_per_km, metadata,
             substituted_exercise_id, substituted_exercise_name, substitution_reason,

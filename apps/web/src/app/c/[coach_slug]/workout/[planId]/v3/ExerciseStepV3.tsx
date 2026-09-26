@@ -38,6 +38,7 @@ import { HoldModuleV3 } from './HoldModuleV3'
 import { RestOfferV3 } from './RestOfferV3'
 import { parseRestTime, useWorkoutTimer, RestClockChip } from '../WorkoutTimerProvider'
 import { WheelHint } from './WheelHint'
+import { suggestionNum, useBlockWeightUnit, weightNum } from '../weight-unit-context'
 
 /** Mejor sesión previa (para "Anterior" + autollenado). */
 type PrevSet = { weight_kg: number | null; reps_done: number | null; date: string }
@@ -166,6 +167,8 @@ export function ExerciseStepV3({
     handleResult,
     onRestOfferChange,
 }: ExerciseStepV3Props) {
+    // Kilos o libras (tren kg-lb-ejecutor): prescripción y «Anterior» en la unidad del ejercicio.
+    const { unit: wUnit } = useBlockWeightUnit(block.id)
     // Pie: el lápiz revela las series anteriores (chips) para corregirlas; el teclado enfoca el valor activo.
     const [showPrev, setShowPrev] = useState(false)
     // Panel de esfuerzo (QA2 hallazgo 3): colapsado por default; el estado vive AQUÍ (por-ejercicio) para
@@ -524,7 +527,7 @@ export function ExerciseStepV3({
                 {block.target_weight_kg != null && (
                     <>
                         {' · '}
-                        <b>{suggestedWeightKg ?? block.target_weight_kg} kg</b>
+                        <b>{suggestionNum(suggestedWeightKg ?? block.target_weight_kg, wUnit)} {wUnit}</b>
                     </>
                 )}
                 {block.rir && <> · RIR {block.rir}</>}
@@ -542,13 +545,13 @@ export function ExerciseStepV3({
                     className="exec-v3-prev"
                     aria-label={
                         activeSetNumber != null && bestPrev.weight_kg
-                            ? `Autollenar la serie activa con ${bestPrev.weight_kg} kg por ${bestPrev.reps_done ?? '-'} reps`
+                            ? `Autollenar la serie activa con ${weightNum(bestPrev.weight_kg, wUnit)} ${wUnit} por ${bestPrev.reps_done ?? '-'} reps`
                             : undefined
                     }
                 >
                     <span className="exec-v3-prev-l">Anterior</span>
                     <span className="exec-v3-prev-r tabular-nums">
-                        {bestPrev.weight_kg ? `${bestPrev.weight_kg} kg` : '-'} × {bestPrev.reps_done || '-'}
+                        {bestPrev.weight_kg ? `${weightNum(bestPrev.weight_kg, wUnit)} ${wUnit}` : '-'} × {bestPrev.reps_done || '-'}
                     </span>
                     {activeSetNumber != null && <span className="exec-v3-prev-tap">1 tap ↻</span>}
                 </button>

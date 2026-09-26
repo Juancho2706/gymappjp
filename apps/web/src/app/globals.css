@@ -2316,6 +2316,28 @@ body[data-exec-v3-toast] [data-sonner-toast][data-styled='true'] [data-descripti
   letter-spacing: 0.08em;
   margin-top: 4px;
 }
+/* Kilos o libras (tren kg-lb-ejecutor): la etiqueta de unidad del tile de peso es un botón que alterna
+   kg ⇄ lb. Mismo look que la etiqueta + subrayado punteado como pista de que se toca. */
+[data-exec-v3] .exec-v3-unitswitch {
+  margin-left: auto;
+  margin-right: auto;
+  background: none;
+  border: 0;
+  padding: 2px 6px;
+  cursor: pointer;
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+  font-family: inherit;
+}
+[data-exec-v3] .exec-v3-unitswitch:hover,
+[data-exec-v3] .exec-v3-unitswitch:focus-visible {
+  color: #d6d6de;
+}
+[data-exec-v3] .exec-v3-unitswitch:focus-visible {
+  outline: 2px solid var(--exec-brand, #2680ff);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
 
 /* Panel de esfuerzo compacto (RPE / RIR opcional) — pills toggle + escala de ticks única */
 [data-exec-v3] .exec-v3-effpanel {

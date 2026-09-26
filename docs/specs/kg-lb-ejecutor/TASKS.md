@@ -56,16 +56,40 @@ Push, deploy, OTA y cualquier `UPDATE` de datos en LIVE **solo a pedido del owne
 
 ## W3 · Web
 
-- [ ] **W3.1** Selector en la rueda y el teclado (`v3/DualWheelPicker.tsx`, `v3/wheel-range.ts`,
-  `WorkoutKeypadProvider.tsx`).
-- [ ] **W3.2** Lecturas en la unidad: prescripción, «Última vez», autollenado, sugerencia, línea de serie,
+> **Estado W3 (26-09): HECHO y commiteado local (sin push). Pausa pedida por el owner ⇒ sigue W4 RN.** Arquitectura: `weight-unit-context.tsx` (nuevo) con `useWeightUnitState` en
+> `WorkoutExecutionClient` (unidad por EJERCICIO efectivo: elegida en la sesión → última usada hoy →
+> `lastWeightUnitByExercise` del historial → `load_unit` del bloque → kg) + `WeightUnitProvider`;
+> `useBlockWeightUnit` (filas) y `useWeightUnitLookup` + `weightNum`/`suggestionNum` (lecturas). Sin
+> provider todo queda byte-idéntico. La conversión a kg del submit web vive en `LogSetForm.handleSubmit`
+> (`weightToKg`, una sola vez).
+
+- [x] **W3.1** Selector en la rueda y el teclado (`v3/DualWheelPicker.tsx`, `v3/wheel-range.ts`,
+  `WorkoutKeypadProvider.tsx`). — selector kg | lb en `NumericKeypadSheet` (mockup), pestaña/unidad/chips
+  (presets lb 1·2,5·5·10, paso lb en memoria) y objetivo/«última vez» convertidos; rueda con
+  `WHEEL_WEIGHT_SPECS` por unidad; en escritorio la etiqueta «KG ⇄» del tile ES el selector (V3 y clásico).
+- [x] **W3.2** Lecturas en la unidad: prescripción, «Última vez», autollenado, sugerencia, línea de serie,
   récord y resumen (`v3/ExerciseStepV3.tsx`, `v3/SupersetStepV3.tsx`, `v3/PrCelebration.tsx`,
-  `v3/SessionCompleteV3.tsx`).
-- [ ] **W3.3** Payload y borrador (`_actions/workout-log.actions.ts`, `workout-draft-store.ts`) + lectura
-  de `weight_unit` en `_data/workout-execution.queries.ts`.
-- [ ] **W3.4** Builder: selector junto a «Peso objetivo» (`BlockEditSheet.tsx`), sin el duplicado de
-  «Ejes adicionales».
-- [ ] **W3.5** Ficha del coach: «(45 lb)» en la línea de serie.
+  `v3/SessionCompleteV3.tsx`). — hecho en ExerciseStepV3, SupersetStepV3, SingleExerciseCard,
+  SupersetGroupCard, recap colapsado, chips/detalle de progresión, «siguiente» del descanso, línea «Serie N»
+  del descanso, chip de serie guardada y PrCelebration. **Queda en kg a propósito (v1):** volumen/tonelaje
+  de `SessionCompleteV3` (suma ejercicios de unidades distintas).
+- [x] **W3.3** Payload y borrador (`_actions/workout-log.actions.ts`, `workout-draft-store.ts`) + lectura
+  de `weight_unit` en `_data/workout-execution.queries.ts`. — la acción escribe `weight_unit` SIEMPRE junto
+  al peso (`?? null` = kg); cola offline (`lib/workout-offline-queue.ts`) serializa `weightUnit`; borrador
+  guarda `wu` y convierte al rehidratar; consultas leen `weight_unit` y arman `lastWeightUnitByExercise`.
+  **Bug encontrado por el test y corregido:** el `<input type=number>` de escritorio tenía `step="0.5"` ⇒
+  44,1 lb o 22,68 kg daban `stepMismatch` y el navegador bloqueaba el envío en silencio; con el selector
+  activo el paso es `any`.
+- [x] **W3.4** Builder: selector junto a «Peso objetivo» (`BlockEditSheet.tsx`), sin el duplicado de
+  «Ejes adicionales». — `TargetWeightField` (guarda kg a centésimas, muestra/recibe lb) +
+  `_lib/target-weight.ts` (también en `StudentLivePreview` y `PrintProgramDialog`).
+- [x] **W3.5** Ficha del coach: «(45 lb)» en la línea de serie. — `TrainingTabB4Panels.tsx` (serie clásica y
+  por tiempo con `annotateEntered`) + `weight_unit` en el select de `services/client/client-detail.service.ts`.
+- [x] **W3.6** Gates de cierre de W3 + commit local. — 26-09: vitest (ejecutor web, builder, ficha, cola
+  offline, services/client, workout-engine, schemas, tests/mobile) **297 archivos / 4.336 tests ✓**; tests
+  nuevos `LogSetForm.weight-unit.test.tsx` (7) y `_lib/target-weight.test.ts` (3); `tsc --noEmit` web exit 0;
+  eslint de los archivos tocados 0 errores (3 warnings preexistentes). QA visual en navegador: NO hecho
+  (va con el QA del owner, SPEC §7).
 
 ## W4 · RN
 
@@ -80,9 +104,21 @@ Push, deploy, OTA y cualquier `UPDATE` de datos en LIVE **solo a pedido del owne
 - [ ] **W5.1** Lista por coach de ejercicios en bloques `lb` con series y objetivos sospechosos.
 - [ ] **W5.2** El owner confirma con cada coach (mensaje lo manda el owner).
 - [ ] **W5.3** `UPDATE` en transacción con tabla de respaldo y rollback escrito, solo lo confirmado.
+- ⚠️ **Antes del deploy web:** los 11 bloques `lb` con `target_weight_kg` escrito en libras (doblementefit 6,
+  monkey 4, robin-coach 1) pasarán a mostrarse CONVERTIDOS (132,5 → «292,1 lb»). Corregir esos 11 objetivos
+  (con OK del owner) en el mismo corte del deploy, o avisar a esos coaches.
 
 ## W6 · Gates y salida
 
 - [ ] **W6.1** Gates proporcionales por ola; suite completa una vez al cierre.
 - [ ] **W6.2** Deploy web + OTA doble, solo a pedido del owner.
 - [ ] **W6.3** QA del owner (SPEC §7) ⇒ SDD `done`.
+
+## Retomar (pausa del 26-09)
+
+W1 (motor) + W2 (columna en LIVE) + W3 (web) hechos, commits locales SIN push. Siguiente: **W4 RN**
+(ejecutor RN: `SetRow`, `TypedKeypad`/`KeypadHost`, `v3/DualWheelPicker`, pantallas V3,
+`lib/workout-session.ts` + cola offline, builder RN `app/coach/program-builder.tsx` +
+`lib/plan-builder/serialize.ts`, ficha coach RN) con la misma arquitectura que la web
+(contexto por ejercicio + conversión única al guardar + lecturas con `weightNum`/`suggestionNum`).
+Después: W5 (datos viejos, con OK) y W6 (gates completos, deploy web + OTA doble, QA del owner).

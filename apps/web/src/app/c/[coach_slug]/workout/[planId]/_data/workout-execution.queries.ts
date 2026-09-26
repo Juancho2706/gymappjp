@@ -198,6 +198,8 @@ export const getWorkoutExecutionData = cache(async (planId: string, targetDate?:
         block_id: string
         set_number: number
         weight_kg: number | null
+        // Unidad que tecleó el alumno (tren kg-lb-ejecutor). `weight_kg` es SIEMPRE kilos.
+        weight_unit: string | null
         reps_done: number | null
         rpe: number | null
         rir: number | null
@@ -227,7 +229,7 @@ export const getWorkoutExecutionData = cache(async (planId: string, targetDate?:
         blockIds.length > 0
             ? supabase
                 .from('workout_logs')
-                .select('block_id, set_number, weight_kg, reps_done, rpe, rir, note, actual_duration_sec, actual_distance_m, actual_hold_sec, actual_avg_hr, substituted_exercise_id, substituted_exercise_name, substitution_reason, metadata')
+                .select('block_id, set_number, weight_kg, weight_unit, reps_done, rpe, rir, note, actual_duration_sec, actual_distance_m, actual_hold_sec, actual_avg_hr, substituted_exercise_id, substituted_exercise_name, substitution_reason, metadata')
                 .in('block_id', blockIds)
                 .gte('logged_at', windowStartUtc)
                 .lt('logged_at', windowEndUtc)
@@ -236,7 +238,7 @@ export const getWorkoutExecutionData = cache(async (planId: string, targetDate?:
         seedBounds && blockIds.length > 0
             ? supabase
                 .from('workout_logs')
-                .select('block_id, set_number, weight_kg, reps_done, rpe, rir, note, actual_duration_sec, actual_distance_m, actual_hold_sec, actual_avg_hr, substituted_exercise_id, substituted_exercise_name, substitution_reason, metadata')
+                .select('block_id, set_number, weight_kg, weight_unit, reps_done, rpe, rir, note, actual_duration_sec, actual_distance_m, actual_hold_sec, actual_avg_hr, substituted_exercise_id, substituted_exercise_name, substitution_reason, metadata')
                 .in('block_id', blockIds)
                 .gte('logged_at', seedBounds.startIso)
                 .lt('logged_at', seedBounds.endIso)
@@ -245,7 +247,7 @@ export const getWorkoutExecutionData = cache(async (planId: string, targetDate?:
         exerciseIds.length > 0
             ? supabase
                 .from('workout_logs')
-                .select('weight_kg, reps_done, logged_at, set_number, exercise_id')
+                .select('weight_kg, weight_unit, reps_done, logged_at, set_number, exercise_id')
                 .eq('client_id', user.id)
                 // P1-3: match por el snapshot exercise_id del log (no por el bloque via JOIN). Sobrevive
                 // al hard-delete del bloque (block_id NULL) → la "sesión anterior" no desaparece. El
@@ -318,10 +320,15 @@ export const getWorkoutExecutionData = cache(async (planId: string, targetDate?:
     seedLogs = (seedLogsRes.data || []) as typeof logs
 
     const previousHistory: Record<string, { weight_kg: number | null, reps_done: number | null, date: string }[]> = {}
+    // Kilos o libras (tren kg-lb-ejecutor, D2 = a): última unidad que el alumno usó en cada ejercicio.
+    // `historyRes` viene desc por fecha ⇒ la primera unidad no nula de cada ejercicio es la más reciente.
+    // Las series anteriores al tren (NULL) no cuentan: sin ninguna, el selector cae a la del bloque.
+    const lastWeightUnitByExercise: Record<string, string> = {}
 
     historyRes.data?.forEach((log: any) => {
         const exId = log.exercise_id
         if (!exId) return
+        if (log.weight_unit && lastWeightUnitByExercise[exId] == null) lastWeightUnitByExercise[exId] = log.weight_unit
         if (!previousHistory[exId]) previousHistory[exId] = []
         const logDate = getSantiagoIsoYmdForUtcInstant(log.logged_at)
         const existingDates = previousHistory[exId].map(h => h.date)
@@ -396,5 +403,5 @@ export const getWorkoutExecutionData = cache(async (planId: string, targetDate?:
         ? { enabled: cardioRes.enabled, zones: cardioRes.zones?.zones ?? null }
         : { enabled: false, zones: null }
 
-    return { user, plan, program, logs, seedLogs, previousHistory, exerciseMaxes, exerciseMaxDates, activeWeekVariant, currentWeek, lastSessionByBlock, areas, cardio }
+    return { user, plan, program, logs, seedLogs, previousHistory, lastWeightUnitByExercise, exerciseMaxes, exerciseMaxDates, activeWeekVariant, currentWeek, lastSessionByBlock, areas, cardio }
 })

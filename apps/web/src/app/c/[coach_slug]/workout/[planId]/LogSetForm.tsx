@@ -22,9 +22,16 @@ import { useCoarsePointer } from '@/lib/client/useCoarsePointer'
 import {
     cardioMinSeedValue,
     cardioMinutesFromSeconds,
+    convertTypedWeight,
     formatWeightEsCl,
+    normalizeWeightUnit,
+    parseWeightEsCl,
+    suggestedWeightInUnit,
+    weightFromKg,
+    weightToKg,
     type PrKind,
     type RepeatSeedEntry,
+    type WeightUnit,
 } from '@eva/workout-engine'
 import { readDraft, saveDraft, clearDraft, type DraftFields } from './workout-draft-store'
 import { useWorkoutKeypad } from './WorkoutKeypadProvider'
@@ -63,6 +70,7 @@ import { cn } from '@/lib/utils'
 import { humanizeStudentWriteError } from '@/lib/student-access'
 import { springs } from '@/lib/animation-presets'
 import { useTargetDate } from './target-date-context'
+import { useBlockWeightUnit } from './weight-unit-context'
 
 const initialState: LogState = {}
 
@@ -437,6 +445,51 @@ function StrengthLogSetForm({
     // Día objetivo (Ola 1): si el ejecutor se abrió con `?fecha=…` (editar un día pasado), viaja en
     // cada submit como `target_date` → la action edita esa fecha en modo solo-UPDATE. null = HOY.
     const targetDate = useTargetDate()
+    // ── Kilos o libras (tren kg-lb-ejecutor, docs/specs/kg-lb-ejecutor) ────────────────────────────────
+    // El input de peso muestra y recibe el número en la unidad del selector del EJERCICIO (contexto del
+    // ejecutor); el submit lo pasa a kilos una sola vez y manda `weight_unit`. Sin provider (tests,
+    // superficies fuera del ejecutor) `unitActive` es false ⇒ la fila queda byte-idéntica a la previa.
+    const { unit: weightUnit, setUnit: setWeightUnit, active: unitActive } = useBlockWeightUnit(blockId)
+    // Unidad VIGENTE para closures que viven más que un render (listeners nativos del borrador y el
+    // `onChange` que el teclado guarda al abrirse): leer el valor del render dejaría una unidad vieja.
+    const weightUnitRef = useRef<WeightUnit>(weightUnit)
+    weightUnitRef.current = weightUnit
+    /** Kilos (log, cola, semilla, «Anterior») → número del input en la unidad visible. */
+    const kgToInput = (kg: number) => weightFromKg(kg, weightUnit)
+    /**
+     * Paso del `<input type=number>` de escritorio. Con el selector activo es `any`: un peso convertido
+     * (20 kg → 44,1 lb; 50 lb → 22,68 kg) no es múltiplo de 0,5 y el navegador BLOQUEARÍA el envío por
+     * `stepMismatch` sin avisar en la fila. Sin provider queda el 0,5 de siempre.
+     */
+    const weightInputStep = unitActive ? 'any' : '0.5'
+    /** Texto del input: es-CL con coma en el path keypad, crudo en el input number de desktop. */
+    const inputWeightText = (n: number) => (useKeypad ? formatWeightEsCl(n) : String(n))
+    /** Unidad para la que YA está convertido el valor del input (evita convertir dos veces). */
+    const inputUnitRef = useRef<WeightUnit>(weightUnit)
+    /** Convierte el número escrito en el input de `from` a `to` (R1: cambiar no borra, convierte). */
+    const convertWeightInput = (from: WeightUnit, to: WeightUnit) => {
+        inputUnitRef.current = to
+        const el = weightRef.current
+        if (!el || from === to) return
+        const n = parseWeightEsCl(el.value)
+        if (n == null) return
+        el.value = inputWeightText(convertTypedWeight(n, from, to))
+        // Mismo evento nativo que el teclado: alimenta el borrador (con la unidad nueva) y el flag vacío.
+        el.dispatchEvent(new Event('input', { bubbles: true }))
+    }
+    /**
+     * Cambio de unidad desde el tile o desde el teclado. La fila que lo dispara convierte EN EL ACTO
+     * (el teclado relee el input sincrónico); las demás filas del ejercicio lo hacen en el efecto de
+     * `weightUnit`. Lee la unidad del ref: el teclado conserva la closure del momento en que se abrió.
+     */
+    const changeWeightUnit = (next: WeightUnit) => {
+        const from = weightUnitRef.current
+        if (!unitActive || next === from) return
+        weightUnitRef.current = next
+        convertWeightInput(from, next)
+        setWeightUnit(next)
+        ph?.capture('weight_unit_toggled', { from, to: next, surface: 'web' })
+    }
     // Resultado del server (ver `sendLogSet`): sólo alimenta la UI (chip de error + base del optimismo).
     // El envío YA no lo maneja `useActionState` — vive fuera del fiber para que la reconciliación no
     // dependa de que la fila siga montada.
@@ -487,7 +540,16 @@ function StrengthLogSetForm({
         // crudos (coma es-CL en el path keypad). El draft NO pisa existingLog/queuedInit (guardas de arriba).
         const draft = readDraft(params.planId, blockId, setNumber)
         if (!draft) return
-        if (weightRef.current && draft.w != null && draft.w !== '') weightRef.current.value = draft.w
+        if (weightRef.current && draft.w != null && draft.w !== '') {
+            // Kilos o libras: el borrador guarda la unidad en que se tecleó; si el selector quedó en otra,
+            // el número se convierte en vez de reinterpretarse (borradores previos al tren = kg).
+            const draftUnit = normalizeWeightUnit(draft.wu)
+            const n = parseWeightEsCl(draft.w)
+            weightRef.current.value =
+                unitActive && draftUnit !== weightUnit && n != null
+                    ? inputWeightText(convertTypedWeight(n, draftUnit, weightUnit))
+                    : draft.w
+        }
         if (repsRef.current && draft.r != null && draft.r !== '') repsRef.current.value = draft.r
         if (draft.rpe != null && draft.rpe !== '') {
             const n = Number(draft.rpe)
@@ -638,13 +700,24 @@ function StrengthLogSetForm({
         fired: false,
     })
 
+    // Kilos o libras: si la unidad del ejercicio cambió desde OTRA fila (o desde el teclado de otra
+    // fila), el número que esta fila ya tenía escrito se convierte. La fila que disparó el cambio ya lo
+    // convirtió (`inputUnitRef` al día) y acá no hace nada.
+    useEffect(() => {
+        if (inputUnitRef.current === weightUnit) return
+        convertWeightInput(inputUnitRef.current, weightUnit)
+        keypad?.refreshDisplay()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [weightUnit])
+
     // Prefill "= última vez" (quick-win E2-3): escribe en los inputs uncontrolled al cambiar el nonce.
     useEffect(() => {
         if (!prefill) return
         // Con teclado custom el input es es-CL (coma decimal); si el keypad está abierto sobre esta
         // fila, refresca su mirror con el valor autollenado.
         if (weightRef.current && prefill.weight != null) {
-            weightRef.current.value = useKeypad ? formatWeightEsCl(prefill.weight) : String(prefill.weight)
+            // `prefill.weight` son kilos («Anterior»): se escribe en la unidad visible (kg ⇒ idéntico).
+            weightRef.current.value = inputWeightText(kgToInput(prefill.weight))
         }
         if (repsRef.current && prefill.reps != null) repsRef.current.value = String(prefill.reps)
         keypad?.refreshDisplay()
@@ -729,7 +802,7 @@ function StrengthLogSetForm({
         // El MISMO listener alimenta el flag de "serie vacía" (mismo motivo por el que no sirve el
         // onChange de React: el keypad muta `ref.value` y sólo despacha el evento nativo).
         const onWeight = () => {
-            captureDraft({ w: weightRef.current?.value ?? '' })
+            captureDraft({ w: weightRef.current?.value ?? '', ...(unitActive ? { wu: weightUnitRef.current } : {}) })
             syncEmptyCapture()
         }
         const onReps = () => {
@@ -903,6 +976,17 @@ function StrengthLogSetForm({
     // (decisión CEO 2026-07-25) — la serie se concluye con el CTA de la fila.
     const openKeypadFor = (initialField: 'weight' | 'reps' | 'reps_right' | 'actual_hold_sec' | 'hold_left_sec' | 'hold_right_sec') => {
         if (!useKeypad || !keypad) return
+        // Kilos o libras: pestaña/unidad del campo de peso según el selector, y el selector kg | lb del
+        // teclado (mockup aprobado 26-09) — solo dentro del ejecutor (`unitActive`).
+        const weightField = {
+            key: 'weight',
+            label: weightUnit === 'lb' ? 'Lb' : 'Kg',
+            unit: weightUnit,
+            allowDecimal: true,
+            weightChips: true,
+            maxIntDigits: 3,
+        }
+        const weightUnitCfg = unitActive ? { value: weightUnit, onChange: changeWeightUnit } : undefined
         // El input pudo montar como number (punto decimal) antes del gate coarse; normaliza a coma.
         const w = weightRef.current
         if (w && w.value.includes('.')) w.value = w.value.replace('.', ',')
@@ -917,13 +1001,13 @@ function StrengthLogSetForm({
             keypad.openKeypad({
                 fields: perSideHold
                     ? [
-                          { key: 'weight', label: 'Kg', unit: 'kg', allowDecimal: true, weightChips: true, maxIntDigits: 3 },
+                          weightField,
                           { key: 'reps', label: 'Reps', unit: 'reps', allowDecimal: false, maxIntDigits: 3 },
                           { key: 'hold_left_sec', label: 'Izq', unit: 'seg', allowDecimal: false, maxIntDigits: 3 },
                           { key: 'hold_right_sec', label: 'Der', unit: 'seg', allowDecimal: false, maxIntDigits: 3 },
                       ]
                     : [
-                          { key: 'weight', label: 'Kg', unit: 'kg', allowDecimal: true, weightChips: true, maxIntDigits: 3 },
+                          weightField,
                           { key: 'reps', label: 'Reps', unit: 'reps', allowDecimal: false, maxIntDigits: 3 },
                           { key: 'actual_hold_sec', label: 'Seg', unit: 'seg', allowDecimal: false, maxIntDigits: 3 },
                       ],
@@ -939,6 +1023,7 @@ function StrengthLogSetForm({
                     lastReps: lastSet?.reps ?? null,
                     exerciseName: nextUpLabel,
                 },
+                weightUnit: weightUnitCfg,
             })
             return
         }
@@ -947,13 +1032,13 @@ function StrengthLogSetForm({
                 ? [
                       // Fuerza POR LADO (W0.5): peso → Izq → Der, mismos rótulos que la fila. Nunca entra
                       // al carril tipado (R18): el commit sigue por `buildStrengthPayload`.
-                      { key: 'weight', label: 'Kg', unit: 'kg', allowDecimal: true, weightChips: true, maxIntDigits: 3 },
+                      weightField,
                       { key: 'reps', label: 'Izq', unit: 'reps', allowDecimal: false, maxIntDigits: 3 },
                       { key: 'reps_right', label: 'Der', unit: 'reps', allowDecimal: false, maxIntDigits: 3 },
                   ]
                 : [
                       // maxIntDigits 3 = tope 999 kg / 999 reps (incidente 4060 kg 2026-08-27).
-                      { key: 'weight', label: 'Kg', unit: 'kg', allowDecimal: true, weightChips: true, maxIntDigits: 3 },
+                      weightField,
                       { key: 'reps', label: 'Reps', unit: 'reps', allowDecimal: false, maxIntDigits: 3 },
                   ],
             fieldRefs: perSideReps
@@ -968,6 +1053,7 @@ function StrengthLogSetForm({
                 lastReps: lastSet?.reps ?? null,
                 exerciseName: nextUpLabel,
             },
+            weightUnit: weightUnitCfg,
         })
     }
 
@@ -1076,7 +1162,14 @@ function StrengthLogSetForm({
         if (wRaw0 !== null && wRaw0 !== '') formData.set('weight_kg', String(wRaw0).replace(',', '.'))
         const weightRaw = formData.get('weight_kg')
         const repsRaw = formData.get('reps_done')
-        const w = weightRaw === null || weightRaw === '' ? null : Number(weightRaw)
+        // Kilos o libras: el input trae el número en la unidad VISIBLE. Acá se pasa a kilos UNA sola vez
+        // (`weightToKg`) y la columna recibe kilos + la unidad tecleada. Sin provider: idéntico a antes.
+        const wTyped = weightRaw === null || weightRaw === '' ? null : Number(weightRaw)
+        const w = wTyped != null && unitActive ? weightToKg(wTyped, weightUnit) : wTyped
+        if (unitActive) {
+            if (w != null) formData.set('weight_kg', String(w))
+            formData.set('weight_unit', weightUnit)
+        }
         let r = repsRaw === null || repsRaw === '' ? null : Number(repsRaw)
         // Fuerza POR LADO (R3): `reps_done` = MÍNIMO de los lados (progresión y PR por e1RM intactos) y
         // el desglose viaja en `metadata` — misma fórmula del motor que usa RN. El input `reps_right` no
@@ -1165,6 +1258,7 @@ function StrengthLogSetForm({
             blockId,
             setNumber,
             weightKg: w,
+            ...(unitActive ? { weightUnit } : {}),
             repsDone: r,
             rpe,
             rir,
@@ -1257,6 +1351,7 @@ function StrengthLogSetForm({
             blockId,
             setNumber,
             weightKg: w,
+            ...(unitActive ? { weightUnit } : {}),
             repsDone: r,
             rpe,
             rir,
@@ -1296,12 +1391,15 @@ function StrengthLogSetForm({
                       reps_done: dispR,
                       actual_hold_sec: existingLog?.actual_hold_sec ?? null,
                       metadata: existingLog?.metadata,
-                  })
+                  }, unitActive ? { unit: weightUnit } : undefined)
                 : null
         const sideLine =
             holdLine ??
             (perSideReps
-                ? formatStrengthSetLine({ weight_kg: dispW, reps_done: dispR, metadata: chipSideMeta })
+                ? formatStrengthSetLine(
+                      { weight_kg: dispW, reps_done: dispR, metadata: chipSideMeta },
+                      unitActive ? { unit: weightUnit } : undefined,
+                  )
                 : null)
         // Se celebra sólo la serie recién cerrada en esta sesión (refs en false para logs cargados).
         const isPending = syncStatus === 'pending'
@@ -1344,7 +1442,10 @@ function StrengthLogSetForm({
                 <span className="font-mono text-[13px] font-bold tabular-nums text-on-dark">
                     {sideLine ?? (
                         <>
-                            {dispW ?? '–'}
+                            {/* Kilos o libras: en lb el chip dice «45 lb»; en kg queda el número de siempre. */}
+                            {dispW != null && unitActive && weightUnit === 'lb'
+                                ? `${formatWeightEsCl(kgToInput(dispW))} lb`
+                                : (dispW ?? '–')}
                             <span className="text-on-dark-muted"> × </span>
                             {dispR ?? '–'}
                         </>
@@ -1384,6 +1485,7 @@ function StrengthLogSetForm({
                         kg={prV3Ref.current.kg}
                         prevKg={prV3Ref.current.prevKg}
                         kind={prV3Ref.current.kind}
+                        unit={unitActive ? weightUnit : undefined}
                     />
                     {chip}
                 </div>
@@ -1407,7 +1509,15 @@ function StrengthLogSetForm({
     // Se lee de `seedValues` (no de `seed`): una serie YA registrada manda ÍNTEGRA. Con `seed?.weightKg`
     // una serie de peso corporal registrada hoy (weight_kg null) se reabría mostrando el peso del día
     // repetido — y al confirmar lo persistía.
-    const weightDefaultNum = existingLog?.weight_kg ?? queuedInit?.weightKg ?? seedValues?.weightKg ?? suggestedWeightKg ?? null
+    // Kilos o libras: la cadena de siempre (log > cola > semilla > sugerido), convertida a la unidad
+    // visible. La sugerencia en libras se redondea al 2,5 (`suggestedWeightInUnit`); en kg es idéntica.
+    const weightDefaultKg = existingLog?.weight_kg ?? queuedInit?.weightKg ?? seedValues?.weightKg ?? null
+    const weightDefaultNum =
+        weightDefaultKg != null
+            ? kgToInput(weightDefaultKg)
+            : suggestedWeightKg != null
+              ? suggestedWeightInUnit(suggestedWeightKg, weightUnit)
+              : null
     const weightDefaultValue = useKeypad
         ? (weightDefaultNum != null ? formatWeightEsCl(weightDefaultNum) : '')
         : (weightDefaultNum ?? '')
@@ -1476,11 +1586,11 @@ function StrengthLogSetForm({
                                 ref={weightRef}
                                 name="weight_kg"
                                 type={useKeypad ? 'text' : 'number'}
-                                {...(useKeypad ? { readOnly: true } : { step: '0.5', min: '0' })}
+                                {...(useKeypad ? { readOnly: true } : { step: weightInputStep, min: '0' })}
                                 inputMode={useKeypad ? 'none' : 'decimal'}
                                 defaultValue={weightDefaultValue}
                                 placeholder="-"
-                                aria-label="Peso en kilos"
+                                aria-label={weightUnit === 'lb' ? 'Peso en libras' : 'Peso en kilos'}
                                 onFocus={useKeypad ? () => openKeypadFor('weight') : undefined}
                                 onPointerDown={useWheel ? onFieldPointerDown : undefined}
                                 onPointerMove={useWheel ? onFieldPointerMove : undefined}
@@ -1495,7 +1605,24 @@ function StrengthLogSetForm({
                                 }}
                                 className={cn('exec-v3-valinput', useWheel && 'exec-v3-touchnone')}
                             />
-                            <span className="exec-v3-valu">KG</span>
+                            {/* Kilos o libras: la etiqueta ES el selector (escritorio no tiene teclado propio
+                                donde ponerlo). Un toque alterna kg ⇄ lb y convierte lo escrito. */}
+                            {unitActive ? (
+                                <button
+                                    type="button"
+                                    className="exec-v3-valu exec-v3-unitswitch"
+                                    onClick={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        changeWeightUnit(weightUnit === 'kg' ? 'lb' : 'kg')
+                                    }}
+                                    aria-label={weightUnit === 'kg' ? 'Unidad: kilos. Cambiar a libras' : 'Unidad: libras. Cambiar a kilos'}
+                                >
+                                    {weightUnit === 'kg' ? 'KG' : 'LB'} <span aria-hidden>⇄</span>
+                                </button>
+                            ) : (
+                                <span className="exec-v3-valu">KG</span>
+                            )}
                         </label>
                         {/* REPS: SIEMPRE presente en fuerza, también por tiempo (F1, owner 11-09).
                             En modo tiempo es el tile del medio y es OPCIONAL — vacío se pinta con el
@@ -1786,6 +1913,7 @@ function StrengthLogSetForm({
                         initialWeight={wheelInit.w}
                         initialReps={wheelInit.r}
                         onDone={applyWheel}
+                        weightUnit={weightUnit}
                         reducedMotion={reducedMotion}
                         setNumber={setNumber}
                         exerciseName={nextUpLabel}
@@ -1893,12 +2021,27 @@ function StrengthLogSetForm({
                     </span>
                     <div className="flex flex-1 items-end gap-2">
                         <label className="flex-1">
-                            <span className="mb-1 block text-[9.5px] font-bold uppercase tracking-[0.08em] text-on-dark-muted">Kg</span>
+                            {unitActive ? (
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.preventDefault()
+                                        e.stopPropagation()
+                                        changeWeightUnit(weightUnit === 'kg' ? 'lb' : 'kg')
+                                    }}
+                                    aria-label={weightUnit === 'kg' ? 'Unidad: kilos. Cambiar a libras' : 'Unidad: libras. Cambiar a kilos'}
+                                    className="mb-1 block text-[9.5px] font-bold uppercase tracking-[0.08em] text-on-dark-muted underline decoration-dotted underline-offset-2 hover:text-on-dark"
+                                >
+                                    {weightUnit === 'kg' ? 'Kg' : 'Lb'} <span aria-hidden>⇄</span>
+                                </button>
+                            ) : (
+                                <span className="mb-1 block text-[9.5px] font-bold uppercase tracking-[0.08em] text-on-dark-muted">Kg</span>
+                            )}
                             <input
                                 ref={weightRef}
                                 name="weight_kg"
                                 type={useKeypad ? 'text' : 'number'}
-                                {...(useKeypad ? { readOnly: true } : { step: '0.5', min: '0' })}
+                                {...(useKeypad ? { readOnly: true } : { step: weightInputStep, min: '0' })}
                                 inputMode={useKeypad ? 'none' : 'decimal'}
                                 defaultValue={weightDefaultValue}
                                 placeholder="-"
@@ -2158,6 +2301,7 @@ function StrengthLogSetForm({
                     initialWeight={wheelInit.w}
                     initialReps={wheelInit.r}
                     onDone={applyWheel}
+                    weightUnit={weightUnit}
                     reducedMotion={reducedMotion}
                     setNumber={setNumber}
                     exerciseName={nextUpLabel}

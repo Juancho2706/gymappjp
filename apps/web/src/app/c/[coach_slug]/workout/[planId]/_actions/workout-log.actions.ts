@@ -73,6 +73,9 @@ export async function logSetAction(
         block_id: formData.get('block_id') as string,
         set_number: formData.get('set_number') as string,
         weight_kg: getOptional('weight_kg'),
+        // Kilos o libras (tren kg-lb-ejecutor): `weight_kg` llega YA en kilos; esto es solo la unidad
+        // en que se tecleó. El zod la valida (kg|lb); una serie sin selector no la manda.
+        weight_unit: rawText('weight_unit'),
         reps_done: getOptional('reps_done'),
         rpe: getOptional('rpe'),
         rir: getOptional('rir'),
@@ -158,6 +161,10 @@ export async function logSetAction(
 
     const payloadValues = {
         weight_kg: parsed.data.weight_kg ?? null,
+        // Se escribe SIEMPRE junto al peso (a diferencia de `metadata`): cada guardado reescribe
+        // `weight_kg`, así que la unidad tiene que corresponderle. Sin selector (cola vieja, RN previo
+        // al tren) ⇒ NULL = kilos, nunca una «lb» heredada sobre un peso tecleado en kg.
+        weight_unit: parsed.data.weight_unit ?? null,
         reps_done: parsed.data.reps_done ?? null,
         rpe: parsed.data.rpe ?? null,
         rir: parsed.data.rir ?? null,

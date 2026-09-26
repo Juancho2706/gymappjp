@@ -26,6 +26,11 @@ export const DEFAULT_DRAFT_MAX_AGE_MS = 24 * 60 * 60 * 1000
 export interface DraftFields {
     /** Peso crudo (es-CL con coma en el path keypad, o crudo del input number en desktop). */
     w?: string
+    /**
+     * Unidad en que se tecleó `w` (tren kg-lb-ejecutor): `'kg'` | `'lb'`. Al rehidratar, si el selector
+     * del ejercicio quedó en otra unidad, el número se convierte en vez de reinterpretarse. Ausente ⇒ kg.
+     */
+    wu?: string
     /** Reps crudas. */
     r?: string
     /** RPE como string (el estado numérico se serializa al capturar; se parsea al rehidratar). */

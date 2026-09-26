@@ -85,6 +85,7 @@ export default async function WorkoutExecutionPage({ params, searchParams }: Pro
             logs={data.logs}
             seedLogs={data.seedLogs}
             previousHistory={data.previousHistory}
+            lastWeightUnitByExercise={data.lastWeightUnitByExercise}
             coachSlug={coach_slug}
             exerciseMaxes={data.exerciseMaxes}
             exerciseMaxDates={data.exerciseMaxDates}

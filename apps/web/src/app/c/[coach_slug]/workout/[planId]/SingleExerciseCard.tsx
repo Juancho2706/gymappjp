@@ -10,6 +10,7 @@ import type { ExerciseType as WorkoutKind } from '@/domain/workout/types'
 import { LogSetForm, type SetSyncResult } from './LogSetForm'
 import { SIDE_LABEL, formatTypedObjective, type SupersetGroupRow, type OptimisticLogPayload } from '@eva/workout-engine'
 import type { ClientCardioView } from './_data/workout-execution.queries'
+import { suggestionNum, useBlockWeightUnit, weightNum } from './weight-unit-context'
 // Primitivos/tipos compartidos con el resto de la exec (SupersetGroupCard los reusa) → se importan
 // del cliente padre. El import cruzado es render-time-only (ambos módulos solo los usan dentro del
 // render), así que no hay ciclo de evaluación de módulo; los tipos van con `import type` (borrados).
@@ -155,6 +156,8 @@ export function SingleExerciseCard({
     handleLogged,
     handleResult,
 }: SingleExerciseCardProps) {
+    // Kilos o libras (tren kg-lb-ejecutor): objetivo, «Última vez» e historial en la unidad del ejercicio.
+    const { unit: wUnit } = useBlockWeightUnit(block.id)
     return (
         <motion.div
             layout={!reducedMotion}
@@ -280,7 +283,7 @@ export function SingleExerciseCard({
                     <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
                         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 font-mono text-[13px] font-semibold text-on-dark">
                             <span>{block.sets} × {block.reps}</span>
-                            {block.target_weight_kg != null && (<><Sep /><span>{suggestedWeightKg ?? block.target_weight_kg} kg</span></>)}
+                            {block.target_weight_kg != null && (<><Sep /><span>{suggestionNum(suggestedWeightKg ?? block.target_weight_kg, wUnit)} {wUnit}</span></>)}
                             {block.rest_time && (<><Sep /><span className="text-on-dark-muted">desc {block.rest_time}</span></>)}
                             {block.tempo && (<><Sep /><span className="text-on-dark-muted">tempo {block.tempo}</span></>)}
                             {block.rir && (<><Sep /><span className="text-on-dark-muted">RIR {block.rir}</span></>)}
@@ -304,12 +307,12 @@ export function SingleExerciseCard({
                             }}
                             disabled={firstUnlogged == null}
                             className="flex min-h-[40px] w-full flex-wrap items-center gap-x-2 gap-y-0.5 rounded-control py-1 text-left text-[11px] transition-colors enabled:hover:bg-white/[0.05] enabled:active:scale-[0.99] disabled:cursor-default"
-                            aria-label={firstUnlogged != null && bestPrev.weight_kg ? `Autollenar la serie activa con ${bestPrev.weight_kg} kg por ${bestPrev.reps_done ?? '-'} reps` : undefined}
+                            aria-label={firstUnlogged != null && bestPrev.weight_kg ? `Autollenar la serie activa con ${weightNum(bestPrev.weight_kg, wUnit)} ${wUnit} por ${bestPrev.reps_done ?? '-'} reps` : undefined}
                         >
                             <History className="h-3.5 w-3.5 shrink-0 text-on-dark-muted" />
                             <span className="font-semibold text-on-dark-muted">Última vez:</span>
                             <span className="font-mono font-bold text-on-dark">
-                                {bestPrev.weight_kg ? `${bestPrev.weight_kg}kg` : '-'} × {bestPrev.reps_done || '-'}
+                                {bestPrev.weight_kg ? `${weightNum(bestPrev.weight_kg, wUnit)}${wUnit}` : '-'} × {bestPrev.reps_done || '-'}
                             </span>
                             {beatIt && (
                                 <span className="inline-flex items-center gap-1 font-bold text-[var(--sport-300)]">
@@ -386,7 +389,7 @@ export function SingleExerciseCard({
                                         {prevList.slice(0, 5).map((s, i) => (
                                             <li key={i} className="flex justify-between font-mono text-[11px] text-on-dark-muted">
                                                 <span>{formatRelativeDate(s.date)}</span>
-                                                <span className="text-on-dark">{s.weight_kg ? `${s.weight_kg}kg` : '-'} × {s.reps_done || '-'}</span>
+                                                <span className="text-on-dark">{s.weight_kg ? `${weightNum(s.weight_kg, wUnit)}${wUnit}` : '-'} × {s.reps_done || '-'}</span>
                                             </li>
                                         ))}
                                     </ul>

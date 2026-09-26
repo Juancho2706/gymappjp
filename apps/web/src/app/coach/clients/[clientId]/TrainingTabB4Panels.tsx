@@ -26,6 +26,8 @@ import {
     formatStrengthTimeSetLine,
     isStrengthTimeBlock,
     sideRepsFromMetadata,
+    formatWeightEsCl,
+    weightFromKg,
     EMPTY_LOGGED_SET_LABEL,
     EXERCISE_TYPE_LABEL,
     type ExerciseType,
@@ -767,7 +769,10 @@ function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
                                     // Fuerza POR TIEMPO (D3): «10 kg × 30 s» lo arma el motor dentro de la rama de
                                     // fuerza; sin hold cae a la línea peso × reps de siempre (over/under, «PC» intactos).
                                     const holdLine =
-                                        strengthTime || s.actual_hold_sec != null ? formatStrengthTimeSetLine(s) : null
+                                        strengthTime || s.actual_hold_sec != null
+                                            ? // Kilos o libras (D5 = a): kilos correctos + «(45 lb)» si se tecleó en libras.
+                                              formatStrengthTimeSetLine(s, { annotateEntered: true })
+                                            : null
                                     if (holdLine != null) {
                                         return (
                                             <span
@@ -809,6 +814,10 @@ function WorkoutDayReadOnly({ logs }: { logs: WorkoutLog[] }) {
                                             {s.set_number ?? si + 1}:{' '}
                                             <span className={cmp ? weightClass : undefined}>
                                                 {done != null ? `${done}kg` : 'PC'}
+                                                {/* Kilos o libras (D5 = a): la unidad que tecleó el alumno, al lado. */}
+                                                {done != null && s.weight_unit === 'lb'
+                                                    ? ` (${formatWeightEsCl(weightFromKg(done, 'lb'))} lb)`
+                                                    : ''}
                                             </span>{' '}
                                             × {sides ? `${sides.left} / ${sides.right}` : (s.reps_done ?? '—')}
                                             {s.rpe != null ? ` · RPE ${s.rpe}` : ''}

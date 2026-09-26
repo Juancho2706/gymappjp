@@ -18,7 +18,11 @@ import {
   appendKeypadDecimal,
   keypadBackspace,
   DEFAULT_KEYPAD_STEP,
+  DEFAULT_KEYPAD_STEP_LB,
   KEYPAD_MAX_DECIMALS,
+  KEYPAD_STEP_PRESETS,
+  KEYPAD_STEP_PRESETS_LB,
+  type WeightUnit,
 } from '@eva/workout-engine'
 import { readKeypadStep, writeKeypadStep } from '@/lib/client/keypad-step'
 import { NumericKeypadSheet, type KeypadTarget } from './NumericKeypadSheet'
@@ -54,6 +58,12 @@ export interface OpenKeypadConfig {
   initialFieldKey: string
   /** Objetivo prescrito (viaja con el teclado — DB-5). */
   target?: KeypadTarget
+  /**
+   * Kilos o libras (tren kg-lb-ejecutor): unidad vigente del peso + callback de cambio. Presente ⇒ el
+   * teclado muestra el selector kg | lb sobre el campo de peso. `onChange` convierte el valor del
+   * `<input>` SINCRÓNICO (el provider lo relee acto seguido). Ausente ⇒ teclado idéntico al previo.
+   */
+  weightUnit?: { value: WeightUnit; onChange: (next: WeightUnit) => void }
 }
 
 interface KeypadContextValue {
@@ -108,6 +118,10 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
   const [activeKey, setActiveKey] = useState('')
   const [display, setDisplay] = useState('')
   const [step, setStep] = useState(DEFAULT_KEYPAD_STEP)
+  // Kilos o libras: unidad del campo de peso mientras el teclado está abierto (la manda la fila) y paso
+  // de los chips en libras (en memoria: el paso en kg sigue persistido como siempre).
+  const [weightUnit, setWeightUnit] = useState<WeightUnit | null>(null)
+  const [stepLb, setStepLb] = useState(DEFAULT_KEYPAD_STEP_LB)
   const [stepMenuOpen, setStepMenuOpen] = useState(false)
   const keypadH = useRef(320)
   // BUG-4: distingue el cierre REAL del teclado (config→null) de un re-open (config→otro config, raro)
@@ -125,7 +139,10 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
     setStep(readKeypadStep())
   }, [])
 
-  const fields = config?.fields ?? []
+  // Kilos o libras: la pestaña/unidad del campo de peso sigue al selector (aunque la fila no reabra).
+  const fields = (config?.fields ?? []).map((f) =>
+    f.weightChips && weightUnit ? { ...f, label: weightUnit === 'lb' ? 'Lb' : 'Kg', unit: weightUnit } : f,
+  )
   const activeIndex = fields.findIndex((f) => f.key === activeKey)
   const activeField = activeIndex >= 0 ? fields[activeIndex] : null
   const isLastField = activeIndex >= 0 && activeIndex === fields.length - 1
@@ -157,6 +174,7 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
     // reubica la fila nueva por encima del teclado.
     closingRef.current = false
     setConfig(cfg)
+    setWeightUnit(cfg.weightUnit?.value ?? null)
     setActiveKey(cfg.initialFieldKey)
     setStepMenuOpen(false)
     setDisplay(el?.value ?? '')
@@ -263,12 +281,37 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
     onDone()
   }, [isLastField, fields, activeIndex, onSwitchField, onDone])
 
-  const onStepChange = useCallback((next: number) => {
-    setStep(next)
-    writeKeypadStep(next)
-    setStepMenuOpen(false)
-    triggerHaptic(8)
-  }, [])
+  const onStepChange = useCallback(
+    (next: number) => {
+      if (weightUnit === 'lb') {
+        setStepLb(next)
+      } else {
+        setStep(next)
+        writeKeypadStep(next)
+      }
+      setStepMenuOpen(false)
+      triggerHaptic(8)
+    },
+    [weightUnit],
+  )
+
+  /**
+   * Selector kg | lb del teclado: la fila convierte su `<input>` en el acto (`cfg.weightUnit.onChange`)
+   * y acá se relee el valor. El número convertido es un valor PRE-CARGADO: el próximo dígito lo reemplaza.
+   */
+  const onWeightUnitChange = useCallback(
+    (next: WeightUnit) => {
+      if (!config?.weightUnit || next === weightUnit) return
+      config.weightUnit.onChange(next)
+      setWeightUnit(next)
+      setStepMenuOpen(false)
+      const el = refFor(activeKey, config)
+      setDisplay(el?.value ?? '')
+      pristineRef.current = (el?.value ?? '') !== ''
+      triggerHaptic(8)
+    },
+    [config, weightUnit, refFor, activeKey],
+  )
 
   const onHeight = useCallback((h: number) => {
     if (h <= 0) return
@@ -358,7 +401,10 @@ export function WorkoutKeypadProvider({ children }: { children: React.ReactNode 
                 allowDecimal={allowDecimal}
                 showChips={showChips}
                 isLastField={isLastField}
-                step={step}
+                step={weightUnit === 'lb' ? stepLb : step}
+                stepPresets={weightUnit === 'lb' ? KEYPAD_STEP_PRESETS_LB : KEYPAD_STEP_PRESETS}
+                weightUnit={showChips ? weightUnit : null}
+                onWeightUnitChange={config.weightUnit ? onWeightUnitChange : undefined}
                 stepMenuOpen={stepMenuOpen}
                 reducedMotion={reducedMotion}
                 onDigit={onDigit}

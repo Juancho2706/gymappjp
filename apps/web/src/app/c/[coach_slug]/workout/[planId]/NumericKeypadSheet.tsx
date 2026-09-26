@@ -7,7 +7,14 @@ import { useReducedMotion } from '@/lib/use-reduced-motion'
 import { Delete, SlidersHorizontal, Check, ArrowRight, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { springsSheet } from '@/lib/animation-presets'
-import { incrementChipsForStep, formatWeightEsCl, KEYPAD_STEP_PRESETS } from '@eva/workout-engine'
+import {
+  incrementChipsForStep,
+  formatWeightEsCl,
+  KEYPAD_STEP_PRESETS,
+  suggestedWeightInUnit,
+  weightFromKg,
+  type WeightUnit,
+} from '@eva/workout-engine'
 
 /** Objetivo prescrito que viaja CON el teclado (DB-5: siempre visible mientras se tipea). */
 export interface KeypadTarget {
@@ -49,8 +56,16 @@ interface Props {
   showChips: boolean
   /** ¿El campo activo es el último de la lista? (define "Siguiente" vs "Listo") */
   isLastField: boolean
-  /** Paso configurable de los chips de incremento (kg). */
+  /** Paso configurable de los chips de incremento (en la unidad del campo de peso). */
   step: number
+  /** Presets del menú de paso (kg por defecto; libras cuando el selector está en lb). */
+  stepPresets?: readonly number[]
+  /**
+   * Kilos o libras: unidad del campo de peso ACTIVO (null ⇒ no es el campo de peso o no hay selector).
+   * Con `onWeightUnitChange` se pinta el selector kg | lb (mockup aprobado 26-09).
+   */
+  weightUnit?: WeightUnit | null
+  onWeightUnitChange?: (next: WeightUnit) => void
   /** ¿Está abierto el selector de paso? */
   stepMenuOpen: boolean
   reducedMotion: boolean | null
@@ -100,6 +115,9 @@ export function NumericKeypadSheet({
   showChips,
   isLastField,
   step,
+  stepPresets = KEYPAD_STEP_PRESETS,
+  weightUnit = null,
+  onWeightUnitChange,
   stepMenuOpen,
   reducedMotion: reducedMotionProp,
   onDigit,
@@ -154,6 +172,10 @@ export function NumericKeypadSheet({
   }, [onHeight])
 
   const chips = incrementChipsForStep(step)
+  // Kilos o libras: el objetivo y la «última vez» llegan en kilos; se leen en la unidad del selector
+  // (la sugerencia en libras redondeada al 2,5). Sin selector (`weightUnit` null) ⇒ kilos, como siempre.
+  const u: WeightUnit = weightUnit === 'lb' ? 'lb' : 'kg'
+  const unitWord = u === 'lb' ? 'libras' : 'kilos'
   // "Siguiente" salvo que sea el último campo → ahí "Listo" cierra el TECLADO (no la serie: el
   // submit vive en el CTA de la fila — decisión CEO 2026-07-25).
   const primaryIsNext = !isLastField
@@ -163,7 +185,9 @@ export function NumericKeypadSheet({
     const parts: string[] = []
     if (target?.sets != null && target?.reps != null) parts.push(`${target.sets}×${target.reps}`)
     else if (target?.reps != null) parts.push(`${target.reps} reps`)
-    if (target?.suggestedWeightKg != null) parts.push(`${formatWeightEsCl(target.suggestedWeightKg)} kg`)
+    if (target?.suggestedWeightKg != null) {
+      parts.push(`${formatWeightEsCl(suggestedWeightInUnit(target.suggestedWeightKg, u))} ${u}`)
+    }
     return parts.join(' · ')
   })()
   const hasLast = target?.lastWeightKg != null || target?.lastReps != null
@@ -225,13 +249,35 @@ export function NumericKeypadSheet({
             <p className="shrink-0 font-mono text-[11px] tabular-nums text-on-dark-muted">
               Última vez{' '}
               <span className="font-bold text-on-dark">
-                {target?.lastWeightKg != null ? `${formatWeightEsCl(target.lastWeightKg)}kg` : '–'}
+                {target?.lastWeightKg != null ? `${formatWeightEsCl(weightFromKg(target.lastWeightKg, u))}${u}` : '–'}
                 {' × '}
                 {target?.lastReps ?? '–'}
               </span>
             </p>
           )}
         </div>
+
+        {/* Kilos o libras: selector de unidad del peso (solo sobre el campo de peso). */}
+        {weightUnit && onWeightUnitChange && (
+          <div className="mt-2 flex justify-center">
+            <div role="group" aria-label="Unidad de peso" className="grid w-40 grid-cols-2 rounded-control bg-white/[0.06] p-0.5">
+              {(['kg', 'lb'] as const).map((opt) => (
+                <button
+                  key={opt}
+                  type="button"
+                  aria-pressed={weightUnit === opt}
+                  onClick={() => onWeightUnitChange(opt)}
+                  className={cn(
+                    'h-8 rounded-[10px] font-mono text-[13px] font-bold transition-colors',
+                    weightUnit === opt ? 'bg-[var(--sport-500)] text-white' : 'text-on-dark-muted hover:text-on-dark',
+                  )}
+                >
+                  {opt}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Display + pestañas de campo */}
         <div className="mt-2 flex items-center gap-2 rounded-control border border-[var(--border-inverse)] bg-white/[0.04] p-2 pl-3">
@@ -280,7 +326,7 @@ export function NumericKeypadSheet({
                   key={delta}
                   type="button"
                   onClick={() => onIncrement(delta)}
-                  aria-label={`${delta > 0 ? 'más' : 'menos'} ${formatWeightEsCl(Math.abs(delta))} kilos`}
+                  aria-label={`${delta > 0 ? 'más' : 'menos'} ${formatWeightEsCl(Math.abs(delta))} ${unitWord}`}
                   className="h-10 flex-1 rounded-full border border-[var(--border-inverse)] bg-white/[0.06] font-mono text-[13px] font-bold tabular-nums text-on-dark transition-transform active:scale-95 hover:bg-white/[0.12]"
                 >
                   {chipLabel(delta)}
@@ -304,10 +350,10 @@ export function NumericKeypadSheet({
             {stepMenuOpen && (
               <div className="mt-2 rounded-control border border-[var(--border-inverse)] bg-white/[0.03] p-2">
                 <p className="mb-1.5 px-1 text-[10px] font-bold uppercase tracking-wider text-on-dark-muted">
-                  Paso del incremento (kg)
+                  Paso del incremento ({u})
                 </p>
                 <div className="flex flex-wrap gap-1.5">
-                  {KEYPAD_STEP_PRESETS.map((preset) => (
+                  {stepPresets.map((preset) => (
                     <button
                       key={preset}
                       type="button"

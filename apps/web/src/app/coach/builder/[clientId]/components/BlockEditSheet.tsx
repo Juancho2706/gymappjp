@@ -15,7 +15,8 @@ import type { BuilderBlock, BuilderCardioContext } from '../types'
 import type { ExerciseType, IntervalConfig, SideMode } from '@/domain/workout/types'
 import { EXERCISE_TYPE_META, effectiveExerciseType } from '@/lib/workout-exercise-type'
 import { exerciseThumbnailUrl, extractYoutubeVideoId } from '@/lib/youtube'
-import { INTERVAL_TEMPLATES, repsUnitForModality, cardioRepsUnitShort } from '@eva/workout-engine'
+import { INTERVAL_TEMPLATES, repsUnitForModality, cardioRepsUnitShort, parseWeightEsCl, weightToKg } from '@eva/workout-engine'
+import { builderWeightUnit, targetWeightInputValue } from '../_lib/target-weight'
 import { stripFieldsForType, applyStrengthModeChange, isBlockComplete } from '@eva/plan-builder'
 import { STRENGTH_TIME_MIN_SEC, STRENGTH_TIME_MAX_SEC } from '@eva/schemas'
 import { HR_ZONES } from '@eva/cardio'
@@ -820,18 +821,12 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
                     <div className="grid grid-cols-2 gap-6">
                         <div className="space-y-3">
                             <label className="text-[12.5px] font-semibold text-foreground flex items-center gap-1.5">
-                                Peso Objetivo (kg)
+                                Peso objetivo
                                 <InfoTooltip content={t('tooltip.weight')} />
                             </label>
-                            <Input
-                                value={block.target_weight_kg || ''}
-                                onChange={e => onChange({...block, target_weight_kg: e.target.value})}
-                                placeholder="Ej. 60 o 62.5"
-                                inputMode="decimal"
-                                autoComplete="off"
-                                className="h-12 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground font-bold focus:border-primary placeholder:text-muted-foreground"
-                            />
-                            <p className="text-[10px] text-muted-foreground/50">en kg, acepta decimales</p>
+                            {/* Kilos o libras (tren kg-lb-ejecutor, D3 = a): la unidad vive PEGADA al número.
+                                Se guarda siempre en kilos; en libras el campo muestra y recibe libras. */}
+                            <TargetWeightField block={block} onChange={onChange} />
                         </div>
                         <div className="space-y-3">
                             <label className="text-[12.5px] font-semibold text-foreground flex items-center gap-1.5">
@@ -924,25 +919,6 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
                                     >
                                         {block.distance_unit ?? 'm'}
                                     </button>
-                                </div>
-                            </div>
-                            <div className="space-y-1.5">
-                                <p className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Unidad de carga</p>
-                                <div className="grid grid-cols-2 overflow-hidden rounded-control border border-border text-[10px] font-bold uppercase tracking-widest dark:border-white/10">
-                                    {(['kg', 'lb'] as const).map((unit) => (
-                                        <button
-                                            key={unit}
-                                            type="button"
-                                            onClick={() => onChange({ ...block, load_unit: unit, load_type: 'weight' })}
-                                            className={`min-h-[40px] transition-colors ${
-                                                (block.load_unit ?? 'kg') === unit
-                                                    ? 'bg-primary text-primary-foreground'
-                                                    : 'text-muted-foreground hover:bg-muted'
-                                            }`}
-                                        >
-                                            {unit}
-                                        </button>
-                                    ))}
                                 </div>
                             </div>
                         </div>
@@ -1343,6 +1319,69 @@ export function BlockEditSheet({ block, clientId, cardio, isMobile = false, onCl
                 ) : null}
             </DialogContent>
         </Dialog>
+        </>
+    )
+}
+
+/**
+ * Peso objetivo del bloque con su unidad al lado (tren kg-lb-ejecutor, D3 = a). `target_weight_kg`
+ * guarda SIEMPRE kilos: en kg el input es el string crudo de siempre; en libras el coach ve y teclea
+ * libras y el bloque recibe los kilos a centésimas. Cambiar de unidad no cambia el peso real: el mismo
+ * valor en kilos se muestra en la otra unidad.
+ */
+function TargetWeightField({ block, onChange }: { block: BuilderBlock; onChange: (b: BuilderBlock) => void }) {
+    const unit = builderWeightUnit(block)
+    // Lo que el coach tipea en libras (null ⇒ derivar de los kilos guardados). Se descarta al cambiar
+    // de bloque o de unidad, así el input nunca muestra un texto de otro bloque.
+    const [lbText, setLbText] = useState<string | null>(null)
+    useEffect(() => {
+        setLbText(null)
+    }, [block.uid, unit])
+    const shown = unit === 'lb' ? (lbText ?? targetWeightInputValue(block)) : block.target_weight_kg || ''
+    const onType = (raw: string) => {
+        if (unit === 'kg') {
+            onChange({ ...block, target_weight_kg: raw })
+            return
+        }
+        setLbText(raw)
+        const lb = parseWeightEsCl(raw)
+        onChange({ ...block, target_weight_kg: lb == null ? '' : String(weightToKg(lb, 'lb')) })
+    }
+    return (
+        <>
+            <div className="flex gap-2">
+                <Input
+                    value={shown}
+                    onChange={(e) => onType(e.target.value)}
+                    placeholder={unit === 'lb' ? 'Ej. 45 o 47.5' : 'Ej. 60 o 62.5'}
+                    inputMode="decimal"
+                    autoComplete="off"
+                    aria-label={unit === 'lb' ? 'Peso objetivo en libras' : 'Peso objetivo en kilos'}
+                    className="h-12 min-w-0 flex-1 bg-secondary dark:bg-white/5 border-border dark:border-white/10 text-foreground font-bold focus:border-primary placeholder:text-muted-foreground"
+                />
+                <div
+                    role="group"
+                    aria-label="Unidad del peso"
+                    className="grid h-12 shrink-0 grid-cols-2 overflow-hidden rounded-control border border-border text-[11px] font-bold uppercase tracking-widest dark:border-white/10"
+                >
+                    {(['kg', 'lb'] as const).map((u) => (
+                        <button
+                            key={u}
+                            type="button"
+                            aria-pressed={unit === u}
+                            onClick={() => onChange({ ...block, load_unit: u, load_type: 'weight' })}
+                            className={`min-w-[44px] px-2 transition-colors ${
+                                unit === u ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-muted'
+                            }`}
+                        >
+                            {u}
+                        </button>
+                    ))}
+                </div>
+            </div>
+            <p className="text-[10px] text-muted-foreground/50">
+                {unit === 'lb' ? 'en libras, acepta decimales · se guarda en kg' : 'en kg, acepta decimales'}
+            </p>
         </>
     )
 }

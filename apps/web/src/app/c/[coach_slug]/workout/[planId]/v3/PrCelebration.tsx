@@ -2,7 +2,7 @@
 
 import { motion } from 'framer-motion'
 import { useReducedMotion } from '@/lib/use-reduced-motion'
-import { formatWeightEsCl, type PrKind } from '@eva/workout-engine'
+import { formatWeightEsCl, weightFromKg, type PrKind, type WeightUnit } from '@eva/workout-engine'
 
 /**
  * Ejecutor V3 (E4.2) — PR EN VIVO. Traducción del mockup `concepto-a-v32-momentos` (pantalla "PR en
@@ -33,10 +33,16 @@ export interface PrCelebrationProps {
     prevKg: number
     /** Eje del récord del engine (weight/e1rm). Sólo matiza el rótulo. */
     kind: PrKind
+    /**
+     * Kilos o libras (tren kg-lb-ejecutor): unidad en que el alumno ve el peso. `kg`/`prevKg` siguen
+     * llegando en kilos (el umbral de PR se compara en kilos); acá solo se leen en su unidad.
+     */
+    unit?: WeightUnit
 }
 
-export function PrCelebration({ kg, prevKg, kind }: PrCelebrationProps) {
+export function PrCelebration({ kg, prevKg, kind, unit = 'kg' }: PrCelebrationProps) {
     const reducedMotion = useReducedMotion()
+    const show = (n: number) => `${formatWeightEsCl(weightFromKg(n, unit))} ${unit}`
     return (
         <motion.div
             className="exec-pr-cel"
@@ -74,14 +80,14 @@ export function PrCelebration({ kg, prevKg, kind }: PrCelebrationProps) {
                 <span className="exec-pr-txt">
                     <span className="exec-pr-k">¡PR! {kind === 'e1rm' ? 'Mejor 1RM' : 'Nuevo récord'}</span>
                     <span className="exec-pr-v tabular-nums">
-                        {formatWeightEsCl(kg)} kg <small>— tu mejor marca</small>
+                        {show(kg)} <small>— tu mejor marca</small>
                     </span>
                 </span>
             </span>
 
             <span className="exec-pr-prev">
                 <span className="exec-pr-prev-l">Anterior</span>
-                <span className="exec-pr-prev-r tabular-nums">{formatWeightEsCl(prevKg)} kg</span>
+                <span className="exec-pr-prev-r tabular-nums">{show(prevKg)}</span>
                 <span className="exec-pr-up" aria-hidden />
                 <span className="exec-pr-sup">Superado</span>
             </span>

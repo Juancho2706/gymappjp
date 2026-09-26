@@ -1,5 +1,6 @@
 'use client'
 
+import { targetWeightLabel } from '../_lib/target-weight'
 import { useRef } from 'react'
 import { X, Printer } from 'lucide-react'
 import { getMuscleColor } from '../muscle-colors'
@@ -113,7 +114,9 @@ export function PrintProgramDialog({ open, onClose, programName, clientName, coa
         // Fuerza por tiempo (D3, W2.9): «3 series × 30 s», nunca «× 30s reps».
         if (isStrengthTimeBlock(builderTypedFields(block), { exercise_type: block.exercise_type })) metaParts.push(formatStrengthTimeObjectiveLong(builderTypedFields(block)).replace(' × ', ' series × '))
         else if (block.sets && block.reps) metaParts.push(`${block.sets} series × ${block.reps} reps`)
-        if (block.target_weight_kg) metaParts.push(`${block.target_weight_kg} kg`)
+        // Kilos o libras: el peso en la unidad del bloque (kg ⇒ idéntico a antes).
+        const weight = targetWeightLabel(block)
+        if (weight) metaParts.push(weight)
         if (block.rest_time) metaParts.push(`Descanso: ${block.rest_time}`)
         if (block.rir != null && block.rir !== '' && block.rir !== '0') metaParts.push(`RIR ${block.rir}`)
         if (block.tempo) metaParts.push(`Tempo ${block.tempo}`)
