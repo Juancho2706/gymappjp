@@ -74,6 +74,12 @@ export function PaymentMethodPicker({
                         <span className="text-[12.5px] leading-snug text-muted">
                             Pagas con Webpay a través de Flow, sin crear cuentas nuevas.
                         </span>
+                        {/* Caso Fraga gym (28-09): Webpay muestra el correo de la cuenta EVA y pide
+                            confirmarlo; la coach creyó que la tarjeta debía tener ese correo y no siguió. */}
+                        <span className="text-[12.5px] leading-snug text-muted">
+                            Webpay te pedirá confirmar tu correo de EVA: marca «Es mi correo». Sirve cualquier
+                            tarjeta, aunque tenga otro correo.
+                        </span>
                     </span>
                     <span className={`flex flex-wrap gap-1.5 ${indent}`}>
                         {WEBPAY_CARDS.map((card) => (
