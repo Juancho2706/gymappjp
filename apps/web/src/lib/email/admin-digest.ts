@@ -28,6 +28,9 @@ export const MP_RECONCILE_DIGEST_ACTION = 'cron.mp_reconcile_digest'
 /** Acción del ledger para el digest del cron `paid-expiry`. */
 export const PAID_EXPIRY_DIGEST_ACTION = 'cron.paid_expiry_digest'
 
+/** Acción del ledger para el digest del cron `flow-reconcile`. */
+export const FLOW_RECONCILE_DIGEST_ACTION = 'cron.flow_reconcile_digest'
+
 /**
  * Forma canónica de un valor: claves de objeto ordenadas alfabéticamente y listas ordenadas por la
  * representación canónica de cada elemento. Sin esto el hash sería mentiroso en las dos direcciones:

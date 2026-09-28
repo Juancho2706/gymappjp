@@ -96,7 +96,7 @@ async function verifyRemote(coach: CandidateCoach): Promise<RemoteVerification> 
 
     try {
         const snap = await provider.fetchCheckoutSnapshot(subId)
-        return { kind: 'status', mappedStatus: mapProviderStatus(snap.status) }
+        return { kind: 'status', mappedStatus: mapProviderStatus(snap.status), dunning: snap.dunning ?? null }
     } catch (err) {
         if (err instanceof ProviderRequestError && err.isNotFound) {
             return { kind: 'not_found' }
@@ -105,6 +105,24 @@ async function verifyRemote(coach: CandidateCoach): Promise<RemoteVerification> 
             return { kind: 'foreign_account' }
         }
         throw err
+    }
+}
+
+/**
+ * Regla 5 (morosa sin reintentos): cancela la suscripción en el gateway ANTES de expirar, para que no
+ * siga generando cobros a un coach sin acceso. Devuelve false si no se pudo (el caller NO expira).
+ */
+async function cancelRemoteBeforeExpire(coach: CandidateCoach): Promise<boolean> {
+    const provider = getPaymentsProviderForCoach(coach)
+    const subId =
+        provider.name === 'flow' ? coach.subscription_provider_external_id : coach.subscription_mp_id
+    if (!subId) return false
+    try {
+        await provider.cancelCheckoutAtProvider(subId)
+        return true
+    } catch (err) {
+        console.error(`[cron/paid-expiry] cancel remoto falló para ${coach.slug}:`, err)
+        return false
     }
 }
 
@@ -273,10 +291,20 @@ export async function GET(req: Request) {
     for (const coach of (candidates ?? []) as CandidateCoach[]) {
         try {
             const remote = await verifyRemote(coach)
-            const decision = resolvePaidExpiryDecision({
+            let decision = resolvePaidExpiryDecision({
                 dbStatus: coach.subscription_status,
                 remote,
             })
+
+            // Regla 5: sin la cancelación remota confirmada NO se expira (con el id nuleado, un cobro
+            // posterior del gateway llegaría huérfano = cobro sin acceso). Queda en alerta y reintenta
+            // mañana.
+            if (decision.action === 'expire' && decision.cancelAtProvider) {
+                const cancelled = await cancelRemoteBeforeExpire(coach)
+                if (!cancelled) {
+                    decision = { action: 'alert', reason: `${decision.reason}:cancel_failed` }
+                }
+            }
 
             if (decision.action === 'expire') {
                 // El ancla del correo se captura ANTES de expirar: `expireCoach` deja

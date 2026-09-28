@@ -174,6 +174,12 @@ export type ProviderCheckoutSnapshot = {
      */
     start_date?: string | null
     auto_recurring?: { end_date?: string | null; transaction_amount?: number | null; start_date?: string | null }
+    /**
+     * Cobranza del gateway (hoy solo Flow): `morose` = hay una invoice impaga; `retriesPending` = el
+     * gateway todavía va a reintentar el cobro. `morose && !retriesPending` = se rindió aunque la
+     * suscripción siga en status «activa» (Flow no la cancela sola). Ausente en MP.
+     */
+    dunning?: { morose: boolean; retriesPending: boolean } | null
 }
 
 /**

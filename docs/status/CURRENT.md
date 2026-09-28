@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-09-26"
+last_verified: "2026-09-28"
 canonical: true
 ---
 
@@ -54,6 +54,9 @@ prevalecen sobre este resumen. La prosa retirada está en
 3. **Embudo Free→Pro** ([spec](../specs/embudo-free-pro/SPEC.md)): W0–W6 en producción; queda App Store Connect (W7.4).
 4. **FC de toda la sesión** (punto 2 de Movens, fuera del tren «Vuelta nueva»): plan aparte, arranca preguntándole
    a Movens qué banda usa ([SDD §6](../specs/vuelta-nueva-salud-y-reloj/SPEC.md)).
+5. **Renovaciones Flow** (28-09, [incidente](../audits/flow-renovaciones-2026-09-28.md)): el plan de $29.990 avisaba a
+   `//api` (308) ⇒ ninguna renovación llegaba; `olympuswolf` quedó 24 días con Pro gratis (cortado). Arreglado con
+   regla de Cloudflare + guardas en `paid-expiry`/`flow-reconcile`. **Queda: verificar la renovación de Movens el 02-10.**
 
 ### 3. Decisiones del owner pendientes
 

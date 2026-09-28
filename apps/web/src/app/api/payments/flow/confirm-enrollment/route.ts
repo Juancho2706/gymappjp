@@ -37,6 +37,7 @@ import {
 import { claimFlowEnrollment, clearFlowEnrollment } from '@/services/billing/plan-change-lock'
 import { decrementCouponCycleForCharge } from '@/services/billing/coupons.service'
 import type { BillableAddon } from '@/domain/billing/types'
+import { buildFlowWebhookUrl } from '@/lib/payments/flow-webhook-url'
 
 /**
  * FASE 2 del alta recurrente por Flow (plan pagos-multigateway-flow, Ola 4 · W3).
@@ -319,11 +320,7 @@ export async function POST(request: Request) {
         }
 
         // webhookUrl DEL PLAN: donde Flow notifica los cobros RECURRENTES de este plan (money-critical).
-        const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
-        const flowWebhookToken = process.env.FLOW_WEBHOOK_TOKEN
-        const webhookUrl = flowWebhookToken
-            ? `${appUrl}/api/payments/flow/webhook?token=${encodeURIComponent(flowWebhookToken)}`
-            : `${appUrl}/api/payments/flow/webhook`
+        const webhookUrl = buildFlowWebhookUrl()
 
         // ── Claim ATOMICO de la ventana de creacion (TOCTOU, panel/juez Ola 4) ──────────────────────
         // Dos POSTs simultaneos (doble tab / polls solapados de la pagina cada 4s) pasarian AMBOS el

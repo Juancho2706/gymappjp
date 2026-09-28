@@ -19,7 +19,22 @@ function makeAdmin() {
                 return chain
             }
             if (table === 'admin_audit_logs') {
-                return { insert: async (row: Record<string, unknown>) => { auditInserts.push(row); return { error: null } } }
+                return {
+                    insert: async (row: Record<string, unknown>) => { auditInserts.push(row); return { error: null } },
+                    // SELECT del ledger del digest (D4): devuelve lo insertado en esta corrida para esa acción.
+                    select: () => {
+                        let action: unknown
+                        const chain: Record<string, unknown> = {}
+                        Object.assign(chain, {
+                            eq: (_col: string, val: unknown) => { action = val; return chain },
+                            order: () => chain,
+                            limit: () => chain,
+                            then: (resolve: (v: { data: unknown; error: null }) => unknown) =>
+                                resolve({ data: auditInserts.filter((r) => r.action === action).reverse(), error: null }),
+                        })
+                        return chain
+                    },
+                }
             }
             return {}
         },
@@ -29,20 +44,32 @@ let fakeAdmin = makeAdmin()
 vi.mock('@/lib/supabase/admin-client', () => ({ createServiceRoleClient: () => fakeAdmin }))
 
 // FlowProvider.fetchCheckoutSnapshot controlado por subscriptionId.
-const snapshots = new Map<string, { status: string; auto_recurring?: { end_date?: string | null } }>()
+const snapshots = new Map<string, { status: string; auto_recurring?: { end_date?: string | null }; dunning?: { morose: boolean; retriesPending: boolean } }>()
 const fetchCheckoutSnapshot = vi.fn(async (subId: string) => {
     const s = snapshots.get(subId)
     if (!s) throw new Error('no snapshot')
-    return { id: subId, external_reference: null, status: s.status, next_payment_date: null, auto_recurring: s.auto_recurring }
+    return { id: subId, external_reference: null, status: s.status, next_payment_date: null, auto_recurring: s.auto_recurring, dunning: s.dunning ?? null }
 })
 // U6.3: SYNC ACOTADO del drift → updateCheckoutAmount (ensure-plan + changePlan al compuesto esperado).
 const updateCheckoutAmount = vi.fn(async (..._a: unknown[]) => {})
+// (5) urlCallback por plan. Default: el plan avisa a la URL esperada (sin alerta).
+const planCallbacks = new Map<string, string | null>()
+const fetchPlanCallbackUrl = vi.fn(async (planId: string) =>
+    planCallbacks.has(planId) ? planCallbacks.get(planId)! : 'https://www.eva-app.cl/api/payments/flow/webhook?token=tok'
+)
 vi.mock('@/lib/payments/provider', () => ({
     getPaymentsProvider: () => ({
         name: 'flow',
         fetchCheckoutSnapshot: (...a: unknown[]) => fetchCheckoutSnapshot(...(a as [string])),
         updateCheckoutAmount: (...a: unknown[]) => updateCheckoutAmount(...a),
+        fetchPlanCallbackUrl: (...a: unknown[]) => fetchPlanCallbackUrl(...(a as [string])),
     }),
+}))
+
+// Digest a ADMIN_EMAILS — mockeado (sin red).
+const sendTransactionalEmail = vi.fn(async (..._a: unknown[]) => ({ ok: true, providerMessageId: null }))
+vi.mock('@/lib/email/send-email', () => ({
+    sendTransactionalEmail: (...a: unknown[]) => sendTransactionalEmail(...a),
 }))
 
 // B4 drift: listLive (add-ons vivos) + resolveDiscountSpecByRedemptionId (cupon) alimentan el compuesto
@@ -68,8 +95,12 @@ beforeEach(() => {
     auditInserts.length = 0
     flowCoaches = []
     snapshots.clear()
+    planCallbacks.clear()
     fakeAdmin = makeAdmin()
     vi.stubEnv('CRON_SECRET', SECRET)
+    vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://www.eva-app.cl')
+    vi.stubEnv('FLOW_WEBHOOK_TOKEN', 'tok')
+    vi.stubEnv('ADMIN_EMAILS', '')
 })
 afterEach(() => vi.unstubAllEnvs())
 
@@ -172,5 +203,61 @@ describe('GET /api/cron/flow-reconcile — SYNC ACOTADO del drift de monto (U6.3
         await GET(authedReq())
         expect(updateCheckoutAmount).toHaveBeenCalledWith('sus_fail', expectedPro)
         expect(auditInserts.some((a) => a.action === 'coach.flow_amount_drift')).toBe(true)
+    })
+})
+
+describe('GET /api/cron/flow-reconcile — morosa, URL de aviso del plan y digest (incidente 28-09)', () => {
+    const coachMoroso = () => ({
+        id: 'c9', slug: 'flow-moroso', subscription_status: 'active', subscription_tier: 'pro', billing_cycle: 'monthly',
+        current_period_end: '2026-09-04T00:00:00', subscription_provider: 'flow', subscription_provider_external_id: 'sus_m',
+        provider_plan_id: null,
+    })
+
+    it('(4) sub «activa» pero morosa → divergencia + audit coach.flow_morose', async () => {
+        flowCoaches = [coachMoroso()]
+        snapshots.set('sus_m', { status: 'authorized', auto_recurring: { end_date: '2026-09-04T00:00:00' }, dunning: { morose: true, retriesPending: false } })
+        const json = await (await GET(authedReq())).json()
+        expect(json.divergences).toBe(1)
+        const audit = auditInserts.find((a) => a.action === 'coach.flow_morose')
+        expect(audit?.payload).toMatchObject({ coach_slug: 'flow-moroso', retries_pending: false })
+    })
+
+    it('(5) plan con urlCallback «//api» (mitigado por Cloudflare) → sin alerta; con otro token → alerta sin exponerlo', async () => {
+        flowCoaches = [
+            { ...coachMoroso(), id: 'c1', slug: 'a', subscription_provider_external_id: 'sus_a', provider_plan_id: 'eva_pro_monthly_29990' },
+            { ...coachMoroso(), id: 'c2', slug: 'b', subscription_provider_external_id: 'sus_b', provider_plan_id: 'eva_pro_monthly_14995' },
+        ]
+        snapshots.set('sus_a', { status: 'authorized', auto_recurring: { end_date: '2026-09-04T00:00:00' } })
+        snapshots.set('sus_b', { status: 'authorized', auto_recurring: { end_date: '2026-09-04T00:00:00' } })
+        planCallbacks.set('eva_pro_monthly_29990', 'https://www.eva-app.cl//api/payments/flow/webhook?token=tok')
+        planCallbacks.set('eva_pro_monthly_14995', 'https://www.eva-app.cl/api/payments/flow/webhook?token=VIEJO')
+        await GET(authedReq())
+        expect(fetchPlanCallbackUrl).toHaveBeenCalledTimes(2)
+        const mismatches = auditInserts.filter((a) => a.action === 'flow.plan_callback_mismatch')
+        expect(mismatches).toHaveLength(1)
+        expect(mismatches[0].payload).toEqual({ plan_id: 'eva_pro_monthly_14995', reason: 'token', triggered_by: 'cron/flow-reconcile' })
+        expect(JSON.stringify(auditInserts)).not.toContain('VIEJO')
+    })
+
+    it('digest: con divergencias manda a ADMIN_EMAILS; mismo contenido al día siguiente ⇒ suprimido', async () => {
+        vi.stubEnv('ADMIN_EMAILS', 'ceo@eva-app.cl')
+        flowCoaches = [coachMoroso()]
+        snapshots.set('sus_m', { status: 'authorized', auto_recurring: { end_date: '2026-09-04T00:00:00' }, dunning: { morose: true, retriesPending: false } })
+        await GET(authedReq())
+        expect(sendTransactionalEmail).toHaveBeenCalledTimes(1)
+        expect((sendTransactionalEmail.mock.calls[0][0] as { to: string }).to).toBe('ceo@eva-app.cl')
+        await GET(authedReq())
+        expect(sendTransactionalEmail).toHaveBeenCalledTimes(1)
+        const digests = auditInserts.filter((a) => a.action === 'cron.flow_reconcile_digest')
+        expect(digests.map((d) => (d.payload as { sent: boolean }).sent)).toEqual([true, false])
+    })
+
+    it('sin divergencias ⇒ no manda correo ni escribe digest', async () => {
+        vi.stubEnv('ADMIN_EMAILS', 'ceo@eva-app.cl')
+        flowCoaches = [{ ...coachMoroso(), current_period_end: '2026-10-04T00:00:00' }]
+        snapshots.set('sus_m', { status: 'authorized', auto_recurring: { end_date: '2026-10-04T00:00:00' }, dunning: { morose: false, retriesPending: false } })
+        await GET(authedReq())
+        expect(sendTransactionalEmail).not.toHaveBeenCalled()
+        expect(auditInserts.some((a) => a.action === 'cron.flow_reconcile_digest')).toBe(false)
     })
 })

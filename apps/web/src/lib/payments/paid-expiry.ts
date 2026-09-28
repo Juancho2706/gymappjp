@@ -25,7 +25,12 @@
  *  - `no_sub_id`: el coach no tiene id de suscripción del gateway para verificar.
  */
 export type RemoteVerification =
-    | { kind: 'status'; mappedStatus: string }
+    | {
+          kind: 'status'
+          mappedStatus: string
+          /** Cobranza del gateway (solo Flow): ver `ProviderCheckoutSnapshot.dunning`. */
+          dunning?: { morose: boolean; retriesPending: boolean } | null
+      }
     | { kind: 'not_found' }
     | { kind: 'foreign_account' }
     | { kind: 'error' }
@@ -34,6 +39,12 @@ export type RemoteVerification =
 export type PaidExpiryDecision = {
     action: 'expire' | 'alert'
     reason: string
+    /**
+     * La suscripción remota sigue «viva» y hay que CANCELARLA en el gateway ANTES de expirar: si no,
+     * el gateway seguiría generando cobros para un coach sin acceso (y con el id nuleado, el webhook de
+     * ese cobro quedaría huérfano). Si la cancelación falla, el route NO expira (queda en alerta).
+     */
+    cancelAtProvider?: boolean
 }
 
 /** Estados mapeados que consideramos "la suscripción sigue VIVA en el gateway" (no cortar). */
@@ -56,6 +67,8 @@ const REMOTE_DEAD_STATUSES = new Set<string>(['canceled', 'expired'])
  *   3. Remota VIVA (active/trialing/pending/paused) → ALERT-ONLY (el gateway aún puede cobrar;
  *      nulear el id rompería el matching del webhook de recuperación del dunning = cobro perdido).
  *   4. Error transitorio, o 'active' sin id verificable → ALERT-ONLY (fail-safe).
+ *   5. Remota VIVA pero MOROSA sin reintentos pendientes (Flow se rindió) → EXPIRE con
+ *      `cancelAtProvider` (cancelar en el gateway primero). Morosa CON reintentos → ALERT-ONLY.
  */
 export function resolvePaidExpiryDecision(input: {
     dbStatus: string
@@ -81,7 +94,17 @@ export function resolvePaidExpiryDecision(input: {
                 return { action: 'expire', reason: `remote_dead:${mapped}` }
             }
             if (REMOTE_ALIVE_STATUSES.has(mapped)) {
-                // Regla 3: el gateway aún la considera viva → nunca cortar.
+                // Regla 5 (Flow): «viva» en status pero MOROSA y sin reintentos pendientes = el gateway
+                // ya se rindió con el cobro y no va a cortar solo (Flow deja status 1). Caso real
+                // olympuswolf 2026-09: invoice impaga del 05-09, 4 intentos, 24 días de Pro gratis.
+                // Se expira, pero cancelando antes en el gateway (cancelAtProvider).
+                if (remote.dunning?.morose && !remote.dunning.retriesPending) {
+                    return { action: 'expire', reason: 'remote_morose_exhausted', cancelAtProvider: true }
+                }
+                // Regla 3: el gateway aún la considera viva (o sigue reintentando) → nunca cortar.
+                if (remote.dunning?.morose) {
+                    return { action: 'alert', reason: `remote_dunning_retrying:${mapped}` }
+                }
                 return { action: 'alert', reason: `remote_alive:${mapped}` }
             }
             // Estado mapeado desconocido → fail-safe (no debería ocurrir; mapProviderStatus

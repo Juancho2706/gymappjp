@@ -83,18 +83,23 @@ let fakeAdmin = makeAdmin()
 vi.mock('@/lib/supabase/admin-client', () => ({ createServiceRoleClient: () => fakeAdmin }))
 
 // Provider por coach: name = subscription_provider; fetchCheckoutSnapshot controlado por subId.
-type SnapEntry = { status?: string } | { throw: Error }
+type SnapEntry =
+    | { status?: string; dunning?: { morose: boolean; retriesPending: boolean } | null }
+    | { throw: Error }
 const snapshots = new Map<string, SnapEntry>()
 const fetchCheckoutSnapshot = vi.fn(async (subId: string) => {
     const entry = snapshots.get(subId)
     if (!entry) throw new Error(`no snapshot for ${subId}`)
     if ('throw' in entry) throw entry.throw
-    return { id: subId, external_reference: null, status: entry.status ?? null, next_payment_date: null }
+    return { id: subId, external_reference: null, status: entry.status ?? null, next_payment_date: null, dunning: entry.dunning ?? null }
 })
+// Regla 5 (morosa sin reintentos): cancelación remota ANTES de expirar.
+const cancelCheckoutAtProvider = vi.fn(async (_subId: string) => {})
 vi.mock('@/lib/payments/provider', () => ({
     getPaymentsProviderForCoach: (coach: { subscription_provider?: string | null }) => ({
         name: coach.subscription_provider === 'flow' ? 'flow' : 'mercadopago',
         fetchCheckoutSnapshot: (...a: unknown[]) => fetchCheckoutSnapshot(...(a as [string])),
+        cancelCheckoutAtProvider: (...a: unknown[]) => cancelCheckoutAtProvider(...(a as [string])),
     }),
 }))
 
@@ -434,5 +439,51 @@ describe('GET /api/cron/paid-expiry — dedupe del digest (D4)', () => {
         await GET(authedReq())
         expect(sendTransactionalEmail).toHaveBeenCalledTimes(2)
         expect(digestRows().every((r) => (r.payload as { sent: boolean }).sent)).toBe(true)
+    })
+})
+
+describe('GET /api/cron/paid-expiry — Flow MOROSA sin reintentos (regla 5)', () => {
+    const morosoFlow = () => [
+        {
+            id: 'c9',
+            slug: 'flow-moroso',
+            subscription_status: 'active',
+            subscription_provider: 'flow',
+            subscription_mp_id: null,
+            subscription_provider_external_id: 'sus_moroso',
+            current_period_end: '2026-09-04T00:00:00Z',
+        },
+    ]
+
+    it('cancela en Flow y DESPUÉS expira (nulea el id de la sub)', async () => {
+        candidates = morosoFlow()
+        snapshots.set('sus_moroso', { status: 'authorized', dunning: { morose: true, retriesPending: false } })
+        const json = await (await GET(authedReq())).json()
+        expect(cancelCheckoutAtProvider).toHaveBeenCalledWith('sus_moroso')
+        expect(json).toMatchObject({ expired: 1, alerts: 0 })
+        const upd = coachUpdates.find((u) => u.id === 'c9')!.update
+        expect(upd).toMatchObject({ subscription_status: 'expired', subscription_provider_external_id: null })
+        const expiredAudit = auditInserts.find((a) => a.action === 'coach.paid_expired_auto')
+        expect((expiredAudit?.payload as { reason: string }).reason).toBe('remote_morose_exhausted')
+    })
+
+    it('si la cancelación en Flow falla → NO expira, queda en alerta (evita cobro huérfano)', async () => {
+        candidates = morosoFlow()
+        snapshots.set('sus_moroso', { status: 'authorized', dunning: { morose: true, retriesPending: false } })
+        cancelCheckoutAtProvider.mockRejectedValueOnce(new Error('Flow caído'))
+        const json = await (await GET(authedReq())).json()
+        expect(json).toMatchObject({ expired: 0, alerts: 1 })
+        expect(coachUpdates).toHaveLength(0)
+        const alert = auditInserts.find((a) => a.action === 'coach.paid_expiry_alert')
+        expect((alert?.payload as { reason: string }).reason).toBe('remote_morose_exhausted:cancel_failed')
+    })
+
+    it('morosa pero Flow sigue reintentando → alerta, ni cancela ni expira', async () => {
+        candidates = morosoFlow()
+        snapshots.set('sus_moroso', { status: 'authorized', dunning: { morose: true, retriesPending: true } })
+        const json = await (await GET(authedReq())).json()
+        expect(cancelCheckoutAtProvider).not.toHaveBeenCalled()
+        expect(json).toMatchObject({ expired: 0, alerts: 1 })
+        expect(coachUpdates).toHaveLength(0)
     })
 })

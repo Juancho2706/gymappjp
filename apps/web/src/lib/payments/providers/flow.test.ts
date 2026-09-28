@@ -217,6 +217,37 @@ describe('FlowProvider — GET snapshots + cancel', () => {
         expect(r.id).toBe('sub_9')
         expect(r.next_payment_date).toBe('2026-08-01')
         expect(r.auto_recurring?.end_date).toBe('2026-08-01')
+        expect(r.dunning).toEqual({ morose: false, retriesPending: false })
+    })
+
+    it('fetchCheckoutSnapshot: morose=1 con invoice impaga SIN próximo intento → Flow se rindió (caso olympuswolf)', async () => {
+        fetchMock.mockResolvedValueOnce(ok({
+            subscriptionId: 'sus_k9', status: 1, morose: 1, period_end: '2026-10-04 00:00:00',
+            invoices: [
+                { id: 7179795, status: 1, next_attemp_date: null },
+                { id: 7431240, status: 0, attemp_count: 4, next_attemp_date: null },
+            ],
+        }))
+        const r = await new FlowProvider().fetchCheckoutSnapshot('sus_k9')
+        expect(r.status).toBe('authorized')
+        expect(r.dunning).toEqual({ morose: true, retriesPending: false })
+    })
+
+    it('fetchCheckoutSnapshot: invoice impaga CON next_attemp_date → sigue reintentando', async () => {
+        fetchMock.mockResolvedValueOnce(ok({
+            subscriptionId: 'sus_r', status: 1, morose: '1',
+            invoices: [{ id: 1, status: 0, attemp_count: 1, next_attemp_date: '2026-09-07 00:00:00' }],
+        }))
+        const r = await new FlowProvider().fetchCheckoutSnapshot('sus_r')
+        expect(r.dunning).toEqual({ morose: true, retriesPending: true })
+    })
+
+    it('fetchPlanCallbackUrl: GET plans/get y devuelve el urlCallback del plan', async () => {
+        fetchMock.mockResolvedValueOnce(ok({ planId: 'eva_pro_monthly_29990', urlCallback: 'https://eva/api/payments/flow/webhook?token=x' }))
+        const url = await new FlowProvider().fetchPlanCallbackUrl('eva_pro_monthly_29990')
+        expect(callAt(0).url.startsWith(`${BASE}/plans/get?`)).toBe(true)
+        expect(callAt(0).params.get('planId')).toBe('eva_pro_monthly_29990')
+        expect(url).toBe('https://eva/api/payments/flow/webhook?token=x')
     })
 
     it('cancelCheckoutAtProvider: POST subscription/cancel con at_period_end=1 (conserva acceso)', async () => {
