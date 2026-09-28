@@ -77,3 +77,30 @@ describe('resolvePaidExpiryDecision — estado mapeado desconocido → ALERT-ONL
         expect(d.reason).toBe('remote_unknown:weird')
     })
 })
+
+describe('resolvePaidExpiryDecision — Flow MOROSA (regla 5, caso olympuswolf 09-2026)', () => {
+    const status = (dunning: { morose: boolean; retriesPending: boolean } | null): RemoteVerification => ({
+        kind: 'status',
+        mappedStatus: 'active',
+        dunning,
+    })
+
+    it('morosa y Flow ya no reintenta → expire + cancelAtProvider (cancelar antes de cortar)', () => {
+        const d = resolvePaidExpiryDecision({ dbStatus: 'active', remote: status({ morose: true, retriesPending: false }) })
+        expect(d).toEqual({ action: 'expire', reason: 'remote_morose_exhausted', cancelAtProvider: true })
+    })
+
+    it('morosa pero Flow sigue reintentando → alert (el cobro todavía puede entrar)', () => {
+        const d = resolvePaidExpiryDecision({ dbStatus: 'active', remote: status({ morose: true, retriesPending: true }) })
+        expect(d.action).toBe('alert')
+        expect(d.reason).toBe('remote_dunning_retrying:active')
+        expect(d.cancelAtProvider).toBeUndefined()
+    })
+
+    it('al día (no morosa) o sin dato de cobranza (MP) → alert remote_alive, igual que antes', () => {
+        for (const dunning of [{ morose: false, retriesPending: false }, null]) {
+            const d = resolvePaidExpiryDecision({ dbStatus: 'active', remote: status(dunning) })
+            expect(d).toEqual({ action: 'alert', reason: 'remote_alive:active' })
+        }
+    })
+})

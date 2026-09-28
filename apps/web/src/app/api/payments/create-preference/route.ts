@@ -34,6 +34,7 @@ import { resolveActiveDiscountSpec, isChargeableNetClp } from '@/services/billin
 import { countActiveStandaloneClients } from '@/services/billing/capacity.service'
 import { claimUpgradeInFlight, clearUpgradeInFlight } from '@/services/billing/plan-change-lock'
 import type { BillableAddon } from '@/domain/billing/types'
+import { buildFlowWebhookUrl, siteBaseUrlNoTrailingSlash } from '@/lib/payments/flow-webhook-url'
 
 // El checkout solo acepta los tiers EN VENTA pagos: pro/elite. growth/scale son LEGACY: quedan en
 // el union/TIER_CONFIG/CHECK pero no se compran. NO reintroducirlos acá. Consecuencia (igual que la
@@ -334,15 +335,13 @@ export async function POST(request: Request) {
         // El preapproval VIEJO a cancelar es SIEMPRE de MercadoPago (columna subscription_mp_id): su
         // cancelación va por el provider MP aunque este checkout sea Flow (ver más abajo, money-safety).
         const mpProvider = gateway === 'mercadopago' ? provider : getPaymentsProvider('mercadopago')
-        const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
+        // Sin slash final: con `https://x.cl/` las URLs salían `//api/...` (308 en el borde de Vercel).
+        const appUrl = siteBaseUrlNoTrailingSlash()
         // webhookUrl por gateway: Flow → /api/payments/flow/webhook (?token=FLOW_WEBHOOK_TOKEN si está
         // seteado, mismo patrón que MP); MercadoPago → /api/payments/webhook como hoy.
         let webhookUrl: string
         if (gateway === 'flow') {
-            const flowWebhookToken = process.env.FLOW_WEBHOOK_TOKEN
-            webhookUrl = flowWebhookToken
-                ? `${appUrl}/api/payments/flow/webhook?token=${encodeURIComponent(flowWebhookToken)}`
-                : `${appUrl}/api/payments/flow/webhook`
+            webhookUrl = buildFlowWebhookUrl()
         } else {
             const webhookToken = process.env.MERCADOPAGO_WEBHOOK_TOKEN
             webhookUrl = webhookToken

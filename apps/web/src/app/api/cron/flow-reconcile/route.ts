@@ -8,6 +8,16 @@ import { listLive } from '@/infrastructure/db/coach-addons.repository'
 import { getCompositeAmountClp, toBillableAddons } from '@/services/billing/addons.service'
 import { resolveDiscountSpecByRedemptionId, isChargeableNetClp } from '@/services/billing/discount.service'
 import type { BillingCycle, SubscriptionTier } from '@/lib/constants'
+import type { FlowProvider } from '@/lib/payments/providers/flow'
+import { buildFlowWebhookUrl, compareFlowCallbackUrl } from '@/lib/payments/flow-webhook-url'
+import { sendTransactionalEmail } from '@/lib/email/send-email'
+import { wrapEmailLayout } from '@/lib/email/base-layout'
+import {
+    computeDigestHash,
+    readLastDigestHash,
+    recordDigest,
+    FLOW_RECONCILE_DIGEST_ACTION,
+} from '@/lib/email/admin-digest'
 
 /**
  * Monto horneado en el planId de Flow (`eva_<tier>_<cycle>_<amount>` → trailing = monto CLP), i.e. lo
@@ -22,13 +32,22 @@ function parseFlowPlanAmount(planId: string | null | undefined): number | null {
 /**
  * Cron reconcile de Flow (plan pagos-multigateway-flow, Ola 3, T3.5) — BACKSTOP diario, espejo de
  * `mp-reconcile`. Es ALERT-ONLY (nunca auto-fix, igual que MP): la DB manda; Flow solo se compara y
- * se ALERTA vía admin_audit_logs (+ email a ADMIN_EMAILS). Detecta dos divergencias money-relevantes:
+ * se ALERTA vía admin_audit_logs (+ email a ADMIN_EMAILS). Detecta divergencias money-relevantes:
  *
  *   (1) ESTADO: `mapProviderStatus(sub.status de Flow)` ≠ `coach.subscription_status` (ej. Flow cancelo
  *       la sub por dunning agotado y EVA no se entero).
  *   (2) PERIODO NO AVANZADO (webhook perdido): la sub Flow esta activa y su `period_end` (fin del periodo
  *       vigente en Flow) es POSTERIOR a `coach.current_period_end` → Flow cobro y avanzo el periodo pero
  *       el webhook no llego → el coach pago y su acceso quedaria corto. Se ALERTA para revisar/reprocesar.
+ *       OJO: Flow avanza el período AUNQUE la invoice quede impaga ⇒ mirar también (4).
+ *   (4) MOROSA: la sub sigue «activa» pero con invoice impaga (`morose`). Si Flow ya no reintenta, el
+ *       backstop `paid-expiry` la corta (regla 5); acá solo se avisa.
+ *   (5) URL DE AVISO DEL PLAN: el `urlCallback` horneado en cada plan usado por coaches vivos debe apuntar
+ *       a nuestro webhook con el token vigente (incidente 28-09: `//api` ⇒ 308 ⇒ renovaciones perdidas).
+ *
+ * Todo lo detectado va a ADMIN_EMAILS en un digest con dedupe (D4, mismo mecanismo que mp-reconcile y
+ * paid-expiry). Antes del 28-09 este cron solo escribía admin_audit_logs y nadie lo veía: 24 días de
+ * alertas diarias de olympuswolf sin que nadie se enterara.
  *
  * Fail-closed por `CRON_SECRET` (un reconcile expuesto deja leer/disparar estado de cobro).
  */
@@ -115,6 +134,19 @@ export async function GET(req: Request) {
                 })
             }
 
+            // (4) MOROSA: invoice impaga con la sub «activa». Solo aviso; el corte es de paid-expiry.
+            if (flowIsActive && snap.dunning?.morose) {
+                const retrying = snap.dunning.retriesPending
+                divergences.push({ coachId: coach.id, slug: coach.slug, kind: 'morose', detail: retrying ? 'Flow sigue reintentando el cobro' : 'Flow ya no reintenta: el corte automático lo vence' })
+                await admin.from('admin_audit_logs').insert({
+                    admin_email: 'cron',
+                    action: 'coach.flow_morose',
+                    target_table: 'coaches',
+                    target_id: coach.id,
+                    payload: { coach_slug: coach.slug, retries_pending: retrying, flow_subscription_id: subId, triggered_by: 'cron/flow-reconcile' },
+                })
+            }
+
             // (3) DRIFT de monto (B4, ALERT-ONLY, barato): Flow hornea el monto en el planId
             // (`eva_<tier>_<cycle>_<amount>`). Comparamos ese monto contra el compuesto ESPERADO de la DB
             // (base + add-ons vivos − cupon). Si difieren → ALERTA (sin auto-fix): puede ser el window de un
@@ -192,6 +224,84 @@ export async function GET(req: Request) {
                 console.error(`[cron/flow-reconcile] failed for coach ${coach.slug}:`, err)
                 errors++
             }
+        }
+    }
+
+    // (5) URL DE AVISO de cada plan en uso: una por plan distinto (pocos), no por coach.
+    const expectedCallback = buildFlowWebhookUrl()
+    const planIds = [...new Set((coaches ?? []).map((c) => c.provider_plan_id).filter((p): p is string => !!p))]
+    for (const planId of planIds) {
+        try {
+            const actual = await (provider as FlowProvider).fetchPlanCallbackUrl(planId)
+            const verdict = compareFlowCallbackUrl(actual, expectedCallback)
+            if (!verdict.ok) {
+                // Nunca loguear la URL: lleva el token del webhook.
+                divergences.push({ coachId: '', slug: planId, kind: 'plan_callback_mismatch', detail: `urlCallback del plan no coincide (${verdict.reason})` })
+                await admin.from('admin_audit_logs').insert({
+                    admin_email: 'cron',
+                    action: 'flow.plan_callback_mismatch',
+                    target_table: 'coaches',
+                    target_id: null,
+                    payload: { plan_id: planId, reason: verdict.reason, triggered_by: 'cron/flow-reconcile' },
+                })
+            }
+        } catch (err) {
+            console.error(`[cron/flow-reconcile] plans/get falló para ${planId}:`, err)
+            errors++
+        }
+    }
+
+    // Digest a ADMIN_EMAILS con dedupe (D4): el hash cubre SOLO lo que el humano lee; si repite el
+    // último registrado, se suprime. Para forzar un reenvío basta con que cambie el contenido.
+    if (divergences.length > 0) {
+        const adminEmails = (process.env.ADMIN_EMAILS ?? '').split(',').map((e) => e.trim()).filter(Boolean)
+        if (adminEmails.length > 0) {
+            const digestHash = computeDigestHash({
+                divergences: divergences.map((d) => ({ slug: d.slug, kind: d.kind, detail: d.detail })),
+            })
+            const suppressed = (await readLastDigestHash(admin, FLOW_RECONCILE_DIGEST_ACTION)) === digestHash
+            const today = new Date().toISOString().slice(0, 10)
+            const rows = divergences
+                .map((d) => `<tr>
+                <td style="padding:6px 8px;font-size:13px;color:#374151;">${d.slug}</td>
+                <td style="padding:6px 8px;font-size:13px;color:#b45309;font-weight:600;">${d.kind}</td>
+                <td style="padding:6px 8px;font-size:13px;color:#374151;">${d.detail}</td>
+            </tr>`)
+                .join('')
+            const body = `
+<h1 style="margin:0 0 8px;font-size:20px;font-weight:800;color:#111827;">⚠️ Reconciliación Flow</h1>
+<p style="margin:0 0 20px;font-size:14px;color:#374151;line-height:1.6;">
+    El cron revisó ${checked} suscripción(es) Flow y encontró <strong>${divergences.length}</strong> alerta(s).
+    <code>period_not_advanced</code> = Flow pasó al período siguiente pero EVA no registró el cobro (aviso perdido o invoice impaga: mirar <code>morose</code>).
+    <code>plan_callback_mismatch</code> = el plan de Flow avisa a una URL que no es la nuestra: sus renovaciones se pierden.
+</p>
+<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="border-collapse:collapse;margin-bottom:24px;">
+    <tr style="background-color:#f9fafb;">
+        <th style="padding:8px;font-size:12px;font-weight:700;color:#6b7280;text-align:left;text-transform:uppercase;letter-spacing:0.8px;">Coach / plan</th>
+        <th style="padding:8px;font-size:12px;font-weight:700;color:#6b7280;text-align:left;text-transform:uppercase;letter-spacing:0.8px;">Tipo</th>
+        <th style="padding:8px;font-size:12px;font-weight:700;color:#6b7280;text-align:left;text-transform:uppercase;letter-spacing:0.8px;">Detalle</th>
+    </tr>
+    ${rows}
+</table>`
+            const html = wrapEmailLayout(body, {
+                headerTitle: 'EVA Reconciliación Flow',
+                previewText: `${divergences.length} alerta(s) Flow — ${today}`,
+            })
+            const subject = `[EVA] Flow: ${divergences.length} alerta(s) — ${today}`
+            if (suppressed) {
+                console.info('[cron/flow-reconcile] digest idéntico al anterior, suprimido')
+            } else {
+                for (const email of adminEmails) {
+                    await sendTransactionalEmail({ to: email, subject, html }).catch((e) =>
+                        console.error(`[cron/flow-reconcile] email to ${email} failed:`, e)
+                    )
+                }
+            }
+            await recordDigest(admin, FLOW_RECONCILE_DIGEST_ACTION, {
+                digest_hash: digestHash,
+                sent: !suppressed,
+                summary: { divergences: divergences.length, errors, recipients: adminEmails.length },
+            })
         }
     }
 

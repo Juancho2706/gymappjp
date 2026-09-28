@@ -24,6 +24,7 @@ import {
 import { parseOneShotAddonReference, parseTierUpgradeReference } from '@/lib/payments/providers/mercadopago'
 import { ProviderRequestError } from '@/lib/payments/provider-error'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
+import { buildFlowWebhookUrl } from '@/lib/payments/flow-webhook-url'
 
 type FlowCycle = 'monthly' | 'quarterly' | 'annual'
 
@@ -184,13 +185,18 @@ export class FlowProvider implements PaymentsProvider {
         }
     }
 
-    /** URL del webhook de Flow para el urlCallback del plan (recurrentes). Igual que confirm-enrollment. */
+    /** URL del webhook de Flow para el urlCallback del plan (recurrentes). Mismo helper que confirm-enrollment. */
     private defaultFlowWebhookUrl(): string {
-        const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'
-        const token = process.env.FLOW_WEBHOOK_TOKEN
-        return token
-            ? `${appUrl}/api/payments/flow/webhook?token=${encodeURIComponent(token)}`
-            : `${appUrl}/api/payments/flow/webhook`
+        return buildFlowWebhookUrl()
+    }
+
+    /**
+     * `urlCallback` guardado en un plan existente (plans/get). Lo usa el cron flow-reconcile para
+     * detectar planes con la URL de aviso rota (incidente 28-09: `//api` ⇒ 308 ⇒ renovaciones perdidas).
+     */
+    async fetchPlanCallbackUrl(planId: string): Promise<string | null> {
+        const plan = await this.flowGet('plans/get', { planId })
+        return typeof plan.urlCallback === 'string' ? plan.urlCallback : null
     }
 
     /**
@@ -285,6 +291,13 @@ export class FlowProvider implements PaymentsProvider {
      */
     async fetchCheckoutSnapshot(checkoutId: string): Promise<ProviderCheckoutSnapshot> {
         const sub = await this.flowGet('subscription/get', { subscriptionId: checkoutId })
+        // Cobranza: Flow deja la sub en status 1 aunque la invoice del período quede impaga (`morose=1`).
+        // Mientras alguna invoice impaga tenga `next_attemp_date` (sic, así lo escribe Flow), sigue
+        // reintentando; sin próximo intento = se rindió (caso olympuswolf 05-09: 4 intentos y nada).
+        const invoices = Array.isArray(sub.invoices) ? (sub.invoices as Array<Record<string, unknown>>) : []
+        const retriesPending = invoices.some(
+            (inv) => Number(inv.status) === 0 && inv.next_attemp_date != null && String(inv.next_attemp_date) !== ''
+        )
         return {
             id: sub.subscriptionId != null ? String(sub.subscriptionId) : checkoutId,
             external_reference: null, // Flow no lleva nuestro ref en la sub; el tier vive en `coaches`.
@@ -296,6 +309,7 @@ export class FlowProvider implements PaymentsProvider {
                 transaction_amount: null, // monto = plan+items; se reconcilia contra invoices, no acá.
                 start_date: (sub.period_start as string | null | undefined) ?? null,
             },
+            dunning: { morose: Number(sub.morose) === 1, retriesPending },
         }
     }
 
