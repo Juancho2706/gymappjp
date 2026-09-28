@@ -18,8 +18,9 @@ const POLL_INTERVAL_MS = 4000 // 4s
 // así que una tarjeta inscrita ya se ve en el primer tick. Si pasado este margen Flow sigue diciendo
 // enrolled:false, Webpay no la inscribió (abandono, «No es mi correo» o validación de $50 rechazada)
 // y la coach miraba un spinner mudo. Se explica y se ofrece la salida SIN cortar el poll: si la
-// tarjeta aparece tarde, el flujo sigue igual que siempre.
-const CARD_MISSING_AFTER_MS = 20 * 1000
+// tarjeta aparece tarde, el flujo sigue igual que siempre. 30 s: holgura para Flow y aun así antes
+// de que la coach se rinda (ella se fue a los 49 s).
+const CARD_MISSING_AFTER_MS = 30 * 1000
 
 /**
  * Retorno de Flow tras enrolar la tarjeta (urlReturn del checkout de enrolamiento). A diferencia
@@ -279,7 +280,7 @@ export default function FlowProcessingPage() {
                         <>
                             <p className="mt-3 text-sm text-strong">
                                 Al reintentar, marca «Es mi correo»: es el correo de tu cuenta EVA y puedes usar
-                                cualquier tarjeta, aunque tenga otro correo. También puedes pagar con Mercado Pago.
+                                cualquier tarjeta, aunque tenga otro correo.
                             </p>
                             <p className="mt-3 text-xs text-muted">
                                 Si recién la inscribiste, espera unos segundos: seguimos revisando.

@@ -61,7 +61,8 @@ describe('flow-processing — vuelta de Webpay sin tarjeta inscrita', () => {
 
     it('los primeros segundos sigue «Procesando», sin acusar la tarjeta', async () => {
         render(<FlowProcessingPage />)
-        await advance(12_000)
+        // Último tick antes del margen de 30 s (los ticks van cada 4 s).
+        await advance(26_000)
 
         expect(screen.getByText('Procesando tu suscripción')).toBeTruthy()
         expect(screen.queryByText('Tu tarjeta no quedó inscrita')).toBeNull()
@@ -69,12 +70,14 @@ describe('flow-processing — vuelta de Webpay sin tarjeta inscrita', () => {
 
     it('pasado el margen explica que no hubo cobro y ofrece volver a elegir medio', async () => {
         render(<FlowProcessingPage />)
-        await advance(24_000)
+        await advance(34_000)
 
         expect(screen.getByText('Tu tarjeta no quedó inscrita')).toBeTruthy()
         expect(screen.queryByText('Procesando tu suscripción')).toBeNull()
         expect(screen.getByText(/No se hizo ningún cobro/)).toBeTruthy()
         expect(screen.getByText(/marca «Es mi correo»/)).toBeTruthy()
+        // Decisión del owner (28-09): no empujar a Mercado Pago desde acá.
+        expect(screen.queryByText(/Mercado Pago/)).toBeNull()
 
         const back = screen.getByRole('link', { name: 'Volver a elegir cómo pagar' })
         expect(back.getAttribute('href')).toBe('/coach/subscription')
@@ -85,7 +88,7 @@ describe('flow-processing — vuelta de Webpay sin tarjeta inscrita', () => {
 
     it('el poll sigue: si la tarjeta aparece tarde, el alta termina como siempre', async () => {
         render(<FlowProcessingPage />)
-        await advance(24_000)
+        await advance(34_000)
         expect(screen.getByText('Tu tarjeta no quedó inscrita')).toBeTruthy()
 
         const callsWithHint = fetchMock.mock.calls.length
@@ -102,7 +105,7 @@ describe('flow-processing — vuelta de Webpay sin tarjeta inscrita', () => {
     it('tarjeta inscrita con la sub en creación (creating:true) no se acusa como faltante', async () => {
         fetchMock.mockResolvedValue(jsonResponse({ ok: true, enrolled: true, creating: true }))
         render(<FlowProcessingPage />)
-        await advance(24_000)
+        await advance(34_000)
 
         expect(screen.getByText('Procesando tu suscripción')).toBeTruthy()
         expect(screen.queryByText('Tu tarjeta no quedó inscrita')).toBeNull()
