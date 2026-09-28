@@ -14,6 +14,12 @@ import { useCaptureCheckoutConfirmed } from '@/lib/posthog/events'
 
 const POLL_TIMEOUT_MS = 5 * 60 * 1000 // 5 minutos
 const POLL_INTERVAL_MS = 4000 // 4s
+// Caso Fraga gym (28-09): Flow redirige al url_return DESPUÉS de cerrar la inscripción con Transbank,
+// así que una tarjeta inscrita ya se ve en el primer tick. Si pasado este margen Flow sigue diciendo
+// enrolled:false, Webpay no la inscribió (abandono, «No es mi correo» o validación de $50 rechazada)
+// y la coach miraba un spinner mudo. Se explica y se ofrece la salida SIN cortar el poll: si la
+// tarjeta aparece tarde, el flujo sigue igual que siempre.
+const CARD_MISSING_AFTER_MS = 20 * 1000
 
 /**
  * Retorno de Flow tras enrolar la tarjeta (urlReturn del checkout de enrolamiento). A diferencia
@@ -23,7 +29,9 @@ const POLL_INTERVAL_MS = 4000 // 4s
  *   · status 'active' (o alreadyCreated) → suscripción creada, al dashboard.
  *   · status 'pending_payment' (200) → Flow tomó el pago pero aún no confirma; el webhook activa.
  *     Cortamos el poll y avisamos (outcome 'pending').
- *   · enrolled:false → la tarjeta aún no refleja en Flow, seguimos pooleando.
+ *   · enrolled:false → la tarjeta aún no refleja en Flow, seguimos pooleando. Pasado
+ *     CARD_MISSING_AFTER_MS se explica que Webpay no la inscribió (sin cobro) y se ofrece volver a
+ *     elegir medio, sin cortar el poll.
  *   · 409 ACTIVE_MP_SUBSCRIPTION / INVALID_CHECKOUT_INTENT → conflicto terminal, cortamos.
  *   · 500 ORPHAN_PERSIST_FAILED / ORPHAN_NEEDS_RECONCILE → cobro sin sub materializada: TERMINAL
  *     con revisión manual (sin reintento automático), ofrecemos canal de soporte.
@@ -57,6 +65,7 @@ export default function FlowProcessingPage() {
     const searchParams = useSearchParams()
     const [statusText, setStatusText] = useState('Confirmando tu tarjeta con Webpay...')
     const [outcome, setOutcome] = useState<Outcome | null>(null)
+    const [cardMissing, setCardMissing] = useState(false)
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
     const pollStartRef = useRef<number>(0)
     const aliveRef = useRef(true)
@@ -181,7 +190,11 @@ export default function FlowProcessingPage() {
                 return false
             }
 
-            // enrolled:false → la tarjeta aún no refleja en Flow, seguimos.
+            // enrolled:false → la tarjeta aún no refleja en Flow, seguimos. Pasado el margen se
+            // explica (ver CARD_MISSING_AFTER_MS); `creating:true` trae enrolled:true y no cuenta.
+            if (payload.enrolled === false && Date.now() - pollStartRef.current >= CARD_MISSING_AFTER_MS) {
+                setCardMissing(true)
+            }
             setStatusText('Confirmando tu tarjeta con Webpay...')
             return true
         } catch {
@@ -193,6 +206,7 @@ export default function FlowProcessingPage() {
     const startPolling = useCallback(() => {
         stopPolling()
         setOutcome(null)
+        setCardMissing(false)
         setStatusText('Confirmando tu tarjeta con Webpay...')
         pollStartRef.current = Date.now()
 
@@ -231,17 +245,23 @@ export default function FlowProcessingPage() {
 
     // Spinner solo mientras pooleamos (sin desenlace). El 'pending' NO es error pero tampoco spinner.
     const isPolling = outcome === null
-    const title = isPolling
+    // Webpay no inscribió la tarjeta: el poll sigue por detrás, pero ya no es «procesando».
+    const showCardMissing = isPolling && cardMissing
+    const title = showCardMissing
+        ? 'Tu tarjeta no quedó inscrita'
+        : isPolling
         ? 'Procesando tu suscripción'
         : outcome.kind === 'pending'
         ? 'Pago en proceso'
         : 'Problema al procesar'
-    const message = outcome?.message ?? statusText
+    const message = showCardMissing
+        ? 'No se hizo ningún cobro. Suele pasar si en Webpay se tocó «No es mi correo» o «Abandonar y volver», o si el banco no aprobó la validación de $50.'
+        : outcome?.message ?? statusText
 
     return (
         <main className="flex min-h-dvh items-center justify-center px-4 py-12 pt-safe pb-safe bg-background">
             <div className="w-full max-w-md rounded-card border border-subtle bg-surface-card p-8 text-center shadow-xl">
-                {isPolling && (
+                {isPolling && !showCardMissing && (
                     <div className="mx-auto mb-6 h-12 w-12 animate-spin rounded-full border-[3px] border-sport-500 border-t-transparent" />
                 )}
 
@@ -255,14 +275,43 @@ export default function FlowProcessingPage() {
                     <h1 className="font-display text-xl font-bold tracking-tight text-strong">{title}</h1>
                     <p className="mt-2 text-sm text-muted">{message}</p>
 
-                    {isPolling && (
+                    {showCardMissing ? (
+                        <>
+                            <p className="mt-3 text-sm text-strong">
+                                Al reintentar, marca «Es mi correo»: es el correo de tu cuenta EVA y puedes usar
+                                cualquier tarjeta, aunque tenga otro correo. También puedes pagar con Mercado Pago.
+                            </p>
+                            <p className="mt-3 text-xs text-muted">
+                                Si recién la inscribiste, espera unos segundos: seguimos revisando.
+                            </p>
+                        </>
+                    ) : isPolling ? (
                         <p className="mt-3 text-xs text-muted">
                             Te redirigiremos automáticamente cuando tu suscripción esté activa.
                         </p>
-                    )}
+                    ) : null}
                 </div>
 
                 <div className="mt-6 flex flex-col gap-3">
+                    {/* Sin tarjeta inscrita: volver al selector de medio (un coach bloqueado rebota solo
+                        a /coach/reactivate desde el gate) o escribirnos. */}
+                    {showCardMissing && (
+                        <>
+                            <Link
+                                href="/coach/subscription"
+                                className="inline-flex h-11 items-center justify-center rounded-control bg-sport-500 px-6 text-sm font-semibold text-white transition-colors hover:bg-sport-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                            >
+                                Volver a elegir cómo pagar
+                            </Link>
+                            <a
+                                href={SUPPORT_MAILTO}
+                                className="inline-flex h-11 items-center justify-center rounded-control border border-default px-6 text-sm font-semibold text-strong hover:bg-surface-sunken transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                            >
+                                Escribir a soporte
+                            </a>
+                        </>
+                    )}
+
                     {/* Reintento manual solo en desenlaces reintentables (4xx genérico / timeout). */}
                     {outcome?.kind === 'retry' && (
                         <button
@@ -296,7 +345,7 @@ export default function FlowProcessingPage() {
                         >
                             Ir a mi suscripción
                         </Link>
-                    ) : (
+                    ) : showCardMissing ? null : (
                         <Link
                             href="/coach/reactivate"
                             className="inline-flex h-11 items-center justify-center rounded-control border border-default px-6 text-sm font-semibold text-strong hover:bg-surface-sunken transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"

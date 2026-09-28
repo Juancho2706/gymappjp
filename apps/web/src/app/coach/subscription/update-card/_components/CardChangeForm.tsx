@@ -273,6 +273,8 @@ export function CardChangeForm({ publicKey, termsVersion, disclosure, subscripti
                 <p className="rounded-control bg-surface-sunken p-3 text-sm text-body">
                     Vas a ser redirigido a Webpay para ingresar tu nueva tarjeta. Al volver, tu suscripción
                     queda cobrando con la tarjeta nueva — el plan, el monto y la fecha de cobro no cambian.
+                    Webpay te pedirá confirmar tu correo de EVA: marca «Es mi correo». Sirve cualquier
+                    tarjeta, aunque tenga otro correo.
                 </p>
 
                 {disclosureBlock}

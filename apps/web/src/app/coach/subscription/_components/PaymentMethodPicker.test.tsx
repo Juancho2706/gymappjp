@@ -39,6 +39,11 @@ describe('PaymentMethodPicker', () => {
         expect(markup).toContain('Débito, crédito o prepago')
     })
 
+    it('avisa que Webpay pide confirmar el correo de EVA y que sirve cualquier tarjeta (caso 28-09)', () => {
+        expect(markup).toContain('marca «Es mi correo»')
+        expect(markup).toContain('aunque tenga otro correo')
+    })
+
     it('es un grupo de radios con leyenda', () => {
         expect(markup).toContain('<fieldset')
         expect(markup).toContain('¿Cómo quieres pagar?')
