@@ -2210,34 +2210,40 @@ function TodayTab({
           cantidad, el stepper se abre encima y cancelar devuelve a la lista. */}
       <SubstitutionSheet
         open={exchange !== null}
-        onClose={() => setExchange(null)}
+        onClose={() => {
+          setExchange(null)
+          setSubstitutionConfirm(null)
+        }}
         entry={exchange?.itemEntry ?? null}
         clientId={userId ?? ''}
         localDate={date}
         consumedFoodId={exchange?.consumedFoodId ?? null}
         pendingId={substitutingId}
         onPick={onPickSubstitution}
-      />
-      {/* SUBI-F5: confirmación de cantidad con stepper (reemplaza al `Alert.alert` de T2.4). Se
-          monta ENCIMA del sheet de intercambio: cancelar devuelve a la lista de opciones. */}
-      <SubstitutionConfirmSheet
-        confirm={substitutionConfirm}
-        pending={
-          substitutionConfirm !== null &&
-          substitutingId ===
-            (substitutionConfirm.option.substitutionId ?? `gf-${substitutionConfirm.option.foodId}`)
-        }
-        onClose={() => setSubstitutionConfirm(null)}
-        onConfirm={(quantity) => {
-          if (!substitutionConfirm) return
-          void submitSubstitution(
-            substitutionConfirm.itemEntry,
-            substitutionConfirm.option,
-            substitutionConfirm.equivalence,
-            quantity,
-          )
-        }}
-      />
+      >
+        {/* SUBI-F5: confirmación de cantidad con stepper (reemplaza al `Alert.alert` de T2.4). Se
+            monta ENCIMA del sheet de intercambio: cancelar devuelve a la lista de opciones. Va
+            anidada DENTRO a propósito: los dos son Modal nativos y dos Modal hermanos no apilan
+            bien en iOS. */}
+        <SubstitutionConfirmSheet
+          confirm={substitutionConfirm}
+          pending={
+            substitutionConfirm !== null &&
+            substitutingId ===
+              (substitutionConfirm.option.substitutionId ?? `gf-${substitutionConfirm.option.foodId}`)
+          }
+          onClose={() => setSubstitutionConfirm(null)}
+          onConfirm={(quantity) => {
+            if (!substitutionConfirm) return
+            void submitSubstitution(
+              substitutionConfirm.itemEntry,
+              substitutionConfirm.option,
+              substitutionConfirm.equivalence,
+              quantity,
+            )
+          }}
+        />
+      </SubstitutionSheet>
       <PortionEquivalencesSheet
         open={equivOpen}
         targets={equivTargets}

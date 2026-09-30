@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import {
   SubstitutionOptionsReadModelSchema,
@@ -34,6 +34,7 @@ export function SubstitutionSheet({
   consumedFoodId,
   pendingId,
   onPick,
+  children,
 }: {
   open: boolean
   onClose: () => void
@@ -47,6 +48,11 @@ export function SubstitutionSheet({
     option: SubstitutionAnyOption,
     equivalence: SubstitutionEquivalence,
   ) => void
+  /**
+   * Hoja que se abre ENCIMA de esta (la confirmación de cantidad). Se pinta DENTRO del Modal:
+   * dos Modal nativos hermanos no apilan bien en iOS.
+   */
+  children?: ReactNode
 }) {
   const [query, setQuery] = useState('')
   const [limit, setLimit] = useState(PAGE_STEP)
@@ -111,9 +117,12 @@ export function SubstitutionSheet({
   const canLoadMore = !loading && groupOptions.length >= limit && limit < MAX_LIMIT
 
   return (
+    // `nativeModal`: su `KeyboardAvoidingView` sube la hoja con el teclado. En gorhom el buscador
+    // quedaba DETRÁS del teclado y no se veía lo que se escribía (video de un coach, 30-09).
     <Sheet
       open={open}
       onClose={onClose}
+      nativeModal
       title={`Cambiar ${itemLabel}`}
       description={`${entry.item.quantity} ${entry.item.unit}${
         entry.item.calories !== null ? ` · ${formatNutritionCalories(entry.item.calories)}` : ''
@@ -210,6 +219,7 @@ export function SubstitutionSheet({
           <Text className="text-sm text-muted">Este alimento no tiene equivalentes cargados.</Text>
         )}
       </View>
+      {children}
     </Sheet>
   )
 }
