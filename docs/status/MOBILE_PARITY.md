@@ -12,6 +12,14 @@ source_of_truth: apps/web responsive + apps/mobile
 
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
 
+> **2026-09-30 (fix RN «Cambiar» del Hoy del alumno — EN PRODUCCIÓN por OTA)**: video de un coach en iPhone: al tocar
+> «Buscar en N equivalentes» el teclado tapaba el buscador y la lista. `SubstitutionSheet` iba por `@gorhom` con un
+> `TextInput` pelado; pasa a `Sheet nativeModal` (su `KeyboardAvoidingView`), como el resto de las hojas del Hoy con
+> input, y la confirmación de cantidad va anidada dentro (dos Modal hermanos no apilan en iOS). La web no cambia (diálogo
+> centrado con foco en el buscador). `master` `872b3e4c`; OTA 1.1.3 android `1e5a31ab` (run 36723062773) / ios `1472feb6`
+> (run 36723087123) desde el tag `ota/1.1.3-20260930`; 1.1.2 android `31212063` (run 36723138827) desde `ota/1.1.2-20260930`
+> = `4aaa25d3`. Gates: `tsc` mobile 0, eslint 0 errores. **QA en device pendiente** (CURRENT §1).
+
 > **2026-09-15/16 (tren «Meta SDK iOS» — EN TESTFLIGHT Y MIDIENDO: build 61 (1.1.3) en App Review, eventos verificados en
 > Events Manager el 16-09 02:05Z; [SDD](../specs/meta-app-events-ios/SPEC.md))**. Entra el SDK
 > de Meta al binario para que las campañas puedan atribuir instalaciones y altas hechas desde el celular: `lib/meta-sdk.ts` (gate

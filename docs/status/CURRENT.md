@@ -41,6 +41,10 @@ prevalecen sobre este resumen. La prosa retirada está en
 3. **«Despegue rápido»** (11-09, [SDD](../specs/despegue-rapido/SPEC.md)): **QA de 5 puntos.** Sentry 23-09:
    `EVA-NEXTJS-1P`/`1Q` («exec-v3: fallback 4.6s ganó la carrera») reaparecieron hoy.
 4. **Fix RN «Asignar plantilla»** (14-09, [OTA](../operations/MOBILE_RELEASES_OTA.md)): **QA en device.**
+5. **Fix RN buscador de «Cambiar» tapado por el teclado** (30-09, `872b3e4c` en `master`; OTA 1.1.3 android
+   `1e5a31ab` / ios `1472feb6`, 1.1.2 android `31212063` desde el tag `ota/1.1.2-20260930`): **QA en iPhone** —
+   Hoy del alumno → «N equivalentes» → tocar el buscador: la hoja sube con el teclado; elegir una opción que pida
+   confirmar cantidad abre «Confirma la cantidad» encima y «Cancelar» vuelve a la lista.
 
 ### 2. Frentes abiertos
 
