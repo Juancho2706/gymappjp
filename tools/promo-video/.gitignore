@@ -1,0 +1,8 @@
+node_modules/
+stills/
+*.log
+sheet*.png
+vsheet*.png
+out/eva_silent.mp4
+out/eva_reel_silent.mp4
+vo_*

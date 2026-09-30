@@ -1,0 +1,7 @@
+{
+  "name": "eva-promo-video",
+  "private": true,
+  "type": "module",
+  "description": "Video promocional EVA: crear una rutina en 30 segundos (16:9 y reel 9:16)",
+  "dependencies": { "playwright": "1.56.1" }
+}
