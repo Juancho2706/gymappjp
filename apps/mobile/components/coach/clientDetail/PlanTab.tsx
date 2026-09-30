@@ -37,6 +37,7 @@ import {
 import type { CoachClientDetailData, ProgramBlock, ProgramDay } from '../../../lib/coach-client-detail'
 import { getTodayInSantiago } from '../../../lib/date-utils'
 import { FONT } from '../../../lib/typography'
+import { targetWeightLabel } from '../../../lib/plan-builder/target-weight'
 
 const DAY_LABELS = ['', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 const PHASE_CLASSES = ['bg-sport-500', 'bg-ember-500', 'bg-aqua-500', 'bg-success-500', 'bg-warning-500'] as const
@@ -578,7 +579,8 @@ function ExerciseDetail({ block }: { block: ProgramBlock }) {
         ? { label: 'Series × reps', value: `${block.sets > 0 ? block.sets : '—'} × ${block.reps.trim() || '—'}${sideSuffix(block.side_mode)}`, Icon: Dumbbell }
         : null,
     sideLabel ? { label: 'Lado', value: sideLabel, Icon: Dumbbell } : null,
-    block.target_weight_kg != null ? { label: 'Obj. peso', value: `${block.target_weight_kg} kg`, Icon: Weight } : null,
+    // Kilos o libras: el peso objetivo en la unidad en que lo prescribió el coach (kg ⇒ texto de siempre).
+    block.target_weight_kg != null ? { label: 'Obj. peso', value: targetWeightLabel(block) ?? `${block.target_weight_kg} kg`, Icon: Weight } : null,
     block.rest_time ? { label: 'Descanso', value: String(block.rest_time), Icon: Timer } : null,
     block.rir != null && block.rir !== '' ? { label: 'RIR', value: String(block.rir), Icon: Gauge } : null,
     block.tempo ? { label: 'Tempo', value: String(block.tempo), Icon: Clock } : null,

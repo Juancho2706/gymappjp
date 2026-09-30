@@ -54,7 +54,16 @@ import {
   type AutoRestModalMode,
   type WorkoutCelebrationEvent,
   sideRepsFromMetadata,
+  isWeightUnit,
+  type WeightUnit,
 } from '@eva/workout-engine'
+import {
+  WeightUnitProvider,
+  suggestionNum,
+  useWeightUnitState,
+  valuesInWeightUnit,
+  type BlockWeightUnitInfo,
+} from '../weight-unit-context'
 import {
   downsampleSeries,
   hubImportPatch,
@@ -411,7 +420,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
 
   const {
     loading, loadError, planTitle, programName, phaseName, activeWeekVariant, currentWeek, weeksToRepeat, programStructure,
-    dayOfWeek, clientId, isDemo, blocks, sections, supersetMembersByBlock, sessionLogs, previousHistory, lastSessionByBlock,
+    dayOfWeek, clientId, isDemo, blocks, sections, supersetMembersByBlock, sessionLogs, previousHistory, lastWeightUnitByExercise, lastSessionByBlock,
     exerciseMaxes, repeatSeed, elapsedSec, isOnline, restoredDraft, saveDraft, logSet, finishSession, retry,
     // Ítem 12 (R6): el reloj de hold armado viaja al snapshot y vuelve de él. Se bajan tal cual a las
     // tres pantallas que montan `HoldModuleV3`; el orquestador no los toca.
@@ -585,6 +594,41 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
     },
     [substitutionByBlock, sessionLogs],
   )
+
+  // ── Kilos o libras (tren kg-lb-ejecutor): unidad por EJERCICIO efectivo ────────────────────────────
+  // Espejo de `WorkoutExecutionClient` web. blockId → ejercicio efectivo (el sustituto si hay
+  // sustitución) + `load_unit` del coach.
+  const weightUnitBlocks = useMemo(() => {
+    const map: Record<string, BlockWeightUnitInfo> = {}
+    for (const block of blocks) {
+      const key = getSubstitution(block)?.exerciseId ?? resolveExercise(block)?.id
+      if (key) map[block.id] = { exerciseKey: key, loadUnit: block.load_unit ?? null }
+    }
+    return map
+  }, [blocks, getSubstitution])
+  // Última unidad por ejercicio: la serie de HOY con unidad (la de mayor número) pisa el historial.
+  const weightUnitLastByExercise = useMemo(() => {
+    const out: Record<string, string> = { ...lastWeightUnitByExercise }
+    const newest: Record<string, number> = {}
+    for (const log of sessionLogs) {
+      if (!isWeightUnit(log.weight_unit)) continue
+      const info = weightUnitBlocks[log.block_id]
+      if (!info) continue
+      if (newest[info.exerciseKey] == null || log.set_number > newest[info.exerciseKey]) {
+        newest[info.exerciseKey] = log.set_number
+        out[info.exerciseKey] = log.weight_unit
+      }
+    }
+    return out
+  }, [lastWeightUnitByExercise, sessionLogs, weightUnitBlocks])
+  const onWeightUnitToggle = useCallback((from: WeightUnit, to: WeightUnit) => {
+    captureAppEvent('weight_unit_toggled', { from, to, surface: 'rn' })
+  }, [])
+  const weightUnits = useWeightUnitState({
+    blocks: weightUnitBlocks,
+    lastUnitByExercise: weightUnitLastByExercise,
+    onToggle: onWeightUnitToggle,
+  })
 
   // ── Ejercicios OMITIDOS (mockup 3) ──
   // El alumno declara "hoy no puedo hacer este" y el bloque queda RESUELTO. La marca NO es estado
@@ -887,6 +931,9 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
             note: holdLog.note ?? '',
           }
         }
+        // Kilos o libras: la semilla sale en kilos (payload/log) y el teclado la muestra en la unidad del
+        // ejercicio — la misma que recibe como `weightUnit` (ver el render del `KeypadHost`).
+        if (holdValues) holdValues = valuesInWeightUnit(holdValues, weightUnits.unitForBlock(blockId))
         const holdPrev = bestPrevOf(previousHistory[exercise?.id ?? ''] ?? [])
         const holdTarget: KeypadTarget = {
           blockId,
@@ -954,9 +1001,14 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
             note: existingLog.note ?? '',
           }
         : null
-      const initialValues = prefill
-        ? { weight: prefill.weight != null ? String(prefill.weight) : '', reps: prefill.reps != null ? String(prefill.reps) : '' }
-        : editValues ?? restored?.values ?? strengthSeedValues(seedEntry) ?? undefined
+      // Kilos o libras: toda la cadena llega en kilos (o, el borrador, con su marca `wu`) y el teclado la
+      // muestra en la unidad del ejercicio — la misma que recibe como `weightUnit`.
+      const initialValues = valuesInWeightUnit(
+        prefill
+          ? { weight: prefill.weight != null ? String(prefill.weight) : '', reps: prefill.reps != null ? String(prefill.reps) : '' }
+          : editValues ?? restored?.values ?? strengthSeedValues(seedEntry) ?? undefined,
+        weightUnits.unitForBlock(blockId),
+      )
       const bestPrev = bestPrevOf(previousHistory[exercise?.id ?? ''] ?? [])
       setKeypadTarget({
         blockId,
@@ -976,7 +1028,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
       })
       haptics.tap()
     },
-    [blocks, effByBlock, restoredDraft, previousHistory, sessionLogs, repeatSeed, supersetMembersByBlock],
+    [blocks, effByBlock, restoredDraft, previousHistory, sessionLogs, repeatSeed, supersetMembersByBlock, weightUnits],
   )
 
   /**
@@ -1119,6 +1171,8 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
           kind: pr.kind,
           weightKg: payload.weightKg ?? 0,
           prevBest: pr.prevBest,
+          // Kilos o libras: la tarjeta del récord se lee en la unidad en que se tecleó la serie.
+          ...(payload.weightUnit ? { weightUnit: payload.weightUnit } : {}),
         })
       } else {
         cel.celebrate(baseEvent)
@@ -1141,12 +1195,16 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
       // texto sale de `formatStrengthTimeSetLine` tal cual (sin guion inventado, decisión W0.4).
       const holdLine =
         block && isStrengthTimeBlock(block, prescribedEx)
-          ? formatStrengthTimeSetLine({
-              weight_kg: payload.weightKg ?? null,
-              reps_done: payload.repsDone ?? null,
-              actual_hold_sec: payload.actualHoldSec ?? null,
-              metadata: payload.metadata ?? null,
-            })
+          ? formatStrengthTimeSetLine(
+              {
+                weight_kg: payload.weightKg ?? null,
+                reps_done: payload.repsDone ?? null,
+                actual_hold_sec: payload.actualHoldSec ?? null,
+                metadata: payload.metadata ?? null,
+              },
+              // Kilos o libras: la línea en la unidad en que se tecleó la serie (sin unidad ⇒ kg).
+              payload.weightUnit ? { unit: payload.weightUnit } : undefined,
+            )
           : null
       lastHoldSetRef.current = holdLine
         ? {
@@ -1192,7 +1250,9 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
                 const nm = nextSub?.name ?? prescribed?.name ?? 'Ejercicio'
                 const eff = effByBlock.get(firstMember.id) ?? null
                 const w = eff?.weightKg ?? firstMember.target_weight_kg
-                const prescription = `${firstMember.sets} × ${firstMember.reps}${w != null ? ` · ${formatWeightEsCl(w)} kg` : ''}`
+                // Kilos o libras: la prescripción del siguiente en la unidad de ESE ejercicio.
+                const wu = weightUnits.unitForBlock(firstMember.id)
+                const prescription = `${firstMember.sets} × ${firstMember.reps}${w != null ? ` · ${wu === 'lb' ? suggestionNum(w, wu) : formatWeightEsCl(w)} ${wu}` : ''}`
                 const idx = members.findIndex((m) => m.id === firstMember.id)
                 const exercise: SessionExercise | null = prescribed
                   ? (nextSub
@@ -1341,7 +1401,7 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
       }
       signalCommitted(payload.blockId, payload.setNumber, isPrLive && !error)
     },
-    [blocks, getSubstitution, logSet, timers, sessionLogs, supersetMembersByBlock, signalCommitted, effByBlock, cel, previousHistory, exerciseMaxes, readAutoRest, resolveHoldPrompt],
+    [blocks, getSubstitution, logSet, timers, sessionLogs, supersetMembersByBlock, signalCommitted, effByBlock, cel, previousHistory, exerciseMaxes, readAutoRest, resolveHoldPrompt, weightUnits],
   )
 
   const retryCommit = useCallback(
@@ -1707,6 +1767,8 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         actualAvgHr: patch.actual_avg_hr ?? log.actual_avg_hr ?? null,
         ...(pace != null ? { actualPaceSecPerKm: pace } : {}),
         ...(metadata != null ? { metadata } : {}),
+        // Kilos o libras: `weight_unit` se reescribe junto al peso; se repite la del log.
+        ...(isWeightUnit(log.weight_unit) ? { weightUnit: log.weight_unit } : {}),
       })
       void haptics.success()
       setWatchImportOpen(false)
@@ -2287,10 +2349,12 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         : (ex?.name ?? 'Ejercicio')
     const eff = effByBlock.get(b.id) ?? null
     const w = eff?.weightKg ?? b.target_weight_kg
-    const prescription = `${b.sets} × ${b.reps}${w != null ? ` · ${formatWeightEsCl(w)} kg` : ''}`
+    // Kilos o libras: la prescripción del siguiente en la unidad de ESE ejercicio (kg ⇒ texto de siempre).
+    const wu = weightUnits.unitForBlock(b.id)
+    const prescription = `${b.sets} × ${b.reps}${w != null ? ` · ${wu === 'lb' ? suggestionNum(w, wu) : formatWeightEsCl(w)} ${wu}` : ''}`
     const coachNote = b.notes?.trim() ? b.notes.trim() : null
     return { index: idx, next: { name, prescription, exercise: ex }, coachNote }
-  }, [steps, completionLogs, effByBlock])
+  }, [steps, completionLogs, effByBlock, weightUnits])
 
   // Snapshot que lee el renderer (identidad estable) — se actualiza en cada render con datos frescos.
   const interstitialDataRef = useRef<RestInterstitialData | null>(null)
@@ -2508,6 +2572,8 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
   }
 
   return (
+    // Kilos o libras (tren kg-lb-ejecutor): la unidad por ejercicio llega a filas, rueda y pantallas.
+    <WeightUnitProvider value={weightUnits}>
     <SafeAreaView edges={['top']} className="flex-1" style={{ backgroundColor: exec.surface.appBg }}>
       <ExecHeaderV3
         dots={dots}
@@ -2676,6 +2742,16 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         onDraftChange={handleDraftChange}
         accent={exec.accent}
         accentText={exec.accentText}
+        // Kilos o libras: selector kg | lb del teclado de EDICIÓN (solo fuerza). `openSet` ya sembró los
+        // valores en esta misma unidad.
+        weightUnit={
+          keypadTarget && !keypadTarget.typed
+            ? {
+                value: weightUnits.unitForBlock(keypadTarget.blockId),
+                onChange: (next) => weightUnits.setUnitForBlock(keypadTarget.blockId, next),
+              }
+            : undefined
+        }
       />
 
       <TechniqueSheet exercise={techniqueExercise} onClose={() => setTechniqueExercise(null)} v3 accent={exec.accent} />
@@ -2814,5 +2890,6 @@ function ExecutorV3Inner({ planId, recoverDate, editDate, repeatDate }: Executor
         />
       ) : null}
     </SafeAreaView>
+    </WeightUnitProvider>
   )
 }

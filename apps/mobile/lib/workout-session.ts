@@ -22,6 +22,7 @@ import {
   buildRepeatSeedMap,
   executionAreaGroupsFor,
   groupContiguousSupersetRuns,
+  isWeightUnit,
   PAST_SET_NOT_FOUND_ERROR,
   type ReconciledSessionLog,
   type OptimisticLogPayload,
@@ -261,6 +262,8 @@ function reconciledToOfflineLog(l: ReconciledSessionLog, planId: string): Workou
     // reconciliarse (`reconcileSessionLogs` lee `q.metadata`), así que al reabrir la sesión una
     // serie pendiente perdía los dos lados y la fila volvía a pintarse como bilateral.
     metadata: l.metadata ?? null,
+    // Kilos o libras: la unidad tecleada sobrevive al snapshot local (`weight_kg` ya son kilos).
+    weightUnit: isWeightUnit(l.weight_unit) ? l.weight_unit : null,
   }
 }
 
@@ -303,6 +306,12 @@ export interface WorkoutSessionState {
   supersetMembersByBlock: Map<string, SessionBlock[]>
   sessionLogs: ReconciledSessionLog[]
   previousHistory: Record<string, PrevSet[]>
+  /**
+   * Kilos o libras (tren kg-lb-ejecutor, D2): última unidad registrada por ejercicio en sesiones previas
+   * (`exercise_id` → `'kg' | 'lb'`). Junto con las series de hoy y el `load_unit` del bloque decide la
+   * unidad con que arranca el selector.
+   */
+  lastWeightUnitByExercise: Record<string, string>
   lastSessionByBlock: Record<string, LastSessionForBlock>
   exerciseMaxes: Record<string, number>
   /**
@@ -400,6 +409,7 @@ export function useWorkoutSession(
   const [areas, setAreas] = useState<WorkoutArea[]>([])
   const [sessionLogs, setSessionLogs] = useState<ReconciledSessionLog[]>([])
   const [previousHistory, setPreviousHistory] = useState<Record<string, PrevSet[]>>({})
+  const [lastWeightUnitByExercise, setLastWeightUnitByExercise] = useState<Record<string, string>>({})
   const [lastSessionByBlock, setLastSessionByBlock] = useState<Record<string, LastSessionForBlock>>({})
   const [exerciseMaxes, setExerciseMaxes] = useState<Record<string, number>>({})
   const [repeatSeed, setRepeatSeed] = useState<Map<string, RepeatSeedEntry> | null>(null)
@@ -484,7 +494,9 @@ export function useWorkoutSession(
           // de una movilidad `per_side` llegaba con `metadata: undefined`, así que corregirle el RPE
           // re-submiteaba el log SIN los segundos por lado (la web sí la selecciona,
           // `workout-execution.queries.ts`). Mismo eje que ya siembra `loadRepeatSeed`.
-          'block_id, set_number, weight_kg, reps_done, rpe, rir, note, actual_duration_sec, actual_distance_m, actual_hold_sec, actual_avg_hr, metadata, substituted_exercise_id, substituted_exercise_name, substitution_reason',
+          // `weight_unit` (tren kg-lb-ejecutor): unidad en que se tecleó el peso — alimenta la unidad
+          // inicial del selector y se re-escribe tal cual al corregir el esfuerzo de la serie.
+          'block_id, set_number, weight_kg, weight_unit, reps_done, rpe, rir, note, actual_duration_sec, actual_distance_m, actual_hold_sec, actual_avg_hr, metadata, substituted_exercise_id, substituted_exercise_name, substitution_reason',
         )
         .eq('client_id', cid)
         .in('block_id', blockIds)
@@ -494,6 +506,7 @@ export function useWorkoutSession(
         block_id: row.block_id as string,
         set_number: row.set_number as number,
         weight_kg: (row.weight_kg as number) ?? null,
+        weight_unit: (row.weight_unit as string) ?? null,
         reps_done: (row.reps_done as number) ?? null,
         rpe: (row.rpe as number) ?? null,
         rir: (row.rir as number) ?? null,
@@ -558,16 +571,22 @@ export function useWorkoutSession(
       const { startIso } = getSantiagoUtcBoundsForDay(dayIso)
       const { data } = await supabase
         .from('workout_logs')
-        .select('weight_kg, reps_done, logged_at, set_number, exercise_id')
+        .select('weight_kg, weight_unit, reps_done, logged_at, set_number, exercise_id')
         .eq('client_id', cid)
         .in('exercise_id', exerciseIds)
         .lt('logged_at', startIso)
         .order('logged_at', { ascending: false })
         .limit(500)
       const history: Record<string, PrevSet[]> = {}
+      // Kilos o libras (tren kg-lb-ejecutor, D2 = a): última unidad que el alumno usó en cada ejercicio.
+      // Viene desc por fecha ⇒ la primera unidad no nula es la más reciente. Las series anteriores al tren
+      // (NULL) no cuentan: sin ninguna, el selector cae a la del bloque. Mismo criterio que la web.
+      const lastUnit: Record<string, string> = {}
       for (const log of (data ?? []) as Record<string, unknown>[]) {
         const exId = (log.exercise_id as string | null) ?? null
         if (!exId) continue
+        const unit = (log.weight_unit as string | null) ?? null
+        if (unit && lastUnit[exId] == null) lastUnit[exId] = unit
         if (!history[exId]) history[exId] = []
         // Día-calendario Santiago del instante (paridad web WorkoutSummaryOverlay.tsx:25-31, cuyo
         // fmtShortDate hace getSantiagoIsoYmdForUtcInstant(iso) antes de formatear). `split('T')[0]`
@@ -581,6 +600,7 @@ export function useWorkoutSession(
         }
       }
       setPreviousHistory(history)
+      setLastWeightUnitByExercise(lastUnit)
     },
     [],
   )
@@ -1062,6 +1082,10 @@ export function useWorkoutSession(
         client_id: cid,
         set_number: payload.setNumber,
         weight_kg: payload.weightKg,
+        // Kilos o libras (tren kg-lb-ejecutor): se escribe SIEMPRE junto al peso, igual que la acción web —
+        // cada guardado reescribe `weight_kg`, así que la unidad tiene que corresponderle. `weight_kg` ya
+        // viene en kilos (lo convirtió el motor). Sin selector ⇒ NULL = kilos, nunca una «lb» heredada.
+        weight_unit: payload.weightUnit ?? null,
         reps_done: payload.repsDone,
         rpe: clampIntInRange(payload.rpe, 1, 10),
         rir: clampIntInRange(payload.rir, 0, 10),
@@ -1201,6 +1225,8 @@ export function useWorkoutSession(
           client_id: cid,
           set_number: payload.setNumber,
           weight_kg: payload.weightKg,
+          // Kilos o libras: misma regla que el guardado online (siempre junto al peso, NULL = kilos).
+          weight_unit: payload.weightUnit ?? null,
           reps_done: payload.repsDone,
           rpe: clampIntInRange(payload.rpe, 1, 10),
           rir: clampIntInRange(payload.rir, 0, 10),
@@ -1315,6 +1341,7 @@ export function useWorkoutSession(
     supersetMembersByBlock,
     sessionLogs,
     previousHistory,
+    lastWeightUnitByExercise,
     lastSessionByBlock,
     exerciseMaxes,
     repeatSeed,

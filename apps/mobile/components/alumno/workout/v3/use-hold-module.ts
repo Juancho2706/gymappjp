@@ -48,6 +48,7 @@ import {
   decideHoldAutolog,
   expiredWhileAwayFrom,
   holdSidesFor,
+  isWeightUnit,
   mergeHoldCaptureValues,
   pauseHoldElapsed,
   readHoldElapsed,
@@ -61,6 +62,7 @@ import {
   type HoldSource,
   type OptimisticLogPayload,
 } from '@eva/workout-engine'
+import { WEIGHT_UNIT_VALUE_KEY } from '../weight-unit-context'
 import { captureAppEvent } from '../../../../lib/analytics'
 import { timerHaptics } from '../../../../lib/haptics'
 // Timbre de 0 (R1, «Reps tras el reloj»): el MISMO cue del descanso, no una alarma nueva.
@@ -296,7 +298,15 @@ export function useHoldModule(args: UseHoldModuleArgs): UseHoldModuleApi {
       if (decision.submit && !sentSetsRef.current.has(sentKey)) {
         sentSetsRef.current.add(sentKey)
         const source: HoldSource = decision.holdSource ?? 'manual'
-        const ctx = { sideMode: a.sideMode, holdSource: source }
+        // Kilos o libras (tren kg-lb-ejecutor): la fila marca con `wu` la unidad en que está escrito el
+        // peso de los valores que se mezclan acá; con ella el MOTOR pasa el número a kilos una sola vez.
+        // Sin marca (fila fuera del ejecutor, borrador previo al tren) ⇒ contexto de siempre = kilos.
+        const typedUnit = values[WEIGHT_UNIT_VALUE_KEY]
+        const ctx = {
+          sideMode: a.sideMode,
+          holdSource: source,
+          ...(a.kind === 'strength_time' && isWeightUnit(typedUnit) ? { weightUnit: typedUnit } : {}),
+        }
         const payload =
           a.kind === 'strength_time'
             ? buildStrengthTimePayload(values, a.blockId, a.setNumber, ctx)

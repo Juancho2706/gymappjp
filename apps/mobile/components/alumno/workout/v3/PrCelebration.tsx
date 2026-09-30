@@ -3,7 +3,7 @@ import { StyleSheet, Text, View } from 'react-native'
 import { MotiView } from 'moti'
 import Animated, { Easing, useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated'
 import { ArrowUp, Medal } from 'lucide-react-native'
-import { formatWeightEsCl, type PrBest, type PrKind } from '@eva/workout-engine'
+import { formatWeightEsCl, weightFromKg, type PrBest, type PrKind, type WeightUnit } from '@eva/workout-engine'
 import { FONT } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
 import type { ExecTheme } from './exec-theme'
@@ -87,6 +87,7 @@ export function PrCelebration({
   exec,
   weightKg,
   prevBest,
+  weightUnit = 'kg',
   kind,
   reducedMotion,
   nonce,
@@ -96,6 +97,11 @@ export function PrCelebration({
   weightKg: number
   /** Mejor marca histórica superada (chip "Anterior" tachado). */
   prevBest: PrBest
+  /**
+   * Kilos o libras (tren kg-lb-ejecutor, R3): unidad en que se tecleó la serie. Los dos pesos llegan en
+   * kilos y se leen en ella. Default kg ⇒ tarjeta idéntica a la previa.
+   */
+  weightUnit?: WeightUnit
   /** Eje del récord — matiza el rótulo (peso vs 1RM). */
   kind: PrKind
   reducedMotion: boolean
@@ -148,7 +154,7 @@ export function PrCelebration({
               ¡PR! {kind === 'e1rm' ? 'Mejor 1RM' : 'Nuevo récord'}
             </Text>
             <Text style={styles.value} numberOfLines={1}>
-              {formatWeightEsCl(weightKg)} kg <Text style={styles.valueSmall}>— tu mejor marca</Text>
+              {formatWeightEsCl(weightFromKg(weightKg, weightUnit))} {weightUnit} <Text style={styles.valueSmall}>— tu mejor marca</Text>
             </Text>
           </View>
         </View>
@@ -157,7 +163,7 @@ export function PrCelebration({
         <View style={styles.prev}>
           <Text style={styles.prevLbl}>Anterior</Text>
           <Text style={[styles.prevVal, { textDecorationColor: hexToRgba(gold, 0.7) }]}>
-            {formatWeightEsCl(prevBest.weightKg)} kg
+            {formatWeightEsCl(weightFromKg(prevBest.weightKg, weightUnit))} {weightUnit}
           </Text>
           <View style={{ flex: 1 }} />
           <ArrowUp size={14} color={gold} strokeWidth={3} />

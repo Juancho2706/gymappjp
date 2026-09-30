@@ -10,7 +10,7 @@ import Animated, {
   type SharedValue,
 } from 'react-native-reanimated'
 import { Check } from 'lucide-react-native'
-import { formatWeightEsCl } from '@eva/workout-engine'
+import { formatWeightEsCl, WHEEL_WEIGHT_SPECS, type WeightUnit } from '@eva/workout-engine'
 import { FONT } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
 import { haptics } from '../../../../lib/haptics'
@@ -213,20 +213,30 @@ export function DualWheelPicker({
   onDone,
   exerciseName,
   totalSets,
+  weightUnit = 'kg',
 }: {
   open: boolean
   onClose: () => void
   setNumber: number
+  /** Valor anterior de peso (en la unidad de la columna) — centra la columna de peso. */
   kgAnchor: number
   repsAnchor: number
   exec: ExecTheme
   reducedMotion?: boolean
-  onDone: (weightKg: number, reps: number) => void
+  /** Entrega el peso en la unidad de la columna (`weightUnit`) y las reps. */
+  onDone: (weight: number, reps: number) => void
   /** Aditivos (mockup a3c): subtitulo "{ejercicio} · N de M" bajo el titulo "Serie N". */
   exerciseName?: string
   totalSets?: number
+  /**
+   * Kilos o libras (tren kg-lb-ejecutor, espejo de la rueda web): unidad de la columna de peso. kg =
+   * 0–400 / 2,5 (igual que siempre); lb = 0–900 / 2,5. Ausente ⇒ kg.
+   */
+  weightUnit?: WeightUnit
 }) {
-  const kg = useMemo(() => buildWheelValues(kgAnchor, KG_STEP, KG_MAX), [kgAnchor])
+  const weightSpec = weightUnit === 'lb' ? WHEEL_WEIGHT_SPECS.lb : { step: KG_STEP, max: KG_MAX }
+  const kg = useMemo(() => buildWheelValues(kgAnchor, weightSpec.step, weightSpec.max), [kgAnchor, weightSpec.step, weightSpec.max])
+  const weightLabel = weightUnit === 'lb' ? 'Lb' : 'Kg'
   const reps = useMemo(() => buildWheelValues(repsAnchor, REPS_STEP, REPS_MAX), [repsAnchor])
 
   // Indice seleccionado por columna (ref: vive fuera del ciclo de render — el scroll lo actualiza en vivo).
@@ -274,16 +284,16 @@ export function DualWheelPicker({
       {/* Columnas re-montadas por ancla (key) para que al reabrir en otra serie recentren el scroll. */}
       <View style={{ flexDirection: 'row', gap: 12 }}>
         <WheelColumn
-          key={`kg-${kgAnchor}`}
+          key={`kg-${kgAnchor}-${weightUnit}`}
           testID="wheel-col-kg"
-          caption="Kg"
+          caption={weightLabel}
           values={kg.values}
           initialIndex={kg.initialIndex}
           onIndexChange={(i) => { kgIdx.current = i }}
           reducedMotion={reducedMotion}
           exec={exec}
           format={(v) => formatWeightEsCl(v)}
-          accessibilityLabel="Rueda de kilos"
+          accessibilityLabel={weightUnit === 'lb' ? 'Rueda de libras' : 'Rueda de kilos'}
         />
         <WheelColumn
           key={`reps-${repsAnchor}`}

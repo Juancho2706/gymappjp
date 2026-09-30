@@ -17,10 +17,13 @@ import {
   INTERVAL_TEMPLATES,
   cardioRepsUnitShort,
   effectiveExerciseType,
+  parseWeightEsCl,
   repsUnitForModality,
+  weightToKg,
   type ExerciseType,
   type IntervalConfig,
 } from '@eva/workout-engine'
+import { builderWeightUnit, targetWeightInputValue } from '../../lib/plan-builder/target-weight'
 import { stripFieldsForType, applyStrengthModeChange } from '@eva/plan-builder'
 import { STRENGTH_TIME_MIN_SEC, STRENGTH_TIME_MAX_SEC } from '@eva/schemas'
 import { HR_ZONES } from '@eva/cardio'
@@ -350,7 +353,9 @@ export const BlockEditorSheet = forwardRef<BottomSheetModal, Props>(function Blo
               )}
             </View>
             <View style={styles.row2}>
-              <Field theme={theme} label="Peso objetivo (kg)" help="Peso sugerido. El alumno lo ve como referencia y registra el real." value={draft.target_weight_kg ?? ''} keyboardType="decimal-pad" onChangeText={(v: string) => patch({ target_weight_kg: v })} placeholder="opcional" />
+              {/* Kilos o libras (tren kg-lb-ejecutor, D3 = a): la unidad vive PEGADA al número y se guarda
+                  siempre en kilos; en libras el campo muestra y recibe libras. */}
+              <TargetWeightField theme={theme} block={draft} onPatch={patch} />
               <Field theme={theme} label="Recuperación" help="Descanso entre series. Ej: 90s o 2min. El timer del alumno lo usa." value={draft.rest_time ?? ''} onChangeText={(v: string) => patch({ rest_time: v })} placeholder="90s" />
             </View>
             <View style={styles.row2}>
@@ -682,6 +687,80 @@ function DistanceField({ theme, label, value, unit, onChangeText, onToggleUnit }
   )
 }
 
+/**
+ * Peso objetivo con su unidad al lado (tren kg-lb-ejecutor, D3 = a) — espejo del `TargetWeightField`
+ * web. `target_weight_kg` guarda SIEMPRE kilos: en kg el input es el string crudo de siempre; en libras
+ * el coach ve y teclea libras y el bloque recibe los kilos a centésimas. Cambiar de unidad no cambia el
+ * peso real: el mismo valor en kilos se muestra en la otra unidad.
+ */
+function TargetWeightField({ theme, block, onPatch }: { theme: any; block: BuilderBlock; onPatch: (p: Partial<BuilderBlock>) => void }) {
+  const unit = builderWeightUnit(block)
+  // Lo que el coach tipea en libras (null ⇒ derivar de los kilos guardados). Se descarta al cambiar de
+  // bloque o de unidad, así el input nunca muestra un texto de otro bloque.
+  const [lbText, setLbText] = useState<string | null>(null)
+  useEffect(() => {
+    setLbText(null)
+  }, [block.uid, unit])
+  const shown = unit === 'lb' ? (lbText ?? targetWeightInputValue(block)) : block.target_weight_kg ?? ''
+  const onType = (raw: string) => {
+    if (unit === 'kg') {
+      onPatch({ target_weight_kg: raw })
+      return
+    }
+    setLbText(raw)
+    const lb = parseWeightEsCl(raw)
+    onPatch({ target_weight_kg: lb == null ? '' : String(weightToKg(lb, 'lb')) })
+  }
+  return (
+    <View style={{ flex: 1, gap: 6 }}>
+      <FieldLabel
+        theme={theme}
+        label="Peso objetivo"
+        help={
+          unit === 'lb'
+            ? 'Peso sugerido en libras (se guarda en kg). El alumno lo ve como referencia y registra el real.'
+            : 'Peso sugerido. El alumno lo ve como referencia y registra el real.'
+        }
+      />
+      <View style={{ flexDirection: 'row', gap: 6 }}>
+        <TextInput
+          value={shown}
+          keyboardType="decimal-pad"
+          placeholder="opcional"
+          placeholderTextColor={theme.mutedForeground}
+          onChangeText={onType}
+          accessibilityLabel={unit === 'lb' ? 'Peso objetivo en libras' : 'Peso objetivo en kilos'}
+          style={[styles.input, { flex: 1, minWidth: 0, borderColor: theme.border, backgroundColor: theme.secondary, color: theme.foreground, fontFamily: theme.fontSans }]}
+        />
+        <View
+          accessibilityRole="radiogroup"
+          accessibilityLabel="Unidad del peso"
+          style={[styles.segmented, { backgroundColor: theme.secondary, borderColor: theme.border }]}
+        >
+          {(['kg', 'lb'] as const).map((u) => {
+            const active = unit === u
+            return (
+              <TouchableOpacity
+                key={u}
+                onPress={() => {
+                  if (!active) onPatch({ load_unit: u, load_type: 'weight' })
+                }}
+                activeOpacity={0.8}
+                accessibilityRole="radio"
+                accessibilityState={{ checked: active }}
+                accessibilityLabel={u === 'kg' ? 'Kilos' : 'Libras'}
+                style={[styles.unitSegItem, active && { backgroundColor: theme.primary }]}
+              >
+                <Text style={{ fontSize: 12, fontFamily: FONT.uiBold, color: active ? theme.primaryForeground : theme.mutedForeground }}>{u}</Text>
+              </TouchableOpacity>
+            )
+          })}
+        </View>
+      </View>
+    </View>
+  )
+}
+
 /** Pace m:ss por km ↔ segundos. */
 function PaceField({ theme, value, onCommit }: { theme: any; value: number | null; onCommit: (sec: number | null) => void }) {
   const fmt = (sec: number | null) => (sec == null ? '' : `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`)
@@ -875,6 +954,8 @@ const styles = StyleSheet.create({
   areaDot: { width: 10, height: 10, borderRadius: 5 },
   groupBox: { borderWidth: 1, borderRadius: 12, padding: 12, gap: 10 },
   unitBtn: { width: 52, height: 44, borderWidth: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  // Segmento kg | lb del peso objetivo: misma piel que `segmented`, ancho fijo y alto del input (44).
+  unitSegItem: { width: 38, height: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 8 },
   hrRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   hrBtn: { minHeight: 40, paddingHorizontal: 12, borderWidth: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   hrZ: { minHeight: 40, minWidth: 44, paddingHorizontal: 10, borderWidth: 1, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },

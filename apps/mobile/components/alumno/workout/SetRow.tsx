@@ -18,6 +18,13 @@ import {
   PAST_SET_NOT_FOUND_ERROR,
   formatStrengthSetLine,
   formatStrengthTimeSetLine,
+  // Kilos o libras (tren kg-lb-ejecutor): la fila muestra y recibe el peso en la unidad del ejercicio.
+  convertTypedWeight,
+  isWeightUnit,
+  normalizeWeightUnit,
+  parseWeightEsCl,
+  suggestedWeightInUnit,
+  type WeightUnit,
 } from '@eva/workout-engine'
 import type { HrMetadataV1 } from '@eva/cardio'
 import { FONT, TYPE, textStyle } from '../../../lib/typography'
@@ -43,6 +50,7 @@ import {
 } from './TypedKeypad'
 import { useEnsureVisibleInStep } from './StepperExecution'
 import { useEvaMotion } from '../../../lib/motion'
+import { useBlockWeightUnit, useWeightUnitLookup, valuesInWeightUnit } from './weight-unit-context'
 
 // --sport-400 NO es un literal fijo: es un escalón de la rampa derivada de la MARCA del coach
 // (`deriveSportTokens(primaryColor).ramp['400']`, la misma fuente que alimenta `--color-sport-400` de
@@ -109,6 +117,9 @@ function effortUpdatePayload(
     actualHoldSec: log.actual_hold_sec ?? null,
     actualAvgHr: log.actual_avg_hr ?? null,
     metadata: log.metadata ?? null,
+    // Kilos o libras: `weight_unit` se reescribe junto al peso en cada guardado (paridad con la acción
+    // web), así que corregir el esfuerzo repite la unidad con que se tecleó ese peso.
+    ...(isWeightUnit(log.weight_unit) ? { weightUnit: log.weight_unit } : {}),
   }
 }
 
@@ -277,6 +288,11 @@ export function SetRow({
   const pending = log?._pending === true
   const [rpeHelpOpen, setRpeHelpOpen] = useState(false)
   const motion = useEvaMotion()
+  // Kilos o libras (tren kg-lb-ejecutor): la marca se lee en la unidad VIGENTE del ejercicio (misma regla
+  // que el chip web). Sin provider ⇒ kg y la línea queda idéntica a la de siempre.
+  const unitOf = useWeightUnitLookup()
+  const readUnit: WeightUnit = log ? unitOf(log.block_id) : 'kg'
+  const lineOpts = readUnit === 'lb' ? { unit: readUnit } : undefined
   // sport-400 de la marca del coach (mismo helper que alimenta las vars --color-sport-* de NativeWind,
   // desde el primaryColor CRUDO ya gateado por tier que expone el ThemeContext) para los iconos lucide.
   const { branding } = useTheme()
@@ -460,8 +476,8 @@ export function SetRow({
                   con desglose en `metadata`; sin lados la línea es la de siempre (misma regla que la web). */}
               {/* Fuerza POR TIEMPO (D3, W2.11): «10 kg × 30 s» con hold; sin hold, la rama de siempre. */}
               {(log?.actual_hold_sec != null
-                ? formatStrengthTimeSetLine({ weight_kg: log?.weight_kg ?? null, actual_hold_sec: log?.actual_hold_sec ?? null, metadata: log?.metadata })
-                : null) ?? formatStrengthSetLine({ weight_kg: log?.weight_kg ?? null, reps_done: log?.reps_done ?? null, metadata: log?.metadata }) ?? (
+                ? formatStrengthTimeSetLine({ weight_kg: log?.weight_kg ?? null, actual_hold_sec: log?.actual_hold_sec ?? null, metadata: log?.metadata }, lineOpts)
+                : null) ?? formatStrengthSetLine({ weight_kg: log?.weight_kg ?? null, reps_done: log?.reps_done ?? null, metadata: log?.metadata }, lineOpts) ?? (
                 <>
                   {log?.weight_kg ?? '–'}
                   <Text className="text-on-dark-muted"> × </Text>
@@ -792,7 +808,7 @@ export function ActiveSetRow({
   /** Draft restaurado de ESTA serie (resiliencia E2-03); pre-llena las cajas al reabrir. */
   seedValues?: Record<string, string> | null
   /** Autollenado "= usar ultima vez" (nonce dispara la re-siembra de KG/REPS). */
-  autofill?: { weight: number | null; reps: number | null; nonce: number } | null
+  autofill?: { weight: number | null; reps: number | null; nonce: number; weightUnit?: WeightUnit } | null
   /**
    * Siembra de campos TIPADOS al cambiar el nonce (hallazgo E · auto-registro de cardio: el timer
    * vuelca los minutos en la caja MIN). Entra por el MISMO `patch` que una edición del alumno, así que
@@ -843,6 +859,18 @@ export function ActiveSetRow({
   effortExpanded?: boolean
   onEffortExpandedChange?: (v: boolean) => void
 }) {
+  // ── Kilos o libras (tren kg-lb-ejecutor, docs/specs/kg-lb-ejecutor) ────────────────────────────────
+  // La caja de peso muestra y recibe el número en la unidad del EJERCICIO (contexto del ejecutor); el
+  // commit lo pasa a kilos una sola vez (en el payload del motor) y manda `weight_unit`. Sin provider o en
+  // una fila tipada `unitActive` es false ⇒ la fila queda byte-idéntica a la previa.
+  const { unit: blockWeightUnit, setUnit: setBlockWeightUnit, active: weightUnitCtx } = useBlockWeightUnit(blockId)
+  const unitActive = weightUnitCtx && !typedMode
+  const weightUnit: WeightUnit = unitActive ? blockWeightUnit : 'kg'
+  const weightField = useMemo<RowField>(
+    () => ({ key: 'weight', label: weightUnit === 'lb' ? 'Lb' : 'Kg', unit: weightUnit, mode: 'weight' }),
+    [weightUnit],
+  )
+
   const fields: RowField[] = useMemo(() => {
     if (typedMode) {
       return typedKeypadFields(typedMode, { sideMode, distanceUnit, cardioModality }).map((f) => ({
@@ -863,14 +891,14 @@ export function ActiveSetRow({
     if (strengthTimeMode) {
       if (sideMode === 'per_side') {
         return [
-          { key: 'weight', label: 'Kg', unit: 'kg', mode: 'weight' },
+          weightField,
           { key: 'reps', label: 'Reps', unit: 'reps', mode: 'reps' },
           { key: 'hold_left_sec', label: 'Izq', unit: 'seg', mode: 'integer' },
           { key: 'hold_right_sec', label: 'Der', unit: 'seg', mode: 'integer' },
         ]
       }
       return [
-        { key: 'weight', label: 'Kg', unit: 'kg', mode: 'weight' },
+        weightField,
         { key: 'reps', label: 'Reps', unit: 'reps', mode: 'reps' },
         { key: 'actual_hold_sec', label: 'Seg', unit: 'seg', mode: 'integer' },
       ]
@@ -880,27 +908,35 @@ export function ActiveSetRow({
     // carril tipado (R18): los pasos salen de esta rama, no de `typedKeypadFields`.
     if (sideMode === 'per_side' || sideMode === 'alternating') {
       return [
-        { key: 'weight', label: 'Kg', unit: 'kg', mode: 'weight' },
+        weightField,
         { key: 'reps_left', label: 'Izq', unit: 'reps', mode: 'reps' },
         { key: 'reps_right', label: 'Der', unit: 'reps', mode: 'reps' },
       ]
     }
     return [
-      { key: 'weight', label: 'Kg', unit: 'kg', mode: 'weight' },
+      weightField,
       { key: 'reps', label: 'Reps', unit: 'reps', mode: 'reps' },
     ]
-  }, [typedMode, sideMode, distanceUnit, cardioModality, strengthTimeMode])
+  }, [typedMode, sideMode, distanceUnit, cardioModality, strengthTimeMode, weightField])
   const perSideReps = !typedMode && !strengthTimeMode && (sideMode === 'per_side' || sideMode === 'alternating')
 
   const motion = useEvaMotion()
 
-  const [values, setValues] = useState<Record<string, string>>(() => {
-    if (seedValues) return { ...seedValues }
-    if (!typedMode && suggestedWeight != null) return { weight: formatWeightEsCl(suggestedWeight) }
+  const [values, setValues] = useState<Record<string, string>>((): Record<string, string> => {
+    // Kilos o libras: la semilla (borrador, día repetido, serie repetida) trae la marca `wu` de su unidad
+    // o, sin ella, kilos; `valuesInWeightUnit` la deja escrita en la unidad del ejercicio. La sugerencia
+    // llega en kilos y en libras se redondea al 2,5 (R3). En kg todo queda como siempre.
+    if (seedValues) return { ...(unitActive ? valuesInWeightUnit(seedValues, weightUnit) : seedValues) }
+    if (!typedMode && suggestedWeight != null) {
+      return unitActive && weightUnit === 'lb'
+        ? { weight: formatWeightEsCl(suggestedWeightInUnit(suggestedWeight, 'lb')), wu: 'lb' }
+        : { weight: formatWeightEsCl(suggestedWeight) }
+    }
     return {}
   })
   const valuesRef = useRef(values)
   valuesRef.current = values
+  const valuesUnitRef = useRef<WeightUnit>(weightUnit)
   const [openKey, setOpenKey] = useState<string | null>(null)
   const [helpKey, setHelpKey] = useState<'rpe' | 'rir' | null>(null)
   // Nota rápida por serie (strength) — desplegable como en web (A.4.d). El texto vive en `values.note`
@@ -915,8 +951,10 @@ export function ActiveSetRow({
   const onNoteFocus = () => ensureVisibleInStep?.(noteInputRef.current)
 
   // Escritura única: sincroniza ref + estado + reporta el draft (resiliencia). idx = campo tocado.
+  // Kilos o libras: el borrador viaja con la marca `wu` de la unidad en que está escrito el peso, así al
+  // restaurarlo se convierte en vez de reinterpretarse (borradores sin marca = kg).
   const patch = (p: Record<string, string>, idx = 0) => {
-    const next = { ...valuesRef.current, ...p }
+    const next = { ...valuesRef.current, ...p, ...(unitActive ? { wu: valuesUnitRef.current } : {}) }
     valuesRef.current = next
     setValues(next)
     onDraftChange(next, idx)
@@ -927,12 +965,38 @@ export function ActiveSetRow({
   useEffect(() => {
     if (!autofill || autofill.nonce === lastAutofill.current) return
     lastAutofill.current = autofill.nonce
+    // Kilos o libras: «Anterior» llega en kilos y la rueda en la unidad que declara (`weightUnit`); acá se
+    // escribe en la unidad del ejercicio (kg ⇒ el número tal cual, como siempre).
+    const autofillWeight =
+      autofill.weight != null && unitActive
+        ? convertTypedWeight(autofill.weight, normalizeWeightUnit(autofill.weightUnit), weightUnit)
+        : autofill.weight
     patch({
-      weight: autofill.weight != null ? formatWeightEsCl(autofill.weight) : valuesRef.current.weight ?? '',
+      weight: autofillWeight != null ? formatWeightEsCl(autofillWeight) : valuesRef.current.weight ?? '',
       reps: autofill.reps != null ? String(autofill.reps) : valuesRef.current.reps ?? '',
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autofill?.nonce])
+
+  // Kilos o libras: si la unidad del ejercicio cambia (selector del teclado, rueda o el teclado de
+  // edición), el número escrito se CONVIERTE (R1: no se borra). `valuesUnitRef` = unidad en que está
+  // escrito `values.weight` ahora mismo (el espejo del `inputUnitRef` de la fila web).
+  useEffect(() => {
+    if (!unitActive) return
+    const from = valuesUnitRef.current
+    if (from === weightUnit) return
+    valuesUnitRef.current = weightUnit
+    const n = parseWeightEsCl(valuesRef.current.weight)
+    patch(
+      { weight: n != null ? formatWeightEsCl(convertTypedWeight(n, from, weightUnit)) : valuesRef.current.weight ?? '' },
+      idxOf('weight'),
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [weightUnit, unitActive])
+  const changeWeightUnit = (next: WeightUnit) => {
+    if (!unitActive || next === weightUnit) return
+    setBlockWeightUnit(next)
+  }
 
   // Siembra tipada (minutos del timer de cardio): mismo mecanismo por nonce que el autollenado de
   // arriba. `patch` escribe sobre lo que ya hay, sin desmontar nada.
@@ -987,11 +1051,22 @@ export function ActiveSetRow({
       // Fuerza POR TIEMPO (D3/R2): `reps_done` null, `actual_hold_sec` (suma L+R en per_side) y la
       // marca `'manual'` — lo tipeado en la fila lo escribió el alumno; el reloj entra por
       // `typedSeedPatch` y el módulo de hold manda su propio commit con `'timer'`.
+      // Kilos o libras: con `weightUnit` en el contexto el MOTOR pasa el número a kilos (una sola vez) y
+      // agrega la unidad; sin selector el contexto es el de siempre y el payload, byte-idéntico.
       : strengthTimeMode
-        ? buildStrengthTimePayload(valuesRef.current, blockId, setNumber, { sideMode: sideMode ?? null, holdSource: 'manual' })
+        ? buildStrengthTimePayload(valuesRef.current, blockId, setNumber, {
+            sideMode: sideMode ?? null,
+            holdSource: 'manual',
+            ...(unitActive ? { weightUnit: valuesUnitRef.current } : {}),
+          })
         // `sideMode` (R3): con `per_side`/`alternating` el motor escribe `reps_done = min(izq, der)` y el
         // desglose en `metadata`; sin lado el payload es byte-idéntico al de siempre.
-        : buildStrengthPayload(valuesRef.current, blockId, setNumber, sideMode ?? null)
+        : buildStrengthPayload(
+            valuesRef.current,
+            blockId,
+            setNumber,
+            unitActive ? { sideMode: sideMode ?? null, weightUnit: valuesUnitRef.current } : sideMode ?? null,
+          )
     onCommit(payload)
   }
 
@@ -1083,7 +1158,10 @@ export function ActiveSetRow({
                 }
               : undefined
           }
-          header={header ?? undefined}
+          header={header ? { ...header, ...(unitActive ? { weightUnit } : {}) } : undefined}
+          // Kilos o libras: selector kg | lb sobre el campo de PESO (mockup aprobado 26-09). Cambiarlo cambia
+          // la unidad del ejercicio en toda la sesión; el efecto de arriba convierte lo escrito.
+          weightUnit={unitActive && currentField.mode === 'weight' ? { value: weightUnit, onChange: changeWeightUnit } : undefined}
         />
       </View>
     </Modal>
@@ -1104,8 +1182,8 @@ export function ActiveSetRow({
         {/* Tiles de valor (peso / reps) — 30/900, tap=teclado, mantener=rueda */}
         <View style={{ flexDirection: 'row', flexWrap: gridTiles ? 'wrap' : 'nowrap', gap: 10 }}>
           <ValueTile
-            label="Kg"
-            unit="KG"
+            label={weightField.label}
+            unit={weightField.unit.toUpperCase()}
             value={values.weight ?? ''}
             editing={openKey === 'weight'}
             exec={exec}
@@ -1303,7 +1381,7 @@ export function ActiveSetRow({
         ) : (
           <>
             <FieldBox
-              label="Kg"
+              label={weightField.label}
               value={values.weight ?? ''}
               active={openKey === 'weight'}
               onPress={() => openField('weight')}

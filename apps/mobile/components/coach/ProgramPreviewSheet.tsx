@@ -6,6 +6,7 @@ import { useTheme } from '../../context/ThemeContext'
 import { FONT } from '../../lib/typography'
 import { getMuscleColor } from '../../lib/muscle-colors'
 import type { BuilderSection, DayState } from '../../lib/plan-builder/types'
+import { targetWeightLabel } from '../../lib/plan-builder/target-weight'
 
 interface Props { days: DayState[]; name: string }
 
@@ -74,7 +75,8 @@ export const ProgramPreviewSheet = forwardRef<BottomSheetModal, Props>(function 
                     <View key={b.uid} style={styles.blockRow}>
                       {b.superset_group ? <Link2 size={11} color={theme.primary} /> : null}
                       <Text style={[styles.blockName, { color: theme.foreground, fontFamily: theme.fontSans }]} numberOfLines={1}>{b.exercise_name}</Text>
-                      <Text style={[styles.blockMeta, { color: theme.mutedForeground, fontFamily: FONT.monoBold }]}>{b.sets}×{b.reps}{b.target_weight_kg ? ` · ${b.target_weight_kg}kg` : ''}</Text>
+                      {/* Kilos o libras: el peso objetivo en la unidad del bloque (kg ⇒ texto de siempre). */}
+                      <Text style={[styles.blockMeta, { color: theme.mutedForeground, fontFamily: FONT.monoBold }]}>{b.sets}×{b.reps}{b.target_weight_kg ? ` · ${targetWeightLabel(b, '')}` : ''}</Text>
                     </View>
                   ))}
                 </View>

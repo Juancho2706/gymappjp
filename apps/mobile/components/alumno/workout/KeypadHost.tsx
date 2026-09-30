@@ -20,6 +20,11 @@ import {
   buildStrengthTimePayload,
   buildTypedPayload,
   type TypedPayloadContext,
+  // Kilos o libras (tren kg-lb-ejecutor).
+  convertTypedWeight,
+  parseWeightEsCl,
+  suggestedWeightInUnit,
+  type WeightUnit,
 } from '@eva/workout-engine'
 import { FONT, textStyle } from '../../../lib/typography'
 import { useEvaMotion } from '../../../lib/motion'
@@ -40,6 +45,7 @@ import {
   KeypadGrid,
   KeypadObjectiveHeader,
   WeightChips,
+  WeightUnitToggle,
 } from './TypedKeypad'
 
 const ON_DARK = '#F4F6F8'
@@ -139,6 +145,7 @@ export function KeypadHost({
   onDraftChange,
   accent,
   accentText,
+  weightUnit,
 }: {
   target: KeypadTarget | null
   /**
@@ -163,6 +170,13 @@ export function KeypadHost({
    *  vez del azul Sport fijo. Ausente (ejecutor V2) ⇒ conserva `bg-sport-500` + texto blanco. */
   accent?: string
   accentText?: string
+  /**
+   * Kilos o libras (tren kg-lb-ejecutor): unidad del ejercicio de `target` + cambio. Solo fuerza (el
+   * caller no la pasa en tipadas). Presente ⇒ el campo de peso se rotula en esa unidad, lleva el selector
+   * kg | lb, `target.initialValues.weight` se asume YA escrito en ella (lo convierte `openSet`) y el
+   * commit manda `weightUnit` para que el motor pase a kilos. Ausente ⇒ host idéntico al previo.
+   */
+  weightUnit?: { value: WeightUnit; onChange: (next: WeightUnit) => void }
 }) {
   const insets = useSafeAreaInsets()
   const motion = useEvaMotion()
@@ -180,10 +194,25 @@ export function KeypadHost({
   // cualquier gesto de edición — los chips ±kg SÍ operan sobre la base (40 +2,5 = 42,5).
   const pristineRef = useRef(false)
 
+  // Kilos o libras: unidad del peso de ESTE target (null = sin selector ⇒ kilos, como siempre) y la unidad
+  // en que está escrito `values.weight` ahora mismo (el espejo del `inputUnitRef` de la fila web).
+  const unitValue: WeightUnit | null = target && !target.typed && weightUnit ? weightUnit.value : null
+  const valuesUnitRef = useRef<WeightUnit>(unitValue ?? 'kg')
+
   // Secuencia de pasos según el tipo del bloque (routing puro compartido con `openSet`).
   const steps = useMemo(() => keypadStepsForTarget(target), [target])
-  // Los campos son las pestañas del display; la nota es una FASE aparte (no una pestaña).
-  const fields = useMemo(() => steps.filter((s): s is KeypadFieldStep => s.kind === 'keypad'), [steps])
+  // Los campos son las pestañas del display; la nota es una FASE aparte (no una pestaña). Con selector, la
+  // pestaña/unidad del peso siguen a la unidad del ejercicio.
+  // `baseFields` alimenta la SIEMBRA (depende solo del target): si dependiera de la unidad, cambiar kg/lb
+  // re-sembraría el teclado con los valores iniciales y borraría lo tecleado.
+  const baseFields = useMemo(() => steps.filter((s): s is KeypadFieldStep => s.kind === 'keypad'), [steps])
+  const fields = useMemo(
+    () =>
+      baseFields.map((f) =>
+        f.key === 'weight' && unitValue ? { ...f, unit: unitValue, label: unitValue === 'lb' ? 'Peso (lb)' : 'Peso (kg)' } : f,
+      ),
+    [baseFields, unitValue],
+  )
   // La nota por serie sólo existe en FUERZA: es lo único que `buildStrengthPayload` lee de `values.note`
   // (el builder tipado no la escribe). Antes esta segunda fase era el esfuerzo y se derivaba del paso
   // `effort` del engine; ahora que el esfuerzo salió del teclado, la condición honesta es "no es tipado".
@@ -193,14 +222,21 @@ export function KeypadHost({
   // (en es-CL, mismo formato que la `ActiveSetRow`). Arranca en el campo tocado (draft) o el primero.
   useEffect(() => {
     if (!target) return
+    // Kilos o libras: `initialValues` ya viene en la unidad del ejercicio (`openSet`); el peso sugerido
+    // llega en kilos y en libras se redondea al 2,5 (R3).
+    const seedUnit: WeightUnit = !target.typed && weightUnit ? weightUnit.value : 'kg'
+    valuesUnitRef.current = seedUnit
     const seed: Record<string, string> =
       target.initialValues ??
       (target.typed
         ? {}
-        : { weight: target.suggestedWeight != null ? formatWeightEsCl(target.suggestedWeight) : '' })
+        : {
+            weight:
+              target.suggestedWeight != null ? formatWeightEsCl(suggestedWeightInUnit(target.suggestedWeight, seedUnit)) : '',
+          })
     valuesRef.current = seed
     setValues(seed)
-    const initialKey = fields[target.initialFieldIndex ?? 0]?.key ?? fields[0]?.key ?? ''
+    const initialKey = baseFields[target.initialFieldIndex ?? 0]?.key ?? baseFields[0]?.key ?? ''
     setActiveKey(initialKey)
     // El campo con el que abre trae valor sembrado ⇒ el primer dígito lo reemplaza (ver pristineRef).
     pristineRef.current = (seed[initialKey] ?? '') !== ''
@@ -208,7 +244,27 @@ export function KeypadHost({
     // Editar una serie que YA lleva nota abre el input desplegado: ahora la nota es lo único de la fase,
     // así que dejarlo colapsado obligaría a un tap extra sólo para ver lo que se está corrigiendo.
     setNoteOpen(!!(seed.note ?? '').trim())
-  }, [target, fields])
+    // `weightUnit` fuera de las deps A PROPÓSITO: la unidad solo decide la siembra al ABRIR un target; un
+    // cambio posterior (selector) convierte lo escrito en el efecto de abajo, nunca re-siembra.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target, baseFields])
+
+  // Kilos o libras: el selector cambió la unidad del ejercicio ⇒ el número escrito se convierte (R1). El
+  // valor convertido queda PRE-CARGADO: el próximo dígito lo reemplaza (mismo criterio que la web).
+  useEffect(() => {
+    if (!target || target.typed || unitValue == null) return
+    const from = valuesUnitRef.current
+    if (from === unitValue) return
+    valuesUnitRef.current = unitValue
+    const n = parseWeightEsCl(valuesRef.current.weight)
+    if (n == null) return
+    const next = { ...valuesRef.current, weight: formatWeightEsCl(convertTypedWeight(n, from, unitValue)), wu: unitValue }
+    valuesRef.current = next
+    setValues(next)
+    onDraftChange(next, Math.max(0, baseFields.findIndex((f) => f.key === 'weight')))
+    pristineRef.current = true
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unitValue])
 
   if (!target || fields.length === 0) return null
 
@@ -234,7 +290,8 @@ export function KeypadHost({
 
   // ── Mutación del valor (write-through al draft), mirror del provider web ──────
   const patch = (p: Record<string, string>, idx: number) => {
-    const next = { ...valuesRef.current, ...p }
+    // Kilos o libras: el borrador viaja con la marca `wu` de la unidad en que está escrito el peso.
+    const next = { ...valuesRef.current, ...p, ...(unitValue ? { wu: valuesUnitRef.current } : {}) }
     valuesRef.current = next
     setValues(next)
     onDraftChange(next, idx)
@@ -308,13 +365,20 @@ export function KeypadHost({
         // o del log) tiene que ir junto a `{left_sec, right_sec}` o el re-guardado degrada
         // `metadata.hold_source` a `'manual'` y rompe el E2E W6.10. Sin marca que conservar cae a
         // `'manual'`, que es la verdad: esa serie la está escribiendo una persona.
+        // Kilos o libras: con selector el motor recibe `weightUnit` y pasa el número a kilos UNA vez.
         ? buildStrengthTimePayload(v, target.blockId, target.setNumber, {
             sideMode: target.sideMode ?? null,
             holdSource: target.holdSource ?? 'manual',
+            ...(unitValue ? { weightUnit: valuesUnitRef.current } : {}),
           })
         // Fuerza POR LADO (W3.10): el teclado de EDICIÓN admite lados sólo en esta rama (`target.sideMode`
         // lo pone `openSet` únicamente en strength); el motor escribe `reps_done = min` + `metadata`.
-        : buildStrengthPayload(v, target.blockId, target.setNumber, target.sideMode ?? null)
+        : buildStrengthPayload(
+            v,
+            target.blockId,
+            target.setNumber,
+            unitValue ? { sideMode: target.sideMode ?? null, weightUnit: valuesUnitRef.current } : target.sideMode ?? null,
+          )
     onCommit(payload)
   }
 
@@ -342,7 +406,9 @@ export function KeypadHost({
     const parts: string[] = []
     if (target.targetSets != null && target.targetReps) parts.push(`${target.targetSets}×${target.targetReps}`)
     else if (target.targetReps) parts.push(`${target.targetReps} reps`)
-    if (target.suggestedWeight != null) parts.push(`${formatWeightEsCl(target.suggestedWeight)} kg`)
+    // Kilos o libras: la sugerencia llega en kilos; en libras se lee redondeada al 2,5.
+    const u: WeightUnit = unitValue ?? 'kg'
+    if (target.suggestedWeight != null) parts.push(`${formatWeightEsCl(suggestedWeightInUnit(target.suggestedWeight, u))} ${u}`)
     return parts.join(' · ')
   })()
   const lastPrev = !target.typed ? target.lastPrev ?? null : null
@@ -442,6 +508,7 @@ export function KeypadHost({
               exerciseName={target.exerciseName}
               objectiveLine={objectiveLine}
               last={lastPrev}
+              weightUnit={unitValue ?? 'kg'}
             />
 
             {/* Prompt de huecos (R9 · SPEC §6): eyebrow con lo que el reloj YA guardó + la pregunta
@@ -598,7 +665,12 @@ export function KeypadHost({
                   />
                 </View>
 
-                {showChips ? <WeightChips onIncrement={onIncrement} /> : null}
+                {/* Kilos o libras: selector kg | lb sobre el campo de PESO (mockup aprobado 26-09). */}
+                {showChips && unitValue && weightUnit ? (
+                  <WeightUnitToggle value={unitValue} onChange={weightUnit.onChange} />
+                ) : null}
+
+                {showChips ? <WeightChips onIncrement={onIncrement} unit={unitValue ?? 'kg'} /> : null}
 
                 <KeypadGrid
                   allowDecimal={allowDecimal}

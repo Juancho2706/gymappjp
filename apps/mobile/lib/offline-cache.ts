@@ -49,6 +49,12 @@ interface PendingLog {
    * los lados de fuerza aunque el drain (spread del item) los subiera igual.
    */
   metadata?: WorkoutLogMetadata | null
+  /**
+   * Kilos o libras (tren kg-lb-ejecutor): unidad en que el alumno TECLEÓ el peso. `weight_kg` ya está en
+   * kilos (la conversión la hizo el motor al armar el payload): esto nunca se reconvierte. Items encolados
+   * antes del tren no traen la key ⇒ el drain no la escribe (esas series se tipearon en «Kg»).
+   */
+  weight_unit?: string | null
   substituted_exercise_id?: string | null
   substituted_exercise_name?: string | null
   substitution_reason?: string | null

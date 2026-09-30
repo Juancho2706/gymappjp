@@ -15,6 +15,7 @@ import {
   type ReconciledSessionLog,
   type RepeatSeedEntry,
   SIDE_LABEL,
+  type WeightUnit,
 } from '@eva/workout-engine'
 import { FONT } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
@@ -36,6 +37,7 @@ import { RestOfferV3 } from './RestOfferV3'
 import { parseRestTime, useWorkoutTimers } from '../timers'
 import { EXEC_SKIP_AMBER, ExerciseActionChips } from './exercise-actions'
 import type { ExecTheme } from './exec-theme'
+import { suggestionNum, useBlockWeightUnit, valuesInWeightUnit, weightNum } from '../weight-unit-context'
 
 // Reflow del layout (paridad SingleExerciseCard CARD_LAYOUT): anima el cambio de tamaño al
 // completar series. Sólo sin reduced-motion.
@@ -180,7 +182,7 @@ export function ExerciseScreenV3({
   repeatRequest?: { setNumber: number; nonce: number } | null
 }) {
   const s = exec.surface
-  const [autofill, setAutofill] = useState<{ weight: number | null; reps: number | null; nonce: number } | null>(null)
+  const [autofill, setAutofill] = useState<{ weight: number | null; reps: number | null; nonce: number; weightUnit?: WeightUnit } | null>(null)
   // Rueda dual (E2.5) — se abre por long-press sobre kg/reps de la serie activa; entrega ambos valores
   // por el MISMO autofill de la fila "Anterior". El hint "una vez" se apaga al usarla o cerrarlo.
   const [wheelOpen, setWheelOpen] = useState(false)
@@ -211,7 +213,10 @@ export function ExerciseScreenV3({
   const activeSet = skipped ? null : repeat?.setNumber ?? firstUnlogged
 
   const suggestedWeightKg = eff?.weightKg ?? block.target_weight_kg
-  const overloadLabel = overloadChipLabel(block, eff, currentWeek)
+  // Kilos o libras (tren kg-lb-ejecutor): todas las lecturas de peso de esta pantalla (objetivo,
+  // «Anterior», récord en vivo, rueda) en la unidad del ejercicio. Sin provider ⇒ kg, como siempre.
+  const { unit: weightUnit, active: weightUnitActive } = useBlockWeightUnit(block.id)
+  const overloadLabel = overloadChipLabel(block, eff, currentWeek, weightUnit)
   const bestPrev = bestPrevOf(prevList)
 
   // PR en vivo (E4.2): cuando la serie recién cerrada de ESTE bloque fue récord, la fila "Anterior" tacha
@@ -226,11 +231,14 @@ export function ExerciseScreenV3({
   // entero. La rueda redondea internamente al grid del paso.
   const wheelAnchors = useMemo(() => {
     const repsParsed = parseInt(String(block.reps), 10)
+    // Kilos o libras: el ancla del peso en la unidad de la rueda (`Number` porque en lb `weightNum`
+    // devuelve texto es-CL; la rueda redondea igual al grid de su paso).
+    const toUnit = (kg: number) => Number(String(weightNum(kg, weightUnit)).replace(',', '.'))
     return {
-      kg: bestPrev?.weight_kg ?? suggestedWeightKg ?? 0,
+      kg: bestPrev?.weight_kg != null ? toUnit(bestPrev.weight_kg) : suggestedWeightKg != null ? toUnit(suggestedWeightKg) : 0,
       reps: bestPrev?.reps_done ?? (Number.isFinite(repsParsed) ? repsParsed : 0),
     }
-  }, [bestPrev, suggestedWeightKg, block.reps])
+  }, [bestPrev, suggestedWeightKg, block.reps, weightUnit])
 
   const openWheel = () => {
     if (activeSet == null) return
@@ -238,8 +246,9 @@ export function ExerciseScreenV3({
     haptics.longPress()
     setWheelOpen(true)
   }
-  const handleWheelDone = (weightKg: number, reps: number) => {
-    if (activeSet != null) setAutofill({ weight: weightKg, reps, nonce: Date.now() })
+  const handleWheelDone = (weight: number, reps: number) => {
+    // La rueda entrega el número en SU unidad (la del ejercicio); la fila lo escribe sin reconvertir.
+    if (activeSet != null) setAutofill({ weight, reps, nonce: Date.now(), weightUnit })
     if (!hintDismissed) dismissWheelHint()
     setWheelOpen(false)
   }
@@ -283,8 +292,19 @@ export function ExerciseScreenV3({
   // serie ya tenía guardado: si no, el auto-envío del reloj borraría las reps que el alumno ya anotó.
   const captureRef = useRef<Record<string, string>>({})
   useEffect(() => {
-    captureRef.current = repeat?.values ?? (suggestedWeightKg != null ? { weight: formatWeightEsCl(suggestedWeightKg) } : {})
+    const seeded: Record<string, string> =
+      repeat?.values ?? (suggestedWeightKg != null ? { weight: formatWeightEsCl(suggestedWeightKg) } : {})
+    // Kilos o libras: la base queda escrita como la muestra la fila (sugerencia en lb redondeada al 2,5)
+    // y marcada con `wu`, que es lo que el reloj lee para que el motor convierta al guardar solo.
+    captureRef.current = !weightUnitActive
+      ? seeded
+      : !repeat?.values && suggestedWeightKg != null && weightUnit === 'lb'
+        ? { weight: String(suggestionNum(suggestedWeightKg, 'lb')), wu: 'lb' }
+        : { ...valuesInWeightUnit(seeded, weightUnit), wu: weightUnit }
     setSeedPatch(null)
+    // La unidad NO va en las deps a propósito: un cambio de unidad lo convierte la fila (y lo reporta por
+    // `onDraftChange`, que actualiza `captureRef`); re-sembrar acá pisaría lo ya tecleado.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeSet, suggestedWeightKg, repeat])
 
   /**
@@ -339,12 +359,16 @@ export function ExerciseScreenV3({
       // R7: el texto sale de `formatStrengthTimeSetLine` TAL CUAL (sin guion inventado) y se arma con
       // el PAYLOAD, no con `blockLogs` — el optimista todavía no propagó a este render.
       const line = strengthTime
-        ? formatStrengthTimeSetLine({
-            weight_kg: payload.weightKg ?? null,
-            reps_done: payload.repsDone ?? null,
-            actual_hold_sec: payload.actualHoldSec ?? null,
-            metadata: payload.metadata ?? null,
-          })
+        ? formatStrengthTimeSetLine(
+            {
+              weight_kg: payload.weightKg ?? null,
+              reps_done: payload.repsDone ?? null,
+              actual_hold_sec: payload.actualHoldSec ?? null,
+              metadata: payload.metadata ?? null,
+            },
+            // Kilos o libras: la línea en la unidad en que se tecleó la serie (sin unidad ⇒ kg).
+            payload.weightUnit ? { unit: payload.weightUnit } : undefined,
+          )
         : null
       setRestOffer({ setNumber: payload.setNumber, seconds: eff.seconds, warmup: eff.warmup, line })
     }
@@ -437,7 +461,7 @@ export function ExerciseScreenV3({
         autofill={autofill}
         header={{
           exerciseName: exercise.name,
-          objectiveLine: `${block.sets}×${strengthTime ? compactDuration(holdSec) : block.reps}${suggestedWeightKg != null ? ` · ${formatWeightEsCl(suggestedWeightKg)} kg` : ''}`,
+          objectiveLine: `${block.sets}×${strengthTime ? compactDuration(holdSec) : block.reps}${suggestedWeightKg != null ? ` · ${weightUnit === 'lb' ? suggestionNum(suggestedWeightKg, 'lb') : formatWeightEsCl(suggestedWeightKg)} ${weightUnit}` : ''}`,
           last: bestPrev ? { weightKg: bestPrev.weight_kg ?? null, reps: bestPrev.reps_done ?? null } : null,
         }}
         onDraftChange={(values, fieldIndex) => {
@@ -576,7 +600,7 @@ export function ExerciseScreenV3({
           {rxWeight != null && (
             <>
               {' · '}
-              <Text style={{ fontFamily: FONT.monoBold, color: s.text }}>{rxWeight} kg</Text>
+              <Text style={{ fontFamily: FONT.monoBold, color: s.text }}>{suggestionNum(rxWeight, weightUnit)} {weightUnit}</Text>
             </>
           )}
           {block.rir ? ` · RIR ${block.rir}` : ''}
@@ -599,7 +623,7 @@ export function ExerciseScreenV3({
           disabled={activeSet == null}
           onPress={() => { if (activeSet != null) setAutofill({ weight: bestPrev.weight_kg, reps: bestPrev.reps_done, nonce: Date.now() }) }}
           accessibilityRole="button"
-          accessibilityLabel={activeSet != null && bestPrev.weight_kg ? `Usar la última vez: ${bestPrev.weight_kg} kg por ${bestPrev.reps_done ?? '-'} reps` : undefined}
+          accessibilityLabel={activeSet != null && bestPrev.weight_kg ? `Usar la última vez: ${weightNum(bestPrev.weight_kg, weightUnit)} ${weightUnit} por ${bestPrev.reps_done ?? '-'} reps` : undefined}
         >
           {/* css-interop descarta `style` cuando es función (auditoría a1 §2.1): el chrome punteado de
               la fila vive en esta View interna con `style` estático. */}
@@ -632,7 +656,7 @@ export function ExerciseScreenV3({
                   textDecorationLine: prRecent ? 'line-through' : 'none',
                 }}
               >
-                {bestPrev.weight_kg ? `${bestPrev.weight_kg} kg` : '-'} × {bestPrev.reps_done || '-'}
+                {bestPrev.weight_kg ? `${weightNum(bestPrev.weight_kg, weightUnit)} ${weightUnit}` : '-'} × {bestPrev.reps_done || '-'}
               </Text>
               {prRecent ? (
                 // Flecha arriba dorada + peso que superó la marca (mockup "PR en vivo").
@@ -640,7 +664,7 @@ export function ExerciseScreenV3({
                   <ArrowUp size={14} color={exec.pr} strokeWidth={3} />
                   {prNewWeightKg != null && (
                     <Text style={{ fontFamily: FONT.monoBold, fontSize: 14, color: exec.pr, fontVariant: ['tabular-nums'] }}>
-                      {prNewWeightKg} kg
+                      {weightNum(prNewWeightKg, weightUnit)} {weightUnit}
                     </Text>
                   )}
                 </View>
@@ -824,6 +848,7 @@ export function ExerciseScreenV3({
         exec={exec}
         reducedMotion={reducedMotion}
         onDone={handleWheelDone}
+        weightUnit={weightUnit}
       />
     </MotiView>
   )

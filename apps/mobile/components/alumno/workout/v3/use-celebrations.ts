@@ -18,6 +18,7 @@ import {
   type CelebrationTier,
   type PrBest,
   type PrKind,
+  type WeightUnit,
   type WorkoutCelebrationEvent,
 } from '@eva/workout-engine'
 import { haptics } from '../../../../lib/haptics'
@@ -39,6 +40,8 @@ export interface PrCelebrationState {
   weightKg: number
   /** Mejor marca histórica superada (para el chip "Anterior" tachado). */
   prevBest: PrBest
+  /** Kilos o libras: unidad en que se tecleó la serie récord (ausente ⇒ kg). Los pesos siguen en kg. */
+  weightUnit?: WeightUnit
   /** Reinicia la animación de confeti cuando se re-dispara (varias PRs seguidas). */
   nonce: number
 }
@@ -50,6 +53,8 @@ export interface PrCelebrationInput {
   kind: PrKind
   weightKg: number
   prevBest: PrBest
+  /** Kilos o libras: unidad en que se tecleó la serie récord (ausente ⇒ kg). */
+  weightUnit?: WeightUnit
 }
 
 export interface CelebrationsApi {

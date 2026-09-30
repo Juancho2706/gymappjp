@@ -23,6 +23,7 @@ import {
   type OptimisticLogPayload,
   type ReconciledSessionLog,
   type TypedKeypadMode,
+  type WeightUnit,
 } from '@eva/workout-engine'
 import { FONT } from '../../../../lib/typography'
 import { hexToRgba } from '../../../../lib/theme'
@@ -43,6 +44,7 @@ import type { EffectiveTarget } from '../../../../lib/workout/progression'
 import { Sheet } from '../../../Sheet'
 import { SetRow, ActiveSetRow } from '../SetRow'
 import { bestPrevOf } from '../workout-ui'
+import { suggestionNum, useWeightUnitLookup, weightNum } from '../weight-unit-context'
 import { DualWheelPicker } from './DualWheelPicker'
 import { dismissWheelHint } from './wheel-hint'
 import { ExecMediaV3, execMediaKind } from './ExecMediaV3'
@@ -191,6 +193,8 @@ export function SupersetScreenV3({
   // de `ExecutorV3`, que ya vive bajo `WorkoutTimerProvider`.
   const timers = useWorkoutTimers()
   const restingNow = timers.state?.kind === 'rest'
+  // Kilos o libras (tren kg-lb-ejecutor): unidad de CADA miembro (su ejercicio). Sin provider ⇒ kg.
+  const unitOf = useWeightUnitLookup()
 
   // Aviso "¡Sigue sin detenerte!" (overlay efímero) + prefill "= última vez" del miembro activo. Ambos
   // son estado LOCAL de UI: no rozan el motor de guardado/cola.
@@ -200,7 +204,7 @@ export function SupersetScreenV3({
   const [seedPatch, setSeedPatch] = useState<{ values: Record<string, string>; nonce: number } | null>(null)
   const [holdStatus, setHoldStatus] = useState<HoldModuleStatus>('idle')
   const captureRef = useRef<Record<string, string>>({})
-  const [autofill, setAutofill] = useState<{ weight: number | null; reps: number | null; nonce: number } | null>(null)
+  const [autofill, setAutofill] = useState<{ weight: number | null; reps: number | null; nonce: number; weightUnit?: WeightUnit } | null>(null)
   // Miembro YA HECHO cuya edición está abierta (QA2 #3): tap en su tarjeta colapsada abre el sheet oscuro
   // "Editar {nombre}" con las filas clásicas del motor (SetRow). Estado LOCAL de UI: no roza guardado/cola.
   const [editBlockId, setEditBlockId] = useState<string | null>(null)
@@ -312,11 +316,15 @@ export function SupersetScreenV3({
   // el OBJETIVO (peso sugerido / reps prescritas). `block.reps` puede ser "8-10" ⇒ toma el primer entero.
   const activeVM = activeBlockId ? memberVMs.find((m) => m.block.id === activeBlockId) ?? null : null
   const wheelVM = activeVM && activeVM.typedMode == null ? activeVM : null
+  // Kilos o libras: la rueda del miembro activo trabaja en la unidad de su ejercicio.
+  const wheelUnit: WeightUnit = wheelVM ? unitOf(wheelVM.block.id) : 'kg'
   const wheelAnchors = (() => {
     if (!wheelVM) return { kg: 0, reps: 0 }
     const repsParsed = parseInt(String(wheelVM.block.reps), 10)
+    const toUnit = (kg: number) => Number(String(weightNum(kg, wheelUnit)).replace(',', '.'))
+    const prevKg = wheelVM.bestPrev?.weight_kg ?? null
     return {
-      kg: wheelVM.bestPrev?.weight_kg ?? wheelVM.suggested ?? 0,
+      kg: prevKg != null ? toUnit(prevKg) : wheelVM.suggested != null ? toUnit(wheelVM.suggested) : 0,
       reps: wheelVM.bestPrev?.reps_done ?? (Number.isFinite(repsParsed) ? repsParsed : 0),
     }
   })()
@@ -326,8 +334,9 @@ export function SupersetScreenV3({
     haptics.longPress()
     setWheelOpen(true)
   }
-  const handleWheelDone = (weightKg: number, reps: number) => {
-    setAutofill({ weight: weightKg, reps, nonce: Date.now() })
+  const handleWheelDone = (weight: number, reps: number) => {
+    // La rueda entrega el peso en SU unidad (la del miembro); la fila lo escribe sin reconvertir.
+    setAutofill({ weight, reps, nonce: Date.now(), weightUnit: wheelUnit })
     dismissWheelHint()
     setWheelOpen(false)
   }
@@ -453,9 +462,12 @@ export function SupersetScreenV3({
           const isActive = active?.blockId === m.block.id && active?.set === round
           const isDoneInRound = !!log
           const isNext = !log && !isActive && nextMemberId === m.block.id
+          // Kilos o libras: pesos de este miembro en la unidad de SU ejercicio (kg ⇒ textos de siempre).
+          const mu = unitOf(m.block.id)
+          const rxWeight = (kg: number) => (mu === 'lb' ? `${suggestionNum(kg, 'lb')} lb` : `${formatWeightEsCl(kg)} kg`)
           const rx =
             m.effType === 'strength'
-              ? `${m.block.reps} reps${m.suggested != null ? ` · ${formatWeightEsCl(m.suggested)} kg` : ''}`
+              ? `${m.block.reps} reps${m.suggested != null ? ` · ${rxWeight(m.suggested)}` : ''}`
               : formatTypedObjective(m.block, m.typedMode as TypedKeypadMode)
 
           // ── MIEMBRO ACTIVO — presentación de ejercicio solo (media 150px + rx + Anterior + hero). ──
@@ -596,7 +608,7 @@ export function SupersetScreenV3({
                     testID={`btn-prev-autofill-ss-${m.block.id}`}
                     onPress={() => setAutofill({ weight: m.bestPrev!.weight_kg, reps: m.bestPrev!.reps_done, nonce: Date.now() })}
                     accessibilityRole="button"
-                    accessibilityLabel={m.bestPrev.weight_kg ? `Usar la última vez: ${m.bestPrev.weight_kg} kg por ${m.bestPrev.reps_done ?? '-'} reps` : undefined}
+                    accessibilityLabel={m.bestPrev.weight_kg ? `Usar la última vez: ${weightNum(m.bestPrev.weight_kg, mu)} ${mu} por ${m.bestPrev.reps_done ?? '-'} reps` : undefined}
                   >
                     {/* css-interop descarta `style` cuando es función (auditoría a1 §2.1): el chrome
                         punteado de la fila vive en esta View interna con `style` estático. */}
@@ -618,7 +630,7 @@ export function SupersetScreenV3({
                       >
                         <Text style={{ fontFamily: FONT.uiSemibold, fontSize: 12, color: s.textMuted }}>Anterior</Text>
                         <Text style={{ fontFamily: FONT.monoBold, fontSize: 14, color: s.text, fontVariant: ['tabular-nums'] }}>
-                          {m.bestPrev!.weight_kg ? `${m.bestPrev!.weight_kg} kg` : '-'} × {m.bestPrev!.reps_done || '-'}
+                          {m.bestPrev!.weight_kg ? `${weightNum(m.bestPrev!.weight_kg, mu)} ${mu}` : '-'} × {m.bestPrev!.reps_done || '-'}
                         </Text>
                         <Text style={{ fontFamily: FONT.uiExtra, fontSize: 11, color: exec.accent }}>1 tap ↻</Text>
                       </View>
@@ -655,7 +667,7 @@ export function SupersetScreenV3({
                     exerciseName: m.exercise.name,
                     objectiveLine:
                       m.effType === 'strength'
-                        ? `${m.block.sets}×${m.block.reps}${m.suggested != null ? ` · ${formatWeightEsCl(m.suggested)} kg` : ''}`
+                        ? `${m.block.sets}×${m.block.reps}${m.suggested != null ? ` · ${rxWeight(m.suggested)}` : ''}`
                         : formatTypedObjective(m.block, m.typedMode as TypedKeypadMode),
                     last:
                       m.effType === 'strength' && m.bestPrev
@@ -840,6 +852,7 @@ export function SupersetScreenV3({
           exec={exec}
           reducedMotion={reducedMotion}
           onDone={handleWheelDone}
+          weightUnit={wheelUnit}
         />
       )}
 

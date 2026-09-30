@@ -7,8 +7,12 @@ import {
   EMPTY_LOGGED_SET_LABEL,
   formatLoggedSetLine,
   formatProgressionTag,
+  formatWeightEsCl,
+  suggestedWeightInUnit,
+  weightFromKg,
   type ReconciledSessionLog,
   type TypedKeypadMode,
+  type WeightUnit,
 } from '@eva/workout-engine'
 import type { EffectiveTarget } from '../../../lib/workout/progression'
 import type { PrevSet } from '../../../lib/workout-session'
@@ -28,7 +32,13 @@ export function overloadChipLabel(
   block: OverloadBlock,
   eff: EffectiveTarget | null,
   currentWeek: number | null | undefined,
+  /** Kilos o libras (tren kg-lb-ejecutor): unidad del ejercicio. Default kg ⇒ textos idénticos. */
+  unit: WeightUnit = 'kg',
 ): string | null {
+  // Objetivo en la unidad (en lb redondeado al 2,5, R3) e incremento en la unidad (a décimas).
+  const tw = (kg: number | null) =>
+    kg == null || unit === 'kg' ? `${kg} ${unit}` : `${formatWeightEsCl(suggestedWeightInUnit(kg, 'lb'))} lb`
+  const inc = (kg: number) => (unit === 'kg' ? String(kg) : formatWeightEsCl(weightFromKg(kg, 'lb')))
   if (!block.progression_type || block.progression_value == null) return null
   if (block.progression_type === 'weight' && block.target_weight_kg == null) return null
   const v = block.progression_value
@@ -37,10 +47,10 @@ export function overloadChipLabel(
     return formatProgressionTag(block) ?? `+${v} rep/ses`
   }
   if (eff.mode === 'double') {
-    return eff.status === 'holding' ? `Mantén ${eff.weightKg} kg` : `Objetivo ${eff.weightKg} kg`
+    return eff.status === 'holding' ? `Mantén ${tw(eff.weightKg)}` : `Objetivo ${tw(eff.weightKg)}`
   }
-  if (eff.isProgressed && currentWeek != null) return `Sem ${currentWeek} · ${eff.weightKg} kg`
-  return `+${v} kg/sem`
+  if (eff.isProgressed && currentWeek != null) return `Sem ${currentWeek} · ${tw(eff.weightKg)}`
+  return `+${inc(v)} ${unit}/sem`
 }
 
 /** Explicación completa de la sobrecarga (va a "Detalles"). */

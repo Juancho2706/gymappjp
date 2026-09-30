@@ -25,7 +25,7 @@ import {
 import { FONT } from '../../../lib/typography'
 import { getTodayInSantiago } from '../../../lib/date-utils'
 import { themeLucideIcons } from '../../../lib/themed-lucide'
-import { EMPTY_LOGGED_SET_LABEL, EXERCISE_TYPE_LABEL, formatLoggedSetLine, formatStrengthTimeSetLine, sideRepsFromMetadata } from '@eva/workout-engine'
+import { EMPTY_LOGGED_SET_LABEL, EXERCISE_TYPE_LABEL, formatLoggedSetLine, formatStrengthTimeSetLine, formatWeightEsCl, sideRepsFromMetadata, weightFromKg } from '@eva/workout-engine'
 
 // QA2 A1: `className` en un icono lucide solo pinta si el componente está registrado en
 // nativewind (RN no tiene `currentColor`); sin esto el glyph cae al negro por defecto.
@@ -625,14 +625,19 @@ function ExerciseSession({ name, muscle, kind, sets, last }: { name: string; mus
           // Fuerza POR TIEMPO (D3, W2.11): «10 kg × 30 s» lo arma el motor dentro de la rama de fuerza;
           // sin hold cae a la línea peso × reps de siempre (paridad web TrainingTabB4Panels).
           const holdLine = set.actualHoldSec != null
-            ? formatStrengthTimeSetLine({
-                weight_kg: set.weightKg,
-                // F1: la serie por tiempo puede traer reps ⇒ «45 kg × 5 · 30 s» (el motor las omite
-                // cuando son null o 0: la ficha NUNCA muestra «× 0»).
-                reps_done: set.repsDone,
-                actual_hold_sec: set.actualHoldSec,
-                metadata: set.metadata,
-              })
+            ? formatStrengthTimeSetLine(
+                {
+                  weight_kg: set.weightKg,
+                  // Kilos o libras (D5): kilos correctos + «(45 lb)» si el alumno tecleó en libras.
+                  weight_unit: set.weightUnit,
+                  // F1: la serie por tiempo puede traer reps ⇒ «45 kg × 5 · 30 s» (el motor las omite
+                  // cuando son null o 0: la ficha NUNCA muestra «× 0»).
+                  reps_done: set.repsDone,
+                  actual_hold_sec: set.actualHoldSec,
+                  metadata: set.metadata,
+                },
+                { annotateEntered: true },
+              )
             : null
           if (holdLine != null) {
             return (
@@ -652,7 +657,9 @@ function ExerciseSession({ name, muscle, kind, sets, last }: { name: string; mus
           return (
             <View key={`${set.setNumber ?? index}-${index}`} className="border border-subtle bg-surface-sunken" style={styles.setPill}>
               <Text className="text-strong" style={styles.setText}>
-                {set.setNumber ?? index + 1}: <Text className={weightTone}>{set.weightKg != null ? `${set.weightKg}kg` : 'PC'}</Text> × {sides ? `${sides.left} / ${sides.right}` : set.repsDone ?? '—'}{set.rpe != null ? ` · RPE ${set.rpe}` : ''}{set.rir != null ? ` · RIR ${set.rir}` : ''}
+                {/* Kilos o libras (D5 = a): kilos correctos y, si el alumno tecleó en libras, la unidad al
+                    lado — «20.41kg (45 lb)», mismo formato que la ficha web. */}
+                {set.setNumber ?? index + 1}: <Text className={weightTone}>{set.weightKg != null ? `${set.weightKg}kg${set.weightUnit === 'lb' ? ` (${formatWeightEsCl(weightFromKg(set.weightKg, 'lb'))} lb)` : ''}` : 'PC'}</Text> ×{sides ? `${sides.left} / ${sides.right}` : set.repsDone ?? '—'}{set.rpe != null ? ` · RPE ${set.rpe}` : ''}{set.rir != null ? ` · RIR ${set.rir}` : ''}
               </Text>
             </View>
           )

@@ -106,6 +106,8 @@ vi.doMock(mobileFile('components', 'alumno', 'workout', 'TypedKeypad.tsx'), () =
   KeypadGrid: () => createElement('div'),
   KeypadObjectiveHeader: (p: AnyProps) => createElement('div', { 'data-testid': 'objective' }, p.objectiveLine as ReactNode),
   WeightChips: () => createElement('div'),
+  // Selector kg | lb (tren kg-lb-ejecutor): sin la prop `weightUnit` el host no lo pinta.
+  WeightUnitToggle: () => createElement('div'),
 }))
 
 const { KeypadHost } = await import('../../apps/mobile/components/alumno/workout/KeypadHost')

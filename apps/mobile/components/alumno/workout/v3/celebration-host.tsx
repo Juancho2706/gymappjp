@@ -38,6 +38,7 @@ export function CelebrationHost({
             exec={exec}
             weightKg={prCelebration.weightKg}
             prevBest={prCelebration.prevBest}
+            weightUnit={prCelebration.weightUnit}
             kind={prCelebration.kind}
             reducedMotion={reducedMotion}
             nonce={prCelebration.nonce}

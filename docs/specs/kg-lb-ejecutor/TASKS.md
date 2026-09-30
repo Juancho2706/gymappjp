@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-09-26"
+last_verified: "2026-09-30"
 canonical: false
 ---
 
@@ -93,11 +93,41 @@ Push, deploy, OTA y cualquier `UPDATE` de datos en LIVE **solo a pedido del owne
 
 ## W4 · RN
 
-- [ ] **W4.1** Selector en `TypedKeypad.tsx`/`KeypadHost.tsx` y `v3/DualWheelPicker.tsx`.
-- [ ] **W4.2** Lecturas en la unidad (`SetRow.tsx`, `SingleExerciseCard.tsx`, `SupersetGroupCard.tsx`,
-  `v3/ExerciseScreenV3.tsx`, `v3/SupersetScreenV3.tsx`, `v3/PrCelebration.tsx`, `v3/SessionCompleteV3.tsx`).
-- [ ] **W4.3** `lib/workout-session.ts` + cola offline con `weight_unit`.
-- [ ] **W4.4** Builder RN (`app/coach/program-builder.tsx`, `lib/plan-builder/serialize.ts`).
+> **Estado W4 (30-09): HECHO y commiteado local en `rnmobiledenuevo` (sin push, sin OTA).** Misma arquitectura
+> que la web: `components/alumno/workout/weight-unit-context.tsx` (nuevo) con `useWeightUnitState` en `ExecutorV3`
+> (unidad por EJERCICIO efectivo: elegida en la sesión → última de hoy → `lastWeightUnitByExercise` del historial →
+> `load_unit` → kg) + `WeightUnitProvider`; `useBlockWeightUnit` (fila, pantallas) y `useWeightUnitLookup` (serie
+> logueada, superserie). Los valores tecleados viajan al borrador con la marca `wu` (sin marca = kg) y
+> `valuesInWeightUnit` los deja en la unidad del ejercicio; la conversión a kg ocurre UNA vez, en el payload del
+> motor (`weightUnit` en el contexto). `weight_unit` se escribe SIEMPRE junto al peso (online y cola), igual que la
+> acción web; los re-envíos armados desde un log (esfuerzo, reloj importado) repiten la unidad del log.
+
+- [x] **W4.1** Selector en `TypedKeypad.tsx`/`KeypadHost.tsx` y `v3/DualWheelPicker.tsx`. — `WeightUnitToggle`
+  (kg | lb, mockup) sobre el campo de peso del teclado de la fila y del de edición; chips en lb con paso propio en
+  memoria (`useKeypadStepLb`, presets 1 · 2,5 · 5 · 10); pestaña/unidad del peso siguen al selector; la rueda usa
+  `WHEEL_WEIGHT_SPECS` por unidad (sin selector propio, igual que la web). El teclado de edición separa los campos
+  de la siembra de los rotulados: cambiar de unidad convierte lo escrito, nunca re-siembra.
+- [x] **W4.2** Lecturas en la unidad. — `SetRow` (línea de serie logueada), `ActiveSetRow` (tiles, sugerencia a
+  2,5 lb, «Anterior»/rueda por autollenado con unidad), `ExerciseScreenV3` y `SupersetScreenV3` (prescripción,
+  «Anterior», récord en vivo, objetivo del teclado, rueda), `overloadChipLabel` con unidad, «Serie N» del descanso
+  y prescripción del siguiente en el interstitial, `PrCelebration` en la unidad tecleada. **Queda en kg a propósito
+  (v1, igual que la web):** volumen/tonelaje de `SessionCompleteV3`. `SingleExerciseCard`/`SupersetGroupCard` no
+  pintan fuerza en V3 (la fuerza va por `ExerciseScreenV3`; `SupersetGroupCard` no se monta).
+- [x] **W4.3** `lib/workout-session.ts` + cola offline con `weight_unit`. — select de las series del día y del
+  historial con `weight_unit` + `lastWeightUnitByExercise` (misma regla que la web); `logData` y `enqueueLog`
+  escriben `weight_unit`; `reconciledToOfflineLog` conserva la unidad en el snapshot; el reloj de fuerza por tiempo
+  (`use-hold-module`) toma la unidad de la marca `wu` de los valores que mezcla.
+- [x] **W4.4** Builder RN. — `TargetWeightField` en `components/coach/BlockEditorSheet.tsx` (número + kg | lb
+  pegado; guarda kilos a centésimas, muestra/recibe libras; escribe `load_unit` + `load_type = 'weight'`, que el
+  serializador ya propaga) + `lib/plan-builder/target-weight.ts` (espejo de `_lib/target-weight.ts` web), también en
+  `ProgramPreviewSheet` y en la tarjeta del plan de la ficha (`PlanTab`, `load_unit` en el select).
+- [x] **W4.5** Ficha del coach RN: «20.41kg (45 lb)» en la línea de serie (`AnalisisTab`, clásica y por tiempo con
+  `annotateEntered`) + `weight_unit` en el select de `lib/coach-client-detail.ts`.
+- **Gates W4 (30-09, salida real):** `tsc --noEmit` mobile exit 0; `vitest run tests/mobile packages/workout-engine`
+  **200 archivos / 3.040 tests ✓** (nuevos: `tests/mobile/kg-lb-keypad-host.test.ts` 5 — libras a kilos una sola vez,
+  sin selector byte-idéntico, objetivo a 2,5 lb, cambio de unidad sin doble conversión —; `tests/mobile/kg-lb-helpers.test.ts`
+  13); eslint de los 25 archivos tocados 0 errores (21 advertencias, todas previas). `expo export` y QA en device:
+  NO hechos (van con W6).
 
 ## W5 · Datos viejos (D4)
 
@@ -114,11 +144,10 @@ Push, deploy, OTA y cualquier `UPDATE` de datos en LIVE **solo a pedido del owne
 - [ ] **W6.2** Deploy web + OTA doble, solo a pedido del owner.
 - [ ] **W6.3** QA del owner (SPEC §7) ⇒ SDD `done`.
 
-## Retomar (pausa del 26-09)
+## Retomar (30-09)
 
-W1 (motor) + W2 (columna en LIVE) + W3 (web) hechos, commits locales SIN push. Siguiente: **W4 RN**
-(ejecutor RN: `SetRow`, `TypedKeypad`/`KeypadHost`, `v3/DualWheelPicker`, pantallas V3,
-`lib/workout-session.ts` + cola offline, builder RN `app/coach/program-builder.tsx` +
-`lib/plan-builder/serialize.ts`, ficha coach RN) con la misma arquitectura que la web
-(contexto por ejercicio + conversión única al guardar + lecturas con `weightNum`/`suggestionNum`).
-Después: W5 (datos viejos, con OK) y W6 (gates completos, deploy web + OTA doble, QA del owner).
+W1 (motor) + W2 (columna en LIVE) + W3 (web) + W4 (RN) hechos; W1–W3 pusheados en `rnmobiledenuevo`, W4 commit
+local. **Nada de kg/lb en `master` ni en OTA.** Siguiente: **W5** (lista por coach → el owner confirma con cada uno
+→ `UPDATE` con respaldo, solo lo confirmado; los 11 objetivos `lb` escritos en libras se corrigen en el mismo corte
+del deploy) y **W6** (suite completa, `expo export`, deploy web + OTA 1.1.3 desde `master` y 1.1.2 android desde tag,
+QA del owner SPEC §7), todo a pedido del owner.

@@ -14,13 +14,16 @@ import {
   KEYPAD_MAX_DECIMALS,
   KEYPAD_MAX_INT_DIGITS,
   KEYPAD_STEP_PRESETS,
+  KEYPAD_STEP_PRESETS_LB,
+  weightFromKg,
   type TypedKeypadMode,
+  type WeightUnit,
 } from '@eva/workout-engine'
 import { FONT, TYPE, textStyle } from '@/lib/typography'
 import { shadow } from '@/lib/shadows'
 import { haptics } from '@/lib/haptics'
 import { useEvaMotion } from '@/lib/motion'
-import { useKeypadStep } from './keypad-step-preference'
+import { useKeypadStep, useKeypadStepLb } from './keypad-step-preference'
 
 /**
  * TypedKeypad — teclado numérico custom del ejecutor de rutina (E2-01/E2-02).
@@ -219,10 +222,13 @@ export function KeypadObjectiveHeader({
   exerciseName,
   objectiveLine,
   last,
+  weightUnit = 'kg',
 }: {
   exerciseName?: string
   objectiveLine?: string
   last?: { weightKg: number | null; reps: number | null } | null
+  /** Kilos o libras: `last.weightKg` llega en kilos y se lee en esta unidad. Default kg (sin cambios). */
+  weightUnit?: WeightUnit
 }) {
   const hasLast = last != null && (last.weightKg != null || last.reps != null)
   if (!exerciseName && !objectiveLine && !hasLast) return null
@@ -245,7 +251,7 @@ export function KeypadObjectiveHeader({
         <Text style={LASTVEZ_STYLE} className="shrink-0 text-on-dark-muted" numberOfLines={1}>
           Última vez{' '}
           <Text style={{ fontFamily: FONT.monoBold }} className="text-on-dark">
-            {last!.weightKg != null ? `${formatWeightEsCl(last!.weightKg)}kg` : '–'}
+            {last!.weightKg != null ? `${formatWeightEsCl(weightFromKg(last!.weightKg, weightUnit))}${weightUnit}` : '–'}
             {' × '}
             {last!.reps ?? '–'}
           </Text>
@@ -260,8 +266,24 @@ export function KeypadObjectiveHeader({
  * Auto-contenido: el paso vive en `useKeypadStep` (cache global AsyncStorage, mismo carril que web) y el
  * menú de presets en estado local. El caller sólo aplica el delta al valor via `onIncrement`.
  */
-export function WeightChips({ onIncrement }: { onIncrement: (delta: number) => void }) {
-  const [step, setStep] = useKeypadStep()
+export function WeightChips({
+  onIncrement,
+  unit = 'kg',
+}: {
+  onIncrement: (delta: number) => void
+  /**
+   * Kilos o libras (R3): en libras los chips usan su propio paso (en memoria, arranca en 2,5) y los
+   * presets 1 · 2,5 · 5 · 10. En kilos, el paso persistido de siempre.
+   */
+  unit?: WeightUnit
+}) {
+  const [stepKg, setStepKg] = useKeypadStep()
+  const [stepLb, setStepLb] = useKeypadStepLb()
+  const isLb = unit === 'lb'
+  const step = isLb ? stepLb : stepKg
+  const setStep = isLb ? setStepLb : setStepKg
+  const presets: readonly number[] = isLb ? KEYPAD_STEP_PRESETS_LB : KEYPAD_STEP_PRESETS
+  const unitWord = isLb ? 'libras' : 'kilos'
   const [stepMenuOpen, setStepMenuOpen] = useState(false)
   const chips = incrementChipsForStep(step)
 
@@ -283,7 +305,7 @@ export function WeightChips({ onIncrement }: { onIncrement: (delta: number) => v
             key={delta}
             testID={`keypad-chip-${chipTestSlug(delta)}`}
             accessibilityRole="button"
-            accessibilityLabel={`${delta > 0 ? 'más' : 'menos'} ${formatWeightEsCl(Math.abs(delta))} kilos`}
+            accessibilityLabel={`${delta > 0 ? 'más' : 'menos'} ${formatWeightEsCl(Math.abs(delta))} ${unitWord}`}
             onPress={() => onIncrement(delta)}
             className="h-10 flex-1 items-center justify-center rounded-pill border border-inverse/10 bg-white/[0.06] active:scale-95 active:bg-white/[0.12]"
           >
@@ -311,10 +333,10 @@ export function WeightChips({ onIncrement }: { onIncrement: (delta: number) => v
       {stepMenuOpen ? (
         <View className="mt-2 rounded-control border border-inverse/10 bg-white/[0.03] p-2">
           <Text style={KEYPAD_EYEBROW_STYLE} className="mb-1.5 px-1 text-on-dark-muted">
-            Paso del incremento (kg)
+            Paso del incremento ({unit})
           </Text>
           <View className="flex-row flex-wrap gap-1.5">
-            {KEYPAD_STEP_PRESETS.map((preset) => {
+            {presets.map((preset) => {
               const active = step === preset
               return (
                 <Pressable
@@ -322,7 +344,7 @@ export function WeightChips({ onIncrement }: { onIncrement: (delta: number) => v
                   testID={`keypad-step-${formatWeightEsCl(preset).replace(',', '-')}`}
                   accessibilityRole="button"
                   accessibilityState={{ selected: active }}
-                  accessibilityLabel={`Paso ${formatWeightEsCl(preset)} kilos`}
+                  accessibilityLabel={`Paso ${formatWeightEsCl(preset)} ${unitWord}`}
                   onPress={() => onStepChange(preset)}
                   className={
                     active
@@ -339,6 +361,52 @@ export function WeightChips({ onIncrement }: { onIncrement: (delta: number) => v
           </View>
         </View>
       ) : null}
+    </View>
+  )
+}
+
+/**
+ * Selector kg | lb del campo de peso (tren kg-lb-ejecutor, mockup aprobado 26-09). Mirror del grupo
+ * `role="group" aria-label="Unidad de peso"` de `NumericKeypadSheet` web: dos segmentos mono, el activo en
+ * sport-500. Solo se pinta sobre el campo de PESO y solo dentro del ejecutor (el caller decide).
+ */
+export function WeightUnitToggle({
+  value,
+  onChange,
+}: {
+  value: WeightUnit
+  onChange: (next: WeightUnit) => void
+}) {
+  return (
+    <View className="mt-2 items-center">
+      <View
+        accessibilityRole="radiogroup"
+        accessibilityLabel="Unidad de peso"
+        className="w-40 flex-row rounded-control bg-white/[0.06] p-0.5"
+      >
+        {(['kg', 'lb'] as const).map((opt) => {
+          const selected = value === opt
+          return (
+            <Pressable
+              key={opt}
+              testID={`keypad-unit-${opt}`}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: selected }}
+              accessibilityLabel={opt === 'kg' ? 'Kilos' : 'Libras'}
+              onPress={() => {
+                if (selected) return
+                haptics.select()
+                onChange(opt)
+              }}
+              className={`h-8 flex-1 items-center justify-center rounded-[10px] ${selected ? 'bg-sport-500' : 'active:bg-white/[0.08]'}`}
+            >
+              <Text style={{ ...textStyle('xs', FONT.monoBold), ...TABULAR }} className={selected ? 'text-white' : 'text-on-dark-muted'}>
+                {opt}
+              </Text>
+            </Pressable>
+          )
+        })}
+      </View>
     </View>
   )
 }
@@ -467,7 +535,20 @@ export function TypedKeypad(props: {
    * Header de objetivo — SIEMPRE visible (DB-5, `NumericKeypadSheet.tsx:204-228`). El scrim atenúa el
    * objetivo/"Última vez" de la card mientras se tipea; el teclado lo repite como en web.
    */
-  header?: { exerciseName?: string; objectiveLine?: string; last?: { weightKg: number | null; reps: number | null } | null }
+  header?: {
+    exerciseName?: string
+    objectiveLine?: string
+    last?: { weightKg: number | null; reps: number | null } | null
+    /** Kilos o libras: unidad de lectura de `last` (llega en kilos). Ausente ⇒ kg, como siempre. */
+    weightUnit?: WeightUnit
+  }
+  /**
+   * Kilos o libras (tren kg-lb-ejecutor): unidad vigente del ejercicio + cambio. Presente ⇒ sobre el campo
+   * de PESO se pinta el selector kg | lb, los chips pasan a la unidad y «Última vez» se lee en ella. El
+   * caller convierte el valor escrito en `onChange` (este teclado no posee el valor). Ausente ⇒ teclado
+   * idéntico al previo.
+   */
+  weightUnit?: { value: WeightUnit; onChange: (next: WeightUnit) => void }
 }) {
   const {
     mode,
@@ -479,6 +560,7 @@ export function TypedKeypad(props: {
     unit,
     tabs,
     header,
+    weightUnit,
     doneLabel = 'Listo',
     doneBlockedHint = null,
   } = props
@@ -541,6 +623,12 @@ export function TypedKeypad(props: {
     haptics.select()
     onChange(applyKeypadIncrement(value, delta))
     pristineRef.current = false
+  }
+  // Selector kg | lb: el caller convierte lo escrito; el número convertido queda PRE-CARGADO (el próximo
+  // dígito lo reemplaza, mismo criterio que la web).
+  const onWeightUnit = (next: WeightUnit) => {
+    pristineRef.current = value !== ''
+    weightUnit?.onChange(next)
   }
   const handleNext = () => {
     haptics.tap()
@@ -608,13 +696,16 @@ export function TypedKeypad(props: {
               exerciseName={header.exerciseName}
               objectiveLine={header.objectiveLine}
               last={header.last}
+              weightUnit={header.weightUnit ?? weightUnit?.value}
             />
           </View>
         ) : null}
 
         <KeypadDisplayRow display={value} unit={unit} tabs={tabs} />
 
-        {cfg.showChips ? <WeightChips onIncrement={onIncrement} /> : null}
+        {cfg.showChips && weightUnit ? <WeightUnitToggle value={weightUnit.value} onChange={onWeightUnit} /> : null}
+
+        {cfg.showChips ? <WeightChips onIncrement={onIncrement} unit={weightUnit?.value} /> : null}
 
         <KeypadGrid
           allowDecimal={cfg.allowDecimal}

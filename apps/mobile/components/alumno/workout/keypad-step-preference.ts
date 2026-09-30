@@ -12,7 +12,13 @@
  */
 import { useSyncExternalStore } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { DEFAULT_KEYPAD_STEP, KEYPAD_STEP_KEY, KEYPAD_STEP_PRESETS } from '@eva/workout-engine'
+import {
+  DEFAULT_KEYPAD_STEP,
+  DEFAULT_KEYPAD_STEP_LB,
+  KEYPAD_STEP_KEY,
+  KEYPAD_STEP_PRESETS,
+  KEYPAD_STEP_PRESETS_LB,
+} from '@eva/workout-engine'
 
 let cache = DEFAULT_KEYPAD_STEP
 let hydrated = false
@@ -71,4 +77,35 @@ export function useKeypadStep(): [number, (step: number) => void] {
   hydrate()
   const step = useSyncExternalStore(subscribe, getKeypadStep, getKeypadStep)
   return [step, setKeypadStep]
+}
+
+// ── Paso en LIBRAS (tren kg-lb-ejecutor, R3) ─────────────────────────────────────────────────────────
+// Espejo de la web (`WorkoutKeypadProvider`, `stepLb`): el paso de los chips en libras vive SOLO en
+// memoria —dura la sesión de la app, no se persiste— y arranca en 2,5 lb (-2,5 / +2,5 / +5, mockup
+// aprobado 26-09). El paso en kilos sigue persistido como siempre, sin tocarse.
+let lbCache: number = DEFAULT_KEYPAD_STEP_LB
+const lbListeners = new Set<() => void>()
+
+function getKeypadStepLb(): number {
+  return lbCache
+}
+
+/** Fija el paso en libras si es un preset de libras. No-op con valor inválido. */
+function setKeypadStepLb(step: number): void {
+  if (!(KEYPAD_STEP_PRESETS_LB as readonly number[]).includes(step)) return
+  lbCache = step
+  lbListeners.forEach((l) => l())
+}
+
+function subscribeLb(fn: () => void): () => void {
+  lbListeners.add(fn)
+  return () => {
+    lbListeners.delete(fn)
+  }
+}
+
+/** Hook: `[paso en lb, setPaso]`, compartido por todos los teclados abiertos en la sesión. */
+export function useKeypadStepLb(): [number, (step: number) => void] {
+  const step = useSyncExternalStore(subscribeLb, getKeypadStepLb, getKeypadStepLb)
+  return [step, setKeypadStepLb]
 }

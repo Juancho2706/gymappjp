@@ -149,6 +149,8 @@ export interface ProgramBlock {
   tempo: string | null
   rir: string | null
   target_weight_kg: number | null
+  /** Kilos o libras (tren kg-lb-ejecutor): unidad en que el coach prescribe el peso (`target_weight_kg` = kg). */
+  load_unit: string | null
   notes: string | null
   exerciseName: string
   muscleGroup: string | null
@@ -222,6 +224,8 @@ export interface WorkoutDaySet {
   kind: ExerciseType
   setNumber: number | null
   weightKg: number | null
+  /** Kilos o libras (tren kg-lb-ejecutor, D5): unidad en que el alumno TECLEÓ el peso. `weightKg` = kg. */
+  weightUnit: string | null
   repsDone: number | null
   rpe: number | null
   rir: number | null
@@ -844,7 +848,7 @@ export async function getCoachClientDetail(clientId: string, workspace?: ClientA
           workout_plans (
             id, title, day_of_week, week_variant,
             workout_blocks (
-              id, order_index, sets, reps, rest_time, tempo, rir, target_weight_kg, notes, superset_group,
+              id, order_index, sets, reps, rest_time, tempo, rir, target_weight_kg, load_unit, notes, superset_group,
               exercise_type_override, duration_sec, distance_value, distance_unit,
               hr_zone, interval_config, reps_value, reps_unit, side_mode,
               exercises ( name, muscle_group, gif_url, thumbnail_url, exercise_type, cardio_modality )
@@ -996,6 +1000,7 @@ export async function getCoachClientDetail(clientId: string, workspace?: ClientA
                 tempo: block.tempo ?? null,
                 rir: block.rir ?? null,
                 target_weight_kg: block.target_weight_kg ?? null,
+                load_unit: block.load_unit ?? null,
                 notes: block.notes ?? null,
                 exerciseName: block.exercises?.name ?? 'Ejercicio',
                 muscleGroup: block.exercises?.muscle_group ?? null,
@@ -1246,7 +1251,7 @@ export async function getCoachClientDayDetail(
       // Espejo del select de la ficha web (`client-detail.service.ts`): los ejes tipados
       // (`actual_*` + `metadata`) y el tipo del ejercicio/bloque son lo que hace visible el cardio.
       .select(`
-        set_number, weight_kg, reps_done, rpe, rir, note, substituted_exercise_name, substitution_reason,
+        set_number, weight_kg, weight_unit, reps_done, rpe, rir, note, substituted_exercise_name, substitution_reason,
         target_reps_at_log, target_weight_at_log, plan_name_at_log, logged_at,
         actual_duration_sec, actual_distance_m, actual_avg_hr, actual_hold_sec, actual_pace_sec_per_km, metadata,
         workout_blocks (
@@ -1296,6 +1301,7 @@ export async function getCoachClientDayDetail(
       kind,
       setNumber: row.set_number ?? null,
       weightKg: row.weight_kg ?? null,
+      weightUnit: row.weight_unit ?? null,
       repsDone: row.reps_done ?? null,
       rpe: row.rpe ?? null,
       rir: row.rir ?? null,
