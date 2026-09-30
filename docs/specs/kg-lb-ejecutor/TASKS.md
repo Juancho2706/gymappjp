@@ -131,23 +131,31 @@ Push, deploy, OTA y cualquier `UPDATE` de datos en LIVE **solo a pedido del owne
 
 ## W5 · Datos viejos (D4)
 
-- [ ] **W5.1** Lista por coach de ejercicios en bloques `lb` con series y objetivos sospechosos.
-- [ ] **W5.2** El owner confirma con cada coach (mensaje lo manda el owner).
-- [ ] **W5.3** `UPDATE` en transacción con tabla de respaldo y rollback escrito, solo lo confirmado.
-- ⚠️ **Antes del deploy web:** los 11 bloques `lb` con `target_weight_kg` escrito en libras (doblementefit 6,
-  monkey 4, robin-coach 1) pasarán a mostrarse CONVERTIDOS (132,5 → «292,1 lb»). Corregir esos 11 objetivos
-  (con OK del owner) en el mismo corte del deploy, o avisar a esos coaches.
+**D4 cambió de (a) a (b) por el owner 30-09** («B pero con backup»): se convierte TODO lo de bloques `lb`, sin
+confirmar coach por coach. W5.1/W5.2 quedan sin objeto.
+
+- [x] **W5.3** Conversión en LIVE 30-09 con `supabase/migrations/_POST_DEPLOY_20260930150000_kg_lb_convert_lb_blocks.sql`
+  (reversa: `…_rollback.sql`). Respaldo en `_bak_kg_lb_20260930_logs` (315) y `_bak_kg_lb_20260930_blocks` (11), RLS
+  on y 0 grants a anon/authenticated/PUBLIC. Verificado: 315/315 series con `weight_unit = 'lb'` y `weight_kg`
+  convertido (0 descuadres contra el respaldo), 11/11 objetivos convertidos (35 → 15,88 · 190 → 86,18 · 210 → 95,25),
+  0 series `lb` pendientes. Muestra: Pushdown 40 → 18,14 kg; Jalón 70 → 31,75 kg.
+- [ ] **W5.4** Barrido post-OTA: volver a correr SOLO la Parte A del mismo SQL cuando la adopción del OTA sea alta
+  (cliente viejo en un bloque `lb` escribe libras sin unidad). La Parte B no se repite (el builder nuevo guarda kilos).
+- ⚠️ Corrido ANTES del deploy (decisión del owner): hasta que salgan web + OTA, la web y la app en prod muestran estas
+  series y objetivos en kilos (40 lb → «18,14 kg»). Límite conocido: un cliente viejo que EDITE una serie ya convertida
+  escribe libras con `weight_unit = 'lb'` ya puesto y el barrido no la detecta (raro: editar series pasadas).
 
 ## W6 · Gates y salida
 
-- [ ] **W6.1** Gates proporcionales por ola; suite completa una vez al cierre.
+- [x] **W6.1** Gates proporcionales por ola; suite completa una vez al cierre (30-09, ver «Retomar»).
 - [ ] **W6.2** Deploy web + OTA doble, solo a pedido del owner.
 - [ ] **W6.3** QA del owner (SPEC §7) ⇒ SDD `done`.
 
 ## Retomar (30-09)
 
 W1 (motor) + W2 (columna en LIVE) + W3 (web) + W4 (RN) hechos; W1–W3 pusheados en `rnmobiledenuevo`, W4 commit
-local. **Nada de kg/lb en `master` ni en OTA.** Siguiente: **W5** (lista por coach → el owner confirma con cada uno
-→ `UPDATE` con respaldo, solo lo confirmado; los 11 objetivos `lb` escritos en libras se corrigen en el mismo corte
-del deploy) y **W6** (suite completa, `expo export`, deploy web + OTA 1.1.3 desde `master` y 1.1.2 android desde tag,
-QA del owner SPEC §7), todo a pedido del owner.
+local. **W5 datos convertidos en LIVE 30-09 (D4 = b, con respaldo).** Gates W6.1 30-09 sobre `e0d25d93`: typecheck web
+0 errores; vitest completo 827 archivos / 11.491 tests pasan, 0 fallan; `expo export --platform android` OK. **Nada de
+kg/lb en `master` ni en OTA todavía.** Siguiente (a pedido del owner, él pushea): `rnmobiledenuevo` → `master`
+(fast-forward, deploy web) → OTA 1.1.3 android + ios desde `master` → barrido W5.4 → QA del owner SPEC §7. Android
+1.1.2 sin port de kg/lb (recomendado: el barrido cubre lo que anoten ahí).
