@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>EVA Nivel Avanzado</title>
+<link rel="stylesheet" href="fonts/fonts.css">
+<link rel="stylesheet" href="fonts/russo.css">
+<link rel="stylesheet" href="fonts/unb.css">
+<style>
+:root{
+  --bg:#05070D; --panel:#0D121B; --panel2:#131A25; --line:rgba(255,255,255,.08); --line2:rgba(255,255,255,.14);
+  --text:#F4F6F8; --muted:#8A95A5; --dim:#566172;
+  --cyan:#00F7F7; --blue:#2680FF; --ember:#FF6A3D; --amber:#F5A524; --ok:#1FB877;
+  --acc:#00F7F7; --acc2:#2680FF;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1350px;overflow:hidden;background:#000}
+#stage{position:relative;width:1080px;height:1350px;overflow:hidden;background:var(--bg);font-family:Inter,sans-serif;color:var(--text);-webkit-font-smoothing:antialiased}
+.abs{position:absolute}
+.mono{font-family:'JetBrains Mono',monospace}
+.U{font-family:'Unbounded',sans-serif}
+canvas{position:absolute;left:0;top:0}
+#grid{position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);background-size:54px 54px;
+  -webkit-mask:radial-gradient(80% 65% at 50% 45%,#000 20%,transparent 100%);mask:radial-gradient(80% 65% at 50% 45%,#000 20%,transparent 100%)}
+#bigL{position:absolute;right:-60px;top:120px;font:900 820px/0.8 'Unbounded';color:transparent;-webkit-text-stroke:2px rgba(255,255,255,.06)}
+.crop{position:absolute;width:34px;height:34px;border-color:rgba(255,255,255,.35);border-style:solid;border-width:0}
+.mk{position:relative;-webkit-mask:url(mark.png) center/contain no-repeat;mask:url(mark.png) center/contain no-repeat;background:#fff}
+.eva{font-family:'Russo One',sans-serif;display:inline-block;transform:skewX(-14deg);letter-spacing:.01em;line-height:1;color:#fff}
+#logo{position:absolute;left:64px;top:62px;display:flex;align-items:center;gap:14px}
+#logo .eva{font-size:36px}
+#logo .t{font:700 14px 'JetBrains Mono';letter-spacing:.24em;color:var(--muted);padding-left:16px;border-left:1.5px solid var(--line2);line-height:1.5}
+#idx{position:absolute;right:64px;top:56px;text-align:right}
+#idx .n{font:800 46px/1 'Unbounded';letter-spacing:-.02em}
+#idx .n span{color:var(--dim);font-size:24px}
+#chap{position:absolute;left:64px;top:190px;display:flex;align-items:center;gap:14px;font:700 17px 'JetBrains Mono';letter-spacing:.2em;white-space:nowrap}
+#chap .badge{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font:900 20px 'Unbounded';color:#05070D}
+#chap .steps{display:flex;gap:6px;margin-left:6px}
+#chap .steps i{width:22px;height:6px;border-radius:3px;background:var(--line2)}
+#head{position:absolute;left:62px;top:262px;width:960px;font:800 88px/1.02 'Unbounded';letter-spacing:-.03em;text-transform:uppercase}
+#head .ln{display:block;white-space:nowrap;transform-origin:0 50%}
+.ch{display:inline-block;white-space:pre;transform-origin:50% 100%}
+.acc{background:linear-gradient(95deg,var(--acc),var(--acc2));-webkit-background-clip:text;background-clip:text;color:transparent}
+#sub{position:absolute;left:64px;width:900px;font:500 30px/1.38 Inter;color:var(--muted)}
+#sub b{color:var(--text);font-weight:700}
+#scan{position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--acc),transparent);opacity:.0;box-shadow:0 0 18px var(--acc)}
+#foot{position:absolute;left:64px;right:64px;top:1284px;display:flex;justify-content:space-between;align-items:center;font:700 17px 'JetBrains Mono';letter-spacing:.24em;color:var(--muted)}
+#foot .sw{display:flex;align-items:center;gap:14px;color:var(--text)}
+.panel{position:absolute;background:linear-gradient(180deg,rgba(22,29,41,.92),rgba(12,16,24,.94));border:1px solid var(--line2);border-radius:28px;box-shadow:0 40px 90px -30px rgba(0,0,0,.9),inset 0 1px 0 rgba(255,255,255,.06)}
+.lab{font:700 14px 'JetBrains Mono';letter-spacing:.2em;color:var(--muted);text-transform:uppercase}
+.fld{border-radius:18px;background:#080B11;border:1.5px solid var(--line2);padding:14px 18px;position:relative}
+.fld .v{font:800 34px/1 'Unbounded';margin-top:10px;letter-spacing:-.02em;white-space:nowrap}
+.glow{position:absolute;inset:-1.5px;border-radius:inherit;box-shadow:inset 0 0 0 2px var(--acc),0 0 36px -4px var(--acc);opacity:0;pointer-events:none}
+.tag{position:absolute;display:flex;align-items:center;gap:10px;height:44px;padding:0 16px 0 8px;border-radius:22px;background:var(--acc);color:#05070D;font:800 17px Inter;white-space:nowrap;box-shadow:0 12px 30px -10px var(--acc)}
+.tag b{width:30px;height:30px;border-radius:50%;background:#05070D;color:var(--acc);display:flex;align-items:center;justify-content:center;font:900 15px 'Unbounded'}
+#cursor{position:absolute;left:0;top:0;width:46px;height:54px;z-index:50;filter:drop-shadow(0 8px 14px rgba(0,0,0,.7))}
+#ring{position:absolute;width:84px;height:84px;border-radius:50%;border:3px solid var(--acc);left:0;top:0;opacity:0;z-index:49}
+#flash{position:absolute;inset:0;background:#fff;opacity:0;z-index:70;mix-blend-mode:overlay;pointer-events:none}
+#vig{position:absolute;inset:0;background:radial-gradient(120% 90% at 50% 40%,transparent 55%,rgba(0,0,0,.6) 100%);pointer-events:none;z-index:60}
+#grain{z-index:66;opacity:.07;mix-blend-mode:overlay;pointer-events:none}
+</style>
+</head>
+<body>
+<div id="stage">
+  <canvas id="bg" width="1080" height="1350"></canvas>
+  <div id="grid"></div>
+  <div id="bigL"></div>
+  <div id="scene" class="abs" style="inset:0"></div>
+  <canvas id="ecg" width="1080" height="1350" style="z-index:20"></canvas>
+  <div class="crop" style="left:36px;top:36px;border-left-width:2px;border-top-width:2px"></div>
+  <div class="crop" style="right:36px;top:36px;border-right-width:2px;border-top-width:2px"></div>
+  <div class="crop" style="left:36px;bottom:36px;border-left-width:2px;border-bottom-width:2px"></div>
+  <div class="crop" style="right:36px;bottom:36px;border-right-width:2px;border-bottom-width:2px"></div>
+  <div id="logo"><div class="mk" style="width:34px;height:42px"></div><span class="eva">EVA</span><span class="t">NIVEL<br>AVANZADO</span></div>
+  <div id="idx"><div class="n"></div></div>
+  <div id="chap"><div class="badge"></div><span class="ct"></span><span class="steps"></span></div>
+  <div id="head"></div>
+  <div id="sub"></div>
+  <div id="scan"></div>
+  <div id="foot"><span id="fl"></span><span class="sw"><span id="fr">DESLIZA</span><svg id="fa" width="44" height="20" viewBox="0 0 44 20"><path d="M2 10h36M30 3l8 7-8 7" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+  <canvas id="fx" width="1080" height="1350" style="z-index:45"></canvas>
+  <div id="ring"></div>
+  <svg id="cursor" viewBox="0 0 44 52"><path d="M4 3 L4 41 L14.5 31.5 L21.5 47 L28.5 44 L21.5 29 L36 29 Z" fill="#fff" stroke="#05070D" stroke-width="2.6" stroke-linejoin="round"/></svg>
+  <div id="vig"></div>
+  <div id="flash"></div>
+  <canvas id="grain" width="540" height="675" style="width:1080px;height:1350px"></canvas>
+</div>
+<script src="pro.js"></script>
+</body>
+</html>
