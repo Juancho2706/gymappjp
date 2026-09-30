@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <title>EVA Rutina</title>
 <link rel="stylesheet" href="fonts/fonts.css">
+<link rel="stylesheet" href="fonts/russo.css">
 <style>
 :root{
   --navy:#00022B; --navy2:#07113D; --blue:#112656; --steel:#2B6EA5; --teal:#1AA1C4; --cyan:#00F7F7;
@@ -23,11 +24,9 @@ canvas{position:absolute;left:0;top:0}
 
 /* ---------- INTRO / OUTRO LOCKUP ---------- */
 .markFill{position:absolute;-webkit-mask:url(mark.png) center/contain no-repeat;mask:url(mark.png) center/contain no-repeat}
-.wmL{position:absolute;inset:0;background:url(wordmark.png) center/100% 100% no-repeat}
-#wmE{clip-path:polygon(0 0,33.4% 0,35.9% 100%,0 100%)}
-#wmV{clip-path:polygon(33.4% 0,76.3% 0,55.9% 100%,35.9% 100%)}
-#wmA{clip-path:polygon(76.3% 0,100% 0,100% 100%,55.9% 100%)}
-.glint{position:absolute;inset:0;-webkit-mask:url(wordmark.png) center/100% 100% no-repeat;mask:url(wordmark.png) center/100% 100% no-repeat;
+.wmBox{display:flex;align-items:center;justify-content:center;font-family:'Russo One',sans-serif;line-height:1;transform:skewX(-14deg);letter-spacing:.01em}
+.wmL{position:relative;display:inline-block;color:#fff;text-shadow:0 0 34px rgba(0,247,247,.35),0 6px 30px rgba(0,0,0,.5)}
+.glint{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:transparent;-webkit-background-clip:text;background-clip:text;
   background:linear-gradient(105deg,transparent 0%,transparent 40%,rgba(255,255,255,.95) 50%,transparent 60%,transparent 100%);background-size:300% 100%}
 #introTag,#outroTag1,#outroTag2{position:absolute;left:0;right:0;text-align:center;white-space:nowrap}
 .word{display:inline-block;overflow:hidden;vertical-align:bottom;padding:0 .12em}
@@ -46,7 +45,7 @@ canvas{position:absolute;left:0;top:0}
 #bigNum div{position:absolute;left:0;top:0}
 #brandBug{position:absolute;left:70px;top:150px;display:flex;align-items:center;gap:18px}
 #brandBug .m{width:34px;height:42px;position:relative}
-#brandBug .w{width:92px;height:34px;background:url(wordmark.png) center/contain no-repeat}
+#brandBug .w{font:36px/1 'Russo One',sans-serif;color:#fff;transform:skewX(-14deg);letter-spacing:.02em}
 #brandBug .crumb{font:600 17px 'JetBrains Mono';color:var(--muted);letter-spacing:.14em;padding-left:18px;border-left:1px solid var(--line2)}
 #progress{position:absolute;left:70px;top:1500px;width:940px;height:40px}
 .seg{position:absolute;top:0;height:40px}
@@ -217,9 +216,9 @@ canvas{position:absolute;left:0;top:0}
           <div id="iMark" class="markFill" style="inset:0;background:linear-gradient(35deg,#fff 0%,#fff 55%,#BFFBFF 80%,#00F7F7 100%)"></div>
           <img id="iMarkOut" src="mark-outline.png" class="abs" style="inset:0;width:100%;height:100%;filter:drop-shadow(0 0 6px #00F7F7) drop-shadow(0 0 14px #00F7F7)">
         </div>
-        <div id="iWm" class="abs" style="left:200px;top:970px;width:680px;height:246px">
-          <div class="wmL" id="wmE"></div><div class="wmL" id="wmV"></div><div class="wmL" id="wmA"></div>
-          <div class="glint" id="iGlint"></div>
+        <div id="iWm" class="abs wmBox" style="left:200px;top:970px;width:680px;height:246px;font-size:300px">
+          <div class="wmL" id="wmE">E</div><div class="wmL" id="wmV">V</div><div class="wmL" id="wmA">A</div>
+          <div class="glint" id="iGlint">EVA</div>
         </div>
         <div id="introTag" class="disp" style="top:1270px;font:800 46px Archivo;letter-spacing:-.01em"></div>
       </div>
@@ -228,7 +227,7 @@ canvas{position:absolute;left:0;top:0}
     <!-- APP -->
     <div id="app" class="scene">
       <div id="bigNum"><div id="bn0">01</div><div id="bn1">02</div></div>
-      <div id="brandBug"><div class="m"><div class="markFill" style="inset:0;background:#fff"></div></div><div class="w"></div><div class="crumb">COACH · BUILDER</div></div>
+      <div id="brandBug"><div class="m"><div class="markFill" style="inset:0;background:#fff"></div></div><div class="w">EVA</div><div class="crumb">COACH · BUILDER</div></div>
       <div id="steps"></div>
       <div id="progress"></div>
       <div id="ui">
@@ -249,11 +248,11 @@ canvas{position:absolute;left:0;top:0}
           <div id="oMarkGlow" class="markFill" style="inset:0;background:var(--sport);filter:blur(40px)"></div>
           <div id="oMark" class="markFill" style="inset:0;background:#fff"></div>
         </div>
-        <div id="oWm" class="abs" style="left:280px;top:900px;width:520px;height:188px">
-          <div class="wmL" id="owE" style="clip-path:polygon(0 0,33.4% 0,35.9% 100%,0 100%)"></div>
-          <div class="wmL" id="owV" style="clip-path:polygon(33.4% 0,76.3% 0,55.9% 100%,35.9% 100%)"></div>
-          <div class="wmL" id="owA" style="clip-path:polygon(76.3% 0,100% 0,100% 100%,55.9% 100%)"></div>
-          <div class="glint" id="oGlint"></div>
+        <div id="oWm" class="abs wmBox" style="left:280px;top:900px;width:520px;height:188px;font-size:228px">
+          <div class="wmL" id="owE">E</div>
+          <div class="wmL" id="owV">V</div>
+          <div class="wmL" id="owA">A</div>
+          <div class="glint" id="oGlint">EVA</div>
         </div>
         <div id="outroTag1" style="top:1170px;font:800 50px Archivo;letter-spacing:-.015em"></div>
         <div id="outroTag2" style="top:1236px;font:800 50px Archivo;letter-spacing:-.015em"></div>
