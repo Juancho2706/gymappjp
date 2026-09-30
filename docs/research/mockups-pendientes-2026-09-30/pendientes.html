@@ -1,0 +1,1119 @@
+<title>Pendientes de EVA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: una columna de trabajo (~1080px). Arriba el índice ordenable; abajo una ficha por pendiente
+   con su escenario de mockups por plataforma (App RN · PWA · Escritorio) y su ficha de motion. */
+:root{
+  /* Color: ramps reales de EVA (docs/architecture/design-system/TOKENS.md) */
+  --paper:#FBFCFD; --card:#FFFFFF; --sunken:#F4F6F8; --line:#E6E9ED; --line-2:#CDD3DB;
+  --ink:#0B0E13; --ink-2:#2A323D; --muted:#5A6573; --subtle:#646F7D;
+  --sport:#2680FF; --sport-600:#1462DC; --sport-ink:#0B47B0; --sport-soft:#E8F1FF;
+  --ember:#FF6A3D; --ember-ink:#C23E14; --ember-soft:#FFEDE6;
+  --aqua:#18ABD4; --aqua-ink:#0A6E8D; --aqua-soft:#E3F5FB;
+  --ok:#1FB877; --ok-ink:#0E7A50; --ok-soft:#DBF5EA;
+  --warn:#F5A524; --warn-ink:#8F5A05; --warn-soft:#FDEFD3;
+  --bad:#F4365A; --bad-ink:#A8163A; --bad-soft:#FCDDE4;
+  --cta:#1A6BE6; --exec:#121219; --exec-2:#1C1C24; --exec-3:#2F2F3A; --exec-ink:#F4F4F6; --exec-muted:#8F8F9C;
+  --shadow:0 1px 2px rgba(11,14,19,.06),0 12px 32px -18px rgba(11,14,19,.28);
+  /* Type */
+  --display:"Archivo","Inter",system-ui,sans-serif;
+  --ui:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  /* Motion: tokens vigentes de apps/web/src/app/globals.css y @eva/brand-kit */
+  --dur-instant:80ms; --dur-fast:140ms; --dur-base:220ms; --dur-slow:320ms; --dur-slower:480ms;
+  --ease-out:cubic-bezier(.22,1,.36,1); --ease-in-out:cubic-bezier(.65,0,.35,1);
+  --ease-spring:cubic-bezier(.34,1.56,.64,1); --ease-emphasis:cubic-bezier(.2,.8,.2,1);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --paper:#0A0D12; --card:#161B22; --sunken:#1F262F; --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.16);
+    --ink:#F4F6F8; --ink-2:#DDE2E8; --muted:#98A2B0; --subtle:#86919E;
+    --sport-soft:rgba(38,128,255,.18); --sport-ink:#93BEFF; --ember-soft:rgba(255,106,61,.18); --ember-ink:#FF8C66;
+    --aqua-soft:rgba(24,171,212,.18); --aqua-ink:#57C7E6; --ok-soft:rgba(31,184,119,.18); --ok-ink:#5FD9A4;
+    --warn-soft:rgba(245,165,36,.18); --warn-ink:#FFC861; --bad-soft:rgba(244,54,90,.2); --bad-ink:#FF8FA3;
+    --shadow:0 1px 0 rgba(255,255,255,.04),0 14px 34px -18px rgba(0,0,0,.7);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --paper:#0A0D12; --card:#161B22; --sunken:#1F262F; --line:rgba(255,255,255,.08); --line-2:rgba(255,255,255,.16);
+  --ink:#F4F6F8; --ink-2:#DDE2E8; --muted:#98A2B0; --subtle:#86919E;
+  --sport-soft:rgba(38,128,255,.18); --sport-ink:#93BEFF; --ember-soft:rgba(255,106,61,.18); --ember-ink:#FF8C66;
+  --aqua-soft:rgba(24,171,212,.18); --aqua-ink:#57C7E6; --ok-soft:rgba(31,184,119,.18); --ok-ink:#5FD9A4;
+  --warn-soft:rgba(245,165,36,.18); --warn-ink:#FFC861; --bad-soft:rgba(244,54,90,.2); --bad-ink:#FF8FA3;
+  --shadow:0 1px 0 rgba(255,255,255,.04),0 14px 34px -18px rgba(0,0,0,.7);
+}
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);font-family:var(--ui);font-size:15px;line-height:1.55;padding-inline:16px;padding-block:0 80px}
+.wrap{max-width:1080px;margin:0 auto}
+h1,h2,h3,h4{font-family:var(--display);margin:0;text-wrap:balance;letter-spacing:-.02em}
+p{margin:0;max-width:70ch}
+code{font-family:var(--mono);font-size:.85em;background:var(--sunken);padding:1px 5px;border-radius:5px;overflow-wrap:anywhere}
+.eyebrow{font-family:var(--mono);font-size:11.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.muted{color:var(--muted)}
+.num{font-variant-numeric:tabular-nums}
+
+/* ---------- header ---------- */
+header.top{padding-block:40px 24px;display:grid;gap:14px}
+header.top h1{font-size:clamp(34px,5.6vw,58px);font-weight:900;line-height:.98}
+header.top h1 em{font-style:normal;color:var(--sport)}
+.lede{font-size:16.5px;color:var(--ink-2);max-width:66ch}
+.legend{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px;border:1px solid var(--line);background:var(--card);white-space:nowrap}
+.chip i{width:8px;height:8px;border-radius:50%;display:block}
+.plat{font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;border-radius:6px;background:var(--sunken);color:var(--ink-2)}
+.plat.no{text-decoration:line-through;color:var(--subtle)}
+.diff{font-size:11.5px;font-weight:700;padding:3px 9px;border-radius:999px;white-space:nowrap}
+.d1{background:var(--ok-soft);color:var(--ok-ink)} .d2{background:var(--sport-soft);color:var(--sport-ink)}
+.d3{background:var(--warn-soft);color:var(--warn-ink)} .d4{background:var(--ember-soft);color:var(--ember-ink)}
+.d5{background:var(--bad-soft);color:var(--bad-ink)}
+
+/* ---------- motion principles strip ---------- */
+.principles{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:8px}
+.pr{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:grid;gap:6px}
+.pr b{font-family:var(--display);font-size:15px}
+.pr p{font-size:13.5px;color:var(--muted)}
+.curves{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+.curve{display:grid;gap:4px;justify-items:center;font-family:var(--mono);font-size:10.5px;color:var(--muted)}
+.curve .track{width:92px;height:8px;border-radius:99px;background:var(--sunken);position:relative;overflow:hidden}
+.curve .dot{position:absolute;top:0;left:0;width:8px;height:8px;border-radius:50%;background:var(--sport)}
+.principles.play .curve .dot{animation:slide 1.4s infinite alternate}
+.curve.c1 .dot{animation-timing-function:var(--ease-out)!important}
+.curve.c2 .dot{animation-timing-function:var(--ease-spring)!important}
+.curve.c3 .dot{animation-timing-function:var(--ease-emphasis)!important}
+.curve.c4 .dot{animation-timing-function:var(--ease-in-out)!important}
+@keyframes slide{to{transform:translateX(84px)}}
+
+/* ---------- index ---------- */
+.idx-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:end;gap:12px;margin-top:40px}
+.sorter{display:inline-flex;background:var(--sunken);border-radius:12px;padding:3px;position:relative}
+.sorter button{all:unset;cursor:pointer;font-size:13px;font-weight:600;padding:7px 14px;border-radius:9px;color:var(--muted);position:relative;z-index:1;transition:color var(--dur-fast) var(--ease-out)}
+.sorter button[aria-pressed="true"]{color:var(--ink)}
+.sorter button:focus-visible{outline:2px solid var(--sport);outline-offset:2px}
+.sorter .thumb{position:absolute;top:3px;bottom:3px;left:3px;border-radius:9px;background:var(--card);box-shadow:var(--shadow);transition:transform var(--dur-slow) var(--ease-spring),width var(--dur-slow) var(--ease-spring)}
+.idx{margin-top:14px;border:1px solid var(--line);border-radius:16px;background:var(--card);overflow:hidden}
+.row{display:grid;grid-template-columns:70px minmax(0,1fr) auto auto;gap:14px;align-items:center;padding:12px 16px;border-top:1px solid var(--line);text-decoration:none;color:inherit;transition:background var(--dur-fast) var(--ease-out)}
+.row:first-child{border-top:0}
+.row:hover,.row:focus-visible{background:var(--sunken);outline:none}
+.row .date{font-family:var(--mono);font-size:12px;color:var(--muted)}
+.row .t{font-weight:600}
+.row .t small{display:block;font-weight:400;color:var(--muted);font-size:12.5px}
+.row .plats{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+.idx.flip .row{animation:rowin var(--dur-slow) var(--ease-out) both;animation-delay:calc(var(--i) * 28ms)}
+@keyframes rowin{from{opacity:0;transform:translateY(8px)}}
+@media (max-width:640px){.row{grid-template-columns:54px minmax(0,1fr) auto}.row .plats{display:none}}
+
+/* ---------- item sections ---------- */
+.item{margin-top:64px;scroll-margin-top:24px;display:grid;gap:18px}
+.item-head{display:grid;gap:10px;padding-top:22px;border-top:2px solid var(--ink)}
+.item-head .meta{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.item-head h2{font-size:clamp(24px,3.4vw,32px);font-weight:800;line-height:1.08}
+.two-col{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:24px}
+@media (max-width:820px){.two-col{grid-template-columns:1fr}}
+.what{display:grid;gap:10px;font-size:14.5px}
+.what p{color:var(--ink-2)}
+.what b{color:var(--ink)}
+.todo{margin:0;padding-left:18px;display:grid;gap:4px;color:var(--ink-2);font-size:14px}
+.ask{background:var(--sport-soft);border-radius:12px;padding:10px 14px;font-size:14px;color:var(--ink-2)}
+.ask b{color:var(--sport-ink)}
+
+/* motion spec */
+.spec{border:1px solid var(--line);border-radius:14px;background:var(--card);overflow:hidden;align-self:start}
+.spec h4{font-size:13px;font-family:var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:10px 14px;border-bottom:1px solid var(--line);background:var(--sunken)}
+.spec table{width:100%;border-collapse:collapse;font-size:13px}
+.spec td{padding:8px 14px;border-top:1px solid var(--line);vertical-align:top}
+.spec tr:first-child td{border-top:0}
+.spec td:first-child{font-weight:600;width:38%}
+.spec td code{font-size:11.5px}
+.spec .rm{font-size:12.5px;color:var(--muted);padding:10px 14px;border-top:1px solid var(--line)}
+.spec-wrap{overflow-x:auto}
+
+/* ---------- stage ---------- */
+.stage{background:var(--sunken);border-radius:20px;padding:18px;display:grid;gap:14px;position:relative}
+.stage-bar{display:flex;flex-wrap:wrap;justify-content:space-between;gap:10px;align-items:center}
+.tabs{display:inline-flex;gap:4px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:3px}
+.tabs button{all:unset;cursor:pointer;font-size:12.5px;font-weight:600;padding:6px 12px;border-radius:9px;color:var(--muted);transition:background var(--dur-fast) var(--ease-out),color var(--dur-fast) var(--ease-out)}
+.tabs button[aria-selected="true"]{background:var(--ink);color:var(--paper)}
+.tabs button:focus-visible{outline:2px solid var(--sport);outline-offset:2px}
+.replay{all:unset;cursor:pointer;display:inline-flex;align-items:center;gap:8px;font-size:12.5px;font-weight:700;padding:7px 12px;border-radius:10px;background:var(--card);border:1px solid var(--line);color:var(--ink)}
+.replay:hover{border-color:var(--sport)}
+.replay:focus-visible{outline:2px solid var(--sport);outline-offset:2px}
+.replay svg{width:14px;height:14px;transition:transform var(--dur-slow) var(--ease-out)}
+.replay:active svg{transform:rotate(-200deg)}
+.panes{display:grid}
+.pane{grid-area:1/1;display:flex;flex-wrap:wrap;gap:22px;justify-content:center;align-items:flex-start;transition:opacity var(--dur-base) var(--ease-out),transform var(--dur-base) var(--ease-out)}
+.pane[hidden]{display:none!important}
+.pane.enter{animation:paneIn var(--dur-slow) var(--ease-out) both}
+@keyframes paneIn{from{opacity:0;transform:translateY(6px) scale(.99)}}
+.cap{font-size:12.5px;color:var(--muted);text-align:center;max-width:320px;margin-inline:auto}
+.cap b{color:var(--ink)}
+figure{margin:0;display:grid;gap:10px;justify-items:center;min-width:0}
+
+/* ---------- device frames ---------- */
+.phone{width:300px;max-width:100%;border-radius:36px;background:var(--paper);border:8px solid #1B2129;box-shadow:var(--shadow);overflow:hidden;position:relative;color:var(--ink)}
+.phone .status{display:flex;justify-content:space-between;align-items:center;padding:10px 18px 6px;font-size:11px;font-weight:600;font-family:var(--ui)}
+.phone .island{position:absolute;top:8px;left:50%;transform:translateX(-50%);width:84px;height:22px;border-radius:14px;background:#0B0E13}
+.phone .screen{padding:8px 14px 16px;display:grid;gap:10px;min-height:470px;align-content:start}
+.phone.android{border-radius:28px}
+.phone.android .island{width:12px;height:12px;border-radius:50%;top:10px}
+.phone.dark{background:var(--exec);color:var(--exec-ink);border-color:#26262f}
+.urlbar{margin:0 12px 6px;background:var(--sunken);border-radius:10px;padding:6px 10px;font-family:var(--mono);font-size:10.5px;color:var(--muted);display:flex;gap:6px;align-items:center;overflow:hidden;white-space:nowrap}
+.urlbar::before{content:"";width:8px;height:10px;border:1.5px solid var(--muted);border-radius:2px 2px 3px 3px;flex:none}
+.browser{width:640px;max-width:100%;border-radius:14px;background:var(--paper);border:1px solid var(--line-2);box-shadow:var(--shadow);overflow:hidden;color:var(--ink)}
+.browser .chrome{display:flex;gap:6px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--line);background:var(--sunken)}
+.browser .chrome i{width:10px;height:10px;border-radius:50%;background:var(--line-2);display:block}
+.browser .chrome span{margin-left:10px;font-family:var(--mono);font-size:11px;color:var(--muted);background:var(--card);border-radius:6px;padding:3px 10px;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.browser .body{padding:18px;display:grid;gap:12px}
+
+/* app atoms */
+.a-h{font-family:var(--display);font-weight:900;font-size:22px;letter-spacing:-.03em;line-height:1.05}
+.a-sub{font-size:12.5px;color:var(--muted)}
+.a-card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:12px;display:grid;gap:8px}
+.a-btn{display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;border-radius:14px;font-weight:700;font-size:14px;border:1px solid transparent}
+.a-btn.pri{background:var(--cta);color:#fff}
+.a-btn.ghost{background:var(--card);border-color:var(--line-2);color:var(--ink)}
+.a-btn.wa{background:#1FA855;color:#fff}
+.a-row{display:flex;align-items:center;gap:10px;padding:9px 10px;border-top:1px solid var(--line)}
+.a-row:first-child{border-top:0}
+.a-row .t{font-weight:700;font-size:13.5px}
+.a-row .s{font-size:12px;color:var(--muted)}
+.a-row .chev{margin-left:auto;color:var(--subtle)}
+.av{width:30px;height:30px;border-radius:50%;background:var(--sunken);display:grid;place-items:center;font-size:11px;font-weight:700;flex:none;color:var(--ink-2)}
+.dot{width:8px;height:8px;border-radius:50%;flex:none}
+.tabbar{display:flex;justify-content:space-around;border-top:1px solid var(--line);padding:8px 0 4px;font-size:10px;color:var(--muted);margin-top:auto}
+.tabbar span.on{color:var(--sport);font-weight:700}
+.logo-eva{font-family:var(--display);font-weight:900;letter-spacing:-.04em}
+
+/* =========================================================
+   Animaciones por mockup. Estado de reposo = estado final.
+   La clase .play (en la .stage) corre la secuencia desde el inicio.
+   ========================================================= */
+.play .m-rise{animation:rise var(--dur-slow) var(--ease-out) both;animation-delay:var(--d,0ms)}
+@keyframes rise{from{opacity:0;transform:translateY(10px)}}
+.play .m-pop{animation:pop var(--dur-slow) var(--ease-spring) both;animation-delay:var(--d,0ms)}
+@keyframes pop{from{opacity:0;transform:scale(.92)}}
+.play .m-fade{animation:fade var(--dur-base) var(--ease-out) both;animation-delay:var(--d,0ms)}
+@keyframes fade{from{opacity:0}}
+
+/* 1 · WhatsApp: saludo de la mano una vez */
+.wa-ic{width:34px;height:34px;border-radius:50%;background:#1FA855;display:grid;place-items:center;flex:none}
+.wa-ic svg{width:18px;height:18px}
+.play .wave{display:inline-block;transform-origin:70% 80%;animation:wave 900ms var(--ease-in-out) 520ms both}
+@keyframes wave{0%,100%{transform:rotate(0)}20%{transform:rotate(16deg)}40%{transform:rotate(-8deg)}60%{transform:rotate(12deg)}80%{transform:rotate(-4deg)}}
+.copyline{display:flex;align-items:center;gap:8px;background:var(--sunken);border-radius:10px;padding:8px 10px;font-family:var(--mono);font-size:12.5px}
+.copyline button{all:unset;cursor:pointer;margin-left:auto;font-family:var(--ui);font-weight:700;font-size:12px;color:var(--sport-600)}
+.copyline button:focus-visible{outline:2px solid var(--sport)}
+
+/* 2 · Página de registro */
+.reg{display:grid;gap:12px;text-align:left}
+.reg .kicker{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--sport-600)}
+.reg h3{font-size:25px;font-weight:900;line-height:1.02;letter-spacing:-.035em}
+.reg h3 span{display:inline-block}
+.play .reg h3 span{animation:word var(--dur-slower) var(--ease-emphasis) both;animation-delay:calc(var(--w) * 60ms + 120ms)}
+@keyframes word{from{opacity:0;transform:translateY(60%);filter:blur(4px)}}
+.gbtn{display:flex;align-items:center;justify-content:center;gap:10px;min-height:46px;border-radius:14px;border:1px solid var(--line-2);background:var(--card);font-weight:700;font-size:14px;transition:transform var(--dur-instant) var(--ease-out)}
+.gbtn:active{transform:scale(.97)}
+.gbtn svg{width:18px;height:18px}
+.field{border:1px solid var(--line-2);border-radius:12px;padding:10px 12px;font-size:13.5px;color:var(--muted);background:var(--card);position:relative;overflow:hidden}
+.field.focus{border-color:var(--sport);box-shadow:0 0 0 4px rgba(38,128,255,.16);color:var(--ink)}
+.caret{display:inline-block;width:1.5px;height:14px;background:var(--sport);vertical-align:-2px;margin-left:1px;animation:blink 1s steps(1) infinite}
+@keyframes blink{50%{opacity:0}}
+.shine{position:relative;overflow:hidden}
+.play .shine::after{content:"";position:absolute;inset:0;background:linear-gradient(100deg,transparent 30%,rgba(255,255,255,.45) 50%,transparent 70%);transform:translateX(-120%);animation:shine 900ms var(--ease-in-out) 1100ms both}
+@keyframes shine{to{transform:translateX(120%)}}
+.proof{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+.proof .stack{display:flex}
+.proof .stack i{width:22px;height:22px;border-radius:50%;border:2px solid var(--paper);margin-left:-6px;background:var(--line-2);display:block}
+.proof .stack i:first-child{margin-left:0;background:#93BEFF}.proof .stack i:nth-child(2){background:#FFB199}.proof .stack i:nth-child(3){background:#57C7E6}
+.desk-reg{display:grid;grid-template-columns:1.1fr 1fr;gap:18px;align-items:center}
+.poster{border-radius:14px;min-height:230px;background:
+  radial-gradient(120% 90% at 20% 10%,rgba(38,128,255,.55),transparent 60%),
+  radial-gradient(90% 80% at 90% 90%,rgba(24,171,212,.45),transparent 60%),#0B0E13;position:relative;overflow:hidden;display:grid;place-items:end start;padding:14px;color:#F4F6F8}
+.poster .mini{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:10px 12px;font-size:12px;display:grid;gap:4px;backdrop-filter:blur(6px)}
+.poster .mini b{font-family:var(--display);font-size:20px}
+.play .poster .mini{animation:rise var(--dur-slower) var(--ease-out) 380ms both}
+
+/* 3 · Landing liviana */
+.lp{border-radius:14px;min-height:190px;display:grid;place-items:center;text-align:center;color:#fff;position:relative;overflow:hidden;padding:16px}
+.lp.heavy{background:linear-gradient(120deg,#2680FF,#FF6A3D,#18ABD4,#2680FF);background-size:300% 300%;animation:hue 4s linear infinite}
+@keyframes hue{to{background-position:300% 0}}
+.lp.heavy::after{content:"";position:absolute;inset:-40%;background:conic-gradient(from 0deg,transparent,rgba(255,255,255,.25),transparent 30%);animation:spin 6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.lp.light{background:radial-gradient(120% 90% at 20% 0%,#2680FF 0%,transparent 60%),radial-gradient(90% 80% at 100% 100%,#0E8FB8,transparent 60%),#0B0E13}
+.lp h4{font-size:20px;font-weight:900;position:relative;z-index:1;line-height:1.05}
+.lp p{font-size:12px;opacity:.8;position:relative;z-index:1;margin-top:6px}
+.gauge{display:grid;justify-items:center;gap:4px}
+.gauge svg{width:112px;height:64px}
+.gauge .arc-bg{fill:none;stroke:var(--line);stroke-width:10;stroke-linecap:round}
+.gauge .arc{fill:none;stroke-width:10;stroke-linecap:round;stroke-dasharray:157;transition:stroke-dashoffset 1s var(--ease-out)}
+.gauge b{font-family:var(--display);font-size:24px;margin-top:-30px}
+.gauge span{font-size:11.5px;color:var(--muted)}
+.play .gauge .arc{animation:arc 1.2s var(--ease-out) 300ms both}
+@keyframes arc{from{stroke-dashoffset:157}}
+@media (prefers-reduced-motion: reduce){.lp.heavy,.lp.heavy::after{animation:none}}
+
+/* 5 · kg/lb (ejecutor RN, oscuro por contrato) */
+.ex-name{font-family:var(--display);font-weight:900;font-size:19px;letter-spacing:-.02em;line-height:1.1}
+.rx{font-family:var(--mono);font-size:12.5px;color:var(--exec-muted)}
+.rx b{color:var(--exec-ink)}
+.sets{display:grid;gap:6px}
+.set{display:flex;justify-content:space-between;padding:9px 12px;border-radius:12px;background:var(--exec-2);font-size:13px;color:var(--exec-muted)}
+.set b{font-family:var(--mono);color:var(--exec-ink);font-weight:600}
+.set.active{outline:1.5px solid var(--sport);background:#16203A;color:var(--exec-ink)}
+.sheet{background:var(--exec-2);border-radius:22px 22px 14px 14px;padding:12px;display:grid;gap:10px;border:1px solid var(--exec-3)}
+.grab{width:36px;height:4px;border-radius:2px;background:var(--exec-3);margin:0 auto}
+.seg{position:relative;display:grid;grid-template-columns:1fr 1fr;background:var(--exec-3);border-radius:11px;padding:3px;width:156px;justify-self:center}
+.seg button{all:unset;cursor:pointer;text-align:center;font-family:var(--mono);font-weight:600;font-size:13px;padding:6px 0;border-radius:8px;color:var(--exec-muted);position:relative;z-index:1;transition:color var(--dur-fast) var(--ease-out)}
+.seg button[aria-pressed="true"]{color:#fff}
+.seg button:focus-visible{outline:2px solid #fff;outline-offset:1px}
+.seg .thumb{position:absolute;top:3px;bottom:3px;left:3px;width:calc(50% - 3px);border-radius:8px;background:var(--sport);transition:transform var(--dur-slow) var(--ease-spring)}
+.seg.lb .thumb{transform:translateX(100%)}
+.readout{display:flex;justify-content:center;align-items:baseline;gap:8px;font-family:var(--mono)}
+.odo{display:inline-flex;overflow:hidden;height:46px;font-size:42px;font-weight:600;letter-spacing:-.02em;line-height:46px}
+.odo .col{display:flex;flex-direction:column;transition:transform var(--dur-base) var(--ease-out)}
+.odo .col span{height:46px}
+.readout .u{font-size:16px;color:var(--exec-muted);display:inline-block}
+.readout .u.swap{animation:uswap var(--dur-base) var(--ease-out)}
+@keyframes uswap{from{opacity:0;transform:translateY(-8px)}}
+.readout .x{font-size:14px;color:var(--exec-muted)}
+.readout .reps{font-size:28px;font-weight:600}
+.conv{text-align:center;font-size:11.5px;color:var(--exec-muted);font-family:var(--mono);min-height:16px}
+.conv.swap{animation:fade var(--dur-fast) var(--ease-out)}
+.presets{display:flex;gap:6px;justify-content:center}
+.presets span{font-family:var(--mono);font-size:12px;padding:6px 10px;border-radius:9px;background:var(--exec-3)}
+.presets.swap span{animation:pop var(--dur-base) var(--ease-spring) both}
+.presets.swap span:nth-child(2){animation-delay:30ms}.presets.swap span:nth-child(3){animation-delay:60ms}.presets.swap span:nth-child(4){animation-delay:90ms}
+.cta-exec{background:var(--sport);color:#fff;text-align:center;font-weight:800;padding:12px;border-radius:14px;font-size:14px;box-shadow:0 4px 0 0 #0B47B0}
+.b-field{display:grid;gap:6px}
+.b-field label{font-size:12px;font-weight:700}
+.b-in{display:flex;gap:8px}
+.b-in .n{flex:1;border:1px solid var(--line-2);border-radius:12px;padding:10px 12px;font-family:var(--mono);font-weight:600;background:var(--card)}
+.seg-l{position:relative;display:grid;grid-template-columns:1fr 1fr;background:var(--sunken);border-radius:11px;padding:3px;width:100px}
+.seg-l span{text-align:center;font-family:var(--mono);font-size:12px;font-weight:700;padding:7px 0;position:relative;z-index:1;color:var(--muted)}
+.seg-l span.on{color:#fff}
+.seg-l .thumb{position:absolute;top:3px;bottom:3px;left:3px;width:calc(50% - 3px);border-radius:8px;background:var(--sport);transform:translateX(100%)}
+.play .seg-l .thumb{animation:thumbGo var(--dur-slow) var(--ease-spring) 500ms both}
+@keyframes thumbGo{from{transform:translateX(0)}}
+.hint{font-size:12px;color:var(--muted)}
+
+/* 6 · Botones Pro */
+.plan-card{border-radius:16px;padding:16px;background:linear-gradient(135deg,var(--sport-soft),var(--card) 72%);border:1px solid var(--line);display:grid;gap:10px}
+.plan-card h4{font-size:18px;font-weight:800}
+.plan-card ul{margin:0;padding-left:18px;font-size:13px;color:var(--ink-2);display:grid;gap:2px}
+.meter{height:8px;border-radius:99px;background:var(--line);overflow:hidden}
+.meter b{display:block;height:100%;width:100%;background:var(--warn);border-radius:99px;transform-origin:left}
+.play .meter b{animation:fill 900ms var(--ease-out) 200ms both}
+@keyframes fill{from{transform:scaleX(0)}}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;padding:10px 14px;border-radius:11px;border:1px solid transparent;white-space:nowrap}
+.btn.pri{background:var(--cta);color:#fff}
+.btn.ghost{border-color:var(--line-2);color:var(--ink);background:var(--card)}
+.modal-scrim{position:relative;border-radius:14px;background:rgba(11,14,19,.5);padding:24px 16px;display:grid;place-items:center}
+.modal{background:var(--card);border-radius:18px;padding:18px;display:grid;gap:10px;max-width:320px;box-shadow:0 24px 50px -24px rgba(0,0,0,.6);text-align:left}
+.play .modal-scrim{animation:fade var(--dur-base) var(--ease-out) both}
+.play .modal{animation:modal var(--dur-slow) var(--ease-emphasis) 80ms both}
+@keyframes modal{from{opacity:0;transform:translateY(12px) scale(.96)}}
+.check{width:40px;height:40px}
+.check circle{fill:var(--ok-soft)}
+.check path{fill:none;stroke:var(--ok);stroke-width:3;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:24;stroke-dashoffset:0}
+.play .check path{animation:draw var(--dur-slow) var(--ease-emphasis) 360ms both}
+@keyframes draw{from{stroke-dashoffset:24}}
+
+/* 10 · Prueba Pro */
+.trialchip{display:inline-flex;align-items:center;gap:8px;padding:6px 10px 6px 6px;border-radius:999px;background:var(--sport-soft);color:var(--sport-ink);font-size:12.5px;font-weight:700;justify-self:start}
+.ring{width:22px;height:22px}
+.ring circle{fill:none;stroke-width:3.5}
+.ring .bg{stroke:rgba(38,128,255,.22)}
+.ring .fg{stroke:var(--sport);stroke-linecap:round;stroke-dasharray:50.3;stroke-dashoffset:39.5;transform:rotate(-90deg);transform-origin:center}
+.play .ring .fg{animation:deplete 1.2s var(--ease-out) 200ms both}
+@keyframes deplete{from{stroke-dashoffset:0}}
+.banner{display:flex;align-items:center;gap:12px;border-radius:14px;padding:12px 14px;background:var(--sport-soft);border:1px solid rgba(38,128,255,.25)}
+.banner .ring{width:36px;height:36px}
+.banner b{font-size:14px}
+.banner .s{font-size:12.5px;color:var(--muted)}
+.banner .btn{margin-left:auto}
+.keep{display:grid;gap:6px}
+.kc{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:12px;border:1px solid var(--line);background:var(--card);cursor:pointer;transition:transform var(--dur-base) var(--ease-spring),box-shadow var(--dur-base) var(--ease-out),border-color var(--dur-fast) var(--ease-out),opacity var(--dur-base) var(--ease-out),max-height var(--dur-slow) var(--ease-in-out),padding var(--dur-slow) var(--ease-in-out),margin var(--dur-slow) var(--ease-in-out);max-height:60px;text-align:left;font:inherit;color:inherit;width:100%}
+.kc:focus-visible{outline:2px solid var(--sport);outline-offset:2px}
+.kc .radio{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--line-2);display:grid;place-items:center;flex:none}
+.kc .radio::after{content:"";width:8px;height:8px;border-radius:50%;background:var(--sport);transform:scale(0);transition:transform var(--dur-base) var(--ease-spring)}
+.kc.sel{border-color:var(--sport);box-shadow:0 10px 24px -14px rgba(38,128,255,.6);transform:scale(1.02)}
+.kc.sel .radio{border-color:var(--sport)}
+.kc.sel .radio::after{transform:scale(1)}
+.keep.done .kc:not(.sel){opacity:0;max-height:0;padding-block:0;margin-block:-3px;border-width:0}
+.archived{display:flex;align-items:center;gap:10px;font-size:12.5px;color:var(--muted);padding:8px 10px;border-radius:12px;background:var(--sunken);transform-origin:top;transition:opacity var(--dur-base) var(--ease-out) 180ms,transform var(--dur-slow) var(--ease-spring) 180ms}
+.keep:not(.done) + .archived{opacity:0;transform:translateY(-6px) scale(.98)}
+.pile{position:relative;width:26px;height:22px}
+.pile i{position:absolute;inset:0;border-radius:6px;background:var(--line-2);border:1.5px solid var(--card)}
+.pile i:nth-child(2){transform:translate(3px,-3px)}.pile i:nth-child(3){transform:translate(6px,-6px)}
+.stats3{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.stats3 div{background:var(--sunken);border-radius:10px;padding:8px;text-align:center}
+.stats3 b{display:block;font-family:var(--display);font-size:22px;font-weight:900;line-height:1}
+.stats3 span{font-size:11px;color:var(--muted)}
+
+/* 11 · FC de toda la sesión */
+.hr{width:100%;height:auto;display:block}
+.hr .zone{opacity:.9}
+.hr .line{fill:none;stroke:var(--bad);stroke-width:2.2;stroke-linejoin:round;stroke-linecap:round;stroke-dasharray:1000;stroke-dashoffset:0}
+.play .hr .line{animation:hrdraw 1.8s var(--ease-in-out) 200ms both}
+@keyframes hrdraw{from{stroke-dashoffset:1000}}
+.hr .area{fill:url(#hrfill);opacity:1}
+.play .hr .area{animation:fade 600ms var(--ease-out) 1500ms both}
+.hr text{font-family:var(--mono);font-size:9px;fill:var(--muted)}
+.hr .axis{stroke:var(--line);stroke-width:1}
+.zones{display:flex;height:10px;border-radius:99px;overflow:hidden}
+.zones i{display:block;height:100%;transform-origin:left}
+.play .zones i{animation:fill 700ms var(--ease-out) both;animation-delay:calc(var(--z) * 90ms + 1600ms)}
+.zlegend{display:flex;flex-wrap:wrap;gap:8px;font-size:11px;color:var(--muted)}
+.zlegend span{display:inline-flex;align-items:center;gap:4px}
+.zlegend i{width:8px;height:8px;border-radius:2px;display:block}
+.bpm{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.bpm div{border-radius:12px;padding:8px 10px;background:var(--exec-2)}
+.bpm b{font-family:var(--display);font-size:22px;display:block;line-height:1;color:var(--exec-ink)}
+.bpm span{font-size:10.5px;color:var(--exec-muted);text-transform:uppercase;letter-spacing:.06em}
+
+/* 12 · Arreglos chicos */
+.sub-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.sub{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;display:grid;gap:10px;align-content:start;min-width:0}
+.sub h3{font-size:16px;font-weight:800}
+.sub .d{font-size:13px;color:var(--muted)}
+.qchips{display:flex;flex-wrap:wrap;gap:6px}
+.qc{all:unset;cursor:pointer;border:1px solid var(--line-2);border-radius:999px;padding:7px 12px;font-size:12px;font-weight:600;background:var(--card);transition:background var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out),transform var(--dur-instant) var(--ease-out)}
+.qc:active{transform:scale(.96)}
+.qc[aria-pressed="true"]{border-color:var(--sport);background:var(--sport-soft);color:var(--sport-ink)}
+.qc:focus-visible{outline:2px solid var(--sport);outline-offset:2px}
+.days{display:grid;gap:6px}
+.day{display:flex;align-items:center;gap:10px;min-height:42px;border:1px solid var(--line);border-radius:12px;padding:6px 10px;font-size:13px;background:var(--card);transition:border-color var(--dur-fast) var(--ease-out),background var(--dur-base) var(--ease-out)}
+.day .cb{width:18px;height:18px;border-radius:6px;border:1.5px solid var(--line-2);display:grid;place-items:center;transition:background var(--dur-fast) var(--ease-out),border-color var(--dur-fast) var(--ease-out)}
+.day .cb svg{width:12px;height:12px;stroke:#fff;stroke-width:3;fill:none;stroke-dasharray:14;stroke-dashoffset:14;transition:stroke-dashoffset var(--dur-base) var(--ease-emphasis)}
+.day.on{border-color:var(--sport);background:var(--sport-soft)}
+.day.on .cb{background:var(--sport);border-color:var(--sport)}
+.day.on .cb svg{stroke-dashoffset:0}
+.day .r{margin-left:auto;font-size:11px;color:var(--muted)}
+.cta-copy{min-height:44px;border-radius:14px;display:grid;place-items:center;font-weight:700;font-size:14px;background:var(--line-2);color:#fff;transition:background var(--dur-base) var(--ease-out)}
+.cta-copy.on{background:var(--cta)}
+.cta-copy span{display:inline-block}
+.cta-copy span.tick{animation:rise var(--dur-base) var(--ease-out)}
+.exec-step{background:var(--exec);color:var(--exec-ink);border-radius:18px;padding:14px;display:grid;gap:10px}
+.big-n{text-align:center;font-family:var(--display);font-weight:900;font-size:52px;line-height:1}
+.big-n small{display:block;font-family:var(--mono);font-size:11px;color:var(--exec-muted);font-weight:500;letter-spacing:.08em;text-transform:uppercase}
+.rest-pair{display:grid;gap:8px}
+.ro1{height:46px;border-radius:15px;background:var(--aqua);color:#062a35;font-weight:900;font-size:15px;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 5px 0 0 #0A6E8D;position:relative;overflow:hidden}
+.ro1 .fillbar{position:absolute;inset:0;background:rgba(255,255,255,.28);transform-origin:left;transform:scaleX(0)}
+.play .ro1 .fillbar{animation:restfill 2.4s linear 900ms both}
+@keyframes restfill{to{transform:scaleX(1)}}
+.ro2{height:46px;border-radius:15px;background:var(--exec-2);border:2px solid var(--exec-3);color:#e8e8ee;font-weight:800;font-size:14px;display:grid;place-items:center}
+.play .rest-pair .ro1{animation:pop var(--dur-slow) var(--ease-spring) 400ms both}
+.play .rest-pair .ro2{animation:pop var(--dur-slow) var(--ease-spring) 470ms both}
+.sq{display:flex;gap:6px;align-items:center}
+.sq i{width:14px;height:14px;border-radius:4px;border:2px solid var(--exec-3);display:block}
+.sq i.on{background:var(--aqua);border-color:var(--aqua)}
+.play .sq i.on:last-of-type{animation:pop var(--dur-base) var(--ease-spring) 200ms both}
+.sq span{margin-left:auto;font-family:var(--mono);font-size:12px;color:var(--exec-muted)}
+.agenda .a-row{transition:transform var(--dur-slow) var(--ease-spring)}
+.play .agenda .up{animation:jump var(--dur-slower) var(--ease-spring) 300ms both}
+@keyframes jump{from{transform:translateY(96px)}}
+.play .agenda .down{animation:dropd var(--dur-slower) var(--ease-spring) 300ms both}
+@keyframes dropd{from{transform:translateY(-48px)}}
+.play .agenda .up .dot{animation:dotc var(--dur-slow) var(--ease-out) 700ms both}
+@keyframes dotc{from{background:#A8B1BD}}
+.prio{border-radius:16px;padding:14px;background:#0B0E13;color:#F4F6F8;display:grid;gap:8px}
+.prio .eb{font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#5C9DFF}
+.prio .h{font-family:var(--display);font-weight:900;font-size:17px}
+.prio .r{display:flex;gap:8px;align-items:center;font-size:12.5px;padding-top:6px;border-top:1px solid rgba(255,255,255,.08)}
+.prio .r .av{background:#2A323D;color:#F4F6F8;width:24px;height:24px;font-size:9.5px}
+.prio .r em{margin-left:auto;font-style:normal;font-family:var(--mono);font-size:11px}
+.inset{display:flex;gap:10px;align-items:center;border-radius:12px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);padding:10px 12px}
+.inset .eb2{font-size:10px;font-weight:800;letter-spacing:.07em;text-transform:uppercase;color:#7FB0FF}
+.inset .ti{font-size:13.5px;font-weight:700}
+.inset .go{font-size:12px;font-weight:800;color:#7FB0FF}
+.play .inset{animation:insetIn var(--dur-slower) var(--ease-emphasis) 420ms both}
+@keyframes insetIn{from{opacity:0;transform:translateY(8px);clip-path:inset(0 0 100% 0 round 12px)}}
+
+/* 13 · Correos */
+.mail{max-width:380px;width:100%;background:#F3F4F6;border-radius:14px;padding:12px;color:#111827;font-family:"Segoe UI",system-ui,sans-serif}
+.mail .mh{background:#0F172A;color:#fff;padding:12px 16px;border-radius:10px 10px 0 0;font-weight:800;font-size:15px}
+.mail .mb{background:#fff;padding:16px;border:1px solid #E5E7EB;border-top:0;display:grid;gap:10px}
+.mail .subj{font-family:var(--mono);font-size:10.5px;color:#6B7280}
+.mail h5{margin:0;font-size:16px;font-weight:800;line-height:1.3}
+.mail p{font-size:12.5px;color:#374151;margin:0}
+.mail .green{background:#F0FDF4;border:1px solid #10B981;border-radius:10px;padding:10px 12px;display:grid;gap:6px}
+.mail .green b{font-size:13px}
+.mail .mbtn{display:inline-block;justify-self:start;background:#10B981;color:#fff;font-size:12px;font-weight:700;padding:9px 16px;border-radius:8px}
+.mail .gbtn2{display:inline-block;justify-self:start;background:#E5E7EB;color:#111827;font-size:12px;font-weight:700;padding:9px 16px;border-radius:8px}
+.mail .mf{background:#F9FAFB;border:1px solid #E5E7EB;border-top:0;border-radius:0 0 10px 10px;padding:8px 16px;font-size:10.5px;color:#6B7280}
+.vs{display:grid;justify-items:center;gap:6px;font-family:var(--mono);font-size:11px;color:var(--muted)}
+.two-mails{display:grid;gap:8px;max-width:300px;width:100%}
+.mini-mail{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:12px;display:grid;gap:2px}
+.mini-mail b{font-size:12.5px}
+.mini-mail.x{border-color:var(--bad);background:var(--bad-soft)}
+
+/* 15 · Live Updates */
+.lock{background:linear-gradient(180deg,#1b2a44,#0B0E13 70%);color:#F4F6F8}
+.lock .clock{font-family:var(--display);font-weight:500;font-size:58px;text-align:center;letter-spacing:-.03em;line-height:1;margin-top:10px}
+.lock .date{text-align:center;font-size:12px;opacity:.8}
+.lu{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.14);border-radius:22px;padding:12px 14px;display:grid;gap:8px;backdrop-filter:blur(10px)}
+.lu .top{display:flex;align-items:center;gap:8px;font-size:12px;opacity:.9}
+.lu .top i{width:18px;height:18px;border-radius:5px;background:var(--sport);display:block}
+.lu .main{display:flex;align-items:baseline;justify-content:space-between}
+.lu .main b{font-family:var(--mono);font-size:30px;font-weight:600}
+.lu .main span{font-size:12.5px;opacity:.85}
+.lu .bar{height:6px;border-radius:99px;background:rgba(255,255,255,.16);overflow:hidden}
+.lu .bar b{display:block;height:100%;background:var(--aqua);width:100%;transform-origin:left;transform:scaleX(.62)}
+.play .lu{animation:luIn var(--dur-slower) var(--ease-emphasis) both}
+@keyframes luIn{from{opacity:0;transform:translateY(20px) scale(.97)}}
+.play .lu .bar b{animation:lubar 3s linear 400ms both}
+@keyframes lubar{from{transform:scaleX(1)}to{transform:scaleX(.62)}}
+.sbchip{display:inline-flex;gap:6px;align-items:center;background:var(--aqua);color:#062a35;font-family:var(--mono);font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:99px}
+
+/* sin pantalla */
+.noscreen{margin-top:64px;display:grid;gap:14px;scroll-margin-top:24px}
+.tbl{overflow-x:auto;border:1px solid var(--line);border-radius:16px;background:var(--card)}
+table.ns{border-collapse:collapse;width:100%;min-width:720px;font-size:13.5px}
+table.ns th,table.ns td{text-align:left;padding:10px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+table.ns th{font-size:11.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--sunken);font-weight:600}
+table.ns tr:last-child td{border-bottom:0}
+table.ns td.date{font-family:var(--mono);font-size:12px;color:var(--muted);white-space:nowrap}
+footer{margin-top:56px;padding-top:16px;border-top:1px solid var(--line);font-size:12.5px;color:var(--muted);display:grid;gap:4px}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:1ms!important;animation-delay:0ms!important;transition-duration:1ms!important}
+  .caret{animation:none}
+}
+</style>
+
+<div class="wrap">
+<header class="top">
+  <span class="eyebrow">EVA · corte del 30-09-2026 · rama <code>mockups-pendientes-0930</code> · nada implementado</span>
+  <h1>Pendientes de EVA, <em>en movimiento</em></h1>
+  <p class="lede">Todo lo que sigue abierto según CURRENT, las specs y los artifacts de septiembre, del más nuevo al más antiguo. Cada pendiente con pantalla trae su mockup en App (React Native), PWA y Escritorio, animado con los tokens de motion que ya tiene el repo. Lo que no tiene pantalla va al final en una tabla.</p>
+  <div class="legend">
+    <span class="diff d1">Fácil · horas</span><span class="diff d2">Media · ~1 día</span><span class="diff d3">Media-difícil · 2–3 días</span><span class="diff d4">Difícil · 1–2 semanas</span><span class="diff d5">Muy difícil / bloqueado</span>
+  </div>
+</header>
+
+<section aria-labelledby="motion-h">
+  <div class="principles" id="principles">
+    <div class="pr"><b id="motion-h">El movimiento explica, no decora</b><p>Cada animación responde a algo que hizo la persona o a un cambio real de estado. Nada se mueve en bucle arriba del pliegue.</p></div>
+    <div class="pr"><b>Cuatro curvas, cinco duraciones</b><p>Las mismas de <code>globals.css</code> y <code>@eva/brand-kit</code>: 80 · 140 · 220 · 320 · 480 ms.</p>
+      <div class="curves" aria-hidden="true"><div class="curve c1"><div class="track"><div class="dot"></div></div>out</div><div class="curve c2"><div class="track"><div class="dot"></div></div>spring</div><div class="curve c3"><div class="track"><div class="dot"></div></div>emphasis</div><div class="curve c4"><div class="track"><div class="dot"></div></div>in-out</div></div></div>
+    <div class="pr"><b>En RN, Reanimated con springs del kit</b><p><code>SPRING.ui</code> (18/220) para controles, <code>SPRING.bouncy</code> (12/180) solo para celebrar. Todo pasa por <code>useEvaMotion()</code>.</p></div>
+    <div class="pr"><b>Reducir movimiento</b><p>Con la opción del sistema activa, todo se vuelve fundido corto o cambio instantáneo. La información llega igual.</p></div>
+  </div>
+</section>
+
+<div class="idx-head">
+  <div><span class="eyebrow">Índice</span><h2 style="font-size:24px;margin-top:4px" id="idx-count">Pendientes con pantalla</h2></div>
+  <div class="sorter" role="group" aria-label="Ordenar">
+    <span class="thumb" aria-hidden="true"></span>
+    <button type="button" id="sort-date" aria-pressed="true">Más reciente primero</button>
+    <button type="button" id="sort-diff" aria-pressed="false">Más difícil primero</button>
+  </div>
+</div>
+<nav class="idx" id="idx" aria-label="Pendientes"></nav>
+
+<main id="items">
+
+<!-- ============ 1 · WhatsApp ============ -->
+<section class="item" id="whatsapp" data-date="2026-09-30" data-diff="1" data-title="Botón de WhatsApp de EVA" data-sub="El número ya está conectado a Meta; falta ponerlo en la guía del coach" data-plats="App,PWA,Escritorio">
+  <div class="item-head">
+    <div class="meta"><span class="eyebrow">30-09 · artifact «WhatsApp EVA en Meta»</span><span class="diff d1">Fácil · 2–3 h</span><span class="plat">App</span><span class="plat">PWA</span><span class="plat">Escritorio</span></div>
+    <h2>«¿Te ayudo a dejarlo andando?» con el WhatsApp de EVA</h2>
+  </div>
+  <div class="two-col">
+    <div class="what">
+      <p>Hoy quedó el <b>+56 9 9075 6670</b> conectado a la página, a Instagram y al portfolio. En el código sigue pendiente la decisión D13 del onboarding: la variable <code>OWNER_WHATSAPP_URL</code> nunca se seteó, así que ni la guía ni los correos ofrecen hablar con alguien.</p>
+      <ul class="todo"><li>Setear <code>OWNER_WHATSAPP_URL</code> en Vercel y en la app.</li><li>Tarjeta en la Guía del coach (web y app) cuando el coach lleva 24 h sin su primer alumno.</li><li>El mismo número en el correo del día 3 (ya pedido por Sergio).</li></ul>
+      <p class="ask"><b>iPhone:</b> es soporte, no venta; no toca la regla de tiendas. Sin precio ni link a pagar.</p>
+    </div>
+    <div class="spec"><h4>Motion</h4><div class="spec-wrap"><table>
+      <tr><td>Entrada de la tarjeta</td><td>sube 10 px + fundido · <code>320ms ease-out</code>, 120 ms después del resto de la guía</td></tr>
+      <tr><td>Ícono</td><td>la mano saluda <b>una vez</b> a los 520 ms · <code>900ms in-out</code>; nunca en bucle</td></tr>
+      <tr><td>Copiar número</td><td>el texto del botón cambia a «Copiado» con fundido <code>140ms</code> + háptico <code>selection</code> en RN</td></tr>
+      <tr><td>RN</td><td><code>FadeInDown.springify()</code> con <code>SPRING.ui</code></td></tr>
+    </table></div><p class="rm">Reducir movimiento: la tarjeta aparece sin desplazamiento y la mano no saluda.</p></div>
+  </div>
+  <div class="stage" data-stage>
+    <div class="stage-bar"><div class="tabs" role="tablist"><button role="tab" aria-selected="true" data-pane="0">App</button><button role="tab" aria-selected="false" data-pane="1">PWA</button><button role="tab" aria-selected="false" data-pane="2">Escritorio</button></div><button class="replay" type="button" data-replay><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 2.5v3h3"/></svg>Reproducir</button></div>
+    <div class="panes">
+      <div class="pane">
+        <figure><div class="phone"><div class="island"></div><div class="status"><span>9:41</span><span>●●●</span></div><div class="screen">
+          <div class="a-sub m-rise">Tu guía · paso 2 de 4</div>
+          <div class="a-h m-rise" style="--d:40ms">Suma a tu primer alumno</div>
+          <div class="a-card m-rise" style="--d:80ms"><div class="a-row"><span class="av">1</span><div><div class="t">Tu marca</div><div class="s">Listo</div></div><span class="chev" style="color:var(--ok)">✓</span></div><div class="a-row"><span class="av">2</span><div><div class="t">Primer alumno</div><div class="s">Invítalo con tu código</div></div><span class="chev">›</span></div></div>
+          <div class="a-card m-rise" style="--d:120ms">
+            <div style="display:flex;gap:10px;align-items:center"><span class="wa-ic"><svg viewBox="0 0 24 24" fill="#fff"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5-1.3A10 10 0 1 0 12 2Zm5.4 14.2c-.2.6-1.3 1.2-1.8 1.2-.5.1-1 .1-3.3-.8-2.8-1.1-4.5-4-4.7-4.2-.1-.2-1.1-1.5-1.1-2.9s.7-2 1-2.3c.2-.3.5-.3.7-.3h.5c.2 0 .4 0 .6.5l.8 2c.1.2.1.4 0 .5l-.4.6-.4.4c-.1.2-.3.3-.1.6.2.3.8 1.3 1.7 2.1 1.2 1 2.1 1.3 2.4 1.5.3.1.5.1.6-.1l.9-1c.2-.3.4-.2.6-.1l1.9.9c.3.1.5.2.5.3.1.2.1.7-.1 1.2Z"/></svg></span><div><div class="t" style="font-weight:800">¿Te ayudo a dejarlo andando? <span class="wave">👋</span></div><div class="a-sub">Escríbenos, respondemos en el día.</div></div></div>
+            <div class="copyline"><span>+56 9 9075 6670</span><button type="button" data-copy="+56 9 9075 6670">Copiar</button></div>
+            <div class="a-btn wa">Abrir WhatsApp</div>
+          </div>
+          <div class="tabbar"><span>Inicio</span><span>Alumnos</span><span class="on">Guía</span><span>Más</span></div>
+        </div></div><figcaption class="cap"><b>Guía del coach en la app.</b> El número se ve como texto seleccionable; el botón abre WhatsApp si el teléfono lo tiene.</figcaption></figure>
+      </div>
+      <div class="pane" hidden>
+        <figure><div class="phone android"><div class="island"></div><div class="status"><span>9:41</span><span>▲ ▮</span></div><div class="urlbar">eva-app.cl/coach/guia</div><div class="screen" style="min-height:430px">
+          <div class="a-h m-rise">Tu guía</div>
+          <div class="a-card m-rise" style="--d:80ms"><div style="display:flex;gap:10px;align-items:center"><span class="wa-ic"><svg viewBox="0 0 24 24" fill="#fff"><circle cx="12" cy="12" r="6"/></svg></span><div><div class="t" style="font-weight:800">¿Te ayudo a dejarlo andando? <span class="wave">👋</span></div><div class="a-sub">Llevas un día sin alumnos. Te ayudamos a sumar el primero.</div></div></div><div class="copyline"><span>+56 9 9075 6670</span><button type="button" data-copy="+56 9 9075 6670">Copiar</button></div><div class="a-btn wa">Abrir WhatsApp</div></div>
+        </div></div><figcaption class="cap"><b>PWA.</b> Misma tarjeta, sin cambios de copy.</figcaption></figure>
+      </div>
+      <div class="pane" hidden>
+        <figure><div class="browser"><div class="chrome"><i></i><i></i><i></i><span>eva-app.cl/coach/dashboard</span></div><div class="body">
+          <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:12px">
+            <div class="a-card m-rise"><div class="eyebrow">Tu guía · 2 de 4</div><div class="a-h" style="font-size:19px">Suma a tu primer alumno</div><div class="a-sub">Comparte tu código <code>JOSEFIT</code> o crea su ficha.</div></div>
+            <div class="a-card m-rise" style="--d:120ms"><div style="display:flex;gap:10px;align-items:center"><span class="wa-ic"><svg viewBox="0 0 24 24" fill="#fff"><circle cx="12" cy="12" r="6"/></svg></span><div class="t" style="font-weight:800">¿Te ayudo? <span class="wave">👋</span></div></div><div class="copyline"><span>+56 9 9075 6670</span><button type="button" data-copy="+56 9 9075 6670">Copiar</button></div></div>
+          </div>
+        </div></div><figcaption class="cap"><b>Escritorio.</b> Va a la derecha de la guía, no encima del trabajo.</figcaption></figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 2 · Página de registro ============ -->
+<section class="item" id="registro" data-date="2026-09-29" data-diff="2" data-title="Página solo de registro" data-sub="Para los anuncios: misma promesa, Google o correo, nada más" data-plats="PWA,Escritorio">
+  <div class="item-head">
+    <div class="meta"><span class="eyebrow">29-09 · artifact «¿Dónde se pierde la gente?»</span><span class="diff d2">Media · 1–1,5 días</span><span class="plat no">App</span><span class="plat">PWA</span><span class="plat">Escritorio</span></div>
+    <h2>Una página para el anuncio: la promesa y el registro, nada más</h2>
+  </div>
+  <div class="two-col">
+    <div class="what">
+      <p>De cada 100 que llegan desde Meta, menos de 10 entran al registro. Sergio pidió una pantalla con la misma frase del anuncio y registro con Google o correo. Sin menú, sin precios, sin idiomas. Los anuncios apuntan ahí y se compara contra la landing actual.</p>
+      <ul class="todo"><li>Ruta nueva, por ejemplo <code>/empieza</code>, con el formulario de alta que ya existe.</li><li>UTM y evento <code>CompleteRegistration</code> iguales que en <code>/register</code>.</li><li>Experimento en PostHog: landing actual contra esta.</li></ul>
+      <p class="ask"><b>Falta de Sergio:</b> 2 o 3 frases de los anuncios que mejor funcionan. En el mockup uso «Tus alumnos, tu marca, una sola app».</p>
+    </div>
+    <div class="spec"><h4>Motion</h4><div class="spec-wrap"><table>
+      <tr><td>Titular</td><td>palabra por palabra, sube 60 % con desenfoque 4 px → 0 · <code>480ms emphasis</code>, 60 ms entre palabras</td></tr>
+      <tr><td>Botón Google</td><td>un solo brillo cruza a los 1,1 s · <code>900ms in-out</code>; al tocar escala 0,97 en <code>80ms</code></td></tr>
+      <tr><td>Campo de correo</td><td>anillo de foco crece a 4 px · <code>140ms ease-out</code></td></tr>
+      <tr><td>Peso</td><td>solo <code>transform</code>, <code>opacity</code> y <code>filter</code>; cero JS de animación. LCP = el titular, que ya está pintado antes de animar</td></tr>
+    </table></div><p class="rm">Reducir movimiento: el titular aparece entero y el brillo no corre.</p></div>
+  </div>
+  <div class="stage" data-stage>
+    <div class="stage-bar"><div class="tabs" role="tablist"><button role="tab" aria-selected="true" data-pane="0">PWA</button><button role="tab" aria-selected="false" data-pane="1">Escritorio</button></div><button class="replay" type="button" data-replay><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 2.5v3h3"/></svg>Reproducir</button></div>
+    <div class="panes">
+      <div class="pane">
+        <figure><div class="phone"><div class="island"></div><div class="status"><span>9:41</span><span>●●●</span></div><div class="urlbar">eva-app.cl/empieza?utm_source=ig</div><div class="screen" style="min-height:450px">
+          <div class="logo-eva m-fade" style="font-size:20px">EVA</div>
+          <div class="reg">
+            <span class="kicker m-fade">Para coaches</span>
+            <h3><span style="--w:0">Tus</span> <span style="--w:1">alumnos,</span> <span style="--w:2">tu</span> <span style="--w:3">marca,</span> <span style="--w:4">una</span> <span style="--w:5">sola</span> <span style="--w:6">app.</span></h3>
+            <p class="a-sub m-rise" style="--d:560ms">Rutinas, nutrición y progreso con tu logo. Empieza gratis con 1 alumno.</p>
+            <div class="gbtn shine m-rise" style="--d:650ms"><svg viewBox="0 0 24 24"><path fill="#4285F4" d="M22 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.6a4.8 4.8 0 0 1-2.1 3.1v2.6h3.4c2-1.8 3.1-4.5 3.1-7.5Z"/><path fill="#34A853" d="M12 22c2.8 0 5.2-.9 6.9-2.5l-3.4-2.6c-.9.6-2.1 1-3.5 1-2.7 0-5-1.8-5.8-4.3H2.7v2.7A10 10 0 0 0 12 22Z"/><path fill="#FBBC05" d="M6.2 13.6a6 6 0 0 1 0-3.8V7.1H2.7a10 10 0 0 0 0 9.2l3.5-2.7Z"/><path fill="#EA4335" d="M12 6c1.5 0 2.9.5 4 1.5l3-3A10 10 0 0 0 2.7 7.1l3.5 2.7C7 7.8 9.3 6 12 6Z"/></svg>Continuar con Google</div>
+            <div class="a-sub m-fade" style="--d:720ms;text-align:center">o con tu correo</div>
+            <div class="field focus m-rise" style="--d:760ms">josefa@<span class="caret"></span></div>
+            <div class="a-btn pri m-rise" style="--d:800ms">Crear mi cuenta gratis</div>
+            <div class="proof m-fade" style="--d:900ms"><span class="stack"><i></i><i></i><i></i></span>Más de 100 coaches en Chile ya usan EVA</div>
+          </div>
+        </div></div><figcaption class="cap"><b>Celular, donde llega el 100 % del tráfico de Meta.</b> Todo cabe sin hacer scroll en 390 × 844.</figcaption></figure>
+      </div>
+      <div class="pane" hidden>
+        <figure><div class="browser"><div class="chrome"><i></i><i></i><i></i><span>eva-app.cl/empieza</span></div><div class="body">
+          <div class="desk-reg">
+            <div class="reg">
+              <div class="logo-eva" style="font-size:20px">EVA</div>
+              <span class="kicker">Para coaches</span>
+              <h3 style="font-size:30px"><span style="--w:0">Tus</span> <span style="--w:1">alumnos,</span> <span style="--w:2">tu</span> <span style="--w:3">marca,</span> <span style="--w:4">una</span> <span style="--w:5">sola</span> <span style="--w:6">app.</span></h3>
+              <div class="gbtn shine">Continuar con Google</div>
+              <div class="field">tu@correo.cl</div>
+              <div class="a-btn pri">Crear mi cuenta gratis</div>
+            </div>
+            <div class="poster"><div class="mini"><span>Semana de Camila</span><b>4 de 5 entrenos</b><span>Tu logo, tus colores</span></div></div>
+          </div>
+        </div></div><figcaption class="cap"><b>Escritorio.</b> El póster es una imagen fija liviana, no el fondo 3D de la landing.</figcaption></figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 3 · Landing liviana ============ -->
+<section class="item" id="landing" data-date="2026-09-29" data-diff="1" data-title="Landing más liviana en celular" data-sub="Sacar la animación de colores y el fondo 3D; PageSpeed móvil 41" data-plats="PWA,Escritorio">
+  <div class="item-head">
+    <div class="meta"><span class="eyebrow">29-09 · «esta semana» según el informe a Sergio</span><span class="diff d1">Fácil · medio día</span><span class="plat no">App</span><span class="plat">PWA</span><span class="plat">Escritorio</span></div>
+    <h2>La landing carga rápido pero trabaja demasiado</h2>
+  </div>
+  <div class="two-col">
+    <div class="what">
+      <p>El puntaje móvil de PageSpeed es 41. La causa es una animación de colores que se redibuja 60 veces por segundo y un fondo 3D. En celulares básicos la página se siente trabada. Se reemplaza por un degradado fijo con la misma paleta y el fondo 3D queda solo en escritorio.</p>
+      <ul class="todo"><li>Degradado en CSS estático (o una imagen AVIF de ~20 KB).</li><li>Fondo 3D con <code>matchMedia('(min-width: 1024px)')</code> y carga diferida.</li><li>Mandar el PageSpeed nuevo a Sergio.</li></ul>
+    </div>
+    <div class="spec"><h4>Regla de motion para la landing</h4><div class="spec-wrap"><table>
+      <tr><td>Arriba del pliegue</td><td>cero animaciones infinitas; solo entradas de una vez</td></tr>
+      <tr><td>Propiedades</td><td>solo <code>transform</code> y <code>opacity</code>; nunca <code>background-position</code> animado</td></tr>
+      <tr><td>Scroll</td><td>revelados con <code>animation-timeline: view()</code> donde exista; sin librería</td></tr>
+      <tr><td>Meta</td><td>PageSpeed móvil ≥ 80 (objetivo, no medido)</td></tr>
+    </table></div></div>
+  </div>
+  <div class="stage" data-stage>
+    <div class="stage-bar"><div class="tabs" role="tablist"><button role="tab" aria-selected="true" data-pane="0">PWA</button></div><button class="replay" type="button" data-replay><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 2.5v3h3"/></svg>Reproducir</button></div>
+    <div class="panes"><div class="pane">
+      <figure><div class="phone"><div class="island"></div><div class="status"><span>9:41</span><span>●●●</span></div><div class="urlbar">eva-app.cl</div><div class="screen" style="min-height:330px">
+        <div class="eyebrow">Hoy</div>
+        <div class="lp heavy"><div><h4>La app de tus alumnos, con tu marca</h4><p>Animación de color a 60 fps + fondo 3D</p></div></div>
+        <div class="gauge"><svg viewBox="0 0 112 64"><path class="arc-bg" d="M8 58a48 48 0 0 1 96 0"/><path class="arc" d="M8 58a48 48 0 0 1 96 0" stroke="#F4365A" style="stroke-dashoffset:92.6"/></svg><b>41</b><span>PageSpeed móvil</span></div>
+      </div></div><figcaption class="cap"><b>Hoy.</b> El fondo se mueve siempre, aunque nadie lo mire.</figcaption></figure>
+      <figure><div class="phone"><div class="island"></div><div class="status"><span>9:41</span><span>●●●</span></div><div class="urlbar">eva-app.cl</div><div class="screen" style="min-height:330px">
+        <div class="eyebrow">Después</div>
+        <div class="lp light"><div><h4 class="m-rise">La app de tus alumnos, con tu marca</h4><p class="m-rise" style="--d:80ms">Degradado fijo, misma paleta</p></div></div>
+        <div class="gauge"><svg viewBox="0 0 112 64"><path class="arc-bg" d="M8 58a48 48 0 0 1 96 0"/><path class="arc" d="M8 58a48 48 0 0 1 96 0" stroke="#1FB877" style="stroke-dashoffset:31.4"/></svg><b>≥ 80</b><span>objetivo</span></div>
+      </div></div><figcaption class="cap"><b>Después.</b> El titular entra una vez y queda quieto.</figcaption></figure>
+    </div></div>
+  </div>
+</section>
+
+<!-- ============ 5 · kg/lb ============ -->
+<section class="item" id="kglb" data-date="2026-09-26" data-diff="3" data-title="Kilos o libras en la app" data-sub="La web ya está hecha (W1–W3); falta el ejecutor y el builder de React Native" data-plats="App">
+  <div class="item-head">
+    <div class="meta"><span class="eyebrow">26-09 · <code>docs/specs/kg-lb-ejecutor</code> · W4–W6</span><span class="diff d3">Media-difícil · ~2 días + OTA doble</span><span class="plat">App</span><span class="plat">PWA ✓</span><span class="plat">Escritorio ✓</span></div>
+    <h2>El alumno elige kg o lb; la app guarda siempre en kilos</h2>
+  </div>
+  <div class="two-col">
+    <div class="what">
+      <p>Motor, columna <code>workout_logs.weight_unit</code> (aplicada en LIVE) y la web están commiteados y sin push. Falta la app: teclado y rueda con selector, lecturas en la unidad, cola offline con la unidad, y el builder RN con el selector junto a «Peso objetivo».</p>
+      <ul class="todo"><li><b>W4</b> RN: <code>TypedKeypad</code>, <code>DualWheelPicker</code>, <code>SetRow</code>, pantallas V3, <code>workout-session.ts</code>, builder.</li><li><b>W5</b> ~295 series viejas: confirmar con cada coach antes de convertir.</li><li><b>Antes del deploy web:</b> corregir 11 objetivos escritos en libras (o pasarán a verse como «292,1 lb»).</li></ul>
+    </div>
+    <div class="spec"><h4>Motion</h4><div class="spec-wrap"><table>
+      <tr><td>Selector kg | lb</td><td>el pulgar se desliza con <code>SPRING.ui</code> (18/220) · háptico <code>selection</code></td></tr>
+      <tr><td>Número</td><td>cada dígito rueda como odómetro · <code>220ms ease-out</code>; los dígitos que no cambian no se mueven</td></tr>
+      <tr><td>Unidad y «se guarda como»</td><td>fundido cruzado <code>140ms</code>, la unidad baja 8 px</td></tr>
+      <tr><td>Presets</td><td>se reemplazan con pop escalonado 30 ms · <code>SPRING.ui</code></td></tr>
+    </table></div><p class="rm">Reducir movimiento: el número cambia de golpe; queda el háptico.</p></div>
+  </div>
+  <div class="stage" data-stage>
+    <div class="stage-bar"><div class="tabs" role="tablist"><button role="tab" aria-selected="true" data-pane="0">App · ejecutor</button><button role="tab" aria-selected="false" data-pane="1">App · builder</button></div><button class="replay" type="button" data-replay><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 2.5v3h3"/></svg>Reproducir</button></div>
+    <div class="panes">
+      <div class="pane">
+        <figure><div class="phone dark"><div class="island"></div><div class="status"><span>9:41</span><span>Serie 2 de 4</span></div><div class="screen">
+          <p class="ex-name">Sentadilla búlgara con mancuernas</p>
+          <p class="rx">4 × 8 · <b data-kg="20.41">45 lb</b> · RIR 2</p>
+          <div class="sets"><div class="set"><span>Serie 1</span><b><span data-kg="20.41">45 lb</span> × 8 ✓</b></div><div class="set active"><span>Serie 2</span><b><span data-kg="22.68">50 lb</span> × 8</b></div></div>
+          <div class="sheet"><div class="grab"></div>
+            <div class="seg lb" id="kgseg" role="group" aria-label="Unidad de peso"><span class="thumb"></span><button type="button" data-u="kg" aria-pressed="false">kg</button><button type="button" data-u="lb" aria-pressed="true">lb</button></div>
+            <div class="readout"><span class="odo" id="odo" aria-live="polite"></span><span class="u" id="unit">lb</span><span class="x">×</span><span class="reps">8</span></div>
+            <p class="conv" id="conv">se guarda como 22,68 kg</p>
+            <div class="presets" id="presets"><span>−2,5</span><span>+2,5</span><span>+5</span><span>+10</span></div>
+            <div class="cta-exec">Guardar serie 2</div>
+          </div>
+        </div></div><figcaption class="cap"><b>Toca kg / lb.</b> Cambian el objetivo, las series y el número con el odómetro.</figcaption></figure>
+      </div>
+      <div class="pane" hidden>
+        <figure><div class="phone"><div class="island"></div><div class="status"><span>9:41</span><span>●●●</span></div><div class="screen">
+          <div class="a-sub">Día 2 · Piernas</div><div class="a-h">Editar bloque</div>
+          <div class="a-card"><div class="t" style="font-weight:800">Sentadilla búlgara</div><div class="a-sub">4 series · 8 reps · RIR 2</div></div>
+          <div class="b-field m-rise" style="--d:120ms"><label for="tw">Peso objetivo</label><div class="b-in"><div class="n" id="tw">50</div><div class="seg-l"><span class="thumb"></span><span>kg</span><span class="on">lb</span></div></div><p class="hint">Se guarda como 22,68 kg. Tu alumno lo ve en libras.</p></div>
+          <div class="a-card m-rise" style="--d:200ms;background:var(--sunken);border-style:dashed"><div class="a-sub">Se retira el selector duplicado de «Ejes adicionales».</div></div>
+          <div class="a-btn pri" style="margin-top:auto">Guardar bloque</div>
+        </div></div><figcaption class="cap"><b>Builder RN.</b> Un solo lugar para la unidad, pegado al número, igual que en la web.</figcaption></figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 6 · Botones Pro ============ -->
+<section class="item" id="pro" data-date="2026-09-26" data-diff="2" data-title="Botones Pro (A + C)" data-sub="Tarjeta de plan en el panel y aviso al llenar el cupo; solo web" data-plats="PWA,Escritorio">
+  <div class="item-head">
+    <div class="meta"><span class="eyebrow">26-09 · decidido «A + C» · Sergio</span><span class="diff d2">Media · ~1 día</span><span class="plat no">App</span><span class="plat">PWA</span><span class="plat">Escritorio</span></div>
+    <h2>Mostrar Pro antes de que el coach choque con el cupo</h2>
+  </div>
+  <div class="two-col">
+    <div class="what">
+      <p>Solo 6 de 71 coaches nuevos vieron un bloqueo de Pro en 30 días. La decisión fue A + C: una tarjeta de plan en el panel que reemplaza el link chico «Expandir límite», y un aviso que aparece <b>una sola vez</b> justo después de crear el alumno que llena el cupo.</p>
+      <ul class="todo"><li>Precio desde <code>TIER_CONFIG</code>, nunca escrito a mano.</li><li>Aviso C con marca en <code>admin_audit_logs</code> o en el perfil para no repetirlo.</li><li>En la app nada: Apple 3.1.1 y la regla del embudo.</li></ul>
+    </div>
+    <div class="spec"><h4>Motion</h4><div class="spec-wrap"><table>
+      <tr><td>Barra de cupo</td><td>se llena de 0 a 1/1 · <code>900ms ease-out</code> al montar, una vez por sesión</td></tr>
+      <tr><td>Aviso C</td><td>velo en <code>220ms</code>; la hoja sube 12 px y escala 0,96 → 1 · <code>320ms emphasis</code></td></tr>
+      <tr><td>Check</td><td>el trazo se dibuja a los 360 ms · <code>320ms emphasis</code>. Sin confeti: es un límite, no un logro</td></tr>
+      <tr><td>Cerrar</td><td>inverso en <code>140ms</code>, sin rebote</td></tr>
+    </table></div></div>
+  </div>
+  <div class="stage" data-stage>
+    <div class="stage-bar"><div class="tabs" role="tablist"><button role="tab" aria-selected="true" data-pane="0">Escritorio</button><button role="tab" aria-selected="false" data-pane="1">PWA</button></div><button class="replay" type="button" data-replay><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 2.5v3h3"/></svg>Reproducir</button></div>
+    <div class="panes">
+      <div class="pane">
+        <figure><div class="browser"><div class="chrome"><i></i><i></i><i></i><span>eva-app.cl/coach/dashboard</span></div><div class="body">
+          <div class="plan-card m-rise"><span class="eyebrow">Plan Free · 1 de 1 alumno</span><div class="meter"><b></b></div><h4>Tu próximo alumno necesita Pro</h4><ul><li>Hasta 25 alumnos</li><li>Sin el sello «Hecho con EVA»</li><li>Cancelas cuando quieras</li></ul><div class="btns"><span class="btn pri">Pasar a Pro · $29.990/mes</span><span class="btn ghost">Ver planes</span></div></div>
+        </div></div><figcaption class="cap"><b>A · Tarjeta de plan.</b> Reemplaza el link «Expandir límite →».</figcaption></figure>
+      </div>
+      <div class="pane" hidden>
+        <figure><div class="phone"><div class="island"></div><div class="status"><span>9:41</span><span>●●●</span></div><div class="urlbar">eva-app.cl/coach/clients</div><div class="screen" style="min-height:440px">
+          <div class="a-h">Alumnos</div>
+          <div class="modal-scrim"><div class="modal"><svg class="check" viewBox="0 0 40 40"><circle cx="20" cy="20" r="20"/><path d="M12 20.5l5.5 5.5L28.5 15"/></svg><h4 style="font-size:17px">Listo, tu primer alumno ya está en EVA</h4><p class="a-sub" style="font-size:13px">Ese era tu cupo del plan Free. Para sumar al siguiente vas a necesitar Pro.</p><div class="btns"><span class="btn pri">Pasar a Pro</span><span class="btn ghost">Ahora no</span></div></div></div>
+        </div></div><figcaption class="cap"><b>C · Aviso al llenar el cupo.</b> Aparece una vez, después de crear el alumno.</figcaption></figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 11 · FC de toda la sesión ============ -->
+<section class="item" id="fc" data-date="2026-09-20" data-diff="4" data-title="FC de toda la sesión" data-sub="Punto 2 de Movens: la curva de pulso del entreno completo" data-plats="App,PWA,Escritorio">
+  <div class="item-head">
+    <div class="meta"><span class="eyebrow">20-09 · punto 2 de Movens · <code>vuelta-nueva-salud-y-reloj</code> §6</span><span class="diff d4">Difícil · plan aparte</span><span class="plat">App</span><span class="plat">PWA</span><span class="plat">Escritorio</span></div>
+    <h2>El pulso de toda la sesión, no solo del cardio</h2>
+  </div>
+  <div class="two-col">
+    <div class="what">
+      <p>Movens quiere ver la frecuencia cardíaca del entreno completo. Quedó fuera del tren «Vuelta nueva» a propósito: el plan arranca preguntándole a Movens qué banda usa, porque de eso depende si se lee de Health Connect / HealthKit o de un sensor BLE directo.</p>
+      <ul class="todo"><li>Preguntar a Movens la banda (el owner).</li><li>Leer muestras de FC entre inicio y fin de la sesión.</li><li>Curva + tiempo en zonas en el resumen del alumno y en la ficha del coach.</li></ul>
+    </div>
+    <div class="spec"><h4>Motion</h4><div class="spec-wrap"><table>
+      <tr><td>Curva</td><td>se dibuja de izquierda a derecha · <code>1,8 s in-out</code>, una vez al abrir el resumen</td></tr>
+      <tr><td>Área</td><td>fundido a los 1,5 s · <code>600ms</code></td></tr>
+      <tr><td>Zonas</td><td>cada tramo crece desde la izquierda, 90 ms entre zonas · <code>700ms ease-out</code></td></tr>
+      <tr><td>RN</td><td>Skia <code>Path</code> con <code>end</code> animado (ya hay Skia en la app)</td></tr>
+    </table></div><p class="rm">Reducir movimiento: la curva aparece entera.</p></div>
+  </div>
+  <div class="stage" data-stage>
+    <div class="stage-bar"><div class="tabs" role="tablist"><button role="tab" aria-selected="true" data-pane="0">App · alumno</button><button role="tab" aria-selected="false" data-pane="1">Escritorio · coach</button></div><button class="replay" type="button" data-replay><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 2.5v3h3"/></svg>Reproducir</button></div>
+    <div class="panes">
+      <div class="pane">
+        <figure><div class="phone dark"><div class="island"></div><div class="status"><span>9:41</span><span>●●●</span></div><div class="screen">
+          <div class="rx">Resumen · Piernas · 58 min</div>
+          <p class="ex-name">Tu pulso en la sesión</p>
+          <div class="bpm"><div><b>128</b><span>Prom.</span></div><div><b>171</b><span>Máx.</span></div><div><b>612</b><span>kcal</span></div></div>
+          <svg class="hr" viewBox="0 0 280 120" role="img" aria-label="Curva de frecuencia cardíaca de 58 minutos, entre 90 y 171 pulsaciones">
+            <defs><linearGradient id="hrfill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#F4365A" stop-opacity=".35"/><stop offset="1" stop-color="#F4365A" stop-opacity="0"/></linearGradient></defs>
+            <line class="axis" x1="0" y1="100" x2="280" y2="100"/>
+            <path class="area" d="M0,82 C20,78 30,60 45,52 S70,40 80,58 S100,30 115,24 S135,55 150,50 S170,20 185,14 S205,48 220,44 S245,30 255,38 S270,70 280,78 L280,100 L0,100 Z"/>
+            <path class="line" pathLength="1000" d="M0,82 C20,78 30,60 45,52 S70,40 80,58 S100,30 115,24 S135,55 150,50 S170,20 185,14 S205,48 220,44 S245,30 255,38 S270,70 280,78"/>
+            <text x="0" y="114">0</text><text x="130" y="114">30 min</text><text x="252" y="114">58</text>
+          </svg>
+          <div class="zones"><i style="--z:0;width:14%;background:#A8B1BD"></i><i style="--z:1;width:26%;background:#57C7E6"></i><i style="--z:2;width:34%;background:#1FB877"></i><i style="--z:3;width:18%;background:#F5A524"></i><i style="--z:4;width:8%;background:#F4365A"></i></div>
+          <div class="zlegend"><span><i style="background:#A8B1BD"></i>Z1 8 min</span><span><i style="background:#57C7E6"></i>Z2 15</span><span><i style="background:#1FB877"></i>Z3 20</span><span><i style="background:#F5A524"></i>Z4 10</span><span><i style="background:#F4365A"></i>Z5 5</span></div>
+        </div></div><figcaption class="cap"><b>Resumen del alumno.</b> Datos de ejemplo.</figcaption></figure>
+      </div>
+      <div class="pane" hidden>
+        <figure><div class="browser"><div class="chrome"><i></i><i></i><i></i><span>eva-app.cl/coach/clients/camila · Entrenos</span></div><div class="body">
+          <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap"><div class="a-h" style="font-size:18px">Piernas · martes 29 sep</div><span class="a-sub">58 min · FC prom. 128 · máx. 171</span></div>
+          <svg class="hr" viewBox="0 0 560 150" role="img" aria-label="Curva de frecuencia cardíaca de 58 minutos con bloques del entreno">
+            <rect x="0" y="0" width="120" height="126" fill="var(--sunken)"/><rect x="260" y="0" width="110" height="126" fill="var(--sunken)"/>
+            <text x="6" y="12">Calentamiento</text><text x="126" y="12">Búlgara</text><text x="266" y="12">Peso muerto rumano</text><text x="376" y="12">Cardio</text>
+            <line class="axis" x1="0" y1="126" x2="560" y2="126"/>
+            <path class="area" d="M0,104 C40,98 60,76 90,66 S140,50 160,74 S200,38 230,30 S270,70 300,64 S340,26 370,18 S410,60 440,56 S490,38 510,48 S540,88 560,98 L560,126 L0,126 Z"/>
+            <path class="line" pathLength="1000" d="M0,104 C40,98 60,76 90,66 S140,50 160,74 S200,38 230,30 S270,70 300,64 S340,26 370,18 S410,60 440,56 S490,38 510,48 S540,88 560,98"/>
+            <text x="0" y="142">0</text><text x="270" y="142">30 min</text><text x="540" y="142">58</text>
+          </svg>
+        </div></div><figcaption class="cap"><b>Ficha del coach.</b> Los bloques del entreno detrás de la curva: se ve en qué ejercicio subió.</figcaption></figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 10 · Prueba Pro 14 días ============ -->
+<section class="item" id="trial" data-date="2026-09-15" data-diff="4" data-title="Prueba Pro 14 días" data-sub="Reverse trial: al día 15 vuelve a Free; espera tus Q1–Q4" data-plats="App,PWA,Escritorio">
+  <div class="item-head">
+    <div class="meta"><span class="eyebrow">14/15-09 · artifact «Prueba Pro 14 días» · nada implementado</span><span class="diff d4">Difícil · ~51 h en 6 waves</span><span class="plat">App</span><span class="plat">PWA</span><span class="plat">Escritorio</span></div>
+    <h2>14 días de Pro al registrarse; el día 15 elige quién sigue</h2>
+  </div>
+  <div class="two-col">
+    <div class="what">
+      <p>Todo coach nuevo nace en Pro por 14 días, sin tarjeta. El día 15 vuelve a Free con 1 alumno. Si tiene 2 o más, cae al muro de cupo hasta pagar o elegir a quién conserva. Los 112 Free de hoy no se tocan.</p>
+      <ul class="todo"><li>Migración <code>trial_source</code>, <code>trial_started_at</code>, índice y RPC del KPI.</li><li><code>endSignupTrial</code>, cron horario, guards de pasarela, anti-abuso fuera de <code>if (isFreeTier)</code>.</li><li>Muro «elige quién sigue» sin botón de borrar.</li></ul>
+      <p class="ask"><b>Esperan tu respuesta:</b> Q1 qué pasa el día 15 · Q2 cupo 25 o 30 · Q3 los Free de hoy · Q4 la regla de Android.</p>
+    </div>
+    <div class="spec"><h4>Motion</h4><div class="spec-wrap"><table>
+      <tr><td>Chip de días</td><td>el anillo se vacía hasta los días que quedan · <code>1,2 s ease-out</code> al abrir la app, no en cada render</td></tr>
+      <tr><td>Elegir alumno</td><td>la fila elegida escala 1,02 con sombra · <code>SPRING.ui</code>; el punto del radio entra con spring</td></tr>
+      <tr><td>Archivar a los otros</td><td>las filas se pliegan (alto → 0) en <code>320ms in-out</code> y aparece la pila «11 archivados» con spring</td></tr>
+      <tr><td>Tono</td><td>ningún rojo ni sacudida: nada se borra, todo se conserva</td></tr>
+    </table></div></div>
+  </div>
+  <div class="stage" data-stage>
+    <div class="stage-bar"><div class="tabs" role="tablist"><button role="tab" aria-selected="true" data-pane="0">App · día 15</button><button role="tab" aria-selected="false" data-pane="1">App · durante</button><button role="tab" aria-selected="false" data-pane="2">Escritorio</button></div><button class="replay" type="button" data-replay><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 2.5v3h3"/></svg>Reproducir</button></div>
+    <div class="panes">
+      <div class="pane">
+        <figure><div class="phone"><div class="island"></div><div class="status"><span>9:41</span><span>iOS</span></div><div class="screen">
+          <div class="a-h m-rise">Tu prueba terminó</div>
+          <div class="a-sub m-rise" style="--d:40ms">Tus datos y tus alumnos se conservan. Tu plan incluye 1 alumno activo: elige quién sigue.</div>
+          <div class="keep" id="keep">
+            <button type="button" class="kc sel m-rise" style="--d:80ms"><span class="radio"></span><span class="av">CR</span><span><span class="t" style="display:block;font-weight:700;font-size:13.5px">Camila Rojas</span><span class="a-sub">entrenó ayer</span></span></button>
+            <button type="button" class="kc m-rise" style="--d:110ms"><span class="radio"></span><span class="av">IP</span><span><span class="t" style="display:block;font-weight:700;font-size:13.5px">Ignacio Pérez</span><span class="a-sub">hace 3 días</span></span></button>
+            <button type="button" class="kc m-rise" style="--d:140ms"><span class="radio"></span><span class="av">DT</span><span><span class="t" style="display:block;font-weight:700;font-size:13.5px">Daniela Tapia</span><span class="a-sub">hace 5 días</span></span></button>
+            <button type="button" class="kc m-rise" style="--d:170ms"><span class="radio"></span><span class="av">+9</span><span><span class="t" style="display:block;font-weight:700;font-size:13.5px">9 alumnos más</span><span class="a-sub">buscar</span></span></button>
+          </div>
+          <div class="archived"><span class="pile"><i></i><i></i><i></i></span><span><b style="color:var(--ink)">11 archivados</b> · sin acceso a su app hasta que los reactives. Sus datos quedan.</span></div>
+          <button type="button" class="a-btn ghost" id="keepgo" style="font:inherit;font-weight:700;cursor:pointer">Archivar a los otros 11</button>
+        </div></div><figcaption class="cap"><b>iPhone y Android.</b> Sin precio ni link. Toca un alumno y luego «Archivar».</figcaption></figure>
+      </div>
+      <div class="pane" hidden>
+        <figure><div class="phone"><div class="island"></div><div class="status"><span>9:41</span><span>●●●</span></div><div class="screen">
+          <div style="display:flex;justify-content:space-between;align-items:center"><div><div class="a-sub">martes, 29 de septiembre</div><div class="a-h">Hola, Josefa</div></div></div>
+          <span class="trialchip m-pop" style="--d:120ms"><svg class="ring" viewBox="0 0 22 22"><circle class="bg" cx="11" cy="11" r="8"/><circle class="fg" cx="11" cy="11" r="8"/></svg>Prueba Pro · quedan 3 días</span>
+          <div class="a-card m-rise" style="--d:180ms"><div class="t" style="font-weight:800">Pendientes de hoy</div><div class="a-row"><span class="dot" style="background:var(--warn)"></span><div><div class="t">Camila Rojas</div><div class="s">Sin entrenos desde el 25 sept · 4 d</div></div></div></div>
+          <div class="tabbar"><span class="on">Inicio</span><span>Alumnos</span><span>Programas</span><span>Más</span></div>
+        </div></div><figcaption class="cap"><b>Durante la prueba.</b> Es estado, no oferta: decide por el estado de la cuenta, no por la fecha.</figcaption></figure>
+      </div>
+      <div class="pane" hidden>
+        <figure><div class="browser"><div class="chrome"><i></i><i></i><i></i><span>eva-app.cl/coach/reactivate?reason=trial_ended</span></div><div class="body">
+          <div class="banner m-rise"><svg class="ring" viewBox="0 0 22 22"><circle class="bg" cx="11" cy="11" r="8"/><circle class="fg" cx="11" cy="11" r="8" style="stroke-dashoffset:50.3"/></svg><div><b>Tu prueba de 14 días terminó</b><div class="s">Elige cómo seguir con tus 12 alumnos</div></div></div>
+          <div class="a-card m-rise" style="--d:80ms"><div class="t" style="font-weight:800">Lo que construiste en 14 días</div><div class="stats3"><div><b class="count" data-to="12">12</b><span>alumnos</span></div><div><b class="count" data-to="8">8</b><span>rutinas</span></div><div><b class="count" data-to="3">3</b><span>planes de nutrición</span></div></div></div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+            <div class="a-card m-rise" style="--d:140ms"><div class="t" style="font-weight:800">Seguir con Pro · $29.990/mes</div><div class="a-sub">Hasta 25 alumnos, sin sello.</div><span class="btn pri">Activar Pro</span></div>
+            <div class="a-card m-rise" style="--d:180ms"><div class="t" style="font-weight:800">Seguir gratis con 1 alumno</div><div class="a-sub">Eliges quién sigue; los demás quedan archivados.</div><span class="btn ghost">Elegir alumno</span></div>
+          </div>
+        </div></div><figcaption class="cap"><b>Web.</b> Aquí sí van precio y checkout. Los números cuentan hacia arriba al entrar.</figcaption></figure>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 12 · Arreglos chicos ============ -->
+<section class="item" id="tren2" data-date="2026-09-14" data-diff="2" data-title="Arreglos chicos, segunda tanda" data-sub="Franjas, descanso en roller/cardio, pendientes honestos, «Tu próximo paso»" data-plats="App,PWA,Escritorio">
+  <div class="item-head">
+    <div class="meta"><span class="eyebrow">14-09 · «Cinco trenes», tren 2 · sin hacer</span><span class="diff d2">Media · 14–18 h en total</span><span class="plat">App</span><span class="plat">PWA</span><span class="plat">Escritorio</span></div>
+    <h2>Seis cosas chicas que el coach y el alumno ven</h2>
+  </div>
+  <div class="two-col">
+    <div class="what">
+      <p>Van juntas porque comparten un deploy y una OTA. Las recomendaciones del 14-09 siguen en pie; dibujé las cuatro que cambian una pantalla.</p>
+      <ul class="todo"><li><b>2a</b> chips «Próximos 2 días» al copiar una franja (web y app).</li><li><b>2b</b> roller y cardio ofrecen descanso en la web; offline no congela.</li><li><b>2c</b> «Pendientes de hoy» con la fecha real del alumno más perdido.</li><li><b>2d</b> «Tu próximo paso» en escritorio; nutrición apagada limpia el directorio.</li><li><b>2e</b> «Editar ejercicio» para ejercicios del equipo + <code>warmup_rest_time</code> al aplicar plantilla.</li><li><b>2f</b> sacar «Ir a facturacion» de la app hasta que exista Cobros.</li></ul>
+    </div>
+    <div class="spec"><h4>Motion</h4><div class="spec-wrap"><table>
+      <tr><td>2a chips</td><td>marcar un chip marca los días en cascada, 40 ms entre días; el check se dibuja en <code>220ms emphasis</code></td></tr>
+      <tr><td>2b descanso</td><td>el par de botones entra con pop escalonado 70 ms; la barra del botón se llena con el tiempo real (lineal)</td></tr>
+      <tr><td>2c agenda</td><td>la fila de Ana sube a su lugar con <code>SPRING.ui</code> y el punto pasa de gris a rojo</td></tr>
+      <tr><td>2d inset</td><td>se revela de arriba abajo con <code>clip-path</code> · <code>480ms emphasis</code></td></tr>
+    </table></div></div>
+  </div>
+  <div class="stage" data-stage>
+    <div class="stage-bar"><div class="tabs" role="tablist"><button role="tab" aria-selected="true" data-pane="0">Las cuatro</button></div><button class="replay" type="button" data-replay><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 2.5v3h3"/></svg>Reproducir</button></div>
+    <div class="panes"><div class="pane">
+      <div class="sub-grid" style="width:100%">
+        <div class="sub"><h3>2a · Copiar la franja</h3><p class="d">App y web · hoja «Copiar a otros días». Toca un chip.</p>
+          <div class="qchips" id="qchips"><button type="button" class="qc" data-n="1" aria-pressed="false">Próximo día</button><button type="button" class="qc" data-n="2" aria-pressed="true">Próximos 2 días</button><button type="button" class="qc" data-n="4" aria-pressed="false">Próximos 4 días</button><button type="button" class="qc" data-n="5" aria-pressed="false">Lu a Vi</button></div>
+          <div class="days" id="days"><div class="day on"><span class="cb"><svg viewBox="0 0 12 12"><path d="M2 6.5l2.5 2.5L10 3.5"/></svg></span>Martes<span class="r">Día 2</span></div><div class="day on"><span class="cb"><svg viewBox="0 0 12 12"><path d="M2 6.5l2.5 2.5L10 3.5"/></svg></span>Miércoles<span class="r">Día 3</span></div><div class="day"><span class="cb"><svg viewBox="0 0 12 12"><path d="M2 6.5l2.5 2.5L10 3.5"/></svg></span>Jueves<span class="r">Reemplaza</span></div><div class="day"><span class="cb"><svg viewBox="0 0 12 12"><path d="M2 6.5l2.5 2.5L10 3.5"/></svg></span>Viernes<span class="r">Día 5</span></div></div>
+          <div class="cta-copy on" id="copycta"><span>Copiar a 2 días</span></div>
+        </div>
+        <div class="sub"><h3>2b · Roller ofrece descanso</h3><p class="d">PWA · paso Roller con «Pasar solo al descanso» apagado.</p>
+          <div class="exec-step"><div class="ex-name" style="text-align:center">Foam roller cuádriceps</div><div class="big-n">12<small>de 12 pasadas</small></div>
+            <div class="rest-pair"><div class="ro1"><span class="fillbar"></span><span style="position:relative">⏱ Descansar 45 s</span></div><div class="ro2">Siguiente serie</div></div>
+            <div class="sq"><i class="on"></i><i class="on"></i><i></i><span>2/3</span></div></div>
+        </div>
+        <div class="sub"><h3>2c · Pendientes honestos</h3><p class="d">App y web · inicio del coach. Ana llevaba 45 días y salía gris y última.</p>
+          <div class="a-card agenda"><div class="a-row up"><span class="dot" style="background:var(--bad)"></span><span class="av">AT</span><div><div class="t">Ana Torres</div><div class="s">Sin check-in desde el 31 jul · 45 d</div></div></div><div class="a-row down"><span class="dot" style="background:var(--warn)"></span><span class="av">CR</span><div><div class="t">Camila Rojas</div><div class="s">Sin entrenos desde el 5 sept · 9 d</div></div></div><div class="a-row down"><span class="dot" style="background:var(--warn)"></span><span class="av">DP</span><div><div class="t">Diego Pérez</div><div class="s">Sin check-in desde el 3 sept · 11 d</div></div></div></div>
+        </div>
+        <div class="sub"><h3>2d · «Tu próximo paso» en escritorio</h3><p class="d">Escritorio · tarjeta «Prioridad de hoy».</p>
+          <div class="prio"><span class="eb">Prioridad de hoy</span><span class="h">2 alumnos necesitan tu atención</span><div class="r"><span class="av">CR</span>Camila Rojas<em style="color:#F4365A">En riesgo</em></div><div class="r"><span class="av">DP</span>Diego Pérez<em style="color:#F5A524">Atrasada</em></div><div class="inset"><span>📅</span><div><div class="eb2">Tu próximo paso</div><div class="ti">3 pendientes hoy</div><div class="go">Ver pendientes →</div></div></div></div>
+        </div>
+      </div>
+    </div></div>
+  </div>
+</section>
+
+<!-- ============ 13 · Correos ============ -->
+<section class="item" id="correos" data-date="2026-09-14" data-diff="2" data-title="Correos que no se contradicen" data-sub="Bienvenida y confirmación en un solo correo; CTA del dunning" data-plats="Correo">
+  <div class="item-head">
+    <div class="meta"><span class="eyebrow">14-09 · «Cinco trenes», tren 5 + dunning de <code>paused</code></span><span class="diff d2">Media · ~9 h, solo web</span><span class="plat">Correo</span></div>
+    <h2>Un correo de bienvenida que no pelea con el de confirmar</h2>
+  </div>
+  <div class="two-col">
+    <div class="what">
+      <p>Al registrarse gratis llegan dos correos en el mismo segundo: «confirma tu correo para activar tu cuenta» y «tu cuenta ya está activa». Se funden en uno con una caja verde «Falta un paso». Quien entra con Google recibe la bienvenida sin la caja. El botón «Anunciar novedades» del admin se retira.</p>
+      <ul class="todo"><li>De paso, el dunning de <code>paused</code>: el botón del correo apunta a <code>/coach/subscription/update-card</code> y el camino Flow gana un CTA.</li><li>Decidir si la gracia de <code>paused</code> se hace simétrica a <code>past_due</code> o se borra del comentario.</li></ul>
+    </div>
+    <div class="spec"><h4>Motion</h4><div class="spec-wrap"><table>
+      <tr><td>En el correo</td><td>ninguno: los clientes de correo no animan de forma confiable. La jerarquía la hace la caja verde</td></tr>
+      <tr><td>En este mockup</td><td>los dos correos se juntan en uno para explicar el cambio</td></tr>
+    </table></div></div>
+  </div>
+  <div class="stage" data-stage>
+    <div class="stage-bar"><div class="tabs" role="tablist"><button role="tab" aria-selected="true" data-pane="0">Correo</button></div><button class="replay" type="button" data-replay><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 2.5v3h3"/></svg>Reproducir</button></div>
+    <div class="panes"><div class="pane">
+      <div class="two-mails merge"><span class="eyebrow">Hoy · mismo segundo</span><div class="mini-mail x m-rise"><b>Confirma tu correo para activar tu cuenta EVA</b><span>«…para activar tu cuenta gratuita…»</span></div><div class="mini-mail x m-rise" style="--d:60ms"><b>Bienvenido a EVA — tu cuenta ya está activa</b><span>«Tu espacio de coaching ya está listo»</span></div></div>
+      <div class="vs m-fade" style="--d:300ms">se funden en ↓</div>
+      <div class="mail m-pop" style="--d:420ms"><div class="mh">EVA</div><div class="mb"><span class="subj">Asunto: Bienvenido a EVA — confirma tu correo y empieza</span><h5>Hola Josefa, bienvenida a EVA</h5><p>Tu espacio de coaching para JoseFit ya está listo. Empiezas con el plan gratuito, sin tarjeta.</p><div class="green"><b>Falta un paso: confirma tu correo</b><p>Así podemos avisarte de tus alumnos y de tu cuenta. El enlace vence en 24 horas.</p><span class="mbtn">Confirmar mi correo</span></div><span class="gbtn2">Ir a mi guía</span></div><div class="mf">Enviado por EVA Fitness Platform</div></div>
+    </div></div>
+  </div>
+</section>
+
+<!-- ============ 15 · Live Updates ============ -->
+<section class="item" id="liveupdates" data-date="2026-08-04" data-diff="4" data-title="Timer fijo en la pantalla de bloqueo" data-sub="Live Updates de Android 16 QPR1+; espera el dato de adopción" data-plats="App">
+  <div class="item-head">
+    <div class="meta"><span class="eyebrow">04-08 · <code>docs/specs/live-updates-a16</code> · draft</span><span class="diff d4">Difícil · build nativa</span><span class="plat">App · Android</span></div>
+    <h2>El descanso, fijo en la pantalla de bloqueo</h2>
+  </div>
+  <div class="two-col">
+    <div class="what">
+      <p>El cronómetro de descanso hoy es una notificación común que el sistema colapsa. Android 16 QPR1 permite «promoted ongoing»: tarjeta fija en bloqueo, chip con el conteo en la barra de estado. En el resto de los teléfonos queda exactamente como hoy.</p>
+      <ul class="todo"><li>Primero: query en PostHog de cuántos usuarios tienen Android 16 QPR1+ (go / no-go).</li><li>Módulo nativo propio (ninguna librería RN lo expone).</li><li>Sale en el binario B, antes de febrero 2027.</li></ul>
+    </div>
+    <div class="spec"><h4>Motion</h4><div class="spec-wrap"><table>
+      <tr><td>Tarjeta</td><td>la anima el sistema; nosotros solo actualizamos el progreso</td></tr>
+      <tr><td>Barra</td><td>lineal, sin curva: es tiempo real</td></tr>
+      <tr><td>Fin del descanso</td><td>vibración + la tarjeta cambia a «¡A la serie 3!»; sin sonido si el teléfono está en silencio</td></tr>
+    </table></div></div>
+  </div>
+  <div class="stage" data-stage>
+    <div class="stage-bar"><div class="tabs" role="tablist"><button role="tab" aria-selected="true" data-pane="0">Android · bloqueo</button></div><button class="replay" type="button" data-replay><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2"><path d="M2.5 8a5.5 5.5 0 1 0 1.6-3.9M2.5 2.5v3h3"/></svg>Reproducir</button></div>
+    <div class="panes"><div class="pane">
+      <figure><div class="phone android lock"><div class="island"></div><div class="status" style="color:#F4F6F8"><span class="sbchip">⏱ 0:43</span><span>▲ ▮</span></div><div class="screen" style="min-height:430px">
+        <div class="clock">9:41</div><div class="date">martes, 30 de septiembre</div>
+        <div style="height:40px"></div>
+        <div class="lu"><div class="top"><i></i>EVA · Piernas</div><div class="main"><b>0:43</b><span>Descanso · luego serie 3 de 4</span></div><div class="bar"><b></b></div></div>
+      </div></div><figcaption class="cap"><b>Pantalla de bloqueo.</b> Tarjeta que no se colapsa y chip con el conteo arriba a la izquierda.</figcaption></figure>
+    </div></div>
+  </div>
+</section>
+
+</main>
+
+<section class="noscreen" id="sinpantalla">
+  <div><span class="eyebrow">Sin pantalla</span><h2 style="font-size:24px;margin-top:4px">Lo que queda y no cambia ninguna pantalla</h2></div>
+  <div class="tbl"><table class="ns">
+    <thead><tr><th>Fecha</th><th>Qué</th><th>Qué falta</th><th>Esfuerzo</th></tr></thead>
+    <tbody>
+      <tr><td class="date">28-09</td><td><b>Renovaciones Flow</b></td><td>Verificar que la renovación de Movens llegue el 02-10.</td><td><span class="diff d1">5 min</span></td></tr>
+      <tr><td class="date">26-09</td><td><b>Píxel de compra</b> (<code>meta-purchase-capi</code>)</td><td><code>Purchase</code> por servidor al primer cobro real, MP y Flow, enganchado en <code>insertBillingSnapshot</code>. Contexto de Meta guardado al elegir medio de pago; timeout 3 s.</td><td><span class="diff d2">~1 día</span></td></tr>
+      <tr><td class="date">26-09</td><td><b>Medir secciones de la landing</b></td><td>Un evento por sección vista y uno por CTA. Datos en 2 semanas; después, experimentos chicos.</td><td><span class="diff d1">medio día</span></td></tr>
+      <tr><td class="date">14-09</td><td><b>Cobros que no se cortan solos</b> (tren 4)</td><td>Callback de reembolso de Flow que no existe; no borrar el preapproval de MP si el cancel falla; período desconocido + rebote ⇒ gracia; UTM desde la app.</td><td><span class="diff d2">~7 h</span></td></tr>
+      <tr><td class="date">14-09</td><td><b>Papeles al día</b> (tren 3)</td><td>Specs y memorias con falsos pendientes.</td><td><span class="diff d1">4 h</span></td></tr>
+      <tr><td class="date">10-09</td><td><b>Backlog Porciones chilenas</b></td><td>D1 smoke PostgREST en CI · D2 ~41 alimentos con macros falsas · D3 auditoría de gramos SMAE · higiene H1–H3. Esperan Q1–Q4.</td><td><span class="diff d3">~4 días</span></td></tr>
+      <tr><td class="date">06-09</td><td><b>Correos del onboarding W6</b></td><td>En ensayo (<code>DRY_RUN=true</code>): aprobar el copy y apagar el ensayo; W8.4.2B sin sus 3 call sites.</td><td><span class="diff d2">~1 día</span></td></tr>
+      <tr><td class="date">07-09</td><td><b>Push iOS caída</b></td><td>Falta la Push Key <code>.p8</code>; Guimel la crea o sube al owner a Admin.</td><td><span class="diff d5">tercero</span></td></tr>
+      <tr><td class="date">23-09</td><td><b>Higiene «Casa en orden»</b></td><td>Dependabot dev, 3 tablas <code>_bak_*</code>, <code>purge_old_audit_logs</code> inexistente, regen de tipos, re-medir TTFB del alumno.</td><td><span class="diff d2">~1 día</span></td></tr>
+      <tr><td class="date">28-08</td><td><b>Cobros coach → alumno</b></td><td>8 decisiones tuyas + contador, abogado y prueba con plata real. 140 tareas paradas.</td><td><span class="diff d5">26–32 días</span></td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<footer>
+  <span>Fuentes: <code>docs/status/CURRENT.md</code> (28-09), specs <code>active</code>/<code>draft</code> en <code>docs/specs</code>, y los artifacts «WhatsApp EVA en Meta», «¿Dónde se pierde la gente?», «Pedidos del 26-09», «Prueba Pro 14 días», «Cinco trenes», «Backlog Porciones chilenas» y «Lo que queda en EVA».</span>
+  <span>Los números de coaches, cohortes y PageSpeed vienen de esos documentos; los nombres de alumnos en los mockups son de ejemplo.</span>
+</footer>
+</div>
+
+<script>
+(function(){
+  var reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var diffLabel = {1:'Fácil',2:'Media',3:'Media-difícil',4:'Difícil',5:'Muy difícil'};
+
+  /* ---------- índice ordenable ---------- */
+  var items = Array.prototype.slice.call(document.querySelectorAll('#items > .item'));
+  var idx = document.getElementById('idx');
+  document.getElementById('idx-count').textContent = items.length + ' pendientes con pantalla';
+  function fmt(d){ var p=d.split('-'); return p[2]+'-'+p[1]; }
+  function renderIndex(list){
+    idx.innerHTML = list.map(function(el,i){
+      var plats = el.dataset.plats.split(',').map(function(p){return '<span class="plat">'+p+'</span>';}).join('');
+      return '<a class="row" style="--i:'+i+'" href="#'+el.id+'"><span class="date">'+fmt(el.dataset.date)+'</span><span class="t">'+el.dataset.title+'<small>'+el.dataset.sub+'</small></span><span class="plats">'+plats+'</span><span class="diff d'+el.dataset.diff+'">'+diffLabel[el.dataset.diff]+'</span></a>';
+    }).join('');
+    idx.classList.remove('flip'); void idx.offsetWidth; if(!reduce) idx.classList.add('flip');
+  }
+  var main = document.getElementById('items');
+  function sortBy(mode){
+    var list = items.slice().sort(function(a,b){
+      if(mode==='diff'){ return (b.dataset.diff - a.dataset.diff) || (b.dataset.date < a.dataset.date ? -1 : 1); }
+      return b.dataset.date < a.dataset.date ? -1 : b.dataset.date > a.dataset.date ? 1 : 0;
+    });
+    list.forEach(function(el){ main.appendChild(el); });
+    renderIndex(list);
+    try{ localStorage.setItem('eva-pend-sort', mode); }catch(e){}
+  }
+  var bDate=document.getElementById('sort-date'), bDiff=document.getElementById('sort-diff'), thumb=document.querySelector('.sorter .thumb');
+  function setSort(mode){
+    bDate.setAttribute('aria-pressed', mode==='date'); bDiff.setAttribute('aria-pressed', mode==='diff');
+    var b = mode==='date'?bDate:bDiff;
+    thumb.style.width = b.offsetWidth+'px'; thumb.style.transform = 'translateX('+(b.offsetLeft-3)+'px)';
+    sortBy(mode);
+  }
+  bDate.addEventListener('click',function(){setSort('date');});
+  bDiff.addEventListener('click',function(){setSort('diff');});
+  var saved='date'; try{ saved = localStorage.getItem('eva-pend-sort') || 'date'; }catch(e){}
+  setSort(saved);
+  window.addEventListener('resize',function(){ setSort(bDiff.getAttribute('aria-pressed')==='true'?'diff':'date'); });
+
+  /* ---------- escenarios: tabs + reproducir ---------- */
+  function play(stage){
+    if(reduce) return;
+    stage.classList.remove('play'); void stage.offsetWidth; stage.classList.add('play');
+    stage.querySelectorAll('.count').forEach(countUp);
+    if(stage.querySelector('#keep')) resetKeep();
+  }
+  function countUp(el){
+    var to = +el.dataset.to, t0 = null, dur = 700;
+    function step(t){ if(!t0) t0=t; var p=Math.min(1,(t-t0)/dur); var e=1-Math.pow(1-p,3); el.textContent=Math.round(to*e); if(p<1) requestAnimationFrame(step); }
+    requestAnimationFrame(step);
+  }
+  document.querySelectorAll('[data-stage]').forEach(function(stage){
+    var tabs = stage.querySelectorAll('[role=tab]'), panes = stage.querySelectorAll('.pane');
+    tabs.forEach(function(tab){
+      tab.addEventListener('click',function(){
+        tabs.forEach(function(t){t.setAttribute('aria-selected', t===tab);});
+        panes.forEach(function(p,i){ var on = String(i)===tab.dataset.pane; p.hidden=!on; if(on){ p.classList.remove('enter'); void p.offsetWidth; if(!reduce) p.classList.add('enter'); } });
+        play(stage);
+      });
+    });
+    stage.querySelector('[data-replay]').addEventListener('click',function(){ play(stage); });
+  });
+  if('IntersectionObserver' in window && !reduce){
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(en){ if(en.isIntersecting){ play(en.target); io.unobserve(en.target); } });
+    },{threshold:.35});
+    document.querySelectorAll('[data-stage]').forEach(function(s){ io.observe(s); });
+    var pr = document.getElementById('principles'); pr.classList.add('play');
+  }
+
+  /* ---------- copiar número ---------- */
+  document.querySelectorAll('[data-copy]').forEach(function(b){
+    b.addEventListener('click',function(){
+      var txt=b.dataset.copy;
+      function ok(){ b.textContent='Copiado'; setTimeout(function(){b.textContent='Copiar';},1500); }
+      function sel(){ var r=document.createRange(); r.selectNodeContents(b.previousElementSibling); var s=getSelection(); s.removeAllRanges(); s.addRange(r); b.textContent='Seleccionado'; }
+      try{ navigator.clipboard.writeText(txt).then(ok,sel); }catch(e){ sel(); }
+    });
+  });
+
+  /* ---------- kg / lb con odómetro ---------- */
+  var KG_PER_LB = 0.45359237, unit='lb', lbVal=50;
+  var odo=document.getElementById('odo'), unitEl=document.getElementById('unit'), conv=document.getElementById('conv'), presets=document.getElementById('presets'), seg=document.getElementById('kgseg');
+  function fmtN(n,d){ return n.toLocaleString('es-CL',{minimumFractionDigits:d,maximumFractionDigits:d}); }
+  function setOdo(str){
+    var chars = str.split('');
+    while(odo.children.length > chars.length) odo.removeChild(odo.lastChild);
+    chars.forEach(function(ch,i){
+      var col = odo.children[i];
+      if(!col){ col=document.createElement('span'); col.className='col'; col.innerHTML='0123456789,'.split('').map(function(c){return '<span>'+c+'</span>';}).join(''); odo.appendChild(col); }
+      var pos = ch===',' ? 10 : +ch;
+      col.style.transform='translateY('+(-46*pos)+'px)';
+    });
+    odo.setAttribute('aria-label', str+' '+unit);
+  }
+  function renderKg(anim){
+    var shown = unit==='lb' ? fmtN(lbVal,0) : fmtN(Math.round(lbVal*KG_PER_LB*10)/10,1);
+    setOdo(shown);
+    unitEl.textContent=unit; conv.textContent = unit==='lb' ? 'se guarda como '+fmtN(Math.round(lbVal*KG_PER_LB*100)/100,2)+' kg' : 'guardado en kg';
+    presets.innerHTML = (unit==='lb'?['−2,5','+2,5','+5','+10']:['−1,25','+1,25','+2,5','+5']).map(function(c){return '<span>'+c+'</span>';}).join('');
+    document.querySelectorAll('#kglb [data-kg]').forEach(function(el){
+      var kg=+el.dataset.kg; var txt = unit==='lb' ? fmtN(Math.round(kg/KG_PER_LB),0)+' lb' : fmtN(Math.round(kg*10)/10,1)+' kg';
+      el.textContent=txt;
+    });
+    if(anim && !reduce){ [unitEl,conv,presets].forEach(function(el){ el.classList.remove('swap'); void el.offsetWidth; el.classList.add('swap'); }); }
+    seg.classList.toggle('lb', unit==='lb');
+    seg.querySelectorAll('button').forEach(function(b){ b.setAttribute('aria-pressed', b.dataset.u===unit); });
+  }
+  seg.querySelectorAll('button').forEach(function(b){ b.addEventListener('click',function(){ if(unit!==b.dataset.u){ unit=b.dataset.u; renderKg(true); } }); });
+  renderKg(false);
+
+  /* ---------- elegir quién sigue ---------- */
+  var keep=document.getElementById('keep'), keepgo=document.getElementById('keepgo');
+  function resetKeep(){ keep.classList.remove('done'); keepgo.textContent='Archivar a los otros 11'; }
+  keep.querySelectorAll('.kc').forEach(function(kc){
+    kc.addEventListener('click',function(){ if(keep.classList.contains('done')) return; keep.querySelectorAll('.kc').forEach(function(k){k.classList.toggle('sel',k===kc);}); });
+  });
+  keepgo.addEventListener('click',function(){
+    if(keep.classList.contains('done')){ resetKeep(); return; }
+    keep.classList.add('done'); keepgo.textContent='Deshacer';
+  });
+
+  /* ---------- chips de franja ---------- */
+  var qchips=document.getElementById('qchips'), days=document.querySelectorAll('#days .day'), cta=document.getElementById('copycta');
+  qchips.querySelectorAll('.qc').forEach(function(q){
+    q.addEventListener('click',function(){
+      qchips.querySelectorAll('.qc').forEach(function(x){x.setAttribute('aria-pressed', x===q);});
+      var n=+q.dataset.n; var count=Math.min(n,days.length);
+      days.forEach(function(d,i){ setTimeout(function(){ d.classList.toggle('on', i<count); }, reduce?0:i*40); });
+      cta.innerHTML='<span class="tick">'+(count===1?'Copiar a 1 día':'Copiar a '+count+' días')+'</span>';
+    });
+  });
+})();
+</script>
