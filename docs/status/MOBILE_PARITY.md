@@ -12,12 +12,13 @@ source_of_truth: apps/web responsive + apps/mobile
 
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
 
-> **2026-09-30 (tren «Kilos o libras» W4 RN — commit local, SIN OTA; [SDD](../specs/kg-lb-ejecutor/SPEC.md))**: paridad
-> con la web W3 (en `rnmobiledenuevo`, tampoco en prod). Selector kg | lb por EJERCICIO en el teclado de la fila y el de
+> **2026-09-30 (tren «Kilos o libras» W4 RN — EN PRODUCCIÓN por OTA; [SDD](../specs/kg-lb-ejecutor/SPEC.md))**: paridad
+> con la web W3 (ambas en `master` `759b47d1`; OTA 1.1.3 android `24d7a59f` run 36761118795 / ios `6c11fb23` run
+> 36761141098; Android 1.1.2 sin port, lo cubre el barrido W5.4). Selector kg | lb por EJERCICIO en el teclado de la fila y el de
 > edición, rueda por unidad, lecturas (prescripción, «Anterior», récord, «Serie N», chip de sobrecarga) en la unidad,
 > guardado en kilos + `weight_unit` (online y cola offline), builder RN con la unidad pegada a «Peso objetivo» y ficha del
 > coach con «(45 lb)». Contexto `components/alumno/workout/weight-unit-context.tsx`; detalle y gates en
-> [TASKS W4](../specs/kg-lb-ejecutor/TASKS.md). Pendiente: W5 (datos viejos, con OK) y W6 (deploy + OTA doble + QA device).
+> [TASKS W4](../specs/kg-lb-ejecutor/TASKS.md). Datos viejos convertidos en LIVE (W5.3). Pendiente: barrido W5.4 y QA device.
 
 > **2026-09-30 (fix RN «Cambiar» del Hoy del alumno — EN PRODUCCIÓN por OTA)**: video de un coach en iPhone: al tocar
 > «Buscar en N equivalentes» el teclado tapaba el buscador y la lista. `SubstitutionSheet` iba por `@gorhom` con un

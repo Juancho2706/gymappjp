@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-09-28"
+last_verified: "2026-09-30"
 canonical: true
 ---
 
@@ -18,8 +18,8 @@ prevalecen sobre este resumen. La prosa retirada está en
 
 | Frente | Estado | Fuente de detalle |
 |---|---|---|
-| Web/PWA | Pricing v3 productivo: Free = 1 alumno + white-label + sello «Hecho con EVA»; Pro 25 sin sello. **Deploy vigente 23-09: `master` = `rnmobiledenuevo` = `111460b0`** («Elige cómo pagar», `dpl_b6qKULbc…`). | [Runbook](../operations/RUNBOOK.md) · [spec](../specs/pricing-v3/SPEC.md) |
-| App nativa (RN) | iOS **1.1.3** pública desde el 16-09 (piso OTA iOS = 1.1.3); Android **1.1.3 (87) pública en Play desde el 25-09** (producción 100 %, 177 países; verificado en consola 26-09). Pistas de prueba: interna y cerrada pausadas (la pausa de alpha sigue «en revisión» al 26-09), abierta nunca usada. Queda OTA doble mientras haya Android en 1.1.2 y el binario B (R8, antes de feb 2027). **OTAs vigentes 23-09**: ios 1.1.3 grupo `6041fa25` + 1.1.2 desde el tag `ota/1.1.2-20260923` (android `49d04dd1` / ios `2c87e903`). | [Mobile parity](MOBILE_PARITY.md) · [OTA](../operations/MOBILE_RELEASES_OTA.md) · [SDD Android 1.1.3](../specs/android-113-play/SPEC.md) |
+| Web/PWA | Pricing v3 productivo: Free = 1 alumno + white-label + sello «Hecho con EVA»; Pro 25 sin sello. **Deploy vigente 30-09: `master` = `rnmobiledenuevo` = `759b47d1`** («Kilos o libras», `dpl_AouZB5An…`). | [Runbook](../operations/RUNBOOK.md) · [spec](../specs/pricing-v3/SPEC.md) |
+| App nativa (RN) | iOS **1.1.3** pública desde el 16-09 (piso OTA iOS = 1.1.3); Android **1.1.3 (87) pública en Play desde el 25-09** (producción 100 %, 177 países; verificado en consola 26-09). Pistas de prueba: interna y cerrada pausadas (la pausa de alpha sigue «en revisión» al 26-09), abierta nunca usada. Queda OTA doble mientras haya Android en 1.1.2 y el binario B (R8, antes de feb 2027). **OTAs vigentes 30-09**: 1.1.3 android `24d7a59f` / ios `6c11fb23` desde `master` `759b47d1` (kg/lb); 1.1.2 android `31212063` desde el tag `ota/1.1.2-20260930` (sin kg/lb). | [Mobile parity](MOBILE_PARITY.md) · [OTA](../operations/MOBILE_RELEASES_OTA.md) · [SDD Android 1.1.3](../specs/android-113-play/SPEC.md) |
 | Nutrition V2 | Canónica para Standalone/Team. «Porciones a la chilena» y «Cantidades honestas» cerrados con QA VERDE (SDD `done`). V1 congelada, **no se borra** (decisión owner 03-08): solo migrar usuarios. | [Porciones CL](../specs/nutrition-porciones-chilenas/SPEC.md) · [Runbook de corte](../operations/NUTRITION_V2_CUTOVER_RUNBOOK.md) · [Delta V1](../audits/v1-deprecation-map-delta-2026-08-03.md) |
 | Teams | Pool, membresías y workspaces implementados; queda la matriz Team del archivado. | [Flows](../architecture/FLOWS_AND_COMPONENTS.md#team) · [Archivado](../../specs/archive-nutrition-v2-cutover/SPEC.md) |
 | Enterprise | **ELIMINADO (owner 01-09)**: E0+E1 en producción 05-09 (`/enterprise` ⇒ 308 a `/pricing`). **Queda E2**: ruta `/e/…`, tablas/funciones org y 2 RPC `SECURITY DEFINER` ejecutables por `anon` (`get_enterprise_alumno_context`, `get_org_branding`). | [SDD retiro](../specs/retiro-starter-y-enterprise/SPEC.md) |
@@ -45,6 +45,9 @@ prevalecen sobre este resumen. La prosa retirada está en
    `1e5a31ab` / ios `1472feb6`, 1.1.2 android `31212063` desde el tag `ota/1.1.2-20260930`): **QA en iPhone** —
    Hoy del alumno → «N equivalentes» → tocar el buscador: la hoja sube con el teclado; elegir una opción que pida
    confirmar cantidad abre «Confirma la cantidad» encima y «Cancelar» vuelve a la lista.
+6. **«Kilos o libras»** (30-09, [SDD](../specs/kg-lb-ejecutor/SPEC.md)): web + OTA 1.1.3 (`24d7a59f` / `6c11fb23`);
+   datos de bloques `lb` convertidos en LIVE con respaldo `_bak_kg_lb_20260930_*`. **Quedan: barrido W5.4 (re-correr
+   la Parte A del SQL) con la adopción del OTA y QA del owner SPEC §7** ([TASKS](../specs/kg-lb-ejecutor/TASKS.md)).
 
 ### 2. Frentes abiertos
 
