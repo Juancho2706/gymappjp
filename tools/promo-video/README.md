@@ -39,7 +39,7 @@ node render.mjs video out/eva_silent.mp4 60 2
 PAGE=index_v.html W=1080 H=1920 node render.mjs video out/eva_reel_silent.mp4 60 2
 
 # audio final y mux (requiere numpy)
-python3 mix_final.py musica_phonk.wav voz_elevenlabs.mp3      # -> out/final_mix.wav
+python3 mix_final.py source-audio/phonk_automotivo_elevenlabs.wav source-audio/voz_cami_elevenlabs.mp3      # -> out/final_mix.wav
 $FFMPEG -i out/eva_reel_silent.mp4 -i out/final_mix.wav -map 0:v -map 1:a -c:v copy -c:a aac -b:a 256k -shortest out/eva_reel_30s_9x16.mp4
 
 ```
@@ -60,7 +60,13 @@ Posiciones finales en el video (ver `LINES` en `mix_final.py`):
 | 6 | 23,35 s | Guarda, asigna, y tu alumno la recibe al instante en su app. |
 | 7 | 27,55 s | Tú entrenas. EVA lleva el resto. |
 
+## Más documentación
+
+- `PROMPTS.md`: prompts exactos de música y voz usados en ElevenLabs.
+- `IDEAS.md`: próximos videos de la serie y proceso para producirlos.
+- `source-audio/`: audios originales de ElevenLabs (música completa de 57 s y voz de Cami).
+
 ## Música (ElevenLabs Music v2.5)
 
 Brazilian phonk a 120 BPM (los cortes del video caen cada 0,5 s), drop en el segundo 4, instrumental.
-El prompt usado está en el historial del proyecto; la pista se corta en 28,5 s.
+El prompt usado está en `PROMPTS.md`; la pista se corta en 28,5 s.
