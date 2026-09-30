@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>EVA Carrusel</title>
+<link rel="stylesheet" href="fonts/fonts.css">
+<link rel="stylesheet" href="fonts/russo.css">
+<link rel="stylesheet" href="fonts/archw.css">
+<style>
+:root{
+  --paper:#F4F6F8; --white:#fff; --ink:#0B0E13; --ink2:#2A323D; --muted:#5A6573; --dim:#818C9A; --line:#E6E9ED;
+  --sport:#2680FF; --sport6:#1462DC; --sport1:#E8F1FF; --aqua:#18ABD4; --cyan:#00F7F7; --navy:#00022B;
+  --ember:#FF6A3D; --ok:#1FB877; --violet:#8B5CF6;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1350px;overflow:hidden;background:#fff}
+#stage{position:relative;width:1080px;height:1350px;overflow:hidden;background:var(--paper);font-family:Inter,sans-serif;color:var(--ink);-webkit-font-smoothing:antialiased}
+.abs{position:absolute}
+.mono{font-family:'JetBrains Mono',monospace}
+#bgc{position:absolute;inset:0}
+.blob{position:absolute;border-radius:50%;filter:blur(80px)}
+#dots{position:absolute;inset:-60px;background-image:radial-gradient(rgba(11,14,19,.075) 1.6px,transparent 1.8px);background-size:30px 30px;
+  -webkit-mask:radial-gradient(90% 70% at 50% 45%,#000 30%,transparent 100%);mask:radial-gradient(90% 70% at 50% 45%,#000 30%,transparent 100%)}
+#bigNum{position:absolute;right:-20px;top:70px;font:900 560px/1 'ArchivoW';font-stretch:70%;letter-spacing:-.04em;color:transparent;-webkit-text-stroke:2.5px rgba(38,128,255,.13)}
+
+/* header */
+#pill{position:absolute;left:60px;top:58px;height:60px;padding:0 24px 0 18px;border-radius:30px;background:rgba(255,255,255,.9);border:1.5px solid rgba(11,14,19,.1);
+  display:flex;align-items:center;gap:12px;box-shadow:0 8px 24px -12px rgba(11,14,19,.25)}
+.mk{position:relative;-webkit-mask:url(mark.png) center/contain no-repeat;mask:url(mark.png) center/contain no-repeat;background:var(--ink)}
+.eva{font-family:'Russo One',sans-serif;display:inline-block;transform:skewX(-14deg);letter-spacing:.01em;line-height:1}
+#pill .eva{font-size:30px}
+#pill .sep{width:1.5px;height:24px;background:rgba(11,14,19,.14)}
+#pill .tag{font:700 15px 'JetBrains Mono';letter-spacing:.2em;color:var(--muted)}
+#prog{position:absolute;right:60px;top:74px;display:flex;align-items:center;gap:14px}
+#prog .n{font:700 22px 'JetBrains Mono';color:var(--ink)}
+#prog .dashes{display:flex;gap:7px}
+#prog .d{width:26px;height:5px;border-radius:3px;background:rgba(11,14,19,.12);overflow:hidden;position:relative}
+#prog .d i{position:absolute;left:0;top:0;bottom:0;width:0;background:var(--ink)}
+
+/* headline */
+#kick{position:absolute;left:60px;top:176px;height:46px;padding:0 20px;border-radius:23px;background:var(--sport1);color:var(--sport6);
+  display:flex;align-items:center;gap:10px;font:800 16px 'JetBrains Mono';letter-spacing:.2em;white-space:nowrap}
+#kick b{width:9px;height:9px;border-radius:50%;background:var(--sport)}
+#head{position:absolute;left:56px;top:244px;width:980px;font:900 112px/.92 'ArchivoW';font-stretch:72%;letter-spacing:-.012em;text-transform:uppercase}
+#head .ln{display:block;white-space:nowrap}
+.w{display:inline-block;overflow:hidden;vertical-align:top;padding:0 .03em .06em}
+.w>span{display:inline-block}
+.g{background:linear-gradient(95deg,#2680FF 0%,#18ABD4 60%,#0B8FB0 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+.shine{background-image:linear-gradient(95deg,#2680FF 0%,#18ABD4 60%,#0B8FB0 100%),linear-gradient(100deg,transparent 40%,rgba(255,255,255,.9) 50%,transparent 60%)}
+#under{position:absolute;left:62px;height:10px;border-radius:6px;background:linear-gradient(90deg,#2680FF,#00F7F7);transform-origin:0 50%}
+#sub{position:absolute;left:62px;top:0;width:900px;font:500 32px/1.35 Inter;color:var(--muted)}
+#sub .w{padding-bottom:.1em}
+
+/* footer */
+#foot{position:absolute;left:60px;right:60px;top:1262px;display:flex;justify-content:space-between;align-items:center}
+#foot .url{font:600 21px 'JetBrains Mono';color:var(--muted);letter-spacing:.06em}
+#foot .sw{font:800 19px 'JetBrains Mono';letter-spacing:.3em;color:var(--ink);display:flex;align-items:center;gap:14px}
+#foot .sw svg{display:block}
+#track{position:absolute;left:0;top:1206px;width:1080px;height:3px}
+#track .tl{position:absolute;left:0;top:0;height:3px;border-radius:2px;background:linear-gradient(90deg,rgba(38,128,255,.15),#2680FF 60%,#00C9E0)}
+#track .hd{position:absolute;top:-7px;width:17px;height:17px;border-radius:50%;background:#fff;border:4px solid #2680FF;box-shadow:0 0 0 6px rgba(38,128,255,.15),0 0 24px rgba(0,201,224,.8)}
+
+/* cards */
+.card{position:absolute;background:#fff;border-radius:34px;border:1px solid rgba(11,14,19,.06);
+  box-shadow:0 2px 0 rgba(255,255,255,.8) inset,0 40px 80px -30px rgba(11,30,70,.35),0 12px 30px -18px rgba(11,30,70,.25)}
+.lab{font:700 14px 'JetBrains Mono';letter-spacing:.2em;color:var(--dim);text-transform:uppercase}
+.chip{display:inline-flex;align-items:center;gap:8px;height:40px;padding:0 16px;border-radius:20px;font:700 17px Inter;background:var(--sport1);color:var(--sport6);white-space:nowrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;height:62px;padding:0 30px;border-radius:20px;font:800 21px Inter;color:#fff;background:linear-gradient(135deg,#2680FF,#1462DC);box-shadow:0 14px 30px -10px rgba(38,128,255,.7)}
+.av{width:58px;height:58px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:800 19px Inter;color:#fff;flex:none}
+#cursor{position:absolute;left:0;top:0;width:46px;height:54px;z-index:50;filter:drop-shadow(0 8px 12px rgba(11,14,19,.35))}
+#ring{position:absolute;width:84px;height:84px;border-radius:50%;border:3px solid var(--sport);left:0;top:0;opacity:0;z-index:49}
+#fx{position:absolute;inset:0;z-index:45;pointer-events:none}
+.phone{position:absolute;border-radius:62px;background:#0B0E13;padding:13px;box-shadow:0 0 0 2px #2A323D,0 60px 110px -30px rgba(11,30,70,.55),0 20px 40px -20px rgba(11,30,70,.4)}
+.scr{position:relative;width:100%;height:100%;border-radius:50px;overflow:hidden;background:#F7F8FA}
+.isl{position:absolute;left:50%;top:13px;width:110px;height:32px;border-radius:18px;background:#000;transform:translateX(-50%);z-index:5}
+.sb{position:absolute;left:32px;right:28px;top:17px;display:flex;justify-content:space-between;font:700 16px Inter;color:var(--ink)}
+#flash{position:absolute;inset:0;background:#fff;opacity:0;z-index:70;pointer-events:none}
+#grain{position:absolute;inset:0;z-index:66;opacity:.05;mix-blend-mode:multiply;pointer-events:none}
+
+/* CTA slide */
+#stage.cta{background:#00F7F7}
+</style>
+</head>
+<body>
+<div id="stage">
+  <div id="bgc"><div class="blob" id="b1"></div><div class="blob" id="b2"></div><div class="blob" id="b3"></div><div id="dots"></div><div id="bigNum"></div></div>
+  <div id="scene" class="abs" style="inset:0"></div>
+  <div id="pill"><div class="mk" style="width:28px;height:34px"></div><span class="eva">EVA</span><span class="sep"></span><span class="tag">GUÍA</span></div>
+  <div id="prog"><span class="n"></span><div class="dashes"></div></div>
+  <div id="kick"><b></b><span></span></div>
+  <div id="head"></div>
+  <div id="under"></div>
+  <div id="sub"></div>
+  <div id="track"><div class="tl"></div><div class="hd"></div></div>
+  <div id="foot"><span class="url">eva-app.cl</span><span class="sw"><span id="swT">DESLIZA</span><svg id="swA" width="44" height="20" viewBox="0 0 44 20"><path d="M2 10h36M30 3l8 7-8 7" fill="none" stroke="#0B0E13" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span></div>
+  <canvas id="fx" width="1080" height="1350"></canvas>
+  <div id="ring"></div>
+  <svg id="cursor" viewBox="0 0 44 52"><path d="M4 3 L4 41 L14.5 31.5 L21.5 47 L28.5 44 L21.5 29 L36 29 Z" fill="#0B0E13" stroke="#fff" stroke-width="2.8" stroke-linejoin="round"/></svg>
+  <div id="flash"></div>
+  <canvas id="grain" width="540" height="675" style="width:1080px;height:1350px"></canvas>
+</div>
+<script src="carousel.js"></script>
+</body>
+</html>
