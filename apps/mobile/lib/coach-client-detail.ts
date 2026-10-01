@@ -69,6 +69,12 @@ export interface CoachClientDetail {
   sex: ClientSex | null
   subscription_start_date: string | null
   created_at: string
+  /** Primer login real (`clients.first_login_at`): alimenta el aviso «todavía no entra». */
+  first_login_at?: string | null
+  /** Clave temporal sin cambiar (`clients.force_password_change`). */
+  force_password_change?: boolean | null
+  /** Alumno de ejemplo del onboarding v2: nunca muestra el aviso. */
+  is_demo?: boolean | null
 }
 
 export const SEX_VALUES = ['male', 'female', 'other'] as const
@@ -717,7 +723,7 @@ export async function getCoachClientDetail(clientId: string, workspace?: ClientA
   // ricas fallen en una prod sin columnas enterprise/Codex.
   let clientQuery = supabase
     .from('clients')
-    .select('id, full_name, email, phone, is_active, is_archived, org_id, team_id, goal_weight_kg, subscription_start_date, created_at')
+    .select('id, full_name, email, phone, is_active, is_archived, org_id, team_id, goal_weight_kg, subscription_start_date, created_at, first_login_at, force_password_change, is_demo')
     .eq('id', clientId)
   if (workspace?.kind === 'team_owner' || workspace?.kind === 'team_member') {
     clientQuery = workspace.teamId

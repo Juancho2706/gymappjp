@@ -12,6 +12,8 @@ import { EvaLoaderScreen } from '../../../components/EvaLoader'
 import { AppBackground } from '../../../components/AppBackground'
 import { PhotoLightbox } from '../../../components/PhotoLightbox'
 import { ClientHero, type HeroChips, type HeroStatusLevel } from '../../../components/coach/clientDetail/ClientHero'
+import { NotEnteredNotice } from '../../../components/coach/NotEnteredNotice'
+import { hasNotEnteredYet } from '../../../components/coach/directory/directory-shared'
 import { DossierExportSheet } from '../../../components/coach/clientDetail/DossierExportSheet'
 import { ClientTabBar, type ClientTab, type TabItem } from '../../../components/coach/clientDetail/ClientTabBar'
 import { tabBarBackdropProgress } from '../../../lib/client-tabbar-backdrop'
@@ -633,6 +635,17 @@ export default function ClientDetailScreen() {
   // nutritionCompliancePercent = round(mealsDoneHoy / mealsTotalHoy)) — cumplimiento de
   // HOY, no el promedio semanal. El valor del chip "Comidas hoy" (mealsDone/mealsTotal) y
   // su sub "% plan" deben leer la MISMA ventana (dia), como en ClientProfileHero.tsx:124,331-338.
+  // Plan B «Activación»: alumno real que nunca entró ⇒ aviso con «Reenviarle el acceso» arriba.
+  const notEnteredYet =
+    client.is_demo !== true &&
+    hasNotEnteredYet({
+      isArchived: client.is_archived === true,
+      isActive: client.is_active !== false,
+      firstLoginAt: client.first_login_at ?? null,
+      createdAt: client.created_at ?? null,
+      forcePasswordChange: client.force_password_change === true,
+    })
+
   const heroChips: HeroChips = {
     weightValue: derived.currentWeight,
     weightDelta: derived.weightDelta,
@@ -787,7 +800,18 @@ export default function ClientDetailScreen() {
         scrollEventThrottle={16}
         keyboardShouldPersistTaps="handled"
       >
-        {/* 0 — Hero */}
+        {/* 0 — Hero (el aviso «todavía no entra» va DENTRO del índice 0: `stickyHeaderIndices` fija
+            el 1, la tira de tabs, y un hijo nuevo antes la correría). */}
+        <View>
+        {notEnteredYet ? (
+          <View style={{ marginBottom: 12 }}>
+            <NotEnteredNotice
+              name={client.full_name}
+              createdAt={client.created_at}
+              onResend={() => { setResetPassword(null); setActionError(null); setResetOpen(true) }}
+            />
+          </View>
+        ) : null}
         <ClientHero
           name={client.full_name}
           email={client.email}
@@ -805,6 +829,7 @@ export default function ClientDetailScreen() {
           onExportPdf={() => { if (!exportingPdf) setExportOpen(true) }}
           exportingPdf={exportingPdf}
         />
+        </View>
 
         {/* 1 — Tab bar (sticky) */}
         <View
