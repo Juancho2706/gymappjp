@@ -37,6 +37,8 @@ export interface PlatformOverview {
         full_name: string | null
         brand_name: string | null
         current_period_end: string | null
+        /** Fin REAL (Flow corregido a hora de Chile, `effectivePeriodEndIso`): lo que se imprime. */
+        expires_at: string | null
         subscription_status: string | null
     }[]
     mrrSeries: { ym: string; mrr_clp: number; coach_count: number }[]
@@ -83,6 +85,12 @@ export interface CoachListItem {
      * ver que existen para no leer "0 alumnos" en un coach que sí tiene la cuenta poblada.
      */
     demo_client_count: number
+    /**
+     * Instante REAL en que termina lo pagado (o el trial): `current_period_end` con Flow corregido a
+     * hora de Chile (`effectivePeriodEndIso`), si no `trial_ends_at`. Es lo que el panel imprime.
+     */
+    expires_at: string | null
+    /** Días enteros hasta `expires_at` (truncados, misma regla que la RPC). */
     days_until_expiry: number | null
     utilization_pct: number
     last_activity_at: string | null

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 /**
  * `getAllCoachesPaginated` llama la RPC `get_admin_coaches_paginated` a través de
@@ -11,10 +11,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
  * actividad sobre `coach_last_active_at` (`20260826022428`). Las dos columnas nuevas entran acá.
  */
 
-const { createServiceRoleClientMock, rpcMock, findAdminCoachesFallbackMock } = vi.hoisted(() => ({
+const {
+    createServiceRoleClientMock,
+    rpcMock,
+    findAdminCoachesFallbackMock,
+    findAdminCoachBillingRowsMock,
+    findActiveCouponRedemptionsByIdsMock,
+} = vi.hoisted(() => ({
     createServiceRoleClientMock: vi.fn(),
     rpcMock: vi.fn(),
     findAdminCoachesFallbackMock: vi.fn(),
+    findAdminCoachBillingRowsMock: vi.fn(),
+    findActiveCouponRedemptionsByIdsMock: vi.fn(),
 }))
 
 vi.mock('next/cache', () => ({ unstable_noStore: vi.fn() }))
@@ -22,6 +30,8 @@ vi.mock('@/lib/supabase/admin-client', () => ({ createServiceRoleClient: createS
 vi.mock('@/infrastructure/db', () => ({
     countActiveAdminCoaches: vi.fn(),
     countBetaAdminInvites: vi.fn(),
+    findActiveCouponRedemptionsByIds: findActiveCouponRedemptionsByIdsMock,
+    findAdminCoachBillingRows: findAdminCoachBillingRowsMock,
     findAdminAuditLogs: vi.fn(),
     findAdminBasicCoaches: vi.fn(),
     findAdminCoachesFallback: findAdminCoachesFallbackMock,
@@ -62,7 +72,7 @@ function rpcRow(overrides: Record<string, unknown> = {}) {
     }
 }
 
-/** Las 22 claves que el panel consume de cada coach. Cambiar esta lista es cambiar el contrato. */
+/** Las 23 claves que el panel consume de cada coach. Cambiar esta lista es cambiar el contrato. */
 const COACH_LIST_ITEM_KEYS = [
     'id',
     'full_name',
@@ -79,6 +89,7 @@ const COACH_LIST_ITEM_KEYS = [
     'client_count',
     'active_client_count',
     'demo_client_count',
+    'expires_at',
     'days_until_expiry',
     'utilization_pct',
     'last_activity_at',
@@ -92,6 +103,8 @@ beforeEach(() => {
     vi.clearAllMocks()
     createServiceRoleClientMock.mockReturnValue({ rpc: rpcMock })
     rpcMock.mockResolvedValue({ data: [rpcRow()], error: null })
+    findAdminCoachBillingRowsMock.mockResolvedValue([])
+    findActiveCouponRedemptionsByIdsMock.mockResolvedValue([])
 })
 
 describe('getAllCoachesPaginated — contrato de columnas de get_admin_coaches_paginated', () => {
@@ -153,6 +166,7 @@ describe('getAllCoachesPaginated — contrato de columnas de get_admin_coaches_p
             client_count: 1,
             active_client_count: 1,
             demo_client_count: 1,
+            expires_at: null,
             days_until_expiry: null,
             utilization_pct: 100,
             last_activity_at: '2026-08-20T00:00:00.000Z',
@@ -268,5 +282,84 @@ describe('getAllCoachesPaginated — contrato de columnas de get_admin_coaches_p
         findAdminCoachesFallbackMock.mockResolvedValue(null)
 
         await expect(getAllCoachesPaginated({})).resolves.toEqual({ coaches: [], total: 0 })
+    })
+})
+
+describe('getAllCoachesPaginated — MRR neto y vencimiento real (30-09)', () => {
+    beforeEach(() => {
+        vi.useFakeTimers()
+        vi.setSystemTime(new Date('2026-09-30T21:00:00Z')) // 18:00 de Chile
+    })
+    afterEach(() => {
+        vi.useRealTimers()
+    })
+
+    const proRow = (overrides: Record<string, unknown>) =>
+        rpcRow({ subscription_tier: 'pro', subscription_status: 'active', max_clients: 30, ...overrides })
+
+    it('MRR descuenta el cupón vivo (MDR 50 % ⇒ $14.995) y solo cuenta a quien paga de verdad', async () => {
+        rpcMock.mockResolvedValue({
+            data: [
+                proRow({ id: 'mdr', payment_provider: 'flow' }),
+                proRow({ id: 'movens', payment_provider: 'flow' }),
+                proRow({ id: 'demo', payment_provider: 'mercadopago' }),
+                proRow({ id: 'olympus', payment_provider: 'flow', subscription_status: 'canceled' }),
+            ],
+            error: null,
+        })
+        findAdminCoachBillingRowsMock.mockResolvedValue([
+            { id: 'mdr', subscription_mp_id: null, subscription_provider_external_id: 'sus_qd', active_coupon_redemption_id: 'red-1' },
+            { id: 'movens', subscription_mp_id: null, subscription_provider_external_id: 'sus_e9', active_coupon_redemption_id: null },
+            // Cuenta demo: tier pro + provider MP pero SIN suscripción en el gateway.
+            { id: 'demo', subscription_mp_id: null, subscription_provider_external_id: null, active_coupon_redemption_id: null },
+        ])
+        findActiveCouponRedemptionsByIdsMock.mockResolvedValue([
+            { id: 'red-1', discount_value_snapshot: { code: 'X', type: 'percent', value: 50, target: 'total' }, applied_cycles_remaining: null },
+        ])
+
+        const { coaches } = await getAllCoachesPaginated({})
+        const mrr = Object.fromEntries(coaches.map((c) => [c.id, c.monthly_revenue]))
+
+        expect(mrr).toEqual({ mdr: 14995, movens: 29990, demo: 0, olympus: 0 })
+        // Solo viajan a la DB los activos con gateway (el cancelado ni se consulta).
+        expect(findAdminCoachBillingRowsMock.mock.calls[0][1]).toEqual(['mdr', 'movens', 'demo'])
+        expect(findActiveCouponRedemptionsByIdsMock.mock.calls[0][1]).toEqual(['red-1'])
+    })
+
+    it('Flow: el día guardado como UTC se lee como cobro a las 00:00 de Chile del día siguiente', async () => {
+        rpcMock.mockResolvedValue({
+            data: [
+                proRow({
+                    id: 'movens',
+                    payment_provider: 'flow',
+                    current_period_end: '2026-10-01T00:00:00+00:00',
+                    days_until_expiry: 0, // lo que decía la RPC («0d»)
+                }),
+            ],
+            error: null,
+        })
+
+        const { coaches } = await getAllCoachesPaginated({})
+
+        expect(coaches[0].current_period_end).toBe('2026-10-01T00:00:00+00:00')
+        expect(coaches[0].expires_at).toBe('2026-10-02T03:00:00.000Z')
+        expect(coaches[0].days_until_expiry).toBe(1)
+    })
+
+    it('MercadoPago conserva su instante; trial sin período usa trial_ends_at', async () => {
+        rpcMock.mockResolvedValue({
+            data: [
+                proRow({ id: 'mp', payment_provider: 'mercadopago', current_period_end: '2026-10-26T15:14:07+00:00' }),
+                proRow({ id: 'trial', subscription_status: 'trialing', trial_ends_at: '2026-10-03T12:00:00+00:00' }),
+            ],
+            error: null,
+        })
+
+        const { coaches } = await getAllCoachesPaginated({})
+
+        expect(coaches[0].expires_at).toBe('2026-10-26T15:14:07.000Z')
+        expect(coaches[0].days_until_expiry).toBe(25)
+        expect(coaches[1].expires_at).toBe('2026-10-03T12:00:00.000Z')
+        expect(coaches[1].lifecycle_stage).toBe('new_trial')
     })
 })

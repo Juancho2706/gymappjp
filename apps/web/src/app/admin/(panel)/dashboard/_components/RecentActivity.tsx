@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { AdminStatusBadge } from '../../_components/AdminStatusBadge'
 import { AdminEmptyState } from '../../_components/AdminEmptyState'
 import { AdminRelativeTime } from '../../_components/AdminRelativeTime'
+import { formatExpiryStamp } from '../../_components/expiry-format'
 import { differenceInDays } from 'date-fns'
 import { AlertTriangle, Clock, UserPlus, TrendingDown, ScrollText, type LucideIcon } from 'lucide-react'
 
@@ -31,6 +32,7 @@ interface ExpiringSoon {
     full_name: string | null
     brand_name: string | null
     current_period_end: string | null
+    expires_at: string | null
     subscription_status: string | null
 }
 
@@ -120,13 +122,15 @@ export function RecentActivity({ signups, auditEvents, expiringSoon, pendingPaym
     const attention: AttentionItem[] = [
         ...expiringSoon.map<AttentionItem>(coach => {
             const name = coach.brand_name || coach.full_name || 'Sin nombre'
-            const days = coach.current_period_end
-                ? differenceInDays(new Date(coach.current_period_end), now)
+            // `expires_at` = instante real (Flow corregido): el crudo decía «vence hoy» a coaches
+            // Flow que se cobran mañana. La etiqueta lleva día y hora de Chile, no solo «en Nd».
+            const days = coach.expires_at
+                ? differenceInDays(new Date(coach.expires_at), now)
                 : 0
             return {
                 key: `exp-${coach.id}`,
                 name,
-                label: days <= 0 ? 'vence hoy' : `vence en ${days}d`,
+                label: coach.expires_at ? `vence ${formatExpiryStamp(coach.expires_at)}` : 'vence hoy',
                 days,
                 tone: days <= 2 ? 'danger' : 'warning',
                 icon: AlertTriangle,

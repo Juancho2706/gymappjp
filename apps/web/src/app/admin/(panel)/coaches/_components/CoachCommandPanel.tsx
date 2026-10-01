@@ -25,6 +25,7 @@ import {
 } from '../_actions/coach-actions'
 import { MODULE_KEYS, MODULE_LABELS } from '../../_components/module-labels'
 import { AdminConfirmDialog } from '../../_components/AdminConfirmDialog'
+import { AdminExpiry } from '../../_components/AdminExpiry'
 import {
     ExternalLink, Copy, CheckCircle, AlertTriangle, Clock,
     RefreshCw, Pause, Zap, ShieldOff, Edit3, Activity, Mail, Palette, ArrowRight
@@ -197,9 +198,6 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
         refresh()
     }
 
-    const daysLeft = coach.days_until_expiry
-    const expiryColor = daysLeft === null ? '' : daysLeft < 0 ? 'text-muted' : daysLeft < 7 ? 'text-[var(--danger-500)]' : daysLeft < 14 ? 'text-[var(--warning-500)]' : 'text-[var(--success-500)]'
-
     const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
         { key: 'info',     label: 'Info',     icon: Activity },
         { key: 'edit',     label: 'Editar',   icon: Edit3 },
@@ -298,10 +296,12 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                     label="Vence"
                                     value={
                                         coach.current_period_end ? (
-                                            <span className={expiryColor}>
-                                                {format(new Date(coach.current_period_end), "d MMM yyyy", { locale: es })}
-                                                {daysLeft !== null && ` (${daysLeft < 0 ? 'hace ' + Math.abs(daysLeft) : daysLeft} días${daysLeft < 0 ? '' : ''})`}
-                                            </span>
+                                            <AdminExpiry
+                                                expiresAt={coach.expires_at}
+                                                days={coach.days_until_expiry}
+                                                layout="inline"
+                                                withYear
+                                            />
                                         ) : '—'
                                     }
                                 />

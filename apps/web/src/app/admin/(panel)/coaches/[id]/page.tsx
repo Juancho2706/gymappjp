@@ -1,9 +1,11 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { ArrowLeft, ExternalLink, Ticket } from 'lucide-react'
-import { differenceInCalendarDays, format, formatDistanceToNow } from 'date-fns'
+import { format, formatDistanceToNow } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { AdminStatusBadge } from '../../_components/AdminStatusBadge'
+import { AdminExpiryCountdown } from '../../_components/AdminExpiry'
+import { expiryToneClass, formatExpiryStamp } from '../../_components/expiry-format'
 import { MODULE_LABELS, type ModuleKey } from '../../_components/module-labels'
 import { getCoachDetail } from './_data/coach-detail.queries'
 import { CoachDetailActions, CopyTextButton } from './_components/CoachDetailActions'
@@ -76,18 +78,10 @@ export default async function AdminCoachDetailPage({ params }: Props) {
     const { coach, email, clientCount, activeClientCount, listMonthlyClp, netMonthlyClp, coupon } = detail
     const displayName = coach.brand_name || coach.full_name || coach.slug
 
-    const daysLeft = coach.current_period_end
-        ? differenceInCalendarDays(new Date(coach.current_period_end), new Date())
-        : null
-    const expiryClass = daysLeft === null
-        ? ''
-        : daysLeft < 0
-            ? 'text-muted'
-            : daysLeft < 7
-                ? 'text-[var(--danger-500)]'
-                : daysLeft < 14
-                    ? 'text-[var(--warning-500)]'
-                    : 'text-strong'
+    // Instante REAL del fin de lo pagado (Flow corregido a hora de Chile): antes se formateaba la
+    // columna cruda en la zona del servidor (UTC) ⇒ un Flow que se cobra el 02/10 salía «01/10/26».
+    const { expiresAt, daysUntilExpiry: daysLeft } = detail
+    const expiryClass = daysLeft !== null && daysLeft >= 14 ? 'text-strong' : expiryToneClass(daysLeft)
 
     const discountLabel = coupon
         ? coupon.type === 'percent'
@@ -155,13 +149,11 @@ export default async function AdminCoachDetailPage({ params }: Props) {
                 />
                 <KpiCard
                     label="Vence"
-                    value={coach.current_period_end ? shortDate(coach.current_period_end) : '—'}
+                    value={expiresAt ? formatExpiryStamp(expiresAt, true) : '—'}
                     valueClassName={expiryClass}
-                    sub={daysLeft === null
-                        ? 'Sin fecha de vencimiento'
-                        : daysLeft < 0
-                            ? `Venció hace ${Math.abs(daysLeft)}d`
-                            : `${daysLeft}d restantes`}
+                    sub={expiresAt
+                        ? <><AdminExpiryCountdown expiresAt={expiresAt} />{' · hora de Chile'}</>
+                        : 'Sin fecha de vencimiento'}
                 />
                 <KpiCard
                     label="Última actividad"

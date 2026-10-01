@@ -5,8 +5,10 @@ import { TIER_CONFIG } from '@/lib/constants'
 import {
     countActiveAdminCoaches,
     countBetaAdminInvites,
+    findActiveCouponRedemptionsByIds,
     findAdminAuditLogs,
     findAdminBasicCoaches,
+    findAdminCoachBillingRows,
     findAdminCoachesFallback,
     findAdminClientsForDashboard,
     findExpiringSoonAdminCoaches,
@@ -14,16 +16,74 @@ import {
     findPendingPaymentAdminCoaches,
     findRecentAdminCoachSignups,
 } from '@/infrastructure/db'
+import { discountSpecFromSnapshot } from '@/services/billing/discount.service'
+import { isPayingCoach, netMonthlyClpForCoach } from '@/services/billing/mrr.service'
+import { effectivePeriodEndIso, wholeDaysUntil } from '@/services/billing/period-end'
 import type { PlatformOverview, CoachListItem, ClientListItem, LifecycleStage } from './types'
 
-function computeMonthlyRevenue(tier: string | null, cycle: string | null, provider: string | null): number {
-    if (!tier || ['beta', 'internal', 'admin'].includes(provider ?? '') || tier === 'free') return 0
-    const config = TIER_CONFIG[tier as keyof typeof TIER_CONFIG]
-    if (!config) return 0
-    if (cycle === 'annual' && 'annualPriceClp' in config && config.annualPriceClp) {
-        return Math.round((config.annualPriceClp as number) / 12)
+type CoachListItemSansMrr = Omit<CoachListItem, 'monthly_revenue'>
+
+/**
+ * Vencimiento REAL (Flow corregido a hora de Chile, ver `effectivePeriodEndIso`) y sus días. Los
+ * días se recalculan acá desde ese instante —no se usa `days_until_expiry` de la RPC— para que el
+ * número, la fecha impresa, el health y el «en riesgo» digan lo mismo.
+ */
+function expiryFields(
+    currentPeriodEnd: string | null,
+    trialEndsAt: string | null,
+    paymentProvider: string | null,
+    nowMs: number
+): { expires_at: string | null; days_until_expiry: number | null } {
+    const expiresAt =
+        effectivePeriodEndIso(currentPeriodEnd, paymentProvider) ?? effectivePeriodEndIso(trialEndsAt, null)
+    return {
+        expires_at: expiresAt,
+        days_until_expiry: expiresAt ? wholeDaysUntil(expiresAt, nowMs) : null,
     }
-    return config.monthlyPriceClp
+}
+
+/**
+ * MRR por fila = lo que de verdad paga al mes: MISMA fórmula que Finanzas y la ficha
+ * (`netMonthlyClpForCoach` + cupón vivo) y solo si paga de verdad (`isPayingCoach`). Antes era el
+ * precio de lista para cualquier tier pago ⇒ MDR (cupón 50 %) figuraba con $29.990 y demos o
+ * cancelados sin suscripción sumaban MRR. Corre solo sobre la página ya cortada (≤ pageSize ids).
+ */
+async function withNetMrr(
+    admin: ReturnType<typeof createServiceRoleClient>,
+    items: CoachListItemSansMrr[]
+): Promise<CoachListItem[]> {
+    const candidateIds = items
+        .filter((c) => c.subscription_status === 'active' && (c.payment_provider === 'mercadopago' || c.payment_provider === 'flow'))
+        .map((c) => c.id)
+    const billingRows = await findAdminCoachBillingRows(admin, candidateIds)
+    const billingById = new Map(billingRows.map((b) => [b.id, b]))
+
+    const redemptionIds = billingRows
+        .map((b) => b.active_coupon_redemption_id)
+        .filter((id): id is string => Boolean(id))
+    const redemptions = await findActiveCouponRedemptionsByIds(admin, redemptionIds)
+    const specByRedemptionId = new Map(
+        redemptions.map((r) => [r.id, discountSpecFromSnapshot(r.discount_value_snapshot, r.applied_cycles_remaining)])
+    )
+
+    return items.map((c) => {
+        const billing = billingById.get(c.id)
+        const paying = billing
+            ? isPayingCoach({
+                subscription_status: c.subscription_status,
+                payment_provider: c.payment_provider,
+                subscription_mp_id: billing.subscription_mp_id,
+                subscription_provider_external_id: billing.subscription_provider_external_id,
+            })
+            : false
+        const spec = billing?.active_coupon_redemption_id
+            ? specByRedemptionId.get(billing.active_coupon_redemption_id) ?? null
+            : null
+        return {
+            ...c,
+            monthly_revenue: paying ? netMonthlyClpForCoach(c.subscription_tier, c.billing_cycle, spec) : 0,
+        }
+    })
 }
 
 function computeLifecycleStage(status: string | null, daysLeft: number | null | undefined): LifecycleStage {
@@ -166,7 +226,14 @@ export const getPlatformOverview = cache(
             tierMonthlySeries: (tierSeriesRes.data ?? []) as { ym: string; tier: string; coach_count: number }[],
             workoutSessionsSeries: workoutSessionsRes.data ?? [],
             betaInvitesCount: betaInvitesRes,
-            expiringSoon: expiringSoonRes as PlatformOverview['expiringSoon'],
+            expiringSoon: expiringSoonRes.map((c) => ({
+                id: c.id,
+                full_name: c.full_name,
+                brand_name: c.brand_name,
+                current_period_end: c.current_period_end,
+                expires_at: effectivePeriodEndIso(c.current_period_end, c.payment_provider),
+                subscription_status: c.subscription_status,
+            })),
             pendingPaymentCoaches: pendingPaymentRes as PlatformOverview['pendingPaymentCoaches'],
             trialConversion: (() => {
                 const row = (trialConversionRes.data as any[])?.[0]
@@ -215,56 +282,57 @@ export async function getAllCoachesPaginated(params: {
         p_offset: needsClientFilter ? 0 : offset,
     })
 
+    const nowMs = Date.now()
+
     if (error || !data) {
         // Fallback: direct coaches query if RPC is unavailable
         const fallback = await findAdminCoachesFallback(admin, pageSize)
         if (!fallback) return { coaches: [], total: 0 }
-        const coaches: CoachListItem[] = (fallback as any[]).map(r => ({
+        const coaches: CoachListItemSansMrr[] = (fallback as any[]).map(r => ({
             id: r.id, full_name: r.full_name, brand_name: r.brand_name, slug: r.slug,
             subscription_tier: r.subscription_tier, subscription_status: r.subscription_status,
             billing_cycle: r.billing_cycle, payment_provider: r.payment_provider,
             max_clients: r.max_clients, current_period_end: r.current_period_end,
             trial_ends_at: r.trial_ends_at, created_at: r.created_at,
             client_count: 0, active_client_count: 0, demo_client_count: 0,
-            days_until_expiry: r.current_period_end
-                ? Math.floor((new Date(r.current_period_end).getTime() - Date.now()) / 86400000)
-                : null,
+            ...expiryFields(r.current_period_end, r.trial_ends_at, r.payment_provider, nowMs),
             utilization_pct: 0, last_activity_at: null, coach_last_active_at: null,
             auth_email: null,
-            monthly_revenue: computeMonthlyRevenue(r.subscription_tier, r.billing_cycle, r.payment_provider),
             lifecycle_stage: computeLifecycleStage(r.subscription_status, null),
         }))
-        return { coaches, total: coaches.length }
+        return { coaches: await withNetMrr(admin, coaches), total: coaches.length }
     }
 
     const rows = data as unknown as (Record<string, any> & { total_count: number })[]
     const total = rows[0]?.total_count ?? 0
-    const coaches: CoachListItem[] = rows.map((r) => ({
-        id: r.id,
-        full_name: r.full_name,
-        brand_name: r.brand_name,
-        slug: r.slug,
-        subscription_tier: r.subscription_tier,
-        subscription_status: r.subscription_status,
-        billing_cycle: r.billing_cycle,
-        payment_provider: r.payment_provider,
-        max_clients: r.max_clients,
-        current_period_end: r.current_period_end,
-        trial_ends_at: r.trial_ends_at,
-        created_at: r.created_at,
-        client_count: Number(r.client_count),
-        active_client_count: Number(r.active_client_count),
-        // `?? 0`: la columna es nueva en la RPC — si el entorno todavía corre una versión previa
-        // el listado degrada a "sin demos" en vez de pintar NaN junto al cupo.
-        demo_client_count: Number(r.demo_client_count ?? 0),
-        days_until_expiry: r.days_until_expiry,
-        utilization_pct: Number(r.utilization_pct),
-        last_activity_at: r.last_activity_at,
-        coach_last_active_at: r.coach_last_active_at ?? null,
-        auth_email: r.auth_email ?? null,
-        monthly_revenue: computeMonthlyRevenue(r.subscription_tier, r.billing_cycle, r.payment_provider),
-        lifecycle_stage: computeLifecycleStage(r.subscription_status, r.days_until_expiry),
-    }))
+    const coaches: CoachListItemSansMrr[] = rows.map((r) => {
+        const expiry = expiryFields(r.current_period_end, r.trial_ends_at, r.payment_provider, nowMs)
+        return {
+            id: r.id,
+            full_name: r.full_name,
+            brand_name: r.brand_name,
+            slug: r.slug,
+            subscription_tier: r.subscription_tier,
+            subscription_status: r.subscription_status,
+            billing_cycle: r.billing_cycle,
+            payment_provider: r.payment_provider,
+            max_clients: r.max_clients,
+            current_period_end: r.current_period_end,
+            trial_ends_at: r.trial_ends_at,
+            created_at: r.created_at,
+            client_count: Number(r.client_count),
+            active_client_count: Number(r.active_client_count),
+            // `?? 0`: la columna es nueva en la RPC — si el entorno todavía corre una versión previa
+            // el listado degrada a "sin demos" en vez de pintar NaN junto al cupo.
+            demo_client_count: Number(r.demo_client_count ?? 0),
+            ...expiry,
+            utilization_pct: Number(r.utilization_pct),
+            last_activity_at: r.last_activity_at,
+            coach_last_active_at: r.coach_last_active_at ?? null,
+            auth_email: r.auth_email ?? null,
+            lifecycle_stage: computeLifecycleStage(r.subscription_status, expiry.days_until_expiry),
+        }
+    })
 
     const AT_RISK_STAGES = new Set(['active_atRisk', 'expiring_soon', 'pending'])
     let filtered = coaches
@@ -276,9 +344,9 @@ export async function getAllCoachesPaginated(params: {
     }
 
     if (needsClientFilter) {
-        return { coaches: filtered.slice(offset, offset + pageSize), total: filtered.length }
+        return { coaches: await withNetMrr(admin, filtered.slice(offset, offset + pageSize)), total: filtered.length }
     }
-    return { coaches, total }
+    return { coaches: await withNetMrr(admin, coaches), total }
 }
 
 // Keep old getAllCoaches for backward compat (clients page still uses it)

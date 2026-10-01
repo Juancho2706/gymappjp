@@ -19,6 +19,22 @@ function cycleConfig(billingCycle: string | null | undefined) {
     return BILLING_CYCLE_CONFIG[key] ?? BILLING_CYCLE_CONFIG.monthly
 }
 
+/**
+ * ¿Paga de verdad? Espejo TS de `PAID_COACH_OR_FILTER` + `status = 'active'` (el predicado del MRR
+ * de finanzas): suscripcion real en su gateway. Trial, cortesia, demo o cancelado no suman MRR
+ * aunque su tier tenga precio de lista.
+ */
+export function isPayingCoach(c: {
+    subscription_status: string | null
+    payment_provider: string | null
+    subscription_mp_id: string | null
+    subscription_provider_external_id: string | null
+}): boolean {
+    if (c.subscription_status !== 'active') return false
+    return (c.payment_provider === 'mercadopago' && c.subscription_mp_id !== null)
+        || (c.payment_provider === 'flow' && c.subscription_provider_external_id !== null)
+}
+
 /** Precio de LISTA mensualizado (incluye descuento de ciclo -10%/-20%, sin cupon). */
 export function listMonthlyEquivalentClp(tier: string | null, billingCycle: string | null | undefined): number {
     const monthly = TIER_CONFIG[(tier ?? '') as keyof typeof TIER_CONFIG]?.monthlyPriceClp ?? 0
