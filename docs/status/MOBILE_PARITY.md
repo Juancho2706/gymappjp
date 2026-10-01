@@ -18,7 +18,8 @@ source_of_truth: apps/web responsive + apps/mobile
 > que nunca entró: aviso con «Reenviarle el acceso» (`components/coach/NotEnteredNotice.tsx`) que abre el diálogo
 > «Resetear contraseña» existente; la consulta de la ficha suma `first_login_at, force_password_change, is_demo`. El
 > «Tu coach está armando tu plan» del alumno ya existía en RN; la web lo copió. Gates: `tsc` mobile 0, eslint 0 errores,
-> vitest `tests/mobile` 2.158 ✓, `expo export --platform android` OK. **QA en device pendiente.**
+> vitest `tests/mobile` 2.158 ✓, `expo export --platform android` OK. EN PRODUCCIÓN por OTA: 1.1.3 android `8f69e5ef` /
+> ios `6335c9b5`, port 1.1.2 android `79c6bf7e` (tag `ota/1.1.2-20261001`). **QA en device pendiente.**
 
 > **2026-09-30 (tren «Kilos o libras» W4 RN — EN PRODUCCIÓN por OTA; [SDD](../specs/kg-lb-ejecutor/SPEC.md))**: paridad
 > con la web W3 (ambas en `master` `759b47d1`; OTA 1.1.3 android `24d7a59f` run 36761118795 / ios `6c11fb23` run
