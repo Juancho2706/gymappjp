@@ -8,8 +8,8 @@
 // `/app/id…`, `/cl/…` y `/es/…`; la forma corta es la única que no asume el storefront de nadie.
 export const IOS_STORE_URL = 'https://apps.apple.com/app/id6770426633'
 
-// Play NO está publicada al público todavía: la ficha responde 404 (canal de testing interno).
-// No enlazar desde superficies públicas hasta que la ficha resuelva; el flag lo hace explícito para
-// que nadie pinte un badge de Play sin comprobarlo.
+// Play es pública desde el 2026-09-22 (producción al 100 %, 177 países). Verificado el 2026-10-01
+// sin sesión desde CL, AR y US: la ficha responde 200 con «Instalar». Si la ficha vuelve a caer
+// (retiro, suspensión), bajar el flag: oculta el badge de Play en el hero.
 export const ANDROID_STORE_URL = 'https://play.google.com/store/apps/details?id=cl.evaapp.eva'
-export const ANDROID_STORE_IS_PUBLIC = false
+export const ANDROID_STORE_IS_PUBLIC = true
