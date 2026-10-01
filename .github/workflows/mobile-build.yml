@@ -44,16 +44,17 @@ on:
         default: false
         type: boolean
       # 2026-09-25 (docs/specs/android-113-play, D6): el owner sube los binarios Android DIRECTO a
-      # producción, sin pista de prueba. `alpha` sigue siendo el default para que ninguna corrida
-      # vieja cambie de destino sin querer.
+      # producción, sin pista de prueba. 2026-10-01: default `production` (pedido del owner). Las
+      # pistas de prueba de Play están pausadas y sin testers; Play no permite borrarlas, así que
+      # un submit a `alpha` no le llega a nadie. `alpha` queda como opción explícita.
       android_track:
-        description: 'Google Play track for submit_android (alpha = closed testing; production = 100 % rollout)'
+        description: 'Google Play track for submit_android (production = 100 % rollout; alpha = closed testing, pausada)'
         required: false
-        default: 'alpha'
+        default: 'production'
         type: choice
         options:
-          - alpha
           - production
+          - alpha
 
 jobs:
   build-android:
