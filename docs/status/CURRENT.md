@@ -40,9 +40,10 @@ OTA; [TASKS](../specs/kg-lb-ejecutor/TASKS.md)).
    Queda SKAN cuando Meta habilite «Configurar eventos» y confirmar si la hoja ATT salió en inglés
    (⇒ `locales`, build nueva). Pasos de consola en [MANUAL_TASKS](../operations/MANUAL_TASKS.md) (MOB-META-01).
 2. **Onboarding del coach v2 — correos W6 en ENSAYO desde el 06-09** ([spec](../specs/coach-onboarding-v2/SPEC.md),
-   [auditoría](../audits/correos-y-crons-2026-09-05.md)): `..._DRY_RUN=true` en Production. Falta aprobar el copy
-   y quitar el DRY_RUN; W8.4.2B a medias (`enqueueBehaviorCheck` sin sus 3 call sites); D13
-   `OWNER_WHATSAPP_URL`; W7, F5.3–F5.5 RN y D4. `FREE_COACH_DRIP_ENABLED` **no** se setea.
+   [auditoría](../audits/correos-y-crons-2026-09-05.md)): `..._DRY_RUN=true` en Production. Copy v2 aprobado el
+   01-10 y en código ([TASKS § W6 v2](../specs/coach-onboarding-v2/TASKS.md)): falta el botón de baja del admin,
+   deploy + `ONBOARDING_BEHAVIOR_EMAILS_SINCE` en Vercel, 24 h de ensayo y quitar el DRY_RUN. W8.4.2B a medias
+   (`enqueueBehaviorCheck` sin sus 3 call sites); W7, F5.3–F5.5 RN y D4. `FREE_COACH_DRIP_ENABLED` **no** se setea.
 3. **Embudo Free→Pro** ([spec](../specs/embudo-free-pro/SPEC.md)): W0–W6 en producción; queda App Store Connect (W7.4).
 4. **FC de toda la sesión** (punto 2 de Movens, fuera del tren «Vuelta nueva»): plan aparte, arranca preguntándole
    a Movens qué banda usa ([SDD §6](../specs/vuelta-nueva-salud-y-reloj/SPEC.md)).

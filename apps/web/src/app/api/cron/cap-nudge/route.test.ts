@@ -177,6 +177,14 @@ vi.mock('@/services/billing/sales-emails.service', async (importOriginal) => {
     }
 })
 
+// Historial compartido de correos automáticos (W6 + carrito + cupo): se controla por test.
+const { historyMock } = vi.hoisted(() => ({ historyMock: vi.fn() }))
+vi.mock('@/services/email/automated-email-history.service', () => ({
+    loadAutomatedEmailHistory: historyMock,
+}))
+type History = { sentAts: string[]; ahaAt: string | null; optedOut: boolean }
+let historyByCoach: Record<string, Partial<History>> = {}
+
 import { GET } from './route'
 
 const SECRET = 'cron-sekret'
@@ -218,6 +226,11 @@ beforeEach(() => {
     throwOnSendFor.clear()
     emailByCoachId = { c1: 'coach@gmail.com' }
     fakeAdmin = makeAdmin()
+    historyByCoach = {}
+    historyMock.mockImplementation(
+        async (_admin: unknown, ids: string[]) =>
+            new Map(ids.map((id) => [id, { sentAts: [], ahaAt: null, optedOut: false, ...historyByCoach[id] }]))
+    )
     vi.stubEnv('CRON_SECRET', SECRET)
     vi.stubEnv('EVA_SALES_EMAILS_DISABLED', '')
     // El throttle real (600 ms entre envíos) no aporta nada en test y alargaría la suite.
@@ -484,5 +497,63 @@ describe('GET /api/cron/cap-nudge — predicados de la query', () => {
         expect(clientOps).toContain('range')
         expect(clientOps.indexOf('order')).toBeGreaterThan(-1)
         expect(clientOps.indexOf('order')).toBeLessThan(clientOps.indexOf('range'))
+    })
+})
+
+// Regla compartida con W6 (plan «Correos y activación», 01-10): el barrido de cupo le escribía a cada
+// coach Gratis apenas sumaba su primer alumno, y podía caer el mismo día que «Tu alumno ya está
+// adentro». El aviso REACTIVO (402 al intentar sumar al segundo) no pasa por este cron.
+describe('GET /api/cron/cap-nudge — regla compartida con W6', () => {
+    it('cuenta de menos de 7 días → no se le escribe (es la semana de W6)', async () => {
+        coaches = [freeCoach({ created_at: daysAgo(3) })]
+        clientRows = [{ coach_id: 'c1' }]
+
+        const json = await (await GET(authedReq())).json()
+        expect(json.sent).toBe(0)
+        expect(json.skipped.newAccount).toBe(1)
+        expect(sendTransactionalEmail).not.toHaveBeenCalled()
+    })
+
+    it('con la marca de baja → no se le escribe', async () => {
+        coaches = [freeCoach()]
+        clientRows = [{ coach_id: 'c1' }]
+        historyByCoach = { c1: { optedOut: true } }
+
+        const json = await (await GET(authedReq())).json()
+        expect(json.skipped.optedOut).toBe(1)
+        expect(sendTransactionalEmail).not.toHaveBeenCalled()
+    })
+
+    it('«Tu alumno ya está adentro» hace menos de 72 h → espera', async () => {
+        coaches = [freeCoach()]
+        clientRows = [{ coach_id: 'c1' }]
+        historyByCoach = { c1: { ahaAt: daysAgo(2), sentAts: [daysAgo(2)] } }
+
+        const json = await (await GET(authedReq())).json()
+        expect(json.skipped.afterAha).toBe(1)
+        expect(sendTransactionalEmail).not.toHaveBeenCalled()
+    })
+
+    it('otro correo automático en las últimas 24 h → espera por el cupo compartido', async () => {
+        coaches = [freeCoach()]
+        clientRows = [{ coach_id: 'c1' }]
+        historyByCoach = { c1: { sentAts: [new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString()] } }
+
+        const json = await (await GET(authedReq())).json()
+        expect(json.skipped.quota).toBe(1)
+        expect(summaryPayload()?.skipped).toMatchObject({ quota: 1 })
+        expect(sendTransactionalEmail).not.toHaveBeenCalled()
+    })
+
+    it('historial ilegible → la corrida se aborta sin mandar nada (fail-closed)', async () => {
+        coaches = [freeCoach()]
+        clientRows = [{ coach_id: 'c1' }]
+        historyMock.mockRejectedValue(new Error('db caída'))
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+
+        const res = await GET(authedReq())
+        expect(res.status).toBe(500)
+        expect(sendTransactionalEmail).not.toHaveBeenCalled()
+        expect(summaryPayload()).toMatchObject({ outcome: 'aborted', ledger_unreadable: true })
     })
 })

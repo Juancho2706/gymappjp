@@ -12,6 +12,8 @@ import {
 import { isTestCoachEmail } from '@/lib/test-accounts'
 import { SUBSCRIPTION_BLOCKED_STATUSES } from '@/lib/constants'
 import type { Json, TablesInsert } from '@/lib/database.types'
+import { loadAutomatedEmailHistory } from '@/services/email/automated-email-history.service'
+import { evaluateAutomatedEmailQuota, isWithinSendWindow } from '@/lib/email/automated-email-policy'
 
 /**
  * Cron `checkout-abandoned` — cierra el ÚLTIMO hueco del embudo de pago (A6 del informe de checkout).
@@ -46,6 +48,11 @@ import type { Json, TablesInsert } from '@/lib/database.types'
  * `?dry=1`: corre el barrido entero (candidatos, descartes, decisión) SIN mandar ni emitir nada, y
  * devuelve `wouldNotify` con los slugs. Es la forma de auditar la primera corrida antes de que le
  * escriba a nadie.
+ *
+ * REGLA COMPARTIDA (plan «Correos y activación», 01-10; `lib/email/automated-email-policy.ts`): este
+ * correo también respeta el horario de Chile (09–20 h), el cupo compartido con W6 y el aviso de cupo
+ * (1 cada 24 h, 3 por semana) y la marca de baja. Si espera, el caso sigue abierto y sale en una
+ * corrida siguiente dentro de `LOOKBACK_DAYS`. Sin historial legible la corrida se aborta.
  *
  * FAIL-CLOSED de la auth (`CRON_SECRET`) y FAIL-OPEN de a un coach: cada coach va en su try/catch y un
  * fallo suyo solo se cuenta. Excluye cuentas de prueba (`isTestCoachEmail`, misma fuente que finanzas)
@@ -255,6 +262,9 @@ type SweepSkipped = {
     coachMissing: number
     noRecipient: number
     testAccount: number
+    optedOut: number
+    outsideHours: number
+    quota: number
     deduped: number
     sendFailed: number
 }
@@ -322,6 +332,9 @@ async function runSweep(
         coachMissing: 0,
         noRecipient: 0,
         testAccount: 0,
+        optedOut: 0,
+        outsideHours: 0,
+        quota: 0,
         deduped: 0,
         sendFailed: 0,
     }
@@ -355,6 +368,17 @@ async function runSweep(
         for (const row of rows) coachById.set(row.id, row)
     }
 
+    // Cupo compartido y baja, en lote. Fail-closed: sin historial no se sabe si ya le escribimos hoy.
+    const historyByCoach = await loadAutomatedEmailHistory(
+        admin,
+        cases.map((c) => c.coachId),
+        now
+    ).catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err)
+        throw new Error(`automated email history failed: ${message}`)
+    })
+    const inSendWindow = isWithinSendWindow(now)
+
     for (const abandoned of cases) {
         const coach = coachById.get(abandoned.coachId)
         if (!coach) {
@@ -383,6 +407,20 @@ async function runSweep(
             }
             if (isTestCoachEmail(email)) {
                 skipped.testAccount++
+                continue
+            }
+
+            const history = historyByCoach.get(coach.id)
+            if (history?.optedOut) {
+                skipped.optedOut++
+                continue
+            }
+            if (!inSendWindow) {
+                skipped.outsideHours++
+                continue
+            }
+            if (evaluateAutomatedEmailQuota(history?.sentAts ?? [], now)) {
+                skipped.quota++
                 continue
             }
 
@@ -500,6 +538,9 @@ export async function GET(req: Request) {
             coach_missing: result.skipped.coachMissing,
             no_recipient: result.skipped.noRecipient,
             test_account: result.skipped.testAccount,
+            opted_out: result.skipped.optedOut,
+            outside_hours: result.skipped.outsideHours,
+            quota: result.skipped.quota,
             deduped: result.skipped.deduped,
             send_failed: result.skipped.sendFailed,
         }

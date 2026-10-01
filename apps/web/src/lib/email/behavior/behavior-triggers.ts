@@ -1,4 +1,5 @@
 import type { Persona } from '@eva/schemas'
+import { evaluateAutomatedEmailQuota, isWithinSendWindow } from '../automated-email-policy'
 
 /**
  * Motor de los «correos por comportamiento» del onboarding v2 (W6 / F6.1).
@@ -11,22 +12,28 @@ import type { Persona } from '@eva/schemas'
  * Supabase, cero Resend, cero `process.env`. Todo lo que decide se puede probar con un objeto y una
  * fecha, que es lo que hace auditable el copy antes de encenderlo (el flag vive en el cron).
  *
- * SEIS SEÑALES (SPEC §8):
- *   +2 h sin alumno real · +24 h sin volver al panel · +48 h alumno invitado que no entró ·
+ * SEIS SEÑALES (SPEC §8, con los momentos del plan «Correos y activación» del 01-10):
+ *   día 1 sin alumno real · día 3 sin su primera rutina/pauta · +48 h alumno invitado que no entró ·
  *   aha (primer entreno/comida de un alumno real) · +7 d sin activar (ayuda humana) · corte a 90 d.
  * El corte no manda correo: apaga a todos los demás.
  *
- * CINCO INVARIANTES:
+ * SEIS INVARIANTES:
  *
  * · **DEDUPE por `(coach_id, template_key)`** — el snapshot trae `alreadySent` (las keys vivas del
  *   ledger `coach_email_ledger`) y el motor no vuelve a proponerlas. `scheduleCoachEmail` deduplica
  *   igual en la base; acá se hace ANTES para no gastar un envío por hora por coach hasta el día 90.
  *
- * · **CORTE DE LANZAMIENTO** (`BEHAVIOR_LAUNCH_CUTOVER`) — W6 solo existe para las cuentas creadas
- *   de ahí en adelante. El padrón anterior ya recibió el drip por calendario.
+ * · **CORTE DE LANZAMIENTO** (`BehaviorPolicy.launchCutover`, env `ONBOARDING_BEHAVIOR_EMAILS_SINCE`)
+ *   — W6 solo existe para las cuentas creadas desde el día en que se enciende. Sin corte legible no
+ *   sale nada (fail-closed).
  *
- * · **ESPACIADO DE 24 h POR COACH** (`BEHAVIOR_MIN_GAP_MS`) — el dedupe es por correo, no por
- *   persona: sin este piso un mismo coach junta tres correos DISTINTOS en tres corridas horarias.
+ * · **CUPO COMPARTIDO Y HORARIO** (`lib/email/automated-email-policy.ts`) — el dedupe es por correo,
+ *   no por persona: sin un piso por coach, uno mismo junta tres correos DISTINTOS en tres corridas
+ *   horarias. Máximo 1 correo automático cada 24 h y 3 por semana, contando también el aviso de cupo
+ *   y el carrito abandonado; solo entre 09:00 y 20:00 de Chile. El aha atraviesa el cupo, no el
+ *   horario.
+ *
+ * · **BAJA** — la marca de baja del ledger (`EMAIL_OPT_OUT_TEMPLATE_KEY`) apaga la serie entera.
  *
  * · **UNO POR CORRIDA.** La lista sale ORDENADA por prioridad y el barrido manda solo la primera.
  *   Un coach de 8 días que nunca cargó a nadie matchea 2 h, 24 h y 7 d a la vez: mandarle los tres
@@ -70,48 +77,28 @@ export const BEHAVIOR_PRIORITY: readonly BehaviorTemplateKey[] = BEHAVIOR_TEMPLA
 const HOUR_MS = 60 * 60 * 1000
 const DAY_MS = 24 * HOUR_MS
 
-/** «Cuenta creada, sin alumno real» (SPEC §8, fila 1). */
-export const NO_CLIENT_AFTER_MS = 2 * HOUR_MS
-/** «Sin volver al panel» (SPEC §8, fila 2). */
-export const NO_RETURN_AFTER_MS = 24 * HOUR_MS
+/**
+ * «Cuenta creada, sin alumno real» — el correo del DÍA 1 (plan 01-10; antes salía a las 2 h, a veces
+ * de noche y encima de la bienvenida). 20 h deja pasar la noche y, con la ventana de 09–20 h, llega en
+ * horario hábil del día siguiente.
+ *
+ * La key sigue siendo `behavior_no_client_2h`: es la identidad de dedupe del ledger, no una promesa
+ * de horario.
+ */
+export const NO_CLIENT_AFTER_MS = 20 * HOUR_MS
+/**
+ * «Todavía no armó su primera rutina/pauta» — el correo del DÍA 3. Reemplaza al viejo «+24 h sin
+ * volver al panel», que leía `coaches.last_active_at`: esa columna la escribe solo la web, así que a
+ * los coaches que viven en la app RN les llegaba «no volviste» por error. La key sigue siendo
+ * `behavior_no_return_24h` por la misma razón que la anterior.
+ */
+export const FIRST_ARTIFACT_NUDGE_AFTER_MS = 3 * DAY_MS
 /** «Alumno invitado, no entró» (SPEC §8, fila 3). */
 export const CLIENT_NOT_ENTERED_AFTER_MS = 48 * HOUR_MS
 /** «7 d sin activar» (SPEC §8, fila 5). */
 export const HELP_AFTER_MS = 7 * DAY_MS
 /** Corte del onboarding: pasado esto no sale ningún correo más (SPEC §8, fila 6). */
 export const ONBOARDING_CUTOFF_MS = 90 * DAY_MS
-
-/**
- * Piso de silencio entre DOS CORREOS DE ESTE MOTOR para un mismo coach.
- *
- * El dedupe es por `(coach_id, template_key)`, o sea por CORREO y no por PERSONA: no impide que a un
- * mismo coach le salgan tres correos DISTINTOS en tres corridas horarias seguidas (`no_client_2h` a
- * la hora 1, `no_return_24h` a la hora 2, `help_7d` a la hora 3). El ensayo del 06-09 lo mostró en
- * crudo —83 envíos en la primera hora y hasta 3 por coach en 3 horas— y eso es hostigamiento, no
- * venta.
- *
- * POR QUÉ 24 h: es la ventana más chica del propio drip y el máximo tolerable para una serie que EVA
- * inicia sola (Ley 19.496 art. 28 B). Ninguna señal se pierde por esperar: el barrido es horario y
- * el correo postergado vuelve a matchear en la corrida siguiente, con el dedupe del ledger intacto.
- *
- * POR QUÉ `behavior_aha` SE EXCEPTÚA: es la única señal que dispara el ALUMNO y no el reloj. Es una
- * felicitación por algo que acaba de pasar —el primer entreno o la primera comida cargada—; llegar
- * un día tarde la vuelve ruido, y felicitar no hostiga.
- */
-export const BEHAVIOR_MIN_GAP_MS = 24 * HOUR_MS
-
-/**
- * Ventana que cuenta como «la sesión del alta». `coaches.last_active_at` lo escribe el proxy web en
- * CADA navegación con throttle de 5 min (`touch_coach_activity`, baseline.sql:717), así que un coach
- * que solo miró el panel el primer día tiene la columna seteada y un `!= null` lo daría por
- * «volvió». Se considera que volvió recién cuando su última actividad cae FUERA de esta ventana
- * desde el alta.
- *
- * ⚠️ La columna la escribe SOLO la web (`proxy.ts:794`): un coach que vive en la app RN parece no
- * haber vuelto nunca. Es un falso positivo conocido de esta señal y la razón por la que el correo de
- * +24 h no afirma «no volviste» — dice qué puede hacer en 5 min y ya.
- */
-export const FIRST_SESSION_WINDOW_MS = 2 * HOUR_MS
 
 /**
  * Instante desde el cual `clients.first_login_at` es una señal CONFIABLE. Una fila anterior al
@@ -127,20 +114,18 @@ export const FIRST_SESSION_WINDOW_MS = 2 * HOUR_MS
 export const FIRST_LOGIN_SIGNAL_CUTOVER = '2026-08-26T06:00:00Z'
 
 /**
- * Instante desde el cual una cuenta ENTRA a W6: solo los coaches creados EN O DESPUÉS de esta fecha
- * reciben correos por comportamiento.
+ * Configuración del encendido que NO es foto del coach: entra por parámetro para que el motor siga
+ * siendo puro y cada regla se pruebe con un objeto.
  *
- * POR QUÉ EXISTE: el ensayo real del 06-09 03:00Z dio `candidates=85 wouldSend=83`. El barrido cubre
- * a TODOS los coaches de los últimos 90 d, así que encenderlo sin este corte le escribía de golpe al
- * padrón entero —incluidos coaches de julio con un aha o una «ayuda a los 7 d» tardíos, sobre una
- * cuenta que ya vive hace dos meses—. Ese padrón YA recibió el drip por calendario
- * (`send-drip-sequence.ts`, D11) o está fuera de toda ventana útil: W6 no tiene nada nuevo que
- * decirle y sí mucho que romper.
- *
- * Mismo patrón que `FIRST_LOGIN_SIGNAL_CUTOVER`: string ISO, comparación contra `created_at`, y una
- * constante en vez de una env para que el corte quede en el diff y en los tests, no en un panel.
+ * `launchCutover` — solo los coaches creados EN O DESPUÉS de este instante reciben W6. El ensayo del
+ * 06-09 dio `wouldSend=83` en la primera hora porque el barrido cubría al padrón entero; desde el plan
+ * del 01-10 el corte es la fecha de ENCENDIDO (env `ONBOARDING_BEHAVIOR_EMAILS_SINCE`, se fija sin
+ * redeploy) y los coaches anteriores no reciben la serie atrasada. `null` = sin corte legible ⇒ nadie
+ * entra (fail-closed: escribirle a un padrón entero es el error caro).
  */
-export const BEHAVIOR_LAUNCH_CUTOVER = '2026-09-06T00:00:00Z'
+export interface BehaviorPolicy {
+    launchCutover: string | null
+}
 
 /**
  * Cuenta de QA que ATRAVIESA la exclusión de cuentas de prueba (W8.4.4). `qa-free-v3@evatest.cl` es
@@ -166,8 +151,12 @@ export interface CoachBehaviorSnapshot {
     persona: Persona | null
     /** `coaches.created_at` — ancla de TODAS las ventanas y del corte a 90 d. */
     createdAt: string | null
-    /** `coaches.last_active_at` (solo web). `null` = nunca navegó el panel. */
-    lastActiveAt: string | null
+    /**
+     * ¿Ya armó su primera rutina/pauta/semana? (`resolveFirstArtifact`, sin contar lo sembrado del
+     * demo). `null` = no se leyó —el correo del día 3 ya salió o todavía no toca— o la lectura falló:
+     * en los dos casos el correo del día 3 NO sale.
+     */
+    hasFirstArtifact: boolean | null
     /** Alumnos REALES: `is_demo = false` y `is_archived = false`. El demo no cuenta jamás. */
     realClientCount: number
     /** ¿Algún alumno real ya entró alguna vez? (`clients.first_login_at`). */
@@ -182,11 +171,13 @@ export interface CoachBehaviorSnapshot {
     /** Keys VIVAS del ledger para este coach: el dedupe por `(coach_id, template_key)`. */
     alreadySent: readonly string[]
     /**
-     * Cuándo salió (o va a salir) el ÚLTIMO correo de este motor: el máximo de `sent_at` entre las
-     * filas vivas del ledger, con `scheduled_at`/`created_at` de respaldo. Ancla del espaciado de
-     * `BEHAVIOR_MIN_GAP_MS`; `null` = todavía no recibió ninguno y no hay nada que espaciar.
+     * Instantes de los correos automáticos que ya recibió (o tiene agendados), de LOS DOS registros:
+     * W6 y carrito en `coach_email_ledger`, aviso de cupo en `admin_audit_logs`. Alimenta el cupo
+     * compartido. `null` = historial ilegible ⇒ no sale nada en esta corrida (fail-closed).
      */
-    lastBehaviorSentAt: string | null
+    recentAutomatedSentAts: readonly string[] | null
+    /** Marca de baja viva en el ledger: pidió no recibir más. */
+    optedOut: boolean
     /** Cuenta de prueba según `lib/test-accounts` (el bypass de QA se resuelve acá adentro). */
     isTestAccount: boolean
     /**
@@ -201,8 +192,8 @@ export interface CoachBehaviorSnapshot {
 export type BehaviorTriggerReason =
     | 'real_student_activity'
     | 'invite_pending_48h'
-    | 'no_real_client_2h'
-    | 'no_return_24h'
+    | 'no_real_client_day1'
+    | 'no_first_artifact_day3'
     | 'not_activated_7d'
 
 export interface BehaviorTrigger {
@@ -215,10 +206,14 @@ export type BehaviorSkipReason =
     | 'no_recipient'
     | 'test_account'
     | 'org_managed'
+    | 'opted_out'
     | 'no_created_at'
     | 'past_cutoff'
     | 'before_launch'
+    | 'history_unreadable'
+    | 'outside_hours'
     | 'cooldown'
+    | 'weekly_max'
 
 export type BehaviorEvaluation =
     | { eligible: false; skipped: BehaviorSkipReason }
@@ -230,21 +225,16 @@ function msSince(iso: string | null, now: Date): number | null {
     return Number.isFinite(t) ? now.getTime() - t : null
 }
 
-/** ¿La cuenta nació antes del encendido de W6? Ver `BEHAVIOR_LAUNCH_CUTOVER`. */
-function isBeforeBehaviorLaunch(createdAt: string | null): boolean {
+/**
+ * ¿La cuenta nació antes del encendido de W6? Ver `BehaviorPolicy.launchCutover`. Sin corte legible
+ * responde `true`: nadie entra.
+ */
+function isBeforeBehaviorLaunch(createdAt: string | null, launchCutover: string | null): boolean {
+    const launch = launchCutover ? new Date(launchCutover).getTime() : NaN
+    if (!Number.isFinite(launch)) return true
     const created = createdAt ? new Date(createdAt).getTime() : NaN
     if (!Number.isFinite(created)) return false // sin fecha legible manda `no_created_at`, no esto
-    return created < new Date(BEHAVIOR_LAUNCH_CUTOVER).getTime()
-}
-
-/**
- * ¿Le escribimos hace menos de `BEHAVIOR_MIN_GAP_MS`? Un `scheduled_at` a futuro da una diferencia
- * negativa y también cuenta como «recién», que es lo correcto: ese correo todavía no llegó a la
- * casilla y sumarle otro encima es exactamente el amontonamiento que el piso viene a evitar.
- */
-function isWithinBehaviorCooldown(snapshot: CoachBehaviorSnapshot, now: Date): boolean {
-    const since = msSince(snapshot.lastBehaviorSentAt, now)
-    return since !== null && since < BEHAVIOR_MIN_GAP_MS
+    return created < launch
 }
 
 /**
@@ -258,19 +248,22 @@ function isWithinBehaviorCooldown(snapshot: CoachBehaviorSnapshot, now: Date): b
  */
 export function evaluateBehaviorEligibility(
     snapshot: CoachBehaviorSnapshot,
-    now: Date
+    now: Date,
+    policy: BehaviorPolicy
 ): BehaviorSkipReason | null {
     if (!snapshot.email) return 'no_recipient'
     if (snapshot.isTestAccount && !isBehaviorTestBypass(snapshot.email)) return 'test_account'
     if (snapshot.isOrgManaged) return 'org_managed'
+    if (snapshot.optedOut) return 'opted_out'
 
     const age = msSince(snapshot.createdAt, now)
     // Fail-closed: sin ancla no se puede probar NINGUNA ventana (ni el corte).
     if (age === null) return 'no_created_at'
     // El corte de lanzamiento va ANTES del de 90 d: para una cuenta de julio las dos cosas son
     // ciertas, y la que explica por qué no le escribimos es que W6 no existía cuando se creó.
-    if (isBeforeBehaviorLaunch(snapshot.createdAt)) return 'before_launch'
+    if (isBeforeBehaviorLaunch(snapshot.createdAt, policy.launchCutover)) return 'before_launch'
     if (age >= ONBOARDING_CUTOFF_MS) return 'past_cutoff'
+    if (snapshot.recentAutomatedSentAts === null) return 'history_unreadable'
     return null
 }
 
@@ -281,9 +274,10 @@ export function evaluateBehaviorEligibility(
  */
 export function computeBehaviorTriggers(
     snapshot: CoachBehaviorSnapshot,
-    now: Date
+    now: Date,
+    policy: BehaviorPolicy
 ): BehaviorEvaluation {
-    const skipped = evaluateBehaviorEligibility(snapshot, now)
+    const skipped = evaluateBehaviorEligibility(snapshot, now, policy)
     if (skipped) return { eligible: false, skipped }
 
     const age = msSince(snapshot.createdAt, now) as number
@@ -303,14 +297,14 @@ export function computeBehaviorTriggers(
         }
     }
 
-    // ── +2 h: cuenta creada y todavía sin un alumno real. ──
+    // ── Día 1: cuenta creada y todavía sin un alumno real. ──
     if (age >= NO_CLIENT_AFTER_MS && snapshot.realClientCount === 0) {
-        matched.set('behavior_no_client_2h', 'no_real_client_2h')
+        matched.set('behavior_no_client_2h', 'no_real_client_day1')
     }
 
-    // ── +24 h: no volvió al panel desde la sesión del alta. ──
-    if (age >= NO_RETURN_AFTER_MS && !hasReturnedToPanel(snapshot)) {
-        matched.set('behavior_no_return_24h', 'no_return_24h')
+    // ── Día 3: todavía no armó su primera rutina/pauta (solo con la lectura confirmada en `false`). ──
+    if (age >= FIRST_ARTIFACT_NUDGE_AFTER_MS && snapshot.hasFirstArtifact === false) {
+        matched.set('behavior_no_return_24h', 'no_first_artifact_day3')
     }
 
     // ── +7 d sin ACTIVAR: activar = que un alumno real haya hecho algo (el aha). ──
@@ -326,32 +320,29 @@ export function computeBehaviorTriggers(
         triggers.push({ template_key: key, reason })
     }
 
-    // ── Espaciado por COACH (ver `BEHAVIOR_MIN_GAP_MS`). ──
-    // Se aplica DESPUÉS del dedupe a propósito: así el contador `cooldown` cuenta solo a los coaches
-    // que hoy tenían algo real que recibir, y no se mezcla con los que no matchean nada.
-    if (triggers.length > 0 && isWithinBehaviorCooldown(snapshot, now)) {
+    if (triggers.length === 0) return { eligible: true, triggers }
+
+    // ── Horario de Chile (09–20 h), para TODOS, aha incluido. ──
+    // Va DESPUÉS del dedupe a propósito, igual que el cupo: los contadores cuentan solo a los coaches
+    // que hoy tenían algo real que recibir, y «no había nada» no se mezcla con «había, y espera». La
+    // señal sigue ahí en la corrida de las 09:00.
+    if (!isWithinSendWindow(now)) return { eligible: false, skipped: 'outside_hours' }
+
+    // ── Cupo compartido: 1 cada 24 h y 3 por semana, contando los dos registros. ──
+    // El aha lo atraviesa: es la única señal que dispara el ALUMNO y no el reloj, felicita algo que
+    // acaba de pasar, y llegar días tarde la vuelve ruido.
+    const block = evaluateAutomatedEmailQuota(snapshot.recentAutomatedSentAts ?? [], now)
+    if (block) {
         const allowed = triggers.filter((t) => t.template_key === 'behavior_aha')
-        // Skip EXPLÍCITO en vez de caer a `no_trigger`: en el resumen del cron son dos cosas
-        // distintas —«no había nada que decirle» vs «había, y lo estamos espaciando»— y solo la
-        // segunda se recupera sola en la corrida siguiente. Sin este contador, encender W6 se vería
-        // igual que un motor que no dispara.
-        if (allowed.length === 0) return { eligible: false, skipped: 'cooldown' }
+        // Skip EXPLÍCITO en vez de caer a `no_trigger`: «no había nada que decirle» y «había, y lo
+        // estamos espaciando» son dos cosas distintas, y solo la segunda se recupera sola.
+        if (allowed.length === 0) {
+            return { eligible: false, skipped: block === 'gap_24h' ? 'cooldown' : 'weekly_max' }
+        }
         return { eligible: true, triggers: allowed }
     }
 
     return { eligible: true, triggers }
-}
-
-/**
- * ¿El coach volvió al panel después de la sesión del alta? Ver `FIRST_SESSION_WINDOW_MS`: la
- * columna nace escrita en la primera navegación, así que «volvió» es actividad FUERA de esa ventana.
- */
-export function hasReturnedToPanel(snapshot: CoachBehaviorSnapshot): boolean {
-    if (!snapshot.lastActiveAt || !snapshot.createdAt) return false
-    const created = new Date(snapshot.createdAt).getTime()
-    const active = new Date(snapshot.lastActiveAt).getTime()
-    if (!Number.isFinite(created) || !Number.isFinite(active)) return false
-    return active - created > FIRST_SESSION_WINDOW_MS
 }
 
 /** El correo que sale en esta corrida (el de mayor prioridad), o `null` si no corresponde ninguno. */

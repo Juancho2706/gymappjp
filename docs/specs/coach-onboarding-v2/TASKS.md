@@ -167,6 +167,33 @@ onboarding por área».
   (orden del owner: los gates van en la sesión siguiente); el envío real a `qa-free-v3` queda pendiente y exige
   encender el flag.
 
+### W6 v2 — Plan «Correos y activación» (decidido por el owner el 01-10; artifact `8NRAZ75J`)
+
+> Reemplaza el copy y los momentos de arriba. El link `/join` **sale** de los correos: desde el 21-08 deja una
+> solicitud (`coach_leads`), no un alumno. La «Deuda declarada» de `last_active_at` queda resuelta: el día 3 ya no
+> la lee. Regla nueva compartida con el aviso de cupo y el carrito abandonado:
+> `apps/web/src/lib/email/automated-email-policy.ts` + `services/email/automated-email-history.service.ts`.
+
+- [x] W6v2.1 Plantillas v2 (`behavior-templates.ts`): alta directa `/coach/clients?invite=1`, vista previa de la
+  app con el color del coach, progreso de 3 pasos, firma «El equipo de EVA» (el WhatsApp lo responde el socio
+  como EVA), CTA `#047857` (contraste 5,5:1), «en eva-app.cl» en el aha Free, asunto escapado en el `<title>`.
+- [x] W6v2.2 Momentos: día 1 = 20 h sin alumno real; día 3 = sin primera rutina (`resolveFirstArtifact`, solo
+  si toca y no salió); 48 h, aha y 7 d igual. Keys de dedupe sin cambio.
+- [x] W6v2.3 Horario 09–20 h de Chile (`America/Santiago`) para todo W6, aha incluido; también carrito abandonado.
+- [x] W6v2.4 Cupo compartido: 1 cada 24 h y 3 por semana leyendo `coach_email_ledger` + `admin_audit_logs`
+  (el aha lo atraviesa). Barrido de cupo: nada los primeros 7 días de la cuenta, 72 h tras el aha, cupo y baja;
+  el aviso reactivo (402) sigue al instante. Historial ilegible ⇒ fail-closed en los tres barridos.
+- [x] W6v2.5 Corte por env `ONBOARDING_BEHAVIOR_EMAILS_SINCE` (sin env no entra nadie); `?dry=1&since=` solo en
+  ensayo. `replyTo: contacto@eva-app.cl` y versión texto en `scheduleCoachEmail`. WhatsApp por defecto
+  `wa.me/56990756670` (`OWNER_WHATSAPP_URL` lo pisa).
+- [~] W6v2.6 Baja: el motor y los barridos respetan la marca `email_opt_out` del ledger (`trigger='transactional'`,
+  `status='cancelled'`, sin DDL). **Falta el botón del panel admin que la escribe** (UI ⇒ maqueta primero).
+- [x] W6v2.7 Tests: motor, plantillas, regla compartida y los tres crons (573 verdes en 35 archivos, 01-10);
+  typecheck web limpio; eslint 0 errores.
+- [ ] W6v2.8 Deploy en ensayo (`..._DRY_RUN=true` sigue en Production) + `ONBOARDING_BEHAVIOR_EMAILS_SINCE` en
+  Vercel; correo real a `qa-free-v3` en Gmail (iPhone/Android), Gmail web, Outlook y modo oscuro.
+- [ ] W6v2.9 Encender: con 24 h de ensayo y OK del owner sobre el reparto por tipo, quitar el DRY_RUN.
+
 ## W7 — Medición, QA y salida (jefe + owner + Opus)
 - [ ] F7.1 Insights PostHog: setup ≤24 h, aha ≤7 d, volvió >6 h, tocó marca, por cohorte semanal y por persona; dashboard «Activación coaches».
 - [ ] F7.2 Docs: `CURRENT.md`, `PRODUCT_OVERVIEW`, `MOBILE_PARITY`, `MANUAL_TASKS` (contenido D4 pendiente si aplica); SPEC/PLAN/TASKS a `active`/cierre.

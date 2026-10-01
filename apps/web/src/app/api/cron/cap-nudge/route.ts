@@ -9,6 +9,12 @@ import {
 import { isTestCoachEmail } from '@/lib/test-accounts'
 import { tierMaxClientsFor, type SubscriptionTier } from '@/lib/constants'
 import type { Json, TablesInsert } from '@/lib/database.types'
+import { loadAutomatedEmailHistory } from '@/services/email/automated-email-history.service'
+import {
+    evaluateAutomatedEmailQuota,
+    isWithinAhaQuiet,
+    isWithinCapSweepGrace,
+} from '@/lib/email/automated-email-policy'
 import {
     CAP_NUDGE_TIERS,
     isAtCap,
@@ -31,6 +37,13 @@ import {
  * ESCALERA (anti-spam): máximo 3 toques por nivel de cupo — T0, T0+7 d, T0+28 d — y después silencio
  * hasta que cambie `max_clients` (subir de plan o grandfather). La lógica vive pura en `cap-nudge.ts`;
  * el cooldown de 7 días del service es la segunda barrera (cubre el cruce evento↔cron).
+ *
+ * REGLA COMPARTIDA CON W6 (plan «Correos y activación», 01-10; `lib/email/automated-email-policy.ts`):
+ * el barrido escribía «Alcanzaste el límite» a cada coach Gratis apenas sumaba su primer alumno,
+ * aunque ese alumno no hubiera entrado, y podía caer el mismo día que «Tu alumno ya está adentro».
+ * Ahora: nada en los primeros 7 días de la cuenta (es la semana de W6), 72 h de silencio tras el aha,
+ * el cupo compartido (1 cada 24 h, 3 por semana, leyendo los dos registros) y la marca de baja. El
+ * aviso REACTIVO —cuando intenta sumar al segundo— no pasa por acá y sigue saliendo al instante.
  *
  * KILL-SWITCH: `EVA_SALES_EMAILS_DISABLED=client_limit_reached` (lo aplica el service; acá se cuenta
  * el outcome `skipped_disabled` y la corrida igual deja su resumen).
@@ -249,6 +262,10 @@ async function readPriorSends(
 type SweepSkipped = {
     noRecipient: number
     testAccount: number
+    newAccount: number
+    optedOut: number
+    afterAha: number
+    quota: number
     maxTouches: number
     ladderNotDue: number
     duplicate: number
@@ -356,6 +373,17 @@ async function runSweep(
         now
     )
 
+    // Historial de los DOS registros (W6 + carrito en el ledger, cupo en auditoría) y la marca de
+    // baja. Mismo criterio fail-closed que la escalera: sin historial, la corrida se aborta.
+    const historyByCoach = await loadAutomatedEmailHistory(
+        admin,
+        atCap.map((row) => row.coach.id),
+        now
+    ).catch((err: unknown) => {
+        const message = err instanceof Error ? err.message : String(err)
+        throw new LedgerUnreadableError(`automated email history: ${message}`)
+    })
+
     let sent = 0
     let errors = 0
     let attempts = 0
@@ -365,6 +393,10 @@ async function runSweep(
     const skipped: SweepSkipped = {
         noRecipient: 0,
         testAccount: 0,
+        newAccount: 0,
+        optedOut: 0,
+        afterAha: 0,
+        quota: 0,
         maxTouches: 0,
         ladderNotDue: 0,
         duplicate: 0,
@@ -375,8 +407,19 @@ async function runSweep(
     for (const row of atCap) {
         const { coach, tier, maxClients } = row
         try {
-            // La decisión va PRIMERO: un coach en el tope de la escalera no puede costar una llamada
-            // a GoTrue por día (la mayoría de las corridas son puro skip).
+            // La primera semana de la cuenta es de W6: el barrido no le habla de venta todavía.
+            if (isWithinCapSweepGrace(coach.created_at, now)) {
+                skipped.newAccount++
+                continue
+            }
+            const history = historyByCoach.get(coach.id)
+            if (history?.optedOut) {
+                skipped.optedOut++
+                continue
+            }
+
+            // La decisión va antes que GoTrue: un coach en el tope de la escalera no puede costar
+            // una llamada por día (la mayoría de las corridas son puro skip).
             const decision = resolveCapNudgeDecision({
                 priorSends: priorSendsByCoach.get(coach.id) ?? [],
                 currentLimit: maxClients,
@@ -385,6 +428,18 @@ async function runSweep(
             if (decision.action === 'skip') {
                 if (decision.reason === 'max_touches') skipped.maxTouches++
                 else skipped.ladderNotDue++
+                continue
+            }
+
+            // «Tu alumno ya está adentro» manda 72 h; después, el cupo compartido. El peldaño no se
+            // pierde: la escalera cuenta envíos, no días, así que sale en la corrida siguiente que
+            // pase los dos frenos.
+            if (isWithinAhaQuiet(history?.ahaAt ?? null, now)) {
+                skipped.afterAha++
+                continue
+            }
+            if (evaluateAutomatedEmailQuota(history?.sentAts ?? [], now)) {
+                skipped.quota++
                 continue
             }
 
@@ -464,6 +519,10 @@ export async function GET(req: Request) {
         skipped: {
             no_recipient: 0,
             test_account: 0,
+            new_account: 0,
+            opted_out: 0,
+            after_aha: 0,
+            quota: 0,
             max_touches: 0,
             ladder_not_due: 0,
             duplicate: 0,
@@ -484,6 +543,10 @@ export async function GET(req: Request) {
         summary.skipped = {
             no_recipient: result.skipped.noRecipient,
             test_account: result.skipped.testAccount,
+            new_account: result.skipped.newAccount,
+            opted_out: result.skipped.optedOut,
+            after_aha: result.skipped.afterAha,
+            quota: result.skipped.quota,
             max_touches: result.skipped.maxTouches,
             ladder_not_due: result.skipped.ladderNotDue,
             duplicate: result.skipped.duplicate,

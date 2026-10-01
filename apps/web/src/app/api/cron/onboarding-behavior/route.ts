@@ -4,6 +4,7 @@ import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import {
     behaviorEmailsDryRun,
     behaviorEmailsEnabled,
+    behaviorLaunchCutover,
     sweepBehaviorEmails,
 } from '@/lib/email/behavior/behavior-emails'
 
@@ -12,13 +13,17 @@ import {
  * (W6 / F6.1, D12 = A del owner).
  *
  * QUÉ HACE, cada hora: barre a los coaches con alta en los últimos 90 d, calcula sus señales
- * (+2 h sin alumno real · +24 h sin volver · +48 h alumno invitado que no entró · aha · +7 d sin
- * activar) y manda como máximo UN correo por coach y por corrida, deduplicado por
+ * (día 1 sin alumno real · día 3 sin su primera rutina · +48 h alumno invitado que no entró · aha ·
+ * +7 d sin activar) y manda como máximo UN correo por coach y por corrida, deduplicado por
  * `(coach_id, template_key)` contra `coach_email_ledger`.
  *
- * DOS FRENOS AL ENCENDIDO (06-09, tras el ensayo que dio 83 envíos en la primera hora): solo entran
- * las cuentas creadas desde `BEHAVIOR_LAUNCH_CUTOVER`, y entre dos correos del mismo coach hay un
- * piso de `BEHAVIOR_MIN_GAP_MS` (24 h) que solo el aha atraviesa.
+ * FRENOS (plan «Correos y activación», 01-10): solo entran las cuentas creadas desde
+ * `ONBOARDING_BEHAVIOR_EMAILS_SINCE` (sin esa env no entra nadie); solo sale entre 09:00 y 20:00 de
+ * Chile; y el cupo compartido con el aviso de cupo y el carrito abandonado (1 cada 24 h, 3 por
+ * semana) que solo el aha atraviesa. Quien pidió la baja no recibe nada.
+ *
+ * `?dry=1&since=<ISO>` (SOLO en ensayo) audita con otro corte —por ejemplo, la cohorte entera desde el
+ * 06-09— sin tocar la env ni mandar nada. Fuera de ensayo `since` se ignora.
  *
  * POR QUÉ HORARIO Y NO DIARIO: `vercel.json` solo tenía crons diarios/semanales, así que un «+2 h»
  * agendado ahí sería en realidad «hasta +26 h» y el correo del día 1 llegaría al día 2 (hallazgo
@@ -64,9 +69,14 @@ export async function GET(req: Request) {
         return NextResponse.json({ ok: true, skipped: 'disabled' })
     }
 
-    const dry = behaviorEmailsDryRun() || new URL(req.url).searchParams.get('dry') === '1'
+    const params = new URL(req.url).searchParams
+    const dry = behaviorEmailsDryRun() || params.get('dry') === '1'
+    // El corte de la URL solo vale en ensayo: un envío real con otro corte sería saltarse la env.
+    const sinceParam = dry ? params.get('since')?.trim() : null
+    const launchCutover =
+        sinceParam && Number.isFinite(new Date(sinceParam).getTime()) ? sinceParam : behaviorLaunchCutover()
     const admin = createServiceRoleClient()
-    const summary = await sweepBehaviorEmails(admin, { now: new Date(), dry })
+    const summary = await sweepBehaviorEmails(admin, { now: new Date(), dry, policy: { launchCutover } })
 
     // `wouldSendByKey` y `beforeLaunch` van SUELTOS aunque el segundo ya viaje dentro de `skipped`:
     // el ensayo se audita leyendo el log del cron en Vercel, y ahí lo que se necesita a simple vista
@@ -76,9 +86,10 @@ export async function GET(req: Request) {
         `[cron/onboarding-behavior] done — dry=${dry} candidates=${summary.candidates} ` +
             `sent=${summary.sent} wouldSend=${summary.wouldSend.length} ` +
             `wouldSendByKey=${JSON.stringify(summary.wouldSendByKey)} ` +
-            `beforeLaunch=${summary.skipped.before_launch} cooldown=${summary.skipped.cooldown} ` +
+            `since=${launchCutover ?? 'none'} beforeLaunch=${summary.skipped.before_launch} ` +
+            `outsideHours=${summary.skipped.outside_hours} cooldown=${summary.skipped.cooldown} ` +
             `skipped=${JSON.stringify(summary.skipped)} errors=${summary.errors}`
     )
 
-    return NextResponse.json({ ok: true, dry, ...summary })
+    return NextResponse.json({ ok: true, dry, since: launchCutover, ...summary })
 }
