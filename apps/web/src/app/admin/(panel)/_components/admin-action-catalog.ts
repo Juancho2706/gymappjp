@@ -29,6 +29,8 @@ export const ADMIN_ACTION_CATALOG: Record<string, AdminActionMeta> = {
     'coach.reactivate': { label: 'Reactivó coach', tone: 'success' },
     'coach.force_expire': { label: 'Expiró trial', tone: 'warning' },
     'coach.period_extend': { label: 'Extendió período', tone: 'success' },
+    'coach.email_opt_out': { label: 'Dio de baja de los correos', tone: 'warning' },
+    'coach.email_opt_in': { label: 'Reactivó los correos', tone: 'success' },
     'coach.period_end_update': { label: 'Cambió vencimiento', tone: 'neutral' },
     'coach.bulk_status': { label: 'Cambio masivo de estado', tone: 'warning' },
     'coach.bulk_tier': { label: 'Cambio masivo de plan', tone: 'warning' },

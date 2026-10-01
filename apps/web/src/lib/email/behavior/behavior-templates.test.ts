@@ -126,6 +126,12 @@ describe('destinos de los botones', () => {
         expect(email.text).toContain('«Resetear contraseña»')
     })
 
+    it('con el alumno conocido, el de 48 h abre su ficha', () => {
+        const email = buildBehaviorEmail('behavior_client_not_entered_48h', { ...BASE, pendingClientId: 'abc-123' })
+        expect(email.html).toContain('href="https://www.eva-app.cl/coach/clients/abc-123"')
+        expect(email.text).toContain('En su ficha, «Reenviarle el acceso»')
+    })
+
     it('el CTA usa el verde con contraste AA', () => {
         const email = buildBehaviorEmail('behavior_no_client_2h', BASE)
         expect(email.html).toContain(`background-color:${BEHAVIOR_CTA_GREEN}`)

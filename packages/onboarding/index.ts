@@ -509,6 +509,16 @@ export function resolveRnRoute(
 // para que el paquete siga teniendo una sola puerta de entrada.
 export { isGuideActive, type GuideModeInput } from './guide-mode'
 
+// ── Tarjeta «Tu primer alumno» del panel (plan B «Activación», owner 01-10) ──────────────────
+export {
+    FIRST_STUDENT_RN_ROUTE,
+    FIRST_STUDENT_WEB_HREF,
+    firstStudentCardCopy,
+    shouldShowFirstStudentCard,
+    type FirstStudentCardCopy,
+    type FirstStudentStep,
+} from './first-student'
+
 // ── Memoria por especialidad (QA del owner 22-08, W8.1.3) ────────────────────────────────────
 // Los pasos 2 y 3 dependen del mundo de la persona: se archivan en
 // `onboarding_guide.progress[persona]` para que cambiar de especialidad no tilde lo que no se

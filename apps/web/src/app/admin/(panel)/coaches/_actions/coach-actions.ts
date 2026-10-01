@@ -20,6 +20,7 @@ import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { buildCoachUpdateData, readModules } from '../../_actions/module-form'
 import { syncAdminGrants } from '@/services/billing/addons.service'
 import { purgeCoachOwnedRows } from '@/services/coach/account-deletion.service'
+import { optInCoachEmails, optOutCoachEmails } from '@/services/email/email-opt-out.service'
 
 function revalidateAdmin() {
     revalidatePath('/admin/coaches', 'page')
@@ -210,6 +211,32 @@ export async function extendCoachPeriodAction(coachId: string, days: 7 | 14 | 30
 
     await logAdminAction(adminClient, 'coach.period_extend', 'coaches', coachId, { days, new_period_end: newEnd })
     revalidateAdmin()
+    return { success: true }
+}
+
+// Baja / alta de los correos AUTOMÁTICOS (W6, cupo por barrido, carrito abandonado). Para cuando el
+// coach responde «no quiero más»: los correos de cuenta, contraseña y pagos siguen saliendo.
+export async function setCoachEmailOptOutAction(coachId: string, optOut: boolean) {
+    const { user, adminClient } = await assertAdmin()
+    const parsed = z.string().uuid().safeParse(coachId)
+    if (!parsed.success) return { error: 'Coach inválido.' }
+
+    try {
+        if (optOut) await optOutCoachEmails(adminClient, parsed.data, user.email ?? null)
+        else await optInCoachEmails(adminClient, parsed.data)
+    } catch (err) {
+        return { error: err instanceof Error ? err.message : 'No se pudo guardar la preferencia.' }
+    }
+
+    await logAdminAction(
+        adminClient,
+        optOut ? 'coach.email_opt_out' : 'coach.email_opt_in',
+        'coaches',
+        parsed.data,
+        { source: 'admin' },
+        user.email
+    )
+    revalidatePath(`/admin/coaches/${parsed.data}`, 'page')
     return { success: true }
 }
 

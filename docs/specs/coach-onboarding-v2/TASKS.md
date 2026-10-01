@@ -194,6 +194,24 @@ onboarding por área».
   Vercel; correo real a `qa-free-v3` en Gmail (iPhone/Android), Gmail web, Outlook y modo oscuro.
 - [ ] W6v2.9 Encender: con 24 h de ensayo y OK del owner sobre el reparto por tipo, quitar el DRY_RUN.
 
+### W8 v2 — Plan B «Activación»: que el coach sume su primer alumno (owner 01-10; maqueta artifact `F1yd1V2b`)
+
+> 57 coaches desde el 06-09 → 22 demo → 14 sumaron alumno → 7 con alumno usándola: el 75 % nunca suma el primero.
+
+- [x] B1 Panel con 0 alumnos reales: «Tu primer alumno» primero y sin la card de prioridad. Web móvil/PWA
+  (`DashboardShell`) y escritorio (`DesktopBento`, franja ancha) con `FirstStudentCard.tsx`; RN (`home.tsx` +
+  `components/coach/FirstStudentCard.tsx`). Copy y destinos únicos en `packages/onboarding/first-student.ts`.
+- [x] B2 Ficha del alumno que nunca entró: aviso «todavía no entra» + «Reenviarle el acceso», que abre el flujo
+  existente de «Resetear contraseña» (web `ClientActionsSheet initialConfirm='reset'`; RN diálogo de la ficha).
+  Regla `hasNotEnteredYet` (web `client-status.ts`, RN `directory-shared.ts`), espejo del chip «Todavía no entró».
+  El correo de 48 h abre la ficha de ese alumno (`pendingClientId`).
+- [x] B3 Alumno sin ningún programa en web/PWA: `NoPlanCard` («Tu coach está armando tu plan» + «Hacer un check-in»),
+  espejo de RN; un día de descanso real sigue mostrando «Día de descanso».
+- [x] Baja de correos en el admin: bloque «Correos automáticos» en la ficha del coach
+  (`setCoachEmailOptOutAction`, `services/email/email-opt-out.service.ts`, auditoría `coach.email_opt_out`/`_in`).
+- [ ] B4 Embudo semanal por superficie (web / PWA / app) contado desde las tablas: pendiente.
+- [ ] QA del owner en device (web escritorio, PWA, Android, iPhone).
+
 ## W7 — Medición, QA y salida (jefe + owner + Opus)
 - [ ] F7.1 Insights PostHog: setup ≤24 h, aha ≤7 d, volvió >6 h, tocó marca, por cohorte semanal y por persona; dashboard «Activación coaches».
 - [ ] F7.2 Docs: `CURRENT.md`, `PRODUCT_OVERVIEW`, `MOBILE_PARITY`, `MANUAL_TASKS` (contenido D4 pendiente si aplica); SPEC/PLAN/TASKS a `active`/cierre.

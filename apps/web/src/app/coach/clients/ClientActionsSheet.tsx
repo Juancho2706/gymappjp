@@ -99,11 +99,16 @@ interface ClientActionsSheetProps {
     loginUrl: string
     onClose: () => void
     onEdit: (c: { id: string; name: string }) => void
+    /**
+     * Abre el sheet directo en una confirmación. La usa el aviso «todavía no entra» de la ficha
+     * para ir derecho a «Resetear contraseña» → clave temporal → WhatsApp, sin pasar por el menú.
+     */
+    initialConfirm?: ConfirmKind
 }
 
-export function ClientActionsSheet({ client, loginUrl, onClose, onEdit }: ClientActionsSheetProps) {
+export function ClientActionsSheet({ client, loginUrl, onClose, onEdit, initialConfirm }: ClientActionsSheetProps) {
     const router = useRouter()
-    const [confirm, setConfirm] = useState<ConfirmKind | null>(null)
+    const [confirm, setConfirm] = useState<ConfirmKind | null>(initialConfirm ?? null)
     const [tempPassword, setTempPassword] = useState<string | null>(null)
     // W2.11: el reenvío del acceso con la clave nueva. `null` = el servidor no lo ofrece (alumno
     // sin teléfono: una credencial no puede ir al selector de contactos, regla 4 de la SPEC).

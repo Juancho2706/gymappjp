@@ -1,7 +1,7 @@
 ---
 status: active
 owner: Juan Manuel Villegas
-last_verified: "2026-09-16"
+last_verified: "2026-10-01"
 canonical: true
 source_of_truth: apps/web responsive + apps/mobile
 ---
@@ -11,6 +11,14 @@ source_of_truth: apps/web responsive + apps/mobile
 Única fuente de verdad para saber qué está cerrado, qué falta y dónde retomar el port de React Native. Los detalles de ejecución viven en [`specs/rn-mobile-parity-redesign/TASKS.md`](../../specs/rn-mobile-parity-redesign/TASKS.md); este archivo prevalece ante cualquier auditoría, spec de unidad o informe histórico.
 
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
+
+> **2026-10-01 (plan B «Activación» RN; [TASKS § W8 v2](../specs/coach-onboarding-v2/TASKS.md))**: paridad con la web.
+> Home del coach con 0 alumnos reales: tarjeta «Tu primer alumno» primero (`components/coach/FirstStudentCard.tsx`, copy en
+> `@eva/onboarding` `first-student.ts`) y sin la card «Prioridad de hoy»; abre el alta guiada `?invite=1`. Ficha del alumno
+> que nunca entró: aviso con «Reenviarle el acceso» (`components/coach/NotEnteredNotice.tsx`) que abre el diálogo
+> «Resetear contraseña» existente; la consulta de la ficha suma `first_login_at, force_password_change, is_demo`. El
+> «Tu coach está armando tu plan» del alumno ya existía en RN; la web lo copió. Gates: `tsc` mobile 0, eslint 0 errores,
+> vitest `tests/mobile` 2.158 ✓, `expo export --platform android` OK. **QA en device pendiente.**
 
 > **2026-09-30 (tren «Kilos o libras» W4 RN — EN PRODUCCIÓN por OTA; [SDD](../specs/kg-lb-ejecutor/SPEC.md))**: paridad
 > con la web W3 (ambas en `master` `759b47d1`; OTA 1.1.3 android `24d7a59f` run 36761118795 / ios `6c11fb23` run

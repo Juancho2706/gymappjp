@@ -101,6 +101,28 @@ function enteredLabel(firstLoginMs: number, now: Date): string {
  * @param now reloj inyectable (tests deterministas).
  * @param cutoverIso costura de test: en producción SIEMPRE `FIRST_LOGIN_SIGNAL_CUTOVER`.
  */
+/**
+ * ¿Podemos AFIRMAR que el alumno nunca entró? Es la rama «Todavía no entró» de `statusMeta`
+ * (activo, sin archivar, sin `first_login_at`, clave temporal sin cambiar y nacido después del
+ * corte). Espejo de `hasNotEnteredYet` de la web (`app/coach/clients/_lib/client-status.ts`).
+ */
+export function hasNotEnteredYet(
+  input: {
+    isArchived: boolean
+    isActive: boolean
+    firstLoginAt: string | null
+    createdAt: string | null
+    forcePasswordChange: boolean
+  },
+  cutoverIso: string = FIRST_LOGIN_SIGNAL_CUTOVER
+): boolean {
+  if (input.isArchived || !input.isActive || !input.forcePasswordChange) return false
+  if (parseIso(input.firstLoginAt) !== null) return false
+  const createdMs = parseIso(input.createdAt)
+  const cutoverMs = parseIso(cutoverIso)
+  return createdMs !== null && cutoverMs !== null && createdMs >= cutoverMs
+}
+
 export function statusMeta(
   input: {
     isArchived: boolean

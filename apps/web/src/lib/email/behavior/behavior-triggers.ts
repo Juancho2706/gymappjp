@@ -166,6 +166,11 @@ export interface CoachBehaviorSnapshot {
      * a `FIRST_LOGIN_SIGNAL_CUTOVER`. `null` = no hay ninguna invitación pendiente medible.
      */
     oldestPendingInviteAt: string | null
+    /**
+     * `id` de ese mismo alumno: el correo de 48 h abre su ficha, donde está «Reenviarle el acceso».
+     * No interviene en ninguna regla del motor. Opcional: `null`/ausente ⇒ el botón va al listado.
+     */
+    oldestPendingInviteClientId?: string | null
     /** El aha: `workout_logs` o `nutrition_intake_entries` de un alumno REAL (nunca del demo). */
     hasRealStudentActivity: boolean
     /** Keys VIVAS del ledger para este coach: el dedupe por `(coach_id, template_key)`. */

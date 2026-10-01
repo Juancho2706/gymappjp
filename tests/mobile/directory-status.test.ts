@@ -30,11 +30,13 @@ vi.doMock(path.join(lucideDir, 'dist', 'cjs', 'lucide-react-native.js'), lucideS
 
 type Shared = typeof import('../../apps/mobile/components/coach/directory/directory-shared')
 let statusMeta: Shared['statusMeta']
+let hasNotEnteredYet: Shared['hasNotEnteredYet']
 let FIRST_LOGIN_SIGNAL_CUTOVER: Shared['FIRST_LOGIN_SIGNAL_CUTOVER']
 
 beforeAll(async () => {
   const mod = await import('../../apps/mobile/components/coach/directory/directory-shared')
   statusMeta = mod.statusMeta
+  hasNotEnteredYet = mod.hasNotEnteredYet
   FIRST_LOGIN_SIGNAL_CUTOVER = mod.FIRST_LOGIN_SIGNAL_CUTOVER
 })
 
@@ -216,5 +218,29 @@ describe('statusMeta · sin first_login_at (el corte decide qué se puede afirma
 describe('FIRST_LOGIN_SIGNAL_CUTOVER (RN)', () => {
   it('es un ISO parseable (el jefe de la ola la fija al ISO del deploy web)', () => {
     expect(Number.isNaN(new Date(FIRST_LOGIN_SIGNAL_CUTOVER).getTime())).toBe(false)
+  })
+})
+
+// Aviso «todavía no entra» de la ficha (plan B «Activación», 01-10): misma regla que el chip.
+describe('hasNotEnteredYet', () => {
+  const pending = { ...base, forcePasswordChange: true, createdAt: '2026-08-25T10:00:00' }
+
+  it('fila posterior al corte, sin login y con clave temporal ⇒ sí', () => {
+    expect(hasNotEnteredYet(pending, CUTOVER_PASADO)).toBe(true)
+  })
+
+  it('con primer login, archivado, pausado o clave ya cambiada ⇒ no', () => {
+    expect(hasNotEnteredYet({ ...pending, firstLoginAt: '2026-08-25T11:00:00' }, CUTOVER_PASADO)).toBe(false)
+    expect(hasNotEnteredYet({ ...pending, isArchived: true }, CUTOVER_PASADO)).toBe(false)
+    expect(hasNotEnteredYet({ ...pending, isActive: false }, CUTOVER_PASADO)).toBe(false)
+    expect(hasNotEnteredYet({ ...pending, forcePasswordChange: false }, CUTOVER_PASADO)).toBe(false)
+  })
+
+  it('fila anterior al corte ⇒ no se puede afirmar', () => {
+    expect(hasNotEnteredYet({ ...pending, createdAt: '2026-08-10T10:00:00' }, CUTOVER_PASADO)).toBe(false)
+  })
+
+  it('coincide con el chip «Todavía no entró» de `statusMeta`', () => {
+    expect(statusMeta(pending, NOW, CUTOVER_PASADO).label).toBe('Todavía no entró')
   })
 })

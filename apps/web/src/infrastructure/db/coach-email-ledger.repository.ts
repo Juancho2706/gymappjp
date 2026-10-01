@@ -220,6 +220,20 @@ export async function listActiveByCoachesAndKey(
     return rowsOrThrow(result, 'listActiveByCoachesAndKey')
 }
 
+/**
+ * Borra las filas VIVAS de una key para un coach. Solo la usa la marca de baja (`email_opt_out`) al
+ * volver a activar los correos desde el admin: no es un correo, es una preferencia, y su historia
+ * queda en `admin_audit_logs` (`coach.email_opt_out` / `coach.email_opt_in`).
+ */
+export async function deleteActiveByCoachAndKey(admin: Db, coachId: string, templateKey: string): Promise<void> {
+    const result = (await ledger(admin)
+        .delete()
+        .eq('coach_id', coachId)
+        .eq('template_key', templateKey)
+        .in('status', ACTIVE_LEDGER_STATUSES as string[])) as QueryResult
+    if (result.error) throw new CoachEmailLedgerDbError('deleteActiveByCoachAndKey', result.error)
+}
+
 /** Deja la fila del envío. Devuelve la fila creada (el service solo usa el `id`). */
 export async function insertLedgerRow(
     admin: Db,

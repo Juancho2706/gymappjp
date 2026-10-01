@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
     clientStatusInputFromRow,
     getClientStatusMeta,
+    hasNotEnteredYet,
     FIRST_LOGIN_SIGNAL_CUTOVER,
     type ClientStatusInput,
 } from './client-status'
@@ -242,5 +243,33 @@ describe('clientStatusInputFromRow', () => {
 
     it('is_active null NO significa pausado (el default de la fila es activo)', () => {
         expect(clientStatusInputFromRow({ is_active: null }).isActive).toBe(true)
+    })
+})
+
+// Aviso «todavía no entra» de la ficha (plan B «Activación», 01-10): misma regla que el chip.
+describe('hasNotEnteredYet', () => {
+    const cutover = '2026-08-20T00:00:00Z'
+    const pending: ClientStatusInput = {
+        ...base,
+        firstLoginAt: null,
+        forcePasswordChange: true,
+        createdAt: '2026-08-25T10:00:00Z',
+    }
+
+    it('fila posterior al corte, sin login y con clave temporal ⇒ sí', () => {
+        expect(hasNotEnteredYet(pending, cutover)).toBe(true)
+        expect(getClientStatusMeta(pending, new Date('2026-08-26T12:00:00Z'), cutover).label).toBe('Todavía no entró')
+    })
+
+    it('con primer login, archivado, pausado, clave cambiada o fila vieja ⇒ no', () => {
+        expect(hasNotEnteredYet({ ...pending, firstLoginAt: '2026-08-25T11:00:00Z' }, cutover)).toBe(false)
+        expect(hasNotEnteredYet({ ...pending, isArchived: true }, cutover)).toBe(false)
+        expect(hasNotEnteredYet({ ...pending, isActive: false }, cutover)).toBe(false)
+        expect(hasNotEnteredYet({ ...pending, forcePasswordChange: false }, cutover)).toBe(false)
+        expect(hasNotEnteredYet({ ...pending, createdAt: '2026-08-10T10:00:00Z' }, cutover)).toBe(false)
+    })
+
+    it('en producción usa el corte canónico', () => {
+        expect(hasNotEnteredYet({ ...pending, createdAt: FIRST_LOGIN_SIGNAL_CUTOVER })).toBe(true)
     })
 })

@@ -49,6 +49,8 @@ export interface BehaviorEmailContext {
     persona: Persona | null
     /** Plan Gratis ⇒ el correo del aha suma una línea sobre el cupo de 1 alumno. */
     isFree?: boolean
+    /** Alumno que lleva más tiempo sin entrar: el correo de 48 h abre su ficha. */
+    pendingClientId?: string | null
     /** `siteBaseUrl()`. Producción como fallback: un correo con `localhost` es un correo perdido. */
     baseUrl: string
     /**
@@ -310,10 +312,15 @@ ${cta(label, url)}`,
 
         // ── +48 h: el coach hizo su parte; el trabajo está trabado del otro lado ──
         case 'behavior_client_not_entered_48h': {
-            const url = `${ctx.baseUrl}/coach/clients`
+            // Con el alumno conocido, el botón abre SU ficha, donde «Reenviarle el acceso» está arriba
+            // (plan B «Activación»). Sin él, el listado y el camino por las opciones.
+            const url = ctx.pendingClientId
+                ? `${ctx.baseUrl}/coach/clients/${encodeURIComponent(ctx.pendingClientId)}`
+                : `${ctx.baseUrl}/coach/clients`
             const label = 'Reenviarle el acceso'
-            const how =
-                'En «Alumnos», abre sus opciones y toca «Resetear contraseña»: te queda el acceso nuevo listo para mandárselo por WhatsApp.'
+            const how = ctx.pendingClientId
+                ? 'En su ficha, «Reenviarle el acceso» te deja el acceso nuevo listo para mandárselo por WhatsApp.'
+                : 'En «Alumnos», abre sus opciones y toca «Resetear contraseña»: te queda el acceso nuevo listo para mandárselo por WhatsApp.'
             return assemble(key, {
                 subject: `Tu ${noun} aún no entra a ${brand}`,
                 preheader: 'Reenvíale el acceso en un minuto.',

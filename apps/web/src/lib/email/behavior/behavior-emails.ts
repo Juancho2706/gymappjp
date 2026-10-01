@@ -226,7 +226,7 @@ export async function loadCoachBehaviorSnapshot(
     // Alumnos REALES: nunca el demo (`is_demo`), nunca los archivados.
     const clientsResult = await admin
         .from('clients')
-        .select('created_at, first_login_at')
+        .select('id, created_at, first_login_at')
         .eq('coach_id', coach.id)
         .eq('is_demo', false)
         .eq('is_archived', false)
@@ -244,10 +244,11 @@ export async function loadCoachBehaviorSnapshot(
     const anyRealClientLoggedIn = clients.some((c) => Boolean(c.first_login_at))
     // Solo las filas POSTERIORES al corte pueden interpretarse como «todavía no entró»: antes de
     // ese deploy la columna no se escribía y un `null` significa vejez, no ausencia.
-    const oldestPendingInviteAt =
+    const oldestPending =
         clients.find(
             (c) => !c.first_login_at && c.created_at != null && c.created_at >= FIRST_LOGIN_SIGNAL_CUTOVER
-        )?.created_at ?? null
+        ) ?? null
+    const oldestPendingInviteAt = oldestPending?.created_at ?? null
 
     // El aha pertenece al alumno REAL: el demo trae actividad sembrada y tildaría el paso el día 1
     // (mismo predicado que `loadOnboardingSignalsDetailed`, services/onboarding/onboarding-v2.queries.ts).
@@ -323,6 +324,7 @@ export async function loadCoachBehaviorSnapshot(
         realClientCount: clients.length,
         anyRealClientLoggedIn,
         oldestPendingInviteAt,
+        oldestPendingInviteClientId: oldestPending?.id ?? null,
         hasRealStudentActivity:
             (workoutActivity.data?.length ?? 0) > 0 || (intakeActivity.data?.length ?? 0) > 0,
         alreadySent,
@@ -372,6 +374,7 @@ export async function runBehaviorCheckForCoach(
         brandColor: coach.primary_color,
         persona: snapshot.persona,
         isFree: (coach.subscription_tier ?? 'free') === 'free',
+        pendingClientId: snapshot.oldestPendingInviteClientId ?? null,
         baseUrl: siteBaseUrl(),
         ownerWhatsappUrl: ownerWhatsappUrl(),
     })

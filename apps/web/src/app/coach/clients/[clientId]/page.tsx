@@ -137,6 +137,9 @@ async function ProfileContent({ clientId }: { clientId: string }) {
                     created_at: client.created_at,
                     is_active: client.is_active,
                     is_archived: (client as { is_archived?: boolean | null }).is_archived ?? null,
+                    first_login_at: (client as { first_login_at?: string | null }).first_login_at ?? null,
+                    force_password_change:
+                        (client as { force_password_change?: boolean | null }).force_password_change ?? null,
                 }}
                 coachSlug={heroCoachSlug}
                 compliance={compliance}

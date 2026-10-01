@@ -351,6 +351,7 @@ export default async function AdminCoachDetailPage({ params }: Props) {
                 coachId={coach.id}
                 slug={coach.slug}
                 clientCount={clientCount}
+                emailOptOutAt={detail.emailOptOutAt}
             />
         </div>
     )

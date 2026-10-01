@@ -13,6 +13,7 @@ import { VerifyEmailBanner } from './banners/VerifyEmailBanner'
 import { RegistrationMirror } from '../../_components/RegistrationMirror'
 import { PulseHero } from './PulseHero'
 import { PriorityCard } from './PriorityCard'
+import { FirstStudentCard } from './FirstStudentCard'
 import { AgendaCard } from './AgendaCard'
 import { NewsFeed } from './NewsFeed'
 import { DashboardFab } from './DashboardFab'
@@ -25,6 +26,7 @@ import type { DomainsEnabled } from '../_lib/quick-actions'
 import type { DashboardV2Data } from '../_data/types'
 import type { WorkspaceSummary } from '@/domain/auth/types'
 import type { Persona } from '@eva/schemas'
+import { shouldShowFirstStudentCard } from '@eva/onboarding'
 import type { SubscriptionTier } from '@/lib/constants'
 import { studentCountLabel, tierMaxClientsFor } from '@/lib/constants'
 import { cn } from '@/lib/utils'
@@ -82,6 +84,7 @@ export function DashboardShell({
     data,
     coachName,
     coachInviteCode,
+    persona,
     subscriptionTier,
     coachLogoUrl,
     coachLogoDarkUrl,
@@ -112,6 +115,10 @@ export function DashboardShell({
     // cupo real. Con el 80 escrito a mano el banner era INALCANZABLE — Elite hoy topa en 60 (el
     // gate de cupo corta antes de llegar a 80) y un grandfathered de 100 lo veía recién al 80%.
     const teamsBridgeThreshold = Math.ceil(maxClients * 0.8)
+    // Plan B «Activación» (01-10): con 0 alumnos REALES (`totalClients` ya excluye al demo) lo
+    // primero del panel es dar de alta al primero, y la tarjeta de prioridad —que con 0 alumnos
+    // decía «Todo al día. Buen trabajo.»— no se muestra.
+    const showFirstStudent = shouldShowFirstStudentCard(data.kpi.totalClients)
 
     return (
         <>
@@ -239,6 +246,12 @@ export function DashboardShell({
                         </div>
                     </header>
 
+                    {showFirstStudent && (
+                        <div className="pb-3.5">
+                            <FirstStudentCard persona={persona} />
+                        </div>
+                    )}
+
                     {/* Código de invitación a un toque del saludo: el dato ya llegaba al shell pero
                         solo se veía en Ajustes → Mi Marca. `pb-3.5` repite el aire del header para que
                         el bloque sume una fila sin romper el ritmo vertical; `empty:hidden` colapsa esa
@@ -250,8 +263,8 @@ export function DashboardShell({
 
                     <PulseHero kpi={data.kpi} onAdherence={openInsights} />
 
-                    <div className="mb-[22px]">
-                        <PriorityCard
+                    <div className="mb-[22px] empty:hidden">
+                        {!showFirstStudent && <PriorityCard
                             items={data.topRiskClients}
                             showNextStep
                             agendaPending={data.agendaTotal}
@@ -260,7 +273,7 @@ export function DashboardShell({
                                 data.expiringPrograms.filter((p) => p.daysLeft <= 0).length
                             }
                             avgAdherence={data.kpi.avgAdherence}
-                        />
+                        />}
                     </div>
 
                     <div className="mb-6">
@@ -280,6 +293,8 @@ export function DashboardShell({
                 <div className="hidden md:block">
                     <DesktopBento
                         data={data}
+                        persona={persona}
+                        showFirstStudent={showFirstStudent}
                         coachName={coachName}
                         coachInviteCode={coachInviteCode}
                         onAdherence={openInsights}

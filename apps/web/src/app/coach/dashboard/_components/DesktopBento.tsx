@@ -20,6 +20,8 @@ import { Badge } from '@/components/ui/badge'
 import { CreateClientModal } from '../../clients/CreateClientModal'
 import { EvaCountUp } from './EvaCountUp'
 import { InviteCodePill } from './invite/InviteCodePill'
+import { FirstStudentCard } from './FirstStudentCard'
+import type { Persona } from '@eva/schemas'
 import { todayLabel, flagLabel } from '../_lib/dashboard-design'
 import {
     daysSinceSantiagoInstant,
@@ -41,6 +43,14 @@ interface Props {
     /** Código de invitación permanente del coach; sin él la pastilla no se pinta. */
     coachInviteCode?: string | null
     onAdherence: () => void
+    /** Persona del coach: decide el sustantivo de «Tu primer alumno». */
+    persona?: Persona | null
+    /**
+     * 0 alumnos reales (lo resuelve el shell con `shouldShowFirstStudentCard`): la franja «Tu primer
+     * alumno» va arriba de los KPIs y la card oscura de prioridad no se pinta (con 0 alumnos decía
+     * «Ningún alumno en riesgo. Todo al día.»).
+     */
+    showFirstStudent?: boolean
 }
 
 type KpiTone = 'sport' | 'danger' | 'success' | 'ember'
@@ -104,7 +114,14 @@ function dayLabel(iso: string): string {
  * "Programas activos" + "Actividad reciente" apiladas a la derecha. md+; el stack
  * móvil maneja anchos angostos.
  */
-export function DesktopBento({ data, coachName, coachInviteCode, onAdherence }: Props) {
+export function DesktopBento({
+    data,
+    coachName,
+    coachInviteCode,
+    onAdherence,
+    persona = null,
+    showFirstStudent = false,
+}: Props) {
     const router = useRouter()
     const [createOpen, setCreateOpen] = useState(false)
     const firstName = coachName?.split(' ')[0] || 'Coach'
@@ -217,6 +234,12 @@ export function DesktopBento({ data, coachName, coachInviteCode, onAdherence }: 
                 </div>
             </div>
 
+            {showFirstStudent && (
+                <div className="mb-5">
+                    <FirstStudentCard persona={persona} layout="wide" />
+                </div>
+            )}
+
             {/* KPIs */}
             <div className="mb-5 grid grid-cols-2 gap-4 min-[1000px]:grid-cols-4">
                 {kpis.map((k) => {
@@ -261,8 +284,15 @@ export function DesktopBento({ data, coachName, coachInviteCode, onAdherence }: 
             </div>
 
             {/* Bento grid */}
-            <div className="grid grid-cols-1 items-start gap-5 min-[1000px]:grid-cols-[1.5fr_1fr]">
-                {/* Card oscura — Prioridad de hoy (warroom) */}
+            <div
+                className={
+                    showFirstStudent
+                        ? 'grid grid-cols-1 items-start gap-5'
+                        : 'grid grid-cols-1 items-start gap-5 min-[1000px]:grid-cols-[1.5fr_1fr]'
+                }
+            >
+                {/* Card oscura — Prioridad de hoy (warroom). Con 0 alumnos manda «Tu primer alumno». */}
+                {!showFirstStudent && (
                 <div className="overflow-hidden rounded-card bg-[var(--ink-950)] shadow-[var(--shadow-sm)]">
                     <div className="flex items-center justify-between gap-3 px-[18px] py-4">
                         <div>
@@ -319,6 +349,7 @@ export function DesktopBento({ data, coachName, coachInviteCode, onAdherence }: 
                         )}
                     </div>
                 </div>
+                )}
 
                 {/* Columna derecha — Programas activos + Actividad reciente */}
                 <div className="flex min-w-0 flex-col gap-5">

@@ -21,6 +21,8 @@ import {
 } from '../../../components/coach/CoachDashboardSections'
 import { CoachSearchPalette } from '../../../components/coach/CoachSearchPalette'
 import { InviteCodePill } from '../../../components/coach/InviteStudent'
+import { FirstStudentCard } from '../../../components/coach/FirstStudentCard'
+import { shouldShowFirstStudentCard } from '@eva/onboarding'
 import { VerifyEmailBanner } from '../../../components/coach/VerifyEmailBanner'
 import { useTheme } from '../../../context/ThemeContext'
 import { useMarkDashboardReady } from '../../../context/DashboardReadyContext'
@@ -134,6 +136,9 @@ export default function CoachHomeScreen() {
     )
   }
 
+  // Con 0 alumnos reales manda «Tu primer alumno» (plan B «Activación», paridad con la web).
+  const showFirstStudent = shouldShowFirstStudentCard(data.kpi.totalClients)
+
   // Umbral del puente a Teams = MISMA fuente que el banner interno (~80% del cupo REAL del coach,
   // grandfather de pricing v2). Antes era un 80 escrito a mano acá y otro adentro: con Elite en 60
   // ninguno de los dos se alcanzaba nunca.
@@ -179,6 +184,15 @@ export default function CoachHomeScreen() {
           pendingCount={data.topRiskClients.length + data.expiringPrograms.length + data.pendingCheckinsCount}
         />
 
+        {/* Plan B «Activación» (01-10): con 0 alumnos REALES (`kpi.totalClients` excluye al demo) lo
+            primero es dar de alta al primero; la card «Prioridad de hoy» no se pinta (decía «Ningún
+            alumno en riesgo · Todo al día. Buen trabajo.»). Paridad con la web. */}
+        {showFirstStudent ? (
+          <View style={{ marginBottom: 14 }}>
+            <FirstStudentCard persona={data.onboardingV2?.persona ?? null} />
+          </View>
+        ) : null}
+
         {/* Código de invitación — pastilla + hoja "Invitar alumno" (se auto-oculta sin código) */}
         <InviteCodePill inviteCode={data.publicCode?.inviteCode ?? null} />
 
@@ -191,7 +205,7 @@ export default function CoachHomeScreen() {
         />
 
         {/* P2 — Prioridad de hoy (card oscura + NextBestAction embebido) */}
-        <MobileFocusList
+        {!showFirstStudent && <MobileFocusList
           items={data.topRiskClients}
           kpi={data.kpi}
           agenda={data.agenda}
@@ -199,7 +213,7 @@ export default function CoachHomeScreen() {
           expiringPrograms={data.expiringPrograms}
           onAdherencePress={() => setStatsOpen(true)}
           nutritionEnabled={nutritionEnabled}
-        />
+        />}
 
         {/* Pendientes de hoy — trabajo derivado (sin horario ni «hechas») */}
         <MobileTodayAgenda items={data.agenda} total={data.agendaTotal} />

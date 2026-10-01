@@ -37,6 +37,7 @@ import {
     type ClientStatusLevel,
 } from './clientStatusUtils'
 import { ClientActionsSheet } from '../ClientActionsSheet'
+import { clientStatusInputFromRow, hasNotEnteredYet } from '../_lib/client-status'
 import { EditClientDataModal } from '../EditClientDataModal'
 import { GlowBorderCard } from '@/components/coach/GlowBorderCard'
 
@@ -84,6 +85,10 @@ type ClientProfileHeroProps = {
         created_at: string
         is_active: boolean | null
         is_archived?: boolean | null
+        /** Primer login real (`clients.first_login_at`): alimenta el aviso «todavía no entra». */
+        first_login_at?: string | null
+        /** Clave temporal sin cambiar (`clients.force_password_change`). */
+        force_password_change?: boolean | null
     }
     /** Slug/código público del coach — arma el link de login del alumno (menú de acciones). */
     coachSlug?: string | null
@@ -129,6 +134,9 @@ export function ClientProfileHero({
     status: statusProp,
 }: ClientProfileHeroProps) {
     const [actionsOpen, setActionsOpen] = useState(false)
+    // `reset` cuando el sheet se abre desde el aviso «todavía no entra» (directo a la clave nueva).
+    const [actionsInitial, setActionsInitial] = useState<'reset' | undefined>(undefined)
+    const notEnteredYet = !isDemo && hasNotEnteredYet(clientStatusInputFromRow(client))
     const [editingClient, setEditingClient] = useState<{ id: string; name: string } | null>(null)
     const streakDays = compliance.currentStreak ?? 0
     const trainingAge = formatTrainingAgeLabel(
@@ -246,7 +254,10 @@ export function ClientProfileHero({
                     </button>
                     <button
                         type="button"
-                        onClick={() => setActionsOpen(true)}
+                        onClick={() => {
+                            setActionsInitial(undefined)
+                            setActionsOpen(true)
+                        }}
                         aria-label="Más opciones"
                         title="Más opciones"
                         className="flex h-10 w-10 items-center justify-center rounded-control border border-default bg-surface-card text-strong shadow-[var(--shadow-sm)] transition-colors hover:bg-surface-sunken"
@@ -255,6 +266,17 @@ export function ClientProfileHero({
                     </button>
                 </div>
             </div>
+
+            {notEnteredYet ? (
+                <NotEnteredNotice
+                    name={client.full_name}
+                    createdAt={client.created_at}
+                    onResend={() => {
+                        setActionsInitial('reset')
+                        setActionsOpen(true)
+                    }}
+                />
+            ) : null}
 
             {/* Hero inverso: identidad + 4 chips (2×2), con marco animado de marca
                 (GlowBorderCard). La Card lleva el borde en transparente para no
@@ -392,6 +414,7 @@ export function ClientProfileHero({
                     }
                     onClose={() => setActionsOpen(false)}
                     onEdit={setEditingClient}
+                    initialConfirm={actionsInitial}
                 />
             )}
             {editingClient && (
@@ -472,6 +495,49 @@ function HeroStatChip({
                 {value}
             </div>
             <div className="mt-0.5 min-w-0 text-[10.5px] font-bold [overflow-wrap:anywhere]">{sub}</div>
+        </div>
+    )
+}
+
+/**
+ * Aviso «todavía no entra» (plan B «Activación», owner 01-10, maqueta `F1yd1V2b`). Antes, para
+ * reenviarle el acceso a un alumno que nunca entró había que abrir ⋮ → «Resetear contraseña»; el
+ * correo de las 48 h trae al coach directo a esta ficha. El botón abre ese MISMO flujo (clave
+ * temporal nueva + `ResendAccessWhatsapp`), sin duplicar handlers.
+ */
+function NotEnteredNotice({
+    name,
+    createdAt,
+    onResend,
+}: {
+    name: string
+    createdAt: string
+    onResend: () => void
+}) {
+    // El reloj se lee UNA vez al montar (regla de pureza del render): «hace N días» no necesita más.
+    const [now] = useState(() => Date.now())
+    const first = name.trim().split(' ')[0] || 'Tu alumno'
+    const created = new Date(createdAt).getTime()
+    const days = Number.isFinite(created) ? Math.floor((now - created) / 86_400_000) : null
+    const since = days === null ? null : days <= 0 ? 'hoy' : days === 1 ? 'ayer' : `hace ${days} días`
+    return (
+        <div
+            role="status"
+            className="flex flex-col gap-3 rounded-card border border-[var(--warning-500)]/30 bg-[var(--warning-100)] p-4 print:hidden sm:flex-row sm:items-center sm:justify-between"
+        >
+            <div className="min-w-0">
+                <p className="text-sm font-extrabold text-strong">{first} todavía no entra a tu app</p>
+                <p className="mt-0.5 text-[13px] text-body">
+                    {since ? `Le creaste la cuenta ${since}. ` : ''}Casi siempre el mensaje quedó abajo en el chat.
+                </p>
+            </div>
+            <button
+                type="button"
+                onClick={onResend}
+                className="inline-flex h-11 shrink-0 items-center justify-center gap-2 rounded-control bg-[#25D366] px-4 text-sm font-extrabold text-[#052e16] transition-colors hover:bg-[#1fb956] focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--focus-ring)]"
+            >
+                Reenviarle el acceso
+            </button>
         </div>
     )
 }
