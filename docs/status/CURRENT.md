@@ -28,26 +28,11 @@ prevalecen sobre este resumen. La prosa retirada está en
 
 ### 1. En producción, esperan QA del owner (⇒ SDD `done`)
 
-1. **«Elige cómo pagar»** (23-09, sin OTA, sin SDD; mockup `JQtEuDvT`): alta free→pago, registro y
-   `/coach/reactivate` eligen medio con Webpay primero + rescate al volver de MP. **QA celular VERDE 23-09.
-   Escritorio 24-09 VERDE en prod (selector, Webpay→Flow, MP, rescate, alta con plan pago, oscuro; el 400
-   «User bad request» de MP era solo el correo alias del owner). Arreglos del QA en prod: botón muerto al
-   volver de Webpay, historial legible, «Standalone», copy «prueba»; y en el alta paga la card cotiza sin
-   pasarela (`quoteOnly`) y el checkout se crea al elegir medio (antes: un preapproval MP por carga ⇒
-   correo «Suscriptor cancelado» por recarga y 429 de MP), salida única según el caso en vez de «Ir a
-   reactivación», y loader único en Suscripción (antes cargaba por partes).**
-2. **«Reps tras el reloj» + E1** (12-09, [SDD](../specs/reps-tras-el-reloj/SPEC.md)): **QA §10 (10 puntos,
-   incluye el arrastre del share).**
-3. **«Despegue rápido»** (11-09, [SDD](../specs/despegue-rapido/SPEC.md)): **QA de 5 puntos.** Sentry 23-09:
-   `EVA-NEXTJS-1P`/`1Q` («exec-v3: fallback 4.6s ganó la carrera») reaparecieron hoy.
-4. **Fix RN «Asignar plantilla»** (14-09, [OTA](../operations/MOBILE_RELEASES_OTA.md)): **QA en device.**
-5. **Fix RN buscador de «Cambiar» tapado por el teclado** (30-09, `872b3e4c` en `master`; OTA 1.1.3 android
-   `1e5a31ab` / ios `1472feb6`, 1.1.2 android `31212063` desde el tag `ota/1.1.2-20260930`): **QA en iPhone** —
-   Hoy del alumno → «N equivalentes» → tocar el buscador: la hoja sube con el teclado; elegir una opción que pida
-   confirmar cantidad abre «Confirma la cantidad» encima y «Cancelar» vuelve a la lista.
-6. **«Kilos o libras»** (30-09, [SDD](../specs/kg-lb-ejecutor/SPEC.md)): web + OTA 1.1.3 (`24d7a59f` / `6c11fb23`);
-   datos de bloques `lb` convertidos en LIVE con respaldo `_bak_kg_lb_20260930_*`. **Quedan: barrido W5.4 (re-correr
-   la Parte A del SQL) con la adopción del OTA y QA del owner SPEC §7** ([TASKS](../specs/kg-lb-ejecutor/TASKS.md)).
+Nada pendiente: el owner confirmó el 01-10 que los QA de «Elige cómo pagar», «Reps tras el reloj» + E1,
+«Despegue rápido», fix RN «Asignar plantilla», fix RN buscador de «Cambiar», «Kilos o libras» (SPEC §7),
+Android 1.1.3 en Play, «Entrada dark v1», «+ Nueva pregunta qué crear» e íconos de Nutrición estaban
+verdes. De «Kilos o libras» queda solo el barrido W5.4 (re-correr la Parte A del SQL con la adopción del
+OTA; [TASKS](../specs/kg-lb-ejecutor/TASKS.md)).
 
 ### 2. Frentes abiertos
 
@@ -67,12 +52,10 @@ prevalecen sobre este resumen. La prosa retirada está en
 
 ### 3. Decisiones del owner pendientes
 
-1. **Prueba Pro 14 días al registrarse** (plan 14-09, artifact `WSXBg586`): veredicto variante B (día 15 vuelve
-   a Free-1 + muro de cupo). Nada implementado; esperan Q1–Q4. Reemplaza la idea previa «trial al tocar el cupo».
-2. **Dunning de `paused`**: (a) la gracia es letra muerta porque el webhook nulea `current_period_end`
+1. **Dunning de `paused`**: (a) la gracia es letra muerta porque el webhook nulea `current_period_end`
    (`subscription-state.ts` vía `webhook-pipeline.ts`) ⇒ hacerla simétrica a `past_due` o borrarla del comentario;
    (b) apuntar el CTA del correo de dunning a `/coach/subscription/update-card`; (c) el camino Flow no tiene CTA.
-3. **«Cobros coach → alumno» — BLOQUEADO** ([spec](../specs/cobros-coach-alumno/SPEC.md) `draft`, artifact `046f3bb1`):
+2. **«Cobros coach → alumno» — BLOQUEADO** ([spec](../specs/cobros-coach-alumno/SPEC.md) `draft`, artifact `046f3bb1`):
    8 decisiones (§18.1) + 3 verificaciones externas (§18.2). Estimación 26-32 días-agente + 2-3 semanas de beta.
 
 ### 4. Bloqueado por terceros
@@ -98,7 +81,9 @@ Movens y los 4 coaches A/B de «Vuelta nueva» ([SPEC §9](../specs/vuelta-nueva
 
 ### Cerrados recientes (detalle en cada spec)
 
-Con QA VERDE ⇒ SDD `done`: [«Dossier por meses»](../specs/dossier-por-meses/SPEC.md) (26-09; su E2E sigue
+01-10: los 10 QA del owner de la prioridad 1 (`reps-tras-el-reloj`, `despegue-rapido`, `entrada-dark-v1` y
+`library-new-choice` pasan a `done`) · «Prueba Pro 14 días» **descartada** por el owner · reels de marketing
+cerrados. Con QA VERDE ⇒ SDD `done`: [«Dossier por meses»](../specs/dossier-por-meses/SPEC.md) (26-09; su E2E sigue
 sin correr, espera OK del owner) · «Vuelta nueva, salud y reloj» (21-09) · parche next 16.3.5 + REVOKE anon (21-09) ·
 incidente Ani (23-09) · «Arreglos chicos pre-OTA», «Cuenta atrás», «Share bloque», «Señales honestas»,
 «Porciones a la chilena», «Cantidades honestas» (10/11-09) · «Ciclo real y por lado» y cierres 02/04/05-09.

@@ -1,5 +1,5 @@
 ---
-status: implemented-pending-qa
+status: done
 owner: product-engineering
 last_verified: "2026-08-28"
 canonical: false
