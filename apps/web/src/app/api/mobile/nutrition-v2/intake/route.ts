@@ -16,6 +16,7 @@ import {
   rpcErrorResponse,
   type NutritionV2ApiGate,
 } from '../_shared'
+import { enqueueBehaviorCheckForClient } from '@/lib/email/behavior/behavior-emails'
 import {
   evaluateCorrectPermission,
   evaluateRecordPermission,
@@ -107,6 +108,9 @@ async function executeMutation(input: {
       500,
     )
   }
+
+  // W8.4.2B: una comida registrada es la señal del aha del coach (no bloquea ni lanza).
+  if (input.action === 'record' && input.gate.clientId) enqueueBehaviorCheckForClient(input.gate.clientId)
 
   const responsePayload = { ok: true as const, id: id.data, action: input.action }
   const status: number = input.action === 'record' ? 201 : 200

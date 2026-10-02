@@ -10,6 +10,7 @@ import {
 import { resolveFirstArtifact } from '@/services/onboarding/onboarding-v2.queries'
 import { findActiveByCoachAndKeys } from '@/infrastructure/db/coach-email-ledger.repository'
 import { siteBaseUrl } from '../subscription-url'
+import { isWithinSendWindow } from '../automated-email-policy'
 import { buildBehaviorEmail } from './behavior-templates'
 import {
     BEHAVIOR_TEMPLATE_KEYS,
@@ -573,33 +574,102 @@ export function enqueueBehaviorCheck(
     if (!behaviorEmailsEnabled()) return
     if (!coachId) return
 
-    const run = async () => {
+    scheduleInline(async () => {
         try {
-            // El call site que ya tiene su cliente de service role lo pasa (y se ahorra el import);
-            // el que no, lo crea acá. `admin-client` es `server-only`, por eso va por `import()`.
-            const admin =
-                opts.admin ??
-                (await import('@/lib/supabase/admin-client')).createServiceRoleClient()
-            const { data, error } = await admin
-                .from('coaches')
-                .select(COACH_COLUMNS)
-                .eq('id', coachId)
-                .maybeSingle()
-            if (error || !data) return
-            const result = await runBehaviorCheckForCoach(admin, data as unknown as BehaviorCoachRow, {
-                now: opts.now ?? new Date(),
-                dry: opts.dry ?? behaviorEmailsDryRun(),
-                policy: { launchCutover: behaviorLaunchCutover() },
-            })
-            console.info('[behavior-emails] inline', { coachId, outcome: result.outcome })
+            const admin = opts.admin ?? (await serviceRoleClient())
+            await runInlineCheck(admin, coachId, opts)
         } catch (err) {
             console.warn('[behavior-emails] disparo en línea fallido', {
                 coachId,
                 message: errMessage(err),
             })
         }
-    }
+    })
+}
 
+/**
+ * Disparo en línea desde la ACTIVIDAD del alumno (W8.4.2B): una serie anotada o una comida
+ * registrada. Es la señal del aha (`hasRealStudentActivity`) y el único correo que el alumno puede
+ * destrabar en el momento.
+ *
+ * No hay call site en el primer login a propósito: un login NO matchea ningún disparador (el aha pide
+ * actividad; el «+48 h no entró» solo se APAGA con el login), así que ahí solo gastaría lecturas.
+ *
+ * Se llama en CADA escritura (no hay forma barata de saber si es la primera), así que antes del
+ * snapshot pesado (auth.users, roster, ledger, historial) se descarta con lo que ya trae la fila:
+ * alumno demo/archivado, fuera del horario de envío, o coach fuera de la ventana de onboarding
+ * (anterior al encendido o con más de 90 d). Para el padrón actual —todo anterior al 02-10— el costo
+ * por serie es 2 lecturas por PK dentro de `after()`, sin latencia para el alumno.
+ */
+export function enqueueBehaviorCheckForClient(
+    clientId: string,
+    opts: { admin?: Db; now?: Date; dry?: boolean } = {}
+): void {
+    if (!behaviorEmailsEnabled()) return
+    if (!clientId) return
+
+    scheduleInline(async () => {
+        try {
+            const now = opts.now ?? new Date()
+            if (!isWithinSendWindow(now)) return
+            const admin = opts.admin ?? (await serviceRoleClient())
+            const { data: client, error } = await admin
+                .from('clients')
+                .select('coach_id, is_demo, is_archived')
+                .eq('id', clientId)
+                .maybeSingle()
+            if (error || !client?.coach_id || client.is_demo || client.is_archived) return
+            await runInlineCheck(admin, client.coach_id, { ...opts, now })
+        } catch (err) {
+            console.warn('[behavior-emails] disparo en línea (alumno) fallido', {
+                clientId,
+                message: errMessage(err),
+            })
+        }
+    })
+}
+
+/** ¿El coach sigue en la ventana que lista el barrido? Mismo `since` que `listBehaviorCandidates`. */
+export function isInBehaviorWindow(createdAt: string | null, now: Date, policy: BehaviorPolicy): boolean {
+    const launch = policy.launchCutover ? new Date(policy.launchCutover).getTime() : NaN
+    const created = createdAt ? new Date(createdAt).getTime() : NaN
+    if (!Number.isFinite(launch) || !Number.isFinite(created)) return false
+    return created >= Math.max(now.getTime() - ONBOARDING_CUTOFF_MS, launch)
+}
+
+async function runInlineCheck(
+    admin: Db,
+    coachId: string,
+    opts: { now?: Date; dry?: boolean }
+): Promise<void> {
+    const now = opts.now ?? new Date()
+    const policy: BehaviorPolicy = { launchCutover: behaviorLaunchCutover() }
+    const { data, error } = await admin
+        .from('coaches')
+        .select(COACH_COLUMNS)
+        .eq('id', coachId)
+        .maybeSingle()
+    if (error || !data) return
+    const coach = data as unknown as BehaviorCoachRow
+    if (!isInBehaviorWindow(coach.created_at, now, policy)) return
+    const result = await runBehaviorCheckForCoach(admin, coach, {
+        now,
+        dry: opts.dry ?? behaviorEmailsDryRun(),
+        policy,
+    })
+    console.info('[behavior-emails] inline', { coachId, outcome: result.outcome })
+}
+
+/** `admin-client` es `server-only`, por eso va por `import()`. */
+async function serviceRoleClient(): Promise<Db> {
+    return (await import('@/lib/supabase/admin-client')).createServiceRoleClient()
+}
+
+/**
+ * Corre `run` sin bloquear la respuesta: por `after()` de `next/server` (mantiene viva la invocación
+ * de Vercel), o detached fuera de un request scope (script, test). `run` ya traga sus errores.
+ */
+function scheduleInline(run: () => Promise<void>): void {
     try {
         // `import()` diferido: `next/server` no puede cargarse en los tests puros del motor.
         void import('next/server')

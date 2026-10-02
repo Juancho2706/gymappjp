@@ -15,6 +15,7 @@ import {
   type NutritionIntakeMutation,
   type SubstitutionOptionsItem,
 } from '@eva/nutrition-v2'
+import { enqueueBehaviorCheckForClient } from '@/lib/email/behavior/behavior-emails'
 import {
   evaluateCorrectPermission,
   evaluateRecordPermission,
@@ -326,6 +327,8 @@ export async function recordIntakeAction(input: unknown): Promise<MutationSucces
   if (denial) return denied(denial)
 
   const result = await runMutation(auth.supabase, 'record_nutrition_intake_v2', commonRpcArgs(payload))
+  // W8.4.2B: una comida registrada es la señal del aha del coach (no bloquea ni lanza).
+  if (result.ok) enqueueBehaviorCheckForClient(payload.clientId)
   return result
 }
 
@@ -363,6 +366,7 @@ export async function recordSubstitutionIntakeAction(
 
   const result = await runMutation(auth.supabase, plan.rpcName, plan.args)
   if (!result.ok) return result
+  if (plan.mode === 'record') enqueueBehaviorCheckForClient(payload.clientId)
   return {
     ok: true,
     id: result.id,
@@ -524,6 +528,7 @@ export async function recordSlotIntakeBatchAction(input: unknown): Promise<Batch
   if (ids.length === 0) {
     return firstError ?? fail('BATCH_FAILED', 'No se pudo registrar la comida. Intenta nuevamente.')
   }
+  enqueueBehaviorCheckForClient(clientId)
   return { ok: true, ids, failed }
 }
 

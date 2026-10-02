@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { z } from 'zod'
 import { NutritionIntakeService, INTAKE_SOURCES } from '@/services/nutrition-intake.service'
 import { gateAlumno } from '../_shared'
+import { enqueueBehaviorCheckForClient } from '@/lib/email/behavior/behavior-emails'
 
 /**
  * Registro fuera de plan (off-plan intake) del alumno (base tier). Espejo mobile de
@@ -76,6 +77,7 @@ export async function POST(request: NextRequest) {
         source: parsed.data.source ?? 'offplan',
     })
     if (!entry) return NextResponse.json({ error: 'No se pudo registrar' }, { status: 400 })
+    enqueueBehaviorCheckForClient(gate.clientId)
     return NextResponse.json({ entry })
 }
 

@@ -7,6 +7,7 @@ import { getTodayInSantiago, getSantiagoUtcBoundsForDay } from '@/lib/date-utils
 import { STUDENT_ACCESS_COPY } from '@/lib/student-access'
 import { resolveStudentAccessForClient } from '@/lib/student-access.server'
 import { capturePostHogServerEvent } from '@/lib/posthog/server-capture'
+import { enqueueBehaviorCheckForClient } from '@/lib/email/behavior/behavior-emails'
 import { PAST_SET_NOT_FOUND_ERROR, validateTargetDate } from '@eva/workout-engine'
 
 export type LogState = {
@@ -264,6 +265,9 @@ export async function logSetAction(
     // alumno esté empezando el programa hoy.
     if (!pastEditMode) {
         await autoStartFlexibleProgram(supabase, user.id, parsed.data.block_id)
+        // W8.4.2B: el aha del coach (su alumno anotó algo) sale en el momento y no en la próxima
+        // corrida horaria. No bloquea ni lanza; con el flag apagado no lee nada.
+        enqueueBehaviorCheckForClient(user.id)
     }
 
     // Sin revalidatePath por serie: la UI del exec es optimista + write-through y el resumen usa
