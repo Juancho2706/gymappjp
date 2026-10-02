@@ -59,9 +59,12 @@ vi.mock('@/lib/supabase/admin-client', () => ({
 
 import { GET } from './route'
 
-function req(qs: string, userAgent?: string) {
+function req(qs: string, userAgent?: string, cookie?: string) {
+    const headers: Record<string, string> = {}
+    if (userAgent) headers['user-agent'] = userAgent
+    if (cookie) headers.cookie = cookie
     return new NextRequest(`https://www.eva-app.cl/vive-tu-app${qs}`, {
-        headers: userAgent ? { 'user-agent': userAgent } : undefined,
+        headers: Object.keys(headers).length ? headers : undefined,
     })
 }
 
@@ -236,6 +239,52 @@ describe('GET /vive-tu-app', () => {
 
             expect(cookieOf(res, 'eva_vta_mode')?.value).toBe('remote')
             expect(cookieOf(res, 'eva_vta_return')).toBeUndefined()
+        })
+
+        it('re-entrada al MISMO demo con un viaje `return` abierto ⇒ sigue en `return` y no reescribe la cookie (02-10)', async () => {
+            // Doble toque en un teléfono lento: el primer link ya dejó la sesión del demo y
+            // `eva_vta_mode=return`; el segundo llega sin sesión de coach que devolver.
+            demoOk('demo-1')
+            getUser.mockResolvedValue({ data: { user: { id: 'demo-1' } } })
+
+            const res = await GET(req('?t=tok2&c=X5UD9X44', ANDROID_UA, 'eva_vta_mode=return'))
+
+            expect(res.headers.get('location')).toBe('https://www.eva-app.cl/c/X5UD9X44/dashboard')
+            // Sin `Set-Cookie` del modo: queda la del primer viaje, con su vencimiento original.
+            expect(cookieOf(res, 'eva_vta_mode')).toBeUndefined()
+            // La de retorno del primer viaje sigue viva en el navegador: acá no se emite otra.
+            expect(cookieOf(res, 'eva_vta_return')).toBeUndefined()
+            expect(generateLink).not.toHaveBeenCalled()
+            expect(eventInserts[0]?.metadata).toMatchObject({ mode: 'return' })
+        })
+
+        it('re-entrada al mismo demo SIN viaje `return` abierto ⇒ `remote`, como siempre', async () => {
+            demoOk('demo-1')
+            getUser.mockResolvedValue({ data: { user: { id: 'demo-1' } } })
+
+            const res = await GET(req('?t=tok2&c=X5UD9X44', ANDROID_UA, 'eva_vta_mode=remote'))
+
+            expect(cookieOf(res, 'eva_vta_mode')?.value).toBe('remote')
+            expect(eventInserts[0]?.metadata).toMatchObject({ mode: 'remote' })
+        })
+
+        it('`eva_vta_mode=return` con la sesión de OTRO usuario ⇒ `remote`: el viaje no era de este demo', async () => {
+            demoOk('demo-1')
+            getUser.mockResolvedValue({ data: { user: { id: 'demo-9' } } })
+
+            const res = await GET(req('?t=tok2&c=X5UD9X44', ANDROID_UA, 'eva_vta_mode=return'))
+
+            expect(cookieOf(res, 'eva_vta_mode')?.value).toBe('remote')
+            expect(eventInserts[0]?.metadata).toMatchObject({ mode: 'remote' })
+        })
+
+        it('`src=rn` gana también sobre un viaje `return` abierto', async () => {
+            demoOk('demo-1')
+            getUser.mockResolvedValue({ data: { user: { id: 'demo-1' } } })
+
+            const res = await GET(req('?t=tok2&c=X5UD9X44&src=rn', ANDROID_UA, 'eva_vta_mode=return'))
+
+            expect(cookieOf(res, 'eva_vta_mode')?.value).toBe('rn')
         })
 
         it('`generateLink` falla ⇒ `remote` y el redirect al dashboard igual', async () => {

@@ -80,8 +80,28 @@ export function ViveTuAppButton({
     const [demoMissing, setDemoMissing] = useState(demoClientId === null)
     const [reseeding, startReseed] = useTransition()
     const autoOpenedRef = useRef(false)
+    /**
+     * Un gesto en curso: pidiendo el link o, en móvil, ya navegando. Tras `location.assign` la página
+     * tarda en irse —segundos en un teléfono lento o en el navegador interno de Facebook— y antes el
+     * `finally` reactivaba el botón: un segundo toque emitía OTRO magic link y su entrada, ya con la
+     * sesión del demo puesta, caía en modo `remote` y le escondía al coach «Volver a mi panel» (caso
+     * real 02-10). Ref y no estado: dos toques en el mismo tick ven el mismo `loading` viejo.
+     */
+    const busyRef = useRef(false)
 
     const noun = personaNoun(persona ?? 'strength')
+
+    useEffect(() => {
+        // Si el navegador devuelve esta página desde el bfcache («atrás» tras entrar), vuelve con el
+        // botón trabado en «cargando»: se libera para que el coach pueda volver a entrar.
+        const onPageShow = (event: PageTransitionEvent) => {
+            if (!event.persisted) return
+            busyRef.current = false
+            setLoading(false)
+        }
+        window.addEventListener('pageshow', onPageShow)
+        return () => window.removeEventListener('pageshow', onPageShow)
+    }, [])
 
     useEffect(() => {
         if (!autoOpen || autoOpenedRef.current) return
@@ -113,13 +133,16 @@ export function ViveTuAppButton({
      * `window.open`, que el bloqueador mata tras el await) y no abre hoja ni tilda nada.
      */
     async function open() {
-        if (loading) return
+        if (loading || busyRef.current) return
+        busyRef.current = true
         setLoading(true)
+        let navigating = false
         try {
             const fresh = await generate()
             if (!fresh) return
             if (!readDesktop()) {
                 window.location.assign(fresh.url)
+                navigating = true
                 return
             }
             setLink(fresh)
@@ -130,7 +153,11 @@ export function ViveTuAppButton({
         } catch {
             toast.error('No pudimos abrir tu app. Intenta de nuevo.')
         } finally {
-            setLoading(false)
+            // Navegando, el botón se queda en «cargando» hasta que la página se vaya.
+            if (!navigating) {
+                busyRef.current = false
+                setLoading(false)
+            }
         }
     }
 

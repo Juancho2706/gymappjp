@@ -164,6 +164,11 @@ Banner en el árbol del alumno **solo cuando la sesión es el demo**:
   `otp_expiry`) y `eva_vta_mode` (httpOnly, path `/`, **mismo `maxAge` 3600**; ausencia ⇒ `remote`);
   (6) evento `entered` + PostHog; (7) redirect a `/c/<id>/dashboard`. Errores de verificación →
   `/c/<id>/login?error=vive_tu_app_expirado`.
+- **Re-entrada al mismo demo (fix 02-10, doble toque en un teléfono lento):** si la sesión previa ya era ESE
+  demo y `eva_vta_mode` vale `return`, el viaje se conserva — modo `return`, sin reescribir `eva_vta_mode`
+  (no puede sobrevivir a `eva_vta_return`, que sigue viva). Antes caía a `remote` y escondía «Volver a mi
+  panel». En el botón móvil, tras `location.assign` el botón queda en «cargando» hasta que la página se va
+  (se libera en `pageshow` del bfcache): un solo link por gesto.
 - **`POST /volver-al-panel`** (solo POST; `GET` → 405): lee `eva_vta_return`. Ramas, en orden:
   (a) si hay sesión y `user.id === cookie.c` (el coach ya volvió por otra vía, dos pestañas) → 303 a
   `/coach/guia` **sin consumir** el token, cookies borradas; (b) si hay sesión y no es un `clients.is_demo`

@@ -128,7 +128,18 @@ export async function GET(request: NextRequest) {
         }
     }
 
-    const mode: VtaMode = fromRn ? 'rn' : returnToken ? 'return' : 'remote'
+    // (4b) Re-entrada al MISMO demo (caso real 02-10: doble toque en un teléfono lento): este
+    // navegador ya tenía la sesión de este demo y un viaje `return` abierto, cuya cookie de retorno
+    // sigue viva (no se lee acá: su `path` es `/volver-al-panel`). Sin sesión de coach no hay token
+    // nuevo, y antes el modo caía a `remote` y le escondía «Volver a mi panel». Se conserva el viaje
+    // tal cual, sin reescribir su cookie: renovarla le daría más vida que a la de retorno.
+    const keepsReturnTrip =
+        !fromRn &&
+        !returnToken &&
+        coachUser?.id === client.id &&
+        request.cookies.get(VTA_MODE_COOKIE)?.value === 'return'
+
+    const mode: VtaMode = fromRn ? 'rn' : returnToken || keepsReturnTrip ? 'return' : 'remote'
 
     const response = NextResponse.redirect(`${origin}/c/${identifier}/dashboard`)
 
@@ -140,7 +151,9 @@ export async function GET(request: NextRequest) {
             vtaReturnCookieOptions(),
         )
     }
-    response.cookies.set(VTA_MODE_COOKIE, mode, vtaLabelCookieOptions())
+    if (!keepsReturnTrip) {
+        response.cookies.set(VTA_MODE_COOKIE, mode, vtaLabelCookieOptions())
+    }
     if (fromRn) {
         response.cookies.set(VTA_FROM_COOKIE, parseVtaFrom(searchParams.get('from')), vtaLabelCookieOptions())
     }

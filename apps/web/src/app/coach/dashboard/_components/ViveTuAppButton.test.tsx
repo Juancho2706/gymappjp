@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 /**
  * «Vive tu app» — el botón que decide CÓMO entra el coach a su app de alumno
@@ -90,6 +90,59 @@ describe('ViveTuAppButton — móvil entra directo', () => {
         expect(screen.queryByText(QR_TEXT)).toBeNull()
         // El paso 2 lo tilda el SERVIDOR cuando el coach entró: acá no se avisa nada.
         expect(onOpened).not.toHaveBeenCalled()
+    })
+
+    it('tras navegar el botón queda apagado: un segundo toque NO pide otro link (doble toque 02-10)', async () => {
+        setViewport(false)
+        render(<ViveTuAppButton label="Ver mi app" onOpened={vi.fn()} />)
+        const button = screen.getByRole('button', { name: /Ver mi app/ }) as HTMLButtonElement
+
+        fireEvent.click(button)
+        await waitFor(() => expect(assignMock).toHaveBeenCalledTimes(1))
+        // La página real tarda en irse (teléfono lento, navegador de Facebook): sigue en pantalla.
+        await new Promise((resolve) => setTimeout(resolve, 30))
+        expect(button.disabled).toBe(true)
+
+        fireEvent.click(button)
+        await new Promise((resolve) => setTimeout(resolve, 30))
+        expect(openViveTuAppMock).toHaveBeenCalledTimes(1)
+        expect(assignMock).toHaveBeenCalledTimes(1)
+    })
+
+    it('volver con «atrás» desde el bfcache libera el botón', async () => {
+        setViewport(false)
+        render(<ViveTuAppButton label="Ver mi app" onOpened={vi.fn()} />)
+        const button = screen.getByRole('button', { name: /Ver mi app/ }) as HTMLButtonElement
+
+        fireEvent.click(button)
+        await waitFor(() => expect(assignMock).toHaveBeenCalledTimes(1))
+        expect(button.disabled).toBe(true)
+
+        const restored = new Event('pageshow')
+        Object.defineProperty(restored, 'persisted', { value: true })
+        act(() => {
+            window.dispatchEvent(restored)
+        })
+        await waitFor(() => expect(button.disabled).toBe(false))
+
+        fireEvent.click(button)
+        await waitFor(() => expect(assignMock).toHaveBeenCalledTimes(2))
+        expect(openViveTuAppMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('si pedir el link falla, el botón vuelve a quedar disponible', async () => {
+        setViewport(false)
+        openViveTuAppMock.mockResolvedValueOnce({ ok: false, reason: 'error', detail: 'Espera un momento.' })
+        render(<ViveTuAppButton label="Ver mi app" onOpened={vi.fn()} />)
+        const button = screen.getByRole('button', { name: /Ver mi app/ }) as HTMLButtonElement
+
+        fireEvent.click(button)
+        await waitFor(() => expect(toastErrorMock).toHaveBeenCalledWith('Espera un momento.'))
+        await waitFor(() => expect(button.disabled).toBe(false))
+
+        fireEvent.click(button)
+        await waitFor(() => expect(assignMock).toHaveBeenCalledWith(URL_DEMO))
+        expect(openViveTuAppMock).toHaveBeenCalledTimes(2)
     })
 
     it('`autoOpen` en móvil NO navega solo: pinta el CTA y espera el toque', async () => {
