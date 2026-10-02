@@ -223,6 +223,11 @@ function ActivityRow({ item }: { item: ActivityItemClient }) {
                 ) : (
                     <b className="text-[var(--text-strong)]">{item.title}</b>
                 )}
+                {item.isDemo && (
+                    <Badge tone="info" variant="soft" size="sm" className="ml-1.5 align-middle">
+                        De ejemplo
+                    </Badge>
+                )}
             </div>
             {isCheckin &&
                 (item.reviewed ? (

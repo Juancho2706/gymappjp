@@ -66,6 +66,8 @@ export interface ActivityItemClient {
     clientName?: string
     /** Solo items `check-in`: `true` si el coach ya lo reviso (`reviewed_at != null`). Alimenta la senal + filtro del feed. */
     reviewed?: boolean
+    /** Actividad del alumno de ejemplo (`clients.is_demo`): el feed la rotula «De ejemplo» (W8.1.6). */
+    isDemo?: boolean
 }
 
 /**
@@ -423,6 +425,7 @@ export function buildAgendaFromPulse(
             dueAt,
             days,
             severity: agendaSeverity(days),
+            ...(row.isDemo === true ? { isDemo: true } : {}),
         })
     }
 
@@ -501,7 +504,7 @@ async function getCoachDashboardDataInner(
         applyJoinedClientOwnerScope(
             supabase
                 .from('check_ins')
-                .select('id, created_at, reviewed_at, front_photo_url, back_photo_url, clients!inner(id, full_name, coach_id, org_id, team_id, is_archived)')
+                .select('id, created_at, reviewed_at, front_photo_url, back_photo_url, clients!inner(id, full_name, coach_id, org_id, team_id, is_archived, is_demo)')
                 .eq('clients.is_archived', false),
             userId,
             scope
@@ -554,7 +557,7 @@ async function getCoachDashboardDataInner(
         applyJoinedClientOwnerScope(
             supabase
                 .from('workout_logs')
-                .select('id, logged_at, client_id, clients!inner(id, full_name, coach_id, org_id, team_id, is_archived)')
+                .select('id, logged_at, client_id, clients!inner(id, full_name, coach_id, org_id, team_id, is_archived, is_demo)')
                 .eq('clients.is_archived', false),
             userId,
             scope
@@ -597,7 +600,7 @@ async function getCoachDashboardDataInner(
             : 0
 
     const rawRecentClients = recentClientsRaw || []
-    const rawRecentCheckins = (recentCheckinsRaw.data as { id: string; created_at: string; reviewed_at: string | null; front_photo_url: string | null; back_photo_url: string | null; clients: { id: string; full_name: string } }[] | null) || []
+    const rawRecentCheckins = (recentCheckinsRaw.data as { id: string; created_at: string; reviewed_at: string | null; front_photo_url: string | null; back_photo_url: string | null; clients: { id: string; full_name: string; is_demo?: boolean | null } }[] | null) || []
     // "Por revisar": check-ins recientes sin reviewed_at (ventana acotada del feed, no COUNT global).
     // Concepto DISTINTO del focus adherencia "alumno sin check-in >30d" (checkin_pendiente).
     const pendingCheckinsCount = rawRecentCheckins.filter((c) => !c.reviewed_at).length
@@ -624,7 +627,7 @@ async function getCoachDashboardDataInner(
     const hasCheckinLast30d = ((checkinSignal30dRaw.data as { id: string }[] | null) || []).length > 0
     const hasWorkoutLast30d = workoutLogs30d.length > 0
     const hasStudentSignal30d = hasCheckinLast30d || hasWorkoutLast30d
-    const rawRecentWorkouts = (recentWorkoutsRaw.data as { id: string; logged_at: string; client_id: string; clients: { id: string; full_name: string } }[] | null) || []
+    const rawRecentWorkouts = (recentWorkoutsRaw.data as { id: string; logged_at: string; client_id: string; clients: { id: string; full_name: string; is_demo?: boolean | null } }[] | null) || []
     const clientPayments = (clientPaymentsRaw.data || []) as {
         client_id: string | null
         payment_date: string
@@ -661,6 +664,7 @@ async function getCoachDashboardDataInner(
             subtitle: c.onboarding_completed ? 'Onboarding completado' : 'Pendiente de onboarding',
             date: c.created_at,
             href: `/coach/clients/${c.id}`,
+            ...((c as { is_demo?: boolean | null }).is_demo === true ? { isDemo: true } : {}),
         })
     })
 
@@ -675,6 +679,7 @@ async function getCoachDashboardDataInner(
             href: `/coach/clients/${c.clients.id}`,
             photoUrl: signedCheckinPhotos.get(c.id) ?? null,
             reviewed: !!c.reviewed_at,
+            ...(c.clients.is_demo === true ? { isDemo: true } : {}),
         })
     })
 
@@ -693,6 +698,7 @@ async function getCoachDashboardDataInner(
                 subtitle: 'Workout registrado',
                 date: w.logged_at,
                 href: `/coach/clients/${w.clients.id}`,
+                ...(w.clients.is_demo === true ? { isDemo: true } : {}),
             })
         }
     })
