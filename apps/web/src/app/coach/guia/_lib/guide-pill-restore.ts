@@ -1,4 +1,5 @@
 import { parseOnboardingGuide } from '../../dashboard/_lib/onboarding-guide-state'
+import { onboardingGuideStorageKey } from '../../dashboard/_lib/onboarding-guide-storage-key'
 
 /**
  * «Volver a mostrar la píldora» — el camino de vuelta después de apagar la guía.
@@ -20,13 +21,11 @@ import { parseOnboardingGuide } from '../../dashboard/_lib/onboarding-guide-stat
  */
 
 /**
- * Clave del espejo local, POR COACH. Es la misma que produce `onboardingGuideStorageKey` en
- * `dashboard/_lib/use-onboarding-guide.ts`; se repite acá a propósito para no importar ese módulo
- * (arrastra server actions y el hook entero a un helper que solo toca `localStorage`).
- * Si aquella cambia, esta tiene que cambiar con ella.
+ * Clave del espejo local, POR COACH: la MISMA función que usa el hook (`onboarding-guide-storage-key.ts`,
+ * sin dependencias), así que ya no puede desalinearse.
  */
 export function guideMirrorStorageKey(coachId: string): string {
-    return `eva:coach-onboarding:v2:${coachId}`
+    return onboardingGuideStorageKey(coachId)
 }
 
 /**

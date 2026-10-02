@@ -22,6 +22,7 @@ import {
     parseOnboardingGuide,
     type OnboardingGuideState,
 } from './onboarding-guide-state'
+import { onboardingGuideStorageKey } from './onboarding-guide-storage-key'
 
 /**
  * Estado de la guía de inicio v2 — un solo dueño para las DOS posiciones del dashboard.
@@ -63,10 +64,7 @@ export interface OnboardingGuideVm {
     hide: () => void
 }
 
-/** Clave por coach: el dismiss de otra cuenta en el mismo navegador no puede ocultar esta guía. */
-export function onboardingGuideStorageKey(coachId: string): string {
-    return `eva:coach-onboarding:v2:${coachId}`
-}
+export { onboardingGuideStorageKey }
 
 /** Evita doble confeti (Strict Mode en dev, doble montaje) en la misma sesión del navegador. */
 function ahaConfettiSessionKey(coachId: string): string {

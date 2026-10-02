@@ -20,6 +20,7 @@ import {
   ONBOARDING_STEPS,
   ONBOARDING_STEP_KEYS,
   ONBOARDING_TOTAL_STEPS,
+  PERSONA_CHIP_LABEL,
   progress,
   resolveAutoCompleted,
   resolveRnRoute,
@@ -90,19 +91,6 @@ const STEP_CTA: Record<OnboardingStepKey, string> = {
   aha: 'Ver el panel',
 }
 
-/**
- * Etiqueta corta de la persona para el chip de la cabecera. Gemela de `PERSONA_CHIP_LABEL` de la
- * web (`app/coach/guia/_lib/guide-view.ts`): los `tileTitle` de `PERSONA_COPY` son frases enteras
- * («Entreno fuerza y acondicionamiento») y no entran en un chip de una línea.
- * DEUDA declarada: las dos copias deberían vivir en `@eva/schemas/persona`.
- */
-const PERSONA_CHIP_LABEL: Record<Persona, string> = {
-  strength: 'Fuerza y acondicionamiento',
-  nutrition: 'Nutrición',
-  rehab: 'Rehabilitación',
-  endurance: 'Resistencia',
-  other: 'Panel completo',
-}
 
 type StepState = 'done' | 'next' | 'pending'
 type StepView = { step: OnboardingStep; position: number; state: StepState }
