@@ -19,7 +19,7 @@ source_of_truth: apps/web responsive + apps/mobile
 > corto del builder por coach (`lib/builder-tour-seen.ts`, migra la clave global vieja), miles en los resúmenes de
 > sesión, «Legado (SMAE)» en Porciones con la regla del picker, ficha sin `side_photo_url`/`receipt_url`. EN
 > PRODUCCIÓN por OTA: 1.1.3 android `a66adae5` / ios `21c03c00`, port 1.1.2 android `77cdf08b` (tag
-> `ota/1.1.2-20261002`). **QA en device pendiente.**
+> `ota/1.1.2-20261002`). **QA del owner verde 02-10.**
 
 > **2026-10-01 (plan B «Activación» RN; [TASKS § W8 v2](../specs/coach-onboarding-v2/TASKS.md))**: paridad con la web.
 > Home del coach con 0 alumnos reales: tarjeta «Tu primer alumno» primero (`components/coach/FirstStudentCard.tsx`, copy en

@@ -78,8 +78,8 @@ verdes. De «Kilos o libras» queda solo el barrido W5.4 ([TASKS](../specs/kg-lb
 
 1. **Rama `casa-en-orden-0210` — ✅ EN PRODUCCIÓN 02-10** (web `master` `41bcdcc5` = `dpl_GAnzGBhZ…` READY 21:37Z; migración
    aplicada en LIVE y verificada: `anon` sin EXECUTE en las 2 funciones; OTA 1.1.3 android `a66adae5` / ios `21c03c00` + port
-   1.1.2 android `77cdf08b`, [registro](../operations/MOBILE_RELEASES_OTA.md)). **Queda QA corto del owner**: borrar el ejemplo
-   en web y app, feed del panel, sesión con más de 1.000 kg; y confirmar en 24 h que bajan los `42703` de la ficha RN. Contenido: `next` 16.3.5 → 16.3.8 (**crítica**
+   1.1.2 android `77cdf08b`, [registro](../operations/MOBILE_RELEASES_OTA.md)). **QA del owner VERDE 02-10** (borrar el ejemplo
+   en web y app, feed del panel, sesión con más de 1.000 kg). Queda solo confirmar el 03-10 que bajan los `42703` de la ficha RN. Contenido: `next` 16.3.5 → 16.3.8 (**crítica**
    GHSA-vcvr-r3jv-pc5j, RCE en `next/og` ImageResponse: la usan `/api/og`, `/api/pr-card`, splash y manifest) +
    pisos de seguridad in-major (`vitest` 4.1.11, `js-yaml`, `undici`, `brace-expansion`, `fast-uri`, `dompurify`);
    migración `20261002170000_revoke_anon_enterprise_read_rpcs.sql` (quita `anon` de
