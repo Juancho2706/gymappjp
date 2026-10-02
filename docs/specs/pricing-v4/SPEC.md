@@ -65,6 +65,7 @@ sello «Hecho con EVA»; cambia el cupo de venta de Pro (25 → 10) y el rango q
   (`subscription-status` → `SubscriptionContent`), `/coach/reactivate` (`reactivate.queries` →
   `ReactivateClient` → `effectiveTierLimit`), `OverLimitBanner` (vía `getCoach`), `BillingBanners`
   (antes usaba `getRecommendedTier` sin grandfather).
+- Panel admin: casilla «Cupo antiguo (pricing v4)» en el panel del coach para marcar/desmarcar a mano (cortesías, casos de borde).
 - Copy de venta derivado del catálogo: `PreciosSection.tsx`, `landing-v2/copy.ts`, `/pricing/page.tsx`,
   `i18n/es.json` + `en.json` (`landing.pricing.plan.pro|elite.desc`). Correos de drip/bienvenida y la
   página de nutrición ya leen `TIER_CONFIG.pro.maxClients` ⇒ dicen 10 solos.

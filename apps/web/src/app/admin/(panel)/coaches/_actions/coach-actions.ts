@@ -550,6 +550,23 @@ export async function getCoachModulesAction(coachId: string): Promise<Record<str
     return (raw && typeof raw === 'object') ? raw : {}
 }
 
+/**
+ * Pricing v4: ¿el coach conserva los cupos pagos previos (pro 30/25, elite 100/60)? La RPC del listado
+ * no trae la columna; el panel la lee al abrir, igual que los módulos. null = no se pudo leer (el form
+ * entonces NO la envía y no se pisa).
+ */
+export async function getCoachPaidCapsGrandfatheredAction(coachId: string): Promise<boolean | null> {
+    await assertAdmin()
+    const admin = createServiceRoleClient()
+    const { data, error } = await admin
+        .from('coaches')
+        .select('paid_caps_grandfathered')
+        .eq('id', coachId)
+        .maybeSingle()
+    if (error || !data) return null
+    return data.paid_caps_grandfathered === true
+}
+
 export async function getCoachNotesAction(coachId: string): Promise<string> {
     await assertAdmin()
     const admin = createServiceRoleClient()

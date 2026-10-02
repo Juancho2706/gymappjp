@@ -20,6 +20,7 @@ import {
     updateCoachAction,
     sendIndividualCoachEmailAction,
     getCoachModulesAction,
+    getCoachPaidCapsGrandfatheredAction,
     getCoachSubscriptionEvents,
     type SubscriptionEventRow,
 } from '../_actions/coach-actions'
@@ -31,7 +32,7 @@ import {
     RefreshCw, Pause, Zap, ShieldOff, Edit3, Activity, Mail, Palette, ArrowRight
 } from 'lucide-react'
 import type { CoachListItem } from '../../dashboard/_data/types'
-import { TIER_CONFIG } from '@eva/tiers'
+import { TIER_CONFIG, tierMaxClientsFor, type SubscriptionTier } from '@eva/tiers'
 import { format } from 'date-fns'
 import { es } from 'date-fns/locale'
 
@@ -107,6 +108,11 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
     const [editMaxClients, setEditMaxClients] = useState(coach.max_clients ?? 10)
     const [editColorHex, setEditColorHex] = useState((coach as any).primary_color ?? '#10B981')
     const [modules, setModules] = useState<Record<string, boolean> | null>(null)
+    // Pricing v4: marca «cupo antiguo». undefined = cargando · null = no se pudo leer (el form no la envía).
+    const [paidCapsGrandfathered, setPaidCapsGrandfathered] = useState<boolean | null | undefined>(undefined)
+    // Cupo que el write-path le grabaría a ESTE coach en cada tier (fecha de alta + marca v4).
+    const capFor = (tier: string, grandfathered: boolean | null | undefined = paidCapsGrandfathered) =>
+        tierMaxClientsFor(tier as SubscriptionTier, coach.created_at, grandfathered ?? false)
 
     useEffect(() => {
         setEditTier(coach.subscription_tier ?? 'free')
@@ -122,6 +128,10 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
         }).catch(() => {
             // Espejo del unico camino de fallo: liberar el "Cargando..." (EVA-NEXTJS-19).
             setLoadingEvents(false)
+        })
+        setPaidCapsGrandfathered(undefined)
+        void getCoachPaidCapsGrandfatheredAction(coach.id).then(setPaidCapsGrandfathered).catch(() => {
+            setPaidCapsGrandfathered(null)
         })
         // Modulos del coach para el bloque de override del tab Editar (ROTO-9).
         setModules(null)
@@ -326,6 +336,14 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                     </span>
                                 } />
                                 <InfoRow label="Máximo" value={`${coach.max_clients} alumnos`} />
+                                <InfoRow
+                                    label="Cupo antiguo"
+                                    value={paidCapsGrandfathered === undefined
+                                        ? 'Cargando...'
+                                        : paidCapsGrandfathered === null
+                                            ? 'No disponible'
+                                            : paidCapsGrandfathered ? 'Sí (pricing v4)' : 'No'}
+                                />
                                 <InfoRow label="Utilización" value={`${coach.utilization_pct}%`} />
                                 <InfoRow
                                     label="Última actividad"
@@ -435,22 +453,18 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                         onValueChange={v => {
                                             if (!v) return
                                             setEditTier(v)
-                                            const cfg = TIER_CONFIG[v as keyof typeof TIER_CONFIG]
-                                            if (cfg) setEditMaxClients(cfg.maxClients)
+                                            setEditMaxClients(capFor(v))
                                         }}
                                     >
                                         <SelectTrigger className="mt-1 border-subtle bg-surface-sunken text-strong">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent className="border-subtle bg-surface-sunken">
-                                            {ALL_TIERS.map(v => {
-                                                const cfg = TIER_CONFIG[v]
-                                                return (
-                                                    <SelectItem key={v} value={v}>
-                                                        {v} <span className="text-muted">({cfg.maxClients} alumnos)</span>
-                                                    </SelectItem>
-                                                )
-                                            })}
+                                            {ALL_TIERS.map(v => (
+                                                <SelectItem key={v} value={v}>
+                                                    {v} <span className="text-muted">({capFor(v)} alumnos)</span>
+                                                </SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -500,6 +514,39 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                         </SelectContent>
                                     </Select>
                                 </div>
+                            </div>
+
+                            {/* Pricing v4: cupo antiguo (grandfather por compra). Con la marca, renovaciones y
+                                recompras le escriben pro 30/25 y elite 100/60; sin ella, el catálogo (pro 10). */}
+                            <div className="rounded-lg border border-subtle p-3">
+                                {paidCapsGrandfathered === undefined ? (
+                                    <p className="text-xs text-muted">Cargando cupo antiguo...</p>
+                                ) : paidCapsGrandfathered === null ? (
+                                    <p className="text-xs text-muted">No se pudo leer el cupo antiguo; este guardado no lo cambia.</p>
+                                ) : (
+                                    <>
+                                        <input type="hidden" name="paid_caps_grandfathered_present" value="1" />
+                                        <label className="flex items-center gap-2 text-xs font-medium text-strong">
+                                            <input
+                                                type="checkbox"
+                                                name="paid_caps_grandfathered"
+                                                checked={paidCapsGrandfathered}
+                                                onChange={e => {
+                                                    const next = e.target.checked
+                                                    setPaidCapsGrandfathered(next)
+                                                    setEditMaxClients(capFor(editTier, next))
+                                                }}
+                                                className="h-4 w-4 rounded border-subtle bg-surface-sunken"
+                                            />
+                                            Cupo antiguo (pricing v4)
+                                        </label>
+                                        <p className="mt-1 text-[10px] text-muted">
+                                            Al renovar o volver a comprar conserva Pro {capFor('pro', true)} y Elite {capFor('elite', true)} alumnos
+                                            en vez de Pro {capFor('pro', false)} y Elite {capFor('elite', false)}. Al marcarlo se ajusta «Max alumnos»
+                                            al cupo de su tier actual; revísalo antes de guardar.
+                                        </p>
+                                    </>
+                                )}
                             </div>
 
                             {/* Provider */}

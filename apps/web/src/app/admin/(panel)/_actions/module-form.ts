@@ -42,5 +42,12 @@ export function buildCoachUpdateData(formData: FormData): Record<string, unknown
     }
     const maxClients = formData.get('max_clients')
     if (maxClients) updateData.max_clients = Number(maxClients)
+    // Pricing v4: marca «cupo antiguo» (`coaches.paid_caps_grandfathered`). Un checkbox desmarcado no
+    // viaja en el FormData, así que el form manda `paid_caps_grandfathered_present` SOLO cuando el valor
+    // actual ya se cargó: sin esa señal no se toca la columna (mismo gate que `modules_present`).
+    if (formData.get('paid_caps_grandfathered_present')) {
+        const v = formData.get('paid_caps_grandfathered')
+        updateData.paid_caps_grandfathered = v === 'on' || v === 'true'
+    }
     return updateData
 }

@@ -25,6 +25,9 @@ sin cambio · D4 corte = migración del día D**. Ver [SPEC](SPEC.md).
 - [x] Fallbacks de lectura (`max_clients ?? …`) y sitios solo-Free pasan `null` explícito.
 - [x] Tests del webhook: renovación de pro marcado ⇒ 25; pro sin marca ⇒ 10; Free viejo sin marca que compra ⇒ 10.
 
+## W3b — Panel admin
+- [x] Coaches › panel del coach: casilla «Cupo antiguo (pricing v4)» en Editar (lee la marca al abrir con `getCoachPaidCapsGrandfatheredAction`; el form solo la envía si se pudo leer) + fila en Info. El selector de tier y la casilla sugieren el «Max alumnos» que el write-path le grabaría a ESE coach. Queda en `admin_audit_logs` vía `coach.update`.
+
 ## W4 — Copy
 - [x] Landing v2 (`PreciosSection.tsx`, `copy.ts` EN), `/pricing`, i18n ES/EN: rangos derivados del catálogo.
 

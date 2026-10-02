@@ -51,4 +51,24 @@ describe('buildCoachUpdateData (D2 — modules via write-through, NO jsonb direc
         expect('full_name' in updateData).toBe(false)
         expect(updateData.max_clients).toBe(42)
     })
+
+    // Pricing v4: «cupo antiguo» (`coaches.paid_caps_grandfathered`).
+    it('cupo antiguo: marcado ⇒ true; desmarcado con la señal _present ⇒ false', () => {
+        const on = new FormData()
+        on.set('paid_caps_grandfathered_present', '1')
+        on.set('paid_caps_grandfathered', 'on')
+        expect(buildCoachUpdateData(on).paid_caps_grandfathered).toBe(true)
+
+        // Un checkbox desmarcado no viaja: la señal _present es la que permite apagarlo.
+        const off = new FormData()
+        off.set('paid_caps_grandfathered_present', '1')
+        expect(buildCoachUpdateData(off).paid_caps_grandfathered).toBe(false)
+    })
+
+    it('cupo antiguo: sin la señal _present (valor no cargado) NO se toca la columna', () => {
+        const fd = new FormData()
+        fd.set('full_name', 'Ana Coach')
+        fd.set('paid_caps_grandfathered', 'on')
+        expect('paid_caps_grandfathered' in buildCoachUpdateData(fd)).toBe(false)
+    })
 })
