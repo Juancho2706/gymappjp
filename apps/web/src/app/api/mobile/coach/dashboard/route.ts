@@ -253,6 +253,12 @@ export async function POST(request: NextRequest) {
                 ? (parsed.metadata as Record<string, string | number | boolean>)
                 : null
 
+        // El aha es UNO por coach entre web y app: si ya está, no se repite aunque la marca del jsonb
+        // se haya perdido (persist fallido, servidor viejo, otra pestaña).
+        if (await ahaAlreadyRecorded(admin, user.id, eventType)) {
+            return NextResponse.json({ ok: true, deduped: true })
+        }
+
         const { error } = await admin.from('coach_onboarding_events').insert({
             coach_id: user.id,
             step_key: stepKey,
@@ -270,7 +276,7 @@ export async function POST(request: NextRequest) {
         // Espejo a PostHog (W8.5.2 = W0.5 de flujo-coach-nuevo), gemelo del de la ruta web. Aparte
         // del insert y no dentro de `recordOnboardingEvent` por lo mismo: el 500 `EVENT_INSERT_FAILED`
         // sale de leer el `error` del insert, que el helper del servicio se traga. Solo se alcanza
-        // con la fila escrita —un duplicado o una FK rota retornan 500 arriba— así que la app no
+        // con la fila escrita —un duplicado responde `deduped` y una FK rota 500 arriba— así que la app no
         // puede meter en PostHog una fila que la tabla no tiene. `await` obligatorio: Vercel congela
         // la invocación al responder.
         await mirrorOnboardingEventToPostHog({
@@ -300,6 +306,8 @@ export async function POST(request: NextRequest) {
                 onboarding_guide: {
                     ...existing,
                     ...incoming,
+                    // Pegajoso (mismo criterio que la acción web): nadie vuelve a `false` el aha ya emitido.
+                    ...(existing.ahaMomentSent === true ? { ahaMomentSent: true } : {}),
                 } as Json,
                 updated_at: new Date().toISOString(),
             })
@@ -329,4 +337,25 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ ok: true })
+}
+
+/** ¿Este coach ya tiene su `aha_moment`? Solo consulta para ese tipo; ante error de lectura, no bloquea. */
+async function ahaAlreadyRecorded(
+    admin: ReturnType<typeof createServiceRoleClient>,
+    coachId: string,
+    eventType: string,
+): Promise<boolean> {
+    if (eventType !== 'aha_moment') return false
+    try {
+        const { data, error } = await admin
+            .from('coach_onboarding_events')
+            .select('id')
+            .eq('coach_id', coachId)
+            .eq('event_type', 'aha_moment')
+            .limit(1)
+            .maybeSingle()
+        return error == null && data != null
+    } catch {
+        return false
+    }
 }

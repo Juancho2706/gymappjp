@@ -1517,7 +1517,8 @@ export default function ProgramBuilderScreen() {
       setSeenTour(true)
       void supabase.auth.getSession().then(({ data }) => {
         const coachId = data.session?.user.id
-        AsyncStorage.setItem(coachId ? builderTourSeenKey(coachId) : LEGACY_BUILDER_TOUR_SEEN_KEY, '1').catch(() => {})
+        // Sin sesión no se escribe nada: la clave vieja global es justo el bug que esto arregla.
+        if (coachId) AsyncStorage.setItem(builderTourSeenKey(coachId), '1').catch(() => {})
       }).catch(() => {})
     }
   }
@@ -1532,6 +1533,12 @@ export default function ProgramBuilderScreen() {
         coachId ? AsyncStorage.getItem(builderTourSeenKey(coachId)) : Promise.resolve(null),
         AsyncStorage.getItem(LEGACY_BUILDER_TOUR_SEEN_KEY),
       ])
+      // Migración de la clave vieja (global): se le atribuye al PRIMER coach que entra al builder
+      // después del cambio y se borra, así el siguiente coach del mismo teléfono sí ve su tour.
+      if (legacySeen && coachId && !coachSeen) {
+        await AsyncStorage.setItem(builderTourSeenKey(coachId), '1').catch(() => {})
+        await AsyncStorage.removeItem(LEGACY_BUILDER_TOUR_SEEN_KEY).catch(() => {})
+      }
       if (shouldAutoStartBuilderTour({ coachSeen, legacySeen, guideActive })) {
         setSeenTour(false); setTourMode('short'); setTourOpen(true)
       }

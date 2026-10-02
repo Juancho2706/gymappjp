@@ -53,6 +53,8 @@ export interface ExpiringProgramItem {
     clientId: string | undefined
     clientName: string | undefined
     daysLeft: number
+    /** Programa del alumno de ejemplo (W8.1.6): la Agenda lo rotula «de ejemplo». */
+    isDemo?: boolean
 }
 
 export interface ChartPoint {

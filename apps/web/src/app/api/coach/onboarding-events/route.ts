@@ -79,6 +79,19 @@ export async function POST(request: Request) {
 
     const admin = createServiceRoleClient()
 
+    // El aha es UNO por coach entre web y app (la app también lo emite, W8.2.5): sin ventana.
+    if (parsed.data.eventType === 'aha_moment') {
+        const prevAha = await admin
+            .from('coach_onboarding_events')
+            .select('id')
+            .eq('coach_id', user.id)
+            .eq('event_type', 'aha_moment')
+            .limit(1)
+            .maybeSingle()
+            .then((r) => r.data, () => null)
+        if (prevAha) return NextResponse.json({ ok: true, deduped: true })
+    }
+
     /** Interacciones UI (viñetas, Three): no dedupe por ventana — analítica de frecuencia. */
     if (parsed.data.eventType !== 'guide_engagement') {
         const { data: lastDup } = await admin

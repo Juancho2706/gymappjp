@@ -504,9 +504,6 @@ export function resolveRnRoute(
     return resolveTarget(step.rnRoute, ctx.demoClientId)
 }
 
-// ── Modo guía (owner 22-08: «un solo onboarding por área») ───────────────────────────────────
-// Vive en su propio archivo para que web y RN compartan la MISMA condición; se re-exporta acá
-// para que el paquete siga teniendo una sola puerta de entrada.
 /**
  * Etiqueta corta de la persona para el chip de la cabecera de la guía (web y RN). Los `tileTitle` de
  * `PERSONA_COPY` son frases completas («Entreno fuerza y acondicionamiento»): sirven para elegir en
@@ -520,6 +517,9 @@ export const PERSONA_CHIP_LABEL: Record<Persona, string> = {
     other: 'Panel completo',
 }
 
+// ── Modo guía (owner 22-08: «un solo onboarding por área») ───────────────────────────────────
+// Vive en su propio archivo para que web y RN compartan la MISMA condición; se re-exporta acá
+// para que el paquete siga teniendo una sola puerta de entrada.
 export { isGuideActive, type GuideModeInput } from './guide-mode'
 
 // ── Tarjeta «Tu primer alumno» del panel (plan B «Activación», owner 01-10) ──────────────────

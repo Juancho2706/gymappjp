@@ -94,6 +94,8 @@ interface FakeState {
     selects: Record<string, Record<string, unknown>[]>
     /** Correo de cada usuario Auth que responde `getUserById` (ausente = no existe). */
     authEmails: Record<string, string>
+    /** Ids cuyo `getUserById` falla con un error que NO es 404 (red, 500). */
+    authTransient: Set<string>
 }
 
 function makeFakeAdmin(overrides: Record<string, Record<string, unknown>[]> = {}): {
@@ -107,6 +109,7 @@ function makeFakeAdmin(overrides: Record<string, Record<string, unknown>[]> = {}
         deletedUsers: [],
         selects: { ...overrides },
         authEmails: {},
+        authTransient: new Set(),
     }
 
     const respond: Responder = (op) => {
@@ -137,6 +140,9 @@ function makeFakeAdmin(overrides: Record<string, Record<string, unknown>[]> = {}
                     return { data: null, error: null }
                 },
                 getUserById: async (id: string) => {
+                    if (state.authTransient.has(id)) {
+                        return { data: { user: null }, error: { status: 500, message: 'upstream timeout' } }
+                    }
                     const email = state.authEmails[id]
                     return email
                         ? { data: { user: { id, email } }, error: null }
@@ -407,6 +413,28 @@ describe('deleteDemoStudent', () => {
         state.authEmails['demo-ajeno'] = 'demo-coach-2@evatest.cl'
         await deleteDemoStudent(admin, { coachId: COACH })
         expect(state.deletedUsers).toEqual([])
+    })
+
+    it('error transitorio al mirar el huérfano: NO limpia el inventario (el próximo intento lo reintenta)', async () => {
+        const { admin, state } = makeFakeAdmin({
+            coaches: [{ onboarding_guide: { demo: { version: 1, clientId: 'demo-huerfano', areaIds: [] } } }],
+            clients: [],
+        })
+        state.authTransient.add('demo-huerfano')
+        await deleteDemoStudent(admin, { coachId: COACH })
+        expect(state.deletedUsers).toEqual([])
+        expect(opsFor(state, 'coaches', 'update')).toHaveLength(0)
+    })
+
+    it('las áreas del inventario se borran solo si no son de team', async () => {
+        const { admin, state } = makeFakeAdmin({
+            coaches: [{ onboarding_guide: { demo: { version: 1, clientId: 'demo-1', areaIds: ['area-1'] } } }],
+            clients: [{ id: 'demo-1' }],
+        })
+        await deleteDemoStudent(admin, { coachId: COACH })
+        expect(opsFor(state, 'workout_section_templates', 'delete')[0]?.filters).toEqual(
+            expect.arrayContaining([['is', 'team_id', null]]),
+        )
     })
 
     it('sin demo ni inventario no borra nada y responde `deleted: false`', async () => {

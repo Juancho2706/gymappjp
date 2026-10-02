@@ -262,7 +262,8 @@ export function DesktopRosterTable({
     const selectedRows = rows.filter((r) => sel[r.id] && !r.archived)
     const selIds = selectedRows.map((r) => r.id)
     // Archivar nunca debe tocar a un ya-archivado.
-    const archivableIds = selectedRows.filter((r) => !r.archived).map((r) => r.id)
+    // El alumno de ejemplo no se archiva (el servidor lo salta): no entra al conteo «Archivar N».
+    const archivableIds = selectedRows.filter((r) => !r.archived && !r.isDemo).map((r) => r.id)
     const selectableRows = rows.filter((r) => !r.archived)
     const allOn = selectableRows.length > 0 && selectableRows.every((r) => sel[r.id])
     const toggleAll = () =>

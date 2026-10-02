@@ -424,9 +424,14 @@ export async function deleteDemoStudent(
     //  · un usuario Auth huérfano del inventario cuyo correo es EXACTAMENTE el del demo de este coach
     //    (`demo-<coachId>@evatest.cl`, lo crea `seedDemoStudent`): el caso «la fila se perdió».
     const orphanIds: string[] = []
+    // `false` = no se pudo saber si el huérfano existe (error que no es 404): el inventario NO se
+    // limpia, para que el próximo intento lo vuelva a mirar en vez de dejar un usuario Auth con el
+    // correo del demo que haría fallar para siempre el `createUser` del re-sembrado.
+    let orphanResolved = true
     if (inventory != null && !rowIds.has(inventory.clientId)) {
-        const { data: orphan } = await admin.auth.admin.getUserById(inventory.clientId)
+        const { data: orphan, error: orphanError } = await admin.auth.admin.getUserById(inventory.clientId)
         if (orphan?.user?.email === demoEmailFor(coachId)) orphanIds.push(inventory.clientId)
+        else if (orphanError != null && (orphanError as { status?: number }).status !== 404) orphanResolved = false
     }
 
     let deleted = false
@@ -471,11 +476,14 @@ export async function deleteDemoStudent(
             .in('id', areaIds)
             .eq('coach_id', coachId)
             .eq('is_system', false)
+            // `areaIds` sale del jsonb que el coach puede escribir: nunca un área de team (sus
+            // compañeros la usan); el seed solo crea áreas del panel personal.
+            .is('team_id', null)
             .select('id')
         if ((removedAreas ?? []).length > 0) deleted = true
     }
 
-    if (inventory != null) {
+    if (inventory != null && orphanResolved) {
         await writeDemoInventory(admin, coachId, null)
         deleted = true
     }

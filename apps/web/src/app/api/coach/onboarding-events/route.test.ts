@@ -298,3 +298,20 @@ describe('POST /api/coach/onboarding-events — espejo a PostHog', () => {
         expect(await res.json()).toEqual({ ok: true })
     })
 })
+
+describe('POST /api/coach/onboarding-events — aha una vez por coach (W8.2.5)', () => {
+    it('con un aha_moment previo (de la web o de la app) responde deduped sin insertar', async () => {
+        // Hace semanas: el dedupe por ventana de 5 s no lo cubriría.
+        lastDup = { id: 'aha-1', created_at: '2026-09-01T00:00:00.000Z' }
+        const res = await POST(req({ stepKey: 'aha', eventType: 'aha_moment' }))
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual({ ok: true, deduped: true })
+        expect(inserts).toHaveLength(0)
+    })
+
+    it('sin aha previo se inserta normal', async () => {
+        const res = await POST(req({ stepKey: 'aha', eventType: 'aha_moment' }))
+        expect(res.status).toBe(200)
+        expect(inserts).toHaveLength(1)
+    })
+})

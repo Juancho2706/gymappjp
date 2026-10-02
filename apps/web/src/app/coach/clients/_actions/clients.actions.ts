@@ -34,6 +34,7 @@ import { resolveCoachScope as getCoachClientScope, applyCoachClientScope } from 
 import { createClientIdentity } from '@/infrastructure/db/client-membership.repository'
 import { deleteClientHard } from '@/services/client/client-deletion.service'
 import { deleteDemoStudent } from '@/services/onboarding/demo-student.service'
+import { recordOnboardingEvent } from '@/services/coach/persona.service'
 import {
     archiveClient,
     bulkArchiveClients,
@@ -495,8 +496,16 @@ export async function deleteClientAction(clientId: string): Promise<{ error?: st
     // W8.1.4: el alumno de ejemplo sale por su propio borrado, que además limpia el inventario del
     // sembrado y sus áreas (con `deleteClientHard` quedaban huérfanos y el re-sembrado se confundía).
     if ((client as { is_demo?: boolean | null }).is_demo === true) {
-        const demo = await deleteDemoStudent(createServiceRoleClient(), { coachId: coachUser.id })
+        const admin = createServiceRoleClient()
+        const demo = await deleteDemoStudent(admin, { coachId: coachUser.id })
         if (!demo.ok) return { error: 'No se pudo borrar el alumno de ejemplo.' }
+        // Misma señal del funnel que «Borrar ejemplo» (best-effort, nunca lanza).
+        await recordOnboardingEvent(admin, {
+            coachId: coachUser.id,
+            stepKey: 'vive_tu_app',
+            eventType: 'demo_deleted',
+            metadata: { surface: 'web' },
+        })
         revalidatePath('/coach/clients')
         revalidatePath('/coach/dashboard')
         return {}

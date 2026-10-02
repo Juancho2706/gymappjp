@@ -1203,13 +1203,17 @@ export default function ClientesScreen() {
       </NativeDialog>
       <NativeDialog
         open={deleteTarget !== null}
-        title="Eliminar alumno"
+        title={deleteTarget?.isDemo ? 'Borrar alumno de ejemplo' : 'Eliminar alumno'}
         onClose={() => { if (!deleting) setDeleteTarget(null) }}
       >
         {deleteTarget ? (
           <View style={{ gap: 14 }}>
             <Text style={{ color: theme.mutedForeground, fontFamily: FONT.ui, fontSize: 13.5, lineHeight: 19 }}>
-              ¿Seguro que quieres eliminar a <Text style={{ color: theme.foreground, fontFamily: FONT.uiBold }}>{deleteTarget.fullName}</Text>? Esta acción eliminará su cuenta y todos sus datos asociados (rutinas, check-ins, progreso). No se puede deshacer.
+              {deleteTarget.isDemo ? (
+                <>Se borra <Text style={{ color: theme.foreground, fontFamily: FONT.uiBold }}>{deleteTarget.fullName}</Text> y todo lo que sembramos con él. Puedes volver a sembrarlo desde Mi panel.</>
+              ) : (
+                <>¿Seguro que quieres eliminar a <Text style={{ color: theme.foreground, fontFamily: FONT.uiBold }}>{deleteTarget.fullName}</Text>? Esta acción eliminará su cuenta y todos sus datos asociados (rutinas, check-ins, progreso). No se puede deshacer.</>
+              )}
             </Text>
             {deleteError ? <Text style={{ color: theme.destructive, fontFamily: FONT.uiSemibold, fontSize: 13 }}>{deleteError}</Text> : null}
             {/* Par apilado (no en fila): "Eliminar definitivamente" no cabe en media

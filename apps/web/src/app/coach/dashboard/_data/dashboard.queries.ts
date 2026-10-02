@@ -375,7 +375,7 @@ function compareAgendaStaleness(a: number | null, b: number | null): number {
  */
 export function buildAgendaFromPulse(
     pulse: Awaited<ReturnType<typeof getCachedDirectoryPulse>>,
-    expiring: Array<{ id: string; clientId?: string; clientName?: string; daysLeft: number; name: string }>,
+    expiring: Array<{ id: string; clientId?: string; clientName?: string; daysLeft: number; name: string; isDemo?: boolean }>,
     now: Date = new Date()
 ): { items: AgendaItem[]; total: number } {
     const items: AgendaItem[] = []
@@ -399,6 +399,7 @@ export function buildAgendaFromPulse(
                 daysLeft: p.daysLeft,
             }),
             href: `/coach/clients/${p.clientId}`,
+            ...(p.isDemo === true ? { isDemo: true } : {}),
             dueAt: null,
             days: null,
             severity: programSeverity(p.daysLeft),
@@ -526,7 +527,7 @@ async function getCoachDashboardDataInner(
             applyResourceOwnerScope(
                 supabase
                 .from('workout_programs')
-                .select('id, name, end_date, client_id, clients:client_id!inner(id, full_name, org_id, team_id, is_archived)')
+                .select('id, name, end_date, client_id, clients:client_id!inner(id, full_name, org_id, team_id, is_archived, is_demo)')
                 .eq('is_active', true)
                 .eq('clients.is_archived', false),
                 userId,
@@ -725,6 +726,7 @@ async function getCoachDashboardDataInner(
                 clientId: p.clients?.id,
                 clientName: p.clients?.full_name,
                 daysLeft: diffDays,
+                ...(p.clients?.is_demo === true ? { isDemo: true } : {}),
             }
         })
         .filter((p) => p.daysLeft <= 3)

@@ -29,6 +29,10 @@ vi.mock('@/lib/mobile-auth', () => ({
 let coachRow: Record<string, unknown> | null = null
 const inserts: Array<Record<string, unknown>> = []
 let insertError: { code?: string; message: string } | null = null
+/** Fila `aha_moment` previa del coach (dedupe «uno por coach» de W8.2.5). */
+let ahaRow: { id: string } | null = null
+/** Payloads de `update` por tabla, para verificar el merge del jsonb. */
+const updates: Array<{ table: string; values: Record<string, unknown> }> = []
 
 /** El espejo a PostHog se ejercita con el módulo real: lo mockeado es la ingesta. */
 type CaptureInput = {
@@ -47,7 +51,10 @@ vi.mock('@/lib/supabase/admin-client', () => ({
             const chain: Record<string, unknown> = {}
             Object.assign(chain, {
                 select: () => chain,
-                update: () => chain,
+                update: (values: Record<string, unknown>) => {
+                    updates.push({ table, values })
+                    return chain
+                },
                 eq: async () => ({ error: null }),
                 maybeSingle: async () => ({ data: coachRow, error: null }),
                 insert: async (row: Record<string, unknown>) => {
@@ -56,6 +63,15 @@ vi.mock('@/lib/supabase/admin-client', () => ({
                 },
             })
             // `update(...).eq(...)` se awaitea suelto; `select(...).eq(...).maybeSingle()` encadena.
+            if (table === 'coach_onboarding_events') {
+                const read: Record<string, unknown> = {}
+                Object.assign(read, {
+                    eq: () => read,
+                    limit: () => read,
+                    maybeSingle: async () => ({ data: ahaRow, error: null }),
+                })
+                Object.assign(chain, { select: () => read })
+            }
             if (table === 'coaches') {
                 Object.assign(chain, {
                     select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: coachRow, error: null }) }) }),
@@ -119,6 +135,8 @@ beforeEach(() => {
     bearerOk = true
     inserts.length = 0
     insertError = null
+    ahaRow = null
+    updates.length = 0
     loadOnboardingV2ApiData.mockResolvedValue(ONBOARDING_V2)
     coachRow = {
         id: COACH_ID,
@@ -369,5 +387,31 @@ describe('POST /api/mobile/coach/dashboard — espejo a PostHog', () => {
         )
         expect(res.status).toBe(200)
         expect(await res.json()).toEqual({ ok: true })
+    })
+})
+
+describe('POST /api/mobile/coach/dashboard — aha una vez por coach (W8.2.5)', () => {
+    it('con un aha_moment previo responde deduped, no inserta ni espeja', async () => {
+        ahaRow = { id: 'aha-1' }
+        const res = await POST(postReq({ action: 'onboarding_event', stepKey: 'aha', eventType: 'aha_moment' }))
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual({ ok: true, deduped: true })
+        expect(inserts).toHaveLength(0)
+        expect(captureMock).not.toHaveBeenCalled()
+    })
+
+    it('persist_onboarding_guide: `ahaMomentSent` es pegajoso y la clave `demo` se ignora', async () => {
+        coachRow = {
+            ...coachRow,
+            onboarding_guide: { ahaMomentSent: true, dismissed: false, demo: { clientId: 'demo-real' } },
+        }
+        const res = await POST(
+            postReq({ action: 'persist_onboarding_guide', guide: { ahaMomentSent: false, dismissed: true, demo: { clientId: 'victima' } } })
+        )
+        expect(res.status).toBe(200)
+        const guide = updates.find((u) => u.table === 'coaches')?.values.onboarding_guide as Record<string, unknown>
+        expect(guide.ahaMomentSent).toBe(true)
+        expect(guide.dismissed).toBe(true)
+        expect(guide.demo).toEqual({ clientId: 'demo-real' })
     })
 })
