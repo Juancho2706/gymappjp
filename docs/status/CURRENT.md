@@ -39,10 +39,10 @@ OTA; [TASKS](../specs/kg-lb-ejecutor/TASKS.md)).
 1. **Meta SDK iOS** ([SDD](../specs/meta-app-events-ios/SPEC.md)): mide de punta a punta desde el 16-09.
    Queda SKAN cuando Meta habilite «Configurar eventos» y confirmar si la hoja ATT salió en inglés
    (⇒ `locales`, build nueva). Pasos de consola en [MANUAL_TASKS](../operations/MANUAL_TASKS.md) (MOB-META-01).
-2. **Onboarding del coach v2 — correos W6 en ENSAYO desde el 06-09** ([spec](../specs/coach-onboarding-v2/SPEC.md),
-   [auditoría](../audits/correos-y-crons-2026-09-05.md)): `..._DRY_RUN=true` en Production. Copy v2 aprobado el
-   01-10 y EN PRODUCCIÓN (`329c833f`, [TASKS § W6 v2](../specs/coach-onboarding-v2/TASKS.md)): falta que el owner fije
-   `ONBOARDING_BEHAVIOR_EMAILS_SINCE` y quite el DRY_RUN en Vercel (el conector no tiene permiso). Plan B «Activación»
+2. **Onboarding del coach v2 — correos W6 ENCENDIDOS el 02-10** ([spec](../specs/coach-onboarding-v2/SPEC.md),
+   [auditoría](../audits/correos-y-crons-2026-09-05.md)): copy v2 en producción (`329c833f`,
+   [TASKS § W6 v2](../specs/coach-onboarding-v2/TASKS.md)); el owner fijó `ONBOARDING_BEHAVIOR_EMAILS_SINCE=2026-10-02T00:00:00Z`
+   y sacó el DRY_RUN; el cron de las 02:00 UTC corrió con `dry=false` (0 candidatos todavía). Plan B «Activación»
    (panel vacío, ficha «todavía no entra», alumno sin programa, baja en el admin) en producción; B4 (embudo por superficie en el correo de los lunes, columna `coaches.signup_surface`) hecho el 02-10; queda QA device. W8.4.2B a medias
    (`enqueueBehaviorCheck` sin sus 3 call sites); W7, F5.3–F5.5 RN y D4. `FREE_COACH_DRIP_ENABLED` **no** se setea.
 3. **Embudo Free→Pro** ([spec](../specs/embudo-free-pro/SPEC.md)): W0–W6 en producción; queda App Store Connect (W7.4).
