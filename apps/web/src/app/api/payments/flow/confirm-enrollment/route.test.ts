@@ -186,6 +186,12 @@ vi.mock('@/services/billing/addon-webhook.service', async (orig) => {
     }
 })
 
+// Plan C: el `Purchase` de Meta del primer cobro (el servicio decide si manda; acá solo el enganche).
+const sendFirstPurchaseToMeta = vi.fn<(...a: unknown[]) => Promise<string>>(async () => 'sent')
+vi.mock('@/services/billing/meta-purchase.service', () => ({
+    sendFirstPurchaseToMeta: (...a: unknown[]) => sendFirstPurchaseToMeta(...a),
+}))
+
 import { POST } from './route'
 
 function makeRequest(body: unknown): Request {
@@ -458,6 +464,17 @@ describe('POST /api/payments/flow/confirm-enrollment — happy path', () => {
         expect(snap.providerPaymentId).toBe('invoice:1167928')
         expect(snap.kind).toBe('recurring')
 
+        // Plan C: después del snapshot, el `Purchase` con el MISMO id que usaría el webhook.
+        expect(sendFirstPurchaseToMeta).toHaveBeenCalledOnce()
+        expect(sendFirstPurchaseToMeta.mock.calls[0][1]).toMatchObject({
+            coachId: 'coach-1',
+            provider: 'flow',
+            providerPaymentId: 'invoice:1167928',
+            totalClp: snap.totalClp,
+            tier: snap.tier,
+            cycle: snap.billingCycle,
+        })
+
         // Evento de historial del alta.
         const evt = upsertCalls.find((c) => c.table === 'subscription_events')
         expect(evt).toBeTruthy()
@@ -476,6 +493,7 @@ describe('POST /api/payments/flow/confirm-enrollment — happy path', () => {
         const res = await POST(makeRequest({}))
         expect(res.status).toBe(200)
         expect(insertBillingSnapshot).not.toHaveBeenCalled()
+        expect(sendFirstPurchaseToMeta).not.toHaveBeenCalled()
         // B1: sin cobro confirmado tampoco se marca first_charged_at (no hubo primer cobro).
         expect(markFirstCharged).not.toHaveBeenCalled()
     })

@@ -23,6 +23,11 @@ import { cookies, headers } from 'next/headers'
 
 const GRAPH_API_VERSION = 'v21.0'
 const GRAPH_API_HOST = 'https://graph.facebook.com'
+/**
+ * Corte del POST a Meta. Un webhook de pago espera esta llamada: sin corte, un Graph API lento
+ * (hubo un `ETIMEDOUT` el 18-08) dejaba colgado el webhook. 3 s sobra para un POST sano.
+ */
+export const META_CAPI_TIMEOUT_MS = 3000
 
 export type MetaCapiEventName =
     | 'CompleteRegistration'
@@ -72,7 +77,18 @@ export type MetaCapiEventInput = {
     context?: MetaCapiRequestContext
     /** Unix SEGUNDOS. Default: ahora. */
     eventTime?: number
+    /**
+     * Código de «Eventos de prueba» de Events Manager. SOLO para la prueba manual del panel admin:
+     * con este código el evento NO cuenta como conversión real. Jamás desde una variable de entorno
+     * (si quedara puesta, todas las compras reales se irían a «Eventos de prueba»).
+     */
+    testEventCode?: string | null
 }
+
+/** Resultado del POST. Los callers de siempre lo ignoran; la prueba del admin lo muestra. */
+export type MetaCapiSendResult =
+    | { ok: true }
+    | { ok: false; reason: 'not_configured' | 'rejected' | 'network'; status?: number }
 
 type MetaCapiUserDataPayload = {
     em?: string[]
@@ -144,6 +160,18 @@ export async function collectMetaCapiContext(): Promise<MetaCapiRequestContext> 
     }
 }
 
+/**
+ * Igual que `collectMetaCapiContext`, pero NUNCA lanza: para guardar las señales del navegador en
+ * el intent de checkout, donde perderlas no puede tumbar un pago. `null` si no hay request.
+ */
+export async function collectMetaCapiContextSafely(): Promise<MetaCapiRequestContext | null> {
+    try {
+        return await collectMetaCapiContext()
+    } catch {
+        return null
+    }
+}
+
 function buildUserDataPayload(
     userData: MetaCapiUserData | undefined,
     context: MetaCapiRequestContext
@@ -182,12 +210,12 @@ function resolveEventSourceUrl(
 
 /**
  * POST directo al Graph API. Resuelve SIEMPRE (nunca lanza): un fallo de Meta jamas puede tumbar
- * un registro ni un webhook de pago.
+ * un registro ni un webhook de pago. Corta a los `META_CAPI_TIMEOUT_MS`.
  */
-export async function sendMetaCapiEvent(input: MetaCapiEventInput): Promise<void> {
+export async function sendMetaCapiEvent(input: MetaCapiEventInput): Promise<MetaCapiSendResult> {
     const pixelId = readPixelId()
     const token = process.env.META_CAPI_TOKEN
-    if (!pixelId || !token) return
+    if (!pixelId || !token) return { ok: false, reason: 'not_configured' }
 
     try {
         const context = input.context ?? (await collectMetaCapiContext())
@@ -209,21 +237,29 @@ export async function sendMetaCapiEvent(input: MetaCapiEventInput): Promise<void
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 // `access_token` en el body: nunca en la URL (queda en logs de proxies).
-                body: JSON.stringify({ data: [event], access_token: token }),
+                body: JSON.stringify({
+                    data: [event],
+                    access_token: token,
+                    ...(input.testEventCode ? { test_event_code: input.testEventCode } : {}),
+                }),
                 cache: 'no-store',
+                signal: AbortSignal.timeout(META_CAPI_TIMEOUT_MS),
             }
         )
 
         if (!response.ok) {
             // Sin body loggeado: contiene el access_token.
             console.warn('[meta-capi] rechazado', input.eventName, response.status)
-        } else {
-            // Confirmacion positiva: es la UNICA forma de saber desde los logs que el evento
-            // server-side llego a Meta (el Events Manager tarda horas en reflejarlo).
-            console.warn('[meta-capi] enviado', input.eventName, input.eventId)
+            return { ok: false, reason: 'rejected', status: response.status }
         }
+        // Confirmacion positiva: es la UNICA forma de saber desde los logs que el evento
+        // server-side llego a Meta (el Events Manager tarda horas en reflejarlo).
+        console.warn('[meta-capi] enviado', input.eventName, input.eventId)
+        return { ok: true }
     } catch (error) {
+        // Incluye el corte por timeout (`TimeoutError` del AbortSignal).
         console.warn('[meta-capi] fallo de red', input.eventName, error)
+        return { ok: false, reason: 'network' }
     }
 }
 

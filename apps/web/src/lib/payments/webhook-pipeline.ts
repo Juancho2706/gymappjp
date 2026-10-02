@@ -38,6 +38,7 @@ import {
     reconcilePreapprovalAmount,
     tierBaseClp,
 } from '@/services/billing/addon-webhook.service'
+import { sendFirstPurchaseToMeta } from '@/services/billing/meta-purchase.service'
 
 /**
  * Pipeline de webhook AGNOSTICO del gateway (plan pagos-multigateway-flow, Ola 1 · §Architecture 4).
@@ -377,6 +378,15 @@ export async function runWebhookPipeline(
                         discountClp: snapComposite.discountClp,
                         couponCode: detail?.couponCode ?? null,
                         couponRedemptionId: detail?.redemptionId ?? null,
+                    })
+                    // Plan C: `Purchase` de Meta solo si es el primer cobro del coach (nunca lanza).
+                    await sendFirstPurchaseToMeta(admin, {
+                        coachId: coach.id,
+                        provider: provider.name,
+                        providerPaymentId: result.providerPaymentId,
+                        totalClp: snapComposite.totalClp,
+                        tier: tierForCharge,
+                        cycle: cycleForCharge,
                     })
                     // F4: decrementar el ciclo del cupón EXACTAMENTE una vez por este cobro (idempotente).
                     // Al expirar (plazo disclosed cumplido) subir el preapproval al precio lleno DESDE la
@@ -964,6 +974,15 @@ export async function runWebhookPipeline(
                         couponCode: detail?.couponCode ?? null,
                         couponRedemptionId: detail?.redemptionId ?? null,
                     })
+                    // Plan C: `Purchase` de Meta solo si es el primer cobro del coach (nunca lanza).
+                    await sendFirstPurchaseToMeta(admin, {
+                        coachId: coach.id,
+                        provider: provider.name,
+                        providerPaymentId: result.providerPaymentId,
+                        totalClp: snapComposite.totalClp,
+                        tier: tierForCharge,
+                        cycle: cycleForCharge,
+                    })
                     // F4: decrementar el ciclo del cupón EXACTAMENTE una vez por este cobro (idempotente).
                     // Al expirar (plazo disclosed cumplido) subir el preapproval al precio lleno DESDE la
                     // próxima renovación — revert disclosed (N ciclos → precio normal), SERNAC-safe.
@@ -1525,6 +1544,15 @@ export async function runWebhookPipeline(
                     discountClp: snapComposite.discountClp,
                     couponCode: detail?.couponCode ?? null,
                     couponRedemptionId: detail?.redemptionId ?? null,
+                })
+                // Plan C: `Purchase` de Meta solo si es el primer cobro del coach (nunca lanza).
+                await sendFirstPurchaseToMeta(admin, {
+                    coachId: coach.id,
+                    provider: provider.name,
+                    providerPaymentId: result.providerPaymentId,
+                    totalClp: snapComposite.totalClp,
+                    tier: finalTier,
+                    cycle: finalCycle,
                 })
                 // Decrementar el ciclo del cupón EXACTAMENTE una vez por este cobro (idempotente por
                 // provider_payment_id). Al expirar (N ciclos disclosed cumplidos) subir el preapproval al

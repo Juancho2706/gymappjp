@@ -18,7 +18,8 @@ import {
     type SubscriptionTier,
 } from '@/lib/constants'
 import { getPaymentsProvider } from '@/lib/payments/provider'
-import { persistCheckoutIntent } from '@/lib/payments/checkout-intent'
+import { buildCheckoutIntentMeta, persistCheckoutIntent } from '@/lib/payments/checkout-intent'
+import { collectMetaCapiContextSafely } from '@/lib/meta/capi'
 import { buildTierUpgradeExternalReference } from '@/lib/payments/providers/mercadopago'
 import { rateLimitPayment, jsonRateLimited } from '@/lib/rate-limit'
 import { resolvePreferredWorkspace } from '@/services/auth/workspace.service'
@@ -635,11 +636,19 @@ export async function POST(request: Request) {
         //           (`coachId|tier|cycle`) es la fuente de verdad del cobro para webhook y
         //           confirm-subscription. Tumbar acá un checkout ya creado dejaría al coach con un
         //           preapproval huérfano y sin pantalla de pago: peor que perder un rastro.
+        // Plan C (píxel de compra): este request SÍ es del navegador del coach, así que acá se
+        // guardan `fbp`/`fbc`/user-agent para el `Purchase` que manda después el webhook.
+        const metaContext = await collectMetaCapiContextSafely()
         const intentPersisted = await persistCheckoutIntent(admin, {
             coachId: user.id,
             channel: gateway,
             provider: provider.name,
-            intent: { tier, cycle: billingCycle, addons: checkoutAddons },
+            intent: {
+                tier,
+                cycle: billingCycle,
+                addons: checkoutAddons,
+                meta: metaContext ? buildCheckoutIntentMeta(metaContext) : null,
+            },
         })
         if (!intentPersisted.ok) {
             if (gateway === 'flow') {

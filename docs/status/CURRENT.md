@@ -51,6 +51,10 @@ OTA; [TASKS](../specs/kg-lb-ejecutor/TASKS.md)).
 5. **Renovaciones Flow** (28-09, [incidente](../audits/flow-renovaciones-2026-09-28.md)): el plan de $29.990 avisaba a
    `//api` (308) ⇒ ninguna renovación llegaba; `olympuswolf` quedó 24 días con Pro gratis (cortado). Arreglado con
    regla de Cloudflare + guardas en `paid-expiry`/`flow-reconcile`. **Queda: verificar la renovación de Movens el 02-10.**
+6. **Píxel de compra (Meta `Purchase` por servidor)** ([spec](../specs/meta-purchase-capi/SPEC.md), plan C del 01-10):
+   en código el 02-10; un `Purchase` por coach en su primer cobro real (MP o Flow), con el contexto del navegador
+   guardado al elegir medio de pago. Prueba sin pago real en Admin → Sistema con el código de «Eventos de prueba».
+   Queda QA con el próximo pago real (SPEC §7).
 
 ### 3. Decisiones del owner pendientes
 

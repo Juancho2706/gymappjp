@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
     CHECKOUT_INTENT_CHANNELS,
+    buildCheckoutIntentMeta,
     buildCheckoutIntentPayload,
     checkoutIntentEventId,
+    readCheckoutIntentMeta,
     checkoutIntentStatus,
     persistCheckoutIntent,
 } from './checkout-intent'
@@ -102,5 +104,36 @@ describe('persistCheckoutIntent', () => {
                 intent: { tier: 'pro', cycle: 'monthly', addons: [] },
             })
         ).resolves.toEqual({ ok: false, error: 'duplicate key' })
+    })
+})
+
+// Plan C (píxel de compra): el intent guarda las señales del navegador del coach para el `Purchase`
+// que manda después el webhook. Sin IP, y sin ensuciar el payload cuando no hay señales.
+describe('checkout-intent — señales de Meta', () => {
+    it('buildCheckoutIntentMeta guarda fbp/fbc/ua y nunca la IP', () => {
+        const meta = buildCheckoutIntentMeta({ fbp: 'fb.1.2.3', fbc: null, clientUserAgent: 'Mozilla/5.0' })
+        expect(meta).toEqual({ fbp: 'fb.1.2.3', fbc: null, ua: 'Mozilla/5.0' })
+        expect(meta).not.toHaveProperty('ip')
+    })
+
+    it('sin ninguna señal ⇒ null, y el payload queda idéntico al histórico', () => {
+        expect(buildCheckoutIntentMeta({ fbp: null, fbc: '', clientUserAgent: null })).toBeNull()
+        expect(
+            buildCheckoutIntentPayload({ tier: 'pro', cycle: 'monthly', addons: [], meta: null })
+        ).toEqual({ tier: 'pro', cycle: 'monthly', addons: [] })
+    })
+
+    it('con señales, el payload suma `meta` y readCheckoutIntentMeta lo recupera', () => {
+        const meta = { fbp: 'fb.1.2.3', fbc: 'fb.1.2.abc', ua: 'UA' }
+        const payload = buildCheckoutIntentPayload({ tier: 'pro', cycle: 'monthly', addons: [], meta })
+        expect(payload).toMatchObject({ tier: 'pro', meta })
+        expect(readCheckoutIntentMeta(payload)).toEqual(meta)
+    })
+
+    it('readCheckoutIntentMeta tolera payloads viejos o malformados', () => {
+        expect(readCheckoutIntentMeta({ tier: 'pro', cycle: 'monthly', addons: [] })).toBeNull()
+        expect(readCheckoutIntentMeta(null)).toBeNull()
+        expect(readCheckoutIntentMeta({ meta: 'x' })).toBeNull()
+        expect(readCheckoutIntentMeta({ meta: { fbp: 1 } })).toBeNull()
     })
 })

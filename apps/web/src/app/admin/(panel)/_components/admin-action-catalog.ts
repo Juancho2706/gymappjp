@@ -102,6 +102,8 @@ export const ADMIN_ACTION_CATALOG: Record<string, AdminActionMeta> = {
 
     // ── Otros procesos ──────────────────────────────────────────────────────
     'exercise.media.uploaded': { label: 'Subió media de ejercicio', tone: 'neutral' },
+    'meta.purchase_sent': { label: 'Compra enviada a Meta', tone: 'sport' },
+    'meta.purchase_test_sent': { label: 'Prueba del píxel de compra', tone: 'neutral' },
     'cron.trial_expiry_ran': { label: 'Cron: vencimiento de trials', tone: 'neutral' },
     'cron.paid_expiry_ran': { label: 'Cron: vencimiento de pagos', tone: 'neutral' },
     'cron.purge_data_ran': { label: 'Cron: purga de datos', tone: 'neutral' },

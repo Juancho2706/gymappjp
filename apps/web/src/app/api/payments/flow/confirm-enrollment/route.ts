@@ -36,6 +36,7 @@ import {
 } from '@/services/billing/addon-webhook.service'
 import { claimFlowEnrollment, clearFlowEnrollment } from '@/services/billing/plan-change-lock'
 import { decrementCouponCycleForCharge } from '@/services/billing/coupons.service'
+import { sendFirstPurchaseToMeta } from '@/services/billing/meta-purchase.service'
 import type { BillableAddon } from '@/domain/billing/types'
 import { buildFlowWebhookUrl } from '@/lib/payments/flow-webhook-url'
 
@@ -532,6 +533,16 @@ export async function POST(request: Request) {
                     discountClp: composite.discountClp,
                     couponCode: detail?.couponCode ?? null,
                     couponRedemptionId: detail?.redemptionId ?? null,
+                })
+                // Plan C: `Purchase` de Meta del primer cobro de Flow (mismo id que usaría el webhook,
+                // así que si llegan los dos solo uno cuenta; nunca lanza).
+                await sendFirstPurchaseToMeta(admin, {
+                    coachId: user.id,
+                    provider: 'flow',
+                    providerPaymentId: `invoice:${result.firstInvoice.id}`,
+                    totalClp: composite.totalClp,
+                    tier,
+                    cycle,
                 })
                 // F11 (L2): decrementar el ciclo del cupon EXACTAMENTE una vez por este primer cobro
                 // (idempotente por el MISMO payment id que usaria el webhook: 'invoice:<id>'). Sin esto, si el

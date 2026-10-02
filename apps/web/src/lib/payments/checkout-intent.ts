@@ -41,6 +41,43 @@ export type CheckoutIntent = {
     addons: string[]
     /** Cupón saneado del signup (REGISTER-CODE). Solo informativo: el canje vive en /processing. */
     coupon?: string | null
+    /**
+     * Señales del navegador del coach para el `Purchase` de Meta (plan C, `docs/specs/meta-purchase-capi`).
+     * Se guardan acá porque el cobro lo confirma un webhook de MP/Flow, cuyo request NO es del coach.
+     * Sin IP a propósito (Ley 21.719: mínimo necesario). Ausente ⇒ el payload queda como siempre.
+     */
+    meta?: CheckoutIntentMeta | null
+}
+
+export type CheckoutIntentMeta = {
+    fbp: string | null
+    fbc: string | null
+    ua: string | null
+}
+
+/** Arma el `meta` del intent; `null` si no hay ninguna señal (no ensucia el payload). */
+export function buildCheckoutIntentMeta(ctx: {
+    fbp: string | null
+    fbc: string | null
+    clientUserAgent: string | null
+}): CheckoutIntentMeta | null {
+    const meta: CheckoutIntentMeta = {
+        fbp: ctx.fbp || null,
+        fbc: ctx.fbc || null,
+        // Tope defensivo: el user-agent lo escribe el cliente.
+        ua: ctx.clientUserAgent ? ctx.clientUserAgent.slice(0, 512) : null,
+    }
+    return meta.fbp || meta.fbc || meta.ua ? meta : null
+}
+
+/** Lee el `meta` de un payload de intent ya guardado. Tolera payloads viejos o malformados. */
+export function readCheckoutIntentMeta(payload: Json | null | undefined): CheckoutIntentMeta | null {
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) return null
+    const raw = (payload as Record<string, Json | undefined>).meta
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null
+    const str = (v: Json | undefined) => (typeof v === 'string' && v ? v : null)
+    const meta = { fbp: str(raw.fbp), fbc: str(raw.fbc), ua: str(raw.ua) }
+    return meta.fbp || meta.fbc || meta.ua ? meta : null
 }
 
 /** Clave única del intent. Para `flow` devuelve `flow_checkout_intent:<coachId>` (contrato vivo). */
@@ -55,8 +92,8 @@ export function checkoutIntentStatus(channel: CheckoutIntentChannel): string {
 
 /**
  * Payload puro del intent. Se mantiene MÍNIMO y con las mismas tres claves que lee hoy
- * `flow/confirm-enrollment` (`tier` / `cycle` / `addons`); `coupon` solo aparece cuando existe,
- * para que el payload de Flow siga siendo idéntico al histórico.
+ * `flow/confirm-enrollment` (`tier` / `cycle` / `addons`); `coupon` y `meta` solo aparecen cuando
+ * existen, para que el payload de Flow siga siendo idéntico al histórico.
  */
 export function buildCheckoutIntentPayload(intent: CheckoutIntent): Json {
     return {
@@ -64,6 +101,7 @@ export function buildCheckoutIntentPayload(intent: CheckoutIntent): Json {
         cycle: intent.cycle,
         addons: [...intent.addons],
         ...(intent.coupon ? { coupon: intent.coupon } : {}),
+        ...(intent.meta ? { meta: intent.meta } : {}),
     } as Json
 }
 
