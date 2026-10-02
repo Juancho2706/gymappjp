@@ -425,7 +425,7 @@ export async function sendIndividualCoachEmailAction(
     const [coachRes, authUserRes] = await Promise.all([
         adminClient
             .from('coaches')
-            .select('full_name, trial_ends_at, subscription_tier, created_at')
+            .select('full_name, trial_ends_at, subscription_tier, created_at, paid_caps_grandfathered')
             .eq('id', coachId)
             .maybeSingle(),
         adminClient.auth.admin.getUserById(coachId),
@@ -447,9 +447,9 @@ export async function sendIndividualCoachEmailAction(
     const activeCount = clientCount ?? 0
     // Pricing v2 (P2): recomendación y límite con el grandfather del coach (espejo del cron
     // trial-expiry) — un pro VIEJO con 28 activos recibe «Pro (hasta 30)», no un salto a Elite.
-    const recTier = getRecommendedTierFor(activeCount, coach.created_at)
+    const recTier = getRecommendedTierFor(activeCount, coach.created_at, coach.paid_caps_grandfathered)
     const recConfig = TIER_CONFIG[recTier]
-    const recMaxClients = tierMaxClientsFor(recTier, coach.created_at)
+    const recMaxClients = tierMaxClientsFor(recTier, coach.created_at, coach.paid_caps_grandfathered)
     const appUrl = process.env.NEXT_PUBLIC_SITE_URL ?? 'https://eva-app.cl'
     const reactivateUrl = `${appUrl}/coach/reactivate?tier=${recTier}`
     const coachName = coach.full_name ?? 'Coach'

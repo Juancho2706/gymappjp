@@ -28,6 +28,11 @@ export type CoachBillingRow = {
     id: string
     /** Fecha de creación del coach — decide su límite grandfathered (pricing v2, tierMaxClientsFor). */
     created_at: string | null
+    /**
+     * Pricing v4: pagador al corte v4 ⇒ conserva los cupos pagos previos (pro 30/25) al cambiar de
+     * plan. `undefined` solo en fixtures viejos de tests (tierMaxClientsFor lo trata como true).
+     */
+    paid_caps_grandfathered?: boolean | null
     subscription_tier: string
     subscription_status: string
     billing_cycle: string | null
@@ -50,7 +55,7 @@ export async function fetchCoachBillingRow(
     const { data, error } = await admin
         .from('coaches')
         .select(
-            'id, created_at, subscription_tier, subscription_status, billing_cycle, current_period_end, subscription_mp_id, subscription_provider, subscription_provider_external_id'
+            'id, created_at, paid_caps_grandfathered, subscription_tier, subscription_status, billing_cycle, current_period_end, subscription_mp_id, subscription_provider, subscription_provider_external_id'
         )
         .eq('id', coachId)
         .maybeSingle()

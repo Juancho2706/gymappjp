@@ -103,7 +103,7 @@ export async function getImportContext(): Promise<ImportContext> {
         orgId,
         // El precheck de UI debe mostrar el cupo REAL: la columna manda y, si es NULL, la escalera
         // de grandfather del coach. El 10 hardcodeado anterior prometía 10 altas a un free de 1.
-        maxClients: coach.max_clients ?? tierMaxClientsFor(tier, coach.created_at),
+        maxClients: coach.max_clients ?? tierMaxClientsFor(tier, coach.created_at, null),
         activeCount: activeCount ?? 0,
     }
 }
@@ -191,7 +191,7 @@ export async function importClientsAction(
     if (!orgId && !activeTeamId) {
         // La columna GANA (ahí vive el grandfather de Pricing v3); si viene NULL, la escalera de
         // fecha del coach — nunca el catálogo de venta plano, que le daría 1 a un free viejo de 3.
-        const maxClients = rawCoach.max_clients ?? tierMaxClientsFor(tier, rawCoach.created_at)
+        const maxClients = rawCoach.max_clients ?? tierMaxClientsFor(tier, rawCoach.created_at, null)
         const { count: activeCount } = await supabase
             .from('clients')
             .select('id', { count: 'exact', head: true })

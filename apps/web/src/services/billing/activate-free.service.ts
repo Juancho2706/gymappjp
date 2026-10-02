@@ -61,7 +61,7 @@ export async function activateFreePlanForCoach(
     // Pricing v2 (P2, grandfather): el cupo free del coach depende de su fecha de creación —
     // un coach VIEJO que reactiva conserva su 3; uno nuevo entra con 2. Fecha ausente ⇒ fail-safe
     // viejo (generoso). Antes acá se escribía el freeLimit plano del catálogo.
-    const freeLimit = tierMaxClientsFor('free', coach.created_at)
+    const freeLimit = tierMaxClientsFor('free', coach.created_at, null)
 
     if (activeCount > freeLimit) {
         return {

@@ -27,7 +27,8 @@ export const getReactivatePageData = cache(async () => {
             // el grandfather en la COLUMNA (backfill por uso del día D), así que `max_clients` manda
             // para el tier ACTUAL y `created_at` solo proyecta los tiers que todavía no tiene
             // (escalera de 3 peldaños: pre-v2 3 · v2 2 · v3 1). Nunca el catálogo de venta plano.
-            .select('subscription_tier, subscription_status, current_period_end, paid_access_ended_at, max_clients, subscription_mp_id, created_at')
+            // paid_caps_grandfathered (pricing v4): un ex-pagador que reactiva ve su Pro de 30/25.
+            .select('subscription_tier, subscription_status, current_period_end, paid_access_ended_at, max_clients, subscription_mp_id, created_at, paid_caps_grandfathered')
             .eq('id', user.id)
             .maybeSingle(),
         // Cupo STANDALONE (`coach_id` + `org_id IS NULL` + `team_id IS NULL`): mismo scoping que la lista archivable, el archivado

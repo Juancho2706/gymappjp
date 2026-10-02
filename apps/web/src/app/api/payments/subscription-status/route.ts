@@ -36,8 +36,9 @@ export async function GET() {
         .from('coaches')
         .select(
             // created_at: ancla del grandfather de pricing v2 (P2) — la UI resuelve los límites por
-            // tier de ESTE coach con tierMaxClientsFor(tier, created_at) (espejo del guard server).
-            'id, subscription_tier, subscription_status, max_clients, billing_cycle, current_period_end, payment_provider, subscription_provider, subscription_mp_id, superseded_mp_preapproval_id, card_last4, card_brand, created_at'
+            // tier de ESTE coach con tierMaxClientsFor(tier, created_at, paid_caps_grandfathered)
+            // (espejo del guard server; paid_caps_grandfathered = grandfather por compra de pricing v4).
+            'id, subscription_tier, subscription_status, max_clients, billing_cycle, current_period_end, payment_provider, subscription_provider, subscription_mp_id, superseded_mp_preapproval_id, card_last4, card_brand, created_at, paid_caps_grandfathered'
         )
         .eq('id', user.id)
         .maybeSingle()

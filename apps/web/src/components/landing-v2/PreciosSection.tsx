@@ -42,11 +42,12 @@ const FONT_MONO = 'var(--font-geist-mono), ui-monospace, monospace'
 const FONT_DISPLAY = 'var(--font-montserrat), var(--font-inter), sans-serif'
 const FONT_NUM = 'var(--font-archivo), var(--font-montserrat), sans-serif'
 
-// Rangos derivados de la fuente REAL (@eva/tiers) — catálogo de venta pricing v3.
-// Pro arranca en 2: su rango es «hasta 25».
+// Rangos derivados de la fuente REAL (@eva/tiers) — catálogo de venta pricing v4.
+// Pro arranca donde termina Free: su rango es «2–10»; Elite sigue con «11–60».
 const FREE_HI = getTierMaxClients('free') // 1
-const PRO_HI = getTierMaxClients('pro') // 25
-const ELITE_LO = getTierMaxClients('pro') + 1 // 26
+const PRO_LO = FREE_HI + 1 // 2
+const PRO_HI = getTierMaxClients('pro') // 10
+const ELITE_LO = PRO_HI + 1 // 11
 const ELITE_HI = getTierMaxClients('elite') // 60
 
 // Ciclo del provider ('m'|'q'|'a') → BillingCycle de @eva/tiers.
@@ -398,7 +399,7 @@ export function PreciosSection({ exerciseCount }: { exerciseCount: number }) {
                     </div>
                     <h3 style={{ ...planName, position: 'relative' }}>Pro</h3>
                     <p style={{ ...planSub, position: 'relative' }}>
-                        {t('pp_sub', 'Hasta 25 alumnos y tu app sin rastro de EVA.')}
+                        {t('pp_sub', `De ${PRO_LO} a ${PRO_HI} alumnos y tu app sin rastro de EVA.`)}
                     </p>
                     <div style={{ ...priceRow, position: 'relative' }}>
                         <span data-price="pro" style={priceNum}>
@@ -409,7 +410,7 @@ export function PreciosSection({ exerciseCount }: { exerciseCount: number }) {
                     <ul style={{ ...featureList, position: 'relative' }}>
                         <li style={liStyle}>
                             <span style={brandCheck}>✓</span>
-                            {rangeLabel(null, PRO_HI)}
+                            {rangeLabel(PRO_LO, PRO_HI)}
                         </li>
                         <li style={liStyle}>
                             <span style={brandCheck}>✓</span>

@@ -191,7 +191,7 @@ export async function POST(request: NextRequest) {
     const tier = (coach.subscription_tier ?? 'free') as SubscriptionTier
     // Pricing v2 (P2): la columna max_clients SIGUE ganando; el fallback usa el helper con la fecha
     // de creación (grandfather) — nunca el catálogo de venta plano para un coach existente.
-    const maxClients = coach.max_clients ?? tierMaxClientsFor(tier, coach.created_at)
+    const maxClients = coach.max_clients ?? tierMaxClientsFor(tier, coach.created_at, null)
     const { count: activeClientsCount, error: countError } = workspace.type === 'coach_standalone'
         ? await admin
             .from('clients')

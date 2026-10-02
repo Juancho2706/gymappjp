@@ -89,7 +89,7 @@ Las capacidades profesionales están sujetas a tier, módulo, consentimiento y c
 
 ### Comercial y pagos
 
-- tiers en venta: Free (1 alumno), Pro (25) y Elite (60); Growth y Scale permanecen solo por compatibilidad con cuentas legacy (Starter se retiró del producto el 2026-09-05);
+- tiers en venta: Free (1 alumno), Pro (2–10) y Elite (11–60) desde Pricing v4 (2026-10-02; los pagadores previos conservan 25/30 vía `coaches.paid_caps_grandfathered`); Growth y Scale permanecen solo por compatibilidad con cuentas legacy (Starter se retiró del producto el 2026-09-05);
 - suscripciones standalone, cambios de plan, cupones, grace period y reactivación;
 - MercadoPago como gateway principal;
 - integración Flow/Webpay disponible detrás de feature flag;

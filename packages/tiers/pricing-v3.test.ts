@@ -171,21 +171,22 @@ describe('catálogo de venta free (D2=A)', () => {
 })
 
 describe('recomendación de plan con free = 1', () => {
-    it('getRecommendedTier: 0–1 ⇒ free, 2–25 ⇒ pro, 26–60 ⇒ elite', () => {
+    // Pricing v4 (owner 2026-10-02): el tope de Pro bajó a 10 ⇒ Elite arranca en 11.
+    it('getRecommendedTier: 0–1 ⇒ free, 2–10 ⇒ pro, 11–60 ⇒ elite', () => {
         expect(getRecommendedTier(0)).toBe('free')
         expect(getRecommendedTier(1)).toBe('free')
         expect(getRecommendedTier(2)).toBe('pro')
-        expect(getRecommendedTier(25)).toBe('pro')
-        expect(getRecommendedTier(26)).toBe('elite')
+        expect(getRecommendedTier(10)).toBe('pro')
+        expect(getRecommendedTier(11)).toBe('elite')
         expect(getRecommendedTier(60)).toBe('elite')
     })
 
     it('getRecommendedTierFor respeta el bucket de fecha del coach', () => {
         // Coach nacido en v3 con 2 alumnos: su free topa en 1 ⇒ Pro.
-        expect(getRecommendedTierFor(2, PRICING_V3_CUTOVER)).toBe('pro')
+        expect(getRecommendedTierFor(2, PRICING_V3_CUTOVER, true)).toBe('pro')
         // Coach de la ventana v2 con 2 alumnos: su free todavía topa en 2 ⇒ free.
-        expect(getRecommendedTierFor(2, '2026-08-18T00:00:00Z')).toBe('free')
+        expect(getRecommendedTierFor(2, '2026-08-18T00:00:00Z', true)).toBe('free')
         // Coach pre-v2 con 3 alumnos: su free topa en 3 ⇒ free.
-        expect(getRecommendedTierFor(3, '2026-01-01T00:00:00Z')).toBe('free')
+        expect(getRecommendedTierFor(3, '2026-01-01T00:00:00Z', true)).toBe('free')
     })
 })

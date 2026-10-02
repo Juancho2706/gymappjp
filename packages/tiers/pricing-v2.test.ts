@@ -20,6 +20,10 @@ import {
 // Pricing v3 (specs/pricing-v3, owner 2026-08-21) NO borra ese contrato: le agrega un tercer
 // peldaño (free 2 → 1) y abre el white-label a todos los planes vendidos. Las expectativas de acá
 // se corrigieron a la escalera de 3 tramos; lo específico de v3 vive en ./pricing-v3.test.ts.
+//
+// Pricing v4 (owner 2026-10-02): la escalera de tiers PAGOS de acá rige para los pagadores marcados
+// al corte v4 (`paid_caps_grandfathered = true`), por eso las llamadas pasan `true`. El catálogo
+// nuevo (pro 10) y el caso sin marca viven en ./pricing-v4.test.ts.
 
 const BEFORE_V2_ISO = '2026-01-15T12:00:00Z'
 // Último instante del mundo pre-v2 (1s antes del corte v2).
@@ -53,75 +57,75 @@ describe('tierMaxClientsFor — escalera de 3 peldaños por fecha de creación (
     for (const [tier, preV2, inV2, inV3] of CASES) {
         describe(tier, () => {
             it(`coach creado ANTES del corte v2 conserva ${preV2} (string ISO)`, () => {
-                expect(tierMaxClientsFor(tier, BEFORE_V2_ISO)).toBe(preV2)
-                expect(tierMaxClientsFor(tier, LAST_PRE_V2_ISO)).toBe(preV2)
+                expect(tierMaxClientsFor(tier, BEFORE_V2_ISO, true)).toBe(preV2)
+                expect(tierMaxClientsFor(tier, LAST_PRE_V2_ISO, true)).toBe(preV2)
             })
 
             it(`coach creado en la ventana v2 (18-08 a 20-08) entra con ${inV2}`, () => {
-                expect(tierMaxClientsFor(tier, FIRST_V2_ISO)).toBe(inV2)
-                expect(tierMaxClientsFor(tier, LAST_V2_ISO)).toBe(inV2)
+                expect(tierMaxClientsFor(tier, FIRST_V2_ISO, true)).toBe(inV2)
+                expect(tierMaxClientsFor(tier, LAST_V2_ISO, true)).toBe(inV2)
             })
 
             it(`coach creado DESDE el corte v3 entra con ${inV3}`, () => {
-                expect(tierMaxClientsFor(tier, FIRST_V3_ISO)).toBe(inV3)
-                expect(tierMaxClientsFor(tier, AFTER_V3_ISO)).toBe(inV3)
+                expect(tierMaxClientsFor(tier, FIRST_V3_ISO, true)).toBe(inV3)
+                expect(tierMaxClientsFor(tier, AFTER_V3_ISO, true)).toBe(inV3)
             })
 
             it('acepta Date además de string, en los 3 tramos', () => {
-                expect(tierMaxClientsFor(tier, new Date(BEFORE_V2_ISO))).toBe(preV2)
-                expect(tierMaxClientsFor(tier, new Date(LAST_V2_ISO))).toBe(inV2)
-                expect(tierMaxClientsFor(tier, new Date(AFTER_V3_ISO))).toBe(inV3)
+                expect(tierMaxClientsFor(tier, new Date(BEFORE_V2_ISO), true)).toBe(preV2)
+                expect(tierMaxClientsFor(tier, new Date(LAST_V2_ISO), true)).toBe(inV2)
+                expect(tierMaxClientsFor(tier, new Date(AFTER_V3_ISO), true)).toBe(inV3)
             })
 
             it('fecha null ⇒ tratar como coach PRE-v2 (fail-safe generoso)', () => {
-                expect(tierMaxClientsFor(tier, null)).toBe(preV2)
+                expect(tierMaxClientsFor(tier, null, true)).toBe(preV2)
             })
 
             it('fecha undefined ⇒ tratar como coach PRE-v2 (fail-safe generoso)', () => {
-                expect(tierMaxClientsFor(tier, undefined)).toBe(preV2)
+                expect(tierMaxClientsFor(tier, undefined, true)).toBe(preV2)
             })
 
             it('fecha inválida ⇒ tratar como coach PRE-v2 (fail-safe generoso)', () => {
-                expect(tierMaxClientsFor(tier, 'no-es-una-fecha')).toBe(preV2)
-                expect(tierMaxClientsFor(tier, '')).toBe(preV2)
-                expect(tierMaxClientsFor(tier, new Date('invalid'))).toBe(preV2)
+                expect(tierMaxClientsFor(tier, 'no-es-una-fecha', true)).toBe(preV2)
+                expect(tierMaxClientsFor(tier, '', true)).toBe(preV2)
+                expect(tierMaxClientsFor(tier, new Date('invalid'), true)).toBe(preV2)
             })
         })
     }
 
     it('el corte v2 es inclusivo: creado EXACTO en el corte ⇒ límites v2; 1ms antes ⇒ pre-v2', () => {
-        expect(tierMaxClientsFor('pro', PRICING_V2_CUTOVER)).toBe(25)
-        expect(tierMaxClientsFor('pro', new Date(Date.parse(PRICING_V2_CUTOVER) - 1))).toBe(30)
-        expect(tierMaxClientsFor('free', PRICING_V2_CUTOVER)).toBe(2)
-        expect(tierMaxClientsFor('free', new Date(Date.parse(PRICING_V2_CUTOVER) - 1))).toBe(3)
+        expect(tierMaxClientsFor('pro', PRICING_V2_CUTOVER, true)).toBe(25)
+        expect(tierMaxClientsFor('pro', new Date(Date.parse(PRICING_V2_CUTOVER) - 1), true)).toBe(30)
+        expect(tierMaxClientsFor('free', PRICING_V2_CUTOVER, true)).toBe(2)
+        expect(tierMaxClientsFor('free', new Date(Date.parse(PRICING_V2_CUTOVER) - 1), true)).toBe(3)
     })
 
     it('el corte v3 es inclusivo: creado EXACTO en el corte ⇒ free 1; 1ms antes ⇒ free 2', () => {
-        expect(tierMaxClientsFor('free', PRICING_V3_CUTOVER)).toBe(1)
-        expect(tierMaxClientsFor('free', new Date(Date.parse(PRICING_V3_CUTOVER) - 1))).toBe(2)
+        expect(tierMaxClientsFor('free', PRICING_V3_CUTOVER, true)).toBe(1)
+        expect(tierMaxClientsFor('free', new Date(Date.parse(PRICING_V3_CUTOVER) - 1), true)).toBe(2)
         // pro/elite NO se mueven en v3: el corte solo baja el free.
-        expect(tierMaxClientsFor('pro', new Date(Date.parse(PRICING_V3_CUTOVER) - 1))).toBe(25)
-        expect(tierMaxClientsFor('elite', new Date(Date.parse(PRICING_V3_CUTOVER) - 1))).toBe(60)
+        expect(tierMaxClientsFor('pro', new Date(Date.parse(PRICING_V3_CUTOVER) - 1), true)).toBe(25)
+        expect(tierMaxClientsFor('elite', new Date(Date.parse(PRICING_V3_CUTOVER) - 1), true)).toBe(60)
     })
 
     it('growth/scale (legacy puros) mantienen su techo en los 3 tramos', () => {
         for (const date of [BEFORE_V2_ISO, LAST_V2_ISO, AFTER_V3_ISO, null]) {
-            expect(tierMaxClientsFor('growth', date)).toBe(120)
-            expect(tierMaxClientsFor('scale', date)).toBe(500)
+            expect(tierMaxClientsFor('growth', date, true)).toBe(120)
+            expect(tierMaxClientsFor('scale', date, true)).toBe(500)
         }
     })
 
     it('tier fuera del union (string arbitrario de DB) cae al piso de free de SU tramo, no crashea', () => {
-        expect(tierMaxClientsFor('enterprise' as SubscriptionTier, BEFORE_V2_ISO)).toBe(3)
-        expect(tierMaxClientsFor('enterprise' as SubscriptionTier, LAST_V2_ISO)).toBe(2)
-        expect(tierMaxClientsFor('enterprise' as SubscriptionTier, AFTER_V3_ISO)).toBe(1)
+        expect(tierMaxClientsFor('enterprise' as SubscriptionTier, BEFORE_V2_ISO, true)).toBe(3)
+        expect(tierMaxClientsFor('enterprise' as SubscriptionTier, LAST_V2_ISO, true)).toBe(2)
+        expect(tierMaxClientsFor('enterprise' as SubscriptionTier, AFTER_V3_ISO, true)).toBe(1)
     })
 })
 
 describe('TIER_CONFIG.maxClients — catálogo de VENTA (coaches nuevos)', () => {
-    it('free 1 (pricing v3) / pro 25 / elite 60; growth/scale intactos', () => {
+    it('free 1 (pricing v3) / pro 10 (pricing v4) / elite 60; growth/scale intactos', () => {
         expect(getTierMaxClients('free')).toBe(1)
-        expect(getTierMaxClients('pro')).toBe(25)
+        expect(getTierMaxClients('pro')).toBe(10)
         expect(getTierMaxClients('elite')).toBe(60)
         expect(getTierMaxClients('growth')).toBe(120)
         expect(getTierMaxClients('scale')).toBe(500)
@@ -169,13 +173,13 @@ describe('SALE_TIERS — la venta es free/pro/elite', () => {
         expect((TIER_CONFIG as Record<string, unknown>).starter).toBeUndefined()
     })
 
-    it('getRecommendedTier ya no recomienda starter: 2..25 alumnos ⇒ pro (free topa en 1)', () => {
+    it('getRecommendedTier ya no recomienda starter: 2..10 alumnos ⇒ pro (free topa en 1, pricing v4)', () => {
         expect(getRecommendedTier(0)).toBe('free')
         expect(getRecommendedTier(1)).toBe('free')
         expect(getRecommendedTier(2)).toBe('pro')
         expect(getRecommendedTier(8)).toBe('pro')
-        expect(getRecommendedTier(25)).toBe('pro')
-        expect(getRecommendedTier(26)).toBe('elite')
+        expect(getRecommendedTier(10)).toBe('pro')
+        expect(getRecommendedTier(11)).toBe('elite')
         expect(getRecommendedTier(60)).toBe('elite')
         // sobre el techo de elite: fallback elite (el puente Teams lo maneja la UI)
         expect(getRecommendedTier(61)).toBe('elite')
@@ -184,31 +188,31 @@ describe('SALE_TIERS — la venta es free/pro/elite', () => {
 
 describe('getRecommendedTierFor — recomendación con grandfather (waves B)', () => {
     it('coach VIEJO con 28 alumnos ⇒ pro (su límite real es 30, no 25)', () => {
-        expect(getRecommendedTierFor(28, BEFORE_V2_ISO)).toBe('pro')
+        expect(getRecommendedTierFor(28, BEFORE_V2_ISO, true)).toBe('pro')
         // El mismo conteo para un coach de la ventana v2 o de v3 ⇒ elite (pro nuevo tope 25).
-        expect(getRecommendedTierFor(28, LAST_V2_ISO)).toBe('elite')
-        expect(getRecommendedTierFor(28, AFTER_V3_ISO)).toBe('elite')
+        expect(getRecommendedTierFor(28, LAST_V2_ISO, true)).toBe('elite')
+        expect(getRecommendedTierFor(28, AFTER_V3_ISO, true)).toBe('elite')
     })
 
     it('coach VIEJO con 3 alumnos ⇒ free (límite viejo 3); en v2/v3 con 3 ⇒ pro', () => {
-        expect(getRecommendedTierFor(3, BEFORE_V2_ISO)).toBe('free')
-        expect(getRecommendedTierFor(3, LAST_V2_ISO)).toBe('pro')
-        expect(getRecommendedTierFor(3, AFTER_V3_ISO)).toBe('pro')
+        expect(getRecommendedTierFor(3, BEFORE_V2_ISO, true)).toBe('free')
+        expect(getRecommendedTierFor(3, LAST_V2_ISO, true)).toBe('pro')
+        expect(getRecommendedTierFor(3, AFTER_V3_ISO, true)).toBe('pro')
     })
 
     it('2 alumnos: free en la ventana v2 (tope 2), pro desde v3 (tope 1)', () => {
-        expect(getRecommendedTierFor(2, LAST_V2_ISO)).toBe('free')
-        expect(getRecommendedTierFor(2, FIRST_V3_ISO)).toBe('pro')
+        expect(getRecommendedTierFor(2, LAST_V2_ISO, true)).toBe('free')
+        expect(getRecommendedTierFor(2, FIRST_V3_ISO, true)).toBe('pro')
     })
 
     it('fecha null/desconocida ⇒ fail-safe pre-v2 (mismo criterio que tierMaxClientsFor)', () => {
-        expect(getRecommendedTierFor(28, null)).toBe('pro')
-        expect(getRecommendedTierFor(3, undefined)).toBe('free')
+        expect(getRecommendedTierFor(28, null, true)).toBe('pro')
+        expect(getRecommendedTierFor(3, undefined, true)).toBe('free')
     })
 
     it('sobre el techo de elite en los 3 tramos ⇒ elite (el puente Teams lo maneja la UI)', () => {
-        expect(getRecommendedTierFor(150, BEFORE_V2_ISO)).toBe('elite')
-        expect(getRecommendedTierFor(150, LAST_V2_ISO)).toBe('elite')
-        expect(getRecommendedTierFor(150, AFTER_V3_ISO)).toBe('elite')
+        expect(getRecommendedTierFor(150, BEFORE_V2_ISO, true)).toBe('elite')
+        expect(getRecommendedTierFor(150, LAST_V2_ISO, true)).toBe('elite')
+        expect(getRecommendedTierFor(150, AFTER_V3_ISO, true)).toBe('elite')
     })
 })

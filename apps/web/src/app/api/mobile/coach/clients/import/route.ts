@@ -252,7 +252,7 @@ export async function POST(request: NextRequest) {
         // Mismo contrato que el alta unitaria y que el import web: la columna GANA (ahí vive el
         // grandfather de Pricing v3) y el fallback es la escalera de fecha del coach, jamás el
         // catálogo de venta plano (le daría 1 a un free viejo con cupo 3 por uso).
-        const maxClients = coach?.max_clients ?? tierMaxClientsFor(tier, coach?.created_at)
+        const maxClients = coach?.max_clients ?? tierMaxClientsFor(tier, coach?.created_at, null)
         const { count, error: countError } = await admin
             .from('clients')
             .select('id', { count: 'exact', head: true })

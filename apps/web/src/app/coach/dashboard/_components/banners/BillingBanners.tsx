@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { AlertTriangle, Clock } from 'lucide-react'
-import { getRecommendedTier, TIER_CONFIG } from '@/lib/constants'
+import { getRecommendedTierFor, TIER_CONFIG, tierMaxClientsFor } from '@/lib/constants'
 import { formatStudentAccessDate, resolveStudentGraceEndsAt } from '@/lib/student-access'
 
 interface Props {
@@ -17,9 +17,16 @@ interface Props {
      * gracia de alumnos ancla en currentPeriodEnd (coalesce espejo de la RLS).
      */
     paidAccessEndedAt?: string | null
+    /**
+     * Grandfather (pricing v2 fecha + v4 compra): la recomendación y el «hasta N» se miden con el cupo
+     * que ESTE coach recibiría al contratar — un ex-Pro con 15 alumnos ve Pro (hasta 25/30), no Elite.
+     * Ausentes ⇒ fail-safe generoso (igual que tierMaxClientsFor).
+     */
+    coachCreatedAt?: string | null
+    paidCapsGrandfathered?: boolean | null
 }
 
-export function BillingBanners({ subscriptionStatus, currentPeriodEnd, trialEndsAt, activeClientCount = 0, paidAccessEndedAt = null }: Props) {
+export function BillingBanners({ subscriptionStatus, currentPeriodEnd, trialEndsAt, activeClientCount = 0, paidAccessEndedAt = null, coachCreatedAt = null, paidCapsGrandfathered = null }: Props) {
     const [nowMs, setNowMs] = useState<number | null>(null)
 
     useEffect(() => {
@@ -68,7 +75,7 @@ export function BillingBanners({ subscriptionStatus, currentPeriodEnd, trialEnds
     if (canceledGrace) {
         const days = Math.max(0, Math.ceil((new Date(currentPeriodEnd!).getTime() - nowMs) / 86400000))
         const showRec = days <= 7 && activeClientCount > 0
-        const recTier = showRec ? getRecommendedTier(activeClientCount) : null
+        const recTier = showRec ? getRecommendedTierFor(activeClientCount, coachCreatedAt, paidCapsGrandfathered) : null
         const recConfig = recTier ? TIER_CONFIG[recTier] : null
         return (
             <Banner tone="warn" icon={<Clock className="h-4 w-4" />}>
@@ -76,7 +83,7 @@ export function BillingBanners({ subscriptionStatus, currentPeriodEnd, trialEnds
                 {studentsPressure}
                 {showRec && recConfig && recTier ? (
                     <span className="text-xs opacity-80">
-                        Con {activeClientCount} alumnos: <strong>Plan {recConfig.label}</strong> (hasta {recConfig.maxClients}) ·{' '}
+                        Con {activeClientCount} alumnos: <strong>Plan {recConfig.label}</strong> (hasta {tierMaxClientsFor(recTier, coachCreatedAt, paidCapsGrandfathered)}) ·{' '}
                         <Link href={`/coach/reactivate?tier=${recTier}`} className="underline font-semibold">
                             Activar {recConfig.label}
                         </Link>
@@ -91,14 +98,14 @@ export function BillingBanners({ subscriptionStatus, currentPeriodEnd, trialEnds
     if (trialActive) {
         const days = Math.max(0, Math.ceil((new Date(trialEndsAt!).getTime() - nowMs) / 86400000))
         const showRec = days <= 7 && activeClientCount > 0
-        const recTier = showRec ? getRecommendedTier(activeClientCount) : null
+        const recTier = showRec ? getRecommendedTierFor(activeClientCount, coachCreatedAt, paidCapsGrandfathered) : null
         const recConfig = recTier ? TIER_CONFIG[recTier] : null
         return (
             <Banner tone="info" icon={<Clock className="h-4 w-4" />}>
                 <span>Periodo de prueba · {days} dia{days === 1 ? '' : 's'} restantes.</span>
                 {showRec && recConfig && recTier ? (
                     <span className="text-xs opacity-80">
-                        Con {activeClientCount} alumnos: <strong>Plan {recConfig.label}</strong> (hasta {recConfig.maxClients}) ·{' '}
+                        Con {activeClientCount} alumnos: <strong>Plan {recConfig.label}</strong> (hasta {tierMaxClientsFor(recTier, coachCreatedAt, paidCapsGrandfathered)}) ·{' '}
                         <Link href={`/coach/reactivate?tier=${recTier}`} className="underline font-semibold">
                             Activar {recConfig.label}
                         </Link>

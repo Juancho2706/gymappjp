@@ -77,6 +77,8 @@ type CoachSubscription = {
     max_clients: number | null
     /** Ancla del grandfather de pricing v2: los límites por tier salen de tierMaxClientsFor(tier, created_at). */
     created_at?: string | null
+    /** Pricing v4: pagador al corte v4 ⇒ conserva los cupos pagos previos (pro 30/25). */
+    paid_caps_grandfathered?: boolean | null
     billing_cycle: string
     current_period_end: string | null
     payment_provider: string
@@ -555,11 +557,12 @@ export function SubscriptionContent({
     const coachTier = (coach?.subscription_tier ?? 'free') as SubscriptionTier
     // Límite de alumnos de ESTE coach para un tier dado (grandfather pricing v2, P2): para su tier
     // ACTUAL la columna `max_clients` persiste el cupo efectivo y GANA; para cualquier otro tier
-    // (destino de un cambio) se resuelve con tierMaxClientsFor + created_at — espejo exacto del
+    // (destino de un cambio) se resuelve con tierMaxClientsFor + created_at + paid_caps_grandfathered
+    // (pricing v4) — espejo exacto del
     // write-path de confirms y del guard OVER_CAPACITY del server. Un pro VIEJO ve/conserva 30.
     function coachLimitFor(t: SubscriptionTier): number {
         if (coach && t === coachTier && coach.max_clients != null) return coach.max_clients
-        return tierMaxClientsFor(t, coach?.created_at ?? null)
+        return tierMaxClientsFor(t, coach?.created_at ?? null, coach?.paid_caps_grandfathered ?? null)
     }
     // Dirección del cambio de plan elegido vs el tier vigente — bifurca el copy del modal (issue #1).
     // Espejo de comparePlanDirection del server: 'upgrade' cobra la diferencia prorrateada y activa

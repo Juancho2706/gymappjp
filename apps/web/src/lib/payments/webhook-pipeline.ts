@@ -231,7 +231,7 @@ export async function runWebhookPipeline(
     const { data: coach } = await admin
         .from('coaches')
         .select(
-            'id, created_at, full_name, subscription_status, subscription_tier, billing_cycle, current_period_end, subscription_mp_id, superseded_mp_preapproval_id, subscription_provider, subscription_provider_external_id'
+            'id, created_at, paid_caps_grandfathered, full_name, subscription_status, subscription_tier, billing_cycle, current_period_end, subscription_mp_id, superseded_mp_preapproval_id, subscription_provider, subscription_provider_external_id'
         )
         .eq('id', result.coachId)
         .maybeSingle()
@@ -722,8 +722,8 @@ export async function runWebhookPipeline(
                     .from('coaches')
                     .update({
                         subscription_tier: newTier,
-                        // Pricing v2 (P2): límite con grandfather (espejo de confirm-upgrade).
-                        max_clients: tierMaxClientsFor(newTier, coach.created_at),
+                        // Pricing v2 (P2) + v4: límite con grandfather (espejo de confirm-upgrade).
+                        max_clients: tierMaxClientsFor(newTier, coach.created_at, coach.paid_caps_grandfathered),
                         billing_cycle: cycle,
                         // status se mantiene (el upgrade no cambia el estado de la suscripción).
                     })
@@ -1171,8 +1171,9 @@ export async function runWebhookPipeline(
     if (isPaidLike && (checkoutId || hasResolvedPlan)) {
         coachUpdate.subscription_tier = tier
         coachUpdate.billing_cycle = billingCycle
-        // Pricing v2 (P2): límite con grandfather — un pro viejo que activa/renueva conserva 30.
-        coachUpdate.max_clients = tierMaxClientsFor(tier, coach.created_at)
+        // Pricing v2 (P2) + v4: límite con grandfather — un pro viejo que activa/renueva conserva 30
+        // (o 25); un coach sin `paid_caps_grandfathered` recibe el catálogo v4 (pro 10).
+        coachUpdate.max_clients = tierMaxClientsFor(tier, coach.created_at, coach.paid_caps_grandfathered)
         // subscription_mp_id: SOLO con un checkoutId real. Un `payment` sin `order.id` trae checkoutId
         // null → NO pisar el preapproval id vigente con null (lo dejaría sin con qué cobrar/reconciliar).
         if (checkoutId) {

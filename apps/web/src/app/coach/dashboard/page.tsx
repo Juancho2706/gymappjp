@@ -60,6 +60,7 @@ export default async function CoachDashboardPage() {
                 activeClientCount={activeClientCount}
                 coachMaxClients={coach.max_clients}
                 coachCreatedAt={coach.created_at ?? null}
+                paidCapsGrandfathered={coach.paid_caps_grandfathered ?? null}
                 emailVerified={emailVerified}
             />
         </Suspense>

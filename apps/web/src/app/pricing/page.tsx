@@ -130,6 +130,12 @@ function buildStructuredData() {
     return { softwareApplication, faqPage, breadcrumbList }
 }
 
+// Pricing v4: rangos de venta derivados del catálogo (Free 1 · Pro 2–10 · Elite 11–60).
+const PRO_LO = TIER_CONFIG.free.maxClients + 1
+const PRO_HI = TIER_CONFIG.pro.maxClients
+const ELITE_LO = PRO_HI + 1
+const ELITE_HI = TIER_CONFIG.elite.maxClients
+
 const planDisplay: Array<{
     id: SubscriptionTier
     description: string
@@ -151,7 +157,7 @@ const planDisplay: Array<{
     },
     {
         id: 'pro',
-        description: 'Hasta 25 alumnos · sin sello EVA',
+        description: `De ${PRO_LO} a ${PRO_HI} alumnos · sin sello EVA`,
         icon: Crown,
         color: 'text-violet-400',
         bg: 'bg-violet-500/10',
@@ -160,7 +166,7 @@ const planDisplay: Array<{
     },
     {
         id: 'elite',
-        description: 'Para negocios de 26 a 60 alumnos',
+        description: `Para negocios de ${ELITE_LO} a ${ELITE_HI} alumnos`,
         icon: Dumbbell,
         color: 'text-amber-400',
         bg: 'bg-amber-500/10',
@@ -321,7 +327,7 @@ function PlanCard({
 
             <h2 className="text-lg font-bold text-foreground mb-1">{tier.label}</h2>
             <p className="text-muted-foreground text-sm mb-3">{plan.description}</p>
-            {/* Rango de venta por plan (free «1 alumno» / pro «Hasta 25» / elite «26–60»).
+            {/* Rango de venta por plan (free «1 alumno» / pro «2–10» / elite «11–60», pricing v4).
                 Un coach grandfathered ve SU límite real en su panel, no este label. */}
             <p className="text-xs text-muted-foreground mb-3">
                 {TIER_STUDENT_RANGE_LABEL[plan.id]}

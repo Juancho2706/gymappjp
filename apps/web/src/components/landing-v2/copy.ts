@@ -16,6 +16,11 @@ import { getTierMaxClients, studentCountLabel } from '@eva/tiers'
 // El cupo Free se deriva del catálogo también acá: el ES del FAQ ya lo hacía, y dejar el EN con el
 // número escrito a mano reabre exactamente el drift que este barrido vino a cerrar (QA 17-08).
 const FREE_MAX_CLIENTS = getTierMaxClients('free')
+// Pricing v4: rangos de venta Pro (2–10) y Elite (11–60) derivados del catálogo, nunca a mano.
+const PRO_LO = FREE_MAX_CLIENTS + 1
+const PRO_HI = getTierMaxClients('pro')
+const ELITE_LO = PRO_HI + 1
+const ELITE_HI = getTierMaxClients('elite')
 
 export const EN_DICT: Record<string, string> = {
   nav_marca: 'Your brand',
@@ -103,15 +108,15 @@ export const EN_DICT: Record<string, string> = {
   pf_6: 'White-label: your logo and color',
   pf_cta: 'Start free',
   badge_pop: 'most popular',
-  pp_sub: 'Up to 25 clients and your app with no trace of EVA.',
-  pp_1: 'Up to 25 active clients',
+  pp_sub: `${PRO_LO} to ${PRO_HI} clients and your app with no trace of EVA.`,
+  pp_1: `${PRO_LO}–${PRO_HI} active clients`,
   pp_2: 'Nutrition plans included',
   pp_3: 'No “Made with EVA” badge',
   pp_4: 'Check-ins, progress and alerts',
   pp_5: '4 professional modules included',
   pp_cta: 'Choose Pro →',
   pe_sub: 'For established businesses with high client volume.',
-  pe_1: '26–60 active clients',
+  pe_1: `${ELITE_LO}–${ELITE_HI} active clients`,
   pe_2: 'Everything in Pro, more slots',
   pe_3: 'Annual prepay discounts',
   pe_4: 'Priority support',

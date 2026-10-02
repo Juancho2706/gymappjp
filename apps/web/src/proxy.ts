@@ -699,7 +699,7 @@ async function proxyInner(request: NextRequest) {
                 workspaceType: activeWorkspace?.type ?? null,
                 // Pricing v2 (P2): cupo free EFECTIVO — la columna gana; sin columna, el helper con
                 // la fecha de creación (un free VIEJO mide contra 3, uno nuevo contra 2).
-                freeClientLimit: coach.max_clients ?? tierMaxClientsFor('free', coach.created_at),
+                freeClientLimit: coach.max_clients ?? tierMaxClientsFor('free', coach.created_at, null),
             },
         )
         if (redirectPath && isNavigationRequest) {

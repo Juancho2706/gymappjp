@@ -12,8 +12,9 @@ import { tierMaxClientsFor, type SubscriptionTier } from '@/lib/constants'
  * Regla:
  *  - tier === el tier ACTUAL del coach ⇒ manda la columna (si trae un número usable). Un coach
  *    viejo en free con columna 3 debe seguir leyendo «Free: hasta 3 alumnos», no «hasta 1».
- *  - cualquier OTRO tier ⇒ todavía no hay columna para él: se proyecta con la escalera de fecha,
- *    que es exactamente el valor que el write-path grabará si contrata ese plan.
+ *  - cualquier OTRO tier ⇒ todavía no hay columna para él: se proyecta con la escalera de fecha
+ *    + la marca de grandfather de pricing v4 (`paidCapsGrandfathered`), que es exactamente el
+ *    valor que el write-path grabará si contrata ese plan.
  *
  * `coachMaxClients` no usable (null/undefined/NaN/negativo) ⇒ cae a la escalera (fail-safe: el
  * server revalida el cupo con la misma fuente antes de dejar crear a nadie).
@@ -23,11 +24,14 @@ export function effectiveTierLimit({
     currentTier,
     coachMaxClients,
     coachCreatedAt,
+    paidCapsGrandfathered,
 }: {
     tier: SubscriptionTier
     currentTier: SubscriptionTier
     coachMaxClients?: number | null
     coachCreatedAt?: string | null
+    /** Pricing v4: `coaches.paid_caps_grandfathered`. Ausente/null ⇒ fail-safe generoso. */
+    paidCapsGrandfathered?: boolean | null
 }): number {
     if (
         tier === currentTier &&
@@ -37,5 +41,5 @@ export function effectiveTierLimit({
     ) {
         return coachMaxClients
     }
-    return tierMaxClientsFor(tier, coachCreatedAt)
+    return tierMaxClientsFor(tier, coachCreatedAt, paidCapsGrandfathered)
 }

@@ -182,7 +182,7 @@ export async function POST(request: Request) {
         const { data: currentCoach } = await supabase
             .from('coaches')
             .select(
-                'created_at, subscription_status, subscription_tier, billing_cycle, current_period_end, subscription_mp_id, provider_customer_id, subscription_provider, subscription_provider_external_id'
+                'created_at, paid_caps_grandfathered, subscription_status, subscription_tier, billing_cycle, current_period_end, subscription_mp_id, provider_customer_id, subscription_provider, subscription_provider_external_id'
             )
             .eq('id', user.id)
             .maybeSingle()
@@ -442,7 +442,7 @@ export async function POST(request: Request) {
                 const activeClients = await countActiveStandaloneClients(admin, user.id)
                 // Pricing v2 (P2): el tope del tier DESTINO se mide con el grandfather del coach —
                 // un pro VIEJO admite 30 (no 25), así un elite viejo con 28 activos SÍ puede bajar a pro.
-                const maxClients = tierMaxClientsFor(tier, currentCoach?.created_at ?? null)
+                const maxClients = tierMaxClientsFor(tier, currentCoach?.created_at ?? null, currentCoach?.paid_caps_grandfathered ?? null)
                 if (maxClients < activeClients) {
                     return NextResponse.json(
                         {
@@ -713,7 +713,7 @@ export async function POST(request: Request) {
                 subscription_status: newStatus,
                 billing_cycle: billingCycle,
                 // Pricing v2 (P2): límite con grandfather — un coach viejo que (re)activa conserva su tope.
-                max_clients: tierMaxClientsFor(tier, currentCoach?.created_at ?? null),
+                max_clients: tierMaxClientsFor(tier, currentCoach?.created_at ?? null, currentCoach?.paid_caps_grandfathered ?? null),
                 payment_provider: provider.name,
                 provider_customer_id: checkout.checkoutId,
                 subscription_mp_id: null,
@@ -728,7 +728,7 @@ export async function POST(request: Request) {
                 subscription_status: newStatus,
                 billing_cycle: billingCycle,
                 // Pricing v2 (P2): límite con grandfather — un coach viejo que (re)activa conserva su tope.
-                max_clients: tierMaxClientsFor(tier, currentCoach?.created_at ?? null),
+                max_clients: tierMaxClientsFor(tier, currentCoach?.created_at ?? null, currentCoach?.paid_caps_grandfathered ?? null),
                 payment_provider: provider.name,
                 subscription_mp_id: checkout.checkoutId,
                 superseded_mp_preapproval_id: supersededForUpdate,

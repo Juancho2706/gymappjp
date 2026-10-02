@@ -107,7 +107,7 @@ export async function POST(request: Request) {
         const { data: coach } = await admin
             .from('coaches')
             .select(
-                'id, created_at, subscription_tier, billing_cycle, subscription_status, current_period_end, provider_customer_id, subscription_provider_external_id, subscription_mp_id'
+                'id, created_at, paid_caps_grandfathered, subscription_tier, billing_cycle, subscription_status, current_period_end, provider_customer_id, subscription_provider_external_id, subscription_mp_id'
             )
             .eq('id', user.id)
             .maybeSingle()
@@ -410,7 +410,7 @@ export async function POST(request: Request) {
                 subscription_tier: tier,
                 billing_cycle: cycle,
                 // Pricing v2 (P2): límite con grandfather — la fecha de creación del coach decide su tope.
-                max_clients: tierMaxClientsFor(tier, coach.created_at),
+                max_clients: tierMaxClientsFor(tier, coach.created_at, coach.paid_caps_grandfathered),
                 // Tarjeta enrolada (display-only, E2E QA: quedaba "Sin tarjeta registrada"): el
                 // getCustomerEnrollmentStatus de arriba ya trae marca+last4 de customer/get.
                 card_brand: enrollment.cardType,

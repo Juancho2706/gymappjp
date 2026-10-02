@@ -166,7 +166,7 @@ export async function createClientAction(
     const tier = (coach.subscription_tier ?? 'free') as SubscriptionTier
     // Pricing v2 (P2): la columna max_clients SIGUE ganando; el fallback usa el helper con la fecha
     // de creación (grandfather) — nunca el catálogo de venta plano para un coach existente.
-    const maxClients = coach.max_clients ?? tierMaxClientsFor(tier, coach.created_at)
+    const maxClients = coach.max_clients ?? tierMaxClientsFor(tier, coach.created_at, null)
     let activeClientsQuery = supabase
         .from('clients')
         .select('id', { count: 'exact', head: true })

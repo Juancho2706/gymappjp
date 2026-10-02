@@ -225,7 +225,7 @@ async function getWorkspaceCapacity(db: Db, actor: ClientArchiveActor): Promise<
     return {
       // Pricing v2 (P2): la columna max_clients SIGUE ganando; el fallback usa el helper con la
       // fecha de creación (grandfather) — nunca el catálogo de venta plano para un coach existente.
-      limit: data.max_clients ?? tierMaxClientsFor((data.subscription_tier ?? 'free') as SubscriptionTier, data.created_at),
+      limit: data.max_clients ?? tierMaxClientsFor((data.subscription_tier ?? 'free') as SubscriptionTier, data.created_at, null),
       label: 'tu plan actual',
     }
   }

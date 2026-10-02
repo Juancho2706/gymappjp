@@ -152,7 +152,7 @@ export default async function CoachLayout({
     // Sobre-límite: alumnos activos > cupo efectivo (override manual `max_clients` o, si falta, el
     // del tier PARA ESTE COACH — grandfather de pricing v2, no el catálogo de venta).
     const overLimitTier = parseSubscriptionTier(coach.subscription_tier)
-    const overLimitMax = coach.max_clients ?? tierMaxClientsFor(overLimitTier, coach.created_at)
+    const overLimitMax = coach.max_clients ?? tierMaxClientsFor(overLimitTier, coach.created_at, coach.paid_caps_grandfathered ?? null)
     const overLimit =
         activeStandaloneCount != null && activeStandaloneCount > overLimitMax
             // `currentTier` va crudo además del label: el banner necesita saber a qué plan
@@ -404,6 +404,7 @@ export default async function CoachLayout({
                                 tierLabel={overLimit.tierLabel}
                                 currentTier={overLimit.currentTier}
                                 coachCreatedAt={coach.created_at ?? null}
+                                paidCapsGrandfathered={coach.paid_caps_grandfathered ?? null}
                             />
                         )}
                         <CoachMainWrapper>

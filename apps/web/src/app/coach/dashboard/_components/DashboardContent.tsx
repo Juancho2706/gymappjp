@@ -21,6 +21,7 @@ export async function DashboardContent({
     activeClientCount,
     coachMaxClients,
     coachCreatedAt,
+    paidCapsGrandfathered,
     emailVerified,
 }: {
     userId: string
@@ -44,6 +45,8 @@ export async function DashboardContent({
     coachMaxClients?: number | null
     /** `coaches.created_at` — ancla del grandfather de pricing v2 si falta la columna. */
     coachCreatedAt?: string | null
+    /** `coaches.paid_caps_grandfathered` (pricing v4): pagador al corte v4 ⇒ cupos pagos previos. */
+    paidCapsGrandfathered?: boolean | null
     /**
      * `coaches.email_verified_at` resuelto a booleano (W3.11). `false` ⇒ banner de verificación
      * blanda. NUNCA sale de `auth.users.email_confirmed_at`: bajo D1 = A nace seteada para todos.
@@ -89,6 +92,7 @@ export async function DashboardContent({
             activeClientCount={activeClientCount}
             coachMaxClients={coachMaxClients}
             coachCreatedAt={coachCreatedAt}
+            paidCapsGrandfathered={paidCapsGrandfathered}
             emailVerified={emailVerified}
             workspaces={workspaces}
             domainsEnabled={domainsEnabled}

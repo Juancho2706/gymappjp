@@ -88,7 +88,7 @@ export async function checkJoinCapacity(admin: Admin, invite: JoinCapacityScope)
     const tier = (coach.subscription_tier ?? 'free') as SubscriptionTier
     // La columna gana; el fallback aplica el grandfather (P2). El `??` es defensivo:
     // la columna es NOT NULL en DB, pero un select parcial jamás debe inflar el límite.
-    const limit = coach.max_clients ?? tierMaxClientsFor(tier, coach.created_at)
+    const limit = coach.max_clients ?? tierMaxClientsFor(tier, coach.created_at, null)
 
     const { count, error: countError } = await admin
         .from('clients')

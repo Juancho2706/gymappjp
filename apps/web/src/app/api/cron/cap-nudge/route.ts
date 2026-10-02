@@ -345,7 +345,7 @@ async function runSweep(
     const atCap = candidates
         .map((coach) => {
             const tier = (coach.subscription_tier ?? 'free') as SubscriptionTier
-            const maxClients = coach.max_clients ?? tierMaxClientsFor(tier, coach.created_at)
+            const maxClients = coach.max_clients ?? tierMaxClientsFor(tier, coach.created_at, null)
             return { coach, tier, maxClients, activeCount: counts.get(coach.id) ?? 0 }
         })
         .filter((row) => isAtCap({ activeCount: row.activeCount, maxClients: row.maxClients }))

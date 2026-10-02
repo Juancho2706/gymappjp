@@ -34,7 +34,7 @@ export async function GET(req: Request) {
     // ── Block 1: expire overdue trials ────────────────────────────────────────
     const { data: overdueTrials, error: overdueErr } = await admin
         .from('coaches')
-        .select('id, created_at, full_name, trial_warning_days_sent, subscription_tier, payment_provider')
+        .select('id, created_at, paid_caps_grandfathered, full_name, trial_warning_days_sent, subscription_tier, payment_provider')
         .eq('subscription_status', 'trialing')
         .or(
             'current_period_end.lt.now(),and(current_period_end.is.null,trial_ends_at.lt.now())'
@@ -58,7 +58,8 @@ export async function GET(req: Request) {
                     .update({
                         subscription_status: 'active',
                         subscription_tier: 'free',
-                        max_clients: tierMaxClientsFor('free', coach.created_at),
+                        // Free: la marca v4 no aplica (escalera de fecha 3/2/1).
+                        max_clients: tierMaxClientsFor('free', coach.created_at, null),
                         current_period_end: null,
                         trial_ends_at: null,
                     })
@@ -93,7 +94,7 @@ export async function GET(req: Request) {
                     const activeCount = clientCount ?? 0
                     // Pricing v2 (P2): recomendación y límite con el grandfather del coach — un
                     // pro VIEJO con 28 activos recibe «Pro (hasta 30)», no un salto a Elite.
-                    const recTier = getRecommendedTierFor(activeCount, coach.created_at)
+                    const recTier = getRecommendedTierFor(activeCount, coach.created_at, coach.paid_caps_grandfathered)
                     const recConfig = TIER_CONFIG[recTier]
 
                     const { subject, html } = buildTrialExpiredEmail({
@@ -102,7 +103,7 @@ export async function GET(req: Request) {
                         activeClientCount: activeCount,
                         recommendedTierLabel: recConfig.label,
                         recommendedTierSlug: recTier,
-                        recommendedMaxClients: tierMaxClientsFor(recTier, coach.created_at),
+                        recommendedMaxClients: tierMaxClientsFor(recTier, coach.created_at, coach.paid_caps_grandfathered),
                         recommendedPriceClp: recConfig.monthlyPriceClp,
                         reactivateUrl: `${reactivateBase}?tier=${recTier}`,
                     })
@@ -130,7 +131,7 @@ export async function GET(req: Request) {
     // ── Block 2: warning emails for trials expiring in ≤7 days ───────────────
     const { data: soonTrials, error: soonErr } = await admin
         .from('coaches')
-        .select('id, created_at, full_name, trial_ends_at, trial_warning_days_sent, subscription_tier')
+        .select('id, created_at, paid_caps_grandfathered, full_name, trial_ends_at, trial_warning_days_sent, subscription_tier')
         .eq('subscription_status', 'trialing')
         .gt('trial_ends_at', new Date().toISOString())
         .lt('trial_ends_at', new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString())
@@ -166,7 +167,7 @@ export async function GET(req: Request) {
 
             const activeCount = clientCount ?? 0
             // Pricing v2 (P2): misma recomendación grandfather-aware que el bloque de expirados.
-            const recTier = getRecommendedTierFor(activeCount, coach.created_at)
+            const recTier = getRecommendedTierFor(activeCount, coach.created_at, coach.paid_caps_grandfathered)
             const recConfig = TIER_CONFIG[recTier]
             const coachName = coach.full_name ?? 'Coach'
 
@@ -177,7 +178,7 @@ export async function GET(req: Request) {
                 activeClientCount: activeCount,
                 recommendedTierLabel: recConfig.label,
                 recommendedTierSlug: recTier,
-                recommendedMaxClients: tierMaxClientsFor(recTier, coach.created_at),
+                recommendedMaxClients: tierMaxClientsFor(recTier, coach.created_at, coach.paid_caps_grandfathered),
                 recommendedPriceClp: recConfig.monthlyPriceClp,
                 reactivateUrl: `${reactivateBase}?tier=${recTier}`,
             })

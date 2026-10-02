@@ -45,6 +45,11 @@ export type CoachSession = Pick<
      * catálogo de VENTA. Opcional/nullable: si la lectura falla, el helper cae al fail-safe generoso.
      */
     created_at?: string | null
+    /**
+     * `coaches.paid_caps_grandfathered` — pricing v4: pagador al corte v4 ⇒ al proyectar un tier pago
+     * conserva los cupos previos (pro 30/25). null/ausente ⇒ fail-safe generoso.
+     */
+    paid_caps_grandfathered?: boolean | null
 }
 
 /**
@@ -67,13 +72,14 @@ export const getCoach = cache(async (): Promise<CoachSession | null> => {
     // columna falta.
     const [row, capRes] = await Promise.all([
         findCoachById(supabase, userId),
-        supabase.from('coaches').select('max_clients, created_at').eq('id', userId).maybeSingle(),
+        supabase.from('coaches').select('max_clients, created_at, paid_caps_grandfathered').eq('id', userId).maybeSingle(),
     ])
     if (!row) return null
     return {
         ...row,
         max_clients: capRes.data?.max_clients ?? null,
         created_at: capRes.data?.created_at ?? null,
+        paid_caps_grandfathered: capRes.data?.paid_caps_grandfathered ?? null,
     } as CoachSession
 })
 

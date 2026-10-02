@@ -163,8 +163,9 @@ export async function POST(request: Request) {
                 .from('coaches')
                 .update({
                     subscription_tier: ref.newTier,
-                    // Pricing v2 (P2): límite con grandfather — un coach viejo que sube a elite recibe 100.
-                    max_clients: tierMaxClientsFor(ref.newTier, coach.created_at),
+                    // Pricing v2 (P2) + v4: límite con grandfather — un pagador viejo que sube a elite
+                    // recibe 100 (pre-v2) o 60; sin grandfather v4, el catálogo vigente.
+                    max_clients: tierMaxClientsFor(ref.newTier, coach.created_at, coach.paid_caps_grandfathered),
                     billing_cycle: ref.cycle,
                     // status se mantiene 'active' (no se toca): el upgrade no cambia el estado.
                 })

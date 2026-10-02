@@ -41,9 +41,9 @@ describe('subscription constants', () => {
     })
 
     it('returns max clients and capabilities by tier', () => {
-        // Pricing v2: catálogo de VENTA (coaches nuevos) — pro baja a 25; los pro
-        // existentes retienen 30 vía tierMaxClientsFor (ver packages/tiers/pricing-v2.test.ts).
-        expect(getTierMaxClients('pro')).toBe(25)
+        // Pricing v4: catálogo de VENTA (coaches nuevos) — pro baja a 10; los pagadores al corte
+        // v4 retienen 30/25 vía tierMaxClientsFor (ver packages/tiers/pricing-v4.test.ts).
+        expect(getTierMaxClients('pro')).toBe(10)
         expect(getTierCapabilities('pro').canUseNutrition).toBe(true)
         expect(getTierCapabilities('pro').canUseBranding).toBe(true)
     })
@@ -140,10 +140,11 @@ describe('getRecommendedTier (SALE_TIERS only, fallback elite)', () => {
     it('recommends the smallest sale tier that fits the client count (pricing v3: sin starter)', () => {
         expect(getRecommendedTier(0)).toBe('free')
         expect(getRecommendedTier(1)).toBe('free')
-        // free topa en 1 y starter ya no existe como plan: 2..25 ⇒ pro
+        // free topa en 1 y starter ya no existe como plan: 2..10 ⇒ pro (pricing v4)
         expect(getRecommendedTier(2)).toBe('pro')
         expect(getRecommendedTier(8)).toBe('pro')
-        expect(getRecommendedTier(25)).toBe('pro')
+        expect(getRecommendedTier(10)).toBe('pro')
+        expect(getRecommendedTier(11)).toBe('elite')
         expect(getRecommendedTier(40)).toBe('elite')
     })
 

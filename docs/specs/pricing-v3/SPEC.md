@@ -127,3 +127,5 @@ semana del 17-08: 14 (vs 6 en las 7 semanas previas). ~6% de las altas históric
 en 2 semanas.
 
 > Superada en la parte de Starter por [retiro-starter-y-enterprise](../retiro-starter-y-enterprise/SPEC.md) (2026-09-05): starter salió del union, del catálogo y de la DB por defecto.
+
+> Superada en el cupo de Pro/Elite por [pricing-v4](../pricing-v4/SPEC.md) (2026-10-02): Pro 2–10 · Elite 11–60, con grandfather por compra (`coaches.paid_caps_grandfathered`).

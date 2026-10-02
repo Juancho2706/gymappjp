@@ -83,6 +83,11 @@ interface ReactivateClientProps {
      */
     coachCreatedAt?: string | null
     /**
+     * `coaches.paid_caps_grandfathered` — pricing v4: un ex-pagador (marcado al corte v4) que
+     * reactiva un plan pago recupera sus cupos previos (pro 30/25). null ⇒ fail-safe generoso.
+     */
+    paidCapsGrandfathered?: boolean | null
+    /**
      * `coaches.max_clients` — el cupo REAL del coach en su tier ACTUAL.
      *
      * En Pricing v3 el grandfather vive en esta COLUMNA, no en la fecha: el backfill del día D
@@ -106,7 +111,7 @@ interface ReactivateClientProps {
     canChangeCard?: boolean
 }
 
-export function ReactivateClient({ currentTier, activeClientCount, activeClients = [], subscriptionStatus, currentPeriodEnd = null, paidAccessEndedAt = null, couponsEnabled = false, coachCreatedAt = null, coachMaxClients = null, activeDiscount = null, canChangeCard = false }: ReactivateClientProps) {
+export function ReactivateClient({ currentTier, activeClientCount, activeClients = [], subscriptionStatus, currentPeriodEnd = null, paidAccessEndedAt = null, couponsEnabled = false, coachCreatedAt = null, paidCapsGrandfathered = null, coachMaxClients = null, activeDiscount = null, canChangeCard = false }: ReactivateClientProps) {
     const searchParams = useSearchParams()
     // E1 (P8): checkout_started gated por consentimiento (no-op si el coach no acepto cookies).
     const captureCheckoutStarted = useCaptureCheckoutStarted()
@@ -122,8 +127,8 @@ export function ReactivateClient({ currentTier, activeClientCount, activeClients
     // write-path (activate-free / confirms de pago) escribirá en `max_clients` al contratarlos.
     const limitFor = useCallback(
         (t: SubscriptionTier) =>
-            effectiveTierLimit({ tier: t, currentTier, coachMaxClients, coachCreatedAt }),
-        [coachCreatedAt, coachMaxClients, currentTier]
+            effectiveTierLimit({ tier: t, currentTier, coachMaxClients, coachCreatedAt, paidCapsGrandfathered }),
+        [coachCreatedAt, coachMaxClients, currentTier, paidCapsGrandfathered]
     )
 
     // Pre-select the minimum viable tier for the coach's current client count,

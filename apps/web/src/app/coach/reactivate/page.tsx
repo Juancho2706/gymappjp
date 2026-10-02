@@ -40,6 +40,7 @@ export default async function ReactivatePage() {
                 currentPeriodEnd={coach?.current_period_end ?? null}
                 paidAccessEndedAt={coach?.paid_access_ended_at ?? null}
                 coachCreatedAt={coach?.created_at ?? null}
+                paidCapsGrandfathered={coach?.paid_caps_grandfathered ?? null}
                 coachMaxClients={coach?.max_clients ?? null}
                 recentlyCancelledAddons={recentlyCancelledAddons}
                 couponsEnabled={couponsEnabled}

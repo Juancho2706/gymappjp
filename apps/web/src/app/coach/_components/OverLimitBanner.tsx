@@ -33,6 +33,8 @@ interface Props {
      * ⇒ fail-safe generoso (límites viejos), igual que en el resto del sistema.
      */
     coachCreatedAt?: string | null
+    /** Pricing v4: `coaches.paid_caps_grandfathered` (pagador al corte v4). Ausente ⇒ generoso. */
+    paidCapsGrandfathered?: boolean | null
 }
 
 /**
@@ -41,7 +43,7 @@ interface Props {
  * que calce o archivar alumnos. Se auto-oculta en las rutas donde estorba (pago, reactivación,
  * onboarding), donde el coach ya está resolviendo el cupo.
  */
-export function OverLimitBanner({ activeCount, maxClients, tierLabel, currentTier, coachCreatedAt }: Props) {
+export function OverLimitBanner({ activeCount, maxClients, tierLabel, currentTier, coachCreatedAt, paidCapsGrandfathered }: Props) {
     const pathname = usePathname()
     if (
         pathname.startsWith('/coach/subscription') ||
@@ -57,7 +59,7 @@ export function OverLimitBanner({ activeCount, maxClients, tierLabel, currentTie
     // escalera mentía dos veces: prometía «hasta 30» a un pro cuya columna dice 25, y podía
     // recomendarle su propio plan actual como salida.
     const limitFor = (t: SubscriptionTier) =>
-        effectiveTierLimit({ tier: t, currentTier, coachMaxClients: maxClients, coachCreatedAt })
+        effectiveTierLimit({ tier: t, currentTier, coachMaxClients: maxClients, coachCreatedAt, paidCapsGrandfathered })
 
     // Plan recomendado: el más barato de VENTA cuyo cupo efectivo alcanza a sus alumnos actuales.
     const paidTiers = SALE_TIERS.filter((t) => TIER_CONFIG[t].monthlyPriceClp > 0)

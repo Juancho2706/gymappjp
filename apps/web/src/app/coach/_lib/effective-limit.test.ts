@@ -42,7 +42,7 @@ describe('effectiveTierLimit', () => {
                 coachMaxClients: 3,
                 coachCreatedAt: PRE_V2,
             })
-        ).toBe(tierMaxClientsFor('pro', PRE_V2))
+        ).toBe(tierMaxClientsFor('pro', PRE_V2, null))
     })
 
     it('sin columna usable cae a la escalera aunque el tier sea el actual', () => {
@@ -54,7 +54,7 @@ describe('effectiveTierLimit', () => {
                     coachMaxClients,
                     coachCreatedAt: POST_V3,
                 })
-            ).toBe(tierMaxClientsFor('free', POST_V3))
+            ).toBe(tierMaxClientsFor('free', POST_V3, null))
         }
     })
 
@@ -69,9 +69,30 @@ describe('effectiveTierLimit', () => {
         ).toBe(1)
     })
 
+    it('pricing v4: proyecta Pro con la marca de grandfather (ex-pagador 30, coach sin marca 10)', () => {
+        expect(
+            effectiveTierLimit({
+                tier: 'pro',
+                currentTier: 'free',
+                coachMaxClients: 3,
+                coachCreatedAt: PRE_V2,
+                paidCapsGrandfathered: true,
+            })
+        ).toBe(30)
+        expect(
+            effectiveTierLimit({
+                tier: 'pro',
+                currentTier: 'free',
+                coachMaxClients: 3,
+                coachCreatedAt: PRE_V2,
+                paidCapsGrandfathered: false,
+            })
+        ).toBe(10)
+    })
+
     it('fecha ausente ⇒ fail-safe generoso (límites viejos), igual que tierMaxClientsFor', () => {
         expect(
             effectiveTierLimit({ tier: 'free', currentTier: 'pro', coachMaxClients: 25, coachCreatedAt: null })
-        ).toBe(tierMaxClientsFor('free', null))
+        ).toBe(tierMaxClientsFor('free', null, null))
     })
 })

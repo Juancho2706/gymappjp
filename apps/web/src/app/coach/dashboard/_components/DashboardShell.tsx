@@ -63,6 +63,8 @@ interface Props {
     coachMaxClients?: number | null
     /** `coaches.created_at`: ancla del grandfather de pricing v2 si faltara la columna. */
     coachCreatedAt?: string | null
+    /** `coaches.paid_caps_grandfathered` (pricing v4): pagador al corte v4 ⇒ cupos pagos previos. */
+    paidCapsGrandfathered?: boolean | null
     /**
      * `coaches.email_verified_at` ya resuelto a booleano por el RSC (W3.11). `false` ⇒ se pinta el
      * banner de verificación blanda. La señal NUNCA es `auth.users.email_confirmed_at`: bajo D1 = A
@@ -88,6 +90,7 @@ export function DashboardShell({
     activeClientCount,
     coachMaxClients,
     coachCreatedAt,
+    paidCapsGrandfathered = null,
     emailVerified = true,
     workspaces,
     domainsEnabled,
@@ -107,7 +110,7 @@ export function DashboardShell({
     // el banner tiene que hablar de SU cupo, no del de un coach nuevo.
     // `Math.max(1, …)`: el cupo ahora sale de una COLUMNA de DB y las barras dividen por él — un 0
     // suelto pintaría `NaN%`. Piso defensivo, no una regla de negocio.
-    const maxClients = Math.max(1, coachMaxClients ?? tierMaxClientsFor(subscriptionTier, coachCreatedAt))
+    const maxClients = Math.max(1, coachMaxClients ?? tierMaxClientsFor(subscriptionTier, coachCreatedAt, paidCapsGrandfathered))
     // Puente a Teams: mismo momento de ventas de siempre (~80% del techo) pero medido contra el
     // cupo real. Con el 80 escrito a mano el banner era INALCANZABLE — Elite hoy topa en 60 (el
     // gate de cupo corta antes de llegar a 80) y un grandfathered de 100 lo veía recién al 80%.
@@ -166,6 +169,8 @@ export function DashboardShell({
                         currentPeriodEnd={data.currentPeriodEnd}
                         trialEndsAt={data.trialEndsAt}
                         activeClientCount={data.kpi.totalClients}
+                        coachCreatedAt={coachCreatedAt ?? null}
+                        paidCapsGrandfathered={paidCapsGrandfathered}
                     />
                     {subscriptionTier === 'free' && (
                         <FreeTierBanner

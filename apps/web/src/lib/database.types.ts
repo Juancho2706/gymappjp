@@ -1461,6 +1461,7 @@ export type Database = {
           neutral_tint: boolean
           onboarding_guide: Json
           paid_access_ended_at: string | null
+          paid_caps_grandfathered: boolean
           payment_provider: string
           persona: string | null
           persona_also_other: boolean
@@ -1533,6 +1534,7 @@ export type Database = {
           neutral_tint?: boolean
           onboarding_guide?: Json
           paid_access_ended_at?: string | null
+          paid_caps_grandfathered?: boolean
           payment_provider?: string
           persona?: string | null
           persona_also_other?: boolean
@@ -1605,6 +1607,7 @@ export type Database = {
           neutral_tint?: boolean
           onboarding_guide?: Json
           paid_access_ended_at?: string | null
+          paid_caps_grandfathered?: boolean
           payment_provider?: string
           persona?: string | null
           persona_also_other?: boolean

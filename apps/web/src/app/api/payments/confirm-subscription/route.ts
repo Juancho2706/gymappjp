@@ -60,7 +60,7 @@ export async function POST(request: Request) {
         const { data: coach } = await admin
             .from('coaches')
             .select(
-                'id, created_at, subscription_tier, billing_cycle, subscription_mp_id, current_period_end, subscription_status, superseded_mp_preapproval_id, subscription_provider_external_id, provider_plan_id'
+                'id, created_at, paid_caps_grandfathered, subscription_tier, billing_cycle, subscription_mp_id, current_period_end, subscription_status, superseded_mp_preapproval_id, subscription_provider_external_id, provider_plan_id'
             )
             .eq('id', user.id)
             .maybeSingle()
@@ -239,7 +239,7 @@ export async function POST(request: Request) {
                 subscription_tier: tier,
                 billing_cycle: billingCycle,
                 // Pricing v2 (P2): límite con grandfather — un pro viejo que renueva/reactiva conserva 30.
-                max_clients: tierMaxClientsFor(tier, coach.created_at),
+                max_clients: tierMaxClientsFor(tier, coach.created_at, coach.paid_caps_grandfathered),
                 subscription_mp_id: preapprovalId,
                 // ── B3: al persistir un preapproval MP VIVO, el gateway dueño de la sub vuelve a MP y los
                 // refs Flow MUERTOS se limpian. Sin esto, un ex-coach Flow reactivado por MP quedaria con
