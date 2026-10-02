@@ -29,7 +29,7 @@ export function ExpiringPrograms({ items }: { items: ExpiringProgramItem[] }) {
                         return (
                             <Link
                                 key={p.id}
-                                href={p.clientId ? `/coach/clients/${p.clientId}` : '/coach/programs'}
+                                href={p.clientId ? `/coach/clients/${p.clientId}` : '/coach/workout-programs'}
                                 className={cn(
                                     'block rounded-control outline-none focus-visible:ring-[3px] focus-visible:ring-[var(--focus-ring)]',
                                     i > 0 && 'border-t border-border-subtle'

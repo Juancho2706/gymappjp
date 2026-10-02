@@ -243,3 +243,29 @@ describe('searchCoachWorkspace — forma y hrefs del resultado', () => {
         expect(Array.isArray(res.recipes)).toBe(true)
     })
 })
+
+describe('searchCoachWorkspace — alumno de ejemplo (W8.1.11)', () => {
+    it('rotula al alumno demo y deja al real sin sublabel', async () => {
+        const { db } = makeSupabaseMock({
+            clients: [
+                { id: 'c1', full_name: 'Matías (ejemplo)', is_demo: true },
+                { id: 'c2', full_name: 'Matilde Soto', is_demo: false },
+            ],
+            workout_programs: [],
+            exercises: [],
+            nutrition_recipes: [],
+        })
+        const res = await searchCoachWorkspace(db, {
+            coachId: COACH,
+            scope: { orgId: null, activeTeamId: null },
+            query: 'mat',
+        })
+        expect(res.clients[0]).toEqual({
+            id: 'c1',
+            label: 'Matías (ejemplo)',
+            sublabel: 'De ejemplo',
+            href: '/coach/clients/c1',
+        })
+        expect(res.clients[1]).toEqual({ id: 'c2', label: 'Matilde Soto', href: '/coach/clients/c2' })
+    })
+})
