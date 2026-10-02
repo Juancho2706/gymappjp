@@ -76,7 +76,7 @@ export default function ClientLoginForm({ coachSlug, primaryColor, brandName, lo
     // el mensaje del link vencido dejó de ser lo relevante.
     const notice = state?.error
         ? { error: state.error, action: state.action }
-        : getStudentLoginQueryNotice(errorCode)
+        : getStudentLoginQueryNotice(errorCode, coachSlug)
 
     useEffect(() => {
         if (state.success && state.redirectUrl) {

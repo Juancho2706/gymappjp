@@ -8,9 +8,10 @@
 //     cierra (`signOut({ scope: 'local' })`, decisión D4 = B) y se le devuelve una salida, no un
 //     error mudo. El vocabulario sale de `coaches.persona` (regla de producto 8: nada de «alumno»
 //     hardcodeado en copy nuevo).
-//  2. `getStudentLoginQueryNotice` — el `?error=` que el propio árbol nos manda por URL. Hoy solo
+//  2. `getStudentLoginQueryNotice` — el `?error=` que el propio árbol nos manda por URL:
 //     `vive_tu_app_expirado`, que emite `/vive-tu-app` cuando el magic link del demo venció o ya
-//     se usó; hasta ahora caía en un login pelado (callejón 4 de la SPEC).
+//     se usó (hasta entonces caía en un login pelado, callejón 4 de la SPEC), y `google_solo_coach`,
+//     que emite `resolvePostGoogleAuthUrl` cuando un alumno toca Google en el login de coach (02-10).
 //
 // Un código desconocido NO pinta nada: un `?error=` inventado en la barra no debe poder plantar
 // un banner rojo en la pantalla de marca del coach.
@@ -55,6 +56,7 @@ export function coachAccountMessage(persona?: string | null): string {
 
 export const STUDENT_LOGIN_ERROR_CODES = {
     VIVE_TU_APP_EXPIRADO: 'vive_tu_app_expirado',
+    GOOGLE_SOLO_COACH: 'google_solo_coach',
 } as const
 
 // El nombre del alumno de ejemplo NO se puede nombrar acá: cuando el `verifyOtp` falla, el route
@@ -67,9 +69,29 @@ const QUERY_NOTICES: Record<string, StudentLoginNotice> = {
     },
 }
 
+/**
+ * El alumno que tocó «Continuar con Google» en el login de COACH y `resolvePostGoogleAuthUrl` mandó
+ * a la puerta de su coach (02-10, caso Carolina/Movens). Google para alumnos sigue diferido: el aviso
+ * explica cómo entrar y la salida es recuperar la contraseña, que es lo que necesita quien venía
+ * entrando con Google y no la recuerda. Con `action` el bloque es neutro, no rojo: no es un error
+ * del alumno. Sin sustantivo de persona («alumno», «cliente»): regla de producto 8.
+ */
+function googleOnlyCoachNotice(coachSlug: string | null | undefined): StudentLoginNotice {
+    const slug = coachSlug?.trim()
+    return {
+        error: 'Entrar con Google es solo para cuentas de coach. Tú entras aquí con tu correo y tu contraseña.',
+        action: {
+            href: slug ? `/forgot-password?coach_slug=${encodeURIComponent(slug)}` : '/forgot-password',
+            label: '¿No recuerdas tu contraseña? Recupérala',
+        },
+    }
+}
+
 export function getStudentLoginQueryNotice(
     code: string | null | undefined,
+    coachSlug?: string | null,
 ): StudentLoginNotice | null {
     if (!code) return null
+    if (code === STUDENT_LOGIN_ERROR_CODES.GOOGLE_SOLO_COACH) return googleOnlyCoachNotice(coachSlug)
     return QUERY_NOTICES[code] ?? null
 }

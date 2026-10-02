@@ -21,6 +21,8 @@ const harness = vi.hoisted(() => {
         user: { id: USER_ID } as { id: string } | null,
         identities: ['email', 'google'] as string[],
         emailVerifiedAt: null as string | null,
+        /** 02-10, caso Carolina/Movens: el ALUMNO no tiene fila `coaches`. */
+        coachRowExists: true,
     }
     const tokensSeen: string[] = []
     const rotations: Array<{ id: string; password?: string }> = []
@@ -32,7 +34,10 @@ const harness = vi.hoisted(() => {
         from: (table: string) => ({
             select: () => ({
                 eq: () => ({
-                    maybeSingle: async () => ({ data: { email_verified_at: state.emailVerifiedAt } }),
+                    maybeSingle: async () => ({
+                        data: state.coachRowExists ? { email_verified_at: state.emailVerifiedAt } : null,
+                        error: null,
+                    }),
                 }),
             }),
             update: (patch: Record<string, unknown>) => ({
@@ -103,6 +108,7 @@ beforeEach(() => {
     state.user = { id: USER_ID }
     state.identities = ['email', 'google']
     state.emailVerifiedAt = null
+    state.coachRowExists = true
 })
 
 describe('POST /api/mobile/auth/google-link', () => {
@@ -200,6 +206,19 @@ describe('POST /api/mobile/auth/google-link', () => {
 
         expect(rotations).toHaveLength(1)
         expect(rotations[0].id).toBe(USER_ID)
+    })
+
+    it('NO rota al ALUMNO que toca Google en la pestaña de coach (sin fila `coaches`)', async () => {
+        // 02-10, caso Carolina/Movens: sin fila no hay sello, así que antes rotaba en CADA intento y
+        // GoTrue le cerraba todas las sesiones. Server-side: la app queda cubierta sin OTA.
+        state.coachRowExists = false
+
+        const res = await POST(request())
+
+        expect(res.status).toBe(200)
+        expect(rotations).toHaveLength(0)
+        expect(stamps).toHaveLength(0)
+        expect(capturePostHogServerEventMock).not.toHaveBeenCalled()
     })
 
     it('idempotente: la segunda llamada ya encuentra el correo sellado y no rota de nuevo', async () => {

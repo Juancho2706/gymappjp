@@ -20,33 +20,71 @@ const harness = vi.hoisted(() => {
         existingTrial: null as { id: string } | null,
         existingSlug: null as { id: string } | null,
         insertError: null as { message: string } | null,
+        /** 02-10: el usuario de la sesión ya es ALUMNO (fila `clients` o membresía). */
+        existingClient: null as { id: string } | null,
+        memberships: [] as Array<{ id: string }>,
+        clientLookupError: null as { message: string } | null,
+        membershipLookupError: null as { message: string } | null,
     }
+    const inserts: string[] = []
+    const revokedSessions: Array<{ jwt: string; scope: string }> = []
 
     const sendFreeCoachOnboardingEmailsMock = vi.fn(async () => undefined)
     const generateUniqueInviteCodeMock = vi.fn(async () => INVITE_CODE)
 
-    // Query builder mínimo: las tres lecturas del endpoint son `select().eq(col).maybeSingle()`.
+    // Query builder mínimo, por tabla: `coaches` lee por `id`/`trial_used_email`/`slug`; el cinturón
+    // alumno lee `clients` (`maybeSingle`) y `client_memberships` (`limit`).
     const adminStub = {
-        auth: { getUser: async () => ({ data: { user: state.tokenUser }, error: state.tokenError }) },
-        from: () => ({
+        auth: {
+            getUser: async () => ({ data: { user: state.tokenUser }, error: state.tokenError }),
+            admin: {
+                signOut: async (jwt: string, scope: string) => {
+                    revokedSessions.push({ jwt, scope })
+                    return { data: null, error: null }
+                },
+            },
+        },
+        from: (table: string) => ({
             select: () => ({
                 eq: (col: string) => ({
                     maybeSingle: async () => {
+                        if (table === 'clients') return { data: state.existingClient, error: state.clientLookupError }
                         if (col === 'id') return { data: state.existingCoach }
                         if (col === 'trial_used_email') return { data: state.existingTrial }
                         return { data: state.existingSlug }
                     },
+                    limit: async () => ({ data: state.memberships, error: state.membershipLookupError }),
                 }),
             }),
-            insert: async () => ({ error: state.insertError }),
+            insert: async () => {
+                inserts.push(table)
+                return { error: state.insertError }
+            },
         }),
     }
 
-    return { USER_ID, INVITE_CODE, adminStub, state, sendFreeCoachOnboardingEmailsMock, generateUniqueInviteCodeMock }
+    return {
+        USER_ID,
+        INVITE_CODE,
+        adminStub,
+        state,
+        inserts,
+        revokedSessions,
+        sendFreeCoachOnboardingEmailsMock,
+        generateUniqueInviteCodeMock,
+    }
 })
 
-const { USER_ID, INVITE_CODE, adminStub, state, sendFreeCoachOnboardingEmailsMock, generateUniqueInviteCodeMock } =
-    harness
+const {
+    USER_ID,
+    INVITE_CODE,
+    adminStub,
+    state,
+    inserts,
+    revokedSessions,
+    sendFreeCoachOnboardingEmailsMock,
+    generateUniqueInviteCodeMock,
+} = harness
 
 // Las factories de `vi.mock` se izan por encima del destructuring: leen `harness.*` directo.
 vi.mock('@/lib/supabase/admin-client', () => ({ createServiceRoleClient: () => harness.adminStub }))
@@ -76,6 +114,11 @@ vi.mock('@/lib/posthog/registration-events', () => ({
     captureCoachRegisteredServer: captureRegisteredMock,
 }))
 
+// W3.13 en el alta desde la app (02-10): desde que el aviso de entrada no rota sin fila `coaches`,
+// la rotación de quien ya tenía contraseña vive acá, cuando la fila nace. El helper tiene sus tests.
+const rotateMock = vi.hoisted(() => vi.fn(async () => ({ rotated: false as const, reason: 'no_email_identity' as const })))
+vi.mock('@/lib/auth/google-link-rotation', () => ({ rotatePasswordOnGoogleLink: rotateMock }))
+
 import { POST } from './route'
 
 function req(body: unknown, auth: string | null = 'Bearer ok', extraHeaders: Record<string, string> = {}) {
@@ -103,6 +146,12 @@ beforeEach(() => {
     state.existingTrial = null
     state.existingSlug = null
     state.insertError = null
+    state.existingClient = null
+    state.memberships = []
+    state.clientLookupError = null
+    state.membershipLookupError = null
+    inserts.length = 0
+    revokedSessions.length = 0
     sendFreeCoachOnboardingEmailsMock.mockResolvedValue(undefined)
     generateUniqueInviteCodeMock.mockResolvedValue(INVITE_CODE)
     vi.stubEnv('NEXT_PUBLIC_SITE_URL', 'https://www.eva-app.cl')
@@ -162,6 +211,95 @@ describe('POST /api/mobile/auth/complete-coach-onboarding', () => {
 
         expect(res.status).toBe(500)
         expect(sendFreeCoachOnboardingEmailsMock).not.toHaveBeenCalled()
+    })
+
+    it('alta OK: corre la rotación anti-takeover con `known: null` (no había fila ni casilla probada)', async () => {
+        const res = await POST(req(BODY))
+
+        expect(res.status).toBe(200)
+        expect(rotateMock).toHaveBeenCalledTimes(1)
+        expect(rotateMock).toHaveBeenCalledWith({
+            admin: adminStub,
+            userId: USER_ID,
+            verification: { source: 'known', emailVerifiedAt: null },
+            context: 'mobile_oauth_onboarding',
+        })
+    })
+
+    it('re-entrada o insert fallido: NO rota (la fila no la creó este request)', async () => {
+        state.existingCoach = { id: USER_ID, slug: 'studio-fuerza' }
+        await POST(req(BODY))
+        expect(rotateMock).not.toHaveBeenCalled()
+
+        state.existingCoach = null
+        state.insertError = { message: 'duplicate key' }
+        await POST(req(BODY))
+        expect(rotateMock).not.toHaveBeenCalled()
+    })
+
+    /**
+     * 02-10 — cinturón ALUMNO, gemelo de `oauth_session_is_client` (web). Hasta el 02-10 la rotación
+     * temprana de `google-link` mataba esta sesión y el alta respondía 401 por accidente; sin ese
+     * freno, el alumno que toca «Crear cuenta» → Google en la app quedaría alumno Y coach (doble rol
+     * irreversible) y con la clave rotada.
+     */
+    it('sesión de ALUMNO (fila `clients`): 409 SESSION_IS_CLIENT, sin insert, sin rotación, sin correo', async () => {
+        state.existingClient = { id: USER_ID }
+
+        const res = await POST(req(BODY))
+
+        expect(res.status).toBe(409)
+        expect((await res.json()).code).toBe('SESSION_IS_CLIENT')
+        expect(inserts).toEqual([])
+        expect(rotateMock).not.toHaveBeenCalled()
+        expect(sendFreeCoachOnboardingEmailsMock).not.toHaveBeenCalled()
+        expect(captureRegisteredMock).not.toHaveBeenCalled()
+        // Google para alumnos sigue diferido: se revoca SOLO la sesión de Google que trajo el Bearer.
+        expect(revokedSessions).toEqual([{ jwt: 'ok', scope: 'local' }])
+    })
+
+    it('si la lectura de membresías falla: tampoco inserta', async () => {
+        state.membershipLookupError = { message: 'boom' }
+
+        const res = await POST(req(BODY))
+
+        expect(res.status).toBe(503)
+        expect(inserts).toEqual([])
+        expect(revokedSessions).toEqual([])
+    })
+
+    it('alta de un coach que no es alumno: no revoca nada', async () => {
+        await POST(req(BODY))
+
+        expect(revokedSessions).toEqual([])
+        expect(inserts).toEqual(['coaches'])
+    })
+
+    it('sesión con membresía de alumno (multi-workspace): también 409', async () => {
+        state.memberships = [{ id: 'm1' }]
+
+        const res = await POST(req(BODY))
+
+        expect(res.status).toBe(409)
+        expect(inserts).toEqual([])
+    })
+
+    it('si la lectura de alumno falla: NO inserta (fail-closed, un doble rol no se deshace)', async () => {
+        state.clientLookupError = { message: 'boom' }
+
+        const res = await POST(req(BODY))
+
+        expect(res.status).toBe(503)
+        expect(inserts).toEqual([])
+        expect(rotateMock).not.toHaveBeenCalled()
+    })
+
+    it('el aviso al alumno no lo nombra «alumno» ni «cliente» (regla de producto 8)', async () => {
+        state.existingClient = { id: USER_ID }
+
+        const { error } = await (await POST(req(BODY))).json()
+
+        expect(error.toLowerCase()).not.toMatch(/alumn|client/)
     })
 
     it('payload inválido: 400 y ningún correo', async () => {

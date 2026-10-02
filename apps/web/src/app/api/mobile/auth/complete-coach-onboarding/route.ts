@@ -9,6 +9,7 @@ import { sendFreeCoachOnboardingEmails } from '@/lib/email/free-coach-onboarding
 import { captureCoachRegisteredServer } from '@/lib/posthog/registration-events'
 import { resolveRegistrationPlatform } from '@/lib/posthog/registration'
 import { appSignupSurface } from '@/lib/auth/signup-surface'
+import { rotatePasswordOnGoogleLink } from '@/lib/auth/google-link-rotation'
 
 /**
  * Materializa la fila `coaches` del coach autenticado por OAuth (Google) que aún no tiene perfil.
@@ -101,6 +102,45 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: true, slug: existingCoach.slug, alreadyOnboarded: true })
     }
 
+    // Cinturón ALUMNO (02-10), gemelo de `oauth_session_is_client` en `complete.actions.ts`: el alumno
+    // que toca «Crear cuenta» → Google en la app llega acá con SU usuario. El insert de abajo crearía
+    // una fila `coaches` con el id de un alumno (doble rol, imposible de deshacer desde el producto) y
+    // la rotación le cerraría todas las sesiones. Hasta el 02-10 lo frenaba de casualidad la rotación
+    // temprana de `api/mobile/auth/google-link` (mataba la sesión y esto respondía 401); desde que el
+    // helper no rota sin fila `coaches`, el freno tiene que ser explícito. Error de lectura ⇒ no se
+    // inserta (fail-closed): un alta de coach puede reintentarse, un doble rol no se deshace.
+    // `client_memberships` además de `clients`: la cuenta de alumno multi-workspace cuelga de ahí.
+    const [clientRow, membershipRows] = await Promise.all([
+        adminDb.from('clients').select('id').eq('id', user.id).maybeSingle(),
+        adminDb.from('client_memberships').select('id').eq('account_id', user.id).limit(1),
+    ])
+    const clientLookupError = clientRow.error ?? membershipRows.error
+    const sessionIsClient = Boolean(clientRow.data) || (membershipRows.data?.length ?? 0) > 0
+    if (clientLookupError) {
+        return NextResponse.json(
+            { error: 'No pudimos verificar tu cuenta. Intenta de nuevo en unos minutos.', code: 'CLIENT_CHECK_FAILED' },
+            { status: 503 }
+        )
+    }
+    if (sessionIsClient) {
+        // Google para alumnos sigue DIFERIDO (decisión CEO 2026-06-21): la sesión de Google que la app
+        // acaba de abrir se revoca acá (solo ESA sesión, scope local — las de contraseña del alumno en
+        // otros dispositivos siguen). Sin esto, cerrar y reabrir la app la dejaba adentro con Google
+        // sin pasar por ningún OTA. Fail-silent: el 409 sale igual.
+        try {
+            await adminDb.auth.admin.signOut(token, 'local')
+        } catch {
+            // Silencio deliberado: sin PII ni token en logs.
+        }
+        return NextResponse.json(
+            {
+                error: 'Este correo ya entrena con un coach en EVA, así que no puede crear una cuenta de coach. Entra con tu correo y tu contraseña desde el inicio; si no la recuerdas, recupérala ahí mismo.',
+                code: 'SESSION_IS_CLIENT',
+            },
+            { status: 409 }
+        )
+    }
+
     // Anti-abuso de free trial vía email normalizado (espejo de completeOAuthOnboarding).
     const { data: existingTrial } = await adminDb
         .from('coaches')
@@ -169,6 +209,21 @@ export async function POST(request: NextRequest) {
             { status: 500 }
         )
     }
+
+    // W3.13 — rotación anti-takeover en el ALTA desde la app, mismo contrato que el primer call site
+    // (`coach/onboarding/complete/_actions/complete.actions.ts`). Hasta el 02-10 este caso lo cubría
+    // `api/mobile/auth/google-link` al entrar con Google: sin fila `coaches` rotaba igual. Desde que
+    // el helper no rota sin fila `coaches` (caso Carolina/Movens: al alumno se le rotaba la clave en
+    // cada intento), el aviso de entrada ya no alcanza a quien todavía no es coach, así que la rotación
+    // va acá, cuando la fila nace. Después del insert por la FK de `coach_onboarding_events`; estado
+    // `known: null` porque antes de este request no había fila ni casilla probada. El helper solo
+    // actúa si el auth user ya tenía identidad `email` además de Google, y nunca lanza.
+    await rotatePasswordOnGoogleLink({
+        admin: adminDb,
+        userId: user.id,
+        verification: { source: 'known', emailVerifiedAt: null },
+        context: 'mobile_oauth_onboarding',
+    })
 
     // Alta por Google DESDE LA APP: nace `active`, nunca pasa por `/auth/confirm` y hasta hoy era el
     // ÚNICO camino de alta sin bienvenida ni serie de correos (W2.8 del embudo Free→Pro: causa (4),
