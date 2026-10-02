@@ -30,7 +30,7 @@ export function archiveActor(context: MobileClientMutationContext): ClientArchiv
 export function archiveErrorResponse(result: Extract<ClientArchiveResult, { ok: false }>): NextResponse {
   const status = result.code === 'CLIENT_NOT_FOUND'
     ? 404
-    : result.code === 'CLIENT_LIMIT_REACHED' || result.code === 'CLIENT_NOT_ARCHIVED' || result.code === 'CLIENT_ARCHIVED_READ_ONLY'
+    : result.code === 'CLIENT_LIMIT_REACHED' || result.code === 'CLIENT_NOT_ARCHIVED' || result.code === 'CLIENT_ARCHIVED_READ_ONLY' || result.code === 'DEMO_CLIENT'
       ? 409
       : result.code === 'CLIENT_LIMIT_CHECK_FAILED'
         ? 503

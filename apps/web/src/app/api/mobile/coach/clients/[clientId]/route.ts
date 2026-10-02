@@ -6,6 +6,7 @@ import {
   resolveMobileClientMutationContext,
 } from '../_mutation-auth'
 import { deleteClientHard } from '@/services/client/client-deletion.service'
+import { deleteDemoStudent } from '@/services/onboarding/demo-student.service'
 
 const isoDateSchema = z.string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha debe usar el formato YYYY-MM-DD.')
@@ -63,6 +64,19 @@ export async function DELETE(request: NextRequest, { params }: { params: Promise
   if ('error' in context) return context.error
   if (!(await mobileContextOwnsClient(context, clientId))) {
     return NextResponse.json({ error: 'Alumno no encontrado.', code: 'NOT_FOUND' }, { status: 404 })
+  }
+
+  // W8.1.4: el alumno de ejemplo sale por su propio borrado (limpia el inventario del sembrado y
+  // sus áreas). El scope ya lo verificó `mobileContextOwnsClient`; el dueño del demo es su coach.
+  const { data: row } = await context.admin
+    .from('clients')
+    .select('coach_id, is_demo')
+    .eq('id', clientId)
+    .maybeSingle()
+  if (row?.is_demo === true && row.coach_id) {
+    const demo = await deleteDemoStudent(context.admin, { coachId: row.coach_id })
+    if (!demo.ok) return NextResponse.json({ error: 'No se pudo borrar el alumno de ejemplo.', code: 'DELETE_FAILED' }, { status: 500 })
+    return NextResponse.json({ ok: true })
   }
 
   const { error, code } = await deleteClientHard(context.admin, clientId)

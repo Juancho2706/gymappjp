@@ -27,6 +27,8 @@ export type ArchivedClient = {
   email: string | null
   isArchived: boolean
   isActive: boolean | null
+  /** Alumno de ejemplo del onboarding (`clients.is_demo`). Solo lo trae `findScopedClient`. */
+  isDemo?: boolean
 }
 
 export type ClientArchiveFailureCode =
@@ -40,6 +42,7 @@ export type ClientArchiveFailureCode =
   | 'ACCESS_UPDATE_FAILED'
   | 'AUTH_BAN_FAILED'
   | 'AUTH_UNBAN_FAILED'
+  | 'DEMO_CLIENT'
 
 export type ClientArchiveResult =
   | { ok: true; client: ArchivedClient; idempotent?: boolean }
@@ -74,6 +77,7 @@ function toClient(row: {
   email: string | null
   is_archived: boolean | null
   is_active: boolean | null
+  is_demo?: boolean | null
 }): ArchivedClient {
   return {
     id: row.id,
@@ -81,6 +85,7 @@ function toClient(row: {
     email: row.email,
     isArchived: row.is_archived === true,
     isActive: row.is_active,
+    ...(row.is_demo === true ? { isDemo: true } : {}),
   }
 }
 
@@ -88,7 +93,7 @@ async function findScopedClient(db: Db, actor: ClientArchiveActor, clientId: str
   const query = applyArchiveScope(
     db
       .from('clients')
-      .select('id, full_name, email, is_archived, is_active')
+      .select('id, full_name, email, is_archived, is_active, is_demo')
       .eq('id', clientId),
     actor,
   )
@@ -284,6 +289,12 @@ export async function getClientUnarchiveCapacity(
   return { ok: true, limit: capacity.limit, used, label: capacity.label }
 }
 
+const DEMO_CLIENT_FAILURE: Extract<ClientArchiveResult, { ok: false }> = {
+  ok: false,
+  code: 'DEMO_CLIENT',
+  error: 'El alumno de ejemplo no se archiva: usa «Borrar ejemplo».',
+}
+
 /**
  * Archive is intentionally fail-closed: the DB state and its RLS gate are committed first,
  * then the Auth ban is applied. If GoTrue is temporarily unavailable, the client remains
@@ -297,6 +308,10 @@ export async function archiveClient(
 ): Promise<ClientArchiveResult> {
   const current = await findScopedClient(db, actor, clientId)
   if (!current) return { ok: false, code: 'CLIENT_NOT_FOUND', error: 'Alumno no encontrado.' }
+  // W8.1.4: el alumno de ejemplo no se archiva. Archivarlo lo baneaba en Auth, le mandaba el correo
+  // de archivado a su casilla `@evatest.cl` y dejaba «Borrar ejemplo» sin efecto
+  // (`getDemoClientId` filtra archivados). Su salida es `deleteDemoStudent`.
+  if (current.isDemo && !current.isArchived) return DEMO_CLIENT_FAILURE
 
   if (!current.isArchived) {
     const query = applyArchiveScope(
@@ -404,7 +419,7 @@ export async function bulkArchiveClients(
   // confusing when a coach has standalone and Team pools with overlapping names; fail closed
   // instead of reporting a misleading partial success for IDs outside the selected workspace.
   const scopedQuery = applyArchiveScope(
-    db.from('clients').select('id, full_name, email, is_archived, is_active').in('id', ids),
+    db.from('clients').select('id, full_name, email, is_archived, is_active, is_demo').in('id', ids),
     actor,
   )
   const { data: scopedRows, error: scopedError } = await scopedQuery
@@ -413,7 +428,9 @@ export async function bulkArchiveClients(
     return { ok: false, code: 'CLIENT_NOT_FOUND', error: 'Uno o más alumnos no pertenecen a este workspace.' }
   }
 
-  const rows = scopedRows ?? []
+  // El alumno de ejemplo se SALTA (W8.1.4): una selección masiva que lo incluye archiva al resto y
+  // lo deja como está, en vez de fallar entera por él.
+  const rows = (scopedRows ?? []).filter((client) => client.is_demo !== true)
   const activeIds = rows.filter((client) => client.is_archived !== true).map((client) => client.id)
   if (activeIds.length > 0) {
     const archiveQuery = applyArchiveScope(

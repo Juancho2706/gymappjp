@@ -33,6 +33,7 @@ import { canSendCredentialByWhatsapp } from '@/app/coach/clients/_lib/add-studen
 import { resolveCoachScope as getCoachClientScope, applyCoachClientScope } from '@/services/auth/coach-scope.service'
 import { createClientIdentity } from '@/infrastructure/db/client-membership.repository'
 import { deleteClientHard } from '@/services/client/client-deletion.service'
+import { deleteDemoStudent } from '@/services/onboarding/demo-student.service'
 import {
     archiveClient,
     bulkArchiveClients,
@@ -483,13 +484,24 @@ export async function deleteClientAction(clientId: string): Promise<{ error?: st
 
     let clientQuery = supabase
         .from('clients')
-        .select('id, is_archived')
+        .select('id, is_archived, is_demo')
         .eq('id', clientId)
         .eq('coach_id', coachUser.id)
     clientQuery = applyCoachClientScope(clientQuery, scope)
     const { data: client } = await clientQuery.maybeSingle()
 
     if (!client) return { error: 'Alumno no encontrado.' }
+
+    // W8.1.4: el alumno de ejemplo sale por su propio borrado, que además limpia el inventario del
+    // sembrado y sus áreas (con `deleteClientHard` quedaban huérfanos y el re-sembrado se confundía).
+    if ((client as { is_demo?: boolean | null }).is_demo === true) {
+        const demo = await deleteDemoStudent(createServiceRoleClient(), { coachId: coachUser.id })
+        if (!demo.ok) return { error: 'No se pudo borrar el alumno de ejemplo.' }
+        revalidatePath('/coach/clients')
+        revalidatePath('/coach/dashboard')
+        return {}
+    }
+
     if (client.is_archived) return { error: 'Los alumnos archivados son de solo lectura. Desarchívalo para volver a gestionarlo.' }
 
     // El borrado vive en el service (misma logica que la API movil y que el borrado de cuenta del
