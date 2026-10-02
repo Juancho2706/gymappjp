@@ -822,6 +822,28 @@ describe('POST /api/payments/webhook — B1: cobro recurrente de coach Flow usa 
         expect(updateCheckoutAmount).not.toHaveBeenCalled()
     })
 
+    // Incidente renovaciones 28-09: Flow reusa el id de invoice para el rechazo y para el cobro que lo
+    // recupera. Con la misma clave, el upsert del pago pisaba la fila del rechazo.
+    it('rechazo y cobro de la MISMA invoice Flow dejan dos filas en subscription_events', async () => {
+        providerName = 'flow'
+        coachRow = { ...FLOW_COACH }
+        processWebhook.mockResolvedValue({
+            ...flowRecurringApproved(),
+            providerStatus: 'rejected',
+            paidAt: null,
+            currentPeriodEnd: null,
+        })
+        notificationId = 'flow-token-rechazo'
+        expect((await POST(makeRequest())).status).toBe(200)
+
+        processWebhook.mockResolvedValue(flowRecurringApproved())
+        notificationId = 'flow-token-pago'
+        expect((await POST(makeRequest())).status).toBe(200)
+
+        expect(subscriptionEvents.get('flow:authpay:invoice:9001:rejected')?.provider_status).toBe('rejected')
+        expect(subscriptionEvents.get('flow:authpay:invoice:9001')?.provider_status).toBe('approved')
+    })
+
     it('coach MP (mismo cobro recurrente): SIN regresión — el ref es el subscription_mp_id', async () => {
         coachRow = { ...PAID_COACH } // subscription_mp_id 'preapproval-1', provider default (no flow)
         processWebhook.mockResolvedValue(flowRecurringApproved())

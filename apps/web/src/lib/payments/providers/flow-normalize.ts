@@ -1,5 +1,6 @@
 import type { WebhookProcessResult } from '@/lib/payments/types'
 import { parseOneShotAddonReference, parseTierUpgradeReference } from '@/lib/payments/providers/mercadopago'
+import { santiagoWallTimeToUtcIso } from '@/lib/date-utils'
 
 /**
  * flow-normalize — funciones PURAS (sin red, sin DB, sin reloj) que traducen cada forma de respuesta
@@ -99,6 +100,20 @@ export function parseFlowDate(value?: string | null): string | null {
 }
 
 /**
+ * INSTANTE de un cobro de Flow (`paymentData.date`, hora de pared de Chile sin zona) → ISO UTC.
+ * `parseFlowDate` lo pasaba tal cual y Postgres lo leía como UTC: `billing_snapshots.charged_at`
+ * quedaba 3 h antes en horario de verano (incidente renovaciones 28-09). Solo para instantes de
+ * pago: `period_end` sigue por `parseFlowDate` porque es un DÍA de pared y el display
+ * (`services/billing/period-end.ts`) depende de que quede en 00:00Z. Una fecha sin hora o que ya
+ * trae zona no se toca.
+ */
+export function parseFlowPaymentInstant(value?: string | null): string | null {
+    const normalized = parseFlowDate(value)
+    if (!normalized) return null
+    return santiagoWallTimeToUtcIso(normalized) ?? normalized
+}
+
+/**
  * payment/getStatus.status → vocabulario del pipeline. Coerciona con Number() ANTES de comparar: Flow
  * serializa numericos como STRING a veces (confirmado con amount "1000"); un `status "2"` con `=== 2`
  * estricto caeria a 'rejected' → un pago APROBADO se leeria como rechazado (add-on pagado sin entregar).
@@ -131,7 +146,7 @@ export function normalizeFlowOneShotPayment(payment: FlowPaymentStatus): Webhook
         coachId,
         externalReference: commerceOrder,
         providerPaymentId: payment.flowOrder != null ? String(payment.flowOrder) : null,
-        paidAt: parseFlowDate(payment.paymentData?.date),
+        paidAt: parseFlowPaymentInstant(payment.paymentData?.date),
         oneShotAddon,
         tierUpgrade,
     }
@@ -175,7 +190,7 @@ export function normalizeFlowRecurringInvoice(invoice: FlowInvoice, coachId: str
         providerStatus: paid ? 'approved' : 'rejected', // status 0 (impago) → dunning; 1 (pagado) → approved
         coachId,
         providerPaymentId,
-        paidAt: paid ? parseFlowDate(invoice.payment?.paymentData?.date) : null,
+        paidAt: paid ? parseFlowPaymentInstant(invoice.payment?.paymentData?.date) : null,
         // period_end = fin del periodo pagado → avanza coaches.current_period_end (money-critical).
         currentPeriodEnd: paid ? parseFlowDate(invoice.period_end) : null,
     }

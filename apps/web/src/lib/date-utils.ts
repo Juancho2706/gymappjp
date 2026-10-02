@@ -334,6 +334,28 @@ export function getSantiagoUtcBoundsForDay(isoDate: string): { startIso: string;
 }
 
 /**
+ * Reloj de pared de Santiago SIN zona (`yyyy-mm-ddThh:mm[:ss]`, como lo manda Flow) → instante UTC
+ * ISO. Dos pasadas de offset para que los bordes de cambio de horario caigan del lado correcto.
+ * Entrada que no calza con ese formato ⇒ `null` (el llamador decide el fallback).
+ */
+export function santiagoWallTimeToUtcIso(wall: string): string | null {
+    const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(wall.trim())
+    if (!m) return null
+    const asUtcMs = Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]), Number(m[6] ?? 0))
+    if (Number.isNaN(asUtcMs)) return null
+    const offsetAt = (ms: number): number | null => {
+        const w = santiagoWallClock(new Date(ms))
+        if (!w) return null
+        return Date.UTC(w.year, w.month - 1, w.day, w.hour, w.minute, w.second) - ms
+    }
+    const first = offsetAt(asUtcMs)
+    if (first == null) return null
+    const second = offsetAt(asUtcMs - first)
+    if (second == null) return null
+    return new Date(asUtcMs - second).toISOString()
+}
+
+/**
  * Maps a UTC instant (e.g. `workout_logs.logged_at`) to calendar `YYYY-MM-DD` in America/Santiago.
  * Use this instead of `logged_at.startsWith('yyyy-mm-dd')` (UTC prefix can disagree with local day).
  */

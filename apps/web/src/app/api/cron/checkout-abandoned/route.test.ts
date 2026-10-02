@@ -282,6 +282,26 @@ describe('GET /api/cron/checkout-abandoned — detección', () => {
         })
     })
 
+    // Desde la ola de checkout del 26-08 la salida a la pasarela deja el intent del canal, no un
+    // `pending`: el cron leía solo `pending` y quedó ciego.
+    it('intent de checkout Flow o MP de hace 3 h sin cobro → correo; el del registro no cuenta', async () => {
+        events = [
+            { coach_id: 'c1', created_at: hoursAgo(3), provider: 'flow', provider_status: 'flow_checkout_intent' },
+            { coach_id: 'c2', created_at: hoursAgo(4), provider: 'mercadopago', provider_status: 'mercadopago_checkout_intent' },
+            { coach_id: 'c3', created_at: hoursAgo(5), provider: 'mercadopago', provider_status: 'signup_checkout_intent' },
+        ]
+        coaches = [coach({ id: 'c1' }), coach({ id: 'c2' }), coach({ id: 'c3' })]
+        emailByCoachId = { c1: 'co@coach.co', c2: 'ar@coach.ar', c3: 'cl@coach.cl' }
+
+        const json = await (await GET(authedReq())).json()
+        expect(json).toMatchObject({ ok: true, candidates: 2, notified: 2 })
+        const notifiedIds = scheduleCoachEmail.mock.calls.map((c) => c[1].coachId).sort()
+        expect(notifiedIds).toEqual(['c1', 'c2'])
+        expect(capturePostHogServerEvent).toHaveBeenCalledWith(
+            expect.objectContaining({ distinctId: 'c1', properties: expect.objectContaining({ gateway: 'flow' }) })
+        )
+    })
+
     it('pending de hace 1 h → todavía puede estar pagando: ni correo ni evento', async () => {
         events = [
             { coach_id: 'c1', created_at: hoursAgo(1), provider: 'mercadopago', provider_status: 'pending' },

@@ -14,6 +14,7 @@ import { SUBSCRIPTION_BLOCKED_STATUSES } from '@/lib/constants'
 import type { Json, TablesInsert } from '@/lib/database.types'
 import { loadAutomatedEmailHistory } from '@/services/email/automated-email-history.service'
 import { evaluateAutomatedEmailQuota, isWithinSendWindow } from '@/lib/email/automated-email-policy'
+import { checkoutIntentStatus } from '@/lib/payments/checkout-intent'
 
 /**
  * Cron `checkout-abandoned` — cierra el ÚLTIMO hueco del embudo de pago (A6 del informe de checkout).
@@ -25,8 +26,9 @@ import { evaluateAutomatedEmailQuota, isWithinSendWindow } from '@/lib/email/aut
  * leen en PostHog como «vio el precio y no compró», que es exactamente lo contrario de lo que pasó.
  *
  * QUÉ HACE, cada hora:
- *  1. Busca filas de `subscription_events` con `provider_status='pending'` de hace MÁS de 2 h (y menos
- *     de `LOOKBACK_DAYS`), agrupadas por coach.
+ *  1. Busca filas de `subscription_events` que marcan la salida a la pasarela (`pending` o el intent de
+ *     checkout MP/Flow, ver `CHECKOUT_STARTED_STATUSES`) de hace MÁS de 2 h (y menos de
+ *     `LOOKBACK_DAYS`), agrupadas por coach.
  *  2. Descarta a quien SÍ terminó pagando: cualquier evento POSTERIOR con estado de cobro real
  *     (`authorized`/`approved`), o un coach que hoy está en un tier pago con acceso vivo.
  *  3. Por cada coach que queda, UNA sola vez: emite `checkout_abandoned_at_gateway` server-side a
@@ -68,6 +70,19 @@ const ABANDON_THRESHOLD_HOURS = 2
  * recuperación— y el dedupe del ledger, que es por coach para siempre, quemaría el único disparo.
  */
 const LOOKBACK_DAYS = 7
+
+/**
+ * Estados que significan «llegó a la pasarela». `pending` es el preapproval MP de antes de la ola de
+ * checkout del 25-08; desde el 26-08 el alta nace free y lo que marca la salida a la pasarela es el
+ * intent que escribe `create-preference` por canal (`lib/payments/checkout-intent.ts`). Leer solo
+ * `pending` dejó al cron ciego desde esa fecha. El intent del canal `signup` NO cuenta: es el plan
+ * que eligió al registrarse, no una visita a la pasarela.
+ */
+const CHECKOUT_STARTED_STATUSES = [
+    'pending',
+    checkoutIntentStatus('mercadopago'),
+    checkoutIntentStatus('flow'),
+] as const
 
 /** Estados del gateway que significan COBRO REAL: apagan el caso (ver docblock sobre 'active'). */
 const RECOVERED_PROVIDER_STATUSES = ['authorized', 'approved'] as const
@@ -188,7 +203,7 @@ async function findAbandonedCases(
             admin
                 .from('subscription_events')
                 .select('coach_id, created_at, provider, provider_status')
-                .eq('provider_status', 'pending')
+                .in('provider_status', [...CHECKOUT_STARTED_STATUSES])
                 .gte('created_at', lookbackFrom)
                 .lt('created_at', staleBefore)
                 .order('created_at', { ascending: false })

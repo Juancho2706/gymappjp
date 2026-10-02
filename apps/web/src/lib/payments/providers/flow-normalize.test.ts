@@ -5,6 +5,7 @@ import {
     normalizeFlowSubscriptionLifecycle,
     normalizeFlowRefund,
     parseFlowDate,
+    parseFlowPaymentInstant,
     parseFlowRecurringCommerceOrder,
     type FlowInvoice,
 } from './flow-normalize'
@@ -15,6 +16,23 @@ import {
 const COACH = 'coach-1'
 const ADDON_ORDER = `addon_oneshot|${COACH}|cardio|v2-2026-06`
 const UPGRADE_ORDER = `tier_upgrade|${COACH}|pro|monthly`
+
+describe('parseFlowPaymentInstant', () => {
+    it('hora de pared de Chile → UTC según el horario vigente', () => {
+        // octubre = horario de verano (UTC-3): el caso del incidente de renovaciones
+        expect(parseFlowPaymentInstant('2026-10-02 10:30:00')).toBe('2026-10-02T13:30:00.000Z')
+        // julio = horario de invierno (UTC-4)
+        expect(parseFlowPaymentInstant('2026-07-05 14:30:00')).toBe('2026-07-05T18:30:00.000Z')
+        // cerca de la medianoche cruza de día en UTC
+        expect(parseFlowPaymentInstant('2026-10-02 23:15:00')).toBe('2026-10-03T02:15:00.000Z')
+    })
+    it('sin hora o con zona explícita no se toca; vacío ⇒ null', () => {
+        expect(parseFlowPaymentInstant('2026-07-05')).toBe('2026-07-05')
+        expect(parseFlowPaymentInstant('2026-07-05T14:30:00Z')).toBe('2026-07-05T14:30:00Z')
+        expect(parseFlowPaymentInstant(null)).toBeNull()
+        expect(parseFlowPaymentInstant('  ')).toBeNull()
+    })
+})
 
 describe('parseFlowDate', () => {
     it('convierte `yyyy-mm-dd hh:mm:ss` a ISO-parseable (T en vez de espacio)', () => {
@@ -58,7 +76,8 @@ describe('normalizeFlowOneShotPayment — add-on / tier-upgrade one-shot', () =>
         expect(r.providerStatus).toBe('approved')
         expect(r.coachId).toBe(COACH)
         expect(r.providerPaymentId).toBe('987654')
-        expect(r.paidAt).toBe('2026-07-05T12:00:00')
+        // hora de Chile (julio = UTC-4) → instante UTC
+        expect(r.paidAt).toBe('2026-07-05T16:00:00.000Z')
         expect(r.oneShotAddon).toEqual({ coachId: COACH, moduleKey: 'cardio', termsVersion: 'v2-2026-06' })
         expect(r.tierUpgrade).toBeNull()
     })
@@ -107,7 +126,7 @@ describe('normalizeFlowRecurringInvoice — cobro recurrente', () => {
         expect(r.providerStatus).toBe('approved')
         expect(r.coachId).toBe(COACH)
         expect(r.providerPaymentId).toBe('invoice:5001') // clave ESTABLE = id de invoice, no el flowOrder condicional
-        expect(r.paidAt).toBe('2026-07-01T09:15:00')
+        expect(r.paidAt).toBe('2026-07-01T13:15:00.000Z')
         expect(r.currentPeriodEnd).toBe('2026-08-01')
     })
 

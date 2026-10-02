@@ -92,6 +92,8 @@ describe('persistCheckoutIntent', () => {
         })
         expect(row.payload).toMatchObject({ tier: 'pro', cycle: 'quarterly', coupon: 'DIEGO25' })
         expect(opts).toEqual({ onConflict: 'provider_event_id' })
+        // Fecha del ÚLTIMO gesto: el upsert no rellena created_at solo y el cron de abandono la lee.
+        expect(Date.now() - Date.parse(String(row.created_at))).toBeLessThan(5_000)
     })
 
     it('NO lanza ante un error de DB: devuelve el mensaje para que el caller decida su política', async () => {

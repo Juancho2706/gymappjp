@@ -83,7 +83,8 @@ export function buildDunningTemplateKey(
 
 /**
  * P0-2: email de dunning (pago fallido / recuperado), fire-and-forget. NUNCA bloquea la mutación de
- * cobro: si Resend falla, se loggea y sigue. `subscriptionUrl` apunta a /coach/subscription.
+ * cobro: si Resend falla, se loggea y sigue. `subscriptionUrl` apunta a /coach/subscription; el de
+ * pago fallido manda a `/update-card` (la salida del dunning) con el texto del gateway que cobró.
  *
  * Pasa por `scheduleCoachEmail` —y no por `sendTransactionalEmail` pelado— desde el incidente
  * 2026-09-18: el correo salía SIN dejar fila en `coach_email_ledger`, así que cuando el coach
@@ -98,7 +99,8 @@ async function sendDunningEmail(
     kind: 'failed' | 'recovered',
     subscriptionUrl: string,
     accessUntil: string | null,
-    eventKey: string | null | undefined
+    eventKey: string | null | undefined,
+    provider: 'mercadopago' | 'flow'
 ): Promise<void> {
     try {
         const { data } = await adminClient.auth.admin.getUserById(coachId)
@@ -106,7 +108,12 @@ async function sendDunningEmail(
         if (!email) return
         const { subject, html } =
             kind === 'failed'
-                ? buildPaymentFailedEmail({ coachName, accessUntil, subscriptionUrl })
+                ? buildPaymentFailedEmail({
+                      coachName,
+                      accessUntil,
+                      provider,
+                      updateCardUrl: `${subscriptionUrl}/update-card`,
+                  })
                 : buildPaymentRecoveredEmail({ coachName, subscriptionUrl })
         const res = await scheduleCoachEmail(adminClient, {
             coachId,
@@ -115,7 +122,7 @@ async function sendDunningEmail(
             to: email,
             subject,
             html,
-            payload: { kind, accessUntil },
+            payload: { kind, accessUntil, provider },
         })
         if (!res.ok) {
             console.error('[payments.webhook] dunning email failed (fire-and-forget)', {
@@ -287,6 +294,8 @@ export async function runWebhookPipeline(
         const wasPastDue = coach.subscription_status === 'past_due'
         const dunningCoachName = coach.full_name?.trim() || 'Coach'
         const dunningSubscriptionUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? 'http://localhost:3000'}/coach/subscription`
+        // El gateway que procesa ESTE cobro es el que lo rechazó: el texto del aviso habla de ese medio.
+        const dunningProvider: 'mercadopago' | 'flow' = provider.name === 'flow' ? 'flow' : 'mercadopago'
         const dunningAccessUntil = coach.current_period_end
             ? new Date(coach.current_period_end).toLocaleDateString('es-CL', {
                   day: 'numeric',
@@ -414,7 +423,7 @@ export async function runWebhookPipeline(
                 }
                 // P0-2: si el coach venía de dunning (past_due), avisar que el pago se recuperó.
                 if (wasPastDue) {
-                    await sendDunningEmail(admin, coach.id, dunningCoachName, 'recovered', dunningSubscriptionUrl, null, dunningEventKey)
+                    await sendDunningEmail(admin, coach.id, dunningCoachName, 'recovered', dunningSubscriptionUrl, null, dunningEventKey, dunningProvider)
                 }
             } catch (chargeErr) {
                 console.error('[payments.webhook] recurring authorized_payment (approved) hooks failed', {
@@ -450,7 +459,7 @@ export async function runWebhookPipeline(
                 coachId: coach.id,
                 status: result.providerStatus,
             })
-            await sendDunningEmail(admin, coach.id, dunningCoachName, 'failed', dunningSubscriptionUrl, dunningAccessUntil, dunningEventKey)
+            await sendDunningEmail(admin, coach.id, dunningCoachName, 'failed', dunningSubscriptionUrl, dunningAccessUntil, dunningEventKey, dunningProvider)
         } else {
             // `scheduled`/`pending`/`in_process`/`processed`: el cobro está EN CAMINO, NO rechazado. No
             // marcamos dunning (el evento `approved` lo confirma aparte). Solo log + el upsert de abajo.
@@ -460,11 +469,18 @@ export async function runWebhookPipeline(
                 status: result.providerStatus,
             })
         }
+        // Flow reusa el id de invoice para el intento rechazado y para el cobro que lo recupera: con la
+        // misma clave, el upsert del pago PISABA la fila del rechazo y el historial quedaba sin rastro del
+        // dunning (incidente renovaciones 28-09, MDR). El rechazo lleva su estado en la clave; el cobro
+        // aprobado conserva la clave de siempre (una re-entrega sigue deduplicando).
+        const recurringEventKeyBase = `${provider.name}:authpay:${result.providerPaymentId ?? 'unknown'}`
+        const isDunningEvent = result.providerStatus === 'rejected' || result.providerStatus === 'recycling'
         const recurringEventRow: TablesInsert<'subscription_events'> = {
             coach_id: coach.id,
             provider: provider.name,
             provider_event_id:
-                result.eventId ?? `${provider.name}:authpay:${result.providerPaymentId ?? 'unknown'}`,
+                result.eventId ??
+                (isDunningEvent ? `${recurringEventKeyBase}:${result.providerStatus}` : recurringEventKeyBase),
             // Audit: ref del gateway de la sub (Flow → external_id; MP → mp_id). Idéntico a mp_id para MP.
             provider_checkout_id: subRef,
             provider_status: result.providerStatus ?? null,
@@ -1313,6 +1329,7 @@ export async function runWebhookPipeline(
             // Esta es la rama que avisó a Joaquín el 18-09 (el rechazo llegó por el topic `payment`,
             // no por `authorized_payment`), así que es la que más importa que quede en el ledger.
             result.providerPaymentId ?? result.eventId ?? `period:${coach.current_period_end ?? 'unknown'}`,
+            provider.name === 'flow' ? 'flow' : 'mercadopago',
         )
     } else if (terminalDecision === 'ignore-free') {
         // Free-tier coach has no paid subscription to terminate. A stale cancellation

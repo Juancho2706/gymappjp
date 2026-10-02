@@ -24,9 +24,9 @@ import type { Json, TablesInsert } from '@/lib/database.types'
  *  - `mercadopago` → lo escribe create-preference: el plan del ÚLTIMO checkout MP pedido.
  *  - `flow`        → lo escribe create-preference: idem para Webpay/Flow. Lo LEE la Fase 2.
  *
- * ⚠️ `provider_status` NUNCA puede ser `'pending'`: ese valor es el que el cron
- * `api/cron/checkout-abandoned` usa para detectar un checkout muerto en la pasarela. Los intents
- * usan `<canal>_checkout_intent`, que ningún gateway emite.
+ * `provider_status` es `<canal>_checkout_intent`, que ningún gateway emite. El cron
+ * `api/cron/checkout-abandoned` lee los intents de `mercadopago` y `flow` (junto al `pending`
+ * histórico) como «llegó a la pasarela»; el de `signup` no cuenta.
  */
 
 type AdminClient = ReturnType<typeof createServiceRoleClient>
@@ -132,6 +132,10 @@ export async function persistCheckoutIntent(
         provider_event_id: checkoutIntentEventId(args.channel, args.coachId),
         provider_status: checkoutIntentStatus(args.channel),
         payload: buildCheckoutIntentPayload(args.intent),
+        // El upsert pisa la fila del canal, pero `created_at` solo se llena al insertar: sin esto el
+        // intent quedaba fechado en el PRIMER checkout y el cron `checkout-abandoned` (ventana de 7
+        // días) no veía al coach que vuelve a intentar semanas después.
+        created_at: new Date().toISOString(),
     }
     const { error } = await admin
         .from('subscription_events')
