@@ -321,6 +321,15 @@ describe('POST /api/mobile/auth/register-coach-free — analítica del alta', ()
         expect(captureRegisteredMock).toHaveBeenCalledWith(expect.objectContaining({ platform: 'ios' }))
     })
 
+    it('B4: la fila del coach guarda la superficie del alta (app_android / app_ios)', async () => {
+        await POST(req(BODY, { 'user-agent': 'okhttp/4.9.2' }))
+        expect(coachInserts[0]).toMatchObject({ signup_surface: 'app_android' })
+
+        coachInserts.length = 0
+        await POST(req(BODY, { 'user-agent': 'EVA/85 CFNetwork/1568.100.1 Darwin/24.0.0' }))
+        expect(coachInserts[0]).toMatchObject({ signup_surface: 'app_ios' })
+    })
+
     it('el header explícito gana cuando la app empiece a mandarlo', async () => {
         await POST(req(BODY, { 'user-agent': 'okhttp/4.9.2', 'x-eva-platform': 'ios' }))
 

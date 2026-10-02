@@ -43,7 +43,7 @@ OTA; [TASKS](../specs/kg-lb-ejecutor/TASKS.md)).
    [auditoría](../audits/correos-y-crons-2026-09-05.md)): `..._DRY_RUN=true` en Production. Copy v2 aprobado el
    01-10 y EN PRODUCCIÓN (`329c833f`, [TASKS § W6 v2](../specs/coach-onboarding-v2/TASKS.md)): falta que el owner fije
    `ONBOARDING_BEHAVIOR_EMAILS_SINCE` y quite el DRY_RUN en Vercel (el conector no tiene permiso). Plan B «Activación»
-   (panel vacío, ficha «todavía no entra», alumno sin programa, baja en el admin) en código; queda B4 y QA device. W8.4.2B a medias
+   (panel vacío, ficha «todavía no entra», alumno sin programa, baja en el admin) en producción; B4 (embudo por superficie en el correo de los lunes, columna `coaches.signup_surface`) hecho el 02-10; queda QA device. W8.4.2B a medias
    (`enqueueBehaviorCheck` sin sus 3 call sites); W7, F5.3–F5.5 RN y D4. `FREE_COACH_DRIP_ENABLED` **no** se setea.
 3. **Embudo Free→Pro** ([spec](../specs/embudo-free-pro/SPEC.md)): W0–W6 en producción; queda App Store Connect (W7.4).
 4. **FC de toda la sesión** (punto 2 de Movens, fuera del tren «Vuelta nueva»): plan aparte, arranca preguntándole

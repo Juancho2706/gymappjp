@@ -8,7 +8,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  *    correcto (un secreto vacío no puede volverse una puerta abierta);
  *  · `?dry=1` calcula la fila y NO manda correo;
  *  · sin `NORTH_STAR_REPORT_TO` la corrida es un 200 con `skipped`, no un 500: la env la setea el
- *    owner después del deploy y un cron en rojo por eso solo genera alertas inaccionables.
+ *    owner después del deploy y un cron en rojo por eso solo genera alertas inaccionables;
+ *  · B4: el embudo por superficie viaja en el mismo correo, y si su cálculo falla el correo sale
+ *    igual con el aviso de esa sección.
  */
 
 vi.mock('@/lib/supabase/admin-client', () => ({ createServiceRoleClient: () => ({}) }))
@@ -39,6 +41,13 @@ const computeNorthStarWeeklyRow = vi.fn(async () => ROW)
 vi.mock('@/services/metrics/north-star-weekly.service', () => ({
     computeNorthStarWeeklyRow: () => computeNorthStarWeeklyRow(),
     buildNorthStarEmail: () => ({ subject: 'North Star semanal', html: '<p>fila</p>' }),
+}))
+
+const FUNNEL = { corte: '2026-08-24T13:00:00.000Z', semana: {}, cuatroSemanas: {} }
+const computeSurfaceFunnelReport = vi.fn(async (): Promise<typeof FUNNEL> => FUNNEL)
+vi.mock('@/services/metrics/surface-funnel.service', () => ({
+    computeSurfaceFunnelReport: () => computeSurfaceFunnelReport(),
+    buildSurfaceFunnelSection: (report: unknown) => (report ? '<p>embudo</p>' : '<p>embudo falló</p>'),
 }))
 
 const sendTransactionalEmail = vi.fn(async (input: unknown) => {
@@ -108,8 +117,22 @@ describe('GET /api/cron/north-star-weekly — corrida', () => {
         expect(sendTransactionalEmail.mock.calls[0][0]).toMatchObject({
             to: 'owner@eva-app.cl',
             subject: 'North Star semanal',
-            html: '<p>fila</p>',
+            html: '<p>fila</p><p>embudo</p>',
         })
+        expect(json.funnel).toMatchObject({ corte: FUNNEL.corte })
+    })
+
+    it('B4: si el embudo por superficie falla, el correo de la North Star sale igual', async () => {
+        computeSurfaceFunnelReport.mockRejectedValueOnce(new Error('boom'))
+        const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+        const res = await GET(authedReq())
+        const json = await res.json()
+        expect(json).toMatchObject({ ok: true, sent: true, funnel: null })
+        expect(sendTransactionalEmail.mock.calls[0][0]).toMatchObject({
+            html: '<p>fila</p><p>embudo falló</p>',
+        })
+        expect(error).toHaveBeenCalled()
+        error.mockRestore()
     })
 
     it('sin NORTH_STAR_REPORT_TO no envía y responde 200 con la fila (fail-silent deliberado)', async () => {

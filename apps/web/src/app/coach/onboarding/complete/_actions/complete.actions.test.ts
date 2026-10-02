@@ -143,7 +143,10 @@ const cookiesStoreMock = vi.hoisted(() => ({
 vi.mock('@/lib/supabase/server', () => ({ createClient: async () => harness.serverStub }))
 vi.mock('@/lib/supabase/admin-client', () => ({ createServiceRoleClient: () => harness.adminStub }))
 vi.mock('next/navigation', () => ({ redirect: (p: string) => harness.redirectMock(p) }))
-vi.mock('next/headers', () => ({ cookies: vi.fn(async () => cookiesStoreMock) }))
+vi.mock('next/headers', () => ({
+    cookies: vi.fn(async () => cookiesStoreMock),
+    headers: vi.fn(async () => new Headers({ 'user-agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)' })),
+}))
 vi.mock('@/lib/coach/invite-code.server', () => ({
     generateUniqueInviteCode: harness.generateUniqueInviteCodeMock,
 }))
@@ -219,6 +222,8 @@ describe('completeOAuthOnboarding — alta free por Google (web)', () => {
             // W3.3 (flujo-coach-nuevo): la marca nace PRENDIDA en las tres altas. Se pinnea el
             // valor escrito, no el DEFAULT de la columna (que sigue en `false` a propósito).
             use_brand_colors_coach: true,
+            // B4: el user-agent del mock es un iPhone ⇒ alta desde el teléfono.
+            signup_surface: 'web_mobile',
         })
         expect(sendFreeCoachOnboardingEmailsMock).toHaveBeenCalledWith({
             // Service-role: el ledger de correos no se escribe con la sesión del coach.

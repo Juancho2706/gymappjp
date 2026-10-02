@@ -209,7 +209,13 @@ onboarding por área».
   espejo de RN; un día de descanso real sigue mostrando «Día de descanso».
 - [x] Baja de correos en el admin: bloque «Correos automáticos» en la ficha del coach
   (`setCoachEmailOptOutAction`, `services/email/email-opt-out.service.ts`, auditoría `coach.email_opt_out`/`_in`).
-- [ ] B4 Embudo semanal por superficie (web / PWA / app) contado desde las tablas: pendiente.
+- [x] B4 Embudo semanal por superficie (02-10): columna `coaches.signup_surface` (`web_desktop` | `web_mobile` |
+  `app_ios` | `app_android` | `app_unknown`; migración `20261002012612_coaches_signup_surface.sql`, aditiva en LIVE),
+  escrita por los 4 inserts de alta (`lib/auth/signup-surface.ts`: user-agent en web, `resolveRegistrationPlatform`
+  en `api/mobile/**`). El correo «North Star semanal» de los lunes suma la sección «Embudo por superficie»
+  (`services/metrics/surface-funnel.service.ts`): registro → demo (`vive_tu_app_entered`) → sumó alumno real →
+  entró (`first_login_at`) → lo usa (entreno o comida), para la semana cerrada y las 4 semanas cerradas. Backfill
+  de las 59 altas desde el 06-09: 52 reconstruidas (sesión de auth + eventos de la guía + PostHog), 7 «Sin dato».
 - [ ] QA del owner en device (web escritorio, PWA, Android, iPhone).
 
 ## W7 — Medición, QA y salida (jefe + owner + Opus)

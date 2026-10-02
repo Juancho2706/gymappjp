@@ -492,6 +492,8 @@ describe('registerAction', () => {
     expect(insertQuery.insert).toHaveBeenCalledWith(expect.objectContaining({
       utm_source: null,
       utm_campaign: null,
+      // B4: sin user-agent de teléfono, el alta web cuenta como escritorio.
+      signup_surface: 'web_desktop',
     }))
   })
 

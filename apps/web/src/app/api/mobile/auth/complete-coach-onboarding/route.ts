@@ -8,6 +8,7 @@ import { clientIpFromRequest, jsonRateLimited, rateLimitSignup } from '@/lib/rat
 import { sendFreeCoachOnboardingEmails } from '@/lib/email/free-coach-onboarding'
 import { captureCoachRegisteredServer } from '@/lib/posthog/registration-events'
 import { resolveRegistrationPlatform } from '@/lib/posthog/registration'
+import { appSignupSurface } from '@/lib/auth/signup-surface'
 
 /**
  * Materializa la fila `coaches` del coach autenticado por OAuth (Google) que aún no tiene perfil.
@@ -158,6 +159,8 @@ export async function POST(request: NextRequest) {
             invite_code_confirmed_at: now,
         },
         trial_used_email: emailNorm,
+        // B4: iOS o Android, para el embudo por superficie.
+        signup_surface: appSignupSurface(resolveRegistrationPlatform(request.headers)),
     })
 
     if (coachError) {

@@ -29,6 +29,7 @@ import { normalizeCouponCode } from '@/services/billing/coupons.normalize'
 import { newMetaEventId, queueMetaCapiEvent } from '@/lib/meta/capi'
 import { persistCheckoutIntent } from '@/lib/payments/checkout-intent'
 import { parseUtmCookie, resolveRegistrationUtm, UTM_COOKIE_NAME } from '@/lib/auth/registration-utm'
+import { webSignupSurface } from '@/lib/auth/signup-surface'
 import { passwordRejectionMessage } from '@eva/schemas'
 
 export type RegisterState = {
@@ -250,6 +251,9 @@ export async function registerAction(
         registrationIp = ip !== 'unknown' ? ip : null
     }
 
+    // B4: de dónde vino el alta (escritorio o teléfono), para el embudo por superficie.
+    const signupSurface = webSignupSurface((await headers()).get('user-agent'))
+
     // Create coaches row
     const now = new Date().toISOString()
     const { error: coachError } = await adminDb
@@ -272,6 +276,7 @@ export async function registerAction(
             // `authenticated`/`anon`). `null` explícito cuando el alta no trajo UTM.
             utm_source: utmSource,
             utm_campaign: utmCampaign,
+            signup_surface: signupSurface,
             // ── A1 (ola checkout 25-08): NINGUNA alta nace bloqueada ni con un plan que no pagó ──────
             // Antes, un alta con tier pago se insertaba con `subscription_status='pending_payment'` +
             // el tier pago + su cupo, ANTES de cobrar un peso. `pending_payment` es bloqueo DURO sin

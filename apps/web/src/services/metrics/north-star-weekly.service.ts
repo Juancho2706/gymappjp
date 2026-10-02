@@ -30,11 +30,11 @@ import { normalizePlatformEmail, sanitizePlatformEmail } from '@/lib/auth/platfo
 type Admin = SupabaseClient<Database>
 
 /** PostgREST corta en 1000 filas por respuesta: todo listado se pagina hasta página corta. */
-const PAGE_SIZE = 1000
+export const PAGE_SIZE = 1000
 /** Guarda de bucle: 200 páginas × 1000 filas, imposible con una cohorte semanal. */
 const MAX_PAGES = 200
 /** Tamaño de chunk de ids para los `.in` (evita URLs gigantes en el query string). */
-const COACH_ID_CHUNK = 100
+export const COACH_ID_CHUNK = 100
 
 /**
  * n MÍNIMO POR GUARDARRAÍL (regla dura de W0.1 / SPEC §2.2): bajo esto la celda va NULL y el
@@ -105,10 +105,12 @@ type CoachRow = {
     logo_url: string | null
     subscription_status: string | null
     registration_ip: string | null
+    /** Superficie del alta (B4). La North Star no la usa; la lee el embudo por superficie. */
+    signup_surface: string | null
 }
 
 const COACH_COLUMNS =
-    'id, created_at, persona, primary_color, logo_url, subscription_status, registration_ip'
+    'id, created_at, persona, primary_color, logo_url, subscription_status, registration_ip, signup_surface'
 
 type ClientRow = {
     id: string
@@ -128,7 +130,7 @@ type AuthUserInfo = {
     lastSignInAt: string | null
 }
 
-type CohortCoach = CoachRow & { email: string; auth: AuthUserInfo }
+export type CohortCoach = CoachRow & { email: string; auth: AuthUserInfo }
 
 type CohortClient = ClientRow & {
     lastSignInAt: string | null
@@ -142,7 +144,7 @@ type PageResponse = { data: unknown; error: { message: string } | null }
  * `.order(...)` ESTABLE antes del `.range`: sin orden explícito Postgres puede repetir u OMITIR
  * filas entre páginas, y una fila omitida acá es un coach que desaparece de la métrica.
  */
-async function fetchAllPages<T>(
+export async function fetchAllPages<T>(
     buildQuery: (from: number, to: number) => PromiseLike<PageResponse>,
     pageSize: number
 ): Promise<T[]> {
@@ -158,7 +160,7 @@ async function fetchAllPages<T>(
     return out
 }
 
-function chunked<T>(items: T[], size: number): T[][] {
+export function chunked<T>(items: T[], size: number): T[][] {
     const out: T[][] = []
     for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size))
     return out
@@ -212,7 +214,7 @@ async function fetchAuthUser(admin: Admin, id: string): Promise<AuthUserInfo | n
  * El `join auth.users` de la SQL es INNER: un coach sin usuario de auth (o sin correo) no entra —
  * no se le puede aplicar la purga de cuentas de prueba ni resolver la autoinvitación.
  */
-async function loadCohort(admin: Admin, desde: Date, hasta: Date): Promise<CohortCoach[]> {
+export async function loadCohort(admin: Admin, desde: Date, hasta: Date): Promise<CohortCoach[]> {
     const rows = await fetchAllPages<CoachRow>(
         (from, to) =>
             admin
@@ -246,6 +248,37 @@ async function loadCohort(admin: Admin, desde: Date, hasta: Date): Promise<Cohor
 }
 
 /**
+ * Detector del autoinvitado (el coach que se crea a sí mismo como alumno para probar): misma
+ * normalización de correo + la lista manual `SELF_INVITES_MANUAL`. Lo comparten la North Star y el
+ * embudo por superficie (`surface-funnel.service.ts`) para que «sumó alumno» signifique lo mismo en
+ * los dos. Devuelve `false` para un coach que no está en la cohorte.
+ */
+export function makeSelfInviteDetector(
+    coaches: ReadonlyArray<{ id: string; email: string }>
+): (coachId: string, clientEmailRaw: string | null) => boolean {
+    const emailByCoachId = new Map(coaches.map((c) => [c.id, c.email] as const))
+    const normByCoachId = new Map(
+        coaches.map((c) => [c.id, normalizePlatformEmail(c.email)] as const)
+    )
+    const manualPairs = new Set(
+        SELF_INVITES_MANUAL.map(
+            ([coachEmail, clientEmail]) =>
+                `${sanitizePlatformEmail(coachEmail)} ${sanitizePlatformEmail(clientEmail)}`
+        )
+    )
+    return (coachId, clientEmailRaw) => {
+        const coachEmail = emailByCoachId.get(coachId)
+        const coachNorm = normByCoachId.get(coachId)
+        if (!coachEmail || !coachNorm) return false
+        const clientEmail = sanitizePlatformEmail(clientEmailRaw ?? '')
+        return (
+            normalizePlatformEmail(clientEmail) === coachNorm ||
+            manualPairs.has(`${coachEmail} ${clientEmail}`)
+        )
+    }
+}
+
+/**
  * Alumnos de la cohorte con el predicado canónico COMPLETO de SPEC §2.1:
  * `is_demo IS NOT TRUE AND is_archived = false AND org_id IS NULL AND team_id IS NULL`,
  * creados hasta el corte. `clients.id` ES el auth uid del alumno (verificado en LIVE), así que su
@@ -259,16 +292,11 @@ async function loadClients(
     const byCoach = new Map<string, CohortClient[]>()
     if (coaches.length === 0) return byCoach
 
-    const emailByCoachId = new Map(coaches.map((c) => [c.id, c.email] as const))
-    const normByCoachId = new Map(
-        coaches.map((c) => [c.id, normalizePlatformEmail(c.email)] as const)
+    // Mismo descarte de siempre: un coach sin correo normalizable no aporta alumnos.
+    const coachIds = new Set(
+        coaches.filter((c) => c.email && normalizePlatformEmail(c.email)).map((c) => c.id)
     )
-    const manualPairs = new Set(
-        SELF_INVITES_MANUAL.map(
-            ([coachEmail, clientEmail]) =>
-                `${sanitizePlatformEmail(coachEmail)} ${sanitizePlatformEmail(clientEmail)}`
-        )
-    )
+    const isSelfInvite = makeSelfInviteDetector(coaches)
 
     for (const chunk of chunked(coaches.map((c) => c.id), COACH_ID_CHUNK)) {
         const rows = await fetchAllPages<ClientRow>(
@@ -292,15 +320,8 @@ async function loadClients(
         })
 
         for (const row of rows) {
-            if (!row.coach_id) continue
-            const coachEmail = emailByCoachId.get(row.coach_id)
-            const coachNorm = normByCoachId.get(row.coach_id)
-            if (!coachEmail || !coachNorm) continue
-
-            const clientEmail = sanitizePlatformEmail(row.email ?? '')
-            const selfInvited =
-                normalizePlatformEmail(clientEmail) === coachNorm ||
-                manualPairs.has(`${coachEmail} ${clientEmail}`)
+            if (!row.coach_id || !coachIds.has(row.coach_id)) continue
+            const selfInvited = isSelfInvite(row.coach_id, row.email)
 
             const auth = await fetchAuthUser(admin, row.id)
             const list = byCoach.get(row.coach_id) ?? []
