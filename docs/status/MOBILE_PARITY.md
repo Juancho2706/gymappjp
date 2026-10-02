@@ -12,6 +12,15 @@ source_of_truth: apps/web responsive + apps/mobile
 
 > **Preservación de funciones** (qué se movió de lugar, qué quedó **órfano** en el rediseño, y la deuda de paridad mobile): [`REDESIGN_FEATURE_MATRIX.md`](REDESIGN_FEATURE_MATRIX.md).
 
+> **2026-10-02 (rama `casa-en-orden-0210`, tanda 1 del onboarding RN)**: paridad con la web en el alumno de ejemplo —
+> píldora «De ejemplo» en el directorio (en la tabla densa reemplaza el correo), «De ejemplo ·» en la cabecera de la
+> ficha, menú sin «Archivar» y con «Borrar ejemplo» (texto neutro), borrado por `deleteDemoStudent` vía la API—;
+> «Ver mi guía de inicio» en Soporte (solo panel personal), aha emitido una vez entre web y app (`ahaMomentSent`), tour
+> corto del builder por coach (`lib/builder-tour-seen.ts`, migra la clave global vieja), miles en los resúmenes de
+> sesión, «Legado (SMAE)» en Porciones con la regla del picker, ficha sin `side_photo_url`/`receipt_url`. EN
+> PRODUCCIÓN por OTA: 1.1.3 android `a66adae5` / ios `21c03c00`, port 1.1.2 android `77cdf08b` (tag
+> `ota/1.1.2-20261002`). **QA en device pendiente.**
+
 > **2026-10-01 (plan B «Activación» RN; [TASKS § W8 v2](../specs/coach-onboarding-v2/TASKS.md))**: paridad con la web.
 > Home del coach con 0 alumnos reales: tarjeta «Tu primer alumno» primero (`components/coach/FirstStudentCard.tsx`, copy en
 > `@eva/onboarding` `first-student.ts`) y sin la card «Prioridad de hoy»; abre el alta guiada `?invite=1`. Ficha del alumno

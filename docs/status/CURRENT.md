@@ -44,7 +44,7 @@ verdes. De «Kilos o libras» queda solo el barrido W5.4 ([TASKS](../specs/kg-lb
    [TASKS § W6 v2](../specs/coach-onboarding-v2/TASKS.md)); el owner fijó `ONBOARDING_BEHAVIOR_EMAILS_SINCE=2026-10-02T00:00:00Z`
    y sacó el DRY_RUN; el cron de las 02:00 UTC corrió con `dry=false` (0 candidatos todavía). Plan B «Activación»
    (panel vacío, ficha «todavía no entra», alumno sin programa, baja en el admin) en producción; B4 (embudo por superficie en el correo de los lunes, columna `coaches.signup_surface`) hecho el 02-10; queda QA device. W8.4.2B
-   (disparo en línea del aha desde series y comidas web/API) mergeado en `rnmobiledenuevo` el 02-10, sin deploy; quedan W7, F5.3–F5.5 RN y D4.
+   (disparo en línea del aha desde series y comidas web/API) en producción el 02-10 (`41bcdcc5`); quedan W7, F5.3–F5.5 RN y D4.
    `FREE_COACH_DRIP_ENABLED` **no** se setea.
 3. **Embudo Free→Pro** ([spec](../specs/embudo-free-pro/SPEC.md)): W0–W6 en producción; queda App Store Connect (W7.4).
 4. **FC de toda la sesión** (punto 2 de Movens, fuera del tren «Vuelta nueva»): plan aparte, arranca preguntándole
@@ -76,10 +76,13 @@ verdes. De «Kilos o libras» queda solo el barrido W5.4 ([TASKS](../specs/kg-lb
 
 ### 5. Higiene y deuda técnica (tren «Casa en orden», ola C)
 
-1. **Rama `casa-en-orden-0210` (02-10, mergeada en `rnmobiledenuevo`, sin push ni deploy):** `next` 16.3.5 → 16.3.8 (**crítica**
+1. **Rama `casa-en-orden-0210` — ✅ EN PRODUCCIÓN 02-10** (web `master` `41bcdcc5` = `dpl_GAnzGBhZ…` READY 21:37Z; migración
+   aplicada en LIVE y verificada: `anon` sin EXECUTE en las 2 funciones; OTA 1.1.3 android `a66adae5` / ios `21c03c00` + port
+   1.1.2 android `77cdf08b`, [registro](../operations/MOBILE_RELEASES_OTA.md)). **Queda QA corto del owner**: borrar el ejemplo
+   en web y app, feed del panel, sesión con más de 1.000 kg; y confirmar en 24 h que bajan los `42703` de la ficha RN. Contenido: `next` 16.3.5 → 16.3.8 (**crítica**
    GHSA-vcvr-r3jv-pc5j, RCE en `next/og` ImageResponse: la usan `/api/og`, `/api/pr-card`, splash y manifest) +
    pisos de seguridad in-major (`vitest` 4.1.11, `js-yaml`, `undici`, `brace-expansion`, `fast-uri`, `dompurify`);
-   migración **sin aplicar** `20261002170000_revoke_anon_enterprise_read_rpcs.sql` (quita `anon` de
+   migración `20261002170000_revoke_anon_enterprise_read_rpcs.sql` (quita `anon` de
    `get_enterprise_alumno_context`/`get_org_branding`, dry-run en LIVE OK); fuera la llamada a `purge_old_audit_logs`
    (no existe en LIVE); RN deja de pedir `side_photo_url`/`receipt_url` (16+16 errores `42703` en 24 h, necesita OTA).
    Siguen en `pnpm audit` (build/tooling RN, sin parche in-major): `image-size`, `node-forge`, `esbuild` (low).
@@ -92,7 +95,7 @@ verdes. De «Kilos o libras» queda solo el barrido W5.4 ([TASKS](../specs/kg-lb
    Dos refutaciones independientes aplicadas. **Orden de salida: deploy web ANTES del OTA** (la app nueva lee
    `ahaMomentSent` del endpoint; contra el servidor viejo re-emitiría el aha en cada visita a la guía).
    Owner 02-10: cambios visuales aprobados tal cual; diálogo «Borrar alumno de ejemplo» con texto neutro (no asume
-   género del demo); la migración se aplica en LIVE **después** del deploy web.
+   género del demo); la migración se aplicó en LIVE **después** del deploy web, como pidió.
 2. DB: 3 tablas `_bak_*` (19-08, 21-08, 05-09) listas para retiro.
 3. Regen completo de `database.types.ts` (deja 13 errores en 7 archivos V1; retira los workarounds de T2.3
    y el cast `V2ReadClient`) · matriz RLS con JWTs reales + preflight V1→V2 (sin cambios desde 08-06).
