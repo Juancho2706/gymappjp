@@ -429,9 +429,14 @@ export async function deleteDemoStudent(
     // correo del demo que haría fallar para siempre el `createUser` del re-sembrado.
     let orphanResolved = true
     if (inventory != null && !rowIds.has(inventory.clientId)) {
-        const { data: orphan, error: orphanError } = await admin.auth.admin.getUserById(inventory.clientId)
-        if (orphan?.user?.email === demoEmailFor(coachId)) orphanIds.push(inventory.clientId)
-        else if (orphanError != null && (orphanError as { status?: number }).status !== 404) orphanResolved = false
+        try {
+            const { data: orphan, error: orphanError } = await admin.auth.admin.getUserById(inventory.clientId)
+            if (orphan?.user?.email === demoEmailFor(coachId)) orphanIds.push(inventory.clientId)
+            else if (orphanError != null && (orphanError as { status?: number }).status !== 404) orphanResolved = false
+        } catch {
+            // `getUserById` LANZA (no devuelve error) con un id que no es UUID: ese id no puede ser un
+            // usuario real, así que no hay huérfano que borrar y el inventario basura se limpia.
+        }
     }
 
     let deleted = false
@@ -481,6 +486,18 @@ export async function deleteDemoStudent(
             .is('team_id', null)
             .select('id')
         if ((removedAreas ?? []).length > 0) deleted = true
+    }
+
+    // Si una fila del demo sigue viva (falló el borrado en Auth Y el de la tabla), el borrado NO se
+    // reporta como hecho: el coach vería «listo» con el ejemplo todavía en su lista.
+    if (rowIds.size > 0) {
+        const { data: still } = await admin
+            .from('clients')
+            .select('id')
+            .in('id', [...rowIds])
+            .eq('coach_id', coachId)
+            .eq('is_demo', true)
+        if ((still ?? []).length > 0) return { ok: false, reason: 'demo_still_present' }
     }
 
     if (inventory != null && orphanResolved) {

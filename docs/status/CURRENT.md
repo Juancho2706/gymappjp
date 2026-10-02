@@ -86,6 +86,8 @@ verdes. De «Kilos o libras» queda solo el barrido W5.4 ([TASKS](../specs/kg-lb
    archivable y borrado por su camino (W8.1.4), demo rotulado en dashboard y RN (W8.1.6, W8.2.6), rutas de eventos
    de onboarding acotadas a lo que emite cada cliente + dedupe/rate limit en móvil (W8.2.5, W8.5.3), aha desde RN,
    tour del builder RN por coach, miles en resúmenes V2, «Legado» en Porciones RN, código muerto RN. RN ⇒ OTA.
+   Dos refutaciones independientes aplicadas. **Orden de salida: deploy web ANTES del OTA** (la app nueva lee
+   `ahaMomentSent` del endpoint; contra el servidor viejo re-emitiría el aha en cada visita a la guía).
 2. DB: 3 tablas `_bak_*` (19-08, 21-08, 05-09) listas para retiro.
 3. Regen completo de `database.types.ts` (deja 13 errores en 7 archivos V1; retira los workarounds de T2.3
    y el cast `V2ReadClient`) · matriz RLS con JWTs reales + preflight V1→V2 (sin cambios desde 08-06).

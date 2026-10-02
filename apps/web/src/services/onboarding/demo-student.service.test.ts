@@ -114,7 +114,13 @@ function makeFakeAdmin(overrides: Record<string, Record<string, unknown>[]> = {}
 
     const respond: Responder = (op) => {
         state.ops.push(op)
-        if (op.kind === 'select') return state.selects[op.table] ?? []
+        if (op.kind === 'select') {
+            const rows = state.selects[op.table] ?? []
+            // `clients` borra en cascada con su usuario Auth: una fila cuyo usuario ya se borró deja
+            // de aparecer en la relectura de verificación (`.in('id', …)`) de `deleteDemoStudent`.
+            const relectura = op.table === 'clients' && op.filters.some(([kind, column]) => kind === 'in' && column === 'id')
+            return relectura ? rows.filter((row) => !state.deletedUsers.includes(String(row.id))) : rows
+        }
         if (op.kind === 'insert') {
             const rows = Array.isArray(op.payload) ? op.payload : [op.payload]
             return rows.map((row) => {
@@ -435,6 +441,31 @@ describe('deleteDemoStudent', () => {
         expect(opsFor(state, 'workout_section_templates', 'delete')[0]?.filters).toEqual(
             expect.arrayContaining([['is', 'team_id', null]]),
         )
+    })
+
+    it('si la fila del demo sobrevive (falló Auth y la tabla) responde ok:false, no «listo»', async () => {
+        const { admin, state } = makeFakeAdmin({
+            coaches: [{ onboarding_guide: {} }],
+            clients: [{ id: 'demo-1' }],
+        })
+        ;(admin.auth.admin as unknown as { deleteUser: (id: string) => Promise<unknown> }).deleteUser = async () => ({
+            data: null,
+            error: { status: 500, message: 'auth caído' },
+        })
+        const result = await deleteDemoStudent(admin, { coachId: COACH })
+        expect(result).toEqual({ ok: false, reason: 'demo_still_present' })
+        expect(state.deletedUsers).toEqual([])
+    })
+
+    it('un id de inventario que no es UUID (getUserById lanza) no rompe el borrado', async () => {
+        const { admin } = makeFakeAdmin({
+            coaches: [{ onboarding_guide: { demo: { version: 1, clientId: 'no-es-uuid', areaIds: [] } } }],
+            clients: [],
+        })
+        ;(admin.auth.admin as unknown as { getUserById: (id: string) => Promise<unknown> }).getUserById = async () => {
+            throw new Error('Expected parameter to be UUID')
+        }
+        await expect(deleteDemoStudent(admin, { coachId: COACH })).resolves.toMatchObject({ ok: true })
     })
 
     it('sin demo ni inventario no borra nada y responde `deleted: false`', async () => {
