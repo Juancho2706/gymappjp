@@ -221,15 +221,6 @@ export async function GET(req: Request) {
     let purged = 0
     let errors = 0
 
-    // ── Purge org_audit_logs older than 90 days ──────────────────────────────
-    try {
-        const { error } = await admin.rpc('purge_old_audit_logs' as never)
-        if (error) throw error
-        console.info('[cron/purge-data] purge_old_audit_logs done')
-    } catch (err) {
-        console.warn('[cron/purge-data] purge_old_audit_logs failed (may not exist yet):', err)
-    }
-
     // ── Purge soft-deleted org members (deleted >30 days ago) ────────────────
     try {
         const { count, error } = await admin
