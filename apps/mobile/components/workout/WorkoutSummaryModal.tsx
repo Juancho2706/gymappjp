@@ -7,6 +7,7 @@ import { useTheme } from '../../context/ThemeContext'
 import { useEvaMotion } from '../../lib/motion'
 import { haptics } from '../../lib/haptics'
 import { AnimatedNumber } from '../AnimatedNumber'
+import { formatThousandsEsCl } from '@eva/workout-engine'
 
 // Immersive "gym mode" palette — the summary is always-dark (1:1 with web
 // WorkoutSummaryOverlay on ink-950). Brand accent stays white-label aware.
@@ -107,7 +108,7 @@ export function WorkoutSummaryModal({
   }, [exerciseBreakdown])
 
   async function handleShare() {
-    const text = `¡Completé "${planTitle}"! 💪 ${stats.completedSets} series · ${stats.totalReps} reps · ${Math.round(stats.totalVolume)} kg`
+    const text = `¡Completé "${planTitle}"! 💪 ${stats.completedSets} series · ${stats.totalReps} reps · ${formatThousandsEsCl(stats.totalVolume)} kg`
     try {
       await Share.share({ message: text })
       await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light)
@@ -180,7 +181,7 @@ export function WorkoutSummaryModal({
                       <>
                         {' · '}
                         <Text style={{ color: ON_DARK, fontFamily: FONT_MONO }}>
-                          {Math.round(ex.volume)}
+                          {formatThousandsEsCl(ex.volume)}
                         </Text>
                         {' kg'}
                       </>
@@ -202,7 +203,7 @@ export function WorkoutSummaryModal({
                   <View style={styles.barHeader}>
                     <Text style={[styles.barLabel, { color: ON_DARK, fontFamily: theme.fontSans }]}>{group}</Text>
                     <Text style={[styles.barValue, { color: ON_DARK_MUTED, fontFamily: FONT_MONO }]}>
-                      {Math.round(vol)} kg
+                      {formatThousandsEsCl(vol)} kg
                     </Text>
                   </View>
                   <View style={[styles.barTrack, { backgroundColor: W10 }]}>
@@ -251,7 +252,7 @@ function StatCard({ label, value, theme }: { label: string; value: number; theme
     <View style={[styles.statCard, { borderColor: BORDER_INV, backgroundColor: INK_900 }]}>
       <AnimatedNumber
         value={value}
-        format={(n) => `${Math.round(n)}`}
+        format={(n) => formatThousandsEsCl(n)}
         style={[styles.statValue, { color: theme.primary, fontFamily: FONT_MONO }]}
       />
       <Text style={[styles.statLabel, { color: ON_DARK_MUTED, fontFamily: theme.fontSans }]}>{label}</Text>

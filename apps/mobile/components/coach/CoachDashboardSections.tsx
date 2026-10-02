@@ -227,7 +227,7 @@ export function MobileBillingBanners({ coach }: { coach: CoachProfile; activeCli
  * daría `NaN%` de ancho. Piso defensivo, no una regla de negocio.
  */
 function eliteClientLimitFor(coach: CoachProfile): number {
-  return Math.max(1, coach.maxClients ?? tierMaxClientsFor('elite', coach.createdAt))
+  return Math.max(1, coach.maxClients ?? tierMaxClientsFor('elite', coach.createdAt, null))
 }
 
 /**
@@ -582,7 +582,7 @@ export function quickClientCapFor(coach: CoachProfile, capClients: number): Quic
   const fallback =
     coach.subscriptionTier === 'free'
       ? freeClientLimitFor(coach.createdAt)
-      : tierMaxClientsFor(coach.subscriptionTier, coach.createdAt)
+      : tierMaxClientsFor(coach.subscriptionTier, coach.createdAt, null)
   const maxClients = Math.max(1, coach.maxClients > 0 ? coach.maxClients : fallback)
   // El alta corta del home siempre crea en el espacio personal del coach.
   return { capClients, maxClients, tier: coach.subscriptionTier, workspace: { kind: 'standalone', teamId: null, orgId: null } }

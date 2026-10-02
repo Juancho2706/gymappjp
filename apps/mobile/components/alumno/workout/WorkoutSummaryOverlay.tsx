@@ -18,6 +18,7 @@ import {
   compactDistance,
   formatClockDuration,
   formatSessionDuration,
+  formatThousandsEsCl,
   muscleGroupsToRegionIntensity,
   MUSCLE_REGIONS,
   summarizeSessionByKind,
@@ -289,7 +290,7 @@ export function WorkoutSummaryOverlay({
 
   const heroSecondary =
     totalVolume > 0
-      ? { value: String(Math.round(totalVolume)), unit: 'kg', label: 'Volumen total' }
+      ? { value: formatThousandsEsCl(totalVolume), unit: 'kg', label: 'Volumen total' }
       : session.totalCardioDistanceM > 0
         ? { value: compactDistance(session.totalCardioDistanceM, 'm'), unit: undefined as string | undefined, label: 'Distancia' }
         : { value: String(completedSets), unit: undefined as string | undefined, label: completedSets === 1 ? 'Serie' : 'Series' }
@@ -306,7 +307,7 @@ export function WorkoutSummaryOverlay({
   // se leía como 40 min siendo 40 s). Los tiles de cardio/hold usan `formatClockDuration` (mm:ss).
   const durationLabel = formatSessionDuration(durationSec)
   const prSuffix = detectedPRs.length ? ` 🏆 ${detectedPRs.length} récord${detectedPRs.length > 1 ? 's' : ''}!` : ''
-  const sessionShareMsg = `¡Completé "${planTitle}"! 💪 ${completedSets} series · ${totalReps} reps · ${Math.round(totalVolume)} kg${prSuffix}`
+  const sessionShareMsg = `¡Completé "${planTitle}"! 💪 ${completedSets} series · ${totalReps} reps · ${formatThousandsEsCl(totalVolume)} kg${prSuffix}`
 
   const onOpenPr = useCallback((pr: DetectedPR) => {
     haptics.tap()
@@ -466,7 +467,7 @@ export function WorkoutSummaryOverlay({
                       números en `font-bold text-on-dark`; el texto 'series ·'/'kg vol.' va en peso
                       normal muted (WorkoutSummaryOverlay.tsx:393-395). No es mono. */}
                   <Text style={{ fontFamily: theme.fontSans, fontSize: 12, color: ON_DARK_MUTED, fontVariant: ['tabular-nums'] }}>
-                    <Text style={{ fontFamily: BOLD, color: ON_DARK }}>{ex.sets.length}</Text> series · <Text style={{ fontFamily: BOLD, color: ON_DARK }}>{Math.round(ex.totalVolume)}</Text> kg vol.
+                    <Text style={{ fontFamily: BOLD, color: ON_DARK }}>{ex.sets.length}</Text> series · <Text style={{ fontFamily: BOLD, color: ON_DARK }}>{formatThousandsEsCl(ex.totalVolume)}</Text> kg vol.
                   </Text>
                 </FadeIn>
               ))}
@@ -522,7 +523,7 @@ export function WorkoutSummaryOverlay({
                       <Text style={{ fontFamily: MEDIUM, fontSize: 12, color: ON_DARK }}>{group}</Text>
                       {/* Web (WorkoutSummaryOverlay.tsx:465) pinta "{vol} kg" en SANS `text-on-dark-muted`,
                           sin mono/tabular. Espejamos la sans; tabular-nums sólo alinea los dígitos. */}
-                      <Text style={{ fontFamily: theme.fontSans, fontSize: 12, color: ON_DARK_MUTED, fontVariant: ['tabular-nums'] }}>{Math.round(vol)} kg</Text>
+                      <Text style={{ fontFamily: theme.fontSans, fontSize: 12, color: ON_DARK_MUTED, fontVariant: ['tabular-nums'] }}>{formatThousandsEsCl(vol)} kg</Text>
                     </View>
                     <View style={{ height: 8, borderRadius: 4, backgroundColor: W10, overflow: 'hidden' }}>
                       <MuscleBar pct={pct} color={brand} reduced={motion.reduced} />
@@ -616,7 +617,7 @@ export function WorkoutSummaryOverlay({
       >
         <ShareCardEyebrow color={brand}>ENTRENAMIENTO</ShareCardEyebrow>
         <ShareCardTitle>{planTitle}</ShareCardTitle>
-        <ShareCardHero value={totalVolume > 0 ? String(Math.round(totalVolume)) : durationLabel} unit={totalVolume > 0 ? 'kg' : undefined} color={brand} />
+        <ShareCardHero value={totalVolume > 0 ? formatThousandsEsCl(totalVolume) : durationLabel} unit={totalVolume > 0 ? 'kg' : undefined} color={brand} />
         <ShareCardPill>{completedSets} series{totalReps > 0 ? ` · ${totalReps} reps` : ''}</ShareCardPill>
       </ShareCardPreview>
 

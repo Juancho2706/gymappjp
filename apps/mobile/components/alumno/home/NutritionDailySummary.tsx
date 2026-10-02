@@ -20,7 +20,7 @@ import {
 } from '../../../lib/nutrition-utils'
 import { Badge } from '../../Badge'
 import { Card } from '../../Card'
-import { MACRO_COLORS } from '../../MacroRingSummary'
+import { MACRO_COLORS } from '../../macro-colors'
 import { DANGER_500, EMBER_500, SUCCESS_500 } from './types'
 
 interface MealRow { id: string; name: string }

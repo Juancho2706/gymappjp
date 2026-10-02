@@ -28,13 +28,23 @@
  * Pricing v3 (docs/specs/pricing-v3, decisión del owner 2026-08-21: 1A 2A 3A 4A 5A 6A):
  * - El white-label pasa a estar en TODOS los planes desde v3. Esto REVIERTE la decisión CEO
  *   2026-06-21 («branding = Pro+ ENTERO», white-label v2): ya NO es la regla vigente.
- * - Pro se distingue por dos cosas y solo dos: el CUPO (25 alumnos) y NO llevar el sello
+ * - Pro se distingue por dos cosas y solo dos: el CUPO (25 alumnos; 10 desde v4) y NO llevar el sello
  *   «Hecho con EVA» (capacidad `showsEvaBadge`, helper homónimo). Free sí lo lleva.
  * - Free = 1 alumno (TIER_CONFIG.free.maxClients), con marca propia completa.
  * - El grandfather por USO vive en la columna `coaches.max_clients` (backfill del 2026-08-21,
  *   que NO toca a los free con 2+ alumnos). La escalera de fecha (`tierMaxClientsFor`) es solo
  *   write-path (qué número se ESCRIBE en activaciones/bajadas) y fallback defensivo cuando el
  *   select omite la columna — NUNCA es la fuente de verdad del cupo de un coach concreto.
+ *
+ * Pricing v4 (docs/specs/pricing-v4, propuesta del socio traída por el owner 2026-10-02, opción A):
+ * - Catálogo de venta: Free 1 · Pro 2–10 · Elite 11–60. Precios SIN cambio.
+ * - Grandfather por COMPRA, no por fecha de alta: el coach que al momento del corte tenía un plan
+ *   pago (pro/elite/growth/scale) queda marcado en `coaches.paid_caps_grandfathered = true`
+ *   (backfill de la migración pricing_v4) y conserva para siempre los cupos pagos previos (pro 30/25,
+ *   elite 100/60 según su fecha), también al renovar, cambiar de plan o recomprar tras cancelar.
+ * - Todo coach SIN la marca (los Free de hoy incluidos, aunque se hayan registrado antes) que compre
+ *   Pro/Elite recibe el catálogo v4. La escalera de fecha del Free (3/2/1) NO cambia.
+ * - El corte es el instante en que corre la migración (no hay constante de fecha): la marca es el dato.
  *
  * Contrato de fallback del paquete (retiro de Starter, S1):
  * - Un tier fuera del catálogo se trata como free (precio 0, capabilities de free, ciclos [], rank 0).
@@ -167,9 +177,10 @@ const MODULES_INCLUDED_FEATURE = '4 módulos profesionales incluidos'
 export const TIER_STUDENT_RANGE_LABEL: Record<SubscriptionTier, string> = {
     // Pricing v3: el Free vende 1 alumno CON marca propia (ese es el gancho, no el cupo).
     free: '1 alumno con tu marca',
-    pro: 'Hasta 25 alumnos',
-    // Contrato de venta pricing v2: Elite = el tramo 26–60 (Pro cubre hasta 25).
-    elite: '26–60 alumnos',
+    // Pricing v4 (owner 2026-10-02): Pro = el tramo 2–10 (Free cubre 1).
+    pro: '2–10 alumnos',
+    // Pricing v4: Elite = el tramo 11–60 (Pro cubre hasta 10).
+    elite: '11–60 alumnos',
     // LEGACY — fuera de venta, grandfathered + placeholder team/org_managed (migracion 20260609230000). NO borrar.
     growth: '61–120 alumnos',
     // LEGACY — fuera de venta, grandfathered + placeholder team/org_managed (migracion 20260609230000). NO borrar.
@@ -198,9 +209,10 @@ export const TIER_LABELS: Record<SubscriptionTier, string> = {
     scale: 'Scale',
 }
 
-// Pricing v3: maxClients = catálogo de VENTA (coaches NUEVOS, creados >= PRICING_V3_CUTOVER):
-// free 1 / pro 25 / elite 60. Los coaches anteriores conservan su cupo real en la columna
-// `coaches.max_clients` (que GANA en todos los gates); tierMaxClientsFor() es el write-path/fallback.
+// Pricing v4: maxClients = catálogo de VENTA: free 1 / pro 10 / elite 60. Los coaches anteriores
+// conservan su cupo real en la columna `coaches.max_clients` (que GANA en todos los gates), y los
+// pagadores previos al corte v4 (`paid_caps_grandfathered`) lo conservan también en el write-path:
+// tierMaxClientsFor() es el write-path/fallback.
 export const TIER_CONFIG: Record<SubscriptionTier, TierConfig> = {
     free: {
         label: 'Free',
@@ -213,7 +225,8 @@ export const TIER_CONFIG: Record<SubscriptionTier, TierConfig> = {
     },
     pro: {
         label: 'Pro',
-        maxClients: 25,
+        // Pricing v4 (owner 2026-10-02): 25 → 10. Los pagadores previos conservan 25/30.
+        maxClients: 10,
         monthlyPriceClp: 29990,
         features: [...SHARED_TIER_FEATURES, MODULES_INCLUDED_FEATURE, 'Branding personalizado', 'Planes de nutrición'],
     },
@@ -317,9 +330,9 @@ export function getTierPriceClp(tier: SubscriptionTier, cycle: BillingCycle) {
 }
 
 /**
- * Catálogo de VENTA: límite de alumnos para coaches NUEVOS (creados >= PRICING_V3_CUTOVER).
+ * Catálogo de VENTA (pricing v4): límite de alumnos para coaches NUEVOS sin grandfather.
  * NO usar cuando hay un coach concreto a mano — ahí manda la columna `coaches.max_clients` y,
- * como fallback, `tierMaxClientsFor(tier, created_at)` (escalera de grandfather v2/v3).
+ * como fallback, `tierMaxClientsFor(tier, created_at, paid_caps_grandfathered)`.
  */
 export function getTierMaxClients(tier: SubscriptionTier) {
     // Tier fuera del union (string arbitrario de DB o de un form): cae al piso de FREE, jamás al
@@ -361,8 +374,9 @@ const PRE_CUTOVER_TIER_MAX_CLIENTS: Record<SubscriptionTier, number> = {
 
 /**
  * Límites del mundo pricing-v2 (vigentes entre PRICING_V2_CUTOVER y PRICING_V3_CUTOVER).
- * Solo free cambia en v3 (2 → 1); el resto es idéntico al catálogo actual y se repite acá
- * para que el peldaño del medio sea explícito y no dependa de TIER_CONFIG (que ya es v3).
+ * Solo free cambia en v3 (2 → 1). Los tiers PAGOS de esta tabla son además el cupo grandfathered
+ * de todo pagador previo a v4 creado >= PRICING_V2_CUTOVER (pro 25 / elite 60): por eso no se lee
+ * TIER_CONFIG, que desde v4 tiene pro 10.
  */
 const V2_TIER_MAX_CLIENTS: Record<SubscriptionTier, number> = {
     free: 2,
@@ -373,26 +387,43 @@ const V2_TIER_MAX_CLIENTS: Record<SubscriptionTier, number> = {
 }
 
 /**
- * Límite de alumnos para UN coach concreto — escalera de 3 peldaños por fecha de creación.
+ * Límite de alumnos para UN coach concreto.
  *
  * Regla del dueño (2026-08-17, literal): «los pro actuales retienen sus 30; los free
  * actuales retienen sus 3; y los demás archivados igual». NINGÚN coach existente pierde
  * capacidad por un cambio de catálogo.
  *
- * - Creado ANTES de PRICING_V2_CUTOVER ⇒ mundo pre-v2 (free 3 / pro 30 / elite 100).
- * - Creado entre V2 (incl.) y V3 (excl.) ⇒ mundo v2 (free 2 / pro 25 / elite 60).
- * - Creado >= PRICING_V3_CUTOVER ⇒ catálogo v3 vigente (TIER_CONFIG: free 1 / pro 25 / elite 60).
- * - Fecha null/undefined/inválida ⇒ se trata como coach PRE-v2 (fail-safe GENEROSO: ante la duda
- *   jamás se le quita capacidad a nadie).
+ * FREE — escalera de 3 peldaños por fecha de creación (v4 no la toca):
+ * - Creado ANTES de PRICING_V2_CUTOVER ⇒ 3 · entre V2 (incl.) y V3 (excl.) ⇒ 2 · >= V3 ⇒ 1.
  *
- * Pricing v3: este helper es SOLO write-path (qué número se escribe en activaciones/bajadas) y
- * fallback defensivo. El grandfather REAL de v3 es por USO y vive en la columna
- * `coaches.max_clients`, que gana en todos los gates cuando el select la trae.
+ * TIERS PAGOS — pricing v4 (owner 2026-10-02, opción A: grandfather por COMPRA):
+ * - `paidCapsGrandfathered === false` (coach SIN plan pago al corte v4, o creado después) ⇒
+ *   catálogo vigente (TIER_CONFIG: pro 10 / elite 60), sin importar su fecha de alta.
+ * - `true` (pagador al corte v4) ⇒ cupos pagos previos por fecha: creado antes de V2 ⇒
+ *   pro 30 / elite 100; desde V2 ⇒ pro 25 / elite 60.
+ * - `null`/`undefined` (el llamador no cargó la columna) ⇒ se trata como `true` (fail-safe
+ *   GENEROSO). Los write-paths de activación/renovación SIEMPRE pasan el valor de la fila.
+ *
+ * Fecha null/undefined/inválida ⇒ se trata como coach PRE-v2 (fail-safe GENEROSO: ante la duda
+ * jamás se le quita capacidad a nadie).
+ *
+ * Este helper es SOLO write-path (qué número se escribe en activaciones/bajadas/renovaciones) y
+ * fallback defensivo. El cupo vigente de un coach vive en la columna `coaches.max_clients`, que
+ * gana en todos los gates cuando el select la trae.
+ *
+ * El tercer parámetro es OBLIGATORIO a propósito: el compilador obliga a cada sitio a decidir
+ * (pasar `coach.paid_caps_grandfathered`, o `null` explícito si de verdad no lo tiene).
  */
 export function tierMaxClientsFor(
     tier: SubscriptionTier,
-    coachCreatedAt: string | Date | null | undefined
+    coachCreatedAt: string | Date | null | undefined,
+    paidCapsGrandfathered: boolean | null | undefined
 ): number {
+    // Tiers pagos sin grandfather v4: catálogo vigente, la fecha de alta no importa.
+    // Un tier fuera del union (string arbitrario de DB) NO entra acá: sigue al piso de free abajo.
+    if (tier !== 'free' && paidCapsGrandfathered === false && TIER_CONFIG[tier]) {
+        return TIER_CONFIG[tier].maxClients
+    }
     const createdMs =
         coachCreatedAt instanceof Date
             ? coachCreatedAt.getTime()
@@ -407,7 +438,10 @@ export function tierMaxClientsFor(
     if (createdMs < PRICING_V3_CUTOVER_MS) {
         return V2_TIER_MAX_CLIENTS[tier] ?? V2_TIER_MAX_CLIENTS.free
     }
-    return TIER_CONFIG[tier]?.maxClients ?? TIER_CONFIG.free.maxClients
+    // Post-v3: free es el catálogo (1); un pago con grandfather v4 (o desconocido) conserva los
+    // cupos pagos v2/v3 (pro 25 / elite 60) — TIER_CONFIG.pro ya es 10 (v4).
+    if (tier === 'free') return TIER_CONFIG.free.maxClients
+    return V2_TIER_MAX_CLIENTS[tier] ?? TIER_CONFIG.free.maxClients
 }
 
 /**
@@ -577,6 +611,10 @@ export function getTierNutritionSummary(_tier: SubscriptionTier): string {
     return 'Incluye planes de nutrición'
 }
 
+/**
+ * Recomendación por catálogo de VENTA (sin coach a mano). Con un coach concreto usar
+ * `getRecommendedTierFor`, que respeta su grandfather.
+ */
 export function getRecommendedTier(clientCount: number): SubscriptionTier {
     // Solo recomendamos tiers a la venta. "Más de elite" lo maneja la UI con el puente Teams, no un tier.
     return SALE_TIERS.find(t => TIER_CONFIG[t].maxClients >= clientCount) ?? 'elite'
@@ -585,16 +623,20 @@ export function getRecommendedTier(clientCount: number): SubscriptionTier {
 /**
  * Recomendación de tier para UN coach concreto (pricing v2, waves B): igual que
  * `getRecommendedTier` pero midiendo cada tier con SU límite real vía `tierMaxClientsFor`
- * (grandfather P2). Un coach VIEJO con 28 alumnos debe recibir «Pro (hasta 30)», no «Elite»:
- * si compra Pro, el write-path le fija 30. Para un coach nuevo (o fecha desconocida ⇒ fail-safe
- * viejo/generoso) la recomendación coincide con la del catálogo que le aplica.
- * Consumidores: emails de trial-expiry y el envío manual del panel admin.
+ * (grandfather). Un pagador VIEJO con 28 alumnos debe recibir «Pro (hasta 30)», no «Elite»:
+ * si compra Pro, el write-path le fija 30. Un coach sin grandfather v4 con 15 alumnos recibe
+ * Elite (su Pro topa en 10).
+ * Consumidores: emails de trial-expiry, banners de billing y el envío manual del panel admin.
  */
 export function getRecommendedTierFor(
     clientCount: number,
-    coachCreatedAt: string | Date | null | undefined
+    coachCreatedAt: string | Date | null | undefined,
+    paidCapsGrandfathered: boolean | null | undefined
 ): SubscriptionTier {
-    return SALE_TIERS.find(t => tierMaxClientsFor(t, coachCreatedAt) >= clientCount) ?? 'elite'
+    return (
+        SALE_TIERS.find(t => tierMaxClientsFor(t, coachCreatedAt, paidCapsGrandfathered) >= clientCount) ??
+        'elite'
+    )
 }
 
 // ── Dirección del cambio de plan (upgrade/downgrade) ──────────────────────────

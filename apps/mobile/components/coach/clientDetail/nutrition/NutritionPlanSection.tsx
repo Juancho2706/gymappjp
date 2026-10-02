@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
 import { Apple, ChevronRight, Copy, ExternalLink, Heart, Pencil } from 'lucide-react-native'
 import { Button, Card } from '../../../index'
-import { MACRO_COLORS } from '../../../MacroRingSummary'
+import { MACRO_COLORS } from '../../../macro-colors'
 import { useTheme } from '../../../../context/ThemeContext'
 import { FONT } from '../../../../lib/typography'
 

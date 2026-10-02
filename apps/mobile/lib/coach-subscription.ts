@@ -36,7 +36,7 @@ export interface CoachSubscriptionOverview {
  * null Y el coach YA esta en free (si viene de un plan pago, su columna es la del plan pago).
  */
 export function freeClientLimitFor(coachCreatedAt: string | Date | null | undefined): number {
-  return tierMaxClientsFor('free', coachCreatedAt)
+  return tierMaxClientsFor('free', coachCreatedAt, null)
 }
 
 export { TIER_LABELS }

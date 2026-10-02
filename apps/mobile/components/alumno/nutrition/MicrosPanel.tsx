@@ -5,7 +5,7 @@ import { ArrowUp, Check, ChevronDown, Triangle } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { FONT } from '../../../lib/typography'
 import { shadow } from '../../../lib/shadows'
-import { MACRO_COLORS } from '../../MacroRingSummary'
+import { MACRO_COLORS } from '../../macro-colors'
 import { apiFetch, ApiError } from '../../../lib/api'
 
 /**
