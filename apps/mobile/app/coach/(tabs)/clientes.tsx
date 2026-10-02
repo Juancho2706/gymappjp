@@ -1210,7 +1210,7 @@ export default function ClientesScreen() {
           <View style={{ gap: 14 }}>
             <Text style={{ color: theme.mutedForeground, fontFamily: FONT.ui, fontSize: 13.5, lineHeight: 19 }}>
               {deleteTarget.isDemo ? (
-                <>Se borra <Text style={{ color: theme.foreground, fontFamily: FONT.uiBold }}>{deleteTarget.fullName}</Text> y todo lo que sembramos con él. Puedes volver a sembrarlo desde Mi panel.</>
+                <>Se borra <Text style={{ color: theme.foreground, fontFamily: FONT.uiBold }}>{deleteTarget.fullName}</Text> junto con todo lo de ejemplo. Puedes volver a crearlo desde Mi panel.</>
               ) : (
                 <>¿Seguro que quieres eliminar a <Text style={{ color: theme.foreground, fontFamily: FONT.uiBold }}>{deleteTarget.fullName}</Text>? Esta acción eliminará su cuenta y todos sus datos asociados (rutinas, check-ins, progreso). No se puede deshacer.</>
               )}

@@ -970,7 +970,7 @@ export default function ClientDetailScreen() {
         <View style={{ gap: 14 }}>
           <Text style={{ color: theme.mutedForeground, fontSize: 13.5, lineHeight: 19 }}>
             {client.is_demo === true ? (
-              <>Se borra <Text style={{ color: theme.foreground }}>{client.full_name}</Text> y todo lo que sembramos con él. Puedes volver a sembrarlo desde Mi panel.</>
+              <>Se borra <Text style={{ color: theme.foreground }}>{client.full_name}</Text> junto con todo lo de ejemplo. Puedes volver a crearlo desde Mi panel.</>
             ) : (
               <>¿Seguro que quieres eliminar a <Text style={{ color: theme.foreground }}>{client.full_name}</Text>? Esta acción eliminará su cuenta y todos sus datos asociados (rutinas, check-ins, progreso). No se puede deshacer.</>
             )}

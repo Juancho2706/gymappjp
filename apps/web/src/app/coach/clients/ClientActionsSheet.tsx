@@ -354,7 +354,7 @@ export function ClientActionsSheet({ client, loginUrl, onClose, onEdit, initialC
                 title={isDemo ? 'Borrar alumno de ejemplo' : 'Eliminar alumno'}
                 body={
                     isDemo
-                        ? `Se borra ${name} y todo lo que sembramos con él. Puedes volver a sembrarlo desde Mi panel.`
+                        ? `Se borra ${name} junto con todo lo de ejemplo. Puedes volver a crearlo desde Mi panel.`
                         : `Esta acción eliminará la cuenta de ${name} y todos sus datos asociados (rutinas, check-ins, progreso). No se puede deshacer.`
                 }
                 cta={isDemo ? 'Borrar ejemplo' : 'Eliminar definitivamente'}
