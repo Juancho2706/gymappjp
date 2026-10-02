@@ -306,9 +306,15 @@ export default function CoachGuiaScreen() {
     )
     if (newlyDone.length > 0) patch.completed = { ...v2.guide.completed, ...completed }
 
+    // W8.2.5: el aha (paso 5) se emite UNA vez entre web y app. La marca viaja en este mismo parche
+    // (una sola escritura por visita, por el read-modify-write del jsonb).
+    const needsAha = completed.aha === true && !v2.guide.ahaMomentSent
+    if (needsAha) patch.ahaMomentSent = true
+
     if (Object.keys(patch).length === 0) return
     persistedRef.current = true
     void persistCoachOnboardingGuide(patch)
+    if (needsAha) void postCoachOnboardingEvent('aha_moment', { persona: v2.persona ?? 'sin_persona', surface: 'rn' }, 'aha')
   }, [v2, completed])
 
   const openStep = useCallback(

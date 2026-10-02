@@ -74,9 +74,17 @@ describe('parseMobileOnboardingV2', () => {
                 dismissed: false,
                 hidden: false,
                 guideSeenAt: '2026-08-22T10:00:00.000Z',
+                // Servidor viejo sin la marca ⇒ `false` (la app emite el aha una vez y la persiste).
+                ahaMomentSent: false,
             },
             signals: FULL.signals,
         })
+    })
+
+    it('W8.2.5: lee `ahaMomentSent` cuando el servidor la manda', async () => {
+        const { parseMobileOnboardingV2 } = await loadModule()
+        const parsed = parseMobileOnboardingV2({ ...FULL, guide: { ...FULL.guide, ahaMomentSent: true } })
+        expect(parsed.guide.ahaMomentSent).toBe(true)
     })
 
     it('sin `onboardingV2` (deploy viejo) degrada sin romperse: 5 pasos pendientes y persona nula', async () => {

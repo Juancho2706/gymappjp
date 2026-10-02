@@ -179,6 +179,9 @@ export async function GET(request: NextRequest) {
                 dismissed: guide.dismissed,
                 hidden: guide.hidden,
                 guideSeenAt: guide.guideSeenAt,
+                // W8.2.5: la app emite `aha_moment` una sola vez entre las dos superficies; la marca
+                // la comparte con la web (`onboarding_guide.ahaMomentSent`).
+                ahaMomentSent: guide.ahaMomentSent,
             },
         },
         dashboard,

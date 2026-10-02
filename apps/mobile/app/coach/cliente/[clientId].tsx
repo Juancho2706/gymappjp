@@ -589,11 +589,13 @@ export default function ClientDetailScreen() {
   // ── Hero: eyebrow, estado, chips ──────────────────────────────────────────
   const programName = data.activeProgram?.name?.trim() || null
   const planCur = derived.planCurrentWeek
-  const eyebrow = programName
+  const programEyebrow = programName
     ? `${programName}${planCur != null ? ` · Semana ${planCur}` : ''}`
     : planCur != null
       ? `Semana ${planCur}`
       : 'Sin programa activo'
+  // W8.2.6: el alumno de ejemplo se identifica SIEMPRE en su ficha, igual que en la web.
+  const eyebrow = client.is_demo === true ? `De ejemplo · ${programEyebrow}` : programEyebrow
 
   const todayForStatus = getTodayInSantiago().iso
   const lastCheckinForStatus = data.checkIns[0]?.date ?? null
@@ -921,7 +923,7 @@ export default function ClientDetailScreen() {
 
       <ClientActionsSheet
         visible={moreOpen}
-        client={{ id: client.id, fullName: client.full_name, email: client.email, phone: client.phone, isActive: client.is_active !== false, isArchived }}
+        client={{ id: client.id, fullName: client.full_name, email: client.email, phone: client.phone, isActive: client.is_active !== false, isArchived, isDemo: client.is_demo === true }}
         theme={theme}
         onClose={() => setMoreOpen(false)}
         onProfile={() => {}}

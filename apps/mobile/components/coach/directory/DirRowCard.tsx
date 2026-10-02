@@ -128,6 +128,12 @@ export const DirRowCard = memo(function DirRowCard({
         <View style={styles.info}>
           <View style={styles.nameRow}>
             <Text style={[styles.name, { color: theme.foreground }]} numberOfLines={1}>{item.fullName}</Text>
+            {/* W8.2.6: el alumno de ejemplo se identifica SIEMPRE, igual que en la web. */}
+            {item.isDemo ? (
+              <View className="bg-info-100 rounded-pill" style={styles.severityPill}>
+                <Text className="text-info-600" style={styles.severityText}>De ejemplo</Text>
+              </View>
+            ) : null}
             {pulse ? (
               <View className={`${sev.bg} rounded-pill`} style={styles.severityPill}>
                 <sev.Icon size={11} className={sev.fg} />

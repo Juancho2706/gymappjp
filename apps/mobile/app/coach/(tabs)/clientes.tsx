@@ -218,7 +218,9 @@ function DenseDirectoryTable({
               </View>
               <View style={styles.denseNameCopy}>
                 <Text numberOfLines={1} className="text-strong" style={styles.denseName}>{client.fullName}</Text>
-                <Text numberOfLines={1} className="text-subtle" style={styles.denseEmail}>{client.email || '—'}</Text>
+                <Text numberOfLines={1} className={client.isDemo ? 'text-info-600' : 'text-subtle'} style={styles.denseEmail}>
+                  {client.isDemo ? 'De ejemplo' : client.email || '—'}
+                </Text>
               </View>
             </TouchableOpacity>
           ))}

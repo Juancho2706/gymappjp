@@ -16,6 +16,8 @@ import * as Haptics from 'expo-haptics'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { toast } from '../../components/Toast'
 import { supabase } from '../../lib/supabase'
+import { builderTourSeenKey, LEGACY_BUILDER_TOUR_SEEN_KEY, shouldAutoStartBuilderTour } from '../../lib/builder-tour-seen'
+import { useOnboardingMode } from '../../lib/onboarding-mode'
 import { isMissingColumnError, selectWithFallback } from '../../lib/db-compat'
 import { getCoachProfile } from '../../lib/coach'
 import { useTheme } from '../../context/ThemeContext'
@@ -861,6 +863,9 @@ export default function ProgramBuilderScreen() {
   const tourTargets = useRef<Map<string, any>>(new Map())
   const rootRef = useRef<View>(null) // ancla de coordenadas para el tour (measureLayout)
   const autoTourTried = useRef(false)
+  // Con la guía de inicio activa el tour no arranca solo (misma regla que `tourAutoStartEligible`):
+  // no se marca visto, así queda para cuando la guía termine.
+  const { guideActive } = useOnboardingMode()
   const slideDir = useRef(0)
 
   const [activeDayId, setActiveDayId] = useState(1)
@@ -1510,17 +1515,28 @@ export default function ProgramBuilderScreen() {
     setTourOpen(false)
     if (tourMode === 'short') {
       setSeenTour(true)
-      AsyncStorage.setItem('builder_onboarding_seen_short_v1', '1').catch(() => {})
+      void supabase.auth.getSession().then(({ data }) => {
+        const coachId = data.session?.user.id
+        AsyncStorage.setItem(coachId ? builderTourSeenKey(coachId) : LEGACY_BUILDER_TOUR_SEEN_KEY, '1').catch(() => {})
+      }).catch(() => {})
     }
   }
   // Auto-tour corto la primera vez (tras cargar).
   useEffect(() => {
     if (loading || autoTourTried.current) return
     autoTourTried.current = true
-    AsyncStorage.getItem('builder_onboarding_seen_short_v1').then((v) => {
-      if (!v) { setSeenTour(false); setTourMode('short'); setTourOpen(true) }
-    }).catch(() => {})
-  }, [loading])
+    void (async () => {
+      const { data } = await supabase.auth.getSession()
+      const coachId = data.session?.user.id
+      const [coachSeen, legacySeen] = await Promise.all([
+        coachId ? AsyncStorage.getItem(builderTourSeenKey(coachId)) : Promise.resolve(null),
+        AsyncStorage.getItem(LEGACY_BUILDER_TOUR_SEEN_KEY),
+      ])
+      if (shouldAutoStartBuilderTour({ coachSeen, legacySeen, guideActive })) {
+        setSeenTour(false); setTourMode('short'); setTourOpen(true)
+      }
+    })().catch(() => {})
+  }, [loading, guideActive])
   // Swipe horizontal para cambiar de día (ventaja nativa sobre los chips de la web).
   function changeDay(dir: 1 | -1) {
     const list = liveDays.current

@@ -166,6 +166,7 @@ describe('GET /api/mobile/coach/dashboard — bloque onboardingV2', () => {
                 dismissed: true,
                 hidden: false,
                 guideSeenAt: '2026-08-22T12:00:00.000Z',
+                ahaMomentSent: false,
             },
         })
         // El jsonb crudo NO se reemplaza: la app sigue leyendo de ahí lo que la guía no expone.
@@ -211,6 +212,7 @@ describe('GET /api/mobile/coach/dashboard — bloque onboardingV2', () => {
             dismissed: false,
             hidden: false,
             guideSeenAt: null,
+            ahaMomentSent: false,
         })
     })
 })
