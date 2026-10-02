@@ -7,7 +7,7 @@ canonical: false
 
 # SPEC — Pricing v4: Pro = 2–10 alumnos · Elite = 11–60 · grandfather por compra
 
-**Estado: código listo en `rnmobiledenuevo` (2026-10-02). Falta el día D: migración LIVE → deploy web → OTA. Pasos en [TASKS](TASKS.md).**
+**Estado: EN PRODUCCIÓN 2026-10-02 (migración LIVE + `master` = `5ecfefa1`, `dpl_DV5bcr6Z…`). Faltan el OTA de RN (solo textos) y la QA con compra real. Pasos en [TASKS](TASKS.md).**
 
 ## Origen
 

@@ -32,12 +32,12 @@ sin cambio · D4 corte = migración del día D**. Ver [SPEC](SPEC.md).
 - [x] Landing v2 (`PreciosSection.tsx`, `copy.ts` EN), `/pricing`, i18n ES/EN: rangos derivados del catálogo.
 
 ## W5 — Día D (en este orden)
-- [ ] **D.1** Aplicar la migración en LIVE (`apply_migration`) **antes** del deploy web: el código nuevo selecciona la columna. Verificar con las queries del pie del archivo (elite/true 1 · pro/true 15).
-- [ ] **D.2** Merge + deploy web (landing, /pricing, panel y pagos en el mismo deploy).
-- [ ] **D.3** Re-run de seguridad post-deploy, por si alguien compró Pro con el código viejo entre D.1 y D.2:
+- [x] **D.1** Aplicar la migración en LIVE (`apply_migration`) **antes** del deploy web: el código nuevo selecciona la columna. Verificar con las queries del pie del archivo (elite/true 1 · pro/true 15). **Hecho 2026-10-02 04:26 UTC**: LIVE la registró como `20261002042620` (el archivo conserva `20261002120000`; no se renombran migraciones ya escritas). Verificado: elite/true 1 · pro/true 15 · free/false 146; `authenticated` solo SELECT/REFERENCES sobre la columna (sin UPDATE).
+- [x] **D.2** Merge + deploy web (landing, /pricing, panel y pagos en el mismo deploy). **Hecho 2026-10-02**: fast-forward de `master` a `5ecfefa1`, `dpl_DV5bcr6ZQMD7pM8ZH4cpSPcmg9Ld` READY, 0 errores de runtime en los primeros 30 min.
+- [x] **D.3** Re-run de seguridad post-deploy, por si alguien compró Pro con el código viejo entre D.1 y D.2 (**2026-10-02: 0 filas pagas sin marca ⇒ no hizo falta correrlo**):
   ```sql
   update public.coaches set paid_caps_grandfathered = true
    where paid_caps_grandfathered = false and subscription_tier = 'pro' and max_clients > 10;
   ```
 - [ ] **D.4** OTA a los runtimes vivos de RN (labels y cupo de registro salen de `packages/tiers`).
-- [ ] **D.5** QA en prod: `/pricing` y la landing muestran Pro «2–10» y Elite «11–60»; un coach Free de prueba que compra Pro queda con `max_clients = 10`; la fila de un Pro existente sigue en 25/30 tras su próxima renovación.
+- [ ] **D.5** QA en prod: `/pricing` y la landing muestran Pro «2–10» y Elite «11–60»; un coach Free de prueba que compra Pro queda con `max_clients = 10`; la fila de un Pro existente sigue en 25/30 tras su próxima renovación. **2026-10-02: copy verificado en prod** (`/pricing` y `/` dicen «De 2 a 10» y «11–60», sin «Hasta 25»). Quedan la compra de prueba y la primera renovación real de un pro marcado.
