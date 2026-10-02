@@ -28,6 +28,11 @@ prevalecen sobre este resumen. La prosa retirada está en
 
 ### 1. En producción, esperan QA del owner (⇒ SDD `done`)
 
+**Fix «Google del alumno» EN PROD 02-10** (`master` `3c439684`, `dpl_9HgmZQok…`; bugfix sin SDD, detalle en el commit): la
+rotación anti-takeover W3.13 ya no toca alumnos (a una alumna de Movens le rotaba la clave y la sacaba de la app en cada
+Google), «olvidé mi contraseña» ya no rota, y el alumno que toca Google va al login de su coach con aviso. QA: que la alumna
+recupere su clave desde el aviso y no la vuelva a sacar. Antes de este fix:
+
 Nada pendiente: el owner confirmó el 01-10 que los QA de «Elige cómo pagar», «Reps tras el reloj» + E1,
 «Despegue rápido», fix RN «Asignar plantilla», fix RN buscador de «Cambiar», «Kilos o libras» (SPEC §7),
 Android 1.1.3 en Play, «Entrada dark v1», «+ Nueva pregunta qué crear» e íconos de Nutrición estaban
@@ -105,7 +110,8 @@ verdes. De «Kilos o libras» queda solo el barrido W5.4 ([TASKS](../specs/kg-lb
 ### 6. Avisos a coaches pendientes (los manda el owner)
 
 Movens y los 4 coaches A/B de «Vuelta nueva» ([SPEC §9](../specs/vuelta-nueva-salud-y-reloj/SPEC.md)) ·
-`jotap-coach`/`olympuswolf` de «Cantidades honestas» (TASKS C7) · Ani (clave temporal HIBP).
+`jotap-coach`/`olympuswolf` de «Cantidades honestas» (TASKS C7) · Ani (clave temporal HIBP) · Movens: su alumna
+Carolina ya puede recuperar la clave sola (fix «Google del alumno» 02-10).
 
 ### Cerrados recientes (detalle en cada spec)
 
