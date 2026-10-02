@@ -53,6 +53,22 @@ web y app: Postgres exige SELECT sobre la columna también para FILTRAR, y hoy h
       post-aplicación con la anon key en el cierre del 05-09 (ver `docs/status/CURRENT.md`).
 - Rollback de cualquier fase: `GRANT` inverso (cada migración lo lleva comentado al pie).
 
+### SEC-02 — Revisar signup por email sin confirmación en Supabase Auth
+
+Residual de la refutación del fix «Google del alumno» (02-10), no verificado en producción: `supabase/config.toml`
+(configuración LOCAL) tiene `enable_signup = true` con `enable_confirmations = false`, y la app nunca usa
+`auth.signUp` (las altas pasan por el servidor). Si producción estuviera igual, cualquiera podría crear con la
+anon key una cuenta CONFIRMADA con un correo ajeno, que es justo la pre-cuenta que la rotación anti-takeover W3.13
+intenta neutralizar.
+
+- [ ] En Supabase Dashboard → Authentication → Sign In / Providers → Email: anotar si «Allow new users to sign up»
+      y «Confirm email» están activos en el proyecto `jikjeokundmaafuytdcx`.
+- [ ] Si el signup público está abierto: decidir con ingeniería cómo cerrarlo. Las altas por email (web, app y
+      alumnos) usan `auth.admin.createUser` con `service_role` y no dependen del switch, **pero** `pnpm
+      supabase:disable-signup` manda `disable_signup: true`, que es GLOBAL: bloquearía también el alta de coaches
+      con Google (`signInWithIdToken` crea el usuario nuevo). No correrlo sin resolver eso antes; probar cualquier
+      cambio con un registro de coach por email, uno por Google y un alta de alumno reales.
+
 ## P1 — Cierre del build y QA móvil
 
 ### MOB-02 — Cerrado 2026-09-05

@@ -104,6 +104,10 @@ verdes. De «Kilos o libras» queda solo el barrido W5.4 ([TASKS](../specs/kg-lb
 2. DB: 3 tablas `_bak_*` (19-08, 21-08, 05-09) listas para retiro.
 3. Regen completo de `database.types.ts` (deja 13 errores en 7 archivos V1; retira los workarounds de T2.3
    y el cast `V2ReadClient`) · matriz RLS con JWTs reales + preflight V1→V2 (sin cambios desde 08-06).
+4. **Deuda de auth (residuales del fix «Google del alumno», 02-10; existían antes):** (a) el coach con contraseña que entra o se da de alta con Google queda afuera UNA vez (la rotación W3.13 revoca también su sesión nueva) ·
+   (b) `reset-password.actions.ts:28` no sella `coaches.email_verified_at` ⇒ el próximo Google del coach rota la clave recién puesta ·
+   (c) reset de clave del alumno por el coach (`resetClientPasswordAction`, `clients.actions.ts:548`, y `api/mobile/coach/clients/[clientId]/reset-password`) no rechaza si ese usuario también es coach ·
+   (d) revisar en el Dashboard el signup por email sin confirmación ([SEC-02](../operations/MANUAL_TASKS.md#sec-02--revisar-signup-por-email-sin-confirmación-en-supabase-auth)).
 4. **TTFB del área alumno**: región corregida (`regions: ["pdx1"]`, `deb8aee3`); queda re-medir p50/p75 de
    `/c/:coach_slug/dashboard` y decidir QW3 (doble render móvil+desktop).
 
