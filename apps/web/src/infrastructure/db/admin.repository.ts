@@ -30,7 +30,7 @@ export type PublishedNewsItemRow = Pick<
 
 export type AdminBasicCoachRow = Pick<Tables['coaches']['Row'], 'id' | 'full_name' | 'brand_name' | 'slug'>
 export type AdminRecentCoachSignupRow = Pick<Tables['coaches']['Row'], 'id' | 'full_name' | 'brand_name' | 'created_at' | 'subscription_status' | 'subscription_tier'>
-export type AdminExpiringCoachRow = Pick<Tables['coaches']['Row'], 'id' | 'full_name' | 'brand_name' | 'current_period_end' | 'subscription_status'>
+export type AdminExpiringCoachRow = Pick<Tables['coaches']['Row'], 'id' | 'full_name' | 'brand_name' | 'current_period_end' | 'subscription_status' | 'payment_provider'>
 export type AdminPendingPaymentCoachRow = Pick<Tables['coaches']['Row'], 'id' | 'full_name' | 'brand_name' | 'created_at' | 'subscription_tier'>
 export type AdminPaidCoachTierRow = Pick<Tables['coaches']['Row'], 'subscription_tier'>
 
@@ -84,7 +84,7 @@ export async function findExpiringSoonAdminCoaches(
 ): Promise<AdminExpiringCoachRow[]> {
     const { data } = await db
         .from('coaches')
-        .select('id, full_name, brand_name, current_period_end, subscription_status')
+        .select('id, full_name, brand_name, current_period_end, subscription_status, payment_provider')
         .in('subscription_status', ['active', 'trialing'])
         .lt('current_period_end', upperIso)
         .gt('current_period_end', lowerIso)
@@ -125,6 +125,41 @@ export async function findAdminCoachesFallback(db: DB, limit = 50): Promise<Arra
         .select('id, full_name, brand_name, slug, subscription_tier, subscription_status, billing_cycle, payment_provider, max_clients, current_period_end, trial_ends_at, created_at')
         .order('created_at', { ascending: false })
         .limit(limit)
+
+    return data ?? []
+}
+
+export type AdminCoachBillingRow = Pick<
+    Tables['coaches']['Row'],
+    'id' | 'subscription_mp_id' | 'subscription_provider_external_id' | 'active_coupon_redemption_id'
+>
+export type AdminActiveRedemptionRow = Pick<
+    Tables['coupon_redemptions']['Row'],
+    'id' | 'discount_value_snapshot' | 'applied_cycles_remaining'
+>
+
+/**
+ * Campos de cobro que `get_admin_coaches_paginated` no devuelve y el MRR neto de la lista necesita
+ * (ids de gateway para «paga de verdad» + puntero al cupón vivo). Solo los ids de la página.
+ */
+export async function findAdminCoachBillingRows(db: DB, coachIds: string[]): Promise<AdminCoachBillingRow[]> {
+    if (coachIds.length === 0) return []
+    const { data } = await db
+        .from('coaches')
+        .select('id, subscription_mp_id, subscription_provider_external_id, active_coupon_redemption_id')
+        .in('id', coachIds)
+
+    return data ?? []
+}
+
+/** Redenciones VIVAS (`status = 'active'`) por id — el cupón que de verdad descuenta el cobro. */
+export async function findActiveCouponRedemptionsByIds(db: DB, ids: string[]): Promise<AdminActiveRedemptionRow[]> {
+    if (ids.length === 0) return []
+    const { data } = await db
+        .from('coupon_redemptions')
+        .select('id, discount_value_snapshot, applied_cycles_remaining')
+        .in('id', ids)
+        .eq('status', 'active')
 
     return data ?? []
 }

@@ -176,6 +176,19 @@ vi.mock('@/lib/posthog/server-capture', () => ({
     capturePostHogServerEvent: (...a: unknown[]) => capturePostHogServerEvent(a[0]),
 }))
 
+// Regla compartida (plan «Correos y activación», 01-10): historial y horario se controlan por test
+// para que la suite no dependa de la hora a la que corre.
+const { historyMock, sendWindow } = vi.hoisted(() => ({ historyMock: vi.fn(), sendWindow: { open: true } }))
+vi.mock('@/services/email/automated-email-history.service', () => ({
+    loadAutomatedEmailHistory: historyMock,
+}))
+vi.mock('@/lib/email/automated-email-policy', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@/lib/email/automated-email-policy')>()
+    return { ...actual, isWithinSendWindow: () => sendWindow.open }
+})
+type History = { sentAts: string[]; ahaAt: string | null; optedOut: boolean }
+let historyByCoach: Record<string, Partial<History>> = {}
+
 import { GET } from './route'
 
 const SECRET = 'cron-sekret'
@@ -207,6 +220,12 @@ beforeEach(() => {
     eventOps.length = 0
     nextScheduleOutcome = { ok: true, deduped: false, ledgerId: 'led-1', providerMessageId: 'msg-1' }
     fakeAdmin = makeAdmin()
+    historyByCoach = {}
+    sendWindow.open = true
+    historyMock.mockImplementation(
+        async (_admin: unknown, ids: string[]) =>
+            new Map(ids.map((id) => [id, { sentAts: [], ahaAt: null, optedOut: false, ...historyByCoach[id] }]))
+    )
     vi.stubEnv('CRON_SECRET', SECRET)
     vi.stubEnv('CHECKOUT_ABANDONED_SEND_SPACING_MS', '0')
 })
@@ -454,5 +473,49 @@ describe('GET /api/cron/checkout-abandoned — dry-run y resumen', () => {
         const summary = auditInserts.find((a) => a.action === 'cron.checkout_abandoned_ran')
         expect(summary).toBeTruthy()
         expect((summary!.payload as Record<string, unknown>).outcome).toBe('ok')
+    })
+})
+
+// Regla compartida con W6 y el aviso de cupo (plan «Correos y activación», 01-10).
+describe('GET /api/cron/checkout-abandoned — regla compartida', () => {
+    function oneCase() {
+        events = [{ coach_id: 'c1', created_at: hoursAgo(3), provider: 'mercadopago', provider_status: 'pending' }]
+        coaches = [coach({ id: 'c1', slug: 'ljfitness' })]
+        emailByCoachId = { c1: 'lj@gimnasio.cl' }
+    }
+
+    it('fuera del horario de Chile espera, sin correo ni evento', async () => {
+        oneCase()
+        sendWindow.open = false
+        const json = await (await GET(authedReq())).json()
+        expect(json.notified).toBe(0)
+        expect(json.skipped.outsideHours).toBe(1)
+        expect(scheduleCoachEmail).not.toHaveBeenCalled()
+        expect(capturePostHogServerEvent).not.toHaveBeenCalled()
+    })
+
+    it('otro correo automático en las últimas 24 h → espera por el cupo compartido', async () => {
+        oneCase()
+        historyByCoach = { c1: { sentAts: [hoursAgo(5)] } }
+        const json = await (await GET(authedReq())).json()
+        expect(json.skipped.quota).toBe(1)
+        expect(scheduleCoachEmail).not.toHaveBeenCalled()
+    })
+
+    it('con la marca de baja no se le escribe', async () => {
+        oneCase()
+        historyByCoach = { c1: { optedOut: true } }
+        const json = await (await GET(authedReq())).json()
+        expect(json.skipped.optedOut).toBe(1)
+        expect(scheduleCoachEmail).not.toHaveBeenCalled()
+    })
+
+    it('historial ilegible → la corrida se aborta sin mandar nada', async () => {
+        oneCase()
+        historyMock.mockRejectedValue(new Error('db caída'))
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+        const res = await GET(authedReq())
+        expect(res.status).toBe(500)
+        expect(scheduleCoachEmail).not.toHaveBeenCalled()
     })
 })

@@ -4,18 +4,21 @@ import type { Database } from '@/lib/database.types'
 import { isTestCoachEmail } from '@/lib/test-accounts'
 import { scheduleCoachEmail } from '@/services/email/coach-email-ledger.service'
 import {
-    findActiveByCoachAndKeys,
-    type CoachEmailLedgerRow,
-} from '@/infrastructure/db/coach-email-ledger.repository'
+    loadAutomatedEmailHistory,
+    type CoachAutomatedEmailHistory,
+} from '@/services/email/automated-email-history.service'
+import { resolveFirstArtifact } from '@/services/onboarding/onboarding-v2.queries'
+import { findActiveByCoachAndKeys } from '@/infrastructure/db/coach-email-ledger.repository'
 import { siteBaseUrl } from '../subscription-url'
 import { buildBehaviorEmail } from './behavior-templates'
 import {
-    BEHAVIOR_LAUNCH_CUTOVER,
     BEHAVIOR_TEMPLATE_KEYS,
+    FIRST_ARTIFACT_NUDGE_AFTER_MS,
     FIRST_LOGIN_SIGNAL_CUTOVER,
     ONBOARDING_CUTOFF_MS,
     computeBehaviorTriggers,
     pickBehaviorTrigger,
+    type BehaviorPolicy,
     type BehaviorSkipReason,
     type BehaviorTemplateKey,
     type BehaviorTrigger,
@@ -54,13 +57,31 @@ export function behaviorEmailsDryRun(): boolean {
 }
 
 /**
- * WhatsApp del owner para el correo de +7 d (D13). **Placeholder por env a propósito**: al cierre de
- * W6 el owner todavía no fijó el número, y el correo NO inventa uno — sin esta env cae al «responde
- * este correo», que es una puerta real.
+ * Corte de lanzamiento (ver `BehaviorPolicy.launchCutover`): env `ONBOARDING_BEHAVIOR_EMAILS_SINCE`
+ * con un instante ISO, que se fija el día del encendido sin redeploy. Ausente o ilegible ⇒ `null` ⇒
+ * nadie entra.
  */
-export function ownerWhatsappUrl(): string | null {
-    return process.env.OWNER_WHATSAPP_URL?.trim() || null
+export function behaviorLaunchCutover(): string | null {
+    const raw = process.env.ONBOARDING_BEHAVIOR_EMAILS_SINCE?.trim()
+    if (!raw) return null
+    return Number.isFinite(new Date(raw).getTime()) ? raw : null
 }
+
+/**
+ * WhatsApp de EVA para el correo de +7 d (D13, decidido el 01-10): el +56 9 9075 6670, que responde
+ * el equipo hablando como EVA. `OWNER_WHATSAPP_URL` lo pisa si algún día cambia el número.
+ */
+export const EVA_WHATSAPP_URL = 'https://wa.me/56990756670'
+
+export function ownerWhatsappUrl(): string {
+    return process.env.OWNER_WHATSAPP_URL?.trim() || EVA_WHATSAPP_URL
+}
+
+/**
+ * Dirección de respuesta de la serie. Sin ella, «responde este correo» llegaba al remitente técnico
+ * de Resend. Solo para W6: los demás correos no cambian.
+ */
+export const BEHAVIOR_REPLY_TO = 'contacto@eva-app.cl'
 
 /** PostgREST corta en 1000 filas por respuesta: todo listado se pagina hasta página corta. */
 const PAGE_SIZE = 1000
@@ -107,12 +128,15 @@ export interface BehaviorCoachRow {
     persona: string | null
     invite_code: string | null
     created_at: string | null
-    last_active_at: string | null
     active_org_id: string | null
+    /** Color de marca: pinta la vista previa de la app del alumno en el correo del día 1. */
+    primary_color: string | null
+    /** `free` ⇒ el correo del aha suma la línea del cupo del plan Gratis. */
+    subscription_tier: string | null
 }
 
 const COACH_COLUMNS =
-    'id, slug, full_name, brand_name, persona, invite_code, created_at, last_active_at, active_org_id'
+    'id, slug, full_name, brand_name, persona, invite_code, created_at, active_org_id, primary_color, subscription_tier'
 
 type PageResponse = { data: unknown; error: { message: string } | null }
 
@@ -142,13 +166,17 @@ async function fetchAllPages<T>(
  * lanzamiento.
  *
  * El `since` es el MÁXIMO de los dos para que el padrón anterior a W6 ni se lea: el motor igual lo
- * rebotaría con `before_launch`, pero eso son 85 lecturas de `auth.users` + roster + ledger por
- * corrida horaria para descartar a todos menos a un puñado. Mientras el cutover sea más reciente que
- * `now - 90 d` manda el cutover; después manda la ventana y esto vuelve a ser el corte de siempre.
+ * rebotaría con `before_launch`, pero eso son decenas de lecturas de `auth.users` + roster + ledger
+ * por corrida horaria para descartar a todos. Sin corte legible no se lista a nadie.
  */
-export async function listBehaviorCandidates(admin: Db, now: Date): Promise<BehaviorCoachRow[]> {
+export async function listBehaviorCandidates(
+    admin: Db,
+    now: Date,
+    policy: BehaviorPolicy
+): Promise<BehaviorCoachRow[]> {
+    const launch = policy.launchCutover ? new Date(policy.launchCutover).getTime() : NaN
+    if (!Number.isFinite(launch)) return []
     const windowStart = now.getTime() - ONBOARDING_CUTOFF_MS
-    const launch = new Date(BEHAVIOR_LAUNCH_CUTOVER).getTime()
     const since = new Date(Math.max(windowStart, launch)).toISOString()
     return await fetchAllPages<BehaviorCoachRow>(
         (from, to) =>
@@ -182,39 +210,6 @@ async function resolveCoachEmail(admin: Db, coachId: string): Promise<string | n
 }
 
 /**
- * Estados del ledger que cuentan como «a este coach ya le escribimos» para el espaciado de W6.
- *
- * NO es la lista del dedupe (`ACTIVE_LEDGER_STATUSES`): `bounced`, `complained` y `cancelled` quedan
- * afuera porque ese correo no está en la bandeja del coach —rebotó, lo marcó como spam o lo dimos de
- * baja nosotros—, así que no hay nada que espaciar. `scheduled` sí entra: todavía no salió, pero va
- * a salir, y amontonarle otro encima es justo lo que el piso de 24 h viene a evitar.
- */
-const DELIVERABLE_LEDGER_STATUSES: readonly string[] = ['sent', 'delivered', 'scheduled']
-
-/**
- * Cuándo salió (o va a salir) el último correo de comportamiento del coach, sobre las mismas filas
- * que ya trajo el dedupe.
- *
- * `sent_at` es el dato bueno; `scheduled_at` cubre la fila que espera su turno y `created_at` es el
- * piso cuando el webhook de Resend nunca movió la fila (sin ese respaldo, un webhook no registrado
- * apagaría el espaciado entero: todo `sent_at` en `null` se leería como «nunca le escribimos»).
- */
-function latestBehaviorSentAt(rows: readonly CoachEmailLedgerRow[]): string | null {
-    let latestAt: string | null = null
-    let latestMs = -Infinity
-    for (const row of rows) {
-        if (!DELIVERABLE_LEDGER_STATUSES.includes(row.status)) continue
-        const at = row.sent_at ?? row.scheduled_at ?? row.created_at ?? null
-        if (!at) continue
-        const ms = new Date(at).getTime()
-        if (!Number.isFinite(ms) || ms <= latestMs) continue
-        latestMs = ms
-        latestAt = at
-    }
-    return latestAt
-}
-
-/**
  * Arma el snapshot que consume el motor puro.
  *
  * Cada lectura degrada hacia el lado SEGURO: un conteo caído devuelve el valor que NO dispara
@@ -222,14 +217,16 @@ function latestBehaviorSentAt(rows: readonly CoachEmailLedgerRow[]): string | nu
  */
 export async function loadCoachBehaviorSnapshot(
     admin: Db,
-    coach: BehaviorCoachRow
+    coach: BehaviorCoachRow,
+    opts: { now: Date; history?: CoachAutomatedEmailHistory | null }
 ): Promise<CoachBehaviorSnapshot> {
     const email = await resolveCoachEmail(admin, coach.id)
+    const persona = parsePersonaValue(coach.persona)
 
     // Alumnos REALES: nunca el demo (`is_demo`), nunca los archivados.
     const clientsResult = await admin
         .from('clients')
-        .select('created_at, first_login_at')
+        .select('id, created_at, first_login_at')
         .eq('coach_id', coach.id)
         .eq('is_demo', false)
         .eq('is_archived', false)
@@ -247,10 +244,11 @@ export async function loadCoachBehaviorSnapshot(
     const anyRealClientLoggedIn = clients.some((c) => Boolean(c.first_login_at))
     // Solo las filas POSTERIORES al corte pueden interpretarse como «todavía no entró»: antes de
     // ese deploy la columna no se escribía y un `null` significa vejez, no ausencia.
-    const oldestPendingInviteAt =
+    const oldestPending =
         clients.find(
             (c) => !c.first_login_at && c.created_at != null && c.created_at >= FIRST_LOGIN_SIGNAL_CUTOVER
-        )?.created_at ?? null
+        ) ?? null
+    const oldestPendingInviteAt = oldestPending?.created_at ?? null
 
     // El aha pertenece al alumno REAL: el demo trae actividad sembrada y tildaría el paso el día 1
     // (mismo predicado que `loadOnboardingSignalsDetailed`, services/onboarding/onboarding-v2.queries.ts).
@@ -273,13 +271,10 @@ export async function loadCoachBehaviorSnapshot(
 
     // Dedupe por `(coach_id, template_key)`: las keys VIVAS del ledger. Fail-open como el resto del
     // ledger — si no se puede leer, el dedupe atómico de `scheduleCoachEmail` sigue siendo la red.
-    // La MISMA lectura alimenta el espaciado por coach: no cuesta una consulta extra.
     let alreadySent: string[] = []
-    let lastBehaviorSentAt: string | null = null
     try {
         const rows = await findActiveByCoachAndKeys(admin, coach.id, BEHAVIOR_TEMPLATE_KEYS)
         alreadySent = rows.map((r) => r.template_key)
-        lastBehaviorSentAt = latestBehaviorSentAt(rows)
     } catch (err) {
         console.warn('[behavior-emails] ledger ilegible — se cae al dedupe de la base (fail-open)', {
             coachId: coach.id,
@@ -287,19 +282,54 @@ export async function loadCoachBehaviorSnapshot(
         })
     }
 
+    // Cupo compartido y baja: el barrido lo trae en lote; el disparo en línea lo lee acá. FAIL-CLOSED:
+    // sin historial no sale nada en esta corrida (`history_unreadable`).
+    let history = opts.history ?? null
+    if (opts.history === undefined) {
+        try {
+            history = (await loadAutomatedEmailHistory(admin, [coach.id], opts.now)).get(coach.id) ?? null
+        } catch (err) {
+            console.warn('[behavior-emails] historial de correos ilegible — el coach espera', {
+                coachId: coach.id,
+                message: errMessage(err),
+            })
+        }
+    }
+
+    // «Armó su primera rutina/pauta» solo se lee cuando puede cambiar algo: el correo del día 3 ya le
+    // toca y todavía no salió. Son varias cuentas por coach y el barrido es horario.
+    let hasFirstArtifact: boolean | null = null
+    const created = coach.created_at ? new Date(coach.created_at).getTime() : NaN
+    if (
+        Number.isFinite(created) &&
+        opts.now.getTime() - created >= FIRST_ARTIFACT_NUDGE_AFTER_MS &&
+        !alreadySent.includes('behavior_no_return_24h')
+    ) {
+        try {
+            hasFirstArtifact = await resolveFirstArtifact(admin, coach.id, persona)
+        } catch (err) {
+            console.warn('[behavior-emails] primera rutina ilegible — el correo del día 3 espera', {
+                coachId: coach.id,
+                message: errMessage(err),
+            })
+        }
+    }
+
     return {
         coachId: coach.id,
         email,
-        persona: parsePersonaValue(coach.persona),
+        persona,
         createdAt: coach.created_at,
-        lastActiveAt: coach.last_active_at,
+        hasFirstArtifact,
         realClientCount: clients.length,
         anyRealClientLoggedIn,
         oldestPendingInviteAt,
+        oldestPendingInviteClientId: oldestPending?.id ?? null,
         hasRealStudentActivity:
             (workoutActivity.data?.length ?? 0) > 0 || (intakeActivity.data?.length ?? 0) > 0,
         alreadySent,
-        lastBehaviorSentAt,
+        recentAutomatedSentAts: history ? history.sentAts : null,
+        optedOut: history?.optedOut ?? false,
         isTestAccount: isTestCoachEmail(email),
         isOrgManaged: Boolean(coach.active_org_id),
     }
@@ -322,21 +352,29 @@ export type BehaviorCoachOutcome =
 export async function runBehaviorCheckForCoach(
     admin: Db,
     coach: BehaviorCoachRow,
-    opts: { now: Date; dry: boolean }
+    opts: {
+        now: Date
+        dry: boolean
+        policy: BehaviorPolicy
+        /** Historial ya leído en lote por el barrido; `undefined` = leerlo acá (disparo en línea). */
+        history?: CoachAutomatedEmailHistory | null
+    }
 ): Promise<BehaviorCoachOutcome> {
-    const snapshot = await loadCoachBehaviorSnapshot(admin, coach)
-    const evaluation = computeBehaviorTriggers(snapshot, opts.now)
+    const snapshot = await loadCoachBehaviorSnapshot(admin, coach, { now: opts.now, history: opts.history })
+    const evaluation = computeBehaviorTriggers(snapshot, opts.now, opts.policy)
     if (!evaluation.eligible) return { outcome: 'skipped', reason: evaluation.skipped }
 
     const trigger = pickBehaviorTrigger(evaluation)
     if (!trigger) return { outcome: 'no_trigger' }
     if (opts.dry) return { outcome: 'would_send', trigger }
 
-    const { subject, html } = buildBehaviorEmail(trigger.template_key, {
+    const { subject, html, text } = buildBehaviorEmail(trigger.template_key, {
         coachName: coach.full_name,
         brandName: coach.brand_name,
+        brandColor: coach.primary_color,
         persona: snapshot.persona,
-        inviteCode: coach.invite_code,
+        isFree: (coach.subscription_tier ?? 'free') === 'free',
+        pendingClientId: snapshot.oldestPendingInviteClientId ?? null,
         baseUrl: siteBaseUrl(),
         ownerWhatsappUrl: ownerWhatsappUrl(),
     })
@@ -349,6 +387,8 @@ export async function runBehaviorCheckForCoach(
         to: snapshot.email as string,
         subject,
         html,
+        text,
+        replyTo: BEHAVIOR_REPLY_TO,
         payload: {
             reason: trigger.reason,
             persona: snapshot.persona ?? 'sin_persona',
@@ -384,10 +424,14 @@ function emptySkipped(): BehaviorSweepSummary['skipped'] {
         no_recipient: 0,
         test_account: 0,
         org_managed: 0,
+        opted_out: 0,
         no_created_at: 0,
         past_cutoff: 0,
         before_launch: 0,
+        history_unreadable: 0,
+        outside_hours: 0,
         cooldown: 0,
+        weekly_max: 0,
         no_trigger: 0,
         deduped: 0,
         send_failed: 0,
@@ -402,10 +446,11 @@ function emptySkipped(): BehaviorSweepSummary['skipped'] {
  */
 export async function sweepBehaviorEmails(
     admin: Db,
-    opts: { now?: Date; dry?: boolean } = {}
+    opts: { now?: Date; dry?: boolean; policy?: BehaviorPolicy } = {}
 ): Promise<BehaviorSweepSummary> {
     const now = opts.now ?? new Date()
     const dry = opts.dry ?? behaviorEmailsDryRun()
+    const policy = opts.policy ?? { launchCutover: behaviorLaunchCutover() }
     const summary: BehaviorSweepSummary = {
         candidates: 0,
         sent: 0,
@@ -416,9 +461,14 @@ export async function sweepBehaviorEmails(
         errors: 0,
     }
 
+    if (!policy.launchCutover) {
+        console.warn('[behavior-emails] sin ONBOARDING_BEHAVIOR_EMAILS_SINCE legible — no entra nadie')
+        return summary
+    }
+
     let coaches: BehaviorCoachRow[]
     try {
-        coaches = await listBehaviorCandidates(admin, now)
+        coaches = await listBehaviorCandidates(admin, now, policy)
     } catch (err) {
         console.error('[behavior-emails] barrido abortado: no se pudieron listar los candidatos', {
             message: errMessage(err),
@@ -429,9 +479,29 @@ export async function sweepBehaviorEmails(
     summary.candidates = coaches.length
     const spacing = sendSpacingMs()
 
+    // Historial de los dos registros EN LOTE (una consulta por cada 100 coaches, no una por coach).
+    // Si no se puede leer, cada coach queda como `history_unreadable` y no sale nada (fail-closed).
+    let histories: Map<string, CoachAutomatedEmailHistory> | null = null
+    try {
+        histories = await loadAutomatedEmailHistory(
+            admin,
+            coaches.map((c) => c.id),
+            now
+        )
+    } catch (err) {
+        console.error('[behavior-emails] historial de correos ilegible — corrida sin envíos', {
+            message: errMessage(err),
+        })
+    }
+
     for (const coach of coaches) {
         try {
-            const result = await runBehaviorCheckForCoach(admin, coach, { now, dry })
+            const result = await runBehaviorCheckForCoach(admin, coach, {
+                now,
+                dry,
+                policy,
+                history: histories ? (histories.get(coach.id) ?? null) : null,
+            })
             switch (result.outcome) {
                 case 'skipped':
                     summary.skipped[result.reason] += 1
@@ -519,6 +589,7 @@ export function enqueueBehaviorCheck(
             const result = await runBehaviorCheckForCoach(admin, data as unknown as BehaviorCoachRow, {
                 now: opts.now ?? new Date(),
                 dry: opts.dry ?? behaviorEmailsDryRun(),
+                policy: { launchCutover: behaviorLaunchCutover() },
             })
             console.info('[behavior-emails] inline', { coachId, outcome: result.outcome })
         } catch (err) {

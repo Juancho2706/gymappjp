@@ -50,6 +50,13 @@ export type ScheduleCoachEmailInput = {
     to: string
     subject: string
     html: string
+    /** Versión en texto plano. Opcional: sin ella Resend deriva una del HTML. */
+    text?: string
+    /**
+     * Dirección de respuesta. Sin ella la respuesta va al remitente técnico (`EMAIL_FROM`); W6 la fija
+     * en `contacto@eva-app.cl` porque su pie promete «responde y los cortamos».
+     */
+    replyTo?: string
     /** ISO. Presente = Resend lo agenda (y queda cancelable); ausente = sale ya. */
     scheduledAt?: string | null
     /** Contexto de auditoría. Nunca el cuerpo del correo ni datos sensibles. */
@@ -180,6 +187,8 @@ export async function scheduleCoachEmail(
             to,
             subject,
             html,
+            ...(input.text ? { text: input.text } : {}),
+            ...(input.replyTo ? { replyTo: input.replyTo } : {}),
             ...(scheduledAt ? { scheduledAt } : {}),
         })
     } catch (err) {

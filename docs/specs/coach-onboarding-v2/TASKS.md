@@ -167,6 +167,57 @@ onboarding por área».
   (orden del owner: los gates van en la sesión siguiente); el envío real a `qa-free-v3` queda pendiente y exige
   encender el flag.
 
+### W6 v2 — Plan «Correos y activación» (decidido por el owner el 01-10; artifact `8NRAZ75J`)
+
+> Reemplaza el copy y los momentos de arriba. El link `/join` **sale** de los correos: desde el 21-08 deja una
+> solicitud (`coach_leads`), no un alumno. La «Deuda declarada» de `last_active_at` queda resuelta: el día 3 ya no
+> la lee. Regla nueva compartida con el aviso de cupo y el carrito abandonado:
+> `apps/web/src/lib/email/automated-email-policy.ts` + `services/email/automated-email-history.service.ts`.
+
+- [x] W6v2.1 Plantillas v2 (`behavior-templates.ts`): alta directa `/coach/clients?invite=1`, vista previa de la
+  app con el color del coach, progreso de 3 pasos, firma «El equipo de EVA» (el WhatsApp lo responde el socio
+  como EVA), CTA `#047857` (contraste 5,5:1), «en eva-app.cl» en el aha Free, asunto escapado en el `<title>`.
+- [x] W6v2.2 Momentos: día 1 = 20 h sin alumno real; día 3 = sin primera rutina (`resolveFirstArtifact`, solo
+  si toca y no salió); 48 h, aha y 7 d igual. Keys de dedupe sin cambio.
+- [x] W6v2.3 Horario 09–20 h de Chile (`America/Santiago`) para todo W6, aha incluido; también carrito abandonado.
+- [x] W6v2.4 Cupo compartido: 1 cada 24 h y 3 por semana leyendo `coach_email_ledger` + `admin_audit_logs`
+  (el aha lo atraviesa). Barrido de cupo: nada los primeros 7 días de la cuenta, 72 h tras el aha, cupo y baja;
+  el aviso reactivo (402) sigue al instante. Historial ilegible ⇒ fail-closed en los tres barridos.
+- [x] W6v2.5 Corte por env `ONBOARDING_BEHAVIOR_EMAILS_SINCE` (sin env no entra nadie); `?dry=1&since=` solo en
+  ensayo. `replyTo: contacto@eva-app.cl` y versión texto en `scheduleCoachEmail`. WhatsApp por defecto
+  `wa.me/56990756670` (`OWNER_WHATSAPP_URL` lo pisa).
+- [~] W6v2.6 Baja: el motor y los barridos respetan la marca `email_opt_out` del ledger (`trigger='transactional'`,
+  `status='cancelled'`, sin DDL). **Falta el botón del panel admin que la escribe** (UI ⇒ maqueta primero).
+- [x] W6v2.7 Tests: motor, plantillas, regla compartida y los tres crons (573 verdes en 35 archivos, 01-10);
+  typecheck web limpio; eslint 0 errores.
+- [ ] W6v2.8 Deploy en ensayo (`..._DRY_RUN=true` sigue en Production) + `ONBOARDING_BEHAVIOR_EMAILS_SINCE` en
+  Vercel; correo real a `qa-free-v3` en Gmail (iPhone/Android), Gmail web, Outlook y modo oscuro.
+- [ ] W6v2.9 Encender: con 24 h de ensayo y OK del owner sobre el reparto por tipo, quitar el DRY_RUN.
+
+### W8 v2 — Plan B «Activación»: que el coach sume su primer alumno (owner 01-10; maqueta artifact `F1yd1V2b`)
+
+> 57 coaches desde el 06-09 → 22 demo → 14 sumaron alumno → 7 con alumno usándola: el 75 % nunca suma el primero.
+
+- [x] B1 Panel con 0 alumnos reales: «Tu primer alumno» primero y sin la card de prioridad. Web móvil/PWA
+  (`DashboardShell`) y escritorio (`DesktopBento`, franja ancha) con `FirstStudentCard.tsx`; RN (`home.tsx` +
+  `components/coach/FirstStudentCard.tsx`). Copy y destinos únicos en `packages/onboarding/first-student.ts`.
+- [x] B2 Ficha del alumno que nunca entró: aviso «todavía no entra» + «Reenviarle el acceso», que abre el flujo
+  existente de «Resetear contraseña» (web `ClientActionsSheet initialConfirm='reset'`; RN diálogo de la ficha).
+  Regla `hasNotEnteredYet` (web `client-status.ts`, RN `directory-shared.ts`), espejo del chip «Todavía no entró».
+  El correo de 48 h abre la ficha de ese alumno (`pendingClientId`).
+- [x] B3 Alumno sin ningún programa en web/PWA: `NoPlanCard` («Tu coach está armando tu plan» + «Hacer un check-in»),
+  espejo de RN; un día de descanso real sigue mostrando «Día de descanso».
+- [x] Baja de correos en el admin: bloque «Correos automáticos» en la ficha del coach
+  (`setCoachEmailOptOutAction`, `services/email/email-opt-out.service.ts`, auditoría `coach.email_opt_out`/`_in`).
+- [x] B4 Embudo semanal por superficie (02-10): columna `coaches.signup_surface` (`web_desktop` | `web_mobile` |
+  `app_ios` | `app_android` | `app_unknown`; migración `20261002012612_coaches_signup_surface.sql`, aditiva en LIVE),
+  escrita por los 4 inserts de alta (`lib/auth/signup-surface.ts`: user-agent en web, `resolveRegistrationPlatform`
+  en `api/mobile/**`). El correo «North Star semanal» de los lunes suma la sección «Embudo por superficie»
+  (`services/metrics/surface-funnel.service.ts`): registro → demo (`vive_tu_app_entered`) → sumó alumno real →
+  entró (`first_login_at`) → lo usa (entreno o comida), para la semana cerrada y las 4 semanas cerradas. Backfill
+  de las 59 altas desde el 06-09: 52 reconstruidas (sesión de auth + eventos de la guía + PostHog), 7 «Sin dato».
+- [ ] QA del owner en device (web escritorio, PWA, Android, iPhone).
+
 ## W7 — Medición, QA y salida (jefe + owner + Opus)
 - [ ] F7.1 Insights PostHog: setup ≤24 h, aha ≤7 d, volvió >6 h, tocó marca, por cohorte semanal y por persona; dashboard «Activación coaches».
 - [ ] F7.2 Docs: `CURRENT.md`, `PRODUCT_OVERVIEW`, `MOBILE_PARITY`, `MANUAL_TASKS` (contenido D4 pendiente si aplica); SPEC/PLAN/TASKS a `active`/cierre.

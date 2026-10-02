@@ -1,5 +1,6 @@
 import { WorkoutHeroCard, type HeroBlock } from './WorkoutHeroCard'
 import { RestDayCard } from './RestDayCard'
+import { NoPlanCard } from './NoPlanCard'
 import type { HeroCycleView } from '../../_data/heroComplianceBundle'
 
 interface HeroSectionProps {
@@ -22,6 +23,8 @@ interface HeroSectionProps {
     cycle?: HeroCycleView | null
     /** Master switch del dominio Nutricion: oculta el link "Ver nutrición →" del RestDayCard. */
     nutritionEnabled?: boolean
+    /** Quién le arma el plan (marca del coach o del team): lo nombra `NoPlanCard`. */
+    coachName?: string | null
 }
 
 /**
@@ -59,6 +62,7 @@ export function HeroSection({
     nextWorkoutDayLabel,
     cycle = null,
     nutritionEnabled = true,
+    coachName = null,
 }: HeroSectionProps) {
     if (hasWorkout && planId && planTitle) {
         // «Empezar hoy» sólo cuando el motor dice `not_started` (flexible sin fecha, R30) y hay
@@ -81,7 +85,11 @@ export function HeroSection({
             />
         )
     }
+    // Sin NINGÚN programa (el cursor no tiene `programId`): «Tu coach está armando tu plan», como la
+    // app. «Día de descanso» le decía que no había nada que hacer (plan B «Activación», 01-10).
+    // `cycle` null (tests/legacy sin bundle) conserva el comportamiento de siempre.
+    if (cycle && cycle.programId === null) return <NoPlanCard coachSlug={coachSlug} coachName={coachName} />
     // En `cycle` el cursor siempre resuelve un día mientras haya planes (M2: sin «Día de descanso»
-    // forzado); acá sólo se cae con programa vacío o sin programa — mismo RestDayCard de siempre.
+    // forzado); acá sólo se cae con programa vacío — mismo RestDayCard de siempre.
     return <RestDayCard coachSlug={coachSlug} nextWorkoutTitle={nextWorkoutTitle} nextWorkoutDayLabel={nextWorkoutDayLabel} showNutritionLink={nutritionEnabled} />
 }

@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-09-28"
+last_verified: "2026-09-30"
 canonical: true
 ---
 
@@ -18,8 +18,8 @@ prevalecen sobre este resumen. La prosa retirada está en
 
 | Frente | Estado | Fuente de detalle |
 |---|---|---|
-| Web/PWA | Pricing v3 productivo: Free = 1 alumno + white-label + sello «Hecho con EVA»; Pro 25 sin sello. **Pricing v4 (Pro 2–10 · Elite 11–60, grandfather por compra) listo en `rnmobiledenuevo`, pendiente día D ([tasks](../specs/pricing-v4/TASKS.md)).** **Deploy vigente 23-09: `master` = `rnmobiledenuevo` = `111460b0`** («Elige cómo pagar», `dpl_b6qKULbc…`). | [Runbook](../operations/RUNBOOK.md) · [spec](../specs/pricing-v3/SPEC.md) |
-| App nativa (RN) | iOS **1.1.3** pública desde el 16-09 (piso OTA iOS = 1.1.3); Android **1.1.3 (87) pública en Play desde el 25-09** (producción 100 %, 177 países; verificado en consola 26-09). Pistas de prueba: interna y cerrada pausadas (la pausa de alpha sigue «en revisión» al 26-09), abierta nunca usada. Queda OTA doble mientras haya Android en 1.1.2 y el binario B (R8, antes de feb 2027). **OTAs vigentes 23-09**: ios 1.1.3 grupo `6041fa25` + 1.1.2 desde el tag `ota/1.1.2-20260923` (android `49d04dd1` / ios `2c87e903`). | [Mobile parity](MOBILE_PARITY.md) · [OTA](../operations/MOBILE_RELEASES_OTA.md) · [SDD Android 1.1.3](../specs/android-113-play/SPEC.md) |
+| Web/PWA | Pricing v3 productivo: Free = 1 alumno + white-label + sello «Hecho con EVA»; Pro 25 sin sello. **Pricing v4 (Pro 2–10 · Elite 11–60, grandfather por compra) listo en `rnmobiledenuevo`, pendiente día D ([tasks](../specs/pricing-v4/TASKS.md)).** **Deploy vigente 30-09: `master` = `rnmobiledenuevo` = `759b47d1`** («Kilos o libras», `dpl_AouZB5An…`). | [Runbook](../operations/RUNBOOK.md) · [spec](../specs/pricing-v3/SPEC.md) |
+| App nativa (RN) | iOS **1.1.3** pública desde el 16-09 (piso OTA iOS = 1.1.3); Android **1.1.3 (87) pública en Play desde el 25-09** (producción 100 %, 177 países; verificado en consola 26-09; ficha anónima 200 con «Instalar» en CL/AR/US el 01-10). La landing enlaza Play junto al App Store desde el 01-10 (`ANDROID_STORE_IS_PUBLIC = true`). Pistas de prueba: interna y cerrada pausadas (pausa de alpha aprobada al 27-09), abierta nunca usada; el 01-10 se quitó la lista «EVA TESTERS» (22) de ambas (interna aplicada al instante, alpha enviada a revisión) ⇒ todos reciben producción. Queda OTA doble mientras haya Android en 1.1.2 y el binario B (R8, antes de feb 2027). **OTAs vigentes 30-09**: 1.1.3 android `24d7a59f` / ios `6c11fb23` desde `master` `759b47d1` (kg/lb); 1.1.2 android `31212063` desde el tag `ota/1.1.2-20260930` (sin kg/lb). | [Mobile parity](MOBILE_PARITY.md) · [OTA](../operations/MOBILE_RELEASES_OTA.md) · [SDD Android 1.1.3](../specs/android-113-play/SPEC.md) |
 | Nutrition V2 | Canónica para Standalone/Team. «Porciones a la chilena» y «Cantidades honestas» cerrados con QA VERDE (SDD `done`). V1 congelada, **no se borra** (decisión owner 03-08): solo migrar usuarios. | [Porciones CL](../specs/nutrition-porciones-chilenas/SPEC.md) · [Runbook de corte](../operations/NUTRITION_V2_CUTOVER_RUNBOOK.md) · [Delta V1](../audits/v1-deprecation-map-delta-2026-08-03.md) |
 | Teams | Pool, membresías y workspaces implementados; queda la matriz Team del archivado. | [Flows](../architecture/FLOWS_AND_COMPONENTS.md#team) · [Archivado](../../specs/archive-nutrition-v2-cutover/SPEC.md) |
 | Enterprise | **ELIMINADO (owner 01-09)**: E0+E1 en producción 05-09 (`/enterprise` ⇒ 308 a `/pricing`). **Queda E2**: ruta `/e/…`, tablas/funciones org y 2 RPC `SECURITY DEFINER` ejecutables por `anon` (`get_enterprise_alumno_context`, `get_org_branding`). | [SDD retiro](../specs/retiro-starter-y-enterprise/SPEC.md) |
@@ -28,48 +28,40 @@ prevalecen sobre este resumen. La prosa retirada está en
 
 ### 1. En producción, esperan QA del owner (⇒ SDD `done`)
 
-1. **«Elige cómo pagar»** (23-09, sin OTA, sin SDD; mockup `JQtEuDvT`): alta free→pago, registro y
-   `/coach/reactivate` eligen medio con Webpay primero + rescate al volver de MP. **QA celular VERDE 23-09.
-   Escritorio 24-09 VERDE en prod (selector, Webpay→Flow, MP, rescate, alta con plan pago, oscuro; el 400
-   «User bad request» de MP era solo el correo alias del owner). Arreglos del QA en prod: botón muerto al
-   volver de Webpay, historial legible, «Standalone», copy «prueba»; y en el alta paga la card cotiza sin
-   pasarela (`quoteOnly`) y el checkout se crea al elegir medio (antes: un preapproval MP por carga ⇒
-   correo «Suscriptor cancelado» por recarga y 429 de MP), salida única según el caso en vez de «Ir a
-   reactivación», y loader único en Suscripción (antes cargaba por partes).**
-2. **«Reps tras el reloj» + E1** (12-09, [SDD](../specs/reps-tras-el-reloj/SPEC.md)): **QA §10 (10 puntos,
-   incluye el arrastre del share).**
-3. **«Despegue rápido»** (11-09, [SDD](../specs/despegue-rapido/SPEC.md)): **QA de 5 puntos.** Sentry 23-09:
-   `EVA-NEXTJS-1P`/`1Q` («exec-v3: fallback 4.6s ganó la carrera») reaparecieron hoy.
-4. **Fix RN «Asignar plantilla»** (14-09, [OTA](../operations/MOBILE_RELEASES_OTA.md)): **QA en device.**
-5. **Fix RN buscador de «Cambiar» tapado por el teclado** (30-09, `872b3e4c` en `master`; OTA 1.1.3 android
-   `1e5a31ab` / ios `1472feb6`, 1.1.2 android `31212063` desde el tag `ota/1.1.2-20260930`): **QA en iPhone** —
-   Hoy del alumno → «N equivalentes» → tocar el buscador: la hoja sube con el teclado; elegir una opción que pida
-   confirmar cantidad abre «Confirma la cantidad» encima y «Cancelar» vuelve a la lista.
+Nada pendiente: el owner confirmó el 01-10 que los QA de «Elige cómo pagar», «Reps tras el reloj» + E1,
+«Despegue rápido», fix RN «Asignar plantilla», fix RN buscador de «Cambiar», «Kilos o libras» (SPEC §7),
+Android 1.1.3 en Play, «Entrada dark v1», «+ Nueva pregunta qué crear» e íconos de Nutrición estaban
+verdes. De «Kilos o libras» queda solo el barrido W5.4 (re-correr la Parte A del SQL con la adopción del
+OTA; [TASKS](../specs/kg-lb-ejecutor/TASKS.md)).
 
 ### 2. Frentes abiertos
 
 1. **Meta SDK iOS** ([SDD](../specs/meta-app-events-ios/SPEC.md)): mide de punta a punta desde el 16-09.
    Queda SKAN cuando Meta habilite «Configurar eventos» y confirmar si la hoja ATT salió en inglés
    (⇒ `locales`, build nueva). Pasos de consola en [MANUAL_TASKS](../operations/MANUAL_TASKS.md) (MOB-META-01).
-2. **Onboarding del coach v2 — correos W6 en ENSAYO desde el 06-09** ([spec](../specs/coach-onboarding-v2/SPEC.md),
-   [auditoría](../audits/correos-y-crons-2026-09-05.md)): `..._DRY_RUN=true` en Production. Falta aprobar el copy
-   y quitar el DRY_RUN; W8.4.2B a medias (`enqueueBehaviorCheck` sin sus 3 call sites); D13
-   `OWNER_WHATSAPP_URL`; W7, F5.3–F5.5 RN y D4. `FREE_COACH_DRIP_ENABLED` **no** se setea.
+2. **Onboarding del coach v2 — correos W6 ENCENDIDOS el 02-10** ([spec](../specs/coach-onboarding-v2/SPEC.md),
+   [auditoría](../audits/correos-y-crons-2026-09-05.md)): copy v2 en producción (`329c833f`,
+   [TASKS § W6 v2](../specs/coach-onboarding-v2/TASKS.md)); el owner fijó `ONBOARDING_BEHAVIOR_EMAILS_SINCE=2026-10-02T00:00:00Z`
+   y sacó el DRY_RUN; el cron de las 02:00 UTC corrió con `dry=false` (0 candidatos todavía). Plan B «Activación»
+   (panel vacío, ficha «todavía no entra», alumno sin programa, baja en el admin) en producción; B4 (embudo por superficie en el correo de los lunes, columna `coaches.signup_surface`) hecho el 02-10; queda QA device. W8.4.2B a medias
+   (`enqueueBehaviorCheck` sin sus 3 call sites); W7, F5.3–F5.5 RN y D4. `FREE_COACH_DRIP_ENABLED` **no** se setea.
 3. **Embudo Free→Pro** ([spec](../specs/embudo-free-pro/SPEC.md)): W0–W6 en producción; queda App Store Connect (W7.4).
 4. **FC de toda la sesión** (punto 2 de Movens, fuera del tren «Vuelta nueva»): plan aparte, arranca preguntándole
    a Movens qué banda usa ([SDD §6](../specs/vuelta-nueva-salud-y-reloj/SPEC.md)).
 5. **Renovaciones Flow** (28-09, [incidente](../audits/flow-renovaciones-2026-09-28.md)): el plan de $29.990 avisaba a
    `//api` (308) ⇒ ninguna renovación llegaba; `olympuswolf` quedó 24 días con Pro gratis (cortado). Arreglado con
    regla de Cloudflare + guardas en `paid-expiry`/`flow-reconcile`. **Queda: verificar la renovación de Movens el 02-10.**
+6. **Píxel de compra (Meta `Purchase` por servidor)** ([spec](../specs/meta-purchase-capi/SPEC.md), plan C del 01-10):
+   en código el 02-10; un `Purchase` por coach en su primer cobro real (MP o Flow), con el contexto del navegador
+   guardado al elegir medio de pago. Prueba sin pago real en Admin → Sistema con el código de «Eventos de prueba».
+   Queda QA con el próximo pago real (SPEC §7).
 
 ### 3. Decisiones del owner pendientes
 
-1. **Prueba Pro 14 días al registrarse** (plan 14-09, artifact `WSXBg586`): veredicto variante B (día 15 vuelve
-   a Free-1 + muro de cupo). Nada implementado; esperan Q1–Q4. Reemplaza la idea previa «trial al tocar el cupo».
-2. **Dunning de `paused`**: (a) la gracia es letra muerta porque el webhook nulea `current_period_end`
+1. **Dunning de `paused`**: (a) la gracia es letra muerta porque el webhook nulea `current_period_end`
    (`subscription-state.ts` vía `webhook-pipeline.ts`) ⇒ hacerla simétrica a `past_due` o borrarla del comentario;
    (b) apuntar el CTA del correo de dunning a `/coach/subscription/update-card`; (c) el camino Flow no tiene CTA.
-3. **«Cobros coach → alumno» — BLOQUEADO** ([spec](../specs/cobros-coach-alumno/SPEC.md) `draft`, artifact `046f3bb1`):
+2. **«Cobros coach → alumno» — BLOQUEADO** ([spec](../specs/cobros-coach-alumno/SPEC.md) `draft`, artifact `046f3bb1`):
    8 decisiones (§18.1) + 3 verificaciones externas (§18.2). Estimación 26-32 días-agente + 2-3 semanas de beta.
 
 ### 4. Bloqueado por terceros
@@ -95,7 +87,9 @@ Movens y los 4 coaches A/B de «Vuelta nueva» ([SPEC §9](../specs/vuelta-nueva
 
 ### Cerrados recientes (detalle en cada spec)
 
-Con QA VERDE ⇒ SDD `done`: [«Dossier por meses»](../specs/dossier-por-meses/SPEC.md) (26-09; su E2E sigue
+01-10: los 10 QA del owner de la prioridad 1 (`reps-tras-el-reloj`, `despegue-rapido`, `entrada-dark-v1` y
+`library-new-choice` pasan a `done`) · «Prueba Pro 14 días» **descartada** por el owner · reels de marketing
+cerrados. Con QA VERDE ⇒ SDD `done`: [«Dossier por meses»](../specs/dossier-por-meses/SPEC.md) (26-09; su E2E sigue
 sin correr, espera OK del owner) · «Vuelta nueva, salud y reloj» (21-09) · parche next 16.3.5 + REVOKE anon (21-09) ·
 incidente Ani (23-09) · «Arreglos chicos pre-OTA», «Cuenta atrás», «Share bloque», «Señales honestas»,
 «Porciones a la chilena», «Cantidades honestas» (10/11-09) · «Ciclo real y por lado» y cierres 02/04/05-09.

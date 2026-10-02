@@ -171,6 +171,69 @@ export async function findLatestByCoachAndKey(
     return rowsOrThrow(result, 'findLatestByCoachAndKey')[0] ?? null
 }
 
+/** PostgREST corta en 1000 filas por respuesta: los listados por lote de coaches se paginan. */
+const LIST_PAGE_SIZE = 1000
+/** Guarda de bucle: 50 páginas × 1000 filas, imposible con el padrón actual. */
+const LIST_MAX_PAGES = 50
+
+/**
+ * Todas las filas (cualquier estado) de un LOTE de coaches creadas desde `sinceIso`. Es la lectura
+ * del cupo compartido de correos automáticos (`automated-email-history.service.ts`): una consulta
+ * por lote en vez de una por coach. Orden total `created_at, id` para que el paginado no repita ni
+ * omita filas.
+ */
+export async function listByCoachesSince(
+    admin: Db,
+    coachIds: readonly string[],
+    sinceIso: string
+): Promise<CoachEmailLedgerRow[]> {
+    if (coachIds.length === 0) return []
+    const out: CoachEmailLedgerRow[] = []
+    for (let page = 0; page < LIST_MAX_PAGES; page++) {
+        const from = page * LIST_PAGE_SIZE
+        const result = (await ledger(admin)
+            .select(LEDGER_COLUMNS)
+            .in('coach_id', coachIds as string[])
+            .gte('created_at', sinceIso)
+            .order('created_at', { ascending: true })
+            .order('id', { ascending: true })
+            .range(from, from + LIST_PAGE_SIZE - 1)) as QueryResult
+        const rows = rowsOrThrow(result, 'listByCoachesSince')
+        out.push(...rows)
+        if (rows.length < LIST_PAGE_SIZE) break
+    }
+    return out
+}
+
+/** Filas VIVAS de una key para un lote de coaches, sin ventana de fecha (la marca de baja no vence). */
+export async function listActiveByCoachesAndKey(
+    admin: Db,
+    coachIds: readonly string[],
+    templateKey: string
+): Promise<CoachEmailLedgerRow[]> {
+    if (coachIds.length === 0) return []
+    const result = (await ledger(admin)
+        .select(LEDGER_COLUMNS)
+        .in('coach_id', coachIds as string[])
+        .eq('template_key', templateKey)
+        .in('status', ACTIVE_LEDGER_STATUSES as string[])) as QueryResult
+    return rowsOrThrow(result, 'listActiveByCoachesAndKey')
+}
+
+/**
+ * Borra las filas VIVAS de una key para un coach. Solo la usa la marca de baja (`email_opt_out`) al
+ * volver a activar los correos desde el admin: no es un correo, es una preferencia, y su historia
+ * queda en `admin_audit_logs` (`coach.email_opt_out` / `coach.email_opt_in`).
+ */
+export async function deleteActiveByCoachAndKey(admin: Db, coachId: string, templateKey: string): Promise<void> {
+    const result = (await ledger(admin)
+        .delete()
+        .eq('coach_id', coachId)
+        .eq('template_key', templateKey)
+        .in('status', ACTIVE_LEDGER_STATUSES as string[])) as QueryResult
+    if (result.error) throw new CoachEmailLedgerDbError('deleteActiveByCoachAndKey', result.error)
+}
+
 /** Deja la fila del envío. Devuelve la fila creada (el service solo usa el `id`). */
 export async function insertLedgerRow(
     admin: Db,

@@ -150,6 +150,23 @@ export function getClientStatusMeta(
     }
 }
 
+/**
+ * ¿Podemos AFIRMAR que el alumno nunca entró? Misma regla que el chip «Todavía no entró»
+ * (`getClientStatusMeta`, rama `pending_sync` posterior al corte): activo, sin archivar, sin
+ * `first_login_at`, con la clave temporal sin cambiar y nacido después de
+ * `FIRST_LOGIN_SIGNAL_CUTOVER`. Lo usa el aviso de la ficha (plan B «Activación», 01-10).
+ */
+export function hasNotEnteredYet(
+    { isArchived, isActive, firstLoginAt, createdAt, forcePasswordChange }: ClientStatusInput,
+    cutoverIso: string = FIRST_LOGIN_SIGNAL_CUTOVER
+): boolean {
+    if (isArchived || !isActive || !forcePasswordChange) return false
+    if (parseIso(firstLoginAt) !== null) return false
+    const createdMs = parseIso(createdAt)
+    const cutoverMs = parseIso(cutoverIso)
+    return createdMs !== null && cutoverMs !== null && createdMs >= cutoverMs
+}
+
 /** Adaptador desde la fila cruda del roster (`select('*')` ya trae las dos columnas nuevas). */
 export function clientStatusInputFromRow(client: {
     is_archived?: boolean | null

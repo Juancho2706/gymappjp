@@ -1472,6 +1472,7 @@ export type Database = {
           provider_customer_id: string | null
           provider_plan_id: string | null
           registration_ip: string | null
+          signup_surface: string | null
           slug: string
           slug_changed_at: string | null
           subscription_mp_id: string | null
@@ -1545,6 +1546,7 @@ export type Database = {
           provider_customer_id?: string | null
           provider_plan_id?: string | null
           registration_ip?: string | null
+          signup_surface?: string | null
           slug: string
           slug_changed_at?: string | null
           subscription_mp_id?: string | null
@@ -1618,6 +1620,7 @@ export type Database = {
           provider_customer_id?: string | null
           provider_plan_id?: string | null
           registration_ip?: string | null
+          signup_surface?: string | null
           slug?: string
           slug_changed_at?: string | null
           subscription_mp_id?: string | null

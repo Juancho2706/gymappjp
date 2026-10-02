@@ -18,6 +18,7 @@ import { resendCoachSignupConfirmationEmail } from '@/lib/auth/send-coach-email-
 import { sendFreeCoachOnboardingEmails } from '@/lib/email/free-coach-onboarding'
 import { captureCoachRegisteredServer } from '@/lib/posthog/registration-events'
 import { resolveRegistrationPlatform } from '@/lib/posthog/registration'
+import { appSignupSurface } from '@/lib/auth/signup-surface'
 import { resolveRegistrationUtm } from '@/lib/auth/registration-utm'
 import { passwordRejectionMessage } from '@eva/schemas'
 
@@ -195,6 +196,8 @@ export async function POST(request: NextRequest) {
         },
         trial_used_email: emailNorm,
         ...(registrationIp && { registration_ip: registrationIp }),
+        // B4: iOS o Android, para el embudo por superficie.
+        signup_surface: appSignupSurface(resolveRegistrationPlatform(request.headers)),
     })
 
     if (coachError) {

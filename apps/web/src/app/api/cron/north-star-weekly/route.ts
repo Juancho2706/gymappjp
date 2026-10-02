@@ -6,6 +6,11 @@ import {
     buildNorthStarEmail,
     computeNorthStarWeeklyRow,
 } from '@/services/metrics/north-star-weekly.service'
+import {
+    buildSurfaceFunnelSection,
+    computeSurfaceFunnelReport,
+    type SurfaceFunnelReport,
+} from '@/services/metrics/surface-funnel.service'
 
 /**
  * Cron `north-star-weekly` — «calculada sola» deja de ser una promesa (W1.6).
@@ -14,6 +19,10 @@ import {
  * corre a mano: sin este cron, «sola» significa «el jefe se acuerda el martes». Cada lunes 13:00
  * UTC este endpoint calcula la fila de la SEMANA RECIÉN CERRADA y se la manda al owner por Resend,
  * con los cinco guardarraíles y el `n` de cada uno («sin lectura» bajo el mínimo).
+ *
+ * B4 (plan «Activación», 02-10): el mismo correo suma el embudo registro → demo → sumó alumno →
+ * entró → lo usa separado por superficie de alta (`surface-funnel.service.ts`). Si ese cálculo
+ * falla, el correo sale igual con un aviso en esa sección: la North Star no depende de él.
  *
  * SIN UI: no toca ninguna pantalla ni crea superficie nueva.
  *
@@ -57,8 +66,18 @@ export async function GET(req: Request) {
                 `activados=${row.activados} maduras72h=${row.maduras_72h} ns=${row.north_star_pct ?? 'null'} dry=${dry}`
         )
 
+        let funnel: SurfaceFunnelReport | null = null
+        try {
+            funnel = await computeSurfaceFunnelReport(admin, { now })
+        } catch (err) {
+            console.error(
+                '[cron/north-star-weekly] embudo por superficie falló:',
+                err instanceof Error ? err.message : String(err)
+            )
+        }
+
         if (dry) {
-            return NextResponse.json({ ok: true, dry: true, sent: false, row })
+            return NextResponse.json({ ok: true, dry: true, sent: false, row, funnel })
         }
 
         const to = process.env.NORTH_STAR_REPORT_TO?.trim()
@@ -66,17 +85,18 @@ export async function GET(req: Request) {
             console.warn(
                 '[cron/north-star-weekly] NORTH_STAR_REPORT_TO no está seteada: la fila se calculó y NO se envió correo.'
             )
-            return NextResponse.json({ ok: true, skipped: 'no_recipient_env', row })
+            return NextResponse.json({ ok: true, skipped: 'no_recipient_env', row, funnel })
         }
 
-        const { subject, html } = buildNorthStarEmail(row)
+        const { subject, html: northStarHtml } = buildNorthStarEmail(row)
+        const html = northStarHtml + buildSurfaceFunnelSection(funnel)
         const result = await sendTransactionalEmail({ to, subject, html })
         if (!result.ok) {
             console.error('[cron/north-star-weekly] envío falló:', result.error)
             return NextResponse.json({ ok: false, error: 'send_failed', row }, { status: 500 })
         }
 
-        return NextResponse.json({ ok: true, sent: true, row })
+        return NextResponse.json({ ok: true, sent: true, row, funnel })
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         console.error('[cron/north-star-weekly] corrida abortada:', message)

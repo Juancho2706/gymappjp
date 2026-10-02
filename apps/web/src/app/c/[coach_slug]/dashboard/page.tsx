@@ -100,7 +100,7 @@ export default async function ClientDashboardPage({ params }: Props) {
 
                     {/* HERO — qué hago hoy (workout) o descanso */}
                     <Suspense fallback={<HeroAndComplianceSkeleton />}>
-                        <HeroAndComplianceGroup userId={user.id} coachSlug={coach_slug} />
+                        <HeroAndComplianceGroup userId={user.id} coachSlug={coach_slug} coachName={greetingBrandName ?? null} />
                     </Suspense>
 
                     {/* Coach presence */}

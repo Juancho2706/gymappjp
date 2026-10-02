@@ -6,6 +6,7 @@ import {
     CheckCircle, XCircle, Clock, Shield, Timer
 } from 'lucide-react'
 import { PageInfoButton } from '../_components/PageInfoButton'
+import { MetaPurchaseTestCard } from './_components/MetaPurchaseTestCard'
 
 export const metadata = { title: 'Sistema' }
 
@@ -33,6 +34,10 @@ const SISTEMA_INFO = [
     {
         heading: 'Tarjetas de plataforma',
         body: 'Total coaches — todos los registros en la tabla coaches.\nTotal alumnos — todos los registros en la tabla clients.\nActivos — coaches con status active o trialing (con acceso habilitado).\nBeta — coaches con payment_provider=\'beta\' (prueba sin pago).\nExpirados — coaches con status=\'expired\' (bloqueados hasta pagar).\nMorosos — coaches con status past_due o pending_payment.\nFuente: queries directas a Supabase, sin cache.',
+    },
+    {
+        heading: 'Píxel de compra · prueba',
+        body: 'Cada coach que paga por primera vez (Mercado Pago o Flow) genera solo un evento «Purchase» en Meta con el monto real; las renovaciones no. Para probar sin esperar un pago real, pega el código de Events Manager → Eventos de prueba y envía una compra de prueba: aparece ahí y no cuenta como compra. Cada envío queda en Auditoría (meta.purchase_test_sent); los reales, como meta.purchase_sent.',
     },
     {
         heading: 'Acciones de auditoría (24h)',
@@ -141,6 +146,8 @@ export default async function AdminSistemaPage() {
                     <span className="font-mono text-lg font-bold tabular-nums text-strong">{d.recentAuditCount}</span>
                 </div>
             </div>
+
+            <MetaPurchaseTestCard />
 
             {/* Cron monitoring */}
             <div className="rounded-xl border border-subtle bg-surface-card">

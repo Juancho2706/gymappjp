@@ -7,15 +7,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
  *    cliente de service role. Es la garantía que le permite al owner revisar el copy con el
  *    endpoint ya desplegado;
  *  · **el dry-run**: barre, decide y devuelve `wouldSend`, sin tocar Resend ni el ledger;
- *  · la corrida real: un coach de 3 h sin alumnos recibe UN correo con `trigger: 'behavior'` y la
- *    key `behavior_no_client_2h`;
+ *  · la corrida real: un coach del día 1 sin alumnos recibe UN correo con `trigger: 'behavior'`, la
+ *    key `behavior_no_client_2h`, el alta directa (nunca `/join`) y la respuesta a contacto@;
+ *  · el corte por env (`ONBOARDING_BEHAVIOR_EMAILS_SINCE`): sin él no entra nadie; `?since=` solo en
+ *    ensayo;
+ *  · el horario de Chile y el historial compartido (ilegible ⇒ nadie recibe nada);
  *  · la exclusión de cuentas de prueba con el bypass de `qa-free-v3@evatest.cl`;
  *  · el LOG del ensayo: `wouldSendByKey` y `beforeLaunch` en la línea final, que es como el owner
  *    audita el reparto desde Vercel sin llamar al endpoint.
  *
- * ⏱️ RELOJ CONGELADO DESPUÉS DEL CORTE DE LANZAMIENTO: los coaches de estos tests se arman con
- * `hoursAgo(...)` sobre el reloj del sistema, y con la fecha real (anterior al 06-09) todos nacerían
- * antes de `BEHAVIOR_LAUNCH_CUTOVER` y saldrían por `before_launch`. Se fija el 20-09 y listo.
+ * ⏱️ RELOJ CONGELADO: el 20-09 a las 12:00 de Chile (dentro de la ventana de 09–20 h), dos semanas
+ * después del corte que fija la env en el `beforeEach`.
  */
 
 type CoachRow = {
@@ -26,8 +28,9 @@ type CoachRow = {
     persona: string | null
     invite_code: string | null
     created_at: string | null
-    last_active_at: string | null
     active_org_id: string | null
+    primary_color: string | null
+    subscription_tier: string | null
 }
 
 type ClientRow = { created_at: string | null; first_login_at: string | null }
@@ -36,9 +39,17 @@ let coaches: CoachRow[] = []
 let clientsByCoach: Record<string, ClientRow[]> = {}
 let emailByCoachId: Record<string, string | null> = {}
 
-const { scheduleCoachEmailMock, findActiveByCoachAndKeysMock, serviceClient } = vi.hoisted(() => ({
+const {
+    scheduleCoachEmailMock,
+    findActiveByCoachAndKeysMock,
+    loadAutomatedEmailHistoryMock,
+    resolveFirstArtifactMock,
+    serviceClient,
+} = vi.hoisted(() => ({
     scheduleCoachEmailMock: vi.fn(),
     findActiveByCoachAndKeysMock: vi.fn(),
+    loadAutomatedEmailHistoryMock: vi.fn(),
+    resolveFirstArtifactMock: vi.fn(),
     /** Cuántas veces el endpoint pidió un cliente de service role (0 = no leyó nada). */
     serviceClient: { calls: 0 },
 }))
@@ -50,6 +61,19 @@ vi.mock('@/services/email/coach-email-ledger.service', () => ({
 vi.mock('@/infrastructure/db/coach-email-ledger.repository', () => ({
     findActiveByCoachAndKeys: findActiveByCoachAndKeysMock,
 }))
+
+vi.mock('@/services/email/automated-email-history.service', () => ({
+    loadAutomatedEmailHistory: loadAutomatedEmailHistoryMock,
+}))
+
+vi.mock('@/services/onboarding/onboarding-v2.queries', () => ({
+    resolveFirstArtifact: resolveFirstArtifactMock,
+}))
+
+/** Historial vacío para cada coach pedido (nadie recibió nada, nadie pidió la baja). */
+function emptyHistories(ids: string[]) {
+    return new Map(ids.map((id) => [id, { sentAts: [] as string[], ahaAt: null, optedOut: false }]))
+}
 
 /**
  * Chain de PostgREST: cualquier filtro devuelve la misma cadena, los `eq` se capturan y el `await`
@@ -107,8 +131,9 @@ import { GET } from './route'
 
 const SECRET = 'cron-sekret'
 const HOUR = 60 * 60 * 1000
-/** Dos semanas después del encendido de W6 (`BEHAVIOR_LAUNCH_CUTOVER` = 06-09). */
-const NOW = new Date('2026-09-20T09:00:00.000Z')
+/** 20-09 a las 12:00 de Chile (UTC−3): dentro del horario y dos semanas después del corte. */
+const NOW = new Date('2026-09-20T15:00:00.000Z')
+const LAUNCH = '2026-09-06T00:00:00Z'
 const hoursAgo = (h: number) => new Date(Date.now() - h * HOUR).toISOString()
 
 const req = (query = '') =>
@@ -123,9 +148,10 @@ function coach(overrides: Partial<CoachRow> & { id: string }): CoachRow {
         brand_name: 'Studio Ana',
         persona: 'strength',
         invite_code: 'X5UD9X44',
-        created_at: hoursAgo(3),
-        last_active_at: hoursAgo(3),
+        created_at: hoursAgo(21),
         active_org_id: null,
+        primary_color: '#7C3AED',
+        subscription_tier: 'free',
         ...overrides,
     }
 }
@@ -142,6 +168,8 @@ beforeEach(() => {
     serviceClient.calls = 0
     fakeAdmin = makeAdmin()
     findActiveByCoachAndKeysMock.mockResolvedValue([])
+    loadAutomatedEmailHistoryMock.mockImplementation(async (_admin: unknown, ids: string[]) => emptyHistories(ids))
+    resolveFirstArtifactMock.mockResolvedValue(false)
     scheduleCoachEmailMock.mockResolvedValue({
         ok: true,
         deduped: false,
@@ -153,6 +181,7 @@ beforeEach(() => {
     vi.stubEnv('ONBOARDING_BEHAVIOR_SEND_SPACING_MS', '0')
     vi.stubEnv('ONBOARDING_BEHAVIOR_EMAILS_ENABLED', 'true')
     vi.stubEnv('ONBOARDING_BEHAVIOR_EMAILS_DRY_RUN', '')
+    vi.stubEnv('ONBOARDING_BEHAVIOR_EMAILS_SINCE', LAUNCH)
     vi.spyOn(console, 'info').mockImplementation(() => {})
 })
 
@@ -202,7 +231,7 @@ describe('flag apagado', () => {
 })
 
 describe('corrida real', () => {
-    it('coach de 3 h sin alumnos → UN correo `behavior_no_client_2h` con trigger behavior', async () => {
+    it('coach del día 1 sin alumnos → UN correo `behavior_no_client_2h` con trigger behavior', async () => {
         coaches = [coach({ id: 'c1', slug: 'ana-fit' })]
         emailByCoachId = { c1: 'ana@gym.cl' }
 
@@ -215,8 +244,65 @@ describe('corrida real', () => {
         expect(arg.trigger).toBe('behavior')
         expect(arg.to).toBe('ana@gym.cl')
         expect(arg.subject.length).toBeGreaterThan(0)
-        expect(arg.html).toContain('/join/X5UD9X44')
-        expect(arg.payload).toMatchObject({ reason: 'no_real_client_2h', persona: 'strength' })
+        // Alta directa, nunca `/join` (desde el 21-08 deja una solicitud, no un alumno).
+        expect(arg.html).toContain('/coach/clients?invite=1')
+        expect(arg.html).not.toContain('/join/')
+        expect(arg.text).toContain('El equipo de EVA')
+        expect(arg.replyTo).toBe('contacto@eva-app.cl')
+        expect(arg.payload).toMatchObject({ reason: 'no_real_client_day1', persona: 'strength' })
+    })
+
+    it('el día 3 sin rutina lee «armó su primera rutina» y manda el correo de la guía', async () => {
+        coaches = [coach({ id: 'c1', created_at: hoursAgo(73) })]
+        clientsByCoach = { c1: [{ created_at: hoursAgo(70), first_login_at: hoursAgo(60) }] }
+        emailByCoachId = { c1: 'ana@gym.cl' }
+
+        const json = await (await GET(req())).json()
+        expect(json.sent).toBe(1)
+        expect(resolveFirstArtifactMock).toHaveBeenCalledTimes(1)
+        expect(scheduleCoachEmailMock.mock.calls[0][1].templateKey).toBe('behavior_no_return_24h')
+    })
+
+    it('antes del día 3 ni siquiera lee «armó su primera rutina» (es caro y no cambia nada)', async () => {
+        coaches = [coach({ id: 'c1' })]
+        emailByCoachId = { c1: 'ana@gym.cl' }
+        await GET(req())
+        expect(resolveFirstArtifactMock).not.toHaveBeenCalled()
+    })
+
+    it('fuera del horario de Chile no sale nada y se cuenta', async () => {
+        vi.setSystemTime(new Date('2026-09-21T02:00:00.000Z')) // 23:00 del 20-09 en Chile
+        coaches = [coach({ id: 'c1' })]
+        emailByCoachId = { c1: 'ana@gym.cl' }
+
+        const json = await (await GET(req())).json()
+        expect(json.sent).toBe(0)
+        expect(json.skipped.outside_hours).toBe(1)
+        expect(scheduleCoachEmailMock).not.toHaveBeenCalled()
+    })
+
+    it('historial de correos ilegible → nadie recibe nada (fail-closed)', async () => {
+        loadAutomatedEmailHistoryMock.mockRejectedValue(new Error('db caída'))
+        vi.spyOn(console, 'error').mockImplementation(() => {})
+        coaches = [coach({ id: 'c1' })]
+        emailByCoachId = { c1: 'ana@gym.cl' }
+
+        const json = await (await GET(req())).json()
+        expect(json.sent).toBe(0)
+        expect(json.skipped.history_unreadable).toBe(1)
+    })
+
+    it('con la marca de baja no recibe nada', async () => {
+        loadAutomatedEmailHistoryMock.mockImplementation(
+            async (_admin: unknown, ids: string[]) =>
+                new Map(ids.map((id) => [id, { sentAts: [], ahaAt: null, optedOut: true }]))
+        )
+        coaches = [coach({ id: 'c1' })]
+        emailByCoachId = { c1: 'ana@gym.cl' }
+
+        const json = await (await GET(req())).json()
+        expect(json.sent).toBe(0)
+        expect(json.skipped.opted_out).toBe(1)
     })
 
     it('el dedupe del ledger deja al coach sin correo', async () => {
@@ -241,6 +327,35 @@ describe('corrida real', () => {
     })
 })
 
+describe('corte de lanzamiento por env', () => {
+    it('sin ONBOARDING_BEHAVIOR_EMAILS_SINCE no entra nadie (fail-closed)', async () => {
+        vi.stubEnv('ONBOARDING_BEHAVIOR_EMAILS_SINCE', '')
+        vi.spyOn(console, 'warn').mockImplementation(() => {})
+        coaches = [coach({ id: 'c1' })]
+        emailByCoachId = { c1: 'ana@gym.cl' }
+
+        const json = await (await GET(req())).json()
+        expect(json).toMatchObject({ candidates: 0, sent: 0, since: null })
+        expect(scheduleCoachEmailMock).not.toHaveBeenCalled()
+    })
+
+    it('`?since=` solo vale en ensayo: audita otra cohorte sin mandar', async () => {
+        vi.stubEnv('ONBOARDING_BEHAVIOR_EMAILS_SINCE', '')
+        vi.spyOn(console, 'warn').mockImplementation(() => {})
+        coaches = [coach({ id: 'c1' })]
+        emailByCoachId = { c1: 'ana@gym.cl' }
+
+        const dry = await (await GET(req('?dry=1&since=2026-09-06T00:00:00Z'))).json()
+        expect(dry).toMatchObject({ dry: true, since: '2026-09-06T00:00:00Z' })
+        expect(dry.wouldSend).toHaveLength(1)
+
+        // Sin `dry`, el `since` de la URL se ignora: un envío real nunca se salta la env.
+        const real = await (await GET(req('?since=2026-09-06T00:00:00Z'))).json()
+        expect(real).toMatchObject({ dry: false, since: null, sent: 0 })
+        expect(scheduleCoachEmailMock).not.toHaveBeenCalled()
+    })
+})
+
 describe('dry run', () => {
     it('con ONBOARDING_BEHAVIOR_EMAILS_DRY_RUN=true calcula y NO envía', async () => {
         vi.stubEnv('ONBOARDING_BEHAVIOR_EMAILS_DRY_RUN', 'true')
@@ -251,7 +366,7 @@ describe('dry run', () => {
 
         expect(json).toMatchObject({ ok: true, dry: true, candidates: 1, sent: 0 })
         expect(json.wouldSend).toEqual([
-            { slug: 'ana-fit', key: 'behavior_no_client_2h', reason: 'no_real_client_2h' },
+            { slug: 'ana-fit', key: 'behavior_no_client_2h', reason: 'no_real_client_day1' },
         ])
         expect(scheduleCoachEmailMock).not.toHaveBeenCalled()
     })
@@ -272,7 +387,7 @@ describe('dry run', () => {
         coaches = [
             coach({ id: 'c1', slug: 'ana-fit' }),
             coach({ id: 'c2', slug: 'beto-fit' }),
-            // Coach de agosto, anterior a `BEHAVIOR_LAUNCH_CUTOVER`. En producción el barrido ni lo
+            // Coach de agosto, anterior al corte de la env. En producción el barrido ni lo
             // lee (el `since` de `listBehaviorCandidates` ya lo filtra); el contador existe por el
             // disparo EN LÍNEA, que carga al coach por id y no pasa por esa ventana.
             coach({ id: 'c3', slug: 'viejo-fit', created_at: '2026-08-20T10:00:00.000Z' }),

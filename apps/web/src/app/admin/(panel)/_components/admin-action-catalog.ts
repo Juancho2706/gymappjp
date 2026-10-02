@@ -29,6 +29,8 @@ export const ADMIN_ACTION_CATALOG: Record<string, AdminActionMeta> = {
     'coach.reactivate': { label: 'Reactivó coach', tone: 'success' },
     'coach.force_expire': { label: 'Expiró trial', tone: 'warning' },
     'coach.period_extend': { label: 'Extendió período', tone: 'success' },
+    'coach.email_opt_out': { label: 'Dio de baja de los correos', tone: 'warning' },
+    'coach.email_opt_in': { label: 'Reactivó los correos', tone: 'success' },
     'coach.period_end_update': { label: 'Cambió vencimiento', tone: 'neutral' },
     'coach.bulk_status': { label: 'Cambio masivo de estado', tone: 'warning' },
     'coach.bulk_tier': { label: 'Cambio masivo de plan', tone: 'warning' },
@@ -100,6 +102,8 @@ export const ADMIN_ACTION_CATALOG: Record<string, AdminActionMeta> = {
 
     // ── Otros procesos ──────────────────────────────────────────────────────
     'exercise.media.uploaded': { label: 'Subió media de ejercicio', tone: 'neutral' },
+    'meta.purchase_sent': { label: 'Compra enviada a Meta', tone: 'sport' },
+    'meta.purchase_test_sent': { label: 'Prueba del píxel de compra', tone: 'neutral' },
     'cron.trial_expiry_ran': { label: 'Cron: vencimiento de trials', tone: 'neutral' },
     'cron.paid_expiry_ran': { label: 'Cron: vencimiento de pagos', tone: 'neutral' },
     'cron.purge_data_ran': { label: 'Cron: purga de datos', tone: 'neutral' },

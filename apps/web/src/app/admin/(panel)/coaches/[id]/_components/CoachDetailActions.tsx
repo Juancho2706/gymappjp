@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { toast } from 'sonner'
-import { Check, Clock, Copy, Pause, RefreshCw, ShieldOff } from 'lucide-react'
+import { Check, Clock, Copy, MailCheck, MailX, Pause, RefreshCw, ShieldOff } from 'lucide-react'
 import { InfoTooltip } from '@/components/ui/info-tooltip'
 import { AdminConfirmDialog } from '../../../_components/AdminConfirmDialog'
 import {
@@ -11,6 +11,7 @@ import {
     expireCoachAction,
     extendCoachPeriodAction,
     reactivateCoachAdminAction,
+    setCoachEmailOptOutAction,
     suspendCoachAction,
 } from '../../_actions/coach-actions'
 
@@ -23,6 +24,8 @@ interface Props {
     slug: string
     /** Alumnos totales del coach — alcance real del borrado. */
     clientCount: number
+    /** Cuándo pidió la baja de los correos automáticos; `null` = los recibe. */
+    emailOptOutAt?: string | null
 }
 
 function ActionButton({
@@ -82,14 +85,14 @@ export function CopyTextButton({ value, label }: { value: string; label: string 
     )
 }
 
-type ConfirmKey = 'reactivate' | 'suspend' | 'expire' | 'delete'
+type ConfirmKey = 'reactivate' | 'suspend' | 'expire' | 'delete' | 'optOut'
 
 /**
  * Acciones de la ficha de coach. Toda mutación destructiva pasa por `AdminConfirmDialog` con la
  * consecuencia REAL escrita (expirar cancela la suscripción en la pasarela y ancla la gracia de
  * los alumnos; borrar arrastra alumnos y datos). Extender es reversible ⇒ va directo.
  */
-export function CoachDetailActions({ coachId, slug, clientCount }: Props) {
+export function CoachDetailActions({ coachId, slug, clientCount, emailOptOutAt = null }: Props) {
     const router = useRouter()
     const [pending, setPending] = useState<string | null>(null)
     const [confirm, setConfirm] = useState<ConfirmKey | null>(null)
@@ -143,6 +146,13 @@ export function CoachDetailActions({ coachId, slug, clientCount }: Props) {
             severity: 'danger',
             confirmLabel: 'Expirar y cancelar cobro',
             onConfirm: () => run('expire', () => expireCoachAction(coachId), 'Coach expirado y suscripción cancelada en la pasarela.'),
+        },
+        optOut: {
+            title: '¿Dar de baja de los correos automáticos?',
+            description: 'Deja de recibir la serie de bienvenida, el aviso de cupo y el de pago pendiente. Los correos de cuenta, contraseña y pagos siguen saliendo. Se puede volver a activar.',
+            severity: 'warning',
+            confirmLabel: 'Dar de baja',
+            onConfirm: () => run('optOut', () => setCoachEmailOptOutAction(coachId, true), 'Coach dado de baja de los correos.'),
         },
         delete: {
             title: '¿Eliminar este coach para siempre?',
@@ -224,6 +234,33 @@ export function CoachDetailActions({ coachId, slug, clientCount }: Props) {
                             onClick={() => setConfirm('expire')}
                         />
                     </div>
+                </div>
+
+                <div>
+                    <p className="mb-2 text-[10px] font-medium uppercase tracking-widest text-muted">Correos automáticos</p>
+                    <p className="mb-2 text-[11px] text-muted">
+                        {emailOptOutAt
+                            ? `Dado de baja el ${new Date(emailOptOutAt).toLocaleDateString('es-CL', { timeZone: 'America/Santiago', day: '2-digit', month: '2-digit' })}. Solo recibe correos de cuenta y pagos.`
+                            : 'Recibe la serie de bienvenida, el aviso de cupo y el de pago pendiente.'}
+                    </p>
+                    {emailOptOutAt ? (
+                        <ActionButton
+                            label="Volver a activar"
+                            tooltip="Borra la marca de baja: vuelve a recibir los correos automáticos que le correspondan."
+                            icon={MailCheck}
+                            variant="success"
+                            loading={pending === 'optIn'}
+                            onClick={() => void run('optIn', () => setCoachEmailOptOutAction(coachId, false), 'Correos reactivados.')}
+                        />
+                    ) : (
+                        <ActionButton
+                            label="Dar de baja de los correos"
+                            tooltip="Para cuando responde «no quiero más». Corta la serie de bienvenida, el aviso de cupo por barrido y el de carrito abandonado. Cuenta, contraseña y pagos siguen saliendo."
+                            icon={MailX}
+                            loading={pending === 'optOut'}
+                            onClick={() => setConfirm('optOut')}
+                        />
+                    )}
                 </div>
 
                 <div>

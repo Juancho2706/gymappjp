@@ -3,7 +3,7 @@
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { redirect } from 'next/navigation'
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import {
     BILLING_CYCLE_CONFIG,
     getTierMaxClients,
@@ -20,6 +20,7 @@ import { sendFreeCoachOnboardingEmails } from '@/lib/email/free-coach-onboarding
 import { captureCoachRegisteredServer } from '@/lib/posthog/registration-events'
 import { SERVER_EMITTED_QUERY } from '@/lib/posthog/registration'
 import { parseUtmCookie, resolveRegistrationUtm, UTM_COOKIE_NAME } from '@/lib/auth/registration-utm'
+import { webSignupSurface } from '@/lib/auth/signup-surface'
 import { rotatePasswordOnGoogleLink } from '@/lib/auth/google-link-rotation'
 
 export type CompleteOnboardingState = {
@@ -176,6 +177,8 @@ export async function completeOAuthOnboarding(
         // `authenticated`/`anon`). `null` explícito cuando el alta no trajo UTM.
         utm_source: utmSource,
         utm_campaign: utmCampaign,
+        // B4: escritorio o teléfono, para el embudo por superficie.
+        signup_surface: webSignupSurface((await headers()).get('user-agent')),
         // Google accounts are already email-confirmed — free tier is active immediately
         subscription_status: isFreeTier ? 'active' : 'pending_payment',
         subscription_tier: selectedTier,

@@ -3,7 +3,9 @@ import { cache } from 'react'
 import { z } from 'zod'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
 import { discountSpecFromSnapshot } from '@/services/billing/discount.service'
-import { listMonthlyEquivalentClp, netMonthlyClpForCoach } from '@/services/billing/mrr.service'
+import { isPayingCoach, listMonthlyEquivalentClp, netMonthlyClpForCoach } from '@/services/billing/mrr.service'
+import { effectivePeriodEndIso, wholeDaysUntil } from '@/services/billing/period-end'
+import { readCoachEmailOptOut } from '@/services/email/email-opt-out.service'
 
 /**
  * Data layer de la ficha de coach (`/admin/coaches/[id]`). Server-only, service-role — el gate de
@@ -106,7 +108,13 @@ export interface CoachDetail {
      * NO paga aunque su plan tenga precio de lista.
      */
     isPaying: boolean
+    /** Fin REAL de lo pagado (= próximo cobro); Flow corregido a hora de Chile (`effectivePeriodEndIso`). */
+    expiresAt: string | null
+    /** Días enteros hasta `expiresAt` (truncados, misma regla que la lista). */
+    daysUntilExpiry: number | null
     coupon: CoachDetailCoupon | null
+    /** Cuándo pidió la baja de los correos automáticos; `null` = los recibe. */
+    emailOptOutAt: string | null
     charges: CoachDetailChargeRow[]
     events: CoachDetailEventRow[]
     addons: CoachDetailAddonRow[]
@@ -219,6 +227,12 @@ export const getCoachDetail = cache(async (coachId: string): Promise<CoachDetail
         }
     }
 
+    const expiresAt = effectivePeriodEndIso(coach.current_period_end, coach.payment_provider)
+
+    // Baja de los correos automáticos (marca en `coach_email_ledger`). Ilegible ⇒ `null` y el panel
+    // ofrece dar de baja: es idempotente, así que no hay forma de duplicarla.
+    const emailOptOutAt = await readCoachEmailOptOut(admin, coachId).catch(() => null)
+
     return {
         coach,
         email: authRes.data?.user?.email ?? null,
@@ -226,11 +240,11 @@ export const getCoachDetail = cache(async (coachId: string): Promise<CoachDetail
         activeClientCount: activeClientCountRes.count ?? 0,
         listMonthlyClp: listMonthlyEquivalentClp(coach.subscription_tier, coach.billing_cycle),
         netMonthlyClp: netMonthlyClpForCoach(coach.subscription_tier, coach.billing_cycle, spec),
-        isPaying: coach.subscription_status === 'active' && (
-            (coach.payment_provider === 'mercadopago' && coach.subscription_mp_id !== null)
-            || (coach.payment_provider === 'flow' && coach.subscription_provider_external_id !== null)
-        ),
+        isPaying: isPayingCoach(coach),
+        expiresAt,
+        daysUntilExpiry: expiresAt ? wholeDaysUntil(expiresAt, Date.now()) : null,
         coupon,
+        emailOptOutAt,
         charges: (chargesRes.data ?? []).map((r) => ({
             id: r.id,
             chargedAt: r.charged_at,

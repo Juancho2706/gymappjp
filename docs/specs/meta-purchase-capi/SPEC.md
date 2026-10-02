@@ -1,7 +1,7 @@
 ---
-status: draft
+status: active
 owner: product-engineering
-last_verified: "2026-09-26"
+last_verified: "2026-10-02"
 canonical: false
 ---
 
@@ -88,6 +88,28 @@ campañas deberían seguir optimizando por «Registro completo».
 App móvil (el pago siempre ocurre en la web), `InitiateCheckout` (se puede sumar después con el mismo
 patrón), Test Events de Meta (el helper no soporta `test_event_code`; la verificación es por logs de Vercel).
 
+## 6 bis. Cambios al implementar (02-10, refutación del 01-10)
+
+- **«Primer cobro» no sale de `{ inserted }`.** `insertBillingSnapshot` hace upsert con `ignoreDuplicates` y
+  devuelve `inserted: true` siempre, también en el reintento del webhook. El servicio
+  (`services/billing/meta-purchase.service.ts`) pregunta a la base: manda solo si el snapshot MÁS ANTIGUO del
+  coach (`created_at`, `id`) es este cobro. Cubre reintentos, renovaciones, prorrateos y el mismo primer cobro
+  de Flow llegando por dos caminos con id distinto.
+- **Marca `meta.purchase_sent`** en `admin_audit_logs` (`admin_email = 'system'`, payload sin PII) corta los
+  envíos siguientes del mismo coach; si Meta rechaza o se cae, no se marca. El `event_id` es determinístico
+  (`purchase:<provider>:<provider_payment_id>`), así que una carrera entre dos entregas la descarta Meta.
+- **Exclusiones:** cuentas de prueba (`isTestCoachEmail`), `payment_provider` `internal` o `beta`, y monto 0.
+- **Enganche:** los 3 `insertBillingSnapshot` de cobro `recurring` de `lib/payments/webhook-pipeline.ts` y el de
+  `flow/confirm-enrollment`. El de prorrateo de add-on queda fuera (nunca es el primer cobro).
+- **Contexto (D2):** el intent de `create-preference` (MP y Flow) y el del registro con plan pago guardan
+  `meta: { fbp, fbc, ua }` (`buildCheckoutIntentMeta`); el servicio lee primero el del gateway y después el del
+  registro. Sin IP.
+- **Test Events (cambia §6):** el helper acepta `testEventCode`, pero SOLO lo usa la tarjeta «Píxel de compra ·
+  prueba» de Admin → Sistema (`sendMetaPurchaseTestAction`, auditada como `meta.purchase_test_sent`). Nunca
+  variable de entorno: si quedara puesta, las compras reales se irían a «Eventos de prueba».
+- **Timeout:** `AbortSignal.timeout(3000)` en `sendMetaCapiEvent`, que ahora devuelve `{ ok }` (los callers
+  existentes lo ignoran).
+
 ## 7. QA del owner
 
 1. Un coach real paga por MP ⇒ en Vercel aparece `[meta-capi] enviado Purchase purchase:mercadopago:<id>`
@@ -96,3 +118,5 @@ patrón), Test Events de Meta (el helper no soporta `test_event_code`; la verifi
 3. La renovación del mes siguiente del mismo coach **no** envía nada (D1a).
 4. Una cuenta de prueba que paga no envía nada.
 5. En Events Manager, «Compras» aparece con método «Servidor» y el valor en CLP (lag de 1–3 h).
+6. Sin esperar un pago: Events Manager → Eventos de prueba → copiar el código → Admin → Sistema → «Píxel de
+   compra · prueba» ⇒ el `Purchase` aparece en «Eventos de prueba» en segundos.

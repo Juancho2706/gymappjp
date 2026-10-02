@@ -148,14 +148,14 @@ confirmar coach por coach. W5.1/W5.2 quedan sin objeto.
 ## W6 · Gates y salida
 
 - [x] **W6.1** Gates proporcionales por ola; suite completa una vez al cierre (30-09, ver «Retomar»).
-- [ ] **W6.2** Deploy web + OTA doble, solo a pedido del owner.
+- [x] **W6.2** 30-09: `master` `872b3e4c..759b47d1` (fast-forward) ⇒ Vercel prod `dpl_AouZB5An…` success; OTA 1.1.3
+  android `24d7a59f` (run 36761118795) / ios `6c11fb23` (run 36761141098), ambos success y listados en
+  `eas update:list --branch production`. Android 1.1.2 SIN port (decisión: lo cubre el barrido W5.4).
 - [ ] **W6.3** QA del owner (SPEC §7) ⇒ SDD `done`.
 
 ## Retomar (30-09)
 
-W1 (motor) + W2 (columna en LIVE) + W3 (web) + W4 (RN) hechos; W1–W3 pusheados en `rnmobiledenuevo`, W4 commit
-local. **W5 datos convertidos en LIVE 30-09 (D4 = b, con respaldo).** Gates W6.1 30-09 sobre `e0d25d93`: typecheck web
-0 errores; vitest completo 827 archivos / 11.491 tests pasan, 0 fallan; `expo export --platform android` OK. **Nada de
-kg/lb en `master` ni en OTA todavía.** Siguiente (a pedido del owner, él pushea): `rnmobiledenuevo` → `master`
-(fast-forward, deploy web) → OTA 1.1.3 android + ios desde `master` → barrido W5.4 → QA del owner SPEC §7. Android
-1.1.2 sin port de kg/lb (recomendado: el barrido cubre lo que anoten ahí).
+W1–W4 en producción 30-09 (web `759b47d1` + OTA 1.1.3 android `24d7a59f` / ios `6c11fb23`); W5.3 datos convertidos en
+LIVE con respaldo (D4 = b). Gates W6.1 sobre `e0d25d93`: typecheck web 0 errores; vitest completo 827 archivos / 11.491
+tests pasan, 0 fallan; `expo export --platform android` OK. **Quedan:** W5.4 barrido (re-correr SOLO la Parte A del SQL
+cuando la adopción del OTA sea alta; revisar antes cuántas series `lb` sin unidad hay) y W6.3 QA del owner SPEC §7.

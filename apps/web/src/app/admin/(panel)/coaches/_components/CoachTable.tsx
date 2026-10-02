@@ -8,6 +8,7 @@ import { Trash2, AlertTriangle, ChevronDown, ChevronsUpDown, ChevronUp, Users, P
 import { formatSantiagoDdMmYy } from '@/lib/date-utils'
 import { AdminStatusBadge } from '../../_components/AdminStatusBadge'
 import { AdminSortHeader } from '../../_components/AdminSortHeader'
+import { AdminExpiry } from '../../_components/AdminExpiry'
 import { AdminEmptyState } from '../../_components/AdminEmptyState'
 import { AdminBulkBar } from '../../_components/AdminBulkBar'
 import { AdminPagination } from '../../_components/AdminPagination'
@@ -238,13 +239,6 @@ function ActivitySortHeader() {
     )
 }
 
-function ExpiryCell({ days }: { days: number | null | undefined }) {
-    if (days === null || days === undefined) return <span className="text-muted">—</span>
-    if (days < 0) return <span className="font-mono text-xs text-muted">vencido</span>
-    const color = days < 7 ? 'text-[var(--danger-500)]' : days < 14 ? 'text-[var(--warning-500)]' : 'text-body'
-    return <span className={`font-mono text-xs tabular-nums ${color}`}>{days}d</span>
-}
-
 function isAtRisk(c: CoachListItem): boolean {
     // Sin fecha de vencimiento NO es riesgo: el `?? 1` viejo convertia null en "vence en 1d"
     // y marcaba en riesgo a TODO coach free/cortesia de por vida (25 falsos positivos en prod).
@@ -359,7 +353,7 @@ export function CoachTable({ coaches, total }: Props) {
                                     <span className="text-sm text-strong">{c.brand_name || c.full_name}</span>
                                     <div className="flex items-center gap-2">
                                         <AdminStatusBadge value={c.subscription_status ?? ''} />
-                                        <ExpiryCell days={c.days_until_expiry} />
+                                        <AdminExpiry expiresAt={c.expires_at} days={c.days_until_expiry} layout="inline" />
                                     </div>
                                 </button>
                             ))}
@@ -426,7 +420,7 @@ export function CoachTable({ coaches, total }: Props) {
                                     )}
                                 </span>
                                 <span className="flex items-center gap-1 text-muted">
-                                    Vence <ExpiryCell days={c.days_until_expiry} />
+                                    Vence <AdminExpiry expiresAt={c.expires_at} days={c.days_until_expiry} layout="inline" />
                                 </span>
                             </div>
 
@@ -595,7 +589,7 @@ export function CoachTable({ coaches, total }: Props) {
                                             )}
                                         </td>
                                         <td className="px-3 py-2.5">
-                                            <ExpiryCell days={c.days_until_expiry} />
+                                            <AdminExpiry expiresAt={c.expires_at} days={c.days_until_expiry} />
                                         </td>
                                         <td className="px-3 py-2.5">
                                             <span className="font-mono text-xs tabular-nums text-body">
