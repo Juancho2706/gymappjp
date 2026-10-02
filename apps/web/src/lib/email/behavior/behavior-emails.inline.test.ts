@@ -13,24 +13,54 @@ vi.mock('next/server', () => ({
     },
 }))
 
+const ledgerRows = vi.hoisted(() => ({ aha: [] as Array<{ id: string; template_key: string }> }))
+const scheduleCoachEmail = vi.hoisted(() => vi.fn())
+vi.mock('@/infrastructure/db/coach-email-ledger.repository', () => ({
+    findActiveByCoachAndKeys: vi.fn(async (_admin: unknown, _coachId: string, keys: readonly string[]) => {
+        reads.push(`ledger:${keys.join(',')}`)
+        return ledgerRows.aha.filter((r) => keys.includes(r.template_key))
+    }),
+}))
+vi.mock('@/services/email/coach-email-ledger.service', () => ({ scheduleCoachEmail }))
+vi.mock('@/services/email/automated-email-history.service', () => ({
+    loadAutomatedEmailHistory: vi.fn(async (_admin: unknown, ids: string[]) =>
+        new Map(ids.map((id) => [id, { sentAts: [], optedOut: false }]))
+    ),
+}))
+
 import {
+    INLINE_SEND_DELAY_MS,
     enqueueBehaviorCheckForClient,
     isInBehaviorWindow,
 } from './behavior-emails'
 
 type Row = Record<string, unknown> | null
 
-/** Cliente admin falso: registra qué tablas se leyeron y devuelve una fila fija por tabla. */
-function fakeAdmin(rows: Record<string, Row>) {
-    const reads: string[] = []
+/** Lecturas de la corrida, en orden (tablas + ledger + auth). */
+const reads: string[] = []
+
+/**
+ * Cliente admin falso: `maybeSingle` devuelve la fila de `rows[tabla]`; las listas (await directo
+ * del builder) devuelven `lists[tabla]`. Registra cada tabla leída.
+ */
+function fakeAdmin(rows: Record<string, Row>, lists: Record<string, unknown[]> = {}) {
+    reads.length = 0
     const admin = {
+        auth: {
+            admin: {
+                getUserById: async () => {
+                    reads.push('auth')
+                    return { data: { user: { email: 'ana@coach-real.cl' } } }
+                },
+            },
+        },
         from(table: string) {
             reads.push(table)
-            const chain = {
-                select: () => chain,
-                eq: () => chain,
-                maybeSingle: async () => ({ data: rows[table] ?? null, error: null }),
-            }
+            const chain: Record<string, unknown> = {}
+            for (const m of ['select', 'eq', 'in', 'is', 'gte', 'order', 'limit']) chain[m] = () => chain
+            chain.maybeSingle = async () => ({ data: rows[table] ?? null, error: null })
+            chain.then = (resolve: (v: unknown) => unknown) =>
+                Promise.resolve({ data: lists[table] ?? [], error: null }).then(resolve)
             return chain
         },
     }
@@ -56,6 +86,8 @@ describe('enqueueBehaviorCheckForClient — filtro barato', () => {
     afterEach(() => {
         vi.unstubAllEnvs()
         pending.splice(0)
+        ledgerRows.aha = []
+        scheduleCoachEmail.mockReset()
     })
 
     it('con el flag apagado no lee nada', async () => {
@@ -102,6 +134,46 @@ describe('enqueueBehaviorCheckForClient — filtro barato', () => {
         enqueueBehaviorCheckForClient('client-1', { admin, now: IN_HOURS })
         await flush()
         expect(reads).toEqual(['clients', 'coaches'])
+    })
+
+    const IN_WINDOW_COACH = {
+        id: 'coach-1',
+        slug: 'nueva',
+        full_name: 'Ana',
+        created_at: '2026-10-02T10:00:00Z',
+        subscription_tier: 'free',
+    }
+
+    it('coach en ventana con el aha ya en el ledger: corta antes del snapshot', async () => {
+        ledgerRows.aha = [{ id: 'l1', template_key: 'behavior_aha' }]
+        const { admin, reads } = fakeAdmin({
+            clients: { coach_id: 'coach-1', is_demo: false, is_archived: false },
+            coaches: IN_WINDOW_COACH,
+        })
+        enqueueBehaviorCheckForClient('client-1', { admin, now: IN_HOURS })
+        await flush()
+        expect(reads).toEqual(['clients', 'coaches', 'ledger:behavior_aha'])
+        expect(scheduleCoachEmail).not.toHaveBeenCalled()
+    })
+
+    it('primer registro real: manda el aha AGENDADO (retirable si otra ejecución gana el ledger)', async () => {
+        scheduleCoachEmail.mockResolvedValue({ ok: true, deduped: false, ledgerId: 'l1', providerMessageId: 'm1' })
+        const { admin } = fakeAdmin(
+            {
+                clients: { coach_id: 'coach-1', is_demo: false, is_archived: false },
+                coaches: IN_WINDOW_COACH,
+            },
+            {
+                clients: [{ id: 'client-1', created_at: '2026-10-02T11:00:00Z', first_login_at: '2026-10-02T12:00:00Z' }],
+                workout_logs: [{ id: 'log-1' }],
+            }
+        )
+        enqueueBehaviorCheckForClient('client-1', { admin, now: IN_HOURS })
+        await flush()
+        expect(scheduleCoachEmail).toHaveBeenCalledTimes(1)
+        const [, arg] = scheduleCoachEmail.mock.calls[0]
+        expect(arg.templateKey).toBe('behavior_aha')
+        expect(arg.scheduledAt).toBe(new Date(IN_HOURS.getTime() + INLINE_SEND_DELAY_MS).toISOString())
     })
 
     it('nunca lanza hacia el caller aunque la base explote', async () => {

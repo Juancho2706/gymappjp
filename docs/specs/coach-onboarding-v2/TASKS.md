@@ -379,7 +379,13 @@ del owner D9–D13 están al final; sin ellas no arranca lo que las cita.
   pide actividad; «+48 h no entró» solo se apaga), así que solo gastaría lecturas. Filtro barato antes del snapshot:
   flag, horario 09–20, alumno demo/archivado, coach fuera de la ventana del barrido (`isInBehaviorWindow`). Límite
   conocido: las series de la app RN se escriben directo a Supabase ⇒ su aha sigue llegando por el cron horario.
-  Tests: `behavior-emails.inline.test.ts` (10). [w6-w7-08/10]
+  **Refutación independiente (02-10):** el disparo por escritura volvía realista la carrera I-7 de `scheduleCoachEmail`
+  (leer → mandar → insertar): el flush de la cola offline manda N series seguidas y dos tareas `after()` podían pasar
+  el dedupe ⇒ aha doble. Arreglo: el envío en línea va AGENDADO a +2 min (`INLINE_SEND_DELAY_MS`), así el 23505 del
+  índice `coach_email_ledger_dedupe_uidx` retira el duplicado en Resend; desde la actividad del alumno solo sale
+  `behavior_aha` (lo demás queda al cron) y con el aha ya en el ledger se corta antes del snapshot. Riesgo residual:
+  cron (envío inmediato) e inline del mismo coach en el mismo segundo, si el inline inserta primero.
+  Tests: `behavior-emails.inline.test.ts` (12). [w6-w7-08/10]
 - [x] W8.4.3 (ejecutado en flujo-coach-nuevo W1, verificado 02-09: W1.1-W1.4 `[x]` 26-08) Señal de login del alumno (`clients` no tiene ninguna; solo `auth.users.last_sign_in_at`):
   columna aditiva `clients.last_login_at` escrita por el login del alumno, o lectura con service_role en el
   barrido. Sin esto no existe «+48 h el alumno no entró». [w6-w7-09]

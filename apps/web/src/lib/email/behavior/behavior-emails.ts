@@ -359,6 +359,13 @@ export async function runBehaviorCheckForCoach(
         policy: BehaviorPolicy
         /** Historial ya leído en lote por el barrido; `undefined` = leerlo acá (disparo en línea). */
         history?: CoachAutomatedEmailHistory | null
+        /**
+         * Envío AGENDADO (disparo en línea): un agendado se puede retirar en Resend si otra ejecución
+         * gana el INSERT del ledger (carrera I-7 de `scheduleCoachEmail`); uno inmediato no.
+         */
+        scheduledAt?: string
+        /** Solo esta key puede salir; cualquier otro disparador queda para el barrido horario. */
+        onlyTemplate?: BehaviorTemplateKey
     }
 ): Promise<BehaviorCoachOutcome> {
     const snapshot = await loadCoachBehaviorSnapshot(admin, coach, { now: opts.now, history: opts.history })
@@ -367,6 +374,7 @@ export async function runBehaviorCheckForCoach(
 
     const trigger = pickBehaviorTrigger(evaluation)
     if (!trigger) return { outcome: 'no_trigger' }
+    if (opts.onlyTemplate && trigger.template_key !== opts.onlyTemplate) return { outcome: 'no_trigger' }
     if (opts.dry) return { outcome: 'would_send', trigger }
 
     const { subject, html, text } = buildBehaviorEmail(trigger.template_key, {
@@ -390,6 +398,7 @@ export async function runBehaviorCheckForCoach(
         html,
         text,
         replyTo: BEHAVIOR_REPLY_TO,
+        ...(opts.scheduledAt ? { scheduledAt: opts.scheduledAt } : {}),
         payload: {
             reason: trigger.reason,
             persona: snapshot.persona ?? 'sin_persona',
@@ -598,8 +607,9 @@ export function enqueueBehaviorCheck(
  * Se llama en CADA escritura (no hay forma barata de saber si es la primera), así que antes del
  * snapshot pesado (auth.users, roster, ledger, historial) se descarta con lo que ya trae la fila:
  * alumno demo/archivado, fuera del horario de envío, o coach fuera de la ventana de onboarding
- * (anterior al encendido o con más de 90 d). Para el padrón actual —todo anterior al 02-10— el costo
- * por serie es 2 lecturas por PK dentro de `after()`, sin latencia para el alumno.
+ * (anterior al encendido o con más de 90 d) o con el aha ya en el ledger. Para el padrón actual —todo
+ * anterior al 02-10— el costo por serie es 2 lecturas por PK dentro de `after()`, sin latencia para el
+ * alumno; un coach en ventana con el aha ya enviado suma 1 lectura del ledger.
  */
 export function enqueueBehaviorCheckForClient(
     clientId: string,
@@ -619,7 +629,7 @@ export function enqueueBehaviorCheckForClient(
                 .eq('id', clientId)
                 .maybeSingle()
             if (error || !client?.coach_id || client.is_demo || client.is_archived) return
-            await runInlineCheck(admin, client.coach_id, { ...opts, now })
+            await runInlineCheck(admin, client.coach_id, { ...opts, now, ahaOnly: true })
         } catch (err) {
             console.warn('[behavior-emails] disparo en línea (alumno) fallido', {
                 clientId,
@@ -637,10 +647,19 @@ export function isInBehaviorWindow(createdAt: string | null, now: Date, policy: 
     return created >= Math.max(now.getTime() - ONBOARDING_CUTOFF_MS, launch)
 }
 
+/**
+ * Retraso del envío en línea. Varias escrituras del mismo alumno llegan juntas (el flush de la cola
+ * offline manda N series seguidas, cada una con su `after()`), y `scheduleCoachEmail` es
+ * leer → mandar → insertar: dos tareas solapadas pueden pasar las dos el dedupe. Con el envío
+ * AGENDADO, la que pierde el INSERT (23505) retira su correo en Resend antes de que salga. Dos
+ * minutos sobran para esa ventana y siguen siendo «en el momento» frente al cron horario.
+ */
+export const INLINE_SEND_DELAY_MS = 2 * 60 * 1000
+
 async function runInlineCheck(
     admin: Db,
     coachId: string,
-    opts: { now?: Date; dry?: boolean }
+    opts: { now?: Date; dry?: boolean; ahaOnly?: boolean }
 ): Promise<void> {
     const now = opts.now ?? new Date()
     const policy: BehaviorPolicy = { launchCutover: behaviorLaunchCutover() }
@@ -652,10 +671,24 @@ async function runInlineCheck(
     if (error || !data) return
     const coach = data as unknown as BehaviorCoachRow
     if (!isInBehaviorWindow(coach.created_at, now, policy)) return
+    if (opts.ahaOnly) {
+        // Desde la actividad del alumno solo el aha puede cambiar: con actividad real los demás
+        // disparadores o ya no aplican (día 1, +48 h, +7 d) o dependen del reloj (día 3, lo manda el
+        // cron). Si el aha ya está en el ledger, cortar acá ahorra el snapshot en cada serie del resto
+        // de los 90 d. Ledger ilegible ⇒ se sigue (el dedupe de `scheduleCoachEmail` es la red).
+        try {
+            const sent = await findActiveByCoachAndKeys(admin, coachId, ['behavior_aha'])
+            if (sent.length > 0) return
+        } catch {
+            /* fail-open, igual que el dedupe del snapshot */
+        }
+    }
     const result = await runBehaviorCheckForCoach(admin, coach, {
         now,
         dry: opts.dry ?? behaviorEmailsDryRun(),
         policy,
+        scheduledAt: new Date(now.getTime() + INLINE_SEND_DELAY_MS).toISOString(),
+        ...(opts.ahaOnly ? { onlyTemplate: 'behavior_aha' as const } : {}),
     })
     console.info('[behavior-emails] inline', { coachId, outcome: result.outcome })
 }
