@@ -227,7 +227,7 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                     <div className="flex flex-wrap items-center gap-1.5 mt-1">
                         {coach.subscription_status && <AdminStatusBadge value={coach.subscription_status} />}
                         {coach.subscription_tier && <AdminStatusBadge value={coach.subscription_tier} type="tier" />}
-                        {coach.payment_provider && <AdminStatusBadge value={coach.payment_provider} type="provider" />}
+                        {coach.payment_provider && <AdminStatusBadge value={coach.payment_provider} type="provider" tier={coach.subscription_tier} />}
                         <a
                             href={`/c/${coach.slug}/login`}
                             target="_blank"
@@ -301,7 +301,7 @@ export function CoachCommandPanel({ coach, open, onClose }: Props) {
                                 <InfoRow label="Tier" value={<AdminStatusBadge value={coach.subscription_tier ?? ''} type="tier" />} />
                                 <InfoRow label="Estado" value={<AdminStatusBadge value={coach.subscription_status ?? ''} />} />
                                 <InfoRow label="Billing cycle" value={coach.billing_cycle} />
-                                <InfoRow label="Provider" value={<AdminStatusBadge value={coach.payment_provider ?? ''} type="provider" />} />
+                                <InfoRow label="Provider" value={<AdminStatusBadge value={coach.payment_provider ?? ''} type="provider" tier={coach.subscription_tier} />} />
                                 <InfoRow
                                     label="Vence"
                                     value={

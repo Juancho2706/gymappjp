@@ -41,11 +41,19 @@ const PROVIDER_MAP: Record<string, { label: string; tone: Tone }> = {
 interface Props {
     value: string
     type?: 'status' | 'tier' | 'provider'
+    /**
+     * Solo para `type="provider"`: todo alta Free escribe `payment_provider = 'admin'`, así que sin
+     * el tier el badge decía «cortesía» en cada Free. Con tier free se muestra «free».
+     */
+    tier?: string | null
 }
 
-export function AdminStatusBadge({ value, type = 'status' }: Props) {
+export function AdminStatusBadge({ value, type = 'status', tier }: Props) {
     const map = type === 'tier' ? TIER_MAP : type === 'provider' ? PROVIDER_MAP : STATUS_MAP
-    const entry = map[value] ?? { label: value, tone: 'neutral' as Tone }
+    const entry =
+        type === 'provider' && value === 'admin' && tier === 'free'
+            ? PROVIDER_MAP.free
+            : map[value] ?? { label: value, tone: 'neutral' as Tone }
     return (
         <Badge tone={entry.tone} variant="soft" size="sm" title={value}>
             {entry.label}

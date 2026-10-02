@@ -26,7 +26,8 @@ const TIER_OPTIONS = (Object.keys(TIER_CONFIG) as Array<keyof typeof TIER_CONFIG
 const PROVIDER_OPTIONS = [
     { value: 'mercadopago',  label: 'MercadoPago' },
     { value: 'flow',         label: 'Flow' },
-    { value: 'admin',        label: 'Admin (cortesia)' },
+    // Todo alta Free escribe 'admin': el filtro trae Free + cuentas creadas a mano desde el panel.
+    { value: 'admin',        label: 'Admin (Free y altas manuales)' },
     { value: 'internal',     label: 'Internal' },
     { value: 'beta',         label: 'Beta' },
 ]

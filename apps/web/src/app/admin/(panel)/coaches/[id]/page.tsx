@@ -121,7 +121,7 @@ export default async function AdminCoachDetailPage({ params }: Props) {
                 <div className="flex flex-wrap items-center gap-1.5">
                     <AdminStatusBadge value={coach.subscription_status} />
                     <AdminStatusBadge value={coach.subscription_tier} type="tier" />
-                    <AdminStatusBadge value={coach.payment_provider} type="provider" />
+                    <AdminStatusBadge value={coach.payment_provider} type="provider" tier={coach.subscription_tier} />
                 </div>
             </header>
 

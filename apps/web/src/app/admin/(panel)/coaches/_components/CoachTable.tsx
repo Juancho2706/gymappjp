@@ -566,7 +566,7 @@ export function CoachTable({ coaches, total }: Props) {
                                         </td>
                                         <td className="px-3 py-2.5"><HealthBar score={score} isFree={isFree} /></td>
                                         <td className="px-3 py-2.5">
-                                            <AdminStatusBadge value={c.payment_provider ?? ''} type="provider" />
+                                            <AdminStatusBadge value={c.payment_provider ?? ''} type="provider" tier={c.subscription_tier} />
                                         </td>
                                         <td className="px-3 py-2.5">
                                             <AdminStatusBadge value={c.subscription_tier ?? ''} type="tier" />
