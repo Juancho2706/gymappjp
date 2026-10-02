@@ -16,6 +16,13 @@ const harness = vi.hoisted(() => {
         user: { id: USER_ID } as { id: string } | null,
         identities: ['email', 'google'] as string[],
         emailVerifiedAt: null as string | null,
+        /** 02-10, caso Carolina/Movens: el ALUMNO no tiene fila `coaches`. */
+        coachRowExists: true,
+        coachReadError: false,
+        /** Claim `amr` de la sesión de la cookie (`undefined` = sin claim legible). */
+        amr: [{ method: 'oauth', timestamp: 1 }] as unknown,
+        getClaimsThrows: false,
+        getClaimsReturnsError: false,
         /** Incidente 04-09: `createClient()` explota con la sesión metida en el `message`. */
         createClientError: null as Error | null,
     }
@@ -28,7 +35,14 @@ const harness = vi.hoisted(() => {
         from: (table: string) => ({
             select: () => ({
                 eq: () => ({
-                    maybeSingle: async () => ({ data: { email_verified_at: state.emailVerifiedAt } }),
+                    maybeSingle: async () =>
+                        // Solo `coaches` responde: si el helper leyera otra tabla, el test lo delata.
+                        table !== 'coaches' || state.coachReadError
+                            ? { data: null, error: { message: 'boom' } }
+                            : {
+                                  data: state.coachRowExists ? { email_verified_at: state.emailVerifiedAt } : null,
+                                  error: null,
+                              },
                 }),
             }),
             update: (patch: Record<string, unknown>) => ({
@@ -58,7 +72,16 @@ const harness = vi.hoisted(() => {
         },
     }
 
-    const serverStub = { auth: { getUser: async () => ({ data: { user: state.user } }) } }
+    const serverStub = {
+        auth: {
+            getUser: async () => ({ data: { user: state.user } }),
+            getClaims: async () => {
+                if (state.getClaimsThrows) throw new Error('JWKS caído')
+                if (state.getClaimsReturnsError) return { data: null, error: { message: 'jwt inválido' } }
+                return { data: state.amr === undefined ? { claims: {} } : { claims: { amr: state.amr } }, error: null }
+            },
+        },
+    }
 
     return { USER_ID, state, rotations, stamps, events, adminStub, serverStub, capturePostHogServerEventMock }
 })
@@ -86,6 +109,11 @@ beforeEach(() => {
     state.user = { id: USER_ID }
     state.identities = ['email', 'google']
     state.emailVerifiedAt = null
+    state.coachRowExists = true
+    state.coachReadError = false
+    state.amr = [{ method: 'oauth', timestamp: 1 }]
+    state.getClaimsThrows = false
+    state.getClaimsReturnsError = false
     state.createClientError = null
 })
 
@@ -207,6 +235,100 @@ describe('POST /api/auth/google-link', () => {
         } finally {
             spies.forEach((spy) => spy.mockRestore())
         }
+    })
+
+    /**
+     * 02-10, caso Carolina/Movens: alumna con identidades email + Google y SIN fila `coaches`. Antes
+     * se le rotaba la clave en CADA intento (sin fila no hay sello que dé idempotencia) y GoTrue le
+     * cerraba todas las sesiones: 9 rotaciones en un mes.
+     */
+    it('NO rota al alumno (sin fila `coaches`), ni sella ni deja rastro', async () => {
+        state.coachRowExists = false
+
+        const res = await POST()
+
+        expect(res.status).toBe(200)
+        await expect(res.json()).resolves.toEqual({ ok: true })
+        expect(rotations).toHaveLength(0)
+        expect(stamps).toHaveLength(0)
+        expect(events).toHaveLength(0)
+        expect(capturePostHogServerEventMock).not.toHaveBeenCalled()
+    })
+
+    it('alumno que entra con Google tres veces: cero rotaciones (el bucle del caso real)', async () => {
+        state.coachRowExists = false
+
+        await POST()
+        await POST()
+        await POST()
+
+        expect(rotations).toHaveLength(0)
+    })
+
+    it('si la lectura de `coaches` falla, NO se toma como «sin fila»: se rota como antes', async () => {
+        state.coachReadError = true
+
+        await POST()
+
+        expect(rotations).toHaveLength(1)
+    })
+
+    it('sesión abierta por el link de «olvidé mi contraseña» (`amr` recovery): NO rota', async () => {
+        // `AuthExchangeClient` también avisa al canjear el link de recuperación; rotar ahí cerraba la
+        // sesión antes de que el formulario de clave nueva pudiera guardarla.
+        state.amr = [{ method: 'recovery', timestamp: 1 }]
+
+        const res = await POST()
+
+        expect(res.status).toBe(200)
+        expect(rotations).toHaveLength(0)
+    })
+
+    it('sesión abierta con contraseña (`amr` password, en cualquiera de los dos formatos): NO rota', async () => {
+        state.amr = [{ method: 'password', timestamp: 1 }]
+        await POST()
+        state.amr = ['password']
+        await POST()
+
+        expect(rotations).toHaveLength(0)
+    })
+
+    it('`getClaims` que devuelve `{ error }` en vez de lanzar: conserva el comportamiento de antes (rota)', async () => {
+        state.getClaimsReturnsError = true
+
+        const res = await POST()
+
+        expect(res.status).toBe(200)
+        expect(rotations).toHaveLength(1)
+    })
+
+    it('`amr` vacío cuenta como ilegible: conserva el comportamiento de antes (rota)', async () => {
+        state.amr = []
+
+        await POST()
+
+        expect(rotations).toHaveLength(1)
+    })
+
+    it('`amr` en formato RFC 8176 (`string[]`) con `oauth`: rota', async () => {
+        state.amr = ['oauth']
+
+        await POST()
+
+        expect(rotations).toHaveLength(1)
+    })
+
+    it('sin claim `amr` legible o con `getClaims` caído: conserva el comportamiento de antes (rota)', async () => {
+        state.amr = undefined
+        await POST()
+        expect(rotations).toHaveLength(1)
+
+        state.emailVerifiedAt = null
+        rotations.length = 0
+        state.getClaimsThrows = true
+        const res = await POST()
+        expect(res.status).toBe(200)
+        expect(rotations).toHaveLength(1)
     })
 
     it('idempotente: la segunda llamada ya encuentra el correo sellado y no rota de nuevo', async () => {

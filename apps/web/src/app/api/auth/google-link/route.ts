@@ -1,7 +1,22 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createServiceRoleClient } from '@/lib/supabase/admin-client'
-import { rotatePasswordOnGoogleLink } from '@/lib/auth/google-link-rotation'
+import { amrAllowsGoogleLinkRotation, rotatePasswordOnGoogleLink } from '@/lib/auth/google-link-rotation'
+
+/**
+ * `amr` de la sesión de la cookie (cómo se abrió). Fail-silent a propósito: `getClaims` puede lanzar
+ * ante red/JWKS y eso no puede convertir el aviso en un 401; sin claim legible devuelve `undefined`
+ * y `amrAllowsGoogleLinkRotation` conserva el comportamiento de antes. No se loguea nada del error
+ * (misma regla anti-fuga que el `catch` de abajo).
+ */
+async function readSessionAmr(supabase: Awaited<ReturnType<typeof createClient>>): Promise<unknown> {
+    try {
+        const { data } = await supabase.auth.getClaims()
+        return data?.claims?.amr
+    } catch {
+        return undefined
+    }
+}
 
 /**
  * W3.13 — el SEGUNDO call site de la rotación anti-takeover (`lib/auth/google-link-rotation.ts`).
@@ -31,12 +46,14 @@ export async function POST() {
     // de tragarse el error, su `message` trae la sesión entera (access_token, refresh_token, email).
     // Por eso acá NO se loguea el error, ni su `message`, ni el objeto: SOLO el nombre de la clase.
     let userId: string | null = null
+    let amr: unknown
     try {
         const supabase = await createClient()
         const {
             data: { user },
         } = await supabase.auth.getUser()
         userId = user?.id ?? null
+        if (userId) amr = await readSessionAmr(supabase)
     } catch (err) {
         console.error('[auth.google-link] sesion ilegible, se responde 401', {
             error: err instanceof Error ? err.name : 'Unknown',
@@ -48,9 +65,16 @@ export async function POST() {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
+    // Solo una sesión abierta POR GOOGLE dispara la rotación (02-10): `AuthExchangeClient` también
+    // avisa al canjear el link de «olvidé mi contraseña», y rotar ahí cerraba la sesión de recuperación
+    // antes de que el formulario guardara la clave nueva.
+    if (!amrAllowsGoogleLinkRotation(amr)) {
+        return NextResponse.json({ ok: true })
+    }
+
     // `lookup`: acá la fila `coaches` (si existe) no la escribió este request, así que la columna
-    // es la fuente de verdad. Un usuario sin fila `coaches` lee `null` y, si además tiene las dos
-    // identidades, se rota igual: la cuenta de auth es lo que hay que proteger.
+    // es la fuente de verdad. Sin fila `coaches` el helper NO rota (02-10, caso Carolina/Movens):
+    // es el alumno que tocó Google en el login de coach, y su login se rechaza igual.
     await rotatePasswordOnGoogleLink({
         admin: createServiceRoleClient(),
         userId,

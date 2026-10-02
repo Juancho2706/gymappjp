@@ -33,10 +33,14 @@ type Db = SupabaseClient<Database>
  * de la víctima). El coach legítimo que se registró con clave y después entra con Google sigue
  * entrando por Google, y ahora SÍ puede resetear su clave porque su correo quedó verificado.
  *
- * DOS CALL SITES, uno solo de código: el alta por Google (`complete.actions.ts`, cuando el auth
- * user existía y la fila `coaches` no) y el endpoint `api/auth/google-link` que llama el camino
- * post-Google de cliente (donde la fila `coaches` SÍ existe y `completeOAuthOnboarding` no corre).
+ * CUATRO CALL SITES, uno solo de código: las dos altas por Google (`complete.actions.ts` en web y
+ * `api/mobile/auth/complete-coach-onboarding` en la app, cuando el auth user existía y la fila
+ * `coaches` no) y los dos endpoints post-Google (`api/auth/google-link` por cookie y
+ * `api/mobile/auth/google-link` por Bearer, donde la fila `coaches` SÍ existe y el alta no corre).
  * Ver el comentario de `verification` para por qué el estado se puede pasar en vez de leerlo.
+ *
+ * SOLO CUENTAS DE COACH (02-10): en modo `lookup`, sin fila `coaches` no se rota — ver el comentario
+ * del lookup más abajo (caso Carolina/Movens).
  */
 export type GoogleLinkRotationResult =
     | { rotated: true }
@@ -46,6 +50,7 @@ export type GoogleLinkRotationResult =
               | 'no_user'
               | 'no_google_identity'
               | 'no_email_identity'
+              | 'not_coach'
               | 'already_verified'
               | 'rotate_failed'
       }
@@ -66,7 +71,33 @@ export type GoogleLinkVerificationState =
     | { source: 'known'; emailVerifiedAt: string | null }
 
 /** De dónde vino la rotación. Solo para telemetría; jamás vuelve al cliente. */
-export type GoogleLinkRotationContext = 'oauth_onboarding' | 'post_google_auth' | 'mobile_post_google_auth'
+export type GoogleLinkRotationContext =
+    | 'oauth_onboarding'
+    | 'mobile_oauth_onboarding'
+    | 'post_google_auth'
+    | 'mobile_post_google_auth'
+
+/**
+ * ¿La sesión que avisa la abrió Google? Lee el claim `amr` del JWT (GoTrue: `signInWithIdToken` y el
+ * redirect OAuth emiten `oauth`; el link de «olvidé mi contraseña» emite `recovery`).
+ *
+ * POR QUÉ (02-10, caso Carolina/Movens). `AuthExchangeClient` canjea TODOS los `?code=` —Google por
+ * redirect y también el link de recuperación— y en los dos avisa a `api/auth/google-link`. Con la
+ * cuenta ya enlazada a Google, el reset de contraseña disparaba la rotación, GoTrue cerraba todas
+ * las sesiones (`UpdatePassword` sin sesión ⇒ `Logout`) y el formulario de clave nueva se quedaba
+ * sin sesión con la que guardar: nadie podía recuperar su clave por sí mismo.
+ *
+ * `amr` ausente, vacío o con forma desconocida ⇒ `true`: ante la duda se conserva el comportamiento
+ * de antes (proteger), porque la rotación de un coach es una sola vez (sella `email_verified_at`).
+ * Acepta las dos formas que documenta supabase-js: `AMREntry[]` y `string[]` (RFC 8176).
+ */
+export function amrAllowsGoogleLinkRotation(amr: unknown): boolean {
+    if (!Array.isArray(amr) || amr.length === 0) return true
+    return amr.some((entry) => {
+        if (typeof entry === 'string') return entry === 'oauth'
+        return Boolean(entry) && typeof entry === 'object' && (entry as { method?: unknown }).method === 'oauth'
+    })
+}
 
 /**
  * 32 bytes de aleatoriedad (256 bits) en hex = 64 caracteres.
@@ -115,11 +146,24 @@ export async function rotatePasswordOnGoogleLink(params: {
     if (params.verification.source === 'known') {
         emailVerifiedAt = params.verification.emailVerifiedAt
     } else {
-        const { data: coach } = await admin
+        const { data: coach, error: coachError } = await admin
             .from('coaches')
             .select('email_verified_at')
             .eq('id', userId)
             .maybeSingle()
+
+        // SIN FILA `coaches` NO SE ROTA (02-10, caso Carolina/Movens). Antes, la ausencia de fila se
+        // leía como «correo nunca probado» y se rotaba: al ALUMNO que tocaba «Continuar con Google»
+        // en el login de coach se le rotaba la clave en CADA intento (el sello de abajo no tiene fila
+        // donde escribirse, así que la idempotencia nunca llegaba) y GoTrue le cerraba todas las
+        // sesiones: 9 rotaciones en un mes y la app la sacaba cada vez que volvía a entrenar.
+        //
+        // No se pierde protección: un login sin fila `coaches` se rechaza igual (no hay cuenta de
+        // coach que proteger), y quien la CREA después pasa por el alta, que rota con `known: null`
+        // (`complete.actions.ts` en web, `api/mobile/auth/complete-coach-onboarding` en la app).
+        // Un error de lectura NO cuenta como «sin fila»: ahí se sigue rotando como antes.
+        if (!coachError && !coach) return { rotated: false, reason: 'not_coach' }
+
         emailVerifiedAt = coach?.email_verified_at ?? null
     }
 

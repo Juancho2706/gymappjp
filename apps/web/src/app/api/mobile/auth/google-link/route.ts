@@ -45,8 +45,9 @@ export async function POST(request: NextRequest) {
     if (uerr || !ud.user) return NextResponse.json({ error: 'Unauthorized', code: 'INVALID_TOKEN' }, { status: 401 })
 
     // `lookup`: acá la fila `coaches` (si existe) no la escribió este request, así que la columna es
-    // la fuente de verdad. Un usuario sin fila `coaches` lee `null` y, si además tiene las dos
-    // identidades, se rota igual: la cuenta de auth es lo que hay que proteger.
+    // la fuente de verdad. Sin fila `coaches` el helper NO rota (02-10, caso Carolina/Movens): es el
+    // alumno que tocó Google en la pestaña de coach; quien se da de alta como coach rota en
+    // `api/mobile/auth/complete-coach-onboarding`, cuando la fila nace.
     //
     // El guardián de «¿hay identidad de Google?» vive en el helper y lee las identidades con el
     // service-role, no lo que diga el cliente: una sesión creada con contraseña que hiciera POST acá

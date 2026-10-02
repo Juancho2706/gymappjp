@@ -10,16 +10,29 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const state = vi.hoisted(() => ({
     coach: null as { id: string; active_org_id: string | null } | null,
+    /** 02-10, caso Carolina/Movens: fila `clients` del alumno con el slug de su coach embebido. */
+    client: null as { id: string; coaches: { slug: string | null } | null } | null,
+    clientReadThrows: false,
+    signedOut: false,
 }))
 
-const signOutMock = vi.fn(async () => ({ error: null }))
+const signOutMock = vi.fn(async () => {
+    state.signedOut = true
+    return { error: null }
+})
 const fetchMock = vi.fn(async () => new Response(JSON.stringify({ ok: true }), { status: 200 }))
 
 const supabaseStub = {
-    from: () => ({
+    from: (table: string) => ({
         select: () => ({
             eq: () => ({
-                maybeSingle: async () => ({ data: state.coach }),
+                maybeSingle: async () => {
+                    if (table !== 'clients') return { data: state.coach }
+                    if (state.clientReadThrows) throw new Error('red caída')
+                    // RLS real: sin sesión el alumno no puede leer su fila. Si alguien moviera la
+                    // lectura DESPUÉS del signOut, este stub lo delata devolviendo vacío.
+                    return { data: state.signedOut ? null : state.client }
+                },
                 eq: () => ({ eq: () => ({ is: () => ({ maybeSingle: async () => ({ data: null }) }) }) }),
             }),
         }),
@@ -36,6 +49,9 @@ beforeEach(() => {
     vi.clearAllMocks()
     vi.stubGlobal('fetch', fetchMock)
     state.coach = null
+    state.client = null
+    state.clientReadThrows = false
+    state.signedOut = false
 })
 
 describe('resolvePostGoogleAuthUrl — login con Google sin cuenta de coach', () => {
@@ -93,6 +109,83 @@ describe('resolvePostGoogleAuthUrl — login con Google sin cuenta de coach', ()
         expect(url).toBe('/register?from=google')
         expect(fetchMock).not.toHaveBeenCalled()
         expect(signOutMock).not.toHaveBeenCalled()
+    })
+
+    it('ALUMNO con coach: rebota al login de SU coach con el aviso, tras limpiar y cerrar la sesión', async () => {
+        state.client = { id: USER_ID, coaches: { slug: 'movens' } }
+
+        const url = await resolvePostGoogleAuthUrl({ supabase, userId: USER_ID, intent: 'login', next: '/coach/dashboard' })
+
+        expect(url).toBe('/c/movens/login?error=google_solo_coach')
+        // Google para alumnos sigue diferido: la sesión se cierra igual que la de cualquier rechazo.
+        expect(fetchMock).toHaveBeenCalledWith('/api/auth/google-orphan-cleanup', { method: 'POST' })
+        expect(signOutMock).toHaveBeenCalledWith({ scope: 'local' })
+    })
+
+    it('ALUMNO que venía con un destino de coach explícito: igual va a la puerta de su coach', async () => {
+        state.client = { id: USER_ID, coaches: { slug: 'movens' } }
+
+        const url = await resolvePostGoogleAuthUrl({
+            supabase,
+            userId: USER_ID,
+            intent: 'login',
+            next: '/coach/subscription?utm_source=email',
+        })
+
+        expect(url).toBe('/c/movens/login?error=google_solo_coach')
+    })
+
+    it('fila `clients` sin slug de coach, o lectura caída: rebote de siempre a `/login`', async () => {
+        state.client = { id: USER_ID, coaches: { slug: null } }
+        await expect(
+            resolvePostGoogleAuthUrl({ supabase, userId: USER_ID, intent: 'login', next: '/coach/dashboard' })
+        ).resolves.toBe('/login?error=no_google_account')
+
+        state.signedOut = false
+        state.client = null
+        state.clientReadThrows = true
+        await expect(
+            resolvePostGoogleAuthUrl({ supabase, userId: USER_ID, intent: 'login', next: '/coach/dashboard' })
+        ).resolves.toBe('/login?error=no_google_account')
+    })
+
+    it('ALUMNO pero el signOut falla dos veces: NO va al login del coach (rebotaría a su app con Google adentro)', async () => {
+        state.client = { id: USER_ID, coaches: { slug: 'movens' } }
+        signOutMock.mockResolvedValueOnce({ error: { message: '503' } } as never)
+        signOutMock.mockResolvedValueOnce({ error: { message: '503' } } as never)
+
+        const url = await resolvePostGoogleAuthUrl({ supabase, userId: USER_ID, intent: 'login', next: '/coach/dashboard' })
+
+        expect(url).toBe('/login?error=no_google_account')
+        expect(signOutMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('ALUMNO con un signOut que falla una vez: el reintento lo cierra y va a su puerta', async () => {
+        state.client = { id: USER_ID, coaches: { slug: 'movens' } }
+        signOutMock.mockResolvedValueOnce({ error: { message: 'red' } } as never)
+
+        const url = await resolvePostGoogleAuthUrl({ supabase, userId: USER_ID, intent: 'login', next: null })
+
+        expect(url).toBe('/c/movens/login?error=google_solo_coach')
+        expect(signOutMock).toHaveBeenCalledTimes(2)
+    })
+
+    it('ALUMNO que toca «Registrarse con Google»: también va a su puerta, con la sesión cerrada', async () => {
+        // El alta de coach lo rechaza igual en el servidor (`oauth_session_is_client`).
+        state.client = { id: USER_ID, coaches: { slug: 'movens' } }
+
+        const url = await resolvePostGoogleAuthUrl({ supabase, userId: USER_ID, intent: 'register', next: null })
+
+        expect(url).toBe('/c/movens/login?error=google_solo_coach')
+        expect(signOutMock).toHaveBeenCalledWith({ scope: 'local' })
+    })
+
+    it('el slug va codificado en la URL (un slug raro no rompe la ruta)', async () => {
+        state.client = { id: USER_ID, coaches: { slug: 'a b/c' } }
+
+        const url = await resolvePostGoogleAuthUrl({ supabase, userId: USER_ID, intent: 'login', next: null })
+
+        expect(url).toBe('/c/a%20b%2Fc/login?error=google_solo_coach')
     })
 
     it('coach real: entra a su panel sin tocar nada', async () => {
