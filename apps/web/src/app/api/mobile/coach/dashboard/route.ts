@@ -282,8 +282,11 @@ export async function POST(request: NextRequest) {
             parsed.guide != null &&
             typeof parsed.guide === 'object' &&
             !Array.isArray(parsed.guide)
-                ? (parsed.guide as Record<string, unknown>)
+                ? { ...(parsed.guide as Record<string, unknown>) }
                 : {}
+        // `demo` es el inventario del alumno de ejemplo: lo escribe SOLO el servidor al sembrar. La app
+        // nunca lo manda; aceptarlo dejaba al cliente decidir qué borra «Borrar ejemplo».
+        delete incoming.demo
 
         const { error } = await admin
             .from('coaches')

@@ -92,6 +92,8 @@ interface FakeState {
     deletedUsers: string[]
     /** Filas que devuelve cada `select` por tabla (se consume en orden si hay varias respuestas). */
     selects: Record<string, Record<string, unknown>[]>
+    /** Correo de cada usuario Auth que responde `getUserById` (ausente = no existe). */
+    authEmails: Record<string, string>
 }
 
 function makeFakeAdmin(overrides: Record<string, Record<string, unknown>[]> = {}): {
@@ -104,6 +106,7 @@ function makeFakeAdmin(overrides: Record<string, Record<string, unknown>[]> = {}
         createdUsers: [],
         deletedUsers: [],
         selects: { ...overrides },
+        authEmails: {},
     }
 
     const respond: Responder = (op) => {
@@ -132,6 +135,12 @@ function makeFakeAdmin(overrides: Record<string, Record<string, unknown>[]> = {}
                 deleteUser: async (id: string) => {
                     state.deletedUsers.push(id)
                     return { data: null, error: null }
+                },
+                getUserById: async (id: string) => {
+                    const email = state.authEmails[id]
+                    return email
+                        ? { data: { user: { id, email } }, error: null }
+                        : { data: { user: null }, error: { status: 404, message: 'User not found' } }
                 },
             },
         },
@@ -364,6 +373,40 @@ describe('deleteDemoStudent', () => {
         }
         expect(guideUpdate.onboarding_guide.demo).toBeUndefined()
         expect(guideUpdate.onboarding_guide.brand_tour_seen).toBe(true)
+    })
+
+    it('SEGURIDAD: un inventario forjado con el id de otro usuario NO borra esa cuenta', async () => {
+        // El coach puede escribir su `onboarding_guide` (RLS `coaches_update_own`): mete el id de
+        // una víctima en `demo.clientId` y toca «Borrar ejemplo».
+        const { admin, state } = makeFakeAdmin({
+            coaches: [{ onboarding_guide: { demo: { version: 1, clientId: 'victima-1', areaIds: [] } } }],
+            clients: [],
+        })
+        state.authEmails['victima-1'] = 'otra.persona@gmail.com'
+        await deleteDemoStudent(admin, { coachId: COACH })
+        expect(state.deletedUsers).toEqual([])
+        expect(opsFor(state, 'clients', 'delete')).toHaveLength(0)
+        expect(opsFor(state, 'client_accounts', 'delete')).toHaveLength(0)
+    })
+
+    it('inventario huérfano con el correo del demo de ESTE coach: sí se borra (la fila se perdió)', async () => {
+        const { admin, state } = makeFakeAdmin({
+            coaches: [{ onboarding_guide: { demo: { version: 1, clientId: 'demo-huerfano', areaIds: [] } } }],
+            clients: [],
+        })
+        state.authEmails['demo-huerfano'] = `demo-${COACH}@evatest.cl`
+        await deleteDemoStudent(admin, { coachId: COACH })
+        expect(state.deletedUsers).toEqual(['demo-huerfano'])
+    })
+
+    it('el demo de OTRO coach (correo demo-<otro>) tampoco se borra', async () => {
+        const { admin, state } = makeFakeAdmin({
+            coaches: [{ onboarding_guide: { demo: { version: 1, clientId: 'demo-ajeno', areaIds: [] } } }],
+            clients: [],
+        })
+        state.authEmails['demo-ajeno'] = 'demo-coach-2@evatest.cl'
+        await deleteDemoStudent(admin, { coachId: COACH })
+        expect(state.deletedUsers).toEqual([])
     })
 
     it('sin demo ni inventario no borra nada y responde `deleted: false`', async () => {
