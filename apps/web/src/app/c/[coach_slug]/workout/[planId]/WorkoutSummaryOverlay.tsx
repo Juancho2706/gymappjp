@@ -7,7 +7,7 @@ import { Trophy, Share2, Check, ArrowRight, HeartPulse, Move, GitCommit } from '
 import { getSantiagoIsoYmdForUtcInstant } from '@/lib/date-utils'
 import { springs, fadeSlideUp, staggerContainer } from '@/lib/animation-presets'
 import { compactDistance } from '@/lib/workout-exercise-type'
-import { cardioRepsLabel } from '@eva/workout-engine'
+import { cardioRepsLabel, formatThousandsEsCl } from '@eva/workout-engine'
 import { MuscleMapSvg } from './MuscleMapSvg'
 import {
     formatSessionDuration,
@@ -174,7 +174,7 @@ export function WorkoutSummaryOverlay({
 
     const handleShare = useCallback(async () => {
         const prText = detectedPRs.length > 0 ? ` 🏆 ${detectedPRs.length} récord${detectedPRs.length > 1 ? 's' : ''}!` : ''
-        const text = `¡Completé "${planTitle}"! 💪 ${completedSets} series · ${totalReps} reps · ${Math.round(totalVolume)} kg${prText}`
+        const text = `¡Completé "${planTitle}"! 💪 ${completedSets} series · ${totalReps} reps · ${formatThousandsEsCl(totalVolume)} kg${prText}`
         if (navigator.share) {
             // White-label (W2): compartir con la marca del coach, no "EVA Fitness". El layout /c
             // fija data-brand-name en un wrapper del documento; este overlay se portalea a
@@ -345,7 +345,7 @@ export function WorkoutSummaryOverlay({
                                 </div>
                                 <div className="text-right text-xs text-on-dark-muted tabular-nums">
                                     <span className="font-bold text-on-dark">{ex.sets.length}</span> series ·{' '}
-                                    <span className="font-bold text-on-dark">{Math.round(ex.totalVolume)}</span> kg vol.
+                                    <span className="font-bold text-on-dark">{formatThousandsEsCl(ex.totalVolume)}</span> kg vol.
                                 </div>
                             </motion.div>
                         ))}
@@ -415,7 +415,7 @@ export function WorkoutSummaryOverlay({
                                 <div key={group} className="space-y-1">
                                     <div className="flex justify-between text-xs">
                                         <span className="font-medium text-on-dark">{group}</span>
-                                        <span className="text-on-dark-muted">{Math.round(vol)} kg</span>
+                                        <span className="text-on-dark-muted">{formatThousandsEsCl(vol)} kg</span>
                                     </div>
                                     <div className="h-2 rounded-full bg-white/10 overflow-hidden">
                                         <motion.div

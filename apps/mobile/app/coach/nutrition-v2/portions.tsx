@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { Copy, Plus, RotateCcw, Search, X } from 'lucide-react-native'
 import type { ExchangeGroup } from '@eva/nutrition-engine'
-import { formatPortionSentence } from '@eva/nutrition-v2'
+import { formatPortionSentence, visibleExchangeGroupsForCoach, type PortionSystem } from '@eva/nutrition-v2'
 import { DuplicateGroupSheet, NutritionHeader, NutritionStatePanel } from '../../../components/nutrition-v2'
 import { Sheet } from '../../../components/Sheet'
 import { useTheme } from '../../../context/ThemeContext'
@@ -64,6 +64,14 @@ export default function CoachPortionsScreen() {
    * vacío al alumno.
    */
   const [foodCounts, setFoodCounts] = useState<Record<string, number> | undefined>(undefined)
+  /**
+   * Set del coach y sets con planes vivos, tal cual los manda el borde. Alimentan la MISMA regla de
+   * legado que el picker del builder (`visibleExchangeGroupsForCoach`): con el set chileno encendido,
+   * un grupo SMAE que todavía usa algún plan se marca «Legado (SMAE)». Sin el dato (fail-open) no se
+   * marca nada.
+   */
+  const [portionSystem, setPortionSystem] = useState<PortionSystem | undefined>(undefined)
+  const [legacySystems, setLegacySystems] = useState<readonly PortionSystem[] | undefined>(undefined)
   const [groupId, setGroupId] = useState<string | null>(null)
   const [rows, setRows] = useState<ExchangeListRow[]>([])
   const [search, setSearch] = useState('')
@@ -81,6 +89,11 @@ export default function CoachPortionsScreen() {
   const [groupsNonce, setGroupsNonce] = useState(0)
 
   const group = useMemo(() => groups.find((entry) => entry.id === groupId) ?? null, [groups, groupId])
+  const legacyGroupIds = useMemo(() => {
+    if (!portionSystem || legacySystems === undefined) return new Set<string>()
+    const visible = visibleExchangeGroupsForCoach({ groups, coachSystem: portionSystem, usedSystems: legacySystems })
+    return new Set(visible.filter((entry) => entry.legacy).map((entry) => entry.id))
+  }, [groups, portionSystem, legacySystems])
 
   useEffect(() => {
     if (!scope) return
@@ -91,6 +104,8 @@ export default function CoachPortionsScreen() {
         if (!alive) return
         setGroups(result.groups)
         setFoodCounts(result.foodCounts)
+        setPortionSystem(result.portionSystem)
+        setLegacySystems(result.legacySystems)
         setGroupId((current) => current ?? result.groups[0]?.id ?? null)
       })
       .catch(() => {
@@ -244,13 +259,20 @@ export default function CoachPortionsScreen() {
           // le abre el sheet "1 porción equivale a" vacío, y eso se dice en voz alta acá en vez
           // de dejar que lo descubra el alumno.
           const foods = portionsFoodsHint(foodCounts?.[entry.id])
+          const legacy = legacyGroupIds.has(entry.id)
           return (
             <Pressable
               key={entry.id}
               onPress={() => setGroupId(entry.id)}
               accessibilityRole="button"
               accessibilityState={{ selected: active }}
-              accessibilityLabel={foods ? `${entry.code} ${entry.name}. ${foods.text}` : `${entry.code} ${entry.name}`}
+              accessibilityLabel={[
+                `${entry.code} ${entry.name}`,
+                legacy ? PORTIONS_COPY.builder.legacyBadge : null,
+                foods?.text ?? null,
+              ]
+                .filter(Boolean)
+                .join('. ')}
               className={`min-h-hit-min justify-center rounded-pill border px-3 py-1.5 ${
                 active ? 'border-primary bg-primary/10' : 'border-subtle bg-surface-card'
               }`}
@@ -258,6 +280,11 @@ export default function CoachPortionsScreen() {
               <Text className="text-[13px] font-sans-semibold text-strong">
                 {entry.code} · {entry.name}
               </Text>
+              {legacy ? (
+                <Text className="text-[10px] font-sans-semibold text-warning-700" numberOfLines={1}>
+                  {PORTIONS_COPY.builder.legacyBadge}
+                </Text>
+              ) : null}
               {foods ? (
                 <Text
                   className={`text-[10px] ${foods.empty ? 'font-sans-semibold text-warning-700' : 'text-muted'}`}

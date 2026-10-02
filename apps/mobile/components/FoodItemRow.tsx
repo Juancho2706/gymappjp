@@ -4,7 +4,7 @@ import { useTheme } from '../context/ThemeContext'
 import { calculateFoodItemMacros, gramsToHousehold } from '../lib/nutrition-utils'
 import type { FoodItemForMacros } from '../lib/nutrition-utils'
 import { FONT } from '../lib/typography'
-import { MACRO_COLORS } from './MacroRingSummary'
+import { MACRO_COLORS } from './macro-colors'
 
 // Acento de dominio nutrición (ember-500, fijo — TOKENS.md).
 const EMBER = '#FF6A3D'

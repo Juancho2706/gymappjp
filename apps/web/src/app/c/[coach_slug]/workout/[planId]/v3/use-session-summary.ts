@@ -10,6 +10,7 @@ import {
     type SessionSummaryByKind,
 } from '../session-summary'
 import { muscleGroupsToRegionIntensity, MUSCLE_REGIONS } from '../muscle-map'
+import { formatThousandsEsCl } from '@eva/workout-engine'
 
 /**
  * Ejecutor V3 (E4.3) — derivación ÚNICA del resumen de sesión, extraída del `WorkoutSummaryOverlay`
@@ -118,7 +119,7 @@ export function useSessionSummary({
 
     const heroSecondary =
         totalVolume > 0
-            ? { value: String(Math.round(totalVolume)), unit: 'kg', label: 'Volumen total' }
+            ? { value: formatThousandsEsCl(totalVolume), unit: 'kg', label: 'Volumen total' }
             : session.totalCardioDistanceM > 0
                 ? { value: compactDistance(session.totalCardioDistanceM, 'm'), unit: undefined, label: 'Distancia' }
                 : { value: String(completedSets), unit: undefined, label: completedSets === 1 ? 'Serie' : 'Series' }

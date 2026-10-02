@@ -14,7 +14,7 @@ import { useTheme } from '../context/ThemeContext'
 import { FONT } from '../lib/typography'
 import { GLOWS } from '../lib/shadows'
 import { FoodItemRow } from './FoodItemRow'
-import { MACRO_COLORS } from './MacroRingSummary'
+import { MACRO_COLORS } from './macro-colors'
 import { sumMealMacros } from '../lib/nutrition-utils'
 import type { FoodItemForMacros, MealWithFoodItems } from '../lib/nutrition-utils'
 
