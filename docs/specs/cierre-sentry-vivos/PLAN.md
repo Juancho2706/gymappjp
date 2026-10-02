@@ -1,7 +1,7 @@
 ---
-status: draft
+status: done
 owner: product-engineering
-last_verified: "2026-08-31"
+last_verified: "2026-10-02"
 canonical: false
 ---
 

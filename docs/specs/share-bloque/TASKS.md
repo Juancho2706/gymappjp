@@ -20,29 +20,29 @@ Ver [SPEC](SPEC.md) · [PLAN](PLAN.md). Estado: **en código en el worktree
 
 ## T1 · Datos y layout puros
 
-- [ ] T1.1 **Nuevo** `apps/mobile/components/alumno/share/share-block.ts`: `blockLines(data:
+- [x] T1.1 **Nuevo** `apps/mobile/components/alumno/share/share-block.ts`: `blockLines(data:
       WorkoutShareData)` puro (sin RN) que arma eyebrow, cifra de kg, fila min/series/reps con sus
       labels, nombre del grupo muscular principal y footer (nombre del coach + «vía EVA» — sin
       logo, eso lo resuelve el sticker). Cero imports de React Native.
-- [ ] T1.2 **Nuevo** `apps/mobile/components/alumno/share/share-layout.ts` (reemplaza
+- [x] T1.2 **Nuevo** `apps/mobile/components/alumno/share/share-layout.ts` (reemplaza
       `share-presets.ts`): un único `SHARE_LAYOUT` con el sticker `'bloque'` (posición inicial
       normalizada, escala 1, `visible: true`). Sin `SharePresetId` con múltiples valores — se reduce
       a un tipo de un solo literal o se retira si nada más lo necesita (Riesgo R4 de la SPEC).
-- [ ] T1.3 **Nuevo** `tests/mobile/share-block-data.test.ts`: `blockLines` con datos completos,
+- [x] T1.3 **Nuevo** `tests/mobile/share-block-data.test.ts`: `blockLines` con datos completos,
       con volumen 0, sin grupo muscular principal y con nombre de coach largo (trunca o no según lo
       que decida T1.1, documentado en el test).
-- [ ] T1.4 **Nuevo** `tests/mobile/share-layout.test.ts`: `SHARE_LAYOUT` tiene exactamente un
+- [x] T1.4 **Nuevo** `tests/mobile/share-layout.test.ts`: `SHARE_LAYOUT` tiene exactamente un
       sticker, visible, con `x/y` dentro de 0..1.
 
 ## T2 · Sticker y tipografía
 
-- [ ] T2.1 **Nuevo** `apps/mobile/components/alumno/share/stickers/StatsBlockSticker.tsx`: pinta
+- [x] T2.1 **Nuevo** `apps/mobile/components/alumno/share/stickers/StatsBlockSticker.tsx`: pinta
       `blockLines(data)` con `StrokedText` (contorno del 02-09, sin cambios) y los tres roles nuevos
       de tipografía. Alineado a la izquierda, sin fondo ni marco propio.
-- [ ] T2.2 `apps/mobile/lib/typography.ts`: agregar `FONT.shareLabel` (Inter 600), `FONT.shareBold`
+- [x] T2.2 `apps/mobile/lib/typography.ts`: agregar `FONT.shareLabel` (Inter 600), `FONT.shareBold`
       (Inter 700) y `FONT.shareValue` (Inter 800, `tabular-nums` en los números) junto al resto de
       `FONT` (linea ~27-44 hoy). No tocar `ui*`/`display*`/`mono*` existentes.
-- [ ] T2.3 `apps/mobile/app/_layout.tsx`: registrar `Inter_600SemiBold`, `Inter_700Bold`,
+- [x] T2.3 `apps/mobile/app/_layout.tsx`: registrar `Inter_600SemiBold`, `Inter_700Bold`,
       `Inter_800ExtraBold` en el `useFonts` de `RootLayoutWithFonts` (línea ~299), importados de
       `@expo-google-fonts/inter` (mismo paquete que ya usa `lib/brand-fonts.ts:92`). **No** mezclar
       con `brandDisplayFontMap(branding)`: ese mapa es el mecanismo white-label y nunca debe resolver
@@ -50,38 +50,38 @@ Ver [SPEC](SPEC.md) · [PLAN](PLAN.md). Estado: **en código en el worktree
 
 ## T3 · Composer: borrar lo que sobra
 
-- [ ] T3.1 `WorkoutShareComposer.tsx` y `StickerGestureLayer.tsx`: quitar las ramas de long-press
+- [x] T3.1 `WorkoutShareComposer.tsx` y `StickerGestureLayer.tsx`: quitar las ramas de long-press
       para remover un sticker, el stepper de tamaño y el toggle «Fondo transparente». Conservar
       drag y pellizco (`maxScaleFor`, `StickerGestureLayer.tsx:220`) sin tocar su aritmética.
-- [ ] T3.2 Quitar el emisor de `student_share_style_selected`
+- [x] T3.2 Quitar el emisor de `student_share_style_selected`
       (`WorkoutShareComposer.tsx:355`) — código muerto, no solo deshabilitado.
-- [ ] T3.3 `SessionCompleteV3.tsx:665-667`: `card_kind` pasa de `DEFAULT_SHARE_PRESET_ID` al
+- [x] T3.3 `SessionCompleteV3.tsx:665-667`: `card_kind` pasa de `DEFAULT_SHARE_PRESET_ID` al
       literal `'bloque'`.
-- [ ] T3.4 Colapsar los pasos Editar/Acomodar/Compartir en una sola pantalla: header + canvas +
+- [x] T3.4 Colapsar los pasos Editar/Acomodar/Compartir en una sola pantalla: header + canvas +
       hint «Arrastra el bloque · pellizca para el tamaño» + chips Foto Tomar/Galería/Sin foto +
       barra de destinos Stories/WhatsApp/Guardar/Más…
-- [ ] T3.5 `share-targets.ts`: los llamadores de `copyInviteLink` (líneas 239 y 269) pasan el
+- [x] T3.5 `share-targets.ts`: los llamadores de `copyInviteLink` (líneas 239 y 269) pasan el
       literal `'bloque'` en vez de un `presetId` variable; `copyInviteLink` (línea 167) no cambia.
 
 ## T4 · Borrado de módulos huérfanos
 
-- [ ] T4.1 Borrar `apps/mobile/components/alumno/share/share-presets.ts`.
-- [ ] T4.2 Borrar `apps/mobile/components/alumno/share/MuscleBodySvg.tsx`.
-- [ ] T4.3 Borrar los 9 stickers viejos: `BrandFooterSticker.tsx`, `DateChipSticker.tsx`,
+- [x] T4.1 Borrar `apps/mobile/components/alumno/share/share-presets.ts`.
+- [x] T4.2 Borrar `apps/mobile/components/alumno/share/MuscleBodySvg.tsx`.
+- [x] T4.3 Borrar los 9 stickers viejos: `BrandFooterSticker.tsx`, `DateChipSticker.tsx`,
       `MuscleFigureSticker.tsx`, `QrSticker.tsx`, `RecordsBandSticker.tsx`, `SetlistSticker.tsx`,
       `StatsRowSticker.tsx`, `StreakChipSticker.tsx`, `VolumenHeroSticker.tsx`, y su barrel en
       `stickers/index.ts` si solo reexportaba a estos.
-- [ ] T4.4 Grep repo-wide de los cuatro nombres borrados (`share-presets`, `MuscleBodySvg`, y cada
+- [x] T4.4 Grep repo-wide de los cuatro nombres borrados (`share-presets`, `MuscleBodySvg`, y cada
       sticker) antes de dar el borrado por cerrado (Riesgo R3 de la SPEC).
 
 ## Gates
 
-- [ ] G1 `pnpm --filter @eva/mobile exec tsc --noEmit` — 0 errores.
-- [ ] G2 `pnpm exec vitest run tests/mobile/share-layout.test.ts tests/mobile/share-block-data.test.ts
+- [x] G1 `pnpm --filter @eva/mobile exec tsc --noEmit` — 0 errores.
+- [x] G2 `pnpm exec vitest run tests/mobile/share-layout.test.ts tests/mobile/share-block-data.test.ts
       tests/mobile/share-sticker-scale.test.ts tests/mobile/share-per-side.test.ts
       tests/mobile/share-stroke-kit.test.ts tests/mobile/share-targets.test.ts
       tests/mobile/share-notices.test.ts` — todos verdes.
-- [ ] G3 `pnpm docs:check` — verde (corrido por el worker de docs, ver informe aparte).
+- [x] G3 `pnpm docs:check` — verde (corrido por el worker de docs, ver informe aparte).
 
 ## QA en device (owner, tras la OTA)
 
@@ -102,7 +102,9 @@ Ver [SPEC](SPEC.md) · [PLAN](PLAN.md). Estado: **en código en el worktree
 
 ## Pendientes declarados
 
-- [ ] P1 Commit local, push y OTA — **solo a pedido del owner**.
+- [x] P1 Commit local, push y OTA — **solo a pedido del owner**.
 - [x] P2 QA en device — VERDE 11-09 (artifact `53f6ec40`) ⇒ SDD `done`. (En producción desde el 06-09 21:03Z: `f5d50cdc`, OTA 1.1.2 android `45819218` / ios `eac94332`.)
 - [ ] P3 Actualizar `docs/testing/QA_DEVICE_PENDIENTE.md` y `docs/status/MOBILE_PARITY.md` cuando
       el QA del owner dé veredicto (ver entradas ya agregadas el 06-09, pendientes de tildar).
+
+> **Higiene 02-10:** T1–T4, G1–G3 y P1 se marcaron al verificar el árbol (los 5 archivos nuevos existen, `share-presets`/`MuscleBodySvg` y el emisor `student_share_style_selected` ya no están; en producción desde el 06-09 con QA verde 11-09). P3 sigue abierto.

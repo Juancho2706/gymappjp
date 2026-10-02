@@ -80,6 +80,12 @@ verdes. De «Kilos o libras» queda solo el barrido W5.4 ([TASKS](../specs/kg-lb
    `get_enterprise_alumno_context`/`get_org_branding`, dry-run en LIVE OK); fuera la llamada a `purge_old_audit_logs`
    (no existe en LIVE); RN deja de pedir `side_photo_url`/`receipt_url` (16+16 errores `42703` en 24 h, necesita OTA).
    Siguen en `pnpm audit` (build/tooling RN, sin parche in-major): `image-size`, `node-forge`, `esbuild` (low).
+   **Tanda 1 (misma rama):** 🔴 **seguridad** — «Borrar ejemplo» podía borrar la cuenta Auth de cualquier usuario
+   con un `onboarding_guide.demo.clientId` forjado (el coach escribe ese jsonb por RLS) ⇒ arreglado `759a32ed`
+   (en LIVE los 16 inventarios raros apuntan a usuarios inexistentes, sin rastro de abuso). Además: demo no
+   archivable y borrado por su camino (W8.1.4), demo rotulado en dashboard y RN (W8.1.6, W8.2.6), rutas de eventos
+   de onboarding acotadas a lo que emite cada cliente + dedupe/rate limit en móvil (W8.2.5, W8.5.3), aha desde RN,
+   tour del builder RN por coach, miles en resúmenes V2, «Legado» en Porciones RN, código muerto RN. RN ⇒ OTA.
 2. DB: 3 tablas `_bak_*` (19-08, 21-08, 05-09) listas para retiro.
 3. Regen completo de `database.types.ts` (deja 13 errores en 7 archivos V1; retira los workarounds de T2.3
    y el cast `V2ReadClient`) · matriz RLS con JWTs reales + preflight V1→V2 (sin cambios desde 08-06).

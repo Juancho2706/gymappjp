@@ -143,9 +143,9 @@ Archivos del worker C: `apps/mobile/lib/auth-actions.ts`, `apps/mobile/lib/brand
 
 ## Backlog
 
-- [ ] V2 legacy sin miles: `WorkoutSummaryOverlay` (RN y web), `WorkoutSummaryModal`, `use-session-summary`.
-- [ ] Tira de grupos de «Porciones» sin marcar «Legado» con el set chileno encendido (el picker del builder sí lo hace).
+- [x] V2 legacy sin miles (02-10, `formatThousandsEsCl`): `WorkoutSummaryOverlay` (RN y web), `WorkoutSummaryModal`, `use-session-summary`.
+- [x] (02-10, misma regla `visibleExchangeGroupsForCoach`) Tira de grupos de «Porciones» sin marcar «Legado» con el set chileno encendido (el picker del builder sí lo hace).
 - [ ] Header web del alumno sin logo del coach: divergencia aceptada frente a RN.
 - [ ] Agenda del coach: divergencia deliberada online («Todavía no registra …», sin ventana) ↔ offline («Sin check-in reciente», ventana de 30 d).
 - [ ] Ítem 16, variante «exigir firma `storedForUserId`» (≈ 1 h) si el owner la pide.
-- [ ] Borrar el código muerto `apps/mobile/components/MacroRingSummary.tsx` y `apps/mobile/components/alumno/nutrition/PlatePanel.tsx` en un tren de higiene.
+- [x] (02-10; `MACRO_COLORS` → `components/macro-colors.ts`, que era lo único vivo del archivo) Borrar el código muerto `apps/mobile/components/MacroRingSummary.tsx` y `apps/mobile/components/alumno/nutrition/PlatePanel.tsx` en un tren de higiene.

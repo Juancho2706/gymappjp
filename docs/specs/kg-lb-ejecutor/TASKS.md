@@ -1,7 +1,7 @@
 ---
-status: active
+status: done
 owner: product-engineering
-last_verified: "2026-09-30"
+last_verified: "2026-10-02"
 canonical: false
 ---
 
@@ -154,7 +154,7 @@ confirmar coach por coach. W5.1/W5.2 quedan sin objeto.
 - [x] **W6.2** 30-09: `master` `872b3e4c..759b47d1` (fast-forward) ⇒ Vercel prod `dpl_AouZB5An…` success; OTA 1.1.3
   android `24d7a59f` (run 36761118795) / ios `6c11fb23` (run 36761141098), ambos success y listados en
   `eas update:list --branch production`. Android 1.1.2 SIN port (decisión: lo cubre el barrido W5.4).
-- [ ] **W6.3** QA del owner (SPEC §7) ⇒ SDD `done`.
+- [x] **W6.3** QA del owner (SPEC §7) ⇒ SDD `done`. — VERDE (owner, 01-10; CURRENT §1).
 
 ## Retomar (30-09)
 

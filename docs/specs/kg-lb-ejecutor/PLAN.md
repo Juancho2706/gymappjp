@@ -1,7 +1,7 @@
 ---
-status: active
+status: done
 owner: product-engineering
-last_verified: "2026-09-26"
+last_verified: "2026-10-02"
 canonical: false
 ---
 
