@@ -141,6 +141,9 @@ confirmar coach por coach. W5.1/W5.2 quedan sin objeto.
   0 series `lb` pendientes. Muestra: Pushdown 40 → 18,14 kg; Jalón 70 → 31,75 kg.
 - [ ] **W5.4** Barrido post-OTA: volver a correr SOLO la Parte A del mismo SQL cuando la adopción del OTA sea alta
   (cliente viejo en un bloque `lb` escribe libras sin unidad). La Parte B no se repite (el builder nuevo guarda kilos).
+  — Medido 02-10 (solo lectura): **0 series pendientes** (bloque `lb` + peso + sin unidad); en 24 h, 295 de 313 series
+  de fuerza traen unidad y 18 de 19 alumnos ya escriben con cliente nuevo. Verificado que un cliente nuevo con el
+  selector en kg escribe `'kg'` (no NULL), así que la Parte A no confunde kilos nuevos con libras viejas.
 - ⚠️ Corrido ANTES del deploy (decisión del owner): hasta que salgan web + OTA, la web y la app en prod muestran estas
   series y objetivos en kilos (40 lb → «18,14 kg»). Límite conocido: un cliente viejo que EDITE una serie ya convertida
   escribe libras con `weight_unit = 'lb'` ya puesto y el barrido no la detecta (raro: editar series pasadas).

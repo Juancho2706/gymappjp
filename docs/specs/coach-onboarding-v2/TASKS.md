@@ -316,6 +316,11 @@ del owner D9–D13 están al final; sin ellas no arranca lo que las cita.
   `alsoOther` (tabla) vs `also_other` (PostHog) · `persona_selected` desde Mi panel sin `changed` en PostHog ·
   `ExpiringPrograms.tsx:32` → `/coach/programs` (404) · `builder_draft_new`/`builder_recent_exercises` globales ·
   `PersonaNudgeCard` solo en la guía (el comentario D8 de `persona.service.ts:38-41` promete dashboard).
+  **Revisión 02-10 (rama `casa-en-orden-0210`):** ARREGLADOS etiqueta demo del buscador (`sublabel: 'De ejemplo'`) y el
+  fallback de `ExpiringPrograms` (→ `/coach/workout-programs`; inalcanzable en la práctica por el `!inner`). YA ESTABAN:
+  voseo (tuteo en `packages/onboarding`) y FAB por dominios (Ola de orden W2.7). POR DISEÑO: el azul EVA no tilda el
+  paso 1 (`SEEDED_BRAND_COLORS`). REAL Y PENDIENTE (cambio de flujo ⇒ owner): el gate de persona (`proxy.ts`) solo
+  conserva `welcome/eid/ph` y pierde el destino pedido; resto sin tocar.
 
 ### W8.2 — App: W5 es más grande de lo declarado (1 Opus, 1,0 d, OTA)
 - [ ] W8.2.1 Tour del builder RN gateado con `tourAutoStartEligible` + clave por coach
@@ -366,9 +371,15 @@ del owner D9–D13 están al final; sin ellas no arranca lo que las cita.
   defecto y `FREE_COACH_DRIP_ENABLED=true` lo resucita.**
 - [x] W8.4.2 **D12** reloj — **parte A (cron horario) HECHA**: `apps/web/src/app/api/cron/onboarding-behavior/route.ts`
   con `0 * * * *` en `vercel.json` (antes solo había diarios/semanales ⇒ «+2 h» = «hasta +26 h»).
-- [~] W8.4.2B **parte B (disparo en línea) A MEDIAS**: `enqueueBehaviorCheck` está exportada pero **sin ninguno de
-  sus 3 call sites**: `student-login-signal.service.ts` (`recordStudentFirstLogin`), el escritor de
-  `workout_logs` del alumno y el escritor de `nutrition_intake_entries`. [w6-w7-08/10]
+- [x] W8.4.2B **parte B (disparo en línea)** — 02-10, rama `casa-en-orden-0210` (sin deploy). `enqueueBehaviorCheckForClient`
+  (`lib/email/behavior/behavior-emails.ts`) en: acción web de series (`workout-log.actions.ts`, no en edición de día
+  pasado), V1 `addIntakeEntryAction`, `api/mobile/nutrition/off-plan` (POST), V2 `recordIntakeAction` /
+  `recordSubstitutionIntakeAction` (modo record) / `recordSlotIntakeBatchAction` y `api/mobile/nutrition-v2/intake`
+  (`record`). **Refutado: el call site del primer login NO se pone** — un login no matchea ningún disparador (el aha
+  pide actividad; «+48 h no entró» solo se apaga), así que solo gastaría lecturas. Filtro barato antes del snapshot:
+  flag, horario 09–20, alumno demo/archivado, coach fuera de la ventana del barrido (`isInBehaviorWindow`). Límite
+  conocido: las series de la app RN se escriben directo a Supabase ⇒ su aha sigue llegando por el cron horario.
+  Tests: `behavior-emails.inline.test.ts` (10). [w6-w7-08/10]
 - [x] W8.4.3 (ejecutado en flujo-coach-nuevo W1, verificado 02-09: W1.1-W1.4 `[x]` 26-08) Señal de login del alumno (`clients` no tiene ninguna; solo `auth.users.last_sign_in_at`):
   columna aditiva `clients.last_login_at` escrita por el login del alumno, o lectura con service_role en el
   barrido. Sin esto no existe «+48 h el alumno no entró». [w6-w7-09]
