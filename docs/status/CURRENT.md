@@ -1,7 +1,7 @@
 ---
 status: active
 owner: product-engineering
-last_verified: "2026-09-30"
+last_verified: "2026-10-02"
 canonical: true
 ---
 
@@ -48,9 +48,10 @@ OTA; [TASKS](../specs/kg-lb-ejecutor/TASKS.md)).
 3. **Embudo Free→Pro** ([spec](../specs/embudo-free-pro/SPEC.md)): W0–W6 en producción; queda App Store Connect (W7.4).
 4. **FC de toda la sesión** (punto 2 de Movens, fuera del tren «Vuelta nueva»): plan aparte, arranca preguntándole
    a Movens qué banda usa ([SDD §6](../specs/vuelta-nueva-salud-y-reloj/SPEC.md)).
-5. **Renovaciones Flow** (28-09, [incidente](../audits/flow-renovaciones-2026-09-28.md)): el plan de $29.990 avisaba a
-   `//api` (308) ⇒ ninguna renovación llegaba; `olympuswolf` quedó 24 días con Pro gratis (cortado). Arreglado con
-   regla de Cloudflare + guardas en `paid-expiry`/`flow-reconcile`. **Queda: verificar la renovación de Movens el 02-10.**
+5. **Renovaciones Flow** ([incidente 28-09](../audits/flow-renovaciones-2026-09-28.md)): **verificado el 02-10**: Movens (plan
+   $29.990, el roto) renovó y su aviso llegó; MDR tuvo un rechazo real de tarjeta, recibió el correo de pago fallido y se
+   recuperó sola (una factura, sin doble cobro). Queda (menor): el evento del rechazo se pisa con el del pago (mismo
+   `provider_event_id`), `charged_at` de Flow queda 3 h antes (Flow da hora de Chile) y `checkout-abandoned` solo lee `pending` (ciego desde el 26-08).
 6. **Píxel de compra (Meta `Purchase` por servidor)** ([spec](../specs/meta-purchase-capi/SPEC.md), plan C del 01-10):
    en código el 02-10; un `Purchase` por coach en su primer cobro real (MP o Flow), con el contexto del navegador
    guardado al elegir medio de pago. Prueba sin pago real en Admin → Sistema con el código de «Eventos de prueba».
@@ -63,6 +64,9 @@ OTA; [TASKS](../specs/kg-lb-ejecutor/TASKS.md)).
    (b) apuntar el CTA del correo de dunning a `/coach/subscription/update-card`; (c) el camino Flow no tiene CTA.
 2. **«Cobros coach → alumno» — BLOQUEADO** ([spec](../specs/cobros-coach-alumno/SPEC.md) `draft`, artifact `046f3bb1`):
    8 decisiones (§18.1) + 3 verificaciones externas (§18.2). Estimación 26-32 días-agente + 2-3 semanas de beta.
+3. **Coaches fuera de Chile no logran pagar** (02-10): los 2 colombianos de los anuncios Arg/Col eligieron Pro → Webpay
+   y Flow no les inscribió tarjeta (Flow: internacionales solo Visa/MC con 3DS, ~50 % de éxito); ningún extranjero probó
+   MercadoPago. Decidir: pausar Arg/Col en Meta, o mandar a los extranjeros a MP tras confirmarlo con Flow.
 
 ### 4. Bloqueado por terceros
 
