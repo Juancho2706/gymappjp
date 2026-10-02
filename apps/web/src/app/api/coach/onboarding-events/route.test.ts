@@ -89,27 +89,31 @@ beforeEach(() => {
 })
 
 describe('POST /api/coach/onboarding-events — contrato de eventos v2', () => {
-    it('acepta los 12 event_type del CHECK de la tabla', async () => {
-        const types = [
-            'step_completed',
-            'step_reopened',
-            'aha_moment',
-            'guide_engagement',
-            'persona_selected',
-            'demo_seeded',
-            'demo_deleted',
-            'vive_tu_app_opened',
-            'invite_link_copied',
-            'invite_whatsapp_opened',
-            'onboarding_dismissed',
-            'first_module_opened',
-        ]
+    it('acepta los 5 event_type que emite el navegador', async () => {
+        const types = ['step_completed', 'step_reopened', 'aha_moment', 'guide_engagement', 'onboarding_dismissed']
         for (const eventType of types) {
             const res = await POST(req({ stepKey: 'profile_branding', eventType }))
             expect(res.status, eventType).toBe(200)
             expect(await res.json()).toEqual({ ok: true })
         }
         expect(inserts).toHaveLength(types.length)
+    })
+
+    it('W8.5.3: los tipos que origina el servidor (o sin emisor) → 400 sin insertar', async () => {
+        const serverOnly = [
+            'persona_selected',
+            'demo_seeded',
+            'demo_deleted',
+            'vive_tu_app_opened',
+            'invite_link_copied',
+            'invite_whatsapp_opened',
+            'first_module_opened',
+        ]
+        for (const eventType of serverOnly) {
+            const res = await POST(req({ stepKey: 'profile_branding', eventType }))
+            expect(res.status, eventType).toBe(400)
+        }
+        expect(inserts).toHaveLength(0)
     })
 
     it('acepta los pasos v2, los legacy y `persona`', async () => {
@@ -155,16 +159,16 @@ describe('POST /api/coach/onboarding-events — contrato de eventos v2', () => {
         expect(inserts).toHaveLength(0)
     })
 
-    it('persona_selected viaja con su metadata {persona, also_other, surface}', async () => {
+    it('la metadata viaja tal cual al insert', async () => {
         const res = await POST(
             req({
-                stepKey: 'persona',
-                eventType: 'persona_selected',
-                metadata: { persona: 'rehab', also_other: true, surface: 'web' },
+                stepKey: 'aha',
+                eventType: 'guide_engagement',
+                metadata: { step: 'aha', surface: 'web', expanded: true },
             })
         )
         expect(res.status).toBe(200)
-        expect(inserts[0]?.metadata).toEqual({ persona: 'rehab', also_other: true, surface: 'web' })
+        expect(inserts[0]?.metadata).toEqual({ step: 'aha', surface: 'web', expanded: true })
     })
 })
 
@@ -278,12 +282,12 @@ describe('POST /api/coach/onboarding-events — espejo a PostHog', () => {
         expect(captureMock).not.toHaveBeenCalled()
     })
 
-    it('`persona_selected` NO se espeja: sus call sites ya lo capturan con payload propio', async () => {
+    it('`persona_selected` desde el navegador se rechaza y no se espeja (lo escribe el servidor)', async () => {
         const res = await POST(
             req({ stepKey: 'persona', eventType: 'persona_selected', metadata: { persona: 'nutrition' } })
         )
-        expect(res.status).toBe(200)
-        expect(inserts).toHaveLength(1)
+        expect(res.status).toBe(400)
+        expect(inserts).toHaveLength(0)
         expect(captureMock).not.toHaveBeenCalled()
     })
 

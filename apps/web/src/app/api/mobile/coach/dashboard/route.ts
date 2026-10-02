@@ -11,6 +11,7 @@ import { isBrandingAllowed, parseSubscriptionTier } from '@eva/tiers'
 import { loadOnboardingV2ApiData } from '@/services/onboarding/onboarding-v2.queries'
 import { parseOnboardingGuide } from '@/app/coach/dashboard/_lib/onboarding-guide-state'
 import { mirrorOnboardingEventToPostHog } from '@/lib/posthog/onboarding-event-mirror'
+import { jsonRateLimited, rateLimitCoachOnboardingEvents } from '@/lib/rate-limit'
 
 function bearerToken(request: NextRequest): string | null {
     const auth = request.headers.get('authorization') || request.headers.get('Authorization')
@@ -31,20 +32,15 @@ const MOBILE_EVENT_STEP_KEYS: readonly string[] = [
     'persona',
 ]
 
-const MOBILE_EVENT_TYPES: readonly string[] = [
-    'step_completed',
-    'step_reopened',
-    'aha_moment',
-    'guide_engagement',
-    'persona_selected',
-    'demo_seeded',
-    'demo_deleted',
-    'vive_tu_app_opened',
-    'invite_link_copied',
-    'invite_whatsapp_opened',
-    'onboarding_dismissed',
-    'first_module_opened',
-]
+/**
+ * Lo que la app emite de verdad (`postCoachOnboardingEvent` en `apps/mobile/lib/coach-dashboard.ts`).
+ * Antes se aceptaban 12 tipos: un bearer podía escribirse `demo_seeded`, `persona_selected`, etc. sin
+ * pasar por el servidor que los origina (W8.2.5). Los demás los escribe solo el servidor.
+ */
+const MOBILE_EVENT_TYPES: readonly string[] = ['step_completed', 'step_reopened', 'aha_moment', 'guide_engagement']
+
+/** Unique violation: el índice parcial `coach_onboarding_events_step_completed_once` ya tiene el paso. */
+const PG_UNIQUE_VIOLATION = '23505'
 
 export async function GET(request: NextRequest) {
     const token = bearerToken(request)
@@ -234,6 +230,10 @@ export async function POST(request: NextRequest) {
             : {}
 
     if (parsed.action === 'onboarding_event') {
+        // Mismo limitador que la ruta web (`api/coach/onboarding-events`): por coach, no por IP.
+        const rl = await rateLimitCoachOnboardingEvents(user.id)
+        if (!rl.ok) return jsonRateLimited(rl.retryAfter)
+
         const stepKey = String(parsed.stepKey ?? '')
         const eventType = String(parsed.eventType ?? '')
         const validStep = MOBILE_EVENT_STEP_KEYS.includes(stepKey)
@@ -258,6 +258,9 @@ export async function POST(request: NextRequest) {
         })
 
         if (error) {
+            // Paso ya completado (índice único parcial): es el camino ESPERADO de un re-emit, no un 500
+            // que ensucie Sentry. Misma respuesta que la ruta web.
+            if (error.code === PG_UNIQUE_VIOLATION) return NextResponse.json({ ok: true, deduped: true })
             return NextResponse.json({ error: error.message, code: 'EVENT_INSERT_FAILED' }, { status: 500 })
         }
 
