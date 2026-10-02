@@ -453,6 +453,7 @@ function RecentActivityCard({ items }: { items: ActivityItemClient[] }) {
                                 <span className="min-w-0 flex-1 truncate text-[13px] text-[var(--text-muted)]">
                                     <span className="font-bold text-[var(--text-strong)]">{name}</span>{' '}
                                     completó su sesión
+                                    {a.isDemo && <span className="text-[var(--text-subtle)]"> · de ejemplo</span>}
                                 </span>
                                 <span className="shrink-0 text-[11.5px] text-[var(--text-subtle)]">
                                     {dayLabel(a.date)}

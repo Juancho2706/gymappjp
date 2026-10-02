@@ -10,6 +10,7 @@ import {
 import { resolveFirstArtifact } from '@/services/onboarding/onboarding-v2.queries'
 import { findActiveByCoachAndKeys } from '@/infrastructure/db/coach-email-ledger.repository'
 import { siteBaseUrl } from '../subscription-url'
+import { isWithinSendWindow } from '../automated-email-policy'
 import { buildBehaviorEmail } from './behavior-templates'
 import {
     BEHAVIOR_TEMPLATE_KEYS,
@@ -358,6 +359,13 @@ export async function runBehaviorCheckForCoach(
         policy: BehaviorPolicy
         /** Historial ya leído en lote por el barrido; `undefined` = leerlo acá (disparo en línea). */
         history?: CoachAutomatedEmailHistory | null
+        /**
+         * Envío AGENDADO (disparo en línea): un agendado se puede retirar en Resend si otra ejecución
+         * gana el INSERT del ledger (carrera I-7 de `scheduleCoachEmail`); uno inmediato no.
+         */
+        scheduledAt?: string
+        /** Solo esta key puede salir; cualquier otro disparador queda para el barrido horario. */
+        onlyTemplate?: BehaviorTemplateKey
     }
 ): Promise<BehaviorCoachOutcome> {
     const snapshot = await loadCoachBehaviorSnapshot(admin, coach, { now: opts.now, history: opts.history })
@@ -366,6 +374,7 @@ export async function runBehaviorCheckForCoach(
 
     const trigger = pickBehaviorTrigger(evaluation)
     if (!trigger) return { outcome: 'no_trigger' }
+    if (opts.onlyTemplate && trigger.template_key !== opts.onlyTemplate) return { outcome: 'no_trigger' }
     if (opts.dry) return { outcome: 'would_send', trigger }
 
     const { subject, html, text } = buildBehaviorEmail(trigger.template_key, {
@@ -389,6 +398,7 @@ export async function runBehaviorCheckForCoach(
         html,
         text,
         replyTo: BEHAVIOR_REPLY_TO,
+        ...(opts.scheduledAt ? { scheduledAt: opts.scheduledAt } : {}),
         payload: {
             reason: trigger.reason,
             persona: snapshot.persona ?? 'sin_persona',
@@ -573,33 +583,126 @@ export function enqueueBehaviorCheck(
     if (!behaviorEmailsEnabled()) return
     if (!coachId) return
 
-    const run = async () => {
+    scheduleInline(async () => {
         try {
-            // El call site que ya tiene su cliente de service role lo pasa (y se ahorra el import);
-            // el que no, lo crea acá. `admin-client` es `server-only`, por eso va por `import()`.
-            const admin =
-                opts.admin ??
-                (await import('@/lib/supabase/admin-client')).createServiceRoleClient()
-            const { data, error } = await admin
-                .from('coaches')
-                .select(COACH_COLUMNS)
-                .eq('id', coachId)
-                .maybeSingle()
-            if (error || !data) return
-            const result = await runBehaviorCheckForCoach(admin, data as unknown as BehaviorCoachRow, {
-                now: opts.now ?? new Date(),
-                dry: opts.dry ?? behaviorEmailsDryRun(),
-                policy: { launchCutover: behaviorLaunchCutover() },
-            })
-            console.info('[behavior-emails] inline', { coachId, outcome: result.outcome })
+            const admin = opts.admin ?? (await serviceRoleClient())
+            await runInlineCheck(admin, coachId, opts)
         } catch (err) {
             console.warn('[behavior-emails] disparo en línea fallido', {
                 coachId,
                 message: errMessage(err),
             })
         }
-    }
+    })
+}
 
+/**
+ * Disparo en línea desde la ACTIVIDAD del alumno (W8.4.2B): una serie anotada o una comida
+ * registrada. Es la señal del aha (`hasRealStudentActivity`) y el único correo que el alumno puede
+ * destrabar en el momento.
+ *
+ * No hay call site en el primer login a propósito: un login NO matchea ningún disparador (el aha pide
+ * actividad; el «+48 h no entró» solo se APAGA con el login), así que ahí solo gastaría lecturas.
+ *
+ * Se llama en CADA escritura (no hay forma barata de saber si es la primera), así que antes del
+ * snapshot pesado (auth.users, roster, ledger, historial) se descarta con lo que ya trae la fila:
+ * alumno demo/archivado, fuera del horario de envío, o coach fuera de la ventana de onboarding
+ * (anterior al encendido o con más de 90 d) o con el aha ya en el ledger. Para el padrón actual —todo
+ * anterior al 02-10— el costo por serie es 2 lecturas por PK dentro de `after()`, sin latencia para el
+ * alumno; un coach en ventana con el aha ya enviado suma 1 lectura del ledger.
+ */
+export function enqueueBehaviorCheckForClient(
+    clientId: string,
+    opts: { admin?: Db; now?: Date; dry?: boolean } = {}
+): void {
+    if (!behaviorEmailsEnabled()) return
+    if (!clientId) return
+
+    scheduleInline(async () => {
+        try {
+            const now = opts.now ?? new Date()
+            if (!isWithinSendWindow(now)) return
+            const admin = opts.admin ?? (await serviceRoleClient())
+            const { data: client, error } = await admin
+                .from('clients')
+                .select('coach_id, is_demo, is_archived')
+                .eq('id', clientId)
+                .maybeSingle()
+            if (error || !client?.coach_id || client.is_demo || client.is_archived) return
+            await runInlineCheck(admin, client.coach_id, { ...opts, now, ahaOnly: true })
+        } catch (err) {
+            console.warn('[behavior-emails] disparo en línea (alumno) fallido', {
+                clientId,
+                message: errMessage(err),
+            })
+        }
+    })
+}
+
+/** ¿El coach sigue en la ventana que lista el barrido? Mismo `since` que `listBehaviorCandidates`. */
+export function isInBehaviorWindow(createdAt: string | null, now: Date, policy: BehaviorPolicy): boolean {
+    const launch = policy.launchCutover ? new Date(policy.launchCutover).getTime() : NaN
+    const created = createdAt ? new Date(createdAt).getTime() : NaN
+    if (!Number.isFinite(launch) || !Number.isFinite(created)) return false
+    return created >= Math.max(now.getTime() - ONBOARDING_CUTOFF_MS, launch)
+}
+
+/**
+ * Retraso del envío en línea. Varias escrituras del mismo alumno llegan juntas (el flush de la cola
+ * offline manda N series seguidas, cada una con su `after()`), y `scheduleCoachEmail` es
+ * leer → mandar → insertar: dos tareas solapadas pueden pasar las dos el dedupe. Con el envío
+ * AGENDADO, la que pierde el INSERT (23505) retira su correo en Resend antes de que salga. Dos
+ * minutos sobran para esa ventana y siguen siendo «en el momento» frente al cron horario.
+ */
+export const INLINE_SEND_DELAY_MS = 2 * 60 * 1000
+
+async function runInlineCheck(
+    admin: Db,
+    coachId: string,
+    opts: { now?: Date; dry?: boolean; ahaOnly?: boolean }
+): Promise<void> {
+    const now = opts.now ?? new Date()
+    const policy: BehaviorPolicy = { launchCutover: behaviorLaunchCutover() }
+    const { data, error } = await admin
+        .from('coaches')
+        .select(COACH_COLUMNS)
+        .eq('id', coachId)
+        .maybeSingle()
+    if (error || !data) return
+    const coach = data as unknown as BehaviorCoachRow
+    if (!isInBehaviorWindow(coach.created_at, now, policy)) return
+    if (opts.ahaOnly) {
+        // Desde la actividad del alumno solo el aha puede cambiar: con actividad real los demás
+        // disparadores o ya no aplican (día 1, +48 h, +7 d) o dependen del reloj (día 3, lo manda el
+        // cron). Si el aha ya está en el ledger, cortar acá ahorra el snapshot en cada serie del resto
+        // de los 90 d. Ledger ilegible ⇒ se sigue (el dedupe de `scheduleCoachEmail` es la red).
+        try {
+            const sent = await findActiveByCoachAndKeys(admin, coachId, ['behavior_aha'])
+            if (sent.length > 0) return
+        } catch {
+            /* fail-open, igual que el dedupe del snapshot */
+        }
+    }
+    const result = await runBehaviorCheckForCoach(admin, coach, {
+        now,
+        dry: opts.dry ?? behaviorEmailsDryRun(),
+        policy,
+        scheduledAt: new Date(now.getTime() + INLINE_SEND_DELAY_MS).toISOString(),
+        ...(opts.ahaOnly ? { onlyTemplate: 'behavior_aha' as const } : {}),
+    })
+    console.info('[behavior-emails] inline', { coachId, outcome: result.outcome })
+}
+
+/** `admin-client` es `server-only`, por eso va por `import()`. */
+async function serviceRoleClient(): Promise<Db> {
+    return (await import('@/lib/supabase/admin-client')).createServiceRoleClient()
+}
+
+/**
+ * Corre `run` sin bloquear la respuesta: por `after()` de `next/server` (mantiene viva la invocación
+ * de Vercel), o detached fuera de un request scope (script, test). `run` ya traga sus errores.
+ */
+function scheduleInline(run: () => Promise<void>): void {
     try {
         // `import()` diferido: `next/server` no puede cargarse en los tests puros del motor.
         void import('next/server')

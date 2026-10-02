@@ -6,6 +6,8 @@ import {
   resolveMobileClientMutationContext,
 } from '../_mutation-auth'
 import { deleteClientHard } from '@/services/client/client-deletion.service'
+import { deleteDemoStudent } from '@/services/onboarding/demo-student.service'
+import { recordOnboardingEvent } from '@/services/coach/persona.service'
 
 const isoDateSchema = z.string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'La fecha debe usar el formato YYYY-MM-DD.')
@@ -56,14 +58,33 @@ async function archivedClientResponse(
 export async function DELETE(request: NextRequest, { params }: { params: Promise<{ clientId: string }> }) {
   const { clientId } = await params
   const body = bodyRecord(await request.json().catch(() => null))
-  const blocked = await archivedClientResponse(request, clientId, body.workspace)
-  if (blocked) return blocked
-
   const context = await resolveMobileClientMutationContext(request, body.workspace)
   if ('error' in context) return context.error
   if (!(await mobileContextOwnsClient(context, clientId))) {
     return NextResponse.json({ error: 'Alumno no encontrado.', code: 'NOT_FOUND' }, { status: 404 })
   }
+
+  // W8.1.4: el alumno de ejemplo sale por su propio borrado (limpia el inventario del sembrado y
+  // sus áreas), ANTES del bloqueo de archivados: un demo archivado antes de este cambio también
+  // tiene que poder borrarse (igual que en la web). El scope ya lo verificó `mobileContextOwnsClient`.
+  const { data: row } = await context.admin
+    .from('clients')
+    .select('coach_id, is_demo')
+    .eq('id', clientId)
+    .maybeSingle()
+  if (row?.is_demo === true && row.coach_id) {
+    const demo = await deleteDemoStudent(context.admin, { coachId: row.coach_id })
+    if (!demo.ok) return NextResponse.json({ error: 'No se pudo borrar el alumno de ejemplo.', code: 'DELETE_FAILED' }, { status: 500 })
+    await recordOnboardingEvent(context.admin, {
+      coachId: row.coach_id,
+      eventType: 'demo_deleted',
+      metadata: { surface: 'rn' },
+    })
+    return NextResponse.json({ ok: true })
+  }
+
+  const blocked = await archivedClientResponse(request, clientId, body.workspace)
+  if (blocked) return blocked
 
   const { error, code } = await deleteClientHard(context.admin, clientId)
   if (error) return NextResponse.json({ error, code: code ?? 'DELETE_FAILED' }, { status: 500 })

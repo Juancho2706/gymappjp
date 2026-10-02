@@ -100,7 +100,7 @@ export async function countCoachClients(db: DB, coachId: string, orgId?: string 
 export async function findCoachRecentClients(db: DB, coachId: string, limit = 5, orgId?: string | null, teamId?: string | null) {
     let query = db
         .from('clients')
-        .select('id, full_name, email, created_at, onboarding_completed')
+        .select('id, full_name, email, created_at, onboarding_completed, is_demo')
         .eq('is_archived', false)
     if (teamId) {
         query = query.is('org_id', null).eq('team_id', teamId)

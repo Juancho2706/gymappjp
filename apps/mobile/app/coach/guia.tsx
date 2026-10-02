@@ -20,6 +20,7 @@ import {
   ONBOARDING_STEPS,
   ONBOARDING_STEP_KEYS,
   ONBOARDING_TOTAL_STEPS,
+  PERSONA_CHIP_LABEL,
   progress,
   resolveAutoCompleted,
   resolveRnRoute,
@@ -90,19 +91,6 @@ const STEP_CTA: Record<OnboardingStepKey, string> = {
   aha: 'Ver el panel',
 }
 
-/**
- * Etiqueta corta de la persona para el chip de la cabecera. Gemela de `PERSONA_CHIP_LABEL` de la
- * web (`app/coach/guia/_lib/guide-view.ts`): los `tileTitle` de `PERSONA_COPY` son frases enteras
- * («Entreno fuerza y acondicionamiento») y no entran en un chip de una línea.
- * DEUDA declarada: las dos copias deberían vivir en `@eva/schemas/persona`.
- */
-const PERSONA_CHIP_LABEL: Record<Persona, string> = {
-  strength: 'Fuerza y acondicionamiento',
-  nutrition: 'Nutrición',
-  rehab: 'Rehabilitación',
-  endurance: 'Resistencia',
-  other: 'Panel completo',
-}
 
 type StepState = 'done' | 'next' | 'pending'
 type StepView = { step: OnboardingStep; position: number; state: StepState }
@@ -318,9 +306,15 @@ export default function CoachGuiaScreen() {
     )
     if (newlyDone.length > 0) patch.completed = { ...v2.guide.completed, ...completed }
 
+    // W8.2.5: el aha (paso 5) se emite UNA vez entre web y app. La marca viaja en este mismo parche
+    // (una sola escritura por visita, por el read-modify-write del jsonb).
+    const needsAha = completed.aha === true && !v2.guide.ahaMomentSent
+    if (needsAha) patch.ahaMomentSent = true
+
     if (Object.keys(patch).length === 0) return
     persistedRef.current = true
     void persistCoachOnboardingGuide(patch)
+    if (needsAha) void postCoachOnboardingEvent('aha_moment', { persona: v2.persona ?? 'sin_persona', surface: 'rn' }, 'aha')
   }, [v2, completed])
 
   const openStep = useCallback(

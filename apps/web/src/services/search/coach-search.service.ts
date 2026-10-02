@@ -72,7 +72,7 @@ async function searchClients(
 ): Promise<SearchHit[]> {
     let query = supabase
         .from('clients')
-        .select('id, full_name')
+        .select('id, full_name, is_demo')
         .ilike('full_name', pattern)
         .order('full_name')
         .limit(limit)
@@ -86,9 +86,12 @@ async function searchClients(
     }
 
     const { data } = await query
+    // El alumno de ejemplo del onboarding se identifica SIEMPRE (W8.1.11), igual que en el roster y la
+    // ficha. Rótulo neutro: la búsqueda no carga la persona del coach (alumno/paciente/atleta).
     return (data ?? []).map((c) => ({
         id: c.id,
         label: c.full_name,
+        ...((c as { is_demo?: boolean | null }).is_demo === true ? { sublabel: 'De ejemplo' } : {}),
         href: `/coach/clients/${c.id}`,
     }))
 }

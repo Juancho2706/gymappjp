@@ -1,7 +1,6 @@
 export { AdherenceStrip } from '../AdherenceStrip'
 export { BottomSheet } from '../BottomSheet'
 export { HabitsTracker } from '../HabitsTracker'
-export { MacroRingSummary } from '../MacroRingSummary'
 export { MealCardExpandable } from '../MealCardExpandable'
 export { NativeDialog } from '../NativeDialog'
 export { NativeScreen } from '../NativeScreen'

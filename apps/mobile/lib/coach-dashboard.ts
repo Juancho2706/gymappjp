@@ -293,6 +293,8 @@ export type MobileOnboardingGuideState = {
   hidden: boolean
   /** Instante ISO de la primera visita a la guía. `null` = todavía no la vio. */
   guideSeenAt: string | null
+  /** `aha_moment` ya emitido (por la web o por la app). Ausente en servidores viejos ⇒ `false`. */
+  ahaMomentSent: boolean
 }
 
 /**
@@ -388,6 +390,7 @@ export function parseMobileOnboardingGuide(raw: unknown): MobileOnboardingGuideS
     hidden: source.hidden === true,
     // El endpoint lo sirve camelCase dentro de `guide`; el jsonb crudo, snake_case.
     guideSeenAt: asTrimmedString(source.guideSeenAt) ?? asTrimmedString(source[GUIDE_SEEN_AT_KEY]),
+    ahaMomentSent: source.ahaMomentSent === true,
   }
 }
 

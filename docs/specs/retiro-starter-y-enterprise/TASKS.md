@@ -863,6 +863,12 @@ pnpm qa:prod:suave                  # Playwright contra prod, 1 navegador, 1 wor
 > D15, E2.pre y los mockup-lotes. Cero «preguntas abiertas» pendientes.
 
 Orden de trenes: **E0 → E1 → (push + deploy) → E2.pre → E2 → E2-bis → E3 → E3-bis → (E4 solo si el owner lo pide)**.
+
+> **Adelanto 02-10 (rama `casa-en-orden-0210`, migración SIN aplicar):** `20261002170000_revoke_anon_enterprise_read_rpcs.sql`
+> quita SOLO el `EXECUTE` de `anon` a `get_enterprise_alumno_context` y `get_org_branding`. Verificado que los 4
+> llamadores (`proxy.ts`) corren con sesión y que ninguna función/política las referencia; `authenticated` queda
+> intacto, así que no adelanta ni rompe los revokes completos de E2-bis / E3-bis. Dry-run en LIVE con rollback
+> garantizado: anon=false, authenticated=true, service_role=true. Se aplica solo con OK del owner.
 Starter (frente S) va en paralelo a E0/E1: archivos disjuntos.
 
 ---

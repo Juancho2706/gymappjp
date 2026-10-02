@@ -125,6 +125,9 @@ export function ClientActionsSheet({ client, loginUrl, onClose, onEdit, initialC
         .join('')
     const paused = client.is_active === false
     const archived = client.is_archived === true
+    // W8.1.4: el alumno de ejemplo no se archiva (el servidor lo rechaza) y su «eliminar» es
+    // «Borrar ejemplo», que limpia también lo sembrado con él.
+    const isDemo = client.is_demo === true
 
     const waMessage = `Hola ${name}! Soy tu coach. Aquí está tu link para acceder a tu plan: ${loginUrl}`
     const whatsappLink =
@@ -219,15 +222,19 @@ export function ClientActionsSheet({ client, loginUrl, onClose, onEdit, initialC
             tone: 'var(--warning-600)',
             on: () => setConfirm('pause'),
         },
-        {
-            icon: Archive,
-            label: 'Archivar alumno',
-            tone: 'var(--ink-600)',
-            on: () => setConfirm('archive'),
-        },
+        ...(isDemo
+            ? []
+            : [
+                  {
+                      icon: Archive,
+                      label: 'Archivar alumno',
+                      tone: 'var(--ink-600)',
+                      on: () => setConfirm('archive'),
+                  },
+              ]),
         {
             icon: Trash2,
-            label: 'Eliminar alumno',
+            label: isDemo ? 'Borrar ejemplo' : 'Eliminar alumno',
             tone: 'var(--danger-600)',
             danger: true,
             on: () => setConfirm('delete'),
@@ -344,9 +351,13 @@ export function ClientActionsSheet({ client, loginUrl, onClose, onEdit, initialC
             <ConfirmBody
                 icon={Trash2}
                 tone="danger"
-                title="Eliminar alumno"
-                body={`Esta acción eliminará la cuenta de ${name} y todos sus datos asociados (rutinas, check-ins, progreso). No se puede deshacer.`}
-                cta="Eliminar definitivamente"
+                title={isDemo ? 'Borrar alumno de ejemplo' : 'Eliminar alumno'}
+                body={
+                    isDemo
+                        ? `Se borra ${name} y todo lo que sembramos con él. Puedes volver a sembrarlo desde Mi panel.`
+                        : `Esta acción eliminará la cuenta de ${name} y todos sus datos asociados (rutinas, check-ins, progreso). No se puede deshacer.`
+                }
+                cta={isDemo ? 'Borrar ejemplo' : 'Eliminar definitivamente'}
                 danger
                 pending={isPending}
                 error={error}

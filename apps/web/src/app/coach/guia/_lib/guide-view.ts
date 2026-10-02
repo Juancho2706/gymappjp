@@ -97,15 +97,5 @@ export function welcomeLines(persona: Persona | null, firstName: string): [strin
     ]
 }
 
-/**
- * Etiqueta corta de la persona para el chip de la cabecera. Los `tileTitle` de `PERSONA_COPY` son
- * frases completas («Entreno fuerza y acondicionamiento»): sirven para elegir en la pantalla de
- * persona, no para un chip de una línea al lado del título.
- */
-export const PERSONA_CHIP_LABEL: Record<Persona, string> = {
-    strength: 'Fuerza y acondicionamiento',
-    nutrition: 'Nutrición',
-    rehab: 'Rehabilitación',
-    endurance: 'Resistencia',
-    other: 'Panel completo',
-}
+/** Etiqueta corta de la persona para el chip: vive en `@eva/onboarding` (compartida con RN). */
+export { PERSONA_CHIP_LABEL } from '@eva/onboarding'

@@ -589,11 +589,13 @@ export default function ClientDetailScreen() {
   // ── Hero: eyebrow, estado, chips ──────────────────────────────────────────
   const programName = data.activeProgram?.name?.trim() || null
   const planCur = derived.planCurrentWeek
-  const eyebrow = programName
+  const programEyebrow = programName
     ? `${programName}${planCur != null ? ` · Semana ${planCur}` : ''}`
     : planCur != null
       ? `Semana ${planCur}`
       : 'Sin programa activo'
+  // W8.2.6: el alumno de ejemplo se identifica SIEMPRE en su ficha, igual que en la web.
+  const eyebrow = client.is_demo === true ? `De ejemplo · ${programEyebrow}` : programEyebrow
 
   const todayForStatus = getTodayInSantiago().iso
   const lastCheckinForStatus = data.checkIns[0]?.date ?? null
@@ -921,7 +923,7 @@ export default function ClientDetailScreen() {
 
       <ClientActionsSheet
         visible={moreOpen}
-        client={{ id: client.id, fullName: client.full_name, email: client.email, phone: client.phone, isActive: client.is_active !== false, isArchived }}
+        client={{ id: client.id, fullName: client.full_name, email: client.email, phone: client.phone, isActive: client.is_active !== false, isArchived, isDemo: client.is_demo === true }}
         theme={theme}
         onClose={() => setMoreOpen(false)}
         onProfile={() => {}}
@@ -964,10 +966,14 @@ export default function ClientDetailScreen() {
         )}
       </NativeDialog>
 
-      <NativeDialog open={deleteOpen} title="Eliminar alumno" onClose={() => { if (!deleting) setDeleteOpen(false) }} closeDisabled={deleting} unmountOnClose>
+      <NativeDialog open={deleteOpen} title={client.is_demo === true ? 'Borrar alumno de ejemplo' : 'Eliminar alumno'} onClose={() => { if (!deleting) setDeleteOpen(false) }} closeDisabled={deleting} unmountOnClose>
         <View style={{ gap: 14 }}>
           <Text style={{ color: theme.mutedForeground, fontSize: 13.5, lineHeight: 19 }}>
-            ¿Seguro que quieres eliminar a <Text style={{ color: theme.foreground }}>{client.full_name}</Text>? Esta acción eliminará su cuenta y todos sus datos asociados (rutinas, check-ins, progreso). No se puede deshacer.
+            {client.is_demo === true ? (
+              <>Se borra <Text style={{ color: theme.foreground }}>{client.full_name}</Text> y todo lo que sembramos con él. Puedes volver a sembrarlo desde Mi panel.</>
+            ) : (
+              <>¿Seguro que quieres eliminar a <Text style={{ color: theme.foreground }}>{client.full_name}</Text>? Esta acción eliminará su cuenta y todos sus datos asociados (rutinas, check-ins, progreso). No se puede deshacer.</>
+            )}
           </Text>
           {actionError ? <Text style={{ color: theme.destructive, fontSize: 13 }}>{actionError}</Text> : null}
           {/* Par apilado (no en fila): "Eliminar definitivamente" no cabe en media

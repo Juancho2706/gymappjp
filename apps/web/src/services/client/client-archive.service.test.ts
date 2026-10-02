@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyArchiveScope,
+  archiveClient,
+  bulkArchiveClients,
   getClientUnarchiveCapacity,
   hasClientUnarchiveCapacity,
   isDedicatedStudentAuthIdentity,
@@ -139,5 +141,60 @@ describe('getClientUnarchiveCapacity — el alumno de ejemplo no bloquea el desa
     const capacity = await getClientUnarchiveCapacity(db, ACTOR)
     expect(capacity).toEqual({ ok: true, limit: 1, used: 0, label: 'tu plan actual' })
     expect(hasClientUnarchiveCapacity(capacity as Extract<typeof capacity, { ok: true }>)).toBe(true)
+  })
+})
+
+describe('alumno de ejemplo (W8.1.4) — no se archiva', () => {
+  const ACTOR = { coachId: 'coach-1', workspace: { type: 'standalone' as const } }
+
+  /** Doble mínimo: `select…maybeSingle` devuelve `row`; un UPDATE se registra y falla el test si ocurre. */
+  function fakeDb(rows: Array<Record<string, unknown>>) {
+    const updates: unknown[] = []
+    const builder = (single: Record<string, unknown> | null) => {
+      const q: Record<string, unknown> = {}
+      for (const m of ['select', 'eq', 'is', 'in']) q[m] = () => q
+      q.update = (values: unknown) => {
+        updates.push(values)
+        return q
+      }
+      q.maybeSingle = async () => ({ data: single, error: null })
+      q.then = (resolve: (v: unknown) => unknown) => Promise.resolve({ data: rows, error: null }).then(resolve)
+      return q
+    }
+    const db = {
+      from: () => builder(rows[0] ?? null),
+      auth: { admin: { getUserById: async () => ({ data: { user: null }, error: null }) } },
+    }
+    return { db: db as never, updates }
+  }
+
+  it('archiveClient rechaza al demo con DEMO_CLIENT y sin escribir nada', async () => {
+    const { db, updates } = fakeDb([
+      { id: 'demo-1', full_name: 'Matías', email: 'demo@evatest.cl', is_archived: false, is_active: true, is_demo: true },
+    ])
+    const result = await archiveClient(db, ACTOR, 'demo-1')
+    expect(result).toMatchObject({ ok: false, code: 'DEMO_CLIENT' })
+    expect(updates).toEqual([])
+  })
+
+  it('bulkArchiveClients salta al demo y archiva solo a los reales', async () => {
+    const { db, updates } = fakeDb([
+      { id: 'demo-1', full_name: 'Matías', email: 'demo@evatest.cl', is_archived: false, is_active: true, is_demo: true },
+      { id: 'real-1', full_name: 'Ana', email: null, is_archived: false, is_active: true, is_demo: false },
+    ])
+    const result = await bulkArchiveClients(db, ACTOR, ['demo-1', 'real-1'])
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.clients.map((c) => c.id)).toEqual(['real-1'])
+    expect(updates).toEqual([{ is_archived: true }])
+  })
+
+  it('bulkArchiveClients con solo el demo no escribe nada', async () => {
+    const { db, updates } = fakeDb([
+      { id: 'demo-1', full_name: 'Matías', email: null, is_archived: false, is_active: true, is_demo: true },
+    ])
+    const result = await bulkArchiveClients(db, ACTOR, ['demo-1'])
+    expect(result).toMatchObject({ ok: true, clients: [] })
+    expect(updates).toEqual([])
   })
 })

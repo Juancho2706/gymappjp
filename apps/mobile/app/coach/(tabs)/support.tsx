@@ -2,13 +2,16 @@ import { useMemo } from 'react'
 import { Linking, Platform, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import Constants from 'expo-constants'
-import { Mail } from 'lucide-react-native'
+import { useRouter } from 'expo-router'
+import { Compass, Mail } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { Button, ScreenHeader } from '../../../components'
 import { Accordion } from '../../../components/Accordion'
 import { AppBackground } from '../../../components/AppBackground'
 import { SUPPORT_FAQ, type FaqEntry } from '../../../lib/support-faq'
 import { runningBundleLabel } from '../../../lib/ota'
+import { COACH_GUIA_ROUTE } from '../../../lib/coach-persona'
+import { useWorkspace } from '../../../lib/workspace'
 
 const SUPPORT_EMAIL = 'soporte@eva-app.cl'
 
@@ -33,6 +36,11 @@ function buildSupportMailto(): string {
 export default function SupportScreen() {
   const { theme } = useTheme()
   const insets = useSafeAreaInsets()
+  const router = useRouter()
+  const workspace = useWorkspace()
+  // La guía de inicio es del panel personal: el coach de team/org no tiene (mismo `managed` que
+  // `OnboardingModeProvider`). Paridad con «Ver mi guía de inicio» de Mi panel (W8.2.2).
+  const hasGuide = workspace.kind === 'standalone' && workspace.isManaged !== true
 
   // Agrupar FAQ por categoría conservando el orden de aparición.
   const groups = useMemo(() => {
@@ -53,6 +61,9 @@ export default function SupportScreen() {
       <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 100 }]} showsVerticalScrollIndicator={false}>
         {/* Contact */}
         <Button label="Escríbenos por email" leftIcon={Mail} onPress={() => Linking.openURL(buildSupportMailto()).catch(() => {})} full />
+        {hasGuide ? (
+          <Button label="Ver mi guía de inicio" leftIcon={Compass} variant="outline" onPress={() => router.push(COACH_GUIA_ROUTE)} full />
+        ) : null}
 
         <Text style={[styles.sectionTitle, { color: theme.mutedForeground, fontFamily: 'HankenGrotesk_800ExtraBold' }]}>PREGUNTAS FRECUENTES</Text>
 

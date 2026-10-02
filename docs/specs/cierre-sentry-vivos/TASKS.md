@@ -1,11 +1,13 @@
 ---
-status: active
+status: done
 owner: product-engineering
-last_verified: "2026-09-05"
+last_verified: "2026-10-02"
 canonical: false
 ---
 
 # TASKS — Cierre de los issues vivos de Sentry
+
+> **02-10: SDD `done`.** O0–O5 hechos con QA; O7.4 desestimado salvo regresión y P3–P5 son trenes aparte declarados (no bloquean el cierre).
 
 Marcar solo con evidencia real. Prohibido dar un gate por verde sin haberlo corrido.
 

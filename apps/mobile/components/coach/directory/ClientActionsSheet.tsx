@@ -36,6 +36,8 @@ export interface ClientActionSubject {
   phone: string | null
   isActive: boolean
   isArchived: boolean
+  /** Alumno de ejemplo (W8.1.4): no se archiva (el servidor lo rechaza) y «eliminar» es «Borrar ejemplo». */
+  isDemo?: boolean
 }
 
 /**
@@ -133,12 +135,12 @@ export function ClientActionsSheet({
     ] : []),
     { key: 'reset', icon: KeyRound, label: 'Resetear contraseña', toneClass: 'text-info-600', on: onReset },
     { key: 'toggle', icon: paused ? CirclePlay : CirclePause, label: paused ? 'Reactivar acceso' : 'Pausar acceso', toneClass: 'text-warning-600', on: onToggle },
-    ...(onArchive
+    ...(onArchive && client.isDemo !== true
       // `ink-700` (no `ink-600`): la rampa neutra solo flipea 100/200/300/700/800 en dark
       // (global.css) ⇒ `text-ink-600` seguiría siendo gris oscuro sobre el sheet oscuro.
       ? [{ key: 'archive', icon: Archive, label: 'Archivar alumno', toneClass: 'text-ink-700', on: onArchive }]
       : []),
-    { key: 'delete', icon: Trash2, label: 'Eliminar alumno', toneClass: 'text-danger-600', danger: true, on: onDelete },
+    { key: 'delete', icon: Trash2, label: client.isDemo === true ? 'Borrar ejemplo' : 'Eliminar alumno', toneClass: 'text-danger-600', danger: true, on: onDelete },
   ]
 
   return (

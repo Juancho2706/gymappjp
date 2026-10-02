@@ -52,6 +52,11 @@ type DB = SupabaseClient<Database>
 /** Dominio de las cuentas de prueba de EVA: excluido de finanzas y de los correos al alumno. */
 const DEMO_EMAIL_DOMAIN = 'evatest.cl'
 
+/** Correo del usuario Auth del alumno de ejemplo de un coach (uno por coach). */
+function demoEmailFor(coachId: string): string {
+    return `demo-${coachId}@${DEMO_EMAIL_DOMAIN}`
+}
+
 /** Días de antigüedad del demo: el programa arranca hace 2 semanas para que la semana esté en curso. */
 const PROGRAM_START_DAYS_AGO = 13
 
@@ -156,7 +161,7 @@ export async function seedDemoStudent(
     const guide = await readCoachGuide(admin, coachId)
     if (guide == null) return { ok: false, reason: 'error', detail: 'coach_inexistente' }
 
-    const email = `demo-${coachId}@${DEMO_EMAIL_DOMAIN}`
+    const email = demoEmailFor(coachId)
     const { data: created, error: authError } = await admin.auth.admin.createUser({
         email,
         password: strongRandomPassword(),
@@ -409,11 +414,34 @@ export async function deleteDemoStudent(
         .select('id')
         .eq('coach_id', coachId)
         .eq('is_demo', true)
-    const clientIds = [...new Set([...(demoRows ?? []).map((row) => row.id), ...(inventory ? [inventory.clientId] : [])])]
+    const rowIds = new Set((demoRows ?? []).map((row) => row.id))
+
+    // SEGURIDAD: `onboarding_guide` lo puede escribir el propio coach (RLS `coaches_update_own` y
+    // `persist_onboarding_guide` de la API móvil), así que `inventory.clientId` NO es de confianza.
+    // Antes se borraba en Auth cualquier id que estuviera ahí ⇒ un coach podía borrar la cuenta de
+    // cualquier usuario cuyo id conociera. Ahora solo se borra:
+    //  · una fila `clients` del coach con `is_demo = true` (la consulta de arriba), o
+    //  · un usuario Auth huérfano del inventario cuyo correo es EXACTAMENTE el del demo de este coach
+    //    (`demo-<coachId>@evatest.cl`, lo crea `seedDemoStudent`): el caso «la fila se perdió».
+    const orphanIds: string[] = []
+    // `false` = no se pudo saber si el huérfano existe (error que no es 404): el inventario NO se
+    // limpia, para que el próximo intento lo vuelva a mirar en vez de dejar un usuario Auth con el
+    // correo del demo que haría fallar para siempre el `createUser` del re-sembrado.
+    let orphanResolved = true
+    if (inventory != null && !rowIds.has(inventory.clientId)) {
+        try {
+            const { data: orphan, error: orphanError } = await admin.auth.admin.getUserById(inventory.clientId)
+            if (orphan?.user?.email === demoEmailFor(coachId)) orphanIds.push(inventory.clientId)
+            else if (orphanError != null && (orphanError as { status?: number }).status !== 404) orphanResolved = false
+        } catch {
+            // `getUserById` LANZA (no devuelve error) con un id que no es UUID: ese id no puede ser un
+            // usuario real, así que no hay huérfano que borrar y el inventario basura se limpia.
+        }
+    }
 
     let deleted = false
 
-    for (const clientId of clientIds) {
+    for (const clientId of [...rowIds, ...orphanIds]) {
         // FKs que NO cascadean desde `clients` (o que conviene borrar antes para no depender del
         // orden del planner): la raíz V2 sí cascadea por `client_id`, pero se borra explícita para
         // que el fallo, si lo hay, sea visible acá y no un 23503 opaco al borrar el auth user.
@@ -430,10 +458,18 @@ export async function deleteDemoStudent(
             deleted = true
             continue
         }
-        // El usuario ya no existe (o no era un auth user): se limpia por tabla.
-        const { data: removed } = await admin.from('clients').delete().eq('id', clientId).select('id')
-        await admin.from('client_accounts').delete().eq('id', clientId)
-        if ((removed ?? []).length > 0) deleted = true
+        // El usuario ya no existe (o no era un auth user): se limpia por tabla, acotado al demo del coach.
+        const { data: removed } = await admin
+            .from('clients')
+            .delete()
+            .eq('id', clientId)
+            .eq('coach_id', coachId)
+            .eq('is_demo', true)
+            .select('id')
+        if ((removed ?? []).length > 0) {
+            await admin.from('client_accounts').delete().eq('id', clientId)
+            deleted = true
+        }
     }
 
     // Áreas custom que creó el seed. Se borran DURO (no soft-delete): son del sembrado, no del coach.
@@ -445,11 +481,26 @@ export async function deleteDemoStudent(
             .in('id', areaIds)
             .eq('coach_id', coachId)
             .eq('is_system', false)
+            // `areaIds` sale del jsonb que el coach puede escribir: nunca un área de team (sus
+            // compañeros la usan); el seed solo crea áreas del panel personal.
+            .is('team_id', null)
             .select('id')
         if ((removedAreas ?? []).length > 0) deleted = true
     }
 
-    if (inventory != null) {
+    // Si una fila del demo sigue viva (falló el borrado en Auth Y el de la tabla), el borrado NO se
+    // reporta como hecho: el coach vería «listo» con el ejemplo todavía en su lista.
+    if (rowIds.size > 0) {
+        const { data: still } = await admin
+            .from('clients')
+            .select('id')
+            .in('id', [...rowIds])
+            .eq('coach_id', coachId)
+            .eq('is_demo', true)
+        if ((still ?? []).length > 0) return { ok: false, reason: 'demo_still_present' }
+    }
+
+    if (inventory != null && orphanResolved) {
         await writeDemoInventory(admin, coachId, null)
         deleted = true
     }

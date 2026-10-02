@@ -3,7 +3,7 @@ import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TouchableOp
 import { BottomSheetModal, BottomSheetFlatList, BottomSheetScrollView } from '@gorhom/bottom-sheet'
 import { AlertTriangle, Plus, Search, Star } from 'lucide-react-native'
 import { useTheme } from '../../context/ThemeContext'
-import { MACRO_COLORS } from '../MacroRingSummary'
+import { MACRO_COLORS } from '../macro-colors'
 import {
   FOOD_CATEGORIES,
   FOOD_UNITS,

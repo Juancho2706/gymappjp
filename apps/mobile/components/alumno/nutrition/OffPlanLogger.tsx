@@ -16,7 +16,7 @@ import { History, Plus, Search, Trash2, X } from 'lucide-react-native'
 import { useTheme } from '../../../context/ThemeContext'
 import { FONT } from '../../../lib/typography'
 import { shadow } from '../../../lib/shadows'
-import { MACRO_COLORS } from '../../MacroRingSummary'
+import { MACRO_COLORS } from '../../macro-colors'
 import { EMBER_500, EMBER_700 } from './types'
 import {
   deleteIntakeEntry,
@@ -51,7 +51,7 @@ import {
  * del día reflejen lo que se consumió realmente (paridad con la web).
  *
  * Suma al total del día vía `onTotalsChange(extra)`: el shell la agrega al
- * `consumed` que alimenta `MacroRingSummary` (los anillos NO se editan aquí).
+ * `consumed` que alimenta los anillos de macros (que NO se editan aquí).
  */
 
 const DENOM_MACRO_COLOR: Record<'protein' | 'carbs' | 'fats', string> = {

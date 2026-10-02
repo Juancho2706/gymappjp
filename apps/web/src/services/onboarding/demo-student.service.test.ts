@@ -92,6 +92,10 @@ interface FakeState {
     deletedUsers: string[]
     /** Filas que devuelve cada `select` por tabla (se consume en orden si hay varias respuestas). */
     selects: Record<string, Record<string, unknown>[]>
+    /** Correo de cada usuario Auth que responde `getUserById` (ausente = no existe). */
+    authEmails: Record<string, string>
+    /** Ids cuyo `getUserById` falla con un error que NO es 404 (red, 500). */
+    authTransient: Set<string>
 }
 
 function makeFakeAdmin(overrides: Record<string, Record<string, unknown>[]> = {}): {
@@ -104,11 +108,19 @@ function makeFakeAdmin(overrides: Record<string, Record<string, unknown>[]> = {}
         createdUsers: [],
         deletedUsers: [],
         selects: { ...overrides },
+        authEmails: {},
+        authTransient: new Set(),
     }
 
     const respond: Responder = (op) => {
         state.ops.push(op)
-        if (op.kind === 'select') return state.selects[op.table] ?? []
+        if (op.kind === 'select') {
+            const rows = state.selects[op.table] ?? []
+            // `clients` borra en cascada con su usuario Auth: una fila cuyo usuario ya se borró deja
+            // de aparecer en la relectura de verificación (`.in('id', …)`) de `deleteDemoStudent`.
+            const relectura = op.table === 'clients' && op.filters.some(([kind, column]) => kind === 'in' && column === 'id')
+            return relectura ? rows.filter((row) => !state.deletedUsers.includes(String(row.id))) : rows
+        }
         if (op.kind === 'insert') {
             const rows = Array.isArray(op.payload) ? op.payload : [op.payload]
             return rows.map((row) => {
@@ -132,6 +144,15 @@ function makeFakeAdmin(overrides: Record<string, Record<string, unknown>[]> = {}
                 deleteUser: async (id: string) => {
                     state.deletedUsers.push(id)
                     return { data: null, error: null }
+                },
+                getUserById: async (id: string) => {
+                    if (state.authTransient.has(id)) {
+                        return { data: { user: null }, error: { status: 500, message: 'upstream timeout' } }
+                    }
+                    const email = state.authEmails[id]
+                    return email
+                        ? { data: { user: { id, email } }, error: null }
+                        : { data: { user: null }, error: { status: 404, message: 'User not found' } }
                 },
             },
         },
@@ -364,6 +385,87 @@ describe('deleteDemoStudent', () => {
         }
         expect(guideUpdate.onboarding_guide.demo).toBeUndefined()
         expect(guideUpdate.onboarding_guide.brand_tour_seen).toBe(true)
+    })
+
+    it('SEGURIDAD: un inventario forjado con el id de otro usuario NO borra esa cuenta', async () => {
+        // El coach puede escribir su `onboarding_guide` (RLS `coaches_update_own`): mete el id de
+        // una víctima en `demo.clientId` y toca «Borrar ejemplo».
+        const { admin, state } = makeFakeAdmin({
+            coaches: [{ onboarding_guide: { demo: { version: 1, clientId: 'victima-1', areaIds: [] } } }],
+            clients: [],
+        })
+        state.authEmails['victima-1'] = 'otra.persona@gmail.com'
+        await deleteDemoStudent(admin, { coachId: COACH })
+        expect(state.deletedUsers).toEqual([])
+        expect(opsFor(state, 'clients', 'delete')).toHaveLength(0)
+        expect(opsFor(state, 'client_accounts', 'delete')).toHaveLength(0)
+    })
+
+    it('inventario huérfano con el correo del demo de ESTE coach: sí se borra (la fila se perdió)', async () => {
+        const { admin, state } = makeFakeAdmin({
+            coaches: [{ onboarding_guide: { demo: { version: 1, clientId: 'demo-huerfano', areaIds: [] } } }],
+            clients: [],
+        })
+        state.authEmails['demo-huerfano'] = `demo-${COACH}@evatest.cl`
+        await deleteDemoStudent(admin, { coachId: COACH })
+        expect(state.deletedUsers).toEqual(['demo-huerfano'])
+    })
+
+    it('el demo de OTRO coach (correo demo-<otro>) tampoco se borra', async () => {
+        const { admin, state } = makeFakeAdmin({
+            coaches: [{ onboarding_guide: { demo: { version: 1, clientId: 'demo-ajeno', areaIds: [] } } }],
+            clients: [],
+        })
+        state.authEmails['demo-ajeno'] = 'demo-coach-2@evatest.cl'
+        await deleteDemoStudent(admin, { coachId: COACH })
+        expect(state.deletedUsers).toEqual([])
+    })
+
+    it('error transitorio al mirar el huérfano: NO limpia el inventario (el próximo intento lo reintenta)', async () => {
+        const { admin, state } = makeFakeAdmin({
+            coaches: [{ onboarding_guide: { demo: { version: 1, clientId: 'demo-huerfano', areaIds: [] } } }],
+            clients: [],
+        })
+        state.authTransient.add('demo-huerfano')
+        await deleteDemoStudent(admin, { coachId: COACH })
+        expect(state.deletedUsers).toEqual([])
+        expect(opsFor(state, 'coaches', 'update')).toHaveLength(0)
+    })
+
+    it('las áreas del inventario se borran solo si no son de team', async () => {
+        const { admin, state } = makeFakeAdmin({
+            coaches: [{ onboarding_guide: { demo: { version: 1, clientId: 'demo-1', areaIds: ['area-1'] } } }],
+            clients: [{ id: 'demo-1' }],
+        })
+        await deleteDemoStudent(admin, { coachId: COACH })
+        expect(opsFor(state, 'workout_section_templates', 'delete')[0]?.filters).toEqual(
+            expect.arrayContaining([['is', 'team_id', null]]),
+        )
+    })
+
+    it('si la fila del demo sobrevive (falló Auth y la tabla) responde ok:false, no «listo»', async () => {
+        const { admin, state } = makeFakeAdmin({
+            coaches: [{ onboarding_guide: {} }],
+            clients: [{ id: 'demo-1' }],
+        })
+        ;(admin.auth.admin as unknown as { deleteUser: (id: string) => Promise<unknown> }).deleteUser = async () => ({
+            data: null,
+            error: { status: 500, message: 'auth caído' },
+        })
+        const result = await deleteDemoStudent(admin, { coachId: COACH })
+        expect(result).toEqual({ ok: false, reason: 'demo_still_present' })
+        expect(state.deletedUsers).toEqual([])
+    })
+
+    it('un id de inventario que no es UUID (getUserById lanza) no rompe el borrado', async () => {
+        const { admin } = makeFakeAdmin({
+            coaches: [{ onboarding_guide: { demo: { version: 1, clientId: 'no-es-uuid', areaIds: [] } } }],
+            clients: [],
+        })
+        ;(admin.auth.admin as unknown as { getUserById: (id: string) => Promise<unknown> }).getUserById = async () => {
+            throw new Error('Expected parameter to be UUID')
+        }
+        await expect(deleteDemoStudent(admin, { coachId: COACH })).resolves.toMatchObject({ ok: true })
     })
 
     it('sin demo ni inventario no borra nada y responde `deleted: false`', async () => {

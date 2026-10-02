@@ -53,6 +53,8 @@ export interface ExpiringProgramItem {
     clientId: string | undefined
     clientName: string | undefined
     daysLeft: number
+    /** Programa del alumno de ejemplo (W8.1.6): la Agenda lo rotula «de ejemplo». */
+    isDemo?: boolean
 }
 
 export interface ChartPoint {
@@ -83,6 +85,8 @@ export interface AgendaItem {
     days: number | null
     /** Punto de color de la fila: `agendaSeverity(days)` en pulse, `programSeverity(daysLeft)` en programas. */
     severity: AgendaSeverity
+    /** Fila del alumno de ejemplo (W8.1.6): se rotula «De ejemplo». Ausente = alumno real. */
+    isDemo?: boolean
 }
 
 export interface AdherenceStat {

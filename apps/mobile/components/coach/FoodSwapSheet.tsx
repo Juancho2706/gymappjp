@@ -3,7 +3,7 @@ import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-nativ
 import { BottomSheetModal, BottomSheetScrollView } from '@gorhom/bottom-sheet'
 import { ArrowLeftRight, Plus, X } from 'lucide-react-native'
 import { useTheme } from '../../context/ThemeContext'
-import { MACRO_COLORS } from '../MacroRingSummary'
+import { MACRO_COLORS } from '../macro-colors'
 import { swapMacros, type DraftFoodItem, type SwapOption } from '../../lib/nutrition-builder'
 import { swapOptionAllowedUnits, swapOptionIsLiquid } from '../../lib/nutrition-utils'
 

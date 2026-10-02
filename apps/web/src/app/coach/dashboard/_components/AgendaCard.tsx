@@ -65,6 +65,11 @@ export function AgendaCard({ items, total }: { items: AgendaItem[]; total: numbe
                                         <div className="min-w-0 flex-1">
                                             <div className="truncate text-sm font-bold text-[var(--text-strong)]">
                                                 {a.clientName}
+                                                {a.isDemo && (
+                                                    <span className="ml-1.5 text-[12px] font-semibold text-[var(--text-subtle)]">
+                                                        · de ejemplo
+                                                    </span>
+                                                )}
                                             </div>
                                             <div className="truncate text-[12.5px] text-[var(--text-muted)]">
                                                 {a.label}

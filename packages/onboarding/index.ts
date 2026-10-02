@@ -504,6 +504,19 @@ export function resolveRnRoute(
     return resolveTarget(step.rnRoute, ctx.demoClientId)
 }
 
+/**
+ * Etiqueta corta de la persona para el chip de la cabecera de la guía (web y RN). Los `tileTitle` de
+ * `PERSONA_COPY` son frases completas («Entreno fuerza y acondicionamiento»): sirven para elegir en
+ * la pantalla de persona, no para un chip de una línea. Fuente única (antes copia en web y en RN).
+ */
+export const PERSONA_CHIP_LABEL: Record<Persona, string> = {
+    strength: 'Fuerza y acondicionamiento',
+    nutrition: 'Nutrición',
+    rehab: 'Rehabilitación',
+    endurance: 'Resistencia',
+    other: 'Panel completo',
+}
+
 // ── Modo guía (owner 22-08: «un solo onboarding por área») ───────────────────────────────────
 // Vive en su propio archivo para que web y RN compartan la MISMA condición; se re-exporta acá
 // para que el paquete siga teniendo una sola puerta de entrada.

@@ -22,22 +22,17 @@ const schema = z.object({
         'first_checkin',
         'persona',
     ]),
-    // Espejo EXACTO del CHECK de `coach_onboarding_events` (migración
-    // 20260822002122_onboarding_v2_persona_demo.sql). Si acá entra un tipo que la DB no admite, el
-    // insert muere en 500: los dos listados se mueven juntos.
+    // Solo lo que emite el navegador (`OnboardingEventType` de `onboarding-telemetry.client.ts`), todo
+    // dentro del CHECK de `coach_onboarding_events`. `persona_selected`, `demo_*`, `vive_tu_app_*` e
+    // `invite_*` los escribe SOLO el servidor que origina el hecho (`recordOnboardingEvent`): aceptarlos
+    // acá dejaba a cualquier sesión de coach fabricárselos (W8.5.3). `invite_link_copied`,
+    // `invite_whatsapp_opened` y `first_module_opened` no tenían emisor en ninguna superficie.
     eventType: z.enum([
         'step_completed',
         'step_reopened',
         'aha_moment',
         'guide_engagement',
-        'persona_selected',
-        'demo_seeded',
-        'demo_deleted',
-        'vive_tu_app_opened',
-        'invite_link_copied',
-        'invite_whatsapp_opened',
         'onboarding_dismissed',
-        'first_module_opened',
     ]),
     metadata: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
 })
@@ -83,6 +78,19 @@ export async function POST(request: Request) {
     }
 
     const admin = createServiceRoleClient()
+
+    // El aha es UNO por coach entre web y app (la app también lo emite, W8.2.5): sin ventana.
+    if (parsed.data.eventType === 'aha_moment') {
+        const prevAha = await admin
+            .from('coach_onboarding_events')
+            .select('id')
+            .eq('coach_id', user.id)
+            .eq('event_type', 'aha_moment')
+            .limit(1)
+            .maybeSingle()
+            .then((r) => r.data, () => null)
+        if (prevAha) return NextResponse.json({ ok: true, deduped: true })
+    }
 
     /** Interacciones UI (viñetas, Three): no dedupe por ventana — analítica de frecuencia. */
     if (parsed.data.eventType !== 'guide_engagement') {

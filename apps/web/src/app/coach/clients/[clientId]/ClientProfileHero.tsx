@@ -406,6 +406,7 @@ export function ClientProfileHero({
                         phone: client.phone,
                         is_active: client.is_active,
                         is_archived: client.is_archived ?? false,
+                        is_demo: isDemo,
                     }}
                     loginUrl={
                         coachSlug && typeof window !== 'undefined'

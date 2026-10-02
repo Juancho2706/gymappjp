@@ -29,6 +29,10 @@ vi.mock('@/lib/mobile-auth', () => ({
 let coachRow: Record<string, unknown> | null = null
 const inserts: Array<Record<string, unknown>> = []
 let insertError: { code?: string; message: string } | null = null
+/** Fila `aha_moment` previa del coach (dedupe «uno por coach» de W8.2.5). */
+let ahaRow: { id: string } | null = null
+/** Payloads de `update` por tabla, para verificar el merge del jsonb. */
+const updates: Array<{ table: string; values: Record<string, unknown> }> = []
 
 /** El espejo a PostHog se ejercita con el módulo real: lo mockeado es la ingesta. */
 type CaptureInput = {
@@ -47,7 +51,10 @@ vi.mock('@/lib/supabase/admin-client', () => ({
             const chain: Record<string, unknown> = {}
             Object.assign(chain, {
                 select: () => chain,
-                update: () => chain,
+                update: (values: Record<string, unknown>) => {
+                    updates.push({ table, values })
+                    return chain
+                },
                 eq: async () => ({ error: null }),
                 maybeSingle: async () => ({ data: coachRow, error: null }),
                 insert: async (row: Record<string, unknown>) => {
@@ -56,6 +63,15 @@ vi.mock('@/lib/supabase/admin-client', () => ({
                 },
             })
             // `update(...).eq(...)` se awaitea suelto; `select(...).eq(...).maybeSingle()` encadena.
+            if (table === 'coach_onboarding_events') {
+                const read: Record<string, unknown> = {}
+                Object.assign(read, {
+                    eq: () => read,
+                    limit: () => read,
+                    maybeSingle: async () => ({ data: ahaRow, error: null }),
+                })
+                Object.assign(chain, { select: () => read })
+            }
             if (table === 'coaches') {
                 Object.assign(chain, {
                     select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: coachRow, error: null }) }) }),
@@ -119,6 +135,8 @@ beforeEach(() => {
     bearerOk = true
     inserts.length = 0
     insertError = null
+    ahaRow = null
+    updates.length = 0
     loadOnboardingV2ApiData.mockResolvedValue(ONBOARDING_V2)
     coachRow = {
         id: COACH_ID,
@@ -166,6 +184,7 @@ describe('GET /api/mobile/coach/dashboard — bloque onboardingV2', () => {
                 dismissed: true,
                 hidden: false,
                 guideSeenAt: '2026-08-22T12:00:00.000Z',
+                ahaMomentSent: false,
             },
         })
         // El jsonb crudo NO se reemplaza: la app sigue leyendo de ahí lo que la guía no expone.
@@ -211,6 +230,7 @@ describe('GET /api/mobile/coach/dashboard — bloque onboardingV2', () => {
             dismissed: false,
             hidden: false,
             guideSeenAt: null,
+            ahaMomentSent: false,
         })
     })
 })
@@ -258,9 +278,23 @@ describe('POST /api/mobile/coach/dashboard — onboarding_event', () => {
         })
     })
 
-    it('acepta los tipos v2 (`vive_tu_app_opened`, `onboarding_dismissed`)', async () => {
-        expect((await POST(postReq({ action: 'onboarding_event', stepKey: 'vive_tu_app', eventType: 'vive_tu_app_opened' }))).status).toBe(200)
-        expect((await POST(postReq({ action: 'onboarding_event', stepKey: 'aha', eventType: 'onboarding_dismissed' }))).status).toBe(200)
+    it('W8.2.5: solo los 4 tipos que emite la app; los que origina el servidor → 400', async () => {
+        for (const eventType of ['step_completed', 'step_reopened', 'aha_moment', 'guide_engagement']) {
+            expect((await POST(postReq({ action: 'onboarding_event', stepKey: 'aha', eventType }))).status).toBe(200)
+        }
+        inserts.length = 0
+        for (const eventType of ['vive_tu_app_opened', 'onboarding_dismissed', 'demo_seeded', 'persona_selected']) {
+            expect((await POST(postReq({ action: 'onboarding_event', stepKey: 'aha', eventType }))).status).toBe(400)
+        }
+        expect(inserts).toHaveLength(0)
+    })
+
+    it('W8.2.5: paso ya completado (23505) → 200 deduped, no 500', async () => {
+        insertError = { code: '23505', message: 'duplicate key value violates unique constraint' }
+        const res = await POST(postReq({ action: 'onboarding_event', stepKey: 'first_artifact', eventType: 'step_completed' }))
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual({ ok: true, deduped: true })
+        expect(captureMock).not.toHaveBeenCalled()
     })
 
     it('sigue aceptando los pasos legacy del checklist v1', async () => {
@@ -274,7 +308,7 @@ describe('POST /api/mobile/coach/dashboard — onboarding_event', () => {
         expect(inserts).toHaveLength(0)
     })
 
-    it('`vive_tu_app_entered` desde la app → 400 (la lista de 12 aceptados no cambia)', async () => {
+    it('`vive_tu_app_entered` desde la app → 400', async () => {
         // vive-tu-app-directo V1.15: el evento existe en la base desde V1.11, pero lo escribe SOLO
         // el servidor web (`GET /vive-tu-app`, después de verificar el magic link y el cinturón
         // `is_demo`). Abrirlo acá dejaría a cualquiera con un bearer auto-tildarse el paso 2 — que
@@ -332,7 +366,7 @@ describe('POST /api/mobile/coach/dashboard — espejo a PostHog', () => {
         expect(captureMock).not.toHaveBeenCalled()
     })
 
-    it('`persona_selected` NO se espeja: su call site ya lo captura con payload propio', async () => {
+    it('`persona_selected` desde la app se rechaza (lo escribe su propio endpoint) y no se espeja', async () => {
         const res = await POST(
             postReq({
                 action: 'onboarding_event',
@@ -341,8 +375,8 @@ describe('POST /api/mobile/coach/dashboard — espejo a PostHog', () => {
                 metadata: { persona: 'nutrition' },
             })
         )
-        expect(res.status).toBe(200)
-        expect(inserts).toHaveLength(1)
+        expect(res.status).toBe(400)
+        expect(inserts).toHaveLength(0)
         expect(captureMock).not.toHaveBeenCalled()
     })
 
@@ -353,5 +387,31 @@ describe('POST /api/mobile/coach/dashboard — espejo a PostHog', () => {
         )
         expect(res.status).toBe(200)
         expect(await res.json()).toEqual({ ok: true })
+    })
+})
+
+describe('POST /api/mobile/coach/dashboard — aha una vez por coach (W8.2.5)', () => {
+    it('con un aha_moment previo responde deduped, no inserta ni espeja', async () => {
+        ahaRow = { id: 'aha-1' }
+        const res = await POST(postReq({ action: 'onboarding_event', stepKey: 'aha', eventType: 'aha_moment' }))
+        expect(res.status).toBe(200)
+        expect(await res.json()).toEqual({ ok: true, deduped: true })
+        expect(inserts).toHaveLength(0)
+        expect(captureMock).not.toHaveBeenCalled()
+    })
+
+    it('persist_onboarding_guide: `ahaMomentSent` es pegajoso y la clave `demo` se ignora', async () => {
+        coachRow = {
+            ...coachRow,
+            onboarding_guide: { ahaMomentSent: true, dismissed: false, demo: { clientId: 'demo-real' } },
+        }
+        const res = await POST(
+            postReq({ action: 'persist_onboarding_guide', guide: { ahaMomentSent: false, dismissed: true, demo: { clientId: 'victima' } } })
+        )
+        expect(res.status).toBe(200)
+        const guide = updates.find((u) => u.table === 'coaches')?.values.onboarding_guide as Record<string, unknown>
+        expect(guide.ahaMomentSent).toBe(true)
+        expect(guide.dismissed).toBe(true)
+        expect(guide.demo).toEqual({ clientId: 'demo-real' })
     })
 })

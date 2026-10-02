@@ -11,6 +11,7 @@ import { isBrandingAllowed, parseSubscriptionTier } from '@eva/tiers'
 import { loadOnboardingV2ApiData } from '@/services/onboarding/onboarding-v2.queries'
 import { parseOnboardingGuide } from '@/app/coach/dashboard/_lib/onboarding-guide-state'
 import { mirrorOnboardingEventToPostHog } from '@/lib/posthog/onboarding-event-mirror'
+import { jsonRateLimited, rateLimitCoachOnboardingEvents } from '@/lib/rate-limit'
 
 function bearerToken(request: NextRequest): string | null {
     const auth = request.headers.get('authorization') || request.headers.get('Authorization')
@@ -31,20 +32,15 @@ const MOBILE_EVENT_STEP_KEYS: readonly string[] = [
     'persona',
 ]
 
-const MOBILE_EVENT_TYPES: readonly string[] = [
-    'step_completed',
-    'step_reopened',
-    'aha_moment',
-    'guide_engagement',
-    'persona_selected',
-    'demo_seeded',
-    'demo_deleted',
-    'vive_tu_app_opened',
-    'invite_link_copied',
-    'invite_whatsapp_opened',
-    'onboarding_dismissed',
-    'first_module_opened',
-]
+/**
+ * Lo que la app emite de verdad (`postCoachOnboardingEvent` en `apps/mobile/lib/coach-dashboard.ts`).
+ * Antes se aceptaban 12 tipos: un bearer podía escribirse `demo_seeded`, `persona_selected`, etc. sin
+ * pasar por el servidor que los origina (W8.2.5). Los demás los escribe solo el servidor.
+ */
+const MOBILE_EVENT_TYPES: readonly string[] = ['step_completed', 'step_reopened', 'aha_moment', 'guide_engagement']
+
+/** Unique violation: el índice parcial `coach_onboarding_events_step_completed_once` ya tiene el paso. */
+const PG_UNIQUE_VIOLATION = '23505'
 
 export async function GET(request: NextRequest) {
     const token = bearerToken(request)
@@ -183,6 +179,9 @@ export async function GET(request: NextRequest) {
                 dismissed: guide.dismissed,
                 hidden: guide.hidden,
                 guideSeenAt: guide.guideSeenAt,
+                // W8.2.5: la app emite `aha_moment` una sola vez entre las dos superficies; la marca
+                // la comparte con la web (`onboarding_guide.ahaMomentSent`).
+                ahaMomentSent: guide.ahaMomentSent,
             },
         },
         dashboard,
@@ -234,6 +233,10 @@ export async function POST(request: NextRequest) {
             : {}
 
     if (parsed.action === 'onboarding_event') {
+        // Mismo limitador que la ruta web (`api/coach/onboarding-events`): por coach, no por IP.
+        const rl = await rateLimitCoachOnboardingEvents(user.id)
+        if (!rl.ok) return jsonRateLimited(rl.retryAfter)
+
         const stepKey = String(parsed.stepKey ?? '')
         const eventType = String(parsed.eventType ?? '')
         const validStep = MOBILE_EVENT_STEP_KEYS.includes(stepKey)
@@ -250,6 +253,12 @@ export async function POST(request: NextRequest) {
                 ? (parsed.metadata as Record<string, string | number | boolean>)
                 : null
 
+        // El aha es UNO por coach entre web y app: si ya está, no se repite aunque la marca del jsonb
+        // se haya perdido (persist fallido, servidor viejo, otra pestaña).
+        if (await ahaAlreadyRecorded(admin, user.id, eventType)) {
+            return NextResponse.json({ ok: true, deduped: true })
+        }
+
         const { error } = await admin.from('coach_onboarding_events').insert({
             coach_id: user.id,
             step_key: stepKey,
@@ -258,13 +267,16 @@ export async function POST(request: NextRequest) {
         })
 
         if (error) {
+            // Paso ya completado (índice único parcial): es el camino ESPERADO de un re-emit, no un 500
+            // que ensucie Sentry. Misma respuesta que la ruta web.
+            if (error.code === PG_UNIQUE_VIOLATION) return NextResponse.json({ ok: true, deduped: true })
             return NextResponse.json({ error: error.message, code: 'EVENT_INSERT_FAILED' }, { status: 500 })
         }
 
         // Espejo a PostHog (W8.5.2 = W0.5 de flujo-coach-nuevo), gemelo del de la ruta web. Aparte
         // del insert y no dentro de `recordOnboardingEvent` por lo mismo: el 500 `EVENT_INSERT_FAILED`
         // sale de leer el `error` del insert, que el helper del servicio se traga. Solo se alcanza
-        // con la fila escrita —un duplicado o una FK rota retornan 500 arriba— así que la app no
+        // con la fila escrita —un duplicado responde `deduped` y una FK rota 500 arriba— así que la app no
         // puede meter en PostHog una fila que la tabla no tiene. `await` obligatorio: Vercel congela
         // la invocación al responder.
         await mirrorOnboardingEventToPostHog({
@@ -282,8 +294,11 @@ export async function POST(request: NextRequest) {
             parsed.guide != null &&
             typeof parsed.guide === 'object' &&
             !Array.isArray(parsed.guide)
-                ? (parsed.guide as Record<string, unknown>)
+                ? { ...(parsed.guide as Record<string, unknown>) }
                 : {}
+        // `demo` es el inventario del alumno de ejemplo: lo escribe SOLO el servidor al sembrar. La app
+        // nunca lo manda; aceptarlo dejaba al cliente decidir qué borra «Borrar ejemplo».
+        delete incoming.demo
 
         const { error } = await admin
             .from('coaches')
@@ -291,6 +306,8 @@ export async function POST(request: NextRequest) {
                 onboarding_guide: {
                     ...existing,
                     ...incoming,
+                    // Pegajoso (mismo criterio que la acción web): nadie vuelve a `false` el aha ya emitido.
+                    ...(existing.ahaMomentSent === true ? { ahaMomentSent: true } : {}),
                 } as Json,
                 updated_at: new Date().toISOString(),
             })
@@ -320,4 +337,25 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ ok: true })
+}
+
+/** ¿Este coach ya tiene su `aha_moment`? Solo consulta para ese tipo; ante error de lectura, no bloquea. */
+async function ahaAlreadyRecorded(
+    admin: ReturnType<typeof createServiceRoleClient>,
+    coachId: string,
+    eventType: string,
+): Promise<boolean> {
+    if (eventType !== 'aha_moment') return false
+    try {
+        const { data, error } = await admin
+            .from('coach_onboarding_events')
+            .select('id')
+            .eq('coach_id', coachId)
+            .eq('event_type', 'aha_moment')
+            .limit(1)
+            .maybeSingle()
+        return error == null && data != null
+    } catch {
+        return false
+    }
 }

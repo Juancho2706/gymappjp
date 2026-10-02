@@ -31,8 +31,8 @@ prevalecen sobre este resumen. La prosa retirada está en
 Nada pendiente: el owner confirmó el 01-10 que los QA de «Elige cómo pagar», «Reps tras el reloj» + E1,
 «Despegue rápido», fix RN «Asignar plantilla», fix RN buscador de «Cambiar», «Kilos o libras» (SPEC §7),
 Android 1.1.3 en Play, «Entrada dark v1», «+ Nueva pregunta qué crear» e íconos de Nutrición estaban
-verdes. De «Kilos o libras» queda solo el barrido W5.4 (re-correr la Parte A del SQL con la adopción del
-OTA; [TASKS](../specs/kg-lb-ejecutor/TASKS.md)).
+verdes. De «Kilos o libras» queda solo el barrido W5.4 ([TASKS](../specs/kg-lb-ejecutor/TASKS.md)): medido el
+02-10, 0 series pendientes y 18 de 19 alumnos con actividad en 24 h ya escriben la unidad (no hay nada que barrer aún).
 
 ### 2. Frentes abiertos
 
@@ -43,13 +43,14 @@ OTA; [TASKS](../specs/kg-lb-ejecutor/TASKS.md)).
    [auditoría](../audits/correos-y-crons-2026-09-05.md)): copy v2 en producción (`329c833f`,
    [TASKS § W6 v2](../specs/coach-onboarding-v2/TASKS.md)); el owner fijó `ONBOARDING_BEHAVIOR_EMAILS_SINCE=2026-10-02T00:00:00Z`
    y sacó el DRY_RUN; el cron de las 02:00 UTC corrió con `dry=false` (0 candidatos todavía). Plan B «Activación»
-   (panel vacío, ficha «todavía no entra», alumno sin programa, baja en el admin) en producción; B4 (embudo por superficie en el correo de los lunes, columna `coaches.signup_surface`) hecho el 02-10; queda QA device. W8.4.2B a medias
-   (`enqueueBehaviorCheck` sin sus 3 call sites); W7, F5.3–F5.5 RN y D4. `FREE_COACH_DRIP_ENABLED` **no** se setea.
+   (panel vacío, ficha «todavía no entra», alumno sin programa, baja en el admin) en producción; B4 (embudo por superficie en el correo de los lunes, columna `coaches.signup_surface`) hecho el 02-10; queda QA device. W8.4.2B
+   (disparo en línea del aha desde series y comidas web/API) mergeado en `rnmobiledenuevo` el 02-10, sin deploy; quedan W7, F5.3–F5.5 RN y D4.
+   `FREE_COACH_DRIP_ENABLED` **no** se setea.
 3. **Embudo Free→Pro** ([spec](../specs/embudo-free-pro/SPEC.md)): W0–W6 en producción; queda App Store Connect (W7.4).
 4. **FC de toda la sesión** (punto 2 de Movens, fuera del tren «Vuelta nueva»): plan aparte, arranca preguntándole
    a Movens qué banda usa ([SDD §6](../specs/vuelta-nueva-salud-y-reloj/SPEC.md)).
 5. **Renovaciones Flow** ([incidente 28-09](../audits/flow-renovaciones-2026-09-28.md)): **verificado el 02-10**: Movens (plan
-   $29.990, el roto) renovó y su aviso llegó; MDR tuvo un rechazo real de tarjeta, recibió el correo de pago fallido y se
+   $29.990, el roto) renovó y su aviso llegó (`flow:authpay:invoice:7654444`, período hasta el 01-11); MDR tuvo un rechazo real de tarjeta, recibió el correo de pago fallido y se
    recuperó sola (una factura, sin doble cobro). Queda (menor): el evento del rechazo se pisa con el del pago (mismo
    `provider_event_id`), `charged_at` de Flow queda 3 h antes (Flow da hora de Chile) y `checkout-abandoned` solo lee `pending` (ciego desde el 26-08).
 6. **Píxel de compra (Meta `Purchase` por servidor)** ([spec](../specs/meta-purchase-capi/SPEC.md), plan C del 01-10):
@@ -75,10 +76,24 @@ OTA; [TASKS](../specs/kg-lb-ejecutor/TASKS.md)).
 
 ### 5. Higiene y deuda técnica (tren «Casa en orden», ola C)
 
-1. Dependabot: `js-yaml` (alta ×2) y `vitest`/`@vitest/mocker` (media ×2), todas dev.
-2. DB: 3 tablas `_bak_*` (19-08, 21-08, 05-09) listas para retiro; el cron `purge-data` llama a
-   `purge_old_audit_logs`, que no existe en LIVE; probe de columnas `side_photo_url`/`receipt_url`
-   inexistentes (~12 errores `42703`/día, revisión 21-09).
+1. **Rama `casa-en-orden-0210` (02-10, mergeada en `rnmobiledenuevo`, sin push ni deploy):** `next` 16.3.5 → 16.3.8 (**crítica**
+   GHSA-vcvr-r3jv-pc5j, RCE en `next/og` ImageResponse: la usan `/api/og`, `/api/pr-card`, splash y manifest) +
+   pisos de seguridad in-major (`vitest` 4.1.11, `js-yaml`, `undici`, `brace-expansion`, `fast-uri`, `dompurify`);
+   migración **sin aplicar** `20261002170000_revoke_anon_enterprise_read_rpcs.sql` (quita `anon` de
+   `get_enterprise_alumno_context`/`get_org_branding`, dry-run en LIVE OK); fuera la llamada a `purge_old_audit_logs`
+   (no existe en LIVE); RN deja de pedir `side_photo_url`/`receipt_url` (16+16 errores `42703` en 24 h, necesita OTA).
+   Siguen en `pnpm audit` (build/tooling RN, sin parche in-major): `image-size`, `node-forge`, `esbuild` (low).
+   **Tanda 1 (misma rama):** 🔴 **seguridad** — «Borrar ejemplo» podía borrar la cuenta Auth de cualquier usuario
+   con un `onboarding_guide.demo.clientId` forjado (el coach escribe ese jsonb por RLS) ⇒ arreglado `759a32eb`
+   (en LIVE los 16 inventarios raros apuntan a usuarios inexistentes, sin rastro de abuso). Además: demo no
+   archivable y borrado por su camino (W8.1.4), demo rotulado en dashboard y RN (W8.1.6, W8.2.6), rutas de eventos
+   de onboarding acotadas a lo que emite cada cliente + dedupe/rate limit en móvil (W8.2.5, W8.5.3), aha desde RN,
+   tour del builder RN por coach, miles en resúmenes V2, «Legado» en Porciones RN, código muerto RN. RN ⇒ OTA.
+   Dos refutaciones independientes aplicadas. **Orden de salida: deploy web ANTES del OTA** (la app nueva lee
+   `ahaMomentSent` del endpoint; contra el servidor viejo re-emitiría el aha en cada visita a la guía).
+   Owner 02-10: cambios visuales aprobados tal cual; diálogo «Borrar alumno de ejemplo» con texto neutro (no asume
+   género del demo); la migración se aplica en LIVE **después** del deploy web.
+2. DB: 3 tablas `_bak_*` (19-08, 21-08, 05-09) listas para retiro.
 3. Regen completo de `database.types.ts` (deja 13 errores en 7 archivos V1; retira los workarounds de T2.3
    y el cast `V2ReadClient`) · matriz RLS con JWTs reales + preflight V1→V2 (sin cambios desde 08-06).
 4. **TTFB del área alumno**: región corregida (`regions: ["pdx1"]`, `deb8aee3`); queda re-medir p50/p75 de

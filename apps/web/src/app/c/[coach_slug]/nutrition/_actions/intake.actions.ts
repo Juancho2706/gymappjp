@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { enqueueBehaviorCheckForClient } from '@/lib/email/behavior/behavior-emails'
 import { z } from 'zod'
 import {
   NUTRITION_MEAL_SLOT_IDS,
@@ -108,6 +109,7 @@ export async function addIntakeEntryAction(
   })
 
   if (!inserted) return { success: false, error: 'No se pudo registrar' }
+  enqueueBehaviorCheckForClient(clientId)
 
   revalidatePath(`/c/${coachSlug}/nutrition`)
   revalidatePath(`/c/${coachSlug}/dashboard`)

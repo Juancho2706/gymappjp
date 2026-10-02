@@ -88,7 +88,8 @@ export interface CheckInEntry {
   energy_level: number | null
   notes: string | null
   front_photo_url: string | null
-  side_photo_url: string | null
+  /** Columna inexistente en LIVE: no se pide, llega `undefined`. Se conserva por si vuelve. */
+  side_photo_url?: string | null
   back_photo_url: string | null
   reviewed_at: string | null
 }
@@ -834,19 +835,17 @@ export async function getCoachClientDetail(clientId: string, workspace?: ClientA
         .eq('client_id', clientId)
         .maybeSingle(),
       // Tiers defensivos (columna faltante = 400 al select entero → degradar en orden):
-      //  1) reviewed_at + side_photo_url  (side = 3ra foto opcional, hoy inexistente en prod)
-      //  2) reviewed_at                    (prod actual)  3) base (DB legacy)
+      //  1) reviewed_at (prod actual)  2) base (DB legacy).
+      // `side_photo_url` NO se pide: no existe en LIVE y el tier que la probaba primero dejaba un
+      // 42703 en los logs de Postgres por cada ficha abierta (revisión 21-09 / 02-10). Los lectores
+      // ya tratan la foto lateral como opcional (`undefined` ⇒ se filtra).
       selectWithFallback<any>(
-        () => supabase.from('check_ins').select('id, date, created_at, weight, energy_level, notes, front_photo_url, side_photo_url, back_photo_url, reviewed_at').eq('client_id', clientId).order('date', { ascending: false }).limit(200),
-        () => selectWithFallback<any>(
-          () => supabase.from('check_ins').select('id, date, created_at, weight, energy_level, notes, front_photo_url, back_photo_url, reviewed_at').eq('client_id', clientId).order('date', { ascending: false }).limit(200),
-          () => supabase.from('check_ins').select('id, date, created_at, weight, energy_level, notes, front_photo_url, back_photo_url').eq('client_id', clientId).order('date', { ascending: false }).limit(200)
-        )
+        () => supabase.from('check_ins').select('id, date, created_at, weight, energy_level, notes, front_photo_url, back_photo_url, reviewed_at').eq('client_id', clientId).order('date', { ascending: false }).limit(200),
+        () => supabase.from('check_ins').select('id, date, created_at, weight, energy_level, notes, front_photo_url, back_photo_url').eq('client_id', clientId).order('date', { ascending: false }).limit(200)
       ),
-      selectWithFallback<any>(
-        () => supabase.from('client_payments').select('id, amount, payment_date, service_description, status, period_months, receipt_url').eq('client_id', clientId).order('payment_date', { ascending: false }).limit(20),
-        () => supabase.from('client_payments').select('id, amount, payment_date, service_description, status, period_months').eq('client_id', clientId).order('payment_date', { ascending: false }).limit(20)
-      ),
+      // Sin `receipt_url`: no existe en LIVE (mismo 42703 por ficha que la foto lateral). El
+      // comprobante queda oculto en Facturación (`p.receipt_url` llega `undefined`).
+      supabase.from('client_payments').select('id, amount, payment_date, service_description, status, period_months').eq('client_id', clientId).order('payment_date', { ascending: false }).limit(20),
       supabase
         .from('workout_programs')
         .select(`

@@ -103,6 +103,10 @@ export async function persistOnboardingGuideAction(
         ...(parsed.data.completed
             ? { completed: { ...existingCompleted, ...parsed.data.completed } as Json }
             : {}),
+        // Pegajoso: una pestaña web hidratada ANTES de que la app emitiera el aha manda
+        // `ahaMomentSent: false` en su próximo guardado; sin esto pisaba el `true` y el aha se
+        // re-emitía en las dos superficies.
+        ...(existing.ahaMomentSent === true ? { ahaMomentSent: true } : {}),
     } as Json
 
     const { error } = await supabase
