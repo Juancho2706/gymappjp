@@ -448,7 +448,7 @@ del owner D9–D13 están al final; sin ellas no arranca lo que las cita.
 
 ## Deuda declarada (fuera de v1)
 - [ ] Vocabulario global por persona (`personaNoun()` en nav y fichas, web+RN).
-- [ ] PDF de la pauta V2 en web (objeción #1 de nutricionistas).
+- [~] PDF de la pauta V2 en web (objeción #1 de nutricionistas). **En código 03-10** (`lib/nutrition-v2-plan-pdf.ts`, ficha del coach + Plan del alumno). **Pendiente:** QA del owner y botón RN.
 - [ ] Programación grupal (persona «preparador de equipo / box»); integraciones Strava/Garmin; ficha clínica.
 - [ ] `register_submitted` en Google OAuth (BROCITO W7).
 

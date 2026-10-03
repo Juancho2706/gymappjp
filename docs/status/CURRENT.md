@@ -56,9 +56,13 @@ verdes. De «Kilos o libras» queda solo el barrido W5.4 ([TASKS](../specs/kg-lb
    a Movens qué banda usa ([SDD §6](../specs/vuelta-nueva-salud-y-reloj/SPEC.md)).
 5. **Renovaciones Flow** ([incidente 28-09](../audits/flow-renovaciones-2026-09-28.md)): **verificado el 02-10**: Movens (plan
    $29.990, el roto) renovó y su aviso llegó (`flow:authpay:invoice:7654444`, período hasta el 01-11); MDR tuvo un rechazo real de tarjeta, recibió el correo de pago fallido y se
-   recuperó sola (una factura, sin doble cobro). Queda (menor): el evento del rechazo se pisa con el del pago (mismo
-   `provider_event_id`), `charged_at` de Flow queda 3 h antes (Flow da hora de Chile) y `checkout-abandoned` solo lee `pending` (ciego desde el 26-08).
-6. **Píxel de compra (Meta `Purchase` por servidor)** ([spec](../specs/meta-purchase-capi/SPEC.md), plan C del 01-10):
+   recuperó sola (una factura, sin doble cobro). Los 3 menores **en código el 03-10, sin deploy** (`463aa57`): el rechazo
+   ya no se pisa con el pago, `charged_at` de Flow en UTC real y `checkout-abandoned` lee los intents MP/Flow; además el
+   correo de pago rechazado habla del medio del coach (Flow ya no lee «Mercado Pago») y lleva a `/update-card`.
+6. **PDF de la pauta V2** (objeción #1 de nutricionistas): **en código el 03-10, sin deploy**. «Descargar PDF» en la ficha
+   del coach y en la pestaña Plan del alumno; marca del tenant, metas, semana, detalle por comida, equivalencias y registro
+   semanal opcional (`lib/nutrition-v2-plan-pdf.ts`). Falta QA del owner en navegador y el botón en la app (RN).
+7. **Píxel de compra (Meta `Purchase` por servidor)** ([spec](../specs/meta-purchase-capi/SPEC.md), plan C del 01-10):
    en código el 02-10; un `Purchase` por coach en su primer cobro real (MP o Flow), con el contexto del navegador
    guardado al elegir medio de pago. Prueba sin pago real en Admin → Sistema con el código de «Eventos de prueba».
    Queda QA con el próximo pago real (SPEC §7).

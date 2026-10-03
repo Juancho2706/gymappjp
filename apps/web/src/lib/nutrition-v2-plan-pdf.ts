@@ -468,9 +468,6 @@ export async function renderNutritionV2PlanPdf(
         doc.addPage()
         interiorHeader(section)
     }
-    const ensure = (needed: number, section: string) => {
-        if (y + needed > bottomLimit) newPage(section)
-    }
 
     // ═══ PORTADA ═══════════════════════════════════════════════════════════════
     const bandH = 72
@@ -597,9 +594,6 @@ export async function renderNutritionV2PlanPdf(
                 if (i === 0) doc.roundedRect(x, y, w, barH, barH / 2, barH / 2, 'F')
                 else if (i === parts.length - 1) doc.roundedRect(x, y, w, barH, barH / 2, barH / 2, 'F')
                 else doc.rect(x, y, w, barH, 'F')
-                if (i > 0 && i < parts.length - 1) {
-                    /* centro plano */
-                }
                 x += w
             })
             // Esquinas internas planas: repinta el borde de unión del primer y último tramo.
@@ -609,7 +603,7 @@ export async function renderNutritionV2PlanPdf(
             if (pW > barH) doc.rect(M + pW - barH / 2, y, barH / 2, barH, 'F')
             fill(FATS)
             if (fW > barH) doc.rect(M + W - fW, y, barH / 2, barH, 'F')
-            y += barH + 4.5
+            y += barH + 8
         }
 
         const extras: string[] = []
@@ -738,7 +732,7 @@ export async function renderNutritionV2PlanPdf(
         let h = 6
         for (const item of slot.items) {
             font('bold', 8.8)
-            h += Math.max(1, wrap(item.name, bodyW * 0.58).length) * 4.2
+            h += Math.max(1, wrap(item.brand ? `${item.name} · ${item.brand}` : item.name, bodyW * 0.58).length) * 4.2
             if (item.notes) {
                 font('italic', 7.4)
                 h += wrap(item.notes, bodyW - 4).length * 3.5
@@ -755,7 +749,7 @@ export async function renderNutritionV2PlanPdf(
             h += wrap(slot.instructions, bodyW).length * 3.6 + 2
         }
         if (model.showMacros) h += 7
-        return Math.max(h + 4, 24)
+        return Math.max(h + 1, 24)
     }
 
     const drawSlot = (slot: PlanPdfSlot, section: string) => {
@@ -782,7 +776,7 @@ export async function renderNutritionV2PlanPdf(
         for (const item of slot.items) {
             font('bold', 8.8)
             text(INK)
-            const nameLines = wrap(item.name, bodyW * 0.58)
+            const nameLines = wrap(item.brand ? `${item.name} · ${item.brand}` : item.name, bodyW * 0.58)
             doc.text(nameLines, bodyX, cy)
             const lastNameW = doc.getTextWidth(nameLines[nameLines.length - 1] ?? '')
             if (item.optional) {
@@ -798,9 +792,6 @@ export async function renderNutritionV2PlanPdf(
             text(BODY)
             doc.text(item.amount, M + W - 4, cy, { align: 'right', maxWidth: bodyW * 0.4 })
             cy += nameLines.length * 4.2
-            if (item.brand) {
-                // la marca va junto al nombre, en gris, sin otra línea
-            }
             if (item.notes) {
                 font('italic', 7.4)
                 text(MUTED)

@@ -57,6 +57,8 @@ import {
   fetchClientFoodPrefsForPicker,
 } from '../_data/client-food-prefs.data'
 import { QuickEditEntry } from './_quick-edit/QuickEditEntry'
+import { PlanPdfDownload } from '@/components/nutrition-v2/PlanPdfDownload'
+import { loadCoachPlanPdfAssetsAction } from '../_actions/plan-pdf.actions'
 import { CoachPrivateNotesPanel } from './CoachPrivateNotesPanel'
 import { PortionDayCoverageCard } from './PortionDayCoverageCard'
 import { CoachWeekDayNav } from './CoachWeekDayNav'
@@ -325,8 +327,16 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
               accion secundaria a la derecha (fuera del header; solo con plan publicado copiable). */}
           <div className="flex flex-wrap items-center gap-2">
             <StrategyBadge strategy={(detail.today.plan ?? detail.plan.plan).strategy} />
-            {canAssign ? (
-              <div className="ml-auto">
+            <div className="ml-auto flex flex-wrap items-center gap-2">
+              {/* PDF de la pauta para entregar en consulta (objeción #1 de nutricionistas). */}
+              <PlanPdfDownload
+                audience="coach"
+                plan={detail.plan}
+                clientName={detail.client.fullName}
+                extraSubstitutions={itemSubstitutions}
+                loadAssets={loadCoachPlanPdfAssetsAction}
+              />
+              {canAssign ? (
                 <AssignPlanToClientsDialog
                   sourceClientId={clientId}
                   sourcePlanVersion={detail.plan.plan.versionNumber}
@@ -335,8 +345,8 @@ export default async function CoachNutritionV2ClientPage({ params, searchParams 
                   rosterHasMore={assignRosterHasMore}
                   today={today}
                 />
-              </div>
-            ) : null}
+              ) : null}
+            </div>
           </div>
 
           {showTodayPlanLag ? (

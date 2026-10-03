@@ -44,6 +44,8 @@ import {
 } from '@/services/nutrition-v2-read.service'
 import { resolveNutritionDomainEnabled } from '@/services/feature-prefs.service'
 import { TodayExperience } from './_components/TodayExperience'
+import { PlanPdfDownload } from '@/components/nutrition-v2/PlanPdfDownload'
+import { loadStudentPlanPdfAssetsAction } from './_actions/plan-pdf.actions'
 import { FutureDayPreview } from './_components/FutureDayPreview'
 import { PastDaySummary } from './_components/PastDaySummary'
 import { LegacyHistoryDetail } from './_components/LegacyHistoryDetail'
@@ -444,13 +446,14 @@ async function PlanView({
   selectedIso: string
   todayIso: string
 }) {
-  const [plan, history] = await Promise.all([
+  const [plan, history, clientName] = await Promise.all([
     getNutritionPlanV2ForWeb({ clientId, date: todayIso }),
     getNutritionHistoryV2ForWeb({
       clientId,
       before: nutritionWeekHistoryCursor(todayIso),
       pageSize: NUTRITION_WEEK_HISTORY_PAGE_SIZE,
     }),
+    getCurrentStudentNutritionDisplayName(clientId),
   ])
   if (!plan.plan) {
     return (
@@ -499,6 +502,13 @@ async function PlanView({
       <NutritionCard>
         <div className="flex flex-wrap items-center gap-2">
           <StrategyBadge strategy={summary.strategy} />
+          <PlanPdfDownload
+            audience="student"
+            className="ml-auto"
+            plan={plan}
+            clientName={clientName}
+            loadAssets={loadStudentPlanPdfAssetsAction}
+          />
         </div>
         <h2 className="mt-4 font-display text-2xl font-bold text-strong">{summary.name}</h2>
         <p className="mt-1 text-xs text-muted">
